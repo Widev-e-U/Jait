@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
@@ -696,11 +696,13 @@ export function formatStructuredValue(value: unknown): string | null {
   if (value == null) return null
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  const mcpEnvelope = formatMcpResultEnvelope(value)
+  if (mcpEnvelope) return mcpEnvelope
   if (Array.isArray(value)) {
     const textBlocks = value.flatMap((entry) => {
       if (!entry || typeof entry !== 'object') return []
       const block = entry as Record<string, unknown>
-      return typeof block.text === 'string' ? [block.text] : []
+      return typeof block.text === 'string' ? [formatMcpContentText(block.text)] : []
     })
     if (textBlocks.length > 0) return textBlocks.join('\n\n')
   }
@@ -711,11 +713,130 @@ export function formatStructuredValue(value: unknown): string | null {
   }
 }
 
+function firstFormattedStructuredText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const formatted = formatStructuredValue(value)
+    if (formatted?.trim()) return formatted
+  }
+  return null
+}
+
+function firstPayloadText(record: Record<string, unknown>): string | null {
+  const stdout = firstFormattedStructuredText(
+    record.formatted_output,
+    record.formattedOutput,
+    record.output,
+    record.stdout,
+    record.content,
+  )
+  const stderr = firstFormattedStructuredText(record.stderr, record.error)
+  const output = [stdout, stderr].filter((part): part is string => Boolean(part?.trim())).join(stdout && stderr ? '\n' : '').trim()
+  if (output) return output
+
+  return firstFormattedStructuredText(
+    record.message,
+    record.text,
+    record.summary,
+    record.result,
+  )
+}
+
+function parseEmbeddedJsonRecord(value: string): Record<string, unknown> | null {
+  const start = value.indexOf('{')
+  const end = value.lastIndexOf('}')
+  if (start === -1 || end <= start) return null
+  try {
+    const parsed = JSON.parse(value.slice(start, end + 1)) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null
+  } catch {
+    return null
+  }
+}
+
+function formatMcpContentText(value: string): string {
+  const parsed = parseEmbeddedJsonRecord(value)
+  if (!parsed) return value
+  return firstPayloadText(parsed) ?? value
+}
+
+function formatMcpResultEnvelope(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const looksLikeEnvelope = Array.isArray(record.content)
+    || 'structuredContent' in record
+    || '_meta' in record
+  if (!looksLikeEnvelope) return null
+
+  const structured = firstFormattedStructuredText(record.structuredContent)
+  if (structured) return structured
+
+  if (Array.isArray(record.content)) {
+    const content = record.content
+      .flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return []
+        const block = entry as Record<string, unknown>
+        if (typeof block.text === 'string') return [formatMcpContentText(block.text)]
+        const formatted = formatStructuredValue(block)
+        return formatted ? [formatted] : []
+      })
+      .filter((entry) => entry.trim().length > 0)
+      .join('\n\n')
+    if (content.trim()) return content
+  }
+
+  const error = firstFormattedStructuredText(record.error)
+  if (error) return error
+  return null
+}
+
+function parseStructuredRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null
+  } catch {
+    return null
+  }
+}
+
+function firstStructuredText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const formatted = formatStructuredValue(value)
+    if (formatted?.trim()) return formatted
+  }
+  return null
+}
+
+function formatTerminalResult(result: ToolCallInfo['result']): string | null {
+  if (!result) return null
+  const data = parseStructuredRecord(result.data)
+  const messageData = parseStructuredRecord(result.message)
+  const source = data ?? messageData
+  if (!source) return null
+
+  const stdout = firstStructuredText(source.formatted_output, source.formattedOutput, source.output, source.stdout, source.content)
+  const stderr = firstStructuredText(source.stderr, source.error)
+  const output = [stdout, stderr].filter((part): part is string => Boolean(part?.trim())).join(stdout && stderr ? '\n' : '').trim()
+  return output || null
+}
+
 /** Format the output data from a tool result */
-function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
+export function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
   const data = result.data as Record<string, unknown> | undefined
   const normalizedTool = normalizeTool(tool ?? '')
+  const mcpOutput = formatMcpResultEnvelope(data?.result) ?? formatMcpResultEnvelope(data) ?? formatMcpResultEnvelope(parseStructuredRecord(result.message))
+  if (mcpOutput) return mcpOutput
+
+  if (normalizedTool === 'execute' || normalizedTool.startsWith('terminal.')) {
+    const terminalOutput = formatTerminalResult(result)
+    if (terminalOutput) return terminalOutput
+  }
 
   // Rich system info display
   if (normalizedTool === 'os.query' && data && data.platform != null) {
@@ -795,9 +916,7 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
   if (!isTerminalTool(call.tool)) return null
   if (call.status === 'running' || call.status === 'pending') return null
 
-  const data = call.result?.data && typeof call.result.data === 'object'
-    ? call.result.data as Record<string, unknown>
-    : undefined
+  const data = parseStructuredRecord(call.result?.data) ?? parseStructuredRecord(call.result?.message) ?? undefined
 
   const timedOut = data?.timedOut === true || /timed out/i.test(call.result?.message ?? '')
   if (timedOut) {
@@ -807,11 +926,16 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
     }
   }
 
-  const exitCodeRaw = data?.exitCode
-  if (typeof exitCodeRaw === 'number') {
-    const isOk = exitCodeRaw === 0
+  const exitCodeRaw = data?.exitCode ?? data?.exit_code
+  const exitCode = typeof exitCodeRaw === 'number'
+    ? exitCodeRaw
+    : typeof exitCodeRaw === 'string' && /^-?\d+$/.test(exitCodeRaw.trim())
+      ? Number.parseInt(exitCodeRaw, 10)
+      : null
+  if (typeof exitCode === 'number') {
+    const isOk = exitCode === 0
     return {
-      label: `exit ${exitCodeRaw}`,
+      label: `exit ${exitCode}`,
       className: isOk
         ? 'border-green-500/40 bg-green-500/10 text-green-500'
         : 'border-red-500/40 bg-red-500/10 text-red-500',
@@ -1515,7 +1639,10 @@ function ToolCallCardInner({
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
   const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
   const isPending = call.status === 'pending'
-  const filePath = getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
+  const filePaths = getToolFilePaths(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
+    .map((path) => path.trim())
+    .filter(Boolean)
+  const filePath = filePaths[0] ?? getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
   const showFileSummary = !!filePath && isEditLikeTool(normalizedTool)
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
@@ -1647,11 +1774,18 @@ function ToolCallCardInner({
         ) : showFileSummary ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             <span>{invocationLabel}:</span>
-            <FileSummaryButton
-              path={filePath}
-              onOpenDiff={onOpenDiff}
-              disabled={call.status !== 'success'}
-            />
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <FileSummaryButton
+                path={filePath}
+                onOpenDiff={onOpenDiff}
+                disabled={call.status !== 'success'}
+              />
+              {filePaths.length > 1 && (
+                <span className="rounded border border-border/60 bg-muted/35 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                  +{filePaths.length - 1}
+                </span>
+              )}
+            </span>
           </span>
         ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
@@ -1691,19 +1825,19 @@ function ToolCallCardInner({
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
   ) : bodyKind === 'terminal' ? (
     <pre ref={terminalScrollRef} className={cn(
-      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-      'bg-muted/40 text-foreground',
-      call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
+      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre',
+      'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
+      call.result && !call.result.ok && 'text-red-200'
     )}>
       {!displayOutput && call.status !== 'running' && (
-        <span className="text-muted-foreground"><span className="text-emerald-500 dark:text-emerald-400">$ </span>{summary}</span>
+        <span className="text-zinc-400"><span className="text-emerald-400">$ </span>{summary}</span>
       )}
       {displayOutput}
       {call.status === 'running' && !displayOutput && (
-        <span className="text-muted-foreground">Running...</span>
+        <span className="text-zinc-400">Running...</span>
       )}
       {call.status === 'running' && (
-        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
   ) : bodyKind === 'browserSnapshot' ? (

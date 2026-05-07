@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface QueuedMessage {
@@ -15,6 +15,7 @@ interface MessageQueueProps {
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string) => void
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
+  onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
   className?: string
 }
@@ -91,6 +92,7 @@ function QueueItem({
   onRemove,
   onEdit,
   onReorder,
+  onSteer,
   onSendToParallelThread,
   dragActive,
   dropBefore,
@@ -102,6 +104,7 @@ function QueueItem({
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string) => void
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
+  onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
   dragActive?: boolean
   dropBefore?: boolean
@@ -233,7 +236,7 @@ function QueueItem({
       {/* Action buttons */}
       <div className={cn(
         'mt-0.5 flex shrink-0 items-center gap-0.5 transition-opacity',
-        showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
+        onSteer ? 'opacity-100' : showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
       )}>
         {editing ? (
           <>
@@ -267,6 +270,18 @@ function QueueItem({
                 title="Edit message"
               >
                 <Pencil className="h-3 w-3" />
+              </button>
+            )}
+            {onSteer && (
+              <button
+                type="button"
+                data-no-drag="true"
+                className="inline-flex h-6 items-center gap-1 rounded border border-primary/25 bg-primary/5 px-1.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/10"
+                onClick={() => onSteer(item.id)}
+                title="Steer with message"
+              >
+                <span>Steer</span>
+                <ArrowRight className="h-3 w-3" />
               </button>
             )}
             {onSendToParallelThread && (
@@ -304,7 +319,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, onSendToParallelThread, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -455,6 +470,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSendToParal
           onRemove={onRemove}
           onEdit={onEdit}
           onReorder={onReorder}
+          onSteer={onSteer}
           onSendToParallelThread={onSendToParallelThread}
           dragActive={dragSourceId === item.id}
           dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}

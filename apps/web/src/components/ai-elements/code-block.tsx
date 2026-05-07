@@ -65,7 +65,7 @@ export function CodeBlockHeader({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex min-h-7 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-1', className)}
+      className={cn('flex min-h-6 items-center justify-between gap-1.5 border-b border-border/60 px-2 py-0.5', className)}
       {...props}
     />
   )
@@ -75,7 +75,7 @@ export function CodeBlockTitle({
   className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground', className)} {...props} />
+  return <div className={cn('flex min-w-0 items-center gap-1.5 text-2xs font-medium text-muted-foreground', className)} {...props} />
 }
 
 export function CodeBlockFilename({
@@ -104,7 +104,7 @@ export function CodeBlockCopyButton({
       type="button"
       variant="ghost"
       size="icon"
-      className={cn('h-6 w-6 rounded-md', className)}
+      className={cn('h-5 w-5 rounded', className)}
       onClick={async () => {
         await navigator.clipboard.writeText(code)
         setCopied(true)
@@ -114,7 +114,7 @@ export function CodeBlockCopyButton({
       title={copied ? 'Copied' : 'Copy code'}
       {...props}
     >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
     </Button>
   )
 }
@@ -137,11 +137,11 @@ export function CodeBlockLanguageSelectorTrigger({
   return (
     <button
       type="button"
-      className={cn('inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground', className)}
+      className={cn('inline-flex h-6 items-center gap-1 rounded px-1.5 text-2xs text-muted-foreground', className)}
       {...props}
     >
       {children}
-      <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+      <ChevronDown className="h-3 w-3 opacity-60" />
     </button>
   )
 }

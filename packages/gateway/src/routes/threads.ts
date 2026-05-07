@@ -531,6 +531,26 @@ export function registerThreadRoutes(
     providerId: ProviderId,
     options?: { suppressTitleTurnEvents?: () => number; decrementSuppressedTurn?: () => void },
   ): (event: ProviderEvent) => void {
+    let pendingAssistantContent = "";
+
+    const flushPendingAssistantContent = (): void => {
+      if (!pendingAssistantContent.trim()) {
+        pendingAssistantContent = "";
+        return;
+      }
+
+      const content = pendingAssistantContent;
+      pendingAssistantContent = "";
+      const activity = threadService.addActivity(threadId, "message", content.trim().slice(0, 500), {
+        role: "assistant",
+        content,
+      });
+      broadcastThreadEvent(threadId, "activity", {
+        event: { type: "message", sessionId: providerSessionId, role: "assistant", content } satisfies ProviderEvent,
+        activity,
+      });
+    };
+
     return (event: ProviderEvent) => {
       if (!isThreadSessionEvent(event, providerSessionId)) {
         return;
@@ -546,9 +566,24 @@ export function registerThreadRoutes(
           options?.decrementSuppressedTurn?.();
           return;
         }
-        if (event.type === "turn.started") {
+        if (event.type === "turn.started" || event.type === "token" || event.type === "message") {
           return;
         }
+      }
+
+      if (event.type === "token") {
+        pendingAssistantContent += event.content;
+        return;
+      }
+
+      if (event.type === "message" && event.role === "assistant" && pendingAssistantContent) {
+        if (event.content === pendingAssistantContent || event.content.startsWith(pendingAssistantContent)) {
+          pendingAssistantContent = "";
+        } else {
+          flushPendingAssistantContent();
+        }
+      } else if (event.type !== "turn.started") {
+        flushPendingAssistantContent();
       }
 
       const activity = threadService.logProviderEvent(threadId, event);
@@ -1424,6 +1459,34 @@ export function registerThreadRoutes(
 
     await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);
     return reply.status(200).send({ ok: true });
+  });
+
+  /** Inject a steering message into a running thread. */
+  app.post("/api/threads/:id/steer", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const message = typeof body["message"] === "string" ? body["message"] : "";
+    if (!message.trim()) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
+    }
+
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
+    if (!thread.providerSessionId || thread.status !== "running") {
+      return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });
+    }
+
+    const attempt = await interventionRunResumeRegistry.resumeThread(id, message);
+    if (attempt.status === "not-running") {
+      return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });
+    }
+    if (attempt.status === "error") {
+      return reply.status(500).send({ error: "STEER_FAILED", details: attempt.error ?? "Failed to steer thread" });
+    }
+
+    return { ok: true, steered: true, status: attempt.status };
   });
 
   /** Stop a running thread */

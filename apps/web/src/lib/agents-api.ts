@@ -568,6 +568,20 @@ export class AgentsApi {
     if (!res.ok) throw new Error(`Failed to send turn: ${res.statusText}`)
   }
 
+  async steerThread(id: string, message: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/steer`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ message }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as Record<string, unknown>
+      const details = typeof err.details === 'string' ? err.details : null
+      const error = typeof err.error === 'string' ? err.error : null
+      throw new Error(details || error || `Failed to steer thread: ${res.statusText}`)
+    }
+  }
+
   async stopThread(id: string): Promise<void> {
     const res = await fetch(`${API_URL}/api/threads/${id}/stop`, {
       method: 'POST',

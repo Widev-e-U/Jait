@@ -5171,6 +5171,36 @@ function App() {
     viewMode,
   ])
 
+  const steerQueuedChatMessage = useCallback((id: string) => {
+    const item = messageQueue.find((queued) => queued.id === id)
+    if (!item || !activeSessionId) return
+    if (!isLoading) {
+      toast.info('Steering is only available while the agent is running.')
+      return
+    }
+
+    void (async () => {
+      const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: item.content }),
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({})) as Record<string, unknown>
+        const details = typeof err.details === 'string' ? err.details : null
+        const error = typeof err.error === 'string' ? err.error : null
+        throw new Error(details || error || `Failed to steer: ${response.statusText}`)
+      }
+      dequeueMessage(id)
+      toast.success('Steered with queued message')
+    })().catch((err) => {
+      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
+    })
+  }, [activeSessionId, dequeueMessage, isLoading, messageQueue, token])
+
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
     setManagerMessageQueues((prev) => ({
       ...prev,
@@ -5275,6 +5305,26 @@ function App() {
       })
     })()
   }, [automation.selectedThread, automation.selectedRepo, managerMessageQueues, dequeueManagerMessage])
+
+  const steerManagerQueueItem = useCallback((id: string) => {
+    const thread = automation.selectedThread
+    if (!thread) return
+    const item = managerMessageQueues[thread.id]?.find((queued) => queued.id === id)
+    if (!item) return
+    if (thread.status !== 'running') {
+      toast.info('Steering is only available while the thread is running.')
+      return
+    }
+
+    void agentsApi.steerThread(thread.id, item.fullContent)
+      .then(() => {
+        dequeueManagerMessage(thread.id, id)
+        toast.success('Steered with queued message')
+      })
+      .catch((err) => {
+        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
+      })
+  }, [automation.selectedThread, dequeueManagerMessage, managerMessageQueues])
 
   const handleManagerQueue = useCallback(async (
     chipFiles?: ReferencedFile[],
@@ -7604,6 +7654,7 @@ function App() {
                               onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
                               onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
                               onReorder={(sourceId, targetId, placement) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId, placement)}
+                              onSteer={automation.selectedThread.status === 'running' ? steerManagerQueueItem : undefined}
                               onSendToParallelThread={sendManagerQueueItemToParallelThread}
                               className="mb-2"
                             />
@@ -7957,6 +8008,7 @@ function App() {
                         onRemove={dequeueMessage}
                         onEdit={updateQueueItem}
                         onReorder={reorderQueueItem}
+                        onSteer={isLoading && activeSessionId ? steerQueuedChatMessage : undefined}
                       />
                     )}
                   </Conversation>

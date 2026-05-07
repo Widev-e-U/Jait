@@ -296,6 +296,47 @@
     opacity: 0.7;
     white-space: pre;
   }
+
+  .jait-editor-search-line {
+    background: hsl(var(--primary) / 0.08);
+  }
+
+  .jait-editor-search-hit {
+    border-radius: 2px;
+    background: hsl(var(--primary) / 0.24);
+    outline: 1px solid hsl(var(--primary) / 0.42);
+  }
+
+  .jait-editor-added-line {
+    background: rgb(34 197 94 / 0.12);
+  }
+
+  .jait-editor-changed-line {
+    background: rgb(234 179 8 / 0.12);
+  }
+
+  .jait-editor-removed-line {
+    background: rgb(239 68 68 / 0.12);
+  }
+
+  .jait-editor-added-gutter,
+  .jait-editor-changed-gutter,
+  .jait-editor-removed-gutter {
+    margin-left: 3px;
+    width: 3px !important;
+  }
+
+  .jait-editor-added-gutter {
+    background: rgb(34 197 94 / 0.95);
+  }
+
+  .jait-editor-changed-gutter {
+    background: linear-gradient(to bottom, rgb(239 68 68 / 0.95) 0 45%, rgb(34 197 94 / 0.95) 45% 100%);
+  }
+
+  .jait-editor-removed-gutter {
+    background: rgb(239 68 68 / 0.95);
+  }
 }
 
 /* Touch-device variant: show elements that are hover-only on pointer devices */

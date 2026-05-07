@@ -10,6 +10,7 @@ interface ReviewableEditorProps {
   language: string
   value: string
   originalContent?: string | null
+  searchHighlight?: { query: string; line?: number | null; key: number } | null
   theme: string
   readOnly?: boolean
   onChange?: (value: string | undefined) => void
@@ -22,6 +23,7 @@ export function ReviewableEditor({
   language,
   value,
   originalContent,
+  searchHighlight,
   theme,
   readOnly,
   onChange,
@@ -31,9 +33,12 @@ export function ReviewableEditor({
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<any>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
+  const reviewDecorationIdsRef = useRef<string[]>([])
+  const searchDecorationIdsRef = useRef<string[]>([])
   const [hunks, setHunks] = useState<ReviewHunk[]>([])
   const [actionPositions, setActionPositions] = useState<Array<{ hunkIndex: number; top: number }>>([])
   const [isApplying, setIsApplying] = useState(false)
+  const [editorReadyVersion, setEditorReadyVersion] = useState(0)
 
   const hasReview = Boolean(originalContent != null && originalContent !== value)
 
@@ -96,6 +101,127 @@ export function ReviewableEditor({
   }, [])
 
   useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    const model = editor?.getModel?.()
+    if (!editor || !monaco || !model) return
+
+    const decorations = hasReview
+      ? hunks
+        .filter((hunk) => hunk.state === 'undecided')
+        .flatMap((hunk) => {
+          const modifiedLineCount = hunk.modifiedEndLineNumber > 0
+            ? hunk.modifiedEndLineNumber - hunk.modifiedStartLineNumber + 1
+            : 0
+          const originalLineCount = hunk.originalEndLineNumber > 0
+            ? hunk.originalEndLineNumber - hunk.originalStartLineNumber + 1
+            : 0
+
+          if (modifiedLineCount > 0) {
+            const className = originalLineCount > 0 ? 'jait-editor-changed-line' : 'jait-editor-added-line'
+            const gutterClassName = originalLineCount > 0 ? 'jait-editor-changed-gutter' : 'jait-editor-added-gutter'
+            return [{
+              range: new monaco.Range(
+                hunk.modifiedStartLineNumber,
+                1,
+                hunk.modifiedEndLineNumber,
+                model.getLineMaxColumn(hunk.modifiedEndLineNumber),
+              ),
+              options: {
+                isWholeLine: true,
+                className,
+                linesDecorationsClassName: gutterClassName,
+                overviewRuler: {
+                  color: originalLineCount > 0 ? 'rgba(234, 179, 8, 0.8)' : 'rgba(34, 197, 94, 0.8)',
+                  position: monaco.editor.OverviewRulerLane.Left,
+                },
+              },
+            }]
+          }
+
+          const anchorLine = Math.min(Math.max(1, getReviewAnchorLine(hunk)), model.getLineCount())
+          return [{
+            range: new monaco.Range(anchorLine, 1, anchorLine, model.getLineMaxColumn(anchorLine)),
+            options: {
+              isWholeLine: true,
+              className: 'jait-editor-removed-line',
+              linesDecorationsClassName: 'jait-editor-removed-gutter',
+              overviewRuler: {
+                color: 'rgba(239, 68, 68, 0.8)',
+                position: monaco.editor.OverviewRulerLane.Left,
+              },
+            },
+          }]
+        })
+      : []
+
+    reviewDecorationIdsRef.current = editor.deltaDecorations(reviewDecorationIdsRef.current, decorations)
+  }, [editorReadyVersion, hasReview, hunks])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    const model = editor?.getModel?.()
+    if (!editor || !monaco || !model) return
+
+    const query = searchHighlight?.query.trim()
+    if (!query) {
+      searchDecorationIdsRef.current = editor.deltaDecorations(searchDecorationIdsRef.current, [])
+      return
+    }
+
+    const lowerQuery = query.toLowerCase()
+    const lineCount = model.getLineCount()
+    const highlightedLine = searchHighlight?.line
+    const requestedLine = highlightedLine && highlightedLine >= 1
+      ? Math.min(highlightedLine, lineCount)
+      : null
+    const findInLine = (lineNumber: number) => {
+      const content = model.getLineContent(lineNumber)
+      const index = content.toLowerCase().indexOf(lowerQuery)
+      return index >= 0 ? { lineNumber, index } : null
+    }
+
+    let match = requestedLine ? findInLine(requestedLine) : null
+    if (!match) {
+      for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+        match = findInLine(lineNumber)
+        if (match) break
+      }
+    }
+
+    if (!match) {
+      searchDecorationIdsRef.current = editor.deltaDecorations(searchDecorationIdsRef.current, [])
+      return
+    }
+
+    const range = new monaco.Range(
+      match.lineNumber,
+      match.index + 1,
+      match.lineNumber,
+      match.index + 1 + query.length,
+    )
+    searchDecorationIdsRef.current = editor.deltaDecorations(searchDecorationIdsRef.current, [
+      {
+        range: new monaco.Range(match.lineNumber, 1, match.lineNumber, model.getLineMaxColumn(match.lineNumber)),
+        options: { isWholeLine: true, className: 'jait-editor-search-line' },
+      },
+      {
+        range,
+        options: {
+          inlineClassName: 'jait-editor-search-hit',
+          overviewRuler: {
+            color: 'rgba(59, 130, 246, 0.85)',
+            position: monaco.editor.OverviewRulerLane.Center,
+          },
+        },
+      },
+    ])
+    editor.revealRangeInCenter(range, monaco.editor.ScrollType.Smooth)
+    editor.setSelection(range)
+  }, [editorReadyVersion, searchHighlight, value])
+
+  useEffect(() => {
     const monaco = monacoRef.current
     if (!monaco) return
     applyActiveMonacoTheme(monaco, theme)
@@ -134,6 +260,7 @@ export function ReviewableEditor({
         onMount={(editor, monaco) => {
           editorRef.current = editor
           monacoRef.current = monaco
+          setEditorReadyVersion((version) => version + 1)
           applyActiveMonacoTheme(monaco, theme)
           const disposables = [
             editor.onDidScrollChange(() => updateActionPositions()),

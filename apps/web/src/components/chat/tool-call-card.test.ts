@@ -6,6 +6,7 @@ let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card
 let isInlineToolCall: typeof import('./tool-call-card')['isInlineToolCall']
 let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCollapsedToolCalls']
 let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
+let formatOutput: typeof import('./tool-call-card')['formatOutput']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -23,6 +24,7 @@ beforeAll(async () => {
     isInlineToolCall,
     summarizeCollapsedToolCalls,
     computeAgentNesting,
+    formatOutput,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -38,6 +40,52 @@ describe('formatStructuredValue', () => {
     expect(formatStructuredValue({ surfaces: [{ id: 'browser-1' }] })).toBe(
       JSON.stringify({ surfaces: [{ id: 'browser-1' }] }, null, 2),
     )
+  })
+
+  it('unwraps MCP result envelopes instead of showing wrapper fields', () => {
+    expect(formatStructuredValue({
+      content: [
+        {
+          type: 'text',
+          text: 'Command completed (exit code 0) {"output":"error: No packages matched the filter","exitCode":0,"timedOut":false}',
+        },
+      ],
+      structuredContent: null,
+      _meta: null,
+      error: null,
+    })).toBe('error: No packages matched the filter')
+  })
+})
+
+describe('formatOutput', () => {
+  it('renders structured terminal results as terminal output text', () => {
+    expect(formatOutput({
+      ok: true,
+      message: JSON.stringify({
+        formatted_output: 'bun test\n\n1 pass',
+        exit_code: 0,
+      }),
+    }, 'terminal.run')).toBe('bun test\n\n1 pass')
+  })
+
+  it('renders nested MCP terminal results as command output text', () => {
+    expect(formatOutput({
+      ok: true,
+      message: 'Tool completed',
+      data: {
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: 'Command completed (exit code 0) {"output":"error: No packages matched the filter","exitCode":0,"timedOut":false,"terminalId":"term-1"}',
+            },
+          ],
+          structuredContent: null,
+          _meta: null,
+          error: null,
+        },
+      },
+    }, 'mcp-tool')).toBe('error: No packages matched the filter')
   })
 })
 

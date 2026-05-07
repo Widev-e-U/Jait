@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import Editor from '@monaco-editor/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronRight, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
@@ -13,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import type { LlmContextFlow, LlmContextFlowRound, RoundMetrics } from '@/hooks/useChat'
+import { useEditorThemeName } from '@/hooks/use-editor-theme'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 type TraceRow =
   | { id: string; kind: 'summary'; flow: LlmContextFlow }
@@ -460,12 +463,8 @@ function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?:
   )
 }
 
-export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, responseContent }: LlmContextFlowDialogProps) {
-  const [mode, setMode] = useState<'trace' | 'raw'>('trace')
-  const [copied, setCopied] = useState(false)
+function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[]; contextFlow?: LlmContextFlow }) {
   const parentRef = useRef<HTMLDivElement | null>(null)
-  const rows = useMemo(() => buildRows(contextFlow, responseContent), [contextFlow, responseContent])
-  const rawText = useMemo(() => contextFlow ? JSON.stringify(contextFlow, null, 2) : '', [contextFlow])
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -475,35 +474,114 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
       if (row.kind === 'summary') return 110
       if (row.kind === 'round') return 120
       if (row.kind === 'tools') return Math.min(420, 110 + row.tools.length * 72)
-      // Messages and the final response start collapsed — estimate only the header height
       if (row.kind === 'response') return 72
       return 52
     },
     overscan: 5,
-    enabled: open && mode === 'trace',
+    enabled: open,
   })
 
   useEffect(() => {
-    if (!open || mode !== 'trace') return
+    if (!open) return
 
     const frame = window.requestAnimationFrame(() => {
       virtualizer.measure()
     })
 
     return () => window.cancelAnimationFrame(frame)
-  }, [open, mode, rows.length, virtualizer])
+  }, [open, rows.length, virtualizer])
+
+  const handleExpandChange = () => {
+    window.requestAnimationFrame(() => {
+      virtualizer.measure()
+    })
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-2">
+      {contextFlow?.note ? (
+        <p className="mb-2 shrink-0 rounded-md border border-border/70 bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+          {contextFlow.note}
+        </p>
+      ) : null}
+      {rows.length > 0 ? (
+        <div ref={parentRef} className="min-h-0 flex-1 overflow-auto pr-2">
+          <div
+            className="relative w-full"
+            style={{ height: `${virtualizer.getTotalSize()}px` }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index]
+              if (!row) return null
+              return (
+                <div
+                  key={row.id}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full pb-3"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <TraceRowView row={row} onExpandChange={handleExpandChange} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+          <MessageSquare className="mr-2 h-4 w-4" />
+          No context snapshot is available for this message.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RawContextEditor({ rawText }: { rawText: string }) {
+  const monacoThemeName = useEditorThemeName()
+  const displayText = rawText || 'No context snapshot is available for this message.'
+
+  return (
+    <div className="h-full min-h-0 p-3 pt-2">
+      <div className="h-full min-h-0 overflow-hidden rounded-md border border-border/70 bg-background">
+        <Editor
+          height="100%"
+          language={rawText ? 'json' : 'plaintext'}
+          beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
+          theme={monacoThemeName}
+          value={displayText}
+          options={{
+            readOnly: true,
+            domReadOnly: true,
+            minimap: { enabled: false },
+            'semanticHighlighting.enabled': true,
+            automaticLayout: true,
+            wordWrap: 'on',
+            fontSize: 12,
+            lineHeight: 18,
+            padding: { top: 12, bottom: 12 },
+            scrollBeyondLastLine: false,
+            renderLineHighlight: 'none',
+            overviewRulerLanes: 0,
+            tabSize: 2,
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, responseContent }: LlmContextFlowDialogProps) {
+  const [mode, setMode] = useState<'trace' | 'raw'>('trace')
+  const [copied, setCopied] = useState(false)
+  const rows = useMemo(() => buildRows(contextFlow, responseContent), [contextFlow, responseContent])
+  const rawText = useMemo(() => contextFlow ? JSON.stringify(contextFlow, null, 2) : '', [contextFlow])
 
   const copyRaw = async () => {
     if (!rawText) return
     await navigator.clipboard.writeText(rawText)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
-  }
-
-  const handleExpandChange = () => {
-    window.requestAnimationFrame(() => {
-      virtualizer.measure()
-    })
   }
 
   return (
@@ -552,48 +630,9 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
         </DialogHeader>
 
         {mode === 'trace' ? (
-          <div className="min-h-0 px-3 pb-3 pt-2">
-            {contextFlow?.note ? (
-              <p className="mb-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-                {contextFlow.note}
-              </p>
-            ) : null}
-            {rows.length > 0 ? (
-              <div ref={parentRef} className="h-full min-h-0 overflow-auto pr-2">
-                <div
-                  className="relative w-full"
-                  style={{ height: `${virtualizer.getTotalSize()}px` }}
-                >
-                  {virtualizer.getVirtualItems().map((virtualRow) => {
-                    const row = rows[virtualRow.index]
-                    if (!row) return null
-                    return (
-                      <div
-                        key={row.id}
-                        data-index={virtualRow.index}
-                        ref={virtualizer.measureElement}
-                        className="absolute left-0 top-0 w-full pb-3"
-                        style={{ transform: `translateY(${virtualRow.start}px)` }}
-                      >
-                        <TraceRowView row={row} onExpandChange={handleExpandChange} />
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
-                <MessageSquare className="mr-2 h-4 w-4" />
-                No context snapshot is available for this message.
-              </div>
-            )}
-          </div>
+          <TraceList key="trace-list" open={open} rows={rows} contextFlow={contextFlow} />
         ) : (
-          <div className="min-h-0 overflow-auto px-3 pb-3 pt-2">
-            <pre className="min-h-full whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted/35 p-3 font-mono text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
-              {rawText || 'No context snapshot is available for this message.'}
-            </pre>
-          </div>
+          <RawContextEditor rawText={rawText} />
         )}
       </DialogContent>
     </Dialog>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('normalizes multi-segment tool names used by tool cards', () => {
@@ -164,6 +164,24 @@ describe('tool call body helpers', () => {
         ],
       }),
     ).toBe('/tmp/jait-codex-test/sample.txt')
+  })
+
+  it('extracts multiple edited file paths from structured result payloads', () => {
+    expect(
+      getToolFilePaths(
+        'edit',
+        {},
+        {
+          changes: [
+            { file_path: 'apps/web/src/App.tsx' },
+            { path: 'packages/gateway/src/routes/threads.ts' },
+          ],
+        },
+      ),
+    ).toEqual([
+      'apps/web/src/App.tsx',
+      'packages/gateway/src/routes/threads.ts',
+    ])
   })
 
   it('extracts screenshot paths from structured result payloads', () => {

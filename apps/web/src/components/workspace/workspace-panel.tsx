@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor, { loader } from '@monaco-editor/react'
 import { AlertCircle, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
@@ -281,6 +281,26 @@ function isDescendantPath(parentPath: string, candidatePath: string): boolean {
   const normalizedParent = normalizePath(parentPath)
   const normalizedCandidate = normalizePath(candidatePath)
   return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}/`)
+}
+
+function workspaceRelativePath(filePath: string, rootPath: string | null): string {
+  const normalizedFile = normalizePath(filePath)
+  if (!rootPath) return normalizedFile
+  const normalizedRoot = normalizePath(rootPath)
+  if (normalizedFile === normalizedRoot) return ''
+  return normalizedFile.startsWith(`${normalizedRoot}/`)
+    ? normalizedFile.slice(normalizedRoot.length + 1)
+    : normalizedFile
+}
+
+function pathsMatchWorkspaceFile(candidatePath: string, filePath: string, rootPath: string | null): boolean {
+  const normalizedCandidate = normalizePath(candidatePath)
+  const normalizedFile = normalizePath(filePath)
+  const relativeFile = workspaceRelativePath(normalizedFile, rootPath)
+  return normalizedCandidate === normalizedFile
+    || normalizedCandidate === relativeFile
+    || normalizedFile.endsWith(`/${normalizedCandidate}`)
+    || normalizedCandidate.endsWith(`/${relativeFile}`)
 }
 
 /* ------------------------------------------------------------------ */
@@ -583,6 +603,13 @@ interface EditorTab {
   previewTarget?: string
   previewSrc?: string | null
   previewMode?: 'raw' | 'managed' | null
+}
+
+interface EditorSearchHighlight {
+  path: string
+  query: string
+  line?: number | null
+  key: number
 }
 
 interface CloseTabOptions {
@@ -1164,6 +1191,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const resolvedTheme = useResolvedTheme()
   const monacoThemeName = useEditorThemeName()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void loader.init().then((monaco) => {
+      if (!cancelled) applyActiveMonacoTheme(monaco, monacoThemeName)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [monacoThemeName])
   /** When non-null, we're in remote (server-backed) mode */
   const [remoteRoot, setRemoteRoot] = useState<string | null>(null)
   const [remoteTreeLoading, setRemoteTreeLoading] = useState(false)
@@ -1278,6 +1312,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+  const findWorkingTreeDiffEntry = useCallback((filePath: string) => (
+    workingTreeDiffEntries.find((entry) => pathsMatchWorkspaceFile(entry.path, filePath, remoteRoot)) ?? null
+  ), [remoteRoot, workingTreeDiffEntries])
+  const activeTabGitDiffEntry = useMemo(() => (
+    activeTab?.type === 'file' ? findWorkingTreeDiffEntry(activeTab.path) : null
+  ), [activeTab, findWorkingTreeDiffEntry])
   const activeTabEditable = isEditableWorkspaceTab(activeTab)
   const canMaximizeActiveTab = Boolean(activeTab)
   const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed && !tree.collapsed
@@ -1328,6 +1368,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
   const [fileSearchResults, setFileSearchResults] = useState<{ files?: { path: string; name: string }[]; matches?: { file: string; line: number; content: string }[] } | null>(null)
   const [fileSearchLoading, setFileSearchLoading] = useState(false)
+  const [editorSearchHighlight, setEditorSearchHighlight] = useState<EditorSearchHighlight | null>(null)
   const fileSearchAbortRef = useRef<AbortController | null>(null)
   const [managedPreviewSession, setManagedPreviewSession] = useState<PreviewSessionState | null>(null)
   const [previewInput, setPreviewInput] = useState(previewInitialTarget?.trim() || '')
@@ -2078,10 +2119,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [])
 
   const loadTabReviewBaseline = useCallback(async (tabId: string, filePath: string) => {
-    if (!surfaceId) return
+    const gitOriginalContent = findWorkingTreeDiffEntry(filePath)?.original ?? null
+    if (!surfaceId) {
+      setTabOriginalContent(tabId, gitOriginalContent)
+      return
+    }
     const backup = await remoteReadBackup(filePath, surfaceId).catch(() => null)
-    setTabOriginalContent(tabId, backup)
-  }, [setTabOriginalContent, surfaceId])
+    setTabOriginalContent(tabId, backup ?? gitOriginalContent)
+  }, [findWorkingTreeDiffEntry, setTabOriginalContent, surfaceId])
+
+  useEffect(() => {
+    if (activeTab?.type !== 'file') return
+    const entry = findWorkingTreeDiffEntry(activeTab.path)
+    if (!entry) return
+    if (activeTab.originalContent === entry.original) return
+    setTabOriginalContent(activeTab.id, entry.original)
+  }, [activeTab, findWorkingTreeDiffEntry, setTabOriginalContent])
 
   const handleTabContentChange = useCallback((tabId: string, nextContent: string | undefined) => {
     setOpenTabs((prev) => prev.map((tab) => {
@@ -2138,6 +2191,82 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       )))
     }
   }, [activeTabId, bumpTree, fetchGitStatus, findLazyFileNode, openTabs, remoteRoot, surfaceId])
+
+  const handleRevertTab = useCallback(async (tabId: string) => {
+    const tab = openTabs.find((entry) => entry.id === tabId)
+    if (!tab || !isEditableWorkspaceTab(tab)) return
+
+    if (tab.isDirty) {
+      const savedContent = tab.savedContent ?? ''
+      setOpenTabs((prev) => prev.map((entry) => (
+        entry.id === tabId
+          ? { ...entry, content: savedContent, modifiedContent: savedContent, isDirty: false, saveError: null }
+          : entry
+      )))
+      if (activeTabId === tabId) setPreviewContent(savedContent)
+      return
+    }
+
+    if (!remoteRoot || gitActionBusy) return
+    const diffEntry = findWorkingTreeDiffEntry(tab.path)
+    const relativePath = workspaceRelativePath(tab.path, remoteRoot)
+    const discardPath = diffEntry?.path ?? relativePath
+    if (!discardPath) return
+
+    const confirmed = await confirm({
+      title: 'Revert file changes',
+      description: `Discard all Git changes in "${tab.label}"?`,
+      confirmLabel: 'Revert',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.discard(remoteRoot, [discardPath])
+      let refreshedContent: string | null = null
+      try {
+        refreshedContent = await remoteReadFile(tab.path, surfaceId)
+      } catch {
+        refreshedContent = null
+      }
+
+      if (refreshedContent == null) {
+        setOpenTabs((prev) => prev.filter((entry) => entry.id !== tabId))
+        if (activeTabId === tabId) {
+          setActiveTabId(null)
+          setPreviewContent(null)
+          setPreviewPath(null)
+        }
+      } else {
+        setOpenTabs((prev) => prev.map((entry) => (
+          entry.id === tabId
+            ? {
+              ...entry,
+              content: refreshedContent,
+              modifiedContent: refreshedContent,
+              savedContent: refreshedContent,
+              originalContent: null,
+              isDirty: false,
+              isSaving: false,
+              saveError: null,
+            }
+            : entry
+        )))
+        if (activeTabId === tabId) setPreviewContent(refreshedContent)
+      }
+
+      setScDiffFile((prev) => (prev && pathsMatchWorkspaceFile(prev.path, tab.path, remoteRoot) ? null : prev))
+      setOpenTabs((prev) => prev.filter((entry) => entry.type !== 'diff' || !pathsMatchWorkspaceFile(entry.path, tab.path, remoteRoot)))
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Revert failed')
+    } finally {
+      setGitActionBusy(false)
+    }
+  }, [activeTabId, bumpTree, confirm, fetchGitStatus, findWorkingTreeDiffEntry, gitActionBusy, openTabs, remoteRoot, surfaceId])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -4272,6 +4401,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
         }`}
       >
+        <button
+          type="button"
+          className={cn(actionButtonClassName, 'hover:text-red-500')}
+          onClick={(e) => {
+            e.stopPropagation()
+            setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
+          }}
+          title="Discard changes"
+          aria-label="Discard changes"
+        >
+          <Undo2 className={iconClassName} />
+        </button>
         {actions === 'stage' ? (
           <button
             type="button"
@@ -4293,18 +4434,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <Minus className={iconClassName} />
           </button>
         )}
-        <button
-          type="button"
-          className={cn(actionButtonClassName, 'hover:text-red-500')}
-          onClick={(e) => {
-            e.stopPropagation()
-            setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
-          }}
-          title="Discard changes"
-          aria-label="Discard changes"
-        >
-          <Undo2 className={iconClassName} />
-        </button>
       </span>
     )
   }, [handleStageFile, handleUnstageFile])
@@ -4842,7 +4971,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     className="flex flex-col gap-0 rounded px-1 py-2 cursor-pointer text-sm hover:bg-muted active:bg-muted"
                     style={{ paddingLeft: 8 }}
                     onClick={() => {
-                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${m.file}` : m.file
+                      const normalizedMatchPath = normalizePath(m.file)
+                      const normalizedRoot = remoteRoot ? normalizePath(remoteRoot) : null
+                      const fullPath = normalizedRoot && !normalizedMatchPath.startsWith(`${normalizedRoot}/`)
+                        ? `${normalizedRoot}/${normalizedMatchPath}`
+                        : normalizedMatchPath
+                      const query = fileSearchQuery.trim()
+                      if (query) {
+                        setEditorSearchHighlight({ path: fullPath, query, line: m.line, key: Date.now() })
+                      }
                       void handleOpenFileByPath(fullPath)
                       if (isMobile) setMobileTab('editor')
                       setFileSearchQuery('')
@@ -5107,6 +5244,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   language={activeTab.language ?? 'plaintext'}
                   value={activeTab.content ?? ''}
                   originalContent={activeTab.originalContent}
+                  searchHighlight={editorSearchHighlight && pathsMatchWorkspaceFile(editorSearchHighlight.path, activeTab.path, remoteRoot) ? editorSearchHighlight : null}
                   theme={monacoThemeName}
                   readOnly={!isEditableWorkspaceTab(activeTab)}
                   onChange={(value) => handleTabContentChange(activeTab.id, value)}
@@ -5434,7 +5572,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     className="flex flex-col gap-0 rounded px-1 py-1 cursor-pointer text-xs hover:bg-muted"
                     style={{ paddingLeft: 8 }}
                     onClick={() => {
-                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${m.file}` : m.file
+                      const normalizedMatchPath = normalizePath(m.file)
+                      const normalizedRoot = remoteRoot ? normalizePath(remoteRoot) : null
+                      const fullPath = normalizedRoot && !normalizedMatchPath.startsWith(`${normalizedRoot}/`)
+                        ? `${normalizedRoot}/${normalizedMatchPath}`
+                        : normalizedMatchPath
+                      const query = fileSearchQuery.trim()
+                      if (query) {
+                        setEditorSearchHighlight({ path: fullPath, query, line: m.line, key: Date.now() })
+                      }
                       void handleOpenFileByPath(fullPath)
                       setFileSearchQuery('')
                       setFileSearchResults(null)
@@ -5802,14 +5948,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               )}
               {activeTabEditable && (
-                <button
-                  onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
-                  disabled={activeTab?.isSaving}
-                >
-                  <Save className={`h-3 w-3 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
-                </button>
+                <>
+                  {(activeTab?.isDirty || activeTabGitDiffEntry) && (
+                    <button
+                      onClick={() => { if (activeTabId) void handleRevertTab(activeTabId) }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                      title={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
+                      disabled={gitActionBusy}
+                    >
+                      <Undo2 className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                    title={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
+                    disabled={activeTab?.isSaving}
+                  >
+                    <Save className={`h-3 w-3 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
+                  </button>
+                </>
               )}
               {activeTab?.type === 'preview' && (
                 <>
@@ -5907,6 +6065,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             language={activeTab.language ?? 'plaintext'}
             value={activeTab.content ?? ''}
             originalContent={activeTab.originalContent}
+            searchHighlight={editorSearchHighlight && pathsMatchWorkspaceFile(editorSearchHighlight.path, activeTab.path, remoteRoot) ? editorSearchHighlight : null}
             theme={monacoThemeName}
             readOnly={!isEditableWorkspaceTab(activeTab)}
             onChange={(value) => handleTabContentChange(activeTab.id, value)}

@@ -89,12 +89,26 @@ function extractPathLikeString(value: string): string | null {
   return null
 }
 
+function extractPathLikeStrings(value: string): string[] {
+  const paths = new Set<string>()
+  const pattern = /(?:^|[\s:(['"`])((?:\/|\.\/|\.\.\/)?(?:[\w.@-]+\/)+[\w.@-]+(?:\.[\w-]+)?|(?:\/|\.\/|\.\.\/)?[\w.@-]+(?:\/[\w.@-]+)*\.[\w-]+)/g
+  for (const match of value.matchAll(pattern)) {
+    if (match[1]?.trim()) paths.add(match[1].trim())
+  }
+  return [...paths]
+}
+
 function isImagePath(value: string): boolean {
   return /\.(?:png|jpe?g|gif|webp)$/i.test(value.trim())
 }
 
 function firstPathFromChanges(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined
+  return pathsFromChanges(value)[0]
+}
+
+function pathsFromChanges(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const paths: string[] = []
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue
     const path = firstNonEmptyString(
@@ -104,9 +118,33 @@ function firstPathFromChanges(value: unknown): string | undefined {
       (entry as Record<string, unknown>).file,
       (entry as Record<string, unknown>).filename,
     )
-    if (path) return path
+    if (path) paths.push(path)
   }
-  return undefined
+  return [...new Set(paths)]
+}
+
+function pathsFromUnknown(value: unknown, depth = 0): string[] {
+  if (depth > 4 || value == null) return []
+  if (typeof value === 'string') return extractPathLikeStrings(value)
+  if (Array.isArray(value)) {
+    return [...new Set(value.flatMap((entry) => pathsFromUnknown(entry, depth + 1)))]
+  }
+  if (typeof value !== 'object') return []
+
+  const record = value as Record<string, unknown>
+  const direct = firstNonEmptyString(
+    record.path,
+    record.file_path,
+    record.filePath,
+    record.file,
+    record.filename,
+    record.target_file,
+    record.targetFile,
+    record.relative_path,
+  )
+  const nestedKeys = ['changes', 'files', 'edits', 'modifiedFiles', 'modified_files', 'diffs', 'result', 'data', 'output']
+  const nested = nestedKeys.flatMap((key) => pathsFromUnknown(record[key], depth + 1))
+  return [...new Set([direct, ...nested].filter((path): path is string => typeof path === 'string' && path.trim().length > 0))]
 }
 
 function getInvocationObject(
@@ -180,15 +218,34 @@ export function getMcpToolLabel(
 export function getToolFilePath(
   tool: string,
   args: Record<string, unknown>,
-  resultData?: Record<string, unknown>,
+  resultData?: unknown,
   resultMessage?: string | null,
 ): string | null {
+  return getToolFilePaths(tool, args, resultData, resultMessage)[0] ?? null
+}
+
+export function getToolFilePaths(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: unknown,
+  resultMessage?: string | null,
+): string[] {
   const normalizedTool = normalizeToolName(tool)
   if (normalizedTool !== 'edit' && normalizedTool !== 'file.write' && normalizedTool !== 'file.patch' && normalizedTool !== 'read' && normalizedTool !== 'file.read') {
-    return null
+    return []
   }
 
-  const normalizedArgs = normalizeToolArgs(normalizedTool, args, resultData)
+  const resultRecord = resultData && typeof resultData === 'object' && !Array.isArray(resultData)
+    ? resultData as Record<string, unknown>
+    : undefined
+  const normalizedArgs = normalizeToolArgs(normalizedTool, args, resultRecord)
+  const paths: string[] = []
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return
+    const trimmed = value.trim()
+    if (trimmed && !paths.includes(trimmed)) paths.push(trimmed)
+  }
+
   const directPath = firstNonEmptyString(
     normalizedArgs.path,
     normalizedArgs.file_path,
@@ -202,9 +259,9 @@ export function getToolFilePath(
     normalizedArgs.title,
     firstPathFromChanges(normalizedArgs.changes),
   )
-  if (directPath) return directPath
+  push(directPath)
 
-  const nested = getInvocationObject(args, resultData)
+  const nested = getInvocationObject(args, resultRecord)
   const nestedPath = firstNonEmptyString(
     nested?.path,
     nested?.file_path,
@@ -218,9 +275,15 @@ export function getToolFilePath(
     nested?.title,
     firstPathFromChanges(nested?.changes),
   )
-  if (nestedPath) return nestedPath
+  push(nestedPath)
 
-  return resultMessage ? extractPathLikeString(resultMessage) : null
+  for (const path of pathsFromUnknown(resultData)) push(path)
+  if (resultMessage) {
+    for (const path of extractPathLikeStrings(resultMessage)) push(path)
+    push(extractPathLikeString(resultMessage))
+  }
+
+  return paths
 }
 
 export function getToolImagePath(

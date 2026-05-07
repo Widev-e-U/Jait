@@ -27,6 +27,7 @@ class MockThreadProvider implements CliProviderAdapter {
 
   private emitter = new EventEmitter();
   private nextSessionNumber = 1;
+  readonly sentTurns: Array<{ sessionId: string; message: string; attachments?: string[] }> = [];
 
   async checkAvailability(): Promise<boolean> {
     return true;
@@ -49,8 +50,8 @@ class MockThreadProvider implements CliProviderAdapter {
     };
   }
 
-  async sendTurn(_sessionId: string, _message: string, _attachments?: string[]): Promise<void> {
-    return;
+  async sendTurn(sessionId: string, message: string, attachments?: string[]): Promise<void> {
+    this.sentTurns.push({ sessionId, message, attachments });
   }
 
   async interruptTurn(_sessionId: string): Promise<void> {
@@ -211,6 +212,103 @@ describe("thread routes", () => {
       const body = JSON.parse(activitiesRes.body) as { activities: Array<unknown> };
 
       expect(body.activities).toHaveLength(150);
+    } finally {
+      await app.close();
+      sqlite.close();
+    }
+  });
+
+  it("persists streamed assistant text at tool-call boundaries", async () => {
+    const { app, sqlite, provider, inject } = await setupThreadApp();
+    try {
+      const threadRes = await inject({
+        method: "POST",
+        url: "/api/threads",
+        payload: { title: "Interleaved Thread", providerId: "codex" },
+      });
+      const thread = JSON.parse(threadRes.body) as { id: string };
+
+      const startedRes = await inject({
+        method: "POST",
+        url: `/api/threads/${thread.id}/start`,
+      });
+      const started = JSON.parse(startedRes.body) as { providerSessionId: string };
+
+      provider.emit({ type: "token", sessionId: started.providerSessionId, content: "First " });
+      provider.emit({ type: "token", sessionId: started.providerSessionId, content: "answer." });
+      provider.emit({
+        type: "tool.start",
+        sessionId: started.providerSessionId,
+        tool: "file.read",
+        args: { path: "app.ts" },
+        callId: "call-1",
+      });
+      provider.emit({
+        type: "tool.result",
+        sessionId: started.providerSessionId,
+        tool: "file.read",
+        ok: true,
+        message: "read app.ts",
+        callId: "call-1",
+      });
+      provider.emit({ type: "token", sessionId: started.providerSessionId, content: "Second answer." });
+      provider.emit({ type: "turn.completed", sessionId: started.providerSessionId });
+
+      const activitiesRes = await inject({
+        method: "GET",
+        url: `/api/threads/${thread.id}/activities`,
+      });
+      const body = JSON.parse(activitiesRes.body) as {
+        activities: Array<{ kind: string; payload?: { role?: string; content?: string; tool?: string } }>;
+      };
+      const ordered = [...body.activities].reverse()
+        .filter((activity) => activity.kind === "message" || activity.kind.startsWith("tool."));
+
+      expect(ordered.map((activity) => activity.kind)).toEqual([
+        "message",
+        "tool.start",
+        "tool.result",
+        "message",
+      ]);
+      expect(ordered[0]?.payload?.content).toBe("First answer.");
+      expect(ordered[3]?.payload?.content).toBe("Second answer.");
+    } finally {
+      await app.close();
+      sqlite.close();
+    }
+  });
+
+  it("accepts steering messages for a running thread", async () => {
+    const { app, sqlite, provider, inject } = await setupThreadApp();
+    try {
+      const threadRes = await inject({
+        method: "POST",
+        url: "/api/threads",
+        payload: { title: "Steered Thread", providerId: "codex" },
+      });
+      const thread = JSON.parse(threadRes.body) as { id: string };
+
+      const startedRes = await inject({
+        method: "POST",
+        url: `/api/threads/${thread.id}/start`,
+      });
+      const started = JSON.parse(startedRes.body) as { providerSessionId: string };
+
+      const steerRes = await inject({
+        method: "POST",
+        url: `/api/threads/${thread.id}/steer`,
+        payload: { message: "Use the smaller fix." },
+      });
+
+      expect(steerRes.statusCode).toBe(200);
+      expect(provider.sentTurns).toEqual([]);
+
+      provider.emit({ type: "turn.completed", sessionId: started.providerSessionId });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(provider.sentTurns).toEqual([
+        { sessionId: started.providerSessionId, message: "Use the smaller fix.", attachments: undefined },
+      ]);
     } finally {
       await app.close();
       sqlite.close();
