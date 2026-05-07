@@ -52,6 +52,7 @@ describe("fresh onboarding", () => {
       "memories",
       "messages",
       "network_hosts",
+      "reminders",
       "scheduled_job_runs",
       "scheduled_jobs",
       "session_state",

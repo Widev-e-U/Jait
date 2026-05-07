@@ -769,4 +769,31 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 034: Agent reminders table ──────────────────────────────────
+  {
+    id: 34,
+    name: "reminders_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS reminders (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          workspace_id TEXT,
+          session_id TEXT,
+          content TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'agent',
+          source_id TEXT,
+          source_surface TEXT NOT NULL DEFAULT 'chat',
+          status TEXT NOT NULL DEFAULT 'active',
+          tags TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_user_status ON reminders(user_id, status, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_workspace ON reminders(workspace_id, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_session ON reminders(session_id, updated_at DESC)`);
+    },
+  },
+
 ];

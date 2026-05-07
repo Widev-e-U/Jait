@@ -1,0 +1,105 @@
+import { describe, expect, it } from "vitest";
+import type { MemoryEntry, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
+import type { ReminderRow, ReminderService } from "../services/reminders.js";
+import type { ToolContext } from "./contracts.js";
+import { createMemoryForgetTool, createMemorySaveTool, createMemorySearchTool } from "./memory-tools.js";
+
+const context: ToolContext = {
+  sessionId: "session-1",
+  actionId: "action-1",
+  workspaceRoot: "/workspace/jait",
+  requestedBy: "user",
+  userId: "user-1",
+};
+
+function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
+  return {
+    id: "memory-1",
+    scope: "workspace",
+    content: "Memory",
+    source: { type: "agent", id: "action-1", surface: "chat" },
+    embedding: {},
+    createdAt: "2026-05-07T00:00:00.000Z",
+    updatedAt: "2026-05-07T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function reminder(overrides: Partial<ReminderRow> = {}): ReminderRow {
+  return {
+    id: "reminder-1",
+    userId: "user-1",
+    workspaceId: "workspace-1",
+    sessionId: "session-1",
+    content: "Reminder",
+    sourceType: "agent",
+    sourceId: "action-1",
+    sourceSurface: "chat",
+    status: "active",
+    tags: "[]",
+    createdAt: "2026-05-07T00:00:00.000Z",
+    updatedAt: "2026-05-07T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("memory tools with reminders", () => {
+  it("saves explicit reminders through memory.save", async () => {
+    const created = reminder();
+    const reminders = {
+      create: (params: { content: string; userId?: string; sessionId?: string | null }) => ({
+        ...created,
+        content: params.content,
+        userId: params.userId ?? null,
+        sessionId: params.sessionId ?? null,
+      }),
+    } as unknown as ReminderService;
+    const memory = { save: async (input: SaveMemoryInput) => memoryEntry({ content: input.content }) } as MemoryService;
+    const tool = createMemorySaveTool(memory, reminders);
+
+    const result = await tool.execute({
+      kind: "reminder",
+      scope: "workspace",
+      content: "Remember this",
+      sourceType: "agent",
+      sourceId: "action-1",
+      sourceSurface: "chat",
+    }, context);
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain("Saved reminder");
+    expect(result.data).toMatchObject({ content: "Remember this", userId: "user-1", sessionId: "session-1" });
+  });
+
+  it("returns memories and reminders from memory.search", async () => {
+    const memory = {
+      search: async () => [memoryEntry()],
+    } as MemoryService;
+    const reminders = {
+      list: () => [reminder()],
+    } as unknown as ReminderService;
+    const tool = createMemorySearchTool(memory, reminders);
+
+    const result = await tool.execute({ query: "remember", limit: 3 }, context);
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({
+      memories: [{ id: "memory-1" }],
+      reminders: [{ id: "reminder-1" }],
+    });
+  });
+
+  it("deletes reminders before falling back to semantic memory", async () => {
+    const memory = {
+      forget: async () => false,
+    } as MemoryService;
+    const reminders = {
+      delete: () => true,
+    } as unknown as ReminderService;
+    const tool = createMemoryForgetTool(memory, reminders);
+
+    const result = await tool.execute({ id: "reminder-1" }, context);
+
+    expect(result).toMatchObject({ ok: true, message: "Forgot reminder reminder-1" });
+  });
+});
