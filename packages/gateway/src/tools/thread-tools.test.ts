@@ -1118,6 +1118,69 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("waits for create_many started threads to finish before returning", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      let sessionCount = 0;
+      provider.startSession = async (options: StartSessionOptions): Promise<ProviderSession> => {
+        provider.lastStartOptions = options;
+        sessionCount += 1;
+        const sessionId = `mock-session-${sessionCount}`;
+        provider.emit({ type: "session.started", sessionId });
+        return {
+          id: sessionId,
+          providerId: provider.id,
+          threadId: options.threadId,
+          status: "running",
+          runtimeMode: options.mode,
+          startedAt: new Date().toISOString(),
+        };
+      };
+      provider.sendTurn.mockImplementation(async (sessionId: string) => {
+        setTimeout(() => {
+          provider.emit({ type: "turn.completed", sessionId });
+        }, 25);
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const outputChunks: string[] = [];
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create_many",
+          prompt: "inspect ui",
+          start: true,
+          threads: [
+            { title: "Thread A" },
+            { title: "Thread B" },
+          ],
+        },
+        { ...context, onOutputChunk: (chunk) => outputChunks.push(chunk) },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.message).toBe("Created 2 thread(s) and waited for 2 to finish.");
+      expect(outputChunks.join("")).toContain("Waiting for 2 thread(s) to finish");
+      const data = result.data as { threads: Array<{ status: string; completedAt: string | null }> };
+      expect(data.threads).toHaveLength(2);
+      expect(data.threads.every((thread) => thread.status === "completed")).toBe(true);
+      expect(data.threads.every((thread) => Boolean(thread.completedAt))).toBe(true);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("defaults create_many threads to the selected provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

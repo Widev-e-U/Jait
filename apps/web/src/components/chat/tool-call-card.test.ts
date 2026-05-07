@@ -7,6 +7,7 @@ let isInlineToolCall: typeof import('./tool-call-card')['isInlineToolCall']
 let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCollapsedToolCalls']
 let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
 let formatOutput: typeof import('./tool-call-card')['formatOutput']
+let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -25,6 +26,7 @@ beforeAll(async () => {
     summarizeCollapsedToolCalls,
     computeAgentNesting,
     formatOutput,
+    getThreadControlListItems,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -86,6 +88,57 @@ describe('formatOutput', () => {
         },
       },
     }, 'mcp-tool')).toBe('error: No packages matched the filter')
+  })
+})
+
+describe('getThreadControlListItems', () => {
+  it('uses result threads when available', () => {
+    expect(getThreadControlListItems(
+      {
+        action: 'create_many',
+        threads: [{ title: 'Draft' }],
+      },
+      {
+        threads: [
+          {
+            id: 'thread-12345678',
+            title: 'Implemented API',
+            status: 'completed',
+            providerId: 'codex',
+            kind: 'delegation',
+          },
+        ],
+      },
+      'success',
+    )).toEqual([
+      {
+        id: 'thread-12345678',
+        title: 'Implemented API',
+        status: 'completed',
+        providerId: 'codex',
+        kind: 'delegation',
+        branch: null,
+        workingDirectory: null,
+        error: null,
+      },
+    ])
+  })
+
+  it('falls back to requested thread specs while running', () => {
+    expect(getThreadControlListItems(
+      {
+        action: 'create_many',
+        threads: [
+          { title: 'Backend' },
+          { title: 'Frontend', providerId: 'claude-code' },
+        ],
+      },
+      undefined,
+      'running',
+    ).map((item) => ({ title: item.title, status: item.status, providerId: item.providerId }))).toEqual([
+      { title: 'Backend', status: 'starting', providerId: null },
+      { title: 'Frontend', status: 'starting', providerId: 'claude-code' },
+    ])
   })
 })
 

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen, Brain } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'agent':           { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
+  'thread.control':  { icon: Bot,       label: 'Threads',     color: 'text-purple-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
   'skill':           { icon: BookOpen,  label: 'Skill',      color: 'text-violet-500' },
   // ── SSH tools ───────────────────────────────────────────
@@ -74,9 +75,11 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'surfaces.list':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
   'surfaces.start':  { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
   'surfaces.stop':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
-  'memory.save':     { icon: FileText,  label: 'Save Memory', color: 'text-amber-500' },
-  'memory.search':   { icon: FileText,  label: 'Search Memory', color: 'text-amber-500' },
-  'memory.forget':   { icon: FileText,  label: 'Forget Memory', color: 'text-amber-500' },
+  'memory.save':     { icon: Brain,  label: 'Save Memory', color: 'text-amber-500' },
+  'memory.search':   { icon: Brain,  label: 'Search Memory', color: 'text-amber-500' },
+  'memory.list':     { icon: Brain,  label: 'List Memory', color: 'text-amber-500' },
+  'memory.update':   { icon: Brain,  label: 'Update Memory', color: 'text-amber-500' },
+  'memory.forget':   { icon: Brain,  label: 'Forget Memory', color: 'text-amber-500' },
   'cron.add':        { icon: Server,    label: 'Add Cron',   color: 'text-violet-500' },
   'cron.list':       { icon: Server,    label: 'List Cron',  color: 'text-violet-500' },
   'cron.update':     { icon: Server,    label: 'Update Cron', color: 'text-violet-500' },
@@ -183,6 +186,13 @@ function getToolInvocationLabels(
     const desc = truncate(displayStr(args.description ?? args.prompt), 60)
     return { running: `Running agent: ${desc}`, done: `Agent completed: ${desc}` }
   }
+  if (normalized === 'thread.control') {
+    const action = displayStr(normalizedArgs.action)
+    const count = Array.isArray(normalizedArgs.threads) ? normalizedArgs.threads.length : 1
+    if (action === 'create_many') return { running: `Running ${count} threads`, done: `Ran ${count} threads` }
+    if (action === 'create') return { running: 'Starting thread', done: 'Started thread' }
+    return { running: 'Managing threads', done: 'Managed threads' }
+  }
   if (normalized === 'todo') {
     return { running: 'Updating tasks', done: 'Updated tasks' }
   }
@@ -195,6 +205,12 @@ function getToolInvocationLabels(
   }
   if (normalized === 'memory.search') {
     return { running: 'Searching memory', done: 'Searched memory' }
+  }
+  if (normalized === 'memory.list') {
+    return { running: 'Loading memory', done: 'Loaded memory' }
+  }
+  if (normalized === 'memory.update') {
+    return { running: 'Updating memory', done: 'Updated memory' }
   }
   if (normalized === 'memory.forget') {
     return { running: 'Removing memory', done: 'Removed memory' }
@@ -256,7 +272,7 @@ function getMcpDisplayLabel(innerName: string | null): { label: string; icon: ty
   if (n.startsWith('fs') || n.startsWith('file') || n.startsWith('read') || n.startsWith('write')) return { label: 'File', icon: FileText, color: 'text-blue-500' }
   if (n.startsWith('browser') || n.startsWith('web') || n.startsWith('http') || n.startsWith('fetch')) return { label: 'Web', icon: Globe, color: 'text-cyan-500' }
   if (n.startsWith('shell') || n.startsWith('exec') || n.startsWith('bash') || n.startsWith('terminal') || n.startsWith('command')) return { label: 'Terminal', icon: Terminal, color: 'text-yellow-500' }
-  if (n.startsWith('memory') || n.startsWith('knowledge')) return { label: 'Memory', icon: FileText, color: 'text-amber-500' }
+  if (n.startsWith('memory') || n.startsWith('knowledge')) return { label: 'Memory', icon: Brain, color: 'text-amber-500' }
   // Use the first segment (server name) as a fallback label
   const firstSegment = n.split('.')[0] ?? n
   const pretty = firstSegment.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
@@ -279,6 +295,83 @@ function displayStr(value: unknown, fallback = ''): string {
     return keys.length > 0 ? `{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? ', …' : ''}}` : fallback
   }
   return fallback
+}
+
+type ThreadListStatus = 'idle' | 'running' | 'completed' | 'error' | 'interrupted' | 'starting' | 'created'
+
+interface ThreadListItem {
+  id: string | null
+  title: string
+  status: ThreadListStatus
+  providerId: string | null
+  kind: string | null
+  branch: string | null
+  workingDirectory: string | null
+  error: string | null
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function getThreadListStatus(value: unknown, fallback: ThreadListStatus): ThreadListStatus {
+  return value === 'idle'
+    || value === 'running'
+    || value === 'completed'
+    || value === 'error'
+    || value === 'interrupted'
+    || value === 'starting'
+    || value === 'created'
+    ? value
+    : fallback
+}
+
+function getThreadListString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function threadItemFromRecord(record: Record<string, unknown>, fallbackStatus: ThreadListStatus): ThreadListItem {
+  return {
+    id: getThreadListString(record.id),
+    title: getThreadListString(record.title) ?? 'Untitled thread',
+    status: getThreadListStatus(record.status, fallbackStatus),
+    providerId: getThreadListString(record.providerId),
+    kind: getThreadListString(record.kind),
+    branch: getThreadListString(record.branch),
+    workingDirectory: getThreadListString(record.workingDirectory),
+    error: getThreadListString(record.error),
+  }
+}
+
+export function getThreadControlListItems(
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+  status?: ToolCallInfo['status'],
+): ThreadListItem[] {
+  const dataThreads = Array.isArray(resultData?.threads) ? resultData.threads : null
+  if (dataThreads) {
+    return dataThreads.flatMap((entry) => {
+      const record = toRecord(entry)
+      return record ? [threadItemFromRecord(record, 'created')] : []
+    })
+  }
+
+  const dataThread = toRecord(resultData?.thread)
+  if (dataThread) return [threadItemFromRecord(dataThread, 'created')]
+
+  const fallbackStatus: ThreadListStatus = status === 'running' || status === 'pending' ? 'starting' : 'created'
+  if (Array.isArray(args.threads)) {
+    return args.threads.flatMap((entry) => {
+      const record = toRecord(entry)
+      return record ? [threadItemFromRecord(record, fallbackStatus)] : []
+    })
+  }
+
+  if (args.action === 'create') {
+    return [threadItemFromRecord(args, fallbackStatus)]
+  }
+
+  return []
 }
 
 function truncate(value: string, max = 64): string {
@@ -389,6 +482,7 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized.startsWith('surfaces.')) return 'surface'
   if (normalized.startsWith('os.')) return 'system'
   if (normalized === 'agent') return 'agent'
+  if (normalized === 'thread.control') return 'thread'
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
   if (normalized === 'mcp-tool') return 'mcp tool'
@@ -484,6 +578,13 @@ function getCallSummary(
     return displayStr(normalizedArgs.query)
   }
   if (normalized === 'agent') return truncate(displayStr(args.description ?? args.prompt), 80)
+  if (normalized === 'thread.control') {
+    const action = displayStr(normalizedArgs.action)
+    const threads = getThreadControlListItems(normalizedArgs, resultData)
+    if (action === 'create_many') return `${threads.length || displayStr(normalizedArgs.threads, '0')} threads`
+    if (threads[0]) return threads[0].title
+    return action || 'thread.control'
+  }
   if (normalized === 'todo') {
     const list = args.todoList as Array<{ title: string; status: string }> | undefined
     if (!list) return 'Track tasks'
@@ -1601,6 +1702,77 @@ function FileSummaryButton({
   )
 }
 
+function ThreadStatusBadge({ status }: { status: ThreadListStatus }) {
+  const classes = status === 'completed'
+    ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400'
+    : status === 'error' || status === 'interrupted'
+      ? 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+      : status === 'running' || status === 'starting'
+        ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+        : 'border-border/70 bg-muted/45 text-muted-foreground'
+  const Icon = status === 'completed'
+    ? CheckCircle2
+    : status === 'error' || status === 'interrupted'
+      ? XCircle
+      : status === 'running' || status === 'starting'
+        ? Loader2
+        : Bot
+
+  return (
+    <span className={cn('inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-medium capitalize', classes)}>
+      <Icon className={cn('h-3 w-3', (status === 'running' || status === 'starting') && 'animate-spin')} />
+      {status}
+    </span>
+  )
+}
+
+function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; resultMessage?: string }) {
+  if (items.length === 0) {
+    return (
+      <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
+        No thread details available.
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-md border border-purple-500/20 bg-purple-500/[0.025] text-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-purple-500/15 px-3 py-2">
+        <span className="font-medium text-foreground">{items.length} thread{items.length === 1 ? '' : 's'}</span>
+        <span className="text-muted-foreground">
+          {items.filter((item) => item.status === 'completed').length} completed
+        </span>
+      </div>
+      <div className="divide-y divide-border/35">
+        {items.map((item, index) => {
+          const shortId = item.id ? item.id.slice(-8) : null
+          const location = item.branch ?? (item.workingDirectory ? getBaseName(item.workingDirectory) : null)
+          return (
+            <div key={item.id ?? `${item.title}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-foreground" title={item.title}>{item.title}</div>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+                  {shortId && <code className="rounded bg-background/70 px-1 py-0.5 font-mono">{shortId}</code>}
+                  {item.providerId && <span>{item.providerId}</span>}
+                  {item.kind && <span>{item.kind}</span>}
+                  {location && <span className="min-w-0 truncate">{location}</span>}
+                </div>
+                {item.error && <div className="mt-1 truncate text-2xs text-red-500" title={item.error}>{item.error}</div>}
+              </div>
+              <ThreadStatusBadge status={item.status} />
+            </div>
+          )
+        })}
+      </div>
+      {resultMessage && (
+        <div className="border-t border-purple-500/15 px-3 py-2 text-2xs text-muted-foreground">
+          {resultMessage}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ToolCallCardInner({
   call,
   childCalls,
@@ -1658,6 +1830,9 @@ function ToolCallCardInner({
   const hasExpandableContent = bodyKind === 'terminal'
     ? true
     : bodyKind !== 'none' && !inlineBody
+  const threadListItems = bodyKind === 'threadList'
+    ? getThreadControlListItems(normalizedArgs, resultData, call.status)
+    : []
 
   const StatusIcon = call.status === 'pending'
     ? Loader2
@@ -1700,6 +1875,7 @@ function ToolCallCardInner({
     const prevStatus = prevStatusRef.current
     if (
       !inlineBody
+      && bodyKind !== 'threadList'
       && (prevStatus === 'running' || prevStatus === 'pending')
       && call.status !== 'running'
       && call.status !== 'pending'
@@ -1710,7 +1886,7 @@ function ToolCallCardInner({
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [call.status, inlineBody])
+  }, [bodyKind, call.status, inlineBody])
 
   useEffect(() => {
     if (
@@ -1883,6 +2059,8 @@ function ToolCallCardInner({
         status={call.status}
       />
     )
+  ) : bodyKind === 'threadList' ? (
+    <ThreadListView items={threadListItems} resultMessage={call.result?.message} />
   ) : bodyKind === 'editDiff' ? (
      <EditDiffView
       filePath={String(normalizedArgs.path ?? '')}

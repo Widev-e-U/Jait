@@ -82,6 +82,9 @@ interface ThreadCreateSpec {
   timeoutMinutes?: number;
 }
 
+const THREAD_TERMINAL_STATUSES = new Set(["completed", "error", "interrupted"]);
+const THREAD_WAIT_POLL_MS = 100;
+
 interface ThreadControlGit {
   runStackedAction(
     cwd: string,
@@ -156,6 +159,10 @@ function normalizeTimeoutMs(timeoutMinutes: number | undefined, defaultMinutes: 
     : defaultMinutes;
   if (minutes === undefined || minutes <= 0) return undefined;
   return Math.max(1, Math.floor(minutes * 60_000));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function shouldGenerateSchedulerThreadTitle(title: unknown): boolean {
@@ -305,6 +312,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     if (!thread) return undefined;
     if (thread.userId && thread.userId !== userId) return undefined;
     return thread;
+  };
+
+  const waitForThreadCompletion = async (threadId: string, context: ToolContext): Promise<ThreadRow | undefined> => {
+    while (!context.signal?.aborted) {
+      const thread = deps.threadService.getById(threadId);
+      if (!thread) return undefined;
+      if (THREAD_TERMINAL_STATUSES.has(thread.status)) return thread;
+      await sleep(THREAD_WAIT_POLL_MS);
+    }
+
+    return deps.threadService.getById(threadId);
   };
 
   const generateAndApplyThreadTitle = async (
@@ -848,23 +866,47 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             for (const started of startResults) {
               threadById.set(started.threadId, started.thread);
             }
+
+            const waitTargets = startResults
+              .filter((result) => result.ok)
+              .flatMap((result) => {
+                const source = created.find((entry) => entry.thread.id === result.threadId);
+                const shouldDetach = source?.spec.detach ?? input.detach;
+                return shouldDetach === true ? [] : [result.threadId];
+              });
+            if (waitTargets.length > 0) {
+              context.onOutputChunk?.(`Waiting for ${waitTargets.length} thread(s) to finish...\n`);
+              const completedThreads = await Promise.all(
+                waitTargets.map((threadId) => waitForThreadCompletion(threadId, context)),
+              );
+              for (const thread of completedThreads) {
+                if (thread) threadById.set(thread.id, thread);
+              }
+            }
+
             for (const { thread, prompt, spec } of created) {
               if (spec.start === true || input.start === true) continue;
               const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
               broadcastThreadEvent(thread.id, "activity", { activity });
             }
             const threads = [...threadById.values()];
+            const terminalFailures = threads.filter((thread) => thread.status === "error" || thread.status === "interrupted");
 
             return {
-              ok: failedStarts.length === 0,
+              ok: failedStarts.length === 0 && terminalFailures.length === 0,
               message:
-                failedStarts.length === 0
-                  ? `Created ${threads.length} thread(s).`
-                  : `Created ${threads.length} thread(s), ${failedStarts.length} failed to start.`,
+                failedStarts.length > 0
+                  ? `Created ${threads.length} thread(s), ${failedStarts.length} failed to start.`
+                  : terminalFailures.length > 0
+                    ? `Created ${threads.length} thread(s), ${terminalFailures.length} did not complete successfully.`
+                    : waitTargets.length > 0
+                      ? `Created ${threads.length} thread(s) and waited for ${waitTargets.length} to finish.`
+                      : `Created ${threads.length} thread(s).`,
               data: {
                 threads,
                 startedCount: startResults.length - failedStarts.length,
                 failedStarts,
+                waitedForCompletionCount: waitTargets.length,
               },
             };
           }

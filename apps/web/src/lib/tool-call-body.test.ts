@@ -37,6 +37,25 @@ describe('tool call body helpers', () => {
     ).toBe('none')
   })
 
+  it('renders thread control create_many calls as thread lists', () => {
+    expect(
+      getToolCallBodyKind({
+        tool: 'thread_control',
+        args: {
+          action: 'create_many',
+          threads: [
+            { title: 'Backend' },
+            { title: 'Frontend' },
+          ],
+        },
+        status: 'running',
+        displayOutput: '',
+        snapshotText: null,
+        screenshotPath: null,
+      }),
+    ).toBe('threadList')
+  })
+
   it('renders an edit diff when replacement details are present', () => {
     expect(canRenderEditDiff('edit', { path: 'a.ts', search: 'a', replace: 'b' })).toBe(true)
     expect(
