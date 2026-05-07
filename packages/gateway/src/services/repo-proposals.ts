@@ -25,6 +25,27 @@ export interface UpdateRepoProposalParams {
 
 export type RepoProposalRow = typeof automationRepoProposals.$inferSelect;
 
+interface CompletionHistoryEntry {
+  completedAt: string;
+  previousStatus: string | null;
+}
+
+function parseCompletionHistory(value: string | null | undefined): CompletionHistoryEntry[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is CompletionHistoryEntry => {
+      if (!entry || typeof entry !== "object") return false;
+      const record = entry as Record<string, unknown>;
+      return typeof record.completedAt === "string"
+        && (typeof record.previousStatus === "string" || record.previousStatus === null);
+    });
+  } catch {
+    return [];
+  }
+}
+
 export class RepoProposalService {
   constructor(private db: JaitDB) {}
 
@@ -49,15 +70,21 @@ export class RepoProposalService {
     const message = params.message.trim();
     const now = new Date().toISOString();
     const id = uuidv7();
+    const status = params.status ?? "open";
+    const completionHistory = status === "done"
+      ? JSON.stringify([{ completedAt: now, previousStatus: null }])
+      : "[]";
     this.db.insert(automationRepoProposals).values({
       id,
       repoId: params.repoId,
       userId: params.userId ?? null,
       message,
-      status: params.status ?? "open",
+      status,
       priority: params.priority ?? "normal",
       dueDate: params.dueDate ?? null,
       tags: JSON.stringify(params.tags ?? []),
+      completedAt: status === "done" ? now : null,
+      completionHistory,
       sourceThreadId: params.sourceThreadId ?? null,
       sourceThreadTitle: params.sourceThreadTitle ?? null,
       createdAt: now,
@@ -67,13 +94,29 @@ export class RepoProposalService {
   }
 
   update(id: string, params: UpdateRepoProposalParams): RepoProposalRow | undefined {
+    const existing = this.getById(id);
+    if (!existing) return undefined;
+
+    const now = new Date().toISOString();
     const set: Record<string, unknown> = {
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
     if (params.message !== undefined) {
       set.message = params.message.trim();
     }
-    if (params.status !== undefined) set.status = params.status;
+    if (params.status !== undefined) {
+      set.status = params.status;
+      if (params.status === "done" && existing.status !== "done") {
+        const history = parseCompletionHistory(existing.completionHistory);
+        set.completedAt = now;
+        set.completionHistory = JSON.stringify([
+          { completedAt: now, previousStatus: existing.status },
+          ...history,
+        ].slice(0, 100));
+      } else if (params.status !== "done" && existing.status === "done") {
+        set.completedAt = null;
+      }
+    }
     if (params.priority !== undefined) set.priority = params.priority;
     if (params.dueDate !== undefined) set.dueDate = params.dueDate;
     if (params.tags !== undefined) set.tags = JSON.stringify(params.tags);

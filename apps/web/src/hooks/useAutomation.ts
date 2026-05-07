@@ -24,7 +24,6 @@ import {
   type ThreadMessageMetadata,
   type ProviderInfo,
   type ProviderId,
-  type RepoProposal,
   type RuntimeMode,
 } from '@/lib/agents-api'
 import {
@@ -131,8 +130,6 @@ export function useAutomation(enabled = true) {
   // Todo list per thread (extracted from todo activities)
   const threadTodosRef = useRef(new Map<string, TodoItem[]>())
   const [selectedThreadTodos, setSelectedThreadTodos] = useState<TodoItem[]>([])
-  const [repoProposals, setRepoProposals] = useState<RepoProposal[]>([])
-  const [loadingRepoProposals, setLoadingRepoProposals] = useState(false)
 
   // Send state
   const activityEndRef = useRef<HTMLDivElement | null>(null)
@@ -205,30 +202,6 @@ export function useAutomation(enabled = true) {
       setSelectedRepoId(repository.id)
     }
   }, [enabled, getRepositoryForThread, selectedRepoId, selectedThread])
-
-  useEffect(() => {
-    const repoId = selectedThreadRepo?.id ?? selectedRepo?.id ?? null
-    if (!enabled || !repoId) {
-      setRepoProposals([])
-      setLoadingRepoProposals(false)
-      return
-    }
-    let cancelled = false
-    setLoadingRepoProposals(true)
-    void agentsApi.listJaitTodos(repoId)
-      .then((proposals) => {
-        if (!cancelled) setRepoProposals(proposals)
-      })
-      .catch(() => {
-        if (!cancelled) setRepoProposals([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingRepoProposals(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [enabled, selectedRepo?.id, selectedThreadRepo?.id])
 
   // ── Data fetching ──────────────────────────────────────────────
 
@@ -929,37 +902,6 @@ export function useAutomation(enabled = true) {
     setThreadListLimit(THREAD_LIST_LIMIT)
   }, [])
 
-  const activeProposalRepo = selectedThreadRepo ?? selectedRepo
-
-  const addRepoProposal = useCallback(async (message: string) => {
-    if (!activeProposalRepo || !message.trim()) return
-    const created = await agentsApi.createJaitTodo(activeProposalRepo.id, {
-      message: message.trim(),
-      sourceThreadId: selectedThread?.id ?? null,
-      sourceThreadTitle: selectedThread?.title ?? null,
-    })
-    setRepoProposals((prev) => [created, ...prev])
-  }, [activeProposalRepo, selectedThread?.id, selectedThread?.title])
-
-  const removeRepoProposal = useCallback(async (proposalId: string) => {
-    await agentsApi.deleteJaitTodo(proposalId)
-    setRepoProposals((prev) => prev.filter((proposal) => proposal.id !== proposalId))
-  }, [])
-
-  const runRepoProposals = useCallback(async (
-    proposalIds: string[],
-    providerId: ProviderId = 'jait',
-    runtimeMode: RuntimeMode = 'full-access',
-    model?: string | null,
-  ) => {
-    const messages = repoProposals.filter((proposal) => proposalIds.includes(proposal.id))
-    if (messages.length === 0) return
-    const repoId = activeProposalRepo?.id ?? null
-    for (const proposal of messages) {
-      await handleSend(proposal.message, providerId, runtimeMode, model, undefined, repoId)
-    }
-  }, [activeProposalRepo?.id, handleSend, repoProposals])
-
   return {
     // Repos
     repositories,
@@ -989,8 +931,6 @@ export function useAutomation(enabled = true) {
     loadingActivities,
     activityEndRef,
     selectedThreadTodos,
-    repoProposals,
-    loadingRepoProposals,
     providers,
     remoteProviders,
     loading,
@@ -1006,9 +946,6 @@ export function useAutomation(enabled = true) {
     handleSendToThread,
     handleStop,
     handleDelete,
-    addRepoProposal,
-    removeRepoProposal,
-    runRepoProposals,
 
     // WS event handler
     handleThreadEvent,

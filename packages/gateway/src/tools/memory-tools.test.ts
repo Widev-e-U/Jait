@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MemoryEntry, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
 import type { ReminderRow, ReminderService } from "../services/reminders.js";
 import type { ToolContext } from "./contracts.js";
-import { createMemoryForgetTool, createMemorySaveTool, createMemorySearchTool } from "./memory-tools.js";
+import { createMemoryForgetTool, createMemoryListTool, createMemorySaveTool, createMemorySearchTool, createMemoryUpdateTool } from "./memory-tools.js";
 
 const context: ToolContext = {
   sessionId: "session-1",
@@ -87,6 +87,38 @@ describe("memory tools with reminders", () => {
       memories: [{ id: "memory-1" }],
       reminders: [{ id: "reminder-1" }],
     });
+  });
+
+  it("lists Memory page entries through memory.list", async () => {
+    const reminders = {
+      list: (options: { userId?: string; status?: string; limit?: number }) => [reminder({
+        userId: options.userId ?? null,
+        status: options.status === "archived" ? "archived" : "active",
+      })],
+    } as unknown as ReminderService;
+    const tool = createMemoryListTool(reminders);
+
+    const result = await tool.execute({ status: "archived", limit: 10 }, context);
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({ memories: [{ id: "reminder-1", status: "archived", userId: "user-1" }] });
+  });
+
+  it("updates Memory page entries through memory.update", async () => {
+    const reminders = {
+      update: (id: string, params: { content?: string; status?: string }, userId?: string) => reminder({
+        id,
+        userId: userId ?? null,
+        content: params.content ?? "Reminder",
+        status: params.status === "archived" ? "archived" : "active",
+      }),
+    } as unknown as ReminderService;
+    const tool = createMemoryUpdateTool(reminders);
+
+    const result = await tool.execute({ id: "reminder-1", content: "Updated", status: "archived" }, context);
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({ id: "reminder-1", content: "Updated", status: "archived", userId: "user-1" });
   });
 
   it("deletes reminders before falling back to semantic memory", async () => {

@@ -17,6 +17,8 @@ describe("RepoProposalService", () => {
         priority TEXT NOT NULL DEFAULT 'normal',
         due_date TEXT,
         tags TEXT NOT NULL DEFAULT '[]',
+        completed_at TEXT,
+        completion_history TEXT NOT NULL DEFAULT '[]',
         source_thread_id TEXT,
         source_thread_title TEXT,
         created_at TEXT NOT NULL,
@@ -53,9 +55,11 @@ describe("RepoProposalService", () => {
     expect(proposals[0]?.priority).toBe("high");
     expect(proposals[0]?.dueDate).toBe("2026-05-12");
     expect(proposals[0]?.tags).toBe(JSON.stringify(["ui", "todo"]));
+    expect(proposals[0]?.completedAt).toBeNull();
+    expect(proposals[0]?.completionHistory).toBe("[]");
   });
 
-  it("updates and deletes proposals", () => {
+  it("updates, tracks completion history, and deletes proposals", () => {
     const created = service.create({
       repoId: "repo-1",
       userId: "user-1",
@@ -74,8 +78,37 @@ describe("RepoProposalService", () => {
     expect(updated?.priority).toBe("low");
     expect(updated?.dueDate).toBe("2026-05-20");
     expect(updated?.tags).toBe(JSON.stringify(["cleanup"]));
+    expect(updated?.completedAt).toBeNull();
+
+    const completed = service.update(created.id, {
+      status: "done",
+    });
+    expect(completed?.completedAt).toEqual(expect.any(String));
+    const history = JSON.parse(completed?.completionHistory ?? "[]") as Array<{ completedAt: string; previousStatus: string }>;
+    expect(history).toHaveLength(1);
+    expect(history[0]?.completedAt).toBe(completed?.completedAt);
+    expect(history[0]?.previousStatus).toBe("in_progress");
+
+    const reopened = service.update(created.id, {
+      status: "open",
+    });
+    expect(reopened?.completedAt).toBeNull();
+    expect(JSON.parse(reopened?.completionHistory ?? "[]")).toHaveLength(1);
 
     service.delete(created.id);
     expect(service.getById(created.id)).toBeUndefined();
+  });
+
+  it("records completion metadata when creating done proposals", () => {
+    const created = service.create({
+      repoId: "repo-1",
+      userId: "user-1",
+      message: "Already finished",
+      status: "done",
+    });
+
+    expect(created.completedAt).toEqual(expect.any(String));
+    const history = JSON.parse(created.completionHistory) as Array<{ completedAt: string; previousStatus: string | null }>;
+    expect(history).toEqual([{ completedAt: created.completedAt, previousStatus: null }]);
   });
 });

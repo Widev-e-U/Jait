@@ -1,5 +1,5 @@
 import type { MemoryService, MemoryScope } from "../memory/contracts.js";
-import type { ReminderService } from "../services/reminders.js";
+import type { ReminderService, ReminderStatus } from "../services/reminders.js";
 import type { ToolContext, ToolDefinition } from "./contracts.js";
 
 export function createMemorySaveTool(memory: MemoryService, reminders?: ReminderService): ToolDefinition<{
@@ -136,6 +136,89 @@ export function createMemoryForgetTool(memory: MemoryService, reminders?: Remind
       }
       const removed = await memory.forget(input.id);
       return { ok: removed, message: removed ? `Forgot memory ${input.id}` : `Memory ${input.id} not found` };
+    },
+  };
+}
+
+export function createMemoryListTool(reminders?: ReminderService): ToolDefinition<{
+  status?: ReminderStatus | "all";
+  workspaceId?: string;
+  sessionId?: string;
+  limit?: number;
+}> {
+  return {
+    name: "memory.list",
+    description: "List Memory page entries. These are explicit agent-readable memory records that can be edited, archived, or deleted.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["active", "archived", "all"] },
+        workspaceId: { type: "string" },
+        sessionId: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+    async execute(input, context: ToolContext) {
+      if (!reminders) {
+        return { ok: false, message: "Memory page service not available." };
+      }
+      const rows = reminders.list({
+        userId: context.userId,
+        status: input.status ?? "active",
+        workspaceId: input.workspaceId,
+        sessionId: input.sessionId,
+        limit: input.limit ?? 50,
+      });
+      return { ok: true, message: `Loaded ${rows.length} memory entries`, data: { memories: rows } };
+    },
+  };
+}
+
+export function createMemoryUpdateTool(reminders?: ReminderService): ToolDefinition<{
+  id: string;
+  content?: string;
+  status?: ReminderStatus;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  tags?: string[];
+}> {
+  return {
+    name: "memory.update",
+    description: "Update a Memory page entry by ID, including content, tags, workspace/session links, or archive/restore status.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        content: { type: "string" },
+        status: { type: "string", enum: ["active", "archived"] },
+        workspaceId: { type: "string" },
+        sessionId: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+      },
+      required: ["id"],
+    },
+    async execute(input, context: ToolContext) {
+      if (!reminders) {
+        return { ok: false, message: "Memory page service not available." };
+      }
+      const updated = reminders.update(input.id, {
+        content: input.content,
+        status: input.status,
+        workspaceId: input.workspaceId,
+        sessionId: input.sessionId,
+        tags: input.tags,
+      }, context.userId);
+      return {
+        ok: !!updated,
+        message: updated ? `Updated memory ${input.id}` : `Memory ${input.id} not found`,
+        data: updated,
+      };
     },
   };
 }

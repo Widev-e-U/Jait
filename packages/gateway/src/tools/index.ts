@@ -45,6 +45,8 @@ export {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
+  createMemoryListTool,
+  createMemoryUpdateTool,
 } from "./memory-tools.js";
 export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
@@ -161,6 +163,8 @@ import {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
+  createMemoryListTool,
+  createMemoryUpdateTool,
 } from "./memory-tools.js";
 import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
@@ -349,6 +353,10 @@ export function createToolRegistry(
     tools.register(createMemorySaveTool(deps.memoryService, deps.reminderService));
     tools.register(createMemorySearchTool(deps.memoryService, deps.reminderService));
     tools.register(createMemoryForgetTool(deps.memoryService, deps.reminderService));
+  }
+  if (deps.reminderService) {
+    tools.register(createMemoryListTool(deps.reminderService));
+    tools.register(createMemoryUpdateTool(deps.reminderService));
   }
 
   if (deps.voiceService) {

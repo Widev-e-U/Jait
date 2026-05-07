@@ -372,6 +372,8 @@ export const automationRepoProposals = sqliteTable(
     priority: text("priority").notNull().default("normal"),
     dueDate: text("due_date"),
     tags: text("tags").notNull().default("[]"),
+    completedAt: text("completed_at"),
+    completionHistory: text("completion_history").notNull().default("[]"),
     sourceThreadId: text("source_thread_id"),
     sourceThreadTitle: text("source_thread_title"),
     createdAt: text("created_at").notNull(),
@@ -380,6 +382,7 @@ export const automationRepoProposals = sqliteTable(
   (table) => [
     index("idx_automation_repo_proposals_repo").on(table.repoId, table.updatedAt),
     index("idx_automation_repo_proposals_user").on(table.userId, table.updatedAt),
+    index("idx_automation_repo_proposals_completed").on(table.repoId, table.completedAt),
   ],
 );
 

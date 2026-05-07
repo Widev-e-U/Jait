@@ -22,10 +22,12 @@ export function mapCodexNotification(
   switch (method) {
     // ── Streaming text tokens ──
     case "item/agentMessage/delta":
+    case "codex/event/agent_message_delta":
     case "codex/event/agent_message_content_delta": {
       const delta =
         typeof params.delta === "string" ? params.delta
           : typeof params.text === "string" ? params.text
+            : typeof params.content === "string" ? params.content
             : "";
       if (delta) return [{ type: "token", sessionId, content: delta }];
       return [];
@@ -214,7 +216,6 @@ export function mapCodexNotification(
     case "turn/diff/updated":
     case "thread/tokenUsage/updated":
     case "codex/event/token_count":
-    case "codex/event/agent_message_delta":
       return [];
 
     // ── Known lifecycle / status notifications → emit as activity ──

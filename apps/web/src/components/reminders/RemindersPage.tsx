@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Archive, Bot, CheckCircle2, Clock3, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
+import { AlertCircle, Archive, Brain, CheckCircle2, Clock3, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,7 +42,7 @@ function formatDate(value: string | null | undefined): string {
   }).format(date)
 }
 
-export function RemindersPage() {
+export function MemoryPage() {
   const [snapshot, setSnapshot] = useState<ReminderSnapshot | null>(null)
   const [statusFilter, setStatusFilter] = useState<ReminderStatusFilter>('active')
   const [workspaceFilter, setWorkspaceFilter] = useState('all')
@@ -59,7 +59,7 @@ export function RemindersPage() {
     try {
       setSnapshot(await agentsApi.getRemindersSnapshot({ status: statusFilter, limit: 200 }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reminders')
+      setError(err instanceof Error ? err.message : 'Failed to load memory')
     } finally {
       setIsLoading(false)
     }
@@ -113,7 +113,7 @@ export function RemindersPage() {
       setNewContent('')
       setNewTags('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add reminder')
+      setError(err instanceof Error ? err.message : 'Failed to add memory')
     } finally {
       setIsSaving(false)
     }
@@ -131,7 +131,7 @@ export function RemindersPage() {
         reminders: current.reminders.map((item) => item.id === reminder.id ? updated : item),
       } : current)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update reminder')
+      setError(err instanceof Error ? err.message : 'Failed to update memory')
       void loadSnapshot()
     }
   }
@@ -143,7 +143,7 @@ export function RemindersPage() {
       await agentsApi.deleteReminder(id)
     } catch (err) {
       setSnapshot(previous)
-      setError(err instanceof Error ? err.message : 'Failed to delete reminder')
+      setError(err instanceof Error ? err.message : 'Failed to delete memory')
     }
   }
 
@@ -152,11 +152,11 @@ export function RemindersPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-            <Bot className="h-6 w-6" />
-            Reminders
+            <Brain className="h-6 w-6" />
+            Memory
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Agent-readable reminders with workspace chat history and completed thread context.
+            Agent-readable memory with workspace chat history and completed thread context.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -178,7 +178,7 @@ export function RemindersPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <Badge variant="outline" className="justify-center px-3 py-1">{counts.reminders} reminders</Badge>
+        <Badge variant="outline" className="justify-center px-3 py-1">{counts.reminders} memories</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.workspaces} workspaces</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.sessions} chats</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.threads} threads</Badge>
@@ -197,12 +197,12 @@ export function RemindersPage() {
       <Card>
         <CardContent className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_220px_220px_auto] lg:items-end">
           <div className="min-w-0 space-y-2">
-            <Label htmlFor="new-reminder-content">Reminder</Label>
+            <Label htmlFor="new-reminder-content">Memory</Label>
             <Textarea
               id="new-reminder-content"
               value={newContent}
               onChange={(event) => setNewContent(event.target.value)}
-              placeholder="Add an agent reminder..."
+              placeholder="Add agent-readable memory..."
               className="min-h-20 lg:min-h-10"
             />
           </div>
@@ -241,7 +241,7 @@ export function RemindersPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">Reminder List</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">Memory List</h2>
             <Select value={workspaceFilter} onValueChange={setWorkspaceFilter}>
               <SelectTrigger className="h-10 w-full sm:w-64">
                 <SelectValue />
@@ -264,9 +264,9 @@ export function RemindersPage() {
           ) : reminders.length === 0 ? (
             <Card className="border-2 border-dashed shadow-none">
               <CardContent className="px-4 py-16 text-center">
-                <Bot className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-                <h3 className="mb-2 text-lg font-medium">No reminders match</h3>
-                <p className="text-sm text-muted-foreground">Change filters or add the first agent reminder.</p>
+                <Brain className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-medium">No memory matches</h3>
+                <p className="text-sm text-muted-foreground">Change filters or add the first memory entry.</p>
               </CardContent>
             </Card>
           ) : (

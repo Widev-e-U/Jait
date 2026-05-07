@@ -257,6 +257,8 @@ export interface JaitTodo {
   priority: 'low' | 'normal' | 'high'
   dueDate: string | null
   tags: string
+  completedAt: string | null
+  completionHistory: string
   sourceThreadId: string | null
   sourceThreadTitle: string | null
   createdAt: string

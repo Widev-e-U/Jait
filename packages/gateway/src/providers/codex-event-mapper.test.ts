@@ -2,6 +2,30 @@ import { describe, expect, it } from "vitest";
 import { mapCodexNotification } from "./codex-event-mapper.js";
 
 describe("mapCodexNotification", () => {
+  it("maps codex agent message deltas as assistant text tokens", () => {
+    const events = mapCodexNotification("codex/event/agent_message_delta", {
+      delta: "Implemented the todo runner.",
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "token",
+      sessionId: "session-1",
+      content: "Implemented the todo runner.",
+    }]);
+  });
+
+  it("maps codex agent message content fallback as assistant text tokens", () => {
+    const events = mapCodexNotification("codex/event/agent_message_delta", {
+      content: "Ran the focused tests.",
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "token",
+      sessionId: "session-1",
+      content: "Ran the focused tests.",
+    }]);
+  });
+
   it("preserves structured tool result payloads for completed codex items", () => {
     const events = mapCodexNotification("codex/event/item_completed", {
       msg: {

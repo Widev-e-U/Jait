@@ -1,1 +1,1 @@
-export { RemindersPage } from './RemindersPage'
+export { MemoryPage } from './RemindersPage'

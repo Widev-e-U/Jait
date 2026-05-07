@@ -40,6 +40,7 @@ import {
   Circle,
   AlertCircle,
   Server,
+  Brain,
   ScrollText,
   ListChecks,
   Boxes,
@@ -77,13 +78,12 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { TodoPage } from '@/components/todo'
-import { RemindersPage } from '@/components/reminders'
+import { MemoryPage } from '@/components/reminders'
 import { ThreadActions } from '@/components/automation/ThreadActions'
 import { ThreadSkillPicker } from '@/components/automation/ThreadSkillPicker'
 import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
 import { StrategyModal } from '@/components/automation/StrategyModal'
 import { PlanModal } from '@/components/automation/PlanModal'
-import { RepoProposalModal } from '@/components/automation/RepoProposalModal'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
 import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
@@ -628,7 +628,7 @@ function buildPreviewElementReferenceSegments(
   return [{ type: 'text', text: `${details}\n` }]
 }
 
-type AppView = 'chat' | 'todo' | 'reminders' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'todo' | 'memory' | 'jobs' | 'network' | 'settings'
 type CliProviderId = ProviderId
 
 type ManagerQueuedMessage = QueuedChatMessage & {
@@ -1017,66 +1017,6 @@ function ManagerRepositoryPanel({
   )
 }
 
-interface ManagerTaskPanelProps {
-  items: TodoItem[]
-  thread: AgentThread | null
-  isMobile?: boolean
-}
-
-function ManagerTaskPanel({ items, thread, isMobile = false }: ManagerTaskPanelProps) {
-  const completed = items.filter((item) => item.status === 'completed').length
-  const inProgress = items.filter((item) => item.status === 'in-progress').length
-
-  return (
-    <aside className={`flex h-full min-h-0 flex-col bg-background ${isMobile ? 'border-b' : 'border-l'}`}>
-      <div className="flex h-[35px] shrink-0 items-center justify-between border-b px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <ListChecks className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Agent tasks
-          </span>
-        </div>
-        {items.length > 0 && (
-          <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-2xs">
-            {completed}/{items.length}
-          </Badge>
-        )}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {items.length > 0 ? (
-          <div className="space-y-3">
-            <TodoList items={items} className="bg-background" />
-            <div className="grid grid-cols-3 gap-2 text-center text-2xs text-muted-foreground">
-              <div className="rounded-md border px-2 py-1.5">
-                <div className="text-sm font-medium text-foreground">{inProgress}</div>
-                Active
-              </div>
-              <div className="rounded-md border px-2 py-1.5">
-                <div className="text-sm font-medium text-foreground">{completed}</div>
-                Done
-              </div>
-              <div className="rounded-md border px-2 py-1.5">
-                <div className="text-sm font-medium text-foreground">{Math.max(0, items.length - completed - inProgress)}</div>
-                Waiting
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-[8rem] flex-col items-center justify-center px-3 text-center">
-            <ListChecks className="mb-2 h-5 w-5 text-muted-foreground/70" />
-            <p className="text-sm font-medium text-foreground">No agent tasks yet</p>
-            <p className="mt-1 max-w-56 text-xs leading-relaxed text-muted-foreground">
-              {thread?.status === 'running'
-                ? 'Tasks will appear here when the agent updates its internal list.'
-                : 'This thread has not published a task list.'}
-            </p>
-          </div>
-        )}
-      </div>
-    </aside>
-  )
-}
-
 function formatThreadDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000)
   if (totalSec < 60) return `${totalSec}s`
@@ -1459,18 +1399,17 @@ function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>(() => {
-    const validViews: AppView[] = ['chat', 'todo', 'reminders', 'jobs', 'network', 'settings']
-    const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
-    return validViews.includes(path) ? path : 'chat'
+    const validViews: AppView[] = ['chat', 'todo', 'memory', 'jobs', 'network', 'settings']
+    const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
+    const view = path === 'reminders' ? 'memory' : path as AppView
+    return validViews.includes(view) ? view : 'chat'
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
-  const [showManagerTasks, setShowManagerTasks] = useState(true)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
-  const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const sidebarRef = useRef<HTMLElement | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
@@ -1630,10 +1569,11 @@ function App() {
 
   // Handle browser back/forward
   useEffect(() => {
-    const validViews: AppView[] = ['chat', 'todo', 'reminders', 'jobs', 'network', 'settings']
+    const validViews: AppView[] = ['chat', 'todo', 'memory', 'jobs', 'network', 'settings']
     const onPopState = () => {
-      const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
-      const next = validViews.includes(path) ? path : 'chat'
+      const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
+      const view = path === 'reminders' ? 'memory' : path as AppView
+      const next = validViews.includes(view) ? view : 'chat'
       setCurrentView(next)
     }
     window.addEventListener('popstate', onPopState)
@@ -1648,8 +1588,9 @@ function App() {
     if (!raw) return
     try {
       const url = new URL(raw)
-      const view = url.hostname || url.pathname.replace(/^\/+/, '')
-      const validViews = ['chat', 'todo', 'reminders', 'jobs', 'network', 'settings'] as const
+      const rawView = url.hostname || url.pathname.replace(/^\/+/, '')
+      const view = rawView === 'reminders' ? 'memory' : rawView
+      const validViews = ['chat', 'todo', 'memory', 'jobs', 'network', 'settings'] as const
       type ValidView = typeof validViews[number]
       if (validViews.includes(view as ValidView)) {
         setCurrentView(view as ValidView)
@@ -6294,17 +6235,17 @@ function App() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={currentView === 'reminders' ? 'secondary' : 'ghost'}
+                  variant={currentView === 'memory' ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('reminders')}
-                  aria-label="Reminders"
+                  onClick={() => setCurrentView('memory')}
+                  aria-label="Memory"
                 >
-                  <ScrollText className="h-3.5 w-3.5" />
-                  <span>Reminders</span>
+                  <Brain className="h-3.5 w-3.5" />
+                  <span>Memory</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Reminders</TooltipContent>
+              <TooltipContent side="bottom">Memory</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -6563,9 +6504,9 @@ function App() {
                       <ListChecks className="h-4 w-4 mr-2" />
                       Todo
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('reminders')}>
-                      <ScrollText className="h-4 w-4 mr-2" />
-                      Reminders
+                    <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
+                      <Brain className="h-4 w-4 mr-2" />
+                      Memory
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setCurrentView('network')}>
                       <Wifi className="h-4 w-4 mr-2" />
@@ -6660,9 +6601,9 @@ function App() {
                     <ListChecks className="h-4 w-4 mr-2" />
                     Todo
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('reminders')}>
-                    <ScrollText className="h-4 w-4 mr-2" />
-                    Reminders
+                  <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Memory
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setCurrentView('network')}>
                     <Wifi className="h-4 w-4 mr-2" />
@@ -7116,20 +7057,6 @@ function App() {
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant={showManagerTasks ? 'secondary' : 'ghost'}
-                            size={isMobile ? 'icon' : 'sm'}
-                            className={isMobile ? 'h-7 w-7 shrink-0' : 'h-6 shrink-0 px-2 text-xs'}
-                            onClick={() => setShowManagerTasks((show) => !show)}
-                          >
-                            <ListChecks className={isMobile ? 'h-3.5 w-3.5' : 'mr-1 h-3 w-3'} />
-                            {!isMobile && 'Tasks'}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">Toggle agent task sidebar</TooltipContent>
-                      </Tooltip>
                       <ThreadSkillPicker
                         token={token}
                         threadId={automation.selectedThread.id}
@@ -7189,10 +7116,10 @@ function App() {
               />
             </ErrorBoundary>
           </div>
-        ) : currentView === 'reminders' ? (
+        ) : currentView === 'memory' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
-            <ErrorBoundary name="Reminders" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
-              <RemindersPage />
+            <ErrorBoundary name="Memory" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
+              <MemoryPage />
             </ErrorBoundary>
           </div>
         ) : currentView === 'jobs' ? (
@@ -7695,23 +7622,6 @@ function App() {
                               workspaceOpen={showWorkspace}
                             />
                           </ErrorBoundary>
-                          {automation.selectedThread && automation.selectedThreadRepo && (
-                            <div className="mt-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="gap-2"
-                                onClick={() => setProposalModalOpen(true)}
-                              >
-                                <ListChecks className="h-4 w-4" />
-                                <span>Agent Todos</span>
-                                <Badge variant="secondary" className="ml-1">
-                                  {automation.repoProposals.length}
-                                </Badge>
-                              </Button>
-                            </div>
-                          )}
                           <div className="flex items-center gap-2 px-1 mt-1.5">
                             {selectedThreadRepoRuntime && (
                               <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
@@ -7725,15 +7635,6 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    {showManagerTasks && (
-                      <div className={isMobile ? 'h-56 shrink-0 overflow-hidden' : 'w-72 shrink-0 overflow-hidden'}>
-                        <ManagerTaskPanel
-                          items={automation.selectedThreadTodos}
-                          thread={automation.selectedThread}
-                          isMobile={isMobile}
-                        />
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
@@ -8645,40 +8546,6 @@ function App() {
                 )
                 await agentsApi.updatePlan(plan.id, { tasks: updatedTasks })
               })()
-            }}
-          />
-        )}
-
-        {automation.selectedThreadRepo && (
-          <RepoProposalModal
-            open={proposalModalOpen}
-            onOpenChange={setProposalModalOpen}
-            repoName={automation.selectedThreadRepo.name}
-            proposals={automation.repoProposals}
-            loading={automation.loadingRepoProposals}
-            defaultProvider={chatProvider}
-            defaultRuntimeMode={chatProvider !== 'jait' ? chatProviderRuntimeMode : 'full-access'}
-            defaultModel={cliModel}
-            onAdd={async (message) => {
-              try {
-                await automation.addRepoProposal(message)
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to add todo')
-              }
-            }}
-            onRemove={async (proposalIds) => {
-              try {
-                await Promise.all(proposalIds.map((proposalId) => automation.removeRepoProposal(proposalId)))
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to remove todos')
-              }
-            }}
-            onRun={async (proposalIds, providerId, runtimeMode, model) => {
-              try {
-                await automation.runRepoProposals(proposalIds, providerId, runtimeMode, model)
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to run todos')
-              }
             }}
           />
         )}

@@ -237,7 +237,7 @@ function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>)
 }
 
 /** Core tools that should still be exposed to MCP clients (e.g. thread agents). */
-const MCP_EXPOSED_CORE_TOOLS = new Set(["todo"]);
+const MCP_EXPOSED_CORE_TOOLS = new Set(["todo", "jait.todos"]);
 
 export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
   return toolRegistry.list().filter((tool) => {

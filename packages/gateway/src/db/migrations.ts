@@ -796,4 +796,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 035: Repo todo completion history ────────────────────────────
+  {
+    id: 35,
+    name: "automation_repo_proposals_completion_history",
+    run(db) {
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN completed_at TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN completion_history TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_completed ON automation_repo_proposals(repo_id, completed_at DESC)`);
+    },
+  },
+
 ];

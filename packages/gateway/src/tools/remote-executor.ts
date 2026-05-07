@@ -33,6 +33,7 @@ const GATEWAY_LOCAL_TOOLS = new Set([
   "memory.read",
   "memory.write",
   "memory.list",
+  "memory.update",
   "memory.search",
   "voice.say",
   "voice.listen",

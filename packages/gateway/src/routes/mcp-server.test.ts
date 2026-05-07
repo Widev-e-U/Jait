@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("mcp-server", () => {
-  it("exposes only non-core builtin tools over MCP", async () => {
+  it("exposes only non-core builtin tools and allowlisted core tools over MCP", async () => {
     const registry = new ToolRegistry();
     registry.register({
       name: "read",
@@ -31,6 +31,24 @@ describe("mcp-server", () => {
       category: "filesystem",
       source: "builtin",
       parameters: { type: "object", properties: {} },
+      async execute() {
+        return { ok: true, message: "ok" };
+      },
+    });
+    registry.register({
+      name: "jait.todos",
+      description: "Manage global Jait todo items",
+      tier: "core",
+      category: "gateway",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "add", "update", "remove"] },
+          todoId: { type: "string" },
+        },
+        required: ["action"],
+      },
       async execute() {
         return { ok: true, message: "ok" };
       },
@@ -64,7 +82,7 @@ describe("mcp-server", () => {
       },
     });
 
-    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["cron.add"]);
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["jait.todos", "cron.add"]);
 
     const response = await handleMcpRequest({
       jsonrpc: "2.0",
@@ -77,6 +95,18 @@ describe("mcp-server", () => {
       id: 1,
       result: {
         tools: [
+          {
+            name: "jait.todos",
+            description: "Manage global Jait todo items",
+            inputSchema: {
+              type: "object",
+              properties: {
+                action: { type: "string", enum: ["list", "add", "update", "remove"] },
+                todoId: { type: "string" },
+              },
+              required: ["action"],
+            },
+          },
           {
             name: "cron.add",
             description: "Create a cron job",

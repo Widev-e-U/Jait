@@ -35,6 +35,8 @@ function createTodo(overrides: Partial<RepoProposalRow>): RepoProposalRow {
     priority: "normal",
     dueDate: null,
     tags: "[]",
+    completedAt: null,
+    completionHistory: "[]",
     sourceThreadId: null,
     sourceThreadTitle: null,
     createdAt: "2026-05-06T00:00:00.000Z",
@@ -95,5 +97,55 @@ describe("createJaitTodosTool", () => {
       tags: JSON.stringify(["ui", "todo"]),
     });
     expect((listResult.data as any).todos).toHaveLength(1);
+  });
+
+  it("updates and removes existing todo items", async () => {
+    const todos: RepoProposalRow[] = [createTodo({ id: "todo-1", message: "Original todo" })];
+    const tool = createJaitTodosTool({
+      repoService: { list: () => [repo] } as any,
+      repoProposalService: {
+        getById: (id: string) => todos.find((todo) => todo.id === id),
+        update: (id: string, params: any) => {
+          const index = todos.findIndex((todo) => todo.id === id);
+          if (index === -1) return undefined;
+          todos[index] = createTodo({
+            ...todos[index],
+            message: params.message ?? todos[index].message,
+            status: params.status ?? todos[index].status,
+            priority: params.priority ?? todos[index].priority,
+            dueDate: params.dueDate ?? todos[index].dueDate,
+            tags: params.tags ? JSON.stringify(params.tags) : todos[index].tags,
+          });
+          return todos[index];
+        },
+        delete: (id: string) => {
+          const index = todos.findIndex((todo) => todo.id === id);
+          if (index !== -1) todos.splice(index, 1);
+        },
+      } as any,
+    });
+
+    const updateResult = await tool.execute({
+      action: "update",
+      todoId: "todo-1",
+      message: "Updated todo",
+      status: "in_progress",
+      priority: "high",
+      tags: ["future", "todo"],
+    }, context);
+    const removeResult = await tool.execute({
+      action: "remove",
+      todoId: "todo-1",
+    }, context);
+
+    expect(updateResult.ok).toBe(true);
+    expect((updateResult.data as any).todo).toMatchObject({
+      message: "Updated todo",
+      status: "in_progress",
+      priority: "high",
+      tags: JSON.stringify(["future", "todo"]),
+    });
+    expect(removeResult.ok).toBe(true);
+    expect(todos).toHaveLength(0);
   });
 });

@@ -57,6 +57,10 @@ interface JaitInput {
   reminderId?: string;
   /** Reminder tags */
   tags?: string[];
+  /** Reminder status */
+  status?: string;
+  /** Session ID for reminders */
+  sessionId?: string | null;
 
   // ── Cron params ──
   /** Cron job name */
@@ -78,7 +82,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
     name: "jait",
     description:
       "Jait platform tool — access memory, scheduler, and gateway status. " +
-      "Actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.forget, cron.add, cron.list, cron.update, cron.remove, status.",
+      "Actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.update, reminder.forget, cron.add, cron.list, cron.update, cron.remove, status.",
     tier: "core",
     category: "gateway",
     source: "builtin",
@@ -90,7 +94,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
           description: "Action to perform.",
           enum: [
             "memory.save", "memory.search", "memory.forget",
-            "reminder.save", "reminder.list", "reminder.forget",
+            "reminder.save", "reminder.list", "reminder.update", "reminder.forget",
             "cron.add", "cron.list", "cron.update", "cron.remove",
             "status",
           ],
@@ -146,6 +150,15 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
           items: { type: "string" },
           description: "Reminder tags.",
         },
+        status: {
+          type: "string",
+          enum: ["active", "archived", "all"],
+          description: "Reminder status for list/update.",
+        },
+        sessionId: {
+          type: "string",
+          description: "Session ID for reminder actions.",
+        },
         // Cron params
         name: {
           type: "string",
@@ -189,7 +202,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               const reminder = deps.reminderService.create({
                 userId: context.userId,
                 workspaceId: input.workspaceId ?? null,
-                sessionId: context.sessionId,
+                sessionId: input.sessionId ?? context.sessionId,
                 content: input.content,
                 sourceType: input.sourceType ?? "agent",
                 sourceId: input.sourceId ?? context.actionId,
@@ -230,7 +243,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             const reminder = deps.reminderService.create({
               userId: context.userId,
               workspaceId: input.workspaceId ?? null,
-              sessionId: context.sessionId,
+              sessionId: input.sessionId ?? context.sessionId,
               content: input.content,
               sourceType: input.sourceType ?? "agent",
               sourceId: input.sourceId ?? context.actionId,
@@ -271,10 +284,41 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             const reminders = deps.reminderService.list({
               userId: context.userId,
               workspaceId: input.workspaceId ?? undefined,
-              status: "active",
+              status: input.status === "archived" || input.status === "all" ? input.status : "active",
+              sessionId: input.sessionId ?? undefined,
               limit: input.limit ?? 50,
             });
             return { ok: true, message: `Loaded ${reminders.length} reminders`, data: { reminders } };
+          }
+
+          case "reminder.update": {
+            if (!deps.reminderService) {
+              return { ok: false, message: "Reminder service not available." };
+            }
+            const id = input.reminderId ?? input.memoryId;
+            if (!id) {
+              return { ok: false, message: "reminder.update requires `reminderId`." };
+            }
+            const status = input.status === undefined
+              ? undefined
+              : input.status === "active" || input.status === "archived"
+                ? input.status
+                : null;
+            if (status === null) {
+              return { ok: false, message: "reminder.update status must be active or archived." };
+            }
+            const reminder = deps.reminderService.update(id, {
+              content: input.content,
+              workspaceId: input.workspaceId,
+              sessionId: input.sessionId,
+              status,
+              tags: input.tags,
+            }, context.userId);
+            return {
+              ok: !!reminder,
+              message: reminder ? `Updated reminder ${id}` : `Reminder ${id} not found`,
+              data: reminder,
+            };
           }
 
           case "memory.forget": {
@@ -414,7 +458,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               ok: false,
               message:
                 `Unknown action: "${input.action}". ` +
-                "Valid actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.forget, " +
+                "Valid actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.update, reminder.forget, " +
                 "cron.add, cron.list, cron.update, cron.remove, status.",
             };
         }
