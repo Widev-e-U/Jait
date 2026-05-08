@@ -2138,6 +2138,7 @@ function App() {
     remainingPrompts,
     error,
     hitMaxRounds,
+    hasMore: hasMoreMessages,
     pendingPlan,
     todoList,
     changedFiles,
@@ -2166,6 +2167,7 @@ function App() {
     setChangedFiles,
     setOnChangedFilesSync,
     refreshMessages,
+    loadOlderMessages,
   } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
@@ -7863,6 +7865,8 @@ function App() {
                     loading={isLoadingHistory}
                     loadingLabel="Loading chat"
                     messageContents={messageContents}
+                    hasMore={hasMoreMessages}
+                    onLoadMore={loadOlderMessages}
                   >
                     {messages.map((msg, idx) => (
                       <Message

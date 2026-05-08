@@ -658,12 +658,22 @@ function parseMessageLimit(raw: unknown): number {
   return Math.min(Math.floor(parsed), MAX_UI_MESSAGE_LIMIT);
 }
 
-function windowMessages<T>(messages: T[], limit: number): {
+function windowMessages<T>(messages: T[], limit: number, before?: number): {
   messages: T[];
   total: number;
   hasMore: boolean;
 } {
   const total = messages.length;
+  if (typeof before === "number" && before >= 0 && before < total) {
+    // Load `limit` messages ending at index `before` (exclusive)
+    const end = before;
+    const start = Math.max(end - limit, 0);
+    return {
+      messages: messages.slice(start, end),
+      total,
+      hasMore: start > 0,
+    };
+  }
   const start = Math.max(total - limit, 0);
   return {
     messages: messages.slice(start),
@@ -2211,12 +2221,17 @@ export function registerChatRoutes(
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
-    const query = request.query as { limit?: number | string };
+    const query = request.query as { limit?: number | string; before?: number | string };
     const limit = parseMessageLimit(query?.limit);
+    const before = typeof query?.before === "number"
+      ? query.before
+      : typeof query?.before === "string"
+        ? Number.parseInt(query.before, 10)
+        : undefined;
     hydrateSession(sessionId);
     const history = sessionHistory.get(sessionId) ?? [];
     const visible = buildVisibleHistoryMessages(sessionId, history);
-    const windowed = windowMessages(visible, limit);
+    const windowed = windowMessages(visible, limit, Number.isFinite(before) ? before : undefined);
     return {
       sessionId,
       streaming: activeStreams.has(sessionId),

@@ -18,7 +18,8 @@ import {
 } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
-const STREAM_SNAPSHOT_LIMIT = 120
+const STREAM_SNAPSHOT_LIMIT = 10
+const LAZY_LOAD_BATCH_SIZE = 20
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
 
 function authHeaders(token?: string | null): Record<string, string> {
@@ -164,6 +165,10 @@ interface ChatState {
   error: string | null
   /** Whether the last response was cut short by hitting the max tool rounds limit */
   hitMaxRounds: boolean
+  /** Whether there are older messages available for lazy loading */
+  hasMore: boolean
+  /** Total message count on the server (for lazy loading progress) */
+  totalMessages: number
 }
 
 /** Execution context info sent by the gateway at the start of a CLI session */
@@ -291,6 +296,8 @@ export function useChat(
     remainingPrompts: null,
     error: null,
     hitMaxRounds: false,
+    hasMore: false,
+    totalMessages: 0,
   })
 
   const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
@@ -333,7 +340,7 @@ export function useChat(
     }
 
     if (!sessionId) {
-      setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null })
+      setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null, hasMore: false, totalMessages: 0 })
       setTodoList([])
       setChangedFiles([])
       setMessageQueue([])
@@ -557,6 +564,8 @@ export function useChat(
                   isLoadingHistory: false,
                   isLoading: snapshotStreaming,
                   error: null,
+                  hasMore: !!(data.hasMore),
+                  totalMessages: typeof data.total === 'number' ? data.total : prev.totalMessages,
                 }))
               } else if (data.type === 'token' && assistantId) {
                 // Batch token updates via rAF instead of per-token setState
@@ -841,6 +850,94 @@ export function useChat(
     if (!sessionId || state.isLoading) return
     resumeSessionStream()
   }, [resumeSessionStream, sessionId, state.isLoading])
+
+  const loadingOlderRef = useRef(false)
+
+  /** Load older messages for lazy-loading / scroll-up pagination. */
+  const loadOlderMessages = useCallback(async () => {
+    if (!sessionId || !state.hasMore || loadingOlderRef.current) return
+    loadingOlderRef.current = true
+    try {
+      const before = state.totalMessages - state.messages.length
+      if (before <= 0) {
+        setState(prev => ({ ...prev, hasMore: false }))
+        return
+      }
+      const res = await fetch(
+        `${API_URL}/api/sessions/${sessionId}/messages?limit=${LAZY_LOAD_BATCH_SIZE}&before=${before}`,
+        { headers: authHeaders(authToken) },
+      )
+      if (!res.ok) return
+      const data = await res.json() as {
+        messages: Array<{
+          id: string;
+          role: 'user' | 'assistant';
+          content: string;
+          contextFlow?: LlmContextFlow;
+          thinking?: string;
+          segments?: unknown[];
+          toolCalls?: Array<{
+            callId: string;
+            tool: string;
+            args: Record<string, unknown>;
+            status?: 'pending' | 'running' | 'success' | 'error';
+            ok?: boolean;
+            message?: string;
+            output?: string;
+            data?: unknown;
+            startedAt?: number;
+            completedAt?: number;
+          }>;
+        }>;
+        hasMore: boolean;
+        total: number;
+      }
+      const olderMsgs: ChatMessage[] = data.messages.map(m => {
+        const safeContent = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+        const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
+        if (m.role === 'user' && m.segments && (m.segments as unknown[]).length > 0) {
+          msg.displaySegments = parseUserMessageSegments(m.segments)
+          msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
+          msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
+          msg.attachments = attachmentsFromSegments(msg.displaySegments)
+        } else if (m.role === 'user') {
+          const parsed = parseLegacyReferencedFilesBlock(m.content)
+          if (parsed.files.length > 0) {
+            msg.displayContent = parsed.text
+            msg.referencedFiles = parsed.files
+            msg.displaySegments = parsed.displaySegments
+            msg.attachments = attachmentsFromSegments(msg.displaySegments)
+          }
+        } else if (m.segments && (m.segments as unknown[]).length > 0) {
+          msg.segments = m.segments as MessageSegment[]
+        }
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          msg.toolCalls = m.toolCalls.map(tc => ({
+            callId: tc.callId,
+            tool: tc.tool,
+            args: tc.args ?? {},
+            status: tc.status ?? (tc.ok ? 'success' as const : 'error' as const),
+            result: {
+              ok: !!tc.ok,
+              message: tc.message ?? '',
+              data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
+            },
+            startedAt: tc.startedAt ?? 0,
+            completedAt: tc.completedAt ?? 0,
+          }))
+        }
+        return msg
+      })
+      setState(prev => ({
+        ...prev,
+        messages: [...olderMsgs, ...prev.messages],
+        hasMore: data.hasMore,
+        totalMessages: data.total,
+      }))
+    } finally {
+      loadingOlderRef.current = false
+    }
+  }, [authToken, sessionId, state.hasMore, state.messages.length, state.totalMessages])
 
   const sendMessage = useCallback(async (
     content: string,
@@ -1208,6 +1305,15 @@ export function useChat(
                           : m
                       ),
                         }))
+              } else {
+                // Stream is stale (session/provider changed), but still clean up
+                // the empty assistant placeholder so it doesn't linger.
+                setState(prev => ({
+                  ...prev,
+                  messages: prev.messages.filter(m =>
+                    !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+                  ),
+                }))
               }
               if (abortControllerRef.current === controller) abortControllerRef.current = null
               if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
@@ -1247,6 +1353,15 @@ export function useChat(
               ),
         }))
         setCompletionCount((prev) => prev + 1)
+      } else if (!completed && isStale()) {
+        // Stream ended without done event and session/provider changed —
+        // clean up empty assistant placeholder to prevent ghost messages.
+        setState(prev => ({
+          ...prev,
+          messages: prev.messages.filter(m =>
+            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+          ),
+        }))
       }
     } catch (error) {
       if (pendingMessageFrame !== null) {
@@ -1278,6 +1393,14 @@ export function useChat(
                   ),
                 }
               }),
+          }))
+        } else {
+          // Stale abort — still clean up empty assistant placeholder
+          setState(prev => ({
+            ...prev,
+            messages: prev.messages.filter(m =>
+              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+            ),
           }))
         }
         return 'aborted'
@@ -1314,6 +1437,14 @@ export function useChat(
             if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
           }, 250)
         }
+      } else {
+        // Stale error — clean up empty assistant placeholder
+        setState(prev => ({
+          ...prev,
+          messages: prev.messages.filter(m =>
+            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+          ),
+        }))
       }
       return 'retry'
     }
@@ -1569,7 +1700,7 @@ export function useChat(
   }, [authToken])
 
   const clearMessages = useCallback(() => {
-    setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false })
+    setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false, hasMore: false, totalMessages: 0 })
     setTodoList([])
     updateAndBroadcastFiles(() => [])
     setMessageQueue([])
@@ -1782,6 +1913,7 @@ export function useChat(
     remainingPrompts: state.remainingPrompts,
     error: state.error,
     hitMaxRounds: state.hitMaxRounds,
+    hasMore: state.hasMore,
     pendingPlan,
     todoList,
     changedFiles: getVisibleChangedFiles(changedFiles, isSwitchingSession),
@@ -1810,5 +1942,6 @@ export function useChat(
     setChangedFiles,
     setOnChangedFilesSync,
     refreshMessages,
+    loadOlderMessages,
   }
 }
