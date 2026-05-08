@@ -35,6 +35,7 @@ import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
 import { registerThreadRoutes } from "./routes/threads.js";
+import { registerProviderRoutes } from "./routes/providers.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerRepoProposalRoutes } from "./routes/repo-proposals.js";
@@ -276,6 +277,15 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       skillRegistry: deps.skillRegistry,
       ws: deps.ws,
       gitService: deps.gitService,
+    });
+  }
+
+  // Provider info, auth, and model listing routes
+  if (deps.providerRegistry) {
+    registerProviderRoutes(app, config, {
+      providerRegistry: deps.providerRegistry,
+      userService: deps.userService,
+      ws: deps.ws,
     });
   }
 

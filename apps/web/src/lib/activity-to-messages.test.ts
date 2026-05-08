@@ -216,4 +216,150 @@ describe('activitiesToMessages', () => {
       { type: 'text', content: 'Done' },
     ])
   })
+
+  it('produces interleaved text and tool segments from ACP-style activities', () => {
+    // Simulates: user msg → assistant text → tool.start → tool.result → assistant text → done
+    // This is the exact activity sequence that buildThreadEventHandler produces
+    // when an ACP provider emits tokens between tool calls.
+    const activities: ThreadActivity[] = [
+      {
+        id: 'u1',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'do something',
+        payload: { role: 'user', content: 'do something' },
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'a1',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'Let me check that file.',
+        payload: { role: 'assistant', content: 'Let me check that file.' },
+        createdAt: '2026-01-01T00:00:01.000Z',
+      },
+      {
+        id: 'ts1',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using read_file',
+        payload: { callId: 'c1', tool: 'read_file', args: { path: '/tmp/test.txt' } },
+        createdAt: '2026-01-01T00:00:02.000Z',
+      },
+      {
+        id: 'tr1',
+        threadId: 't1',
+        kind: 'tool.result',
+        summary: 'read_file: file contents',
+        payload: { callId: 'c1', tool: 'read_file', ok: true, message: 'file contents' },
+        createdAt: '2026-01-01T00:00:03.000Z',
+      },
+      {
+        id: 'a2',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'The file contains the expected data.',
+        payload: { role: 'assistant', content: 'The file contains the expected data.' },
+        createdAt: '2026-01-01T00:00:04.000Z',
+      },
+    ]
+
+    const messages = activitiesToMessages(activities)
+
+    // Should produce: user message, then one assistant message with segments
+    const userMsgs = messages.filter((m) => m.role === 'user')
+    const assistantMsgs = messages.filter((m) => m.role === 'assistant')
+
+    expect(userMsgs).toHaveLength(1)
+    expect(userMsgs[0]!.content).toBe('do something')
+
+    // The assistant message should contain both text and tool call
+    expect(assistantMsgs).toHaveLength(1)
+    const assistant = assistantMsgs[0]!
+    expect(assistant.content).toContain('Let me check that file.')
+    expect(assistant.content).toContain('The file contains the expected data.')
+    expect(assistant.toolCalls).toHaveLength(1)
+    expect(assistant.toolCalls![0]!.tool).toBe('read_file')
+
+    // Segments should interleave text ↔ toolGroup ↔ text
+    expect(assistant.segments).toBeDefined()
+    const segTypes = assistant.segments!.map((s) => s.type)
+    expect(segTypes).toEqual(['text', 'toolGroup', 'text'])
+  })
+
+  it('handles multiple tool calls with interleaved assistant text from ACP', () => {
+    const activities: ThreadActivity[] = [
+      {
+        id: 'a1',
+        threadId: 't1',
+        kind: 'message',
+        summary: "First I'll read the file.",
+        payload: { role: 'assistant', content: "First I'll read the file." },
+        createdAt: '2026-01-01T00:00:01.000Z',
+      },
+      {
+        id: 'ts1',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using read_file',
+        payload: { callId: 'c1', tool: 'read_file', args: { path: '/a.txt' } },
+        createdAt: '2026-01-01T00:00:02.000Z',
+      },
+      {
+        id: 'tr1',
+        threadId: 't1',
+        kind: 'tool.result',
+        summary: 'read_file: ok',
+        payload: { callId: 'c1', tool: 'read_file', ok: true, message: 'ok' },
+        createdAt: '2026-01-01T00:00:03.000Z',
+      },
+      {
+        id: 'a2',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'Now let me write the output.',
+        payload: { role: 'assistant', content: 'Now let me write the output.' },
+        createdAt: '2026-01-01T00:00:04.000Z',
+      },
+      {
+        id: 'ts2',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using write_file',
+        payload: { callId: 'c2', tool: 'write_file', args: { path: '/b.txt' } },
+        createdAt: '2026-01-01T00:00:05.000Z',
+      },
+      {
+        id: 'tr2',
+        threadId: 't1',
+        kind: 'tool.result',
+        summary: 'write_file: ok',
+        payload: { callId: 'c2', tool: 'write_file', ok: true, message: 'ok' },
+        createdAt: '2026-01-01T00:00:06.000Z',
+      },
+      {
+        id: 'a3',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'All done!',
+        payload: { role: 'assistant', content: 'All done!' },
+        createdAt: '2026-01-01T00:00:07.000Z',
+      },
+    ]
+
+    const messages = activitiesToMessages(activities)
+    const assistant = messages.find((m) => m.role === 'assistant')!
+
+    // All three text segments should be in content
+    expect(assistant.content).toContain("First I'll read the file.")
+    expect(assistant.content).toContain('Now let me write the output.')
+    expect(assistant.content).toContain('All done!')
+
+    // Two tool calls
+    expect(assistant.toolCalls).toHaveLength(2)
+
+    // Segments: text → toolGroup → text → toolGroup → text
+    const segTypes = assistant.segments!.map((s) => s.type)
+    expect(segTypes).toEqual(['text', 'toolGroup', 'text', 'toolGroup', 'text'])
+  })
 })

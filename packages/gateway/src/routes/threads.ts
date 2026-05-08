@@ -14,9 +14,6 @@
  *   POST   /api/threads/:id/stop     — stop agent session
  *   POST   /api/threads/:id/interrupt — interrupt current turn
  *   POST   /api/threads/:id/approve  — approve a tool call
- *   POST   /api/threads/:id/create-pr — create a PR for a completed thread
- *   GET    /api/threads/:id/activities — get activity log
- *   GET    /api/providers            — list available providers
  */
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -44,7 +41,6 @@ import {
   normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
 import type { WsEventType, ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared/types";
-import type { ProviderModelInfo } from "../providers/contracts.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
 function parseSkillIds(value: unknown): string[] | null | undefined {
@@ -101,64 +97,6 @@ function resolveThreadProviderId(
   }
 
   return resolveSelectedProvider();
-}
-
-/** Fetch models from OpenRouter API with a 5-second timeout and in-memory cache. */
-let orCache: { models: ProviderModelInfo[]; fetchedAt: number } | null = null;
-const OR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-async function fetchOpenRouterModels(apiKey: string): Promise<ProviderModelInfo[]> {
-  if (orCache && Date.now() - orCache.fetchedAt < OR_CACHE_TTL) {
-    return orCache.models;
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: controller.signal,
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { data?: Array<{ id: string; name?: string; description?: string }> };
-    const models: ProviderModelInfo[] = (data.data ?? [])
-      .filter((m) => m.id && !m.id.includes(":free"))
-      .slice(0, 100)
-      .map((m) => ({
-        id: m.id,
-        name: m.name || m.id.split("/").pop() || m.id,
-        description: m.description?.slice(0, 80),
-      }));
-    orCache = { models, fetchedAt: Date.now() };
-    return models;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-let ollamaCache: { models: ProviderModelInfo[]; fetchedAt: number; url: string } | null = null;
-const OLLAMA_CACHE_TTL = 30 * 1000; // 30 seconds (local, fast)
-
-async function fetchOllamaModels(baseUrl: string): Promise<ProviderModelInfo[]> {
-  const url = baseUrl.replace(/\/+$/, "");
-  if (ollamaCache && ollamaCache.url === url && Date.now() - ollamaCache.fetchedAt < OLLAMA_CACHE_TTL) {
-    return ollamaCache.models;
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(`${url}/api/tags`, { signal: controller.signal });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { models?: Array<{ name: string; size?: number; details?: { parameter_size?: string; family?: string } }> };
-    const models: ProviderModelInfo[] = (data.models ?? []).map((m) => ({
-      id: m.name,
-      name: m.name,
-      description: [m.details?.family, m.details?.parameter_size].filter(Boolean).join(" · ") || undefined,
-    }));
-    ollamaCache = { models, fetchedAt: Date.now(), url };
-    return models;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 export interface ThreadRouteDeps {
@@ -1834,188 +1772,6 @@ export function registerThreadRoutes(
 
     const activities = threadService.getActivities(id, limit);
     return { activities };
-  });
-
-  // ── Provider info ────────────────────────────────────────────────
-
-  /** List available providers (local + remote) */
-  app.get("/api/providers", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-
-    const providers = providerRegistry.list();
-    const providerSnapshots = await Promise.all(
-      providers.map(async (p) => {
-        await p.checkAvailability().catch(() => false);
-        const auth = await p.getAuthStatus?.().catch(() => p.info.auth
-          ? { ...p.info.auth, authenticated: null, detail: "Failed to check provider auth status." }
-          : undefined);
-        return { provider: p, auth };
-      }),
-    );
-
-    // Collect remote provider info from connected filesystem nodes
-    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
-    if (ws) {
-      for (const node of ws.getFsNodes()) {
-        if (node.isGateway) continue;
-        remoteProviders.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          platform: node.platform,
-          providers: node.providers ?? [],
-        });
-      }
-    }
-
-    return {
-      providers: providerSnapshots.map(({ provider: p, auth }) => ({
-        id: p.id,
-        name: p.info.name,
-        description: p.info.description,
-        available: p.info.available,
-        unavailableReason: p.info.unavailableReason,
-        modes: p.info.modes,
-        auth: auth ?? p.info.auth,
-      })),
-      remoteProviders,
-    };
-  });
-
-  /** Get provider auth status */
-  app.get("/api/providers/:id/auth/status", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-
-    const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
-    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
-    if (!provider.getAuthStatus) {
-      return reply.status(501).send({ error: `Provider ${id} does not support auth status` });
-    }
-    return provider.getAuthStatus();
-  });
-
-  /** Start provider login */
-  app.post("/api/providers/:id/auth/login", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-
-    const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
-    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
-    if (!provider.startLogin) {
-      return reply.status(501).send({ error: `Provider ${id} does not support login` });
-    }
-    const result = await provider.startLogin();
-    if (!result.ok && result.status === "unsupported") {
-      return reply.status(501).send(result);
-    }
-    if (!result.ok) {
-      return reply.status(500).send(result);
-    }
-    return result;
-  });
-
-  /** Log out provider */
-  app.post("/api/providers/:id/auth/logout", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-
-    const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
-    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
-    if (!provider.logout) {
-      return reply.status(501).send({ error: `Provider ${id} does not support logout` });
-    }
-    const result = await provider.logout();
-    if (!result.ok && result.status === "unsupported") {
-      return reply.status(501).send(result);
-    }
-    if (!result.ok) {
-      return reply.status(500).send(result);
-    }
-    return result;
-  });
-
-  /** List models for a specific provider */
-  app.get("/api/providers/:id/models", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-
-    const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
-    if (!provider) {
-      return reply.status(404).send({ error: `Unknown provider: ${id}` });
-    }
-
-    if (!provider.listModels) {
-      return { models: [] };
-    }
-
-    try {
-      let models = await provider.listModels();
-
-      // For jait provider, return models from ALL configured backends, grouped
-      if (id === "jait" && deps.userService) {
-        const settings = deps.userService.getSettings(authUser.id);
-        const userApiKeys = settings.apiKeys ?? {};
-        const jaitBackend = settings.jaitBackend || "openai";
-
-        const allModels: ProviderModelInfo[] = [];
-
-        // ── OpenAI models (always shown) ──────────────────────────
-        allModels.push(...models.map((m) => ({ ...m, group: "OpenAI" })));
-
-        // ── OpenRouter models ─────────────────────────────────────
-        const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
-        if (openRouterKey) {
-          try {
-            const orModels = await fetchOpenRouterModels(openRouterKey);
-            if (orModels.length > 0) {
-              allModels.push(...orModels.map((m) => ({ ...m, group: "OpenRouter" })));
-            } else {
-              const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-              allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
-            }
-          } catch {
-            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-            allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
-          }
-        }
-
-        // ── Ollama models ─────────────────────────────────────────
-        const ollamaUrl = userApiKeys["OLLAMA_URL"]?.trim() || config.ollamaUrl;
-        if (ollamaUrl) {
-          try {
-            const ollamaModels = await fetchOllamaModels(ollamaUrl);
-            if (ollamaModels.length > 0) {
-              allModels.push(...ollamaModels.map((m) => ({ ...m, group: "Ollama" })));
-            }
-          } catch {
-            // Ollama unreachable — skip
-          }
-        }
-
-        models = allModels;
-
-        // Prepend recent models (if they exist in the full list)
-        const recentIds = settings.recentModels ?? [];
-        if (recentIds.length > 0) {
-          const modelMap = new Map(models.map((m) => [m.id, m]));
-          const recents = recentIds
-            .filter((rid) => modelMap.has(rid))
-            .map((rid) => ({ ...modelMap.get(rid)!, isRecent: true }));
-          return { models, currentBackend: jaitBackend, recentModels: recents.slice(0, 5).map((r) => r.id) };
-        }
-
-        return { models, currentBackend: jaitBackend };
-      }
-
-      return { models };
-    } catch (err) {
-      return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to list models" });
-    }
   });
 
   app.log.info("Agent thread routes registered at /api/threads");
