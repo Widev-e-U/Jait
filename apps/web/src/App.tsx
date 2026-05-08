@@ -168,6 +168,7 @@ import {
   userReferencedTerminalsFromSegments,
   userReferencedWorkspacesFromSegments,
 } from '@/lib/user-message-segments'
+import { appendTranscript, normalizeTranscript } from '@/lib/transcript-merge'
 
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
@@ -544,17 +545,6 @@ function mergeImageAttachmentsIntoSegments(
 
 function createSilentVoiceLevels(): number[] {
   return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
-}
-
-function normalizeTranscript(text: string): string {
-  return text.trim()
-}
-
-function appendTranscript(prev: string, transcript: string): string {
-  const normalizedPrev = prev.trim()
-  const normalizedTranscript = normalizeTranscript(transcript)
-  if (!normalizedTranscript) return normalizedPrev
-  return normalizedPrev ? `${normalizedPrev} ${normalizedTranscript}` : normalizedTranscript
 }
 
 function summarizeForVoice(text: string, maxLength = 220): string {
