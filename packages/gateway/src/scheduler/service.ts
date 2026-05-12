@@ -1,6 +1,6 @@
 import { eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/index.js";
-import { scheduledJobs } from "../db/schema.js";
+import { scheduledJobRuns, scheduledJobs } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { ToolResult } from "../tools/contracts.js";
 import { ToolName } from "../tools/tool-names.js";
@@ -18,6 +18,8 @@ export interface SchedulerExecutionResult {
   actionId: string;
   result: ToolResult;
 }
+
+export type SchedulerRunTrigger = "manual" | "schedule";
 
 export interface ScheduledJobRecord {
   id: string;
@@ -100,6 +102,16 @@ function parseInput(input: string | null): unknown {
     return JSON.parse(input) as unknown;
   } catch {
     return {};
+  }
+}
+
+function toRunOutputText(data: unknown): string | null {
+  if (data == null) return null;
+  if (typeof data === "string") return data;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return String(data);
   }
 }
 
@@ -301,18 +313,68 @@ export class SchedulerService {
     return this.get(id, userId);
   }
 
-  async trigger(id: string, userId?: string, runAt = new Date()): Promise<SchedulerExecutionResult> {
+  listRuns(jobId: string): Array<typeof scheduledJobRuns.$inferSelect> {
+    return this.options.db
+      .select()
+      .from(scheduledJobRuns)
+      .where(eq(scheduledJobRuns.jobId, jobId))
+      .orderBy(desc(scheduledJobRuns.startedAt))
+      .all();
+  }
+
+  async trigger(
+    id: string,
+    userId?: string,
+    runAt = new Date(),
+    triggeredBy: SchedulerRunTrigger = "manual",
+  ): Promise<SchedulerExecutionResult> {
     const job = this.get(id, userId);
     if (!job) {
       throw new Error(`Job not found: ${id}`);
     }
 
     const actionId = uuidv7();
-    const result = await this.options.executeTool(normalizeScheduledExecution(job));
+    const startedAt = runAt.toISOString();
+
+    this.options.db.insert(scheduledJobRuns).values({
+      id: actionId,
+      jobId: id,
+      status: "running",
+      triggeredBy,
+      startedAt,
+    }).run();
+
+    let result: ToolResult;
+    try {
+      result = await this.options.executeTool(normalizeScheduledExecution(job));
+    } catch (err) {
+      const completedAt = new Date().toISOString();
+      const message = err instanceof Error ? err.message : String(err);
+      this.options.db.update(scheduledJobRuns).set({
+        status: "failed",
+        error: message,
+        completedAt,
+      }).where(eq(scheduledJobRuns.id, actionId)).run();
+
+      this.options.db.update(scheduledJobs).set({
+        lastRunAt: startedAt,
+        updatedAt: completedAt,
+      }).where(eq(scheduledJobs.id, id)).run();
+
+      throw err;
+    }
+
+    const completedAt = new Date().toISOString();
+    this.options.db.update(scheduledJobRuns).set({
+      status: result.ok ? "completed" : "failed",
+      output: result.ok ? toRunOutputText(result.data ?? result.message) : null,
+      error: result.ok ? null : result.message,
+      completedAt,
+    }).where(eq(scheduledJobRuns.id, actionId)).run();
 
     this.options.db.update(scheduledJobs).set({
-      lastRunAt: runAt.toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastRunAt: startedAt,
+      updatedAt: completedAt,
     }).where(eq(scheduledJobs.id, id)).run();
 
     const payload = { jobId: id, actionId, result };
@@ -327,7 +389,11 @@ export class SchedulerService {
       const jobs = this.list().filter((j) => j.enabled);
       for (const job of jobs) {
         if (matchesCronMinute(job.cron, now) && !isSameUtcMinute(job.lastRunAt, now)) {
-          await this.trigger(job.id, undefined, now);
+          try {
+            await this.trigger(job.id, undefined, now, "schedule");
+          } catch (err) {
+            console.error(`Scheduled job failed: ${job.id}`, err);
+          }
         }
       }
     } finally {
