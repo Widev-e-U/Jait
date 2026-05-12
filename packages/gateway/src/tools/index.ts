@@ -187,7 +187,7 @@ import {
 } from "./preview-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
-import { type AppConfig, inferContextWindow } from "../config.js";
+import { type AppConfig } from "../config.js";
 import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import type { SessionStateService } from "../services/session-state.js";
@@ -200,6 +200,8 @@ import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
 import type { RepoProposalService } from "../services/repo-proposals.js";
 import type { ReminderService } from "../services/reminders.js";
+import { resolveJaitLlmConfig } from "../services/jait-llm.js";
+import type { JaitBackend } from "../services/users.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -424,19 +426,17 @@ export function createToolRegistry(
   if (deps.config) {
     const agentDeps = {
       toolRegistry: tools,
-      getLLMConfig: (context: { apiKeys?: Record<string, string> }) => {
-        const effectiveModel =
-          context.apiKeys?.["OPENAI_MODEL"]?.trim() || deps.config!.openaiModel;
-        return {
-          openaiApiKey:
-            context.apiKeys?.["OPENAI_API_KEY"]?.trim() || deps.config!.openaiApiKey,
-          openaiBaseUrl:
-            context.apiKeys?.["OPENAI_BASE_URL"]?.trim() || deps.config!.openaiBaseUrl,
-          openaiModel: effectiveModel,
-          contextWindow: context.apiKeys?.["OPENAI_MODEL"]?.trim()
-            ? inferContextWindow(effectiveModel)
-            : deps.config!.contextWindow,
-        };
+      getLLMConfig: (context: { apiKeys?: Record<string, string>; model?: string; jaitBackend?: string }) => {
+        const llm = resolveJaitLlmConfig({
+          config: deps.config!,
+          apiKeys: context.apiKeys,
+          requestedModel: context.model?.trim() || undefined,
+          jaitBackend: context.jaitBackend as JaitBackend | undefined,
+        });
+        if (!(context.model?.trim() || context.apiKeys?.["OPENAI_MODEL"]?.trim())) {
+          return { ...llm, contextWindow: deps.config!.contextWindow };
+        }
+        return llm;
       },
     };
     // Core: simplified "agent" tool

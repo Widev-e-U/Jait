@@ -145,12 +145,18 @@ export function getPlanModeInstructions(): string {
   return `You are in PLAN mode. The user wants you to create a plan without implementing it. Analyze the request, explore the codebase as needed, and produce a clear, structured plan. Do NOT make any file changes — only describe what should be done.`;
 }
 
+export function getSwarmModeInstructions(): string {
+  return `You are in SWARM mode. Act as a multi-agent coordinator using OpenSwarm-inspired specialist roles. First decompose the user's objective, then delegate useful subtasks with the agent tool to specialists such as General Agent, Deep Research Agent, Data Analyst, Docs Agent, Slides Agent, Image Agent, and Video Agent. Include the specialist role, concrete task, expected output, relevant context, and allowed tools in each delegation. Use parallel delegation for independent subtasks, synthesize specialist outputs into one final response, and do not expose raw specialist transcripts unless the user asks. Specialist sub-agents inherit the currently selected Jait model/provider context; do not ask the user to pick separate specialist models.`;
+}
+
 export function getModeInstructions(mode: ChatMode): string {
   switch (mode) {
     case "ask":
       return getAskModeInstructions();
     case "plan":
       return getPlanModeInstructions();
+    case "swarm":
+      return getSwarmModeInstructions();
     default:
       return "";
   }

@@ -179,7 +179,7 @@ export interface SessionInfo {
   remoteNode?: { nodeId: string; nodeName: string; platform: string }
 }
 
-export type ChatMode = 'ask' | 'agent' | 'plan'
+export type ChatMode = 'ask' | 'agent' | 'swarm' | 'plan'
 
 /** Context window usage breakdown from the gateway */
 export interface ContextUsage {
