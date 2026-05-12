@@ -70,6 +70,24 @@ describe('formatOutput', () => {
     }, 'terminal.run')).toBe('bun test\n\n1 pass')
   })
 
+  it('unwraps command payload envelopes for non-terminal wrapper tools', () => {
+    expect(formatOutput({
+      ok: true,
+      message: JSON.stringify({
+        formattedOutput: 'Changed 2 files',
+        exitCode: 0,
+        timedOut: false,
+      }),
+    }, 'functions.exec_command')).toBe('Changed 2 files')
+  })
+
+  it('unwraps embedded command payload envelopes for non-terminal wrapper tools', () => {
+    expect(formatOutput({
+      ok: true,
+      message: 'Command completed (exit code 0) {"formattedOutput":"Changed 2 files","exitCode":0,"timedOut":false}',
+    }, 'functions.exec_command')).toBe('Changed 2 files')
+  })
+
   it('renders nested MCP terminal results as command output text', () => {
     expect(formatOutput({
       ok: true,
