@@ -12,6 +12,7 @@ export interface ToolContext {
   apiKeys?: Record<string, string>;
   providerId?: string;
   model?: string;
+  jaitBackend?: string;
   runtimeMode?: string;
   /** Optional long-lived sandbox container for provider-owned thread execution */
   sandboxContainerName?: string;

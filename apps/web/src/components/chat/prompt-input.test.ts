@@ -82,6 +82,14 @@ describe('shouldQueuePromptSubmit', () => {
       hasQueueHandler: true,
     })).toBe(true)
   })
+
+  it('queues swarm-mode submits while the current agent chat is loading', () => {
+    expect(shouldQueuePromptSubmit({
+      isLoading: true,
+      sendTarget: 'swarm',
+      hasQueueHandler: true,
+    })).toBe(true)
+  })
 })
 
 describe('attachment draft state', () => {

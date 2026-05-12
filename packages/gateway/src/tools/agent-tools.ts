@@ -195,6 +195,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           apiKeys: context.apiKeys,
           providerId: context.providerId,
           model: context.model,
+          jaitBackend: context.jaitBackend,
           runtimeMode: context.runtimeMode,
           onOutputChunk: onChunk,
           signal,
@@ -246,7 +247,16 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
             toolSchemas,
             hasTools,
             sessionId: `${context.sessionId}:sub:${subAgentId}`,
-            auth: context.userId ? { userId: context.userId, apiKeys: context.apiKeys } : undefined,
+            auth: context.userId
+              ? {
+                userId: context.userId,
+                apiKeys: context.apiKeys,
+                providerId: context.providerId,
+                model: context.model,
+                jaitBackend: context.jaitBackend,
+                runtimeMode: context.runtimeMode,
+              }
+              : undefined,
             abort: subAbort,
             maxRounds: input.maxRounds ?? SUBAGENT_MAX_ROUNDS_DEFAULT,
             maxRetries: 1, // sub-agents get 1 retry (faster turnaround)

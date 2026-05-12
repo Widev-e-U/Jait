@@ -1,8 +1,8 @@
-import { GitBranch, Infinity } from 'lucide-react'
+import { GitBranch, Infinity, Network } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 
-export type SendTarget = 'agent' | 'thread'
+export type SendTarget = 'agent' | 'swarm' | 'thread'
 
 interface SendTargetSelectorProps {
   target: SendTarget
@@ -25,6 +25,12 @@ const TARGETS: Array<{
     description: 'Send to the current coding chat session',
   },
   {
+    value: 'swarm',
+    label: 'Swarm',
+    icon: Network,
+    description: 'Coordinate specialist sub-agents in the current chat session',
+  },
+  {
     value: 'thread',
     label: 'Thread',
     icon: GitBranch,
@@ -43,7 +49,7 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
       role="tablist"
       aria-label="Send target"
       className={cn(
-        'relative inline-grid h-10 grid-cols-2 rounded-lg border border-border/70 bg-muted/40 p-0.5 sm:h-8',
+        'relative inline-grid h-10 grid-cols-3 rounded-lg border border-border/70 bg-muted/40 p-0.5 sm:h-8',
         'shadow-sm transition-colors',
         disabled && 'pointer-events-none opacity-50',
         className,
@@ -51,7 +57,7 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
     >
       <div
         aria-hidden="true"
-        className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out"
+        className="absolute inset-y-0.5 left-0.5 w-[calc(33.333333%-2px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out"
         style={{ transform: `translateX(${safeActiveIndex * 100}%)` }}
       />
       {TARGETS.map((entry) => {
