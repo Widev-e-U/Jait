@@ -657,7 +657,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showProviderModelSelector = Boolean(provider && onProviderChange && onCliModelChange)
   const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
-  const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
+  const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && sendTarget !== 'swarm' && (!provider || provider === 'jait'))
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
   const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)

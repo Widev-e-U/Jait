@@ -13,6 +13,10 @@ interface ConversationProps {
   loadingLabel?: string
   /** Raw text per child item for pretext-based virtual item height estimation. */
   messageContents?: string[]
+  /** Whether there are older messages available to load. */
+  hasMore?: boolean
+  /** Callback to load older messages (scroll-up lazy loading). */
+  onLoadMore?: () => void
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
@@ -23,7 +27,7 @@ const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   touchAction: 'pan-y',
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, hasMore, onLoadMore }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
@@ -149,6 +153,35 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     }
   }, [loading]) // re-attach when scroll element mounts (loading → !loading)
 
+  // Lazy-load older messages when user scrolls near the top
+  const loadMoreTriggeredRef = useRef(false)
+  useEffect(() => {
+    // Reset trigger guard when hasMore changes (e.g. new batch loaded)
+    loadMoreTriggeredRef.current = false
+  }, [hasMore, childItems.length])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !hasMore || !onLoadMore) return
+
+    const handleScroll = () => {
+      if (loadMoreTriggeredRef.current) return
+      if (el.scrollTop < 200) {
+        loadMoreTriggeredRef.current = true
+        const prevHeight = el.scrollHeight
+        onLoadMore()
+        // After older messages are prepended, maintain scroll position
+        requestAnimationFrame(() => {
+          const newHeight = el.scrollHeight
+          el.scrollTop += newHeight - prevHeight
+        })
+      }
+    }
+
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [hasMore, onLoadMore, childItems.length])
+
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
@@ -253,6 +286,18 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
             </div>
           )}
           <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
+            {hasMore && (
+              <div className="flex justify-center py-3">
+                <button
+                  type="button"
+                  onClick={onLoadMore}
+                  className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
+                >
+                  <Loader2 className="h-3 w-3 text-primary animate-spin" style={{ animationPlayState: loadMoreTriggeredRef.current ? 'running' : 'paused' }} />
+                  <span>Load earlier messages</span>
+                </button>
+              </div>
+            )}
             <div
               ref={sizerRef}
               style={{

@@ -1,4 +1,4 @@
-import { MessageSquare, Infinity, ClipboardList, ChevronDown, Check } from 'lucide-react'
+import { MessageSquare, Infinity, ClipboardList, ChevronDown, Check, Network } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-export type ChatMode = 'ask' | 'agent' | 'plan'
+export type ChatMode = 'ask' | 'agent' | 'swarm' | 'plan'
 
 interface ModeSelectorProps {
   mode: ChatMode
@@ -34,6 +34,12 @@ const MODES: Array<{
     label: 'Agent',
     icon: Infinity,
     description: 'Full agentic — reads, writes, runs commands',
+  },
+  {
+    value: 'swarm',
+    label: 'Swarm',
+    icon: Network,
+    description: 'Multi-agent — routes work to specialists',
   },
   {
     value: 'plan',

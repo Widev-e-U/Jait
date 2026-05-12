@@ -1050,4 +1050,232 @@ describe("thread routes", () => {
     await app.close();
     sqlite.close();
   });
+
+  it("persists assistant text between ACP tool calls as message activities", async () => {
+    // Simulates an ACP provider that emits tokens → tool.start → tool.result → tokens
+    // and verifies the thread handler flushes accumulated text into message activities.
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "ACP message test",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "do something", titleTask: "" },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    const sid = "mock-session-1";
+
+    // Simulate ACP event sequence: text → tool → text → done
+    // Phase 1: assistant emits text tokens before a tool call
+    provider.emit({ type: "token", sessionId: sid, content: "Let me " });
+    provider.emit({ type: "token", sessionId: sid, content: "check that file." });
+
+    // Phase 2: tool call starts — should flush "Let me check that file."
+    provider.emit({ type: "tool.start", sessionId: sid, tool: "read_file", args: { path: "/tmp/test.txt" }, callId: "call-1" });
+    provider.emit({ type: "tool.result", sessionId: sid, tool: "read_file", ok: true, message: "file contents", callId: "call-1" });
+
+    // Phase 3: more tokens after the tool
+    provider.emit({ type: "token", sessionId: sid, content: "The file contains " });
+    provider.emit({ type: "token", sessionId: sid, content: "the expected data." });
+
+    // Phase 4: turn completes — should flush "The file contains the expected data."
+    provider.emit({ type: "turn.completed", sessionId: sid });
+
+    // Wait for async processing
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Verify activities (getActivities returns descending order, reverse for chronological)
+    const activities = threadService.getActivities(thread.id).reverse();
+    const messageActivities = activities.filter((a) => a.kind === "message");
+    const toolActivities = activities.filter((a) => a.kind === "tool.start" || a.kind === "tool.result");
+
+    // Should have at least 2 assistant message activities (one before tool, one after)
+    const assistantMessages = messageActivities.filter(
+      (a) => (a.payload as { role?: string })?.role === "assistant",
+    );
+    expect(assistantMessages.length).toBeGreaterThanOrEqual(2);
+
+    // First assistant message: text before the tool call
+    expect(assistantMessages[0]!.summary).toContain("Let me check that file.");
+    const firstPayload = assistantMessages[0]!.payload as { content?: string };
+    expect(firstPayload.content).toBe("Let me check that file.");
+
+    // Second assistant message: text after the tool call
+    expect(assistantMessages[1]!.summary).toContain("The file contains the expected data.");
+    const secondPayload = assistantMessages[1]!.payload as { content?: string };
+    expect(secondPayload.content).toBe("The file contains the expected data.");
+
+    // Should also have tool activities
+    expect(toolActivities.some((a) => a.kind === "tool.start")).toBe(true);
+    expect(toolActivities.some((a) => a.kind === "tool.result")).toBe(true);
+
+    // Verify ordering: message → tool.start → tool.result → message
+    const ordered = activities.filter(
+      (a) => a.kind === "message" || a.kind === "tool.start" || a.kind === "tool.result",
+    );
+    const kinds = ordered.map((a) => {
+      if (a.kind === "message") {
+        return `message:${(a.payload as { role?: string })?.role ?? "?"}`;
+      }
+      return a.kind;
+    });
+
+    // Expected chronological sequence: user message, assistant text, tool.start, tool.result, assistant text
+    const firstAssistantIdx = kinds.indexOf("message:assistant");
+    const toolStartIdx = kinds.indexOf("tool.start");
+    const toolResultIdx = kinds.indexOf("tool.result");
+    const lastAssistantIdx = kinds.lastIndexOf("message:assistant");
+
+    expect(firstAssistantIdx).toBeLessThan(toolStartIdx);
+    expect(toolStartIdx).toBeLessThan(toolResultIdx);
+    expect(toolResultIdx).toBeLessThan(lastAssistantIdx);
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("does not lose assistant text when only tokens arrive with no tool calls", async () => {
+    // Edge case: ACP provider sends tokens → turn.completed with no tools
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Token-only test",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "explain something", titleTask: "" },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    const sid = "mock-session-1";
+
+    // Only tokens, no tool calls
+    provider.emit({ type: "token", sessionId: sid, content: "Here is my explanation " });
+    provider.emit({ type: "token", sessionId: sid, content: "of the topic." });
+    provider.emit({ type: "turn.completed", sessionId: sid });
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const activities = threadService.getActivities(thread.id).reverse();
+    const assistantMessages = activities.filter(
+      (a) => a.kind === "message" && (a.payload as { role?: string })?.role === "assistant",
+    );
+
+    // The accumulated tokens should be flushed as a message activity
+    expect(assistantMessages.length).toBeGreaterThanOrEqual(1);
+    const payload = assistantMessages[0]!.payload as { content?: string };
+    expect(payload.content).toBe("Here is my explanation of the topic.");
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("handles multiple tool calls with interleaved text", async () => {
+    // Simulates: text → tool1 → text → tool2 → text → done
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Multi-tool test",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "do multiple things", titleTask: "" },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    const sid = "mock-session-1";
+
+    // text1 → tool1 → text2 → tool2 → text3
+    provider.emit({ type: "token", sessionId: sid, content: "First I'll read the file." });
+    provider.emit({ type: "tool.start", sessionId: sid, tool: "read_file", args: { path: "/a.txt" }, callId: "c1" });
+    provider.emit({ type: "tool.result", sessionId: sid, tool: "read_file", ok: true, message: "contents of a", callId: "c1" });
+
+    provider.emit({ type: "token", sessionId: sid, content: "Now let me write the output." });
+    provider.emit({ type: "tool.start", sessionId: sid, tool: "write_file", args: { path: "/b.txt" }, callId: "c2" });
+    provider.emit({ type: "tool.result", sessionId: sid, tool: "write_file", ok: true, message: "written", callId: "c2" });
+
+    provider.emit({ type: "token", sessionId: sid, content: "All done!" });
+    provider.emit({ type: "turn.completed", sessionId: sid });
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const activities = threadService.getActivities(thread.id).reverse();
+    const assistantMessages = activities.filter(
+      (a) => a.kind === "message" && (a.payload as { role?: string })?.role === "assistant",
+    );
+
+    // Should have 3 assistant messages: before tool1, between tools, after tool2
+    expect(assistantMessages.length).toBe(3);
+    expect((assistantMessages[0]!.payload as { content: string }).content).toBe("First I'll read the file.");
+    expect((assistantMessages[1]!.payload as { content: string }).content).toBe("Now let me write the output.");
+    expect((assistantMessages[2]!.payload as { content: string }).content).toBe("All done!");
+
+    await app.close();
+    sqlite.close();
+  });
 });

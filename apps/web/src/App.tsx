@@ -2138,6 +2138,7 @@ function App() {
     remainingPrompts,
     error,
     hitMaxRounds,
+    hasMore: hasMoreMessages,
     pendingPlan,
     todoList,
     changedFiles,
@@ -2166,6 +2167,7 @@ function App() {
     setChangedFiles,
     setOnChangedFilesSync,
     refreshMessages,
+    loadOlderMessages,
   } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
@@ -2255,7 +2257,9 @@ function App() {
         : 'Describe what you want to do...'
   const developerPlaceholder = sendTarget === 'thread'
     ? threadPlaceholder
-    : 'Ask anything...'
+    : sendTarget === 'swarm'
+      ? 'Describe a multi-agent task...'
+      : 'Ask anything...'
 
   const developerThreadRepoAutoSelectRef = useRef<string | null>(null)
 
@@ -3046,7 +3050,7 @@ function App() {
         }
         break
       case 'chat.mode':
-        if (value === 'ask' || value === 'agent' || value === 'plan') {
+        if (value === 'ask' || value === 'agent' || value === 'swarm' || value === 'plan') {
           setChatMode(value)
         }
         break
@@ -3141,7 +3145,7 @@ function App() {
     }
 
     const cm = state['chat.mode']
-    if (cm === 'ask' || cm === 'agent' || cm === 'plan') {
+    if (cm === 'ask' || cm === 'agent' || cm === 'swarm' || cm === 'plan') {
       setChatMode(cm)
     }
 
@@ -4911,10 +4915,11 @@ function App() {
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared) return
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
+    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
     enqueueMessage({
       content: prepared.promptWithReferences,
       displayContent: prepared.displayContent || prepared.promptWithReferences,
-      mode: chatMode,
+      mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       responseStyle: chatResponseStyle,
@@ -4925,7 +4930,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, setInputValue])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue])
 
   const ensureSessionTitle = useCallback(async (sessionId: string, prompt: string) => {
     if (!shouldAutoTitleSession(activeSessionRecord?.name)) return
@@ -4953,6 +4958,7 @@ function App() {
     const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const generatedTitle = deriveSessionTitle(prepared?.displayContent || promptText)
+    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
     let sid = activeSessionId
     if (!sid) {
@@ -4966,7 +4972,7 @@ function App() {
       enqueueMessage({
         content: promptText,
         displayContent: prepared?.displayContent || promptText,
-        mode: chatMode,
+        mode: outboundMode,
         provider: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         responseStyle: chatResponseStyle,
@@ -4983,7 +4989,7 @@ function App() {
     sendMessage(promptText, {
       token,
       sessionId: sid,
-      mode: chatMode,
+      mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       responseStyle: chatResponseStyle,
@@ -5368,17 +5374,18 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
+    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
     // Handle architecture generation suggestion
     if (suggestion === 'Generate architecture diagram') {
       setArchitectureGenerating(true)
       setShowArchitecture(true)
       sendMessage(
         'Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) },
+        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -5394,10 +5401,11 @@ function App() {
     if (!activeSessionId || !token) return
     const prepared = await preparePromptSubmission(newContent, metadata?.referencedFiles, metadata?.displaySegments)
     if (!prepared) return
+    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
     await restartFromMessage(messageId, prepared.promptWithReferences, messageIndex, messageFromEnd, {
       token,
       sessionId: activeSessionId,
-      mode: chatMode,
+      mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: cliModel ?? undefined,
@@ -5406,7 +5414,7 @@ function App() {
       displaySegments: prepared.displaySegments,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, preparePromptSubmission])
+  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, preparePromptSubmission, sendTarget])
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -5575,12 +5583,13 @@ function App() {
     }
     if (!sid || !token) return
     await ensureSessionTitle(sid, normalizedTranscript)
+    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
         content: normalizedTranscript,
         displayContent: normalizedTranscript,
-        mode: chatMode,
+        mode: outboundMode,
         provider: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         model: cliModel ?? undefined,
@@ -5591,7 +5600,7 @@ function App() {
     sendMessage(normalizedTranscript, {
       token,
       sessionId: sid,
-      mode: chatMode,
+      mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: cliModel ?? undefined,
@@ -7863,6 +7872,8 @@ function App() {
                     loading={isLoadingHistory}
                     loadingLabel="Loading chat"
                     messageContents={messageContents}
+                    hasMore={hasMoreMessages}
+                    onLoadMore={loadOlderMessages}
                   >
                     {messages.map((msg, idx) => (
                       <Message

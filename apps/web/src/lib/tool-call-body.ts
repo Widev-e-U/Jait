@@ -455,6 +455,7 @@ export function canRenderEditDiff(tool: string, args: Record<string, unknown>): 
 export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind {
   const normalizedTool = normalizeToolName(input.tool)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
+    || normalizedTool.startsWith('ssh.') || normalizedTool === 'elevated.run'
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'

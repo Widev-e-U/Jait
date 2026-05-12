@@ -184,7 +184,7 @@ export interface AgentLoopOptions {
   /** Session identifier (for logging / events) */
   sessionId: string;
   /** Auth context for tool execution */
-  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string };
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string };
   /** Abort controller — abort to cancel the loop */
   abort: AbortController;
   /** Max tool-calling rounds before stopping */
@@ -199,7 +199,7 @@ export interface AgentLoopOptions {
   allowedTools?: Set<string>;
   /** User-disabled tools (never sent to LLM, never executed) */
   disabledTools?: Set<string>;
-  /** Chat mode: ask (read-only), agent (full), or plan (propose then execute) */
+  /** Chat mode: ask (read-only), agent (full), swarm (specialist delegation), or plan (propose then execute) */
   mode?: ChatMode;
   /** Logger (defaults to console) */
   log?: Logger;
@@ -650,7 +650,7 @@ export async function parseOpenAIStream(
 interface ExecuteOneOptions {
   tc: OpenAIToolCall;
   sessionId: string;
-  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string };
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string };
   signal?: AbortSignal;
   toolRegistry?: ToolRegistry;
   maxRetries: number;
@@ -828,7 +828,7 @@ export type ToolExecutor = (
   name: string,
   args: unknown,
   sessionId: string,
-  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string },
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
 ) => Promise<ToolResult>;
@@ -968,7 +968,7 @@ export async function runAgentLoop(
   const planId = mode === "plan" ? `plan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : "";
 
   // ── Mode-aware schema filtering ──
-  // Ask mode: only read-only tools. Plan/Agent mode: full set.
+  // Ask mode: only read-only tools. Plan/Agent/Swarm mode: full set.
   let modeFilteredSchemas = initialToolSchemas;
   if (mode === "ask") {
     modeFilteredSchemas = initialToolSchemas.filter((s) =>
@@ -977,6 +977,8 @@ export async function runAgentLoop(
     onEvent?.({ type: "mode_notice", mode: "ask", message: "Running in Ask mode — read-only tools only." });
   } else if (mode === "plan") {
     onEvent?.({ type: "mode_notice", mode: "plan", message: "Running in Plan mode — mutating actions will be proposed, not executed." });
+  } else if (mode === "swarm") {
+    onEvent?.({ type: "mode_notice", mode: "swarm", message: "Running in Swarm mode — specialist sub-agents may collaborate on this task." });
   }
 
   // Dynamic schema set — starts with filtered schemas, grows when tools.search
@@ -1474,7 +1476,7 @@ export async function retryToolCall(
   executedToolCalls: ExecutedToolCall[],
   executeTool: ToolExecutor,
   sessionId: string,
-  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string },
   onEvent?: (event: AgentLoopEvent) => void,
   signal?: AbortSignal,
 ): Promise<ToolResult> {

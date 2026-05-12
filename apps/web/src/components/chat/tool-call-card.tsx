@@ -61,6 +61,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'ssh.session.start': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.run':   { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.close': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
+  'elevated.run':      { icon: Terminal,  label: 'Elevated',   color: 'text-amber-500' },
   // ── Legacy / standard tools ─────────────────────────────
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
@@ -147,6 +148,12 @@ function getToolInvocationLabels(
   if (normalized === 'execute' || normalized.startsWith('terminal.')) {
     return { running: 'Running command', done: 'Ran command' }
   }
+  if (normalized.startsWith('ssh.')) {
+    return { running: 'Running SSH command', done: 'Ran SSH command' }
+  }
+  if (normalized === 'elevated.run') {
+    return { running: 'Running elevated command', done: 'Ran elevated command' }
+  }
   if (normalized === 'search') {
     const mode = displayStr(normalizedArgs.mode ?? args.mode, 'content')
     const target = query ? ` "${truncate(query, 40)}"` : ''
@@ -181,6 +188,15 @@ function getToolInvocationLabels(
   }
   if (normalized === 'browser.screenshot') {
     return { running: 'Taking screenshot', done: 'Took screenshot' }
+  }
+  if (normalized === 'browser.wait') {
+    return { running: 'Waiting for element', done: 'Waited for element' }
+  }
+  if (normalized === 'browser.scroll') {
+    return { running: 'Scrolling', done: 'Scrolled' }
+  }
+  if (normalized === 'browser.select') {
+    return { running: 'Selecting', done: 'Selected' }
   }
   if (normalized === 'agent') {
     const desc = truncate(displayStr(args.description ?? args.prompt), 60)
@@ -1032,6 +1048,14 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
       })
       .join('\n')
   }
+
+  // Generic extraction: pull meaningful text out of structured result data
+  // instead of dumping raw JSON with keys like formatted_output, exit_code
+  if (data) {
+    const extracted = formatTerminalResult(result)
+    if (extracted) return extracted
+  }
+
   if (result.message && result.message !== 'Command executed successfully') return result.message
   if (data) return safeStringify(data)
   return result.message
@@ -1056,13 +1080,13 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
   if (normalized === 'agent') return 'Sub-agent is working...'
-  if (tool.startsWith('terminal.') || tool === 'execute') return 'Command is still running...'
+  if (tool.startsWith('terminal.') || tool === 'execute' || tool.startsWith('ssh.') || tool === 'elevated.run') return 'Command is still running...'
   return 'Tool is still running...'
 }
 
 function isTerminalTool(tool: string): boolean {
   const n = normalizeTool(tool)
-  return n.startsWith('terminal.') || n === 'execute'
+  return n.startsWith('terminal.') || n === 'execute' || n.startsWith('ssh.') || n === 'elevated.run'
 }
 
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
@@ -1856,6 +1880,7 @@ function ToolCallCardInner({
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
+    || normalizedTool.startsWith('ssh.') || normalizedTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null

@@ -658,12 +658,22 @@ function parseMessageLimit(raw: unknown): number {
   return Math.min(Math.floor(parsed), MAX_UI_MESSAGE_LIMIT);
 }
 
-function windowMessages<T>(messages: T[], limit: number): {
+function windowMessages<T>(messages: T[], limit: number, before?: number): {
   messages: T[];
   total: number;
   hasMore: boolean;
 } {
   const total = messages.length;
+  if (typeof before === "number" && before >= 0 && before < total) {
+    // Load `limit` messages ending at index `before` (exclusive)
+    const end = before;
+    const start = Math.max(end - limit, 0);
+    return {
+      messages: messages.slice(start, end),
+      total,
+      hasMore: start > 0,
+    };
+  }
   const start = Math.max(total - limit, 0);
   return {
     messages: messages.slice(start),
@@ -1081,7 +1091,7 @@ export function registerChatRoutes(
     toolName: string,
     args: unknown,
     sessionId: string,
-    auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
+    auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string },
     onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void,
     signal?: AbortSignal,
   ): Promise<ToolResult> {
@@ -1107,6 +1117,7 @@ export function registerChatRoutes(
       apiKeys: auth?.apiKeys,
       providerId: auth?.providerId,
       model: auth?.model,
+      jaitBackend: auth?.jaitBackend,
       runtimeMode: auth?.runtimeMode,
       onOutputChunk,
       signal,
@@ -1901,6 +1912,7 @@ export function registerChatRoutes(
               apiKeys: userApiKeys,
               providerId: requestProvider,
               model: requestBodyModel || undefined,
+              jaitBackend,
               runtimeMode: requestRuntimeMode ?? undefined,
             },
             abort: streamAbort,
@@ -2211,12 +2223,17 @@ export function registerChatRoutes(
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
-    const query = request.query as { limit?: number | string };
+    const query = request.query as { limit?: number | string; before?: number | string };
     const limit = parseMessageLimit(query?.limit);
+    const before = typeof query?.before === "number"
+      ? query.before
+      : typeof query?.before === "string"
+        ? Number.parseInt(query.before, 10)
+        : undefined;
     hydrateSession(sessionId);
     const history = sessionHistory.get(sessionId) ?? [];
     const visible = buildVisibleHistoryMessages(sessionId, history);
-    const windowed = windowMessages(visible, limit);
+    const windowed = windowMessages(visible, limit, Number.isFinite(before) ? before : undefined);
     return {
       sessionId,
       streaming: activeStreams.has(sessionId),

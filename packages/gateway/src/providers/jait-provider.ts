@@ -9,7 +9,7 @@
 import { EventEmitter } from "node:events";
 import type { AppConfig } from "../config.js";
 import { uuidv7 } from "../db/uuidv7.js";
-import { resolveJaitLlmConfig } from "../services/jait-llm.js";
+import { resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
 import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import {
@@ -17,7 +17,6 @@ import {
   buildTieredToolSchemas,
   runAgentLoop,
   type AgentLoopEvent,
-  type LLMConfig,
   type LlmContextFlowRound,
 } from "../tools/index.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
@@ -218,6 +217,7 @@ export class JaitProvider implements CliProviderAdapter {
               apiKeys: userSettings?.apiKeys ?? {},
               providerId: "jait",
               model: llm.openaiModel,
+              jaitBackend: llm.backend,
               runtimeMode: state.session.runtimeMode,
             },
             abort,
@@ -313,7 +313,7 @@ export class JaitProvider implements CliProviderAdapter {
     this.emitter.emit("event", event);
   }
 
-  private buildLlmConfig(userId?: string, requestedModel?: string): LLMConfig {
+  private buildLlmConfig(userId?: string, requestedModel?: string): ResolvedJaitLlmConfig {
     const userSettings = userId ? this.deps.userService?.getSettings(userId) : undefined;
     return resolveJaitLlmConfig({
       config: this.deps.config,
@@ -327,7 +327,7 @@ export class JaitProvider implements CliProviderAdapter {
     toolName: string,
     input: unknown,
     sessionId: string,
-    auth: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string } | undefined,
+    auth: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string } | undefined,
     onOutputChunk: ((chunk: string) => void) | undefined,
     signal: AbortSignal | undefined,
     workspaceRoot: string,
@@ -357,6 +357,7 @@ export class JaitProvider implements CliProviderAdapter {
       apiKeys: auth?.apiKeys,
       providerId: auth?.providerId,
       model: auth?.model,
+      jaitBackend: auth?.jaitBackend,
       runtimeMode: auth?.runtimeMode,
       sandboxContainerName,
       onOutputChunk,
