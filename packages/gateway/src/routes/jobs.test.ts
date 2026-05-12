@@ -157,6 +157,52 @@ describe("job routes", () => {
     sqlite.close();
   });
 
+  it("lists persisted runs created by scheduled ticks", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, message: "scheduled", data: { handled: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret" };
+    registerJobRoutes(app, config, scheduler);
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const job = scheduler.create({
+      userId: "user-1",
+      name: "scheduled status automation",
+      cron: "* * * * *",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "default",
+      workspaceRoot: process.cwd(),
+    });
+
+    await scheduler.tick(new Date("2026-05-12T12:34:00.000Z"));
+
+    const runsResponse = await app.inject({
+      method: "GET",
+      url: `/jobs/${job.id}/runs`,
+      headers,
+    });
+
+    expect(runsResponse.statusCode).toBe(200);
+    const runsPayload = runsResponse.json() as {
+      total: number;
+      items: Array<{ status: string; triggered_by: string; result: string | null }>;
+    };
+    expect(runsPayload.total).toBe(1);
+    expect(runsPayload.items[0]).toMatchObject({
+      status: "completed",
+      triggered_by: "schedule",
+      result: JSON.stringify({ handled: true }),
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("does not allow one user to trigger another user's job", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

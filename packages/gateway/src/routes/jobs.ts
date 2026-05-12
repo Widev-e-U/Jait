@@ -27,7 +27,7 @@ interface ApiJobRun {
   id: string;
   job_id: string;
   status: "pending" | "running" | "completed" | "failed";
-  triggered_by: "manual" | "schedule";
+  triggered_by: "manual" | "schedule" | "maintenance";
   started_at: string;
   completed_at: string | null;
   result: string | null;
@@ -41,8 +41,6 @@ interface JobMeta {
   provider?: string;
   model?: string;
 }
-
-const MAX_RUNS_PER_JOB = 100;
 
 function normalizeToolName(name: string): string {
   const trimmed = name.trim();
@@ -120,14 +118,17 @@ function parsePrompt(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function toRunResultText(data: unknown): string | null {
-  if (data == null) return null;
-  if (typeof data === "string") return data;
-  try {
-    return JSON.stringify(data);
-  } catch {
-    return String(data);
-  }
+function mapRun(run: ReturnType<SchedulerService["listRuns"]>[number]): ApiJobRun {
+  return {
+    id: run.id,
+    job_id: run.jobId,
+    status: run.status as ApiJobRun["status"],
+    triggered_by: run.triggeredBy as ApiJobRun["triggered_by"],
+    started_at: run.startedAt,
+    completed_at: run.completedAt,
+    result: run.output,
+    error: run.error,
+  };
 }
 
 export function registerJobRoutes(
@@ -135,15 +136,6 @@ export function registerJobRoutes(
   config: AppConfig,
   scheduler: SchedulerService,
 ) {
-  const runsByJob = new Map<string, ApiJobRun[]>();
-
-  const pushRun = (run: ApiJobRun) => {
-    const runs = runsByJob.get(run.job_id) ?? [];
-    runs.unshift(run);
-    if (runs.length > MAX_RUNS_PER_JOB) runs.length = MAX_RUNS_PER_JOB;
-    runsByJob.set(run.job_id, runs);
-  };
-
   app.get("/jobs/providers/available", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -362,21 +354,13 @@ export function registerJobRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const startedAt = new Date().toISOString();
     try {
       const execution = await scheduler.trigger(id, authUser.id);
-      const run: ApiJobRun = {
-        id: execution.actionId,
-        job_id: id,
-        status: execution.result.ok ? "completed" : "failed",
-        triggered_by: "manual",
-        started_at: startedAt,
-        completed_at: new Date().toISOString(),
-        result: execution.result.ok ? toRunResultText(execution.result.data) : null,
-        error: execution.result.ok ? null : execution.result.message,
-      };
-      pushRun(run);
-      return run;
+      const run = scheduler.listRuns(id).find((item) => item.id === execution.actionId);
+      if (!run) {
+        return reply.status(500).send({ detail: "Job run was not persisted" });
+      }
+      return mapRun(run);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const statusCode = /job not found/i.test(message) ? 404 : 500;
@@ -395,7 +379,7 @@ export function registerJobRoutes(
     const query = (request.query as Record<string, unknown>) ?? {};
     const page = Math.max(1, Number.parseInt(String(query["page"] ?? "1"), 10) || 1);
     const size = Math.max(1, Math.min(500, Number.parseInt(String(query["size"] ?? "20"), 10) || 20));
-    const allRuns = runsByJob.get(id) ?? [];
+    const allRuns = scheduler.listRuns(id).map(mapRun);
     const start = (page - 1) * size;
     const items = allRuns.slice(start, start + size);
     return {
