@@ -842,6 +842,7 @@ function firstPayloadText(record: Record<string, unknown>): string | null {
   const stdout = firstFormattedStructuredText(
     record.formatted_output,
     record.formattedOutput,
+    record.formattedoutput,
     record.output,
     record.stdout,
     record.content,
@@ -921,6 +922,12 @@ function parseStructuredRecord(value: unknown): Record<string, unknown> | null {
   }
 }
 
+function parseStructuredOrEmbeddedRecord(value: unknown): Record<string, unknown> | null {
+  const structured = parseStructuredRecord(value)
+  if (structured) return structured
+  return typeof value === 'string' ? parseEmbeddedJsonRecord(value) : null
+}
+
 function firstStructuredText(...values: unknown[]): string | null {
   for (const value of values) {
     const formatted = formatStructuredValue(value)
@@ -929,8 +936,50 @@ function firstStructuredText(...values: unknown[]): string | null {
   return null
 }
 
+function hasCommandPayloadShape(record: Record<string, unknown>): boolean {
+  return 'formatted_output' in record
+    || 'formattedOutput' in record
+    || 'formattedoutput' in record
+    || 'stdout' in record
+    || 'stderr' in record
+    || 'exitCode' in record
+    || 'exit_code' in record
+    || 'exitcode' in record
+    || 'timedOut' in record
+    || 'terminalId' in record
+}
+
+function formatCommandPayloadRecord(record: Record<string, unknown>): string | null {
+  if (!hasCommandPayloadShape(record)) return null
+  return firstPayloadText(record)
+}
+
+function formatCommandPayloadResult(result: ToolCallInfo['result']): string | null {
+  if (!result) return null
+  const records = [
+    parseStructuredOrEmbeddedRecord(result.data),
+    parseStructuredOrEmbeddedRecord(result.message),
+  ].filter((record): record is Record<string, unknown> => record != null)
+
+  for (const record of records) {
+    const direct = formatCommandPayloadRecord(record)
+    if (direct) return direct
+
+    const nested = parseStructuredOrEmbeddedRecord(record.result)
+    if (nested) {
+      const formatted = formatCommandPayloadRecord(nested)
+      if (formatted) return formatted
+    }
+  }
+
+  return null
+}
+
 function formatTerminalResult(result: ToolCallInfo['result']): string | null {
   if (!result) return null
+  const commandPayload = formatCommandPayloadResult(result)
+  if (commandPayload) return commandPayload
+
   const data = parseStructuredRecord(result.data)
   const messageData = parseStructuredRecord(result.message)
   const source = data ?? messageData
@@ -982,6 +1031,11 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
     // Fall through to result.message
   }
 
+  const commandPayload = formatCommandPayloadResult(result)
+  if (commandPayload) return commandPayload
+
+  if (data?.output != null) return formatStructuredValue(data.output) ?? ''
+  if (data?.content != null) return formatStructuredValue(data.content) ?? ''
   if (data?.entries != null) {
     const raw = data.entries as Array<string | { name: string; isDirectory?: boolean }>
     return raw
