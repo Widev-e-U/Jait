@@ -179,6 +179,9 @@ describe("AcpProvider MCP startup events", () => {
       callId: "mcp_startup.jait",
       message: expect.stringContaining("MCP server `jait` failed to start"),
     }));
+    expect(events.find((event) => event.type === "tool.result")).toMatchObject({
+      message: "[codex-acp forwarded startup error] MCP server `jait` failed to start: connection refused",
+    });
   });
 });
 

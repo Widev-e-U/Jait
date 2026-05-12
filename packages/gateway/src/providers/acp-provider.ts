@@ -916,7 +916,7 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
 
 function stringifyToolContent(content: unknown): string {
   if (!Array.isArray(content)) return stringifyUnknown(content);
-  return content.map((item) => stringifyUnknown(item)).join("\n");
+  return content.map((item) => stringifyToolContentItem(item)).join("\n");
 }
 
 function readUpdateStatus(update: unknown): string | null {
@@ -940,6 +940,18 @@ function isReplayableStartupEvent(event: ProviderEvent): boolean {
   if (event.type !== "tool.start" && event.type !== "tool.result") return false;
   if (event.tool === "mcp__jait__startup") return true;
   return typeof event.callId === "string" && event.callId === "mcp_startup.jait";
+}
+
+function stringifyToolContentItem(item: unknown): string {
+  if (!item || typeof item !== "object") return stringifyUnknown(item);
+  const record = item as Record<string, unknown>;
+  if (record["type"] === "content" && "content" in record) {
+    return stringifyToolContentItem(record["content"]);
+  }
+  if (record["type"] === "text" && typeof record["text"] === "string") {
+    return record["text"];
+  }
+  return stringifyUnknown(item);
 }
 
 function stringifyUnknown(value: unknown): string {
