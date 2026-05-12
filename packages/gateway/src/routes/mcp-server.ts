@@ -6,7 +6,7 @@
  * HTTP+SSE transport (`/mcp/sse` + `/mcp/messages`), so we keep both.
  */
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import { verifyAuthToken, extractBearerToken } from "../security/http-auth.js";
 import type { SessionService } from "../services/sessions.js";
@@ -319,7 +319,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
     });
   });
 
-  app.post("/mcp", async (request, reply) => {
+  const handleStreamableMcpPost = async (request: FastifyRequest, reply: FastifyReply) => {
     const body = request.body as McpRequest | undefined;
     if (!body || body.jsonrpc !== "2.0" || !body.method) {
       return reply.status(400).send({ error: "Invalid JSON-RPC request" });
@@ -345,7 +345,13 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       return reply.status(202).send();
     }
     return reply.send(response);
-  });
+  };
+
+  app.post("/mcp", handleStreamableMcpPost);
+
+  // Compatibility for older Jait/Codex configs that stored the legacy SSE URL
+  // in a Streamable HTTP `url` field. Modern Codex POSTs JSON-RPC to that URL.
+  app.post("/mcp/sse", handleStreamableMcpPost);
 
   app.delete("/mcp", async (_request, reply) => reply.status(405).send({ error: "Session termination not supported" }));
 

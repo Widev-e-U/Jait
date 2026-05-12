@@ -192,6 +192,48 @@ describe("mcp-server", () => {
     });
   });
 
+  it("serves streamable HTTP initialize on legacy /mcp/sse POST configs", async () => {
+    const registry = new ToolRegistry();
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp/sse",
+      headers: {
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-03-26",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        protocolVersion: "2025-03-26",
+        serverInfo: {
+          name: "jait-gateway",
+        },
+      },
+    });
+  });
+
   it("accepts initialized notifications over streamable HTTP MCP", async () => {
     const registry = new ToolRegistry();
     const app = Fastify();

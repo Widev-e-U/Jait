@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
+import type { ProviderEvent } from "./contracts.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -130,6 +131,58 @@ afterEach(() => {
   } else {
     process.env.OPENAI_API_KEY = originalOpenAiApiKey;
   }
+});
+
+describe("AcpProvider MCP startup events", () => {
+  it("replays early Jait MCP startup failures to later subscribers", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "mcp_startup.jait",
+        title: "mcp__jait__startup",
+        kind: "other",
+        status: "failed",
+        content: [{
+          type: "content",
+          content: {
+            type: "text",
+            text: "[codex-acp forwarded startup error] MCP server `jait` failed to start: connection refused",
+          },
+        }],
+      },
+    } as any);
+
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "mcp__jait__startup",
+      args: undefined,
+      callId: "mcp_startup.jait",
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "tool.result",
+      sessionId: "provider-session-1",
+      tool: "mcp__jait__startup",
+      ok: false,
+      callId: "mcp_startup.jait",
+      message: expect.stringContaining("MCP server `jait` failed to start"),
+    }));
+    expect(events.find((event) => event.type === "tool.result")).toMatchObject({
+      message: "[codex-acp forwarded startup error] MCP server `jait` failed to start: connection refused",
+    });
+  });
 });
 
 describe("AcpProvider auth", () => {
