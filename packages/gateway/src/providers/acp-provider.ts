@@ -44,6 +44,8 @@ import {
 type AcpProviderAuthKind = "acp";
 
 const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 20_000 : 5_000;
+const REPLAYABLE_EVENT_TTL_MS = 30_000;
+const REPLAYABLE_EVENT_LIMIT = 20;
 
 export interface AcpProviderConfig {
   id: ProviderId;
@@ -118,6 +120,7 @@ export class AcpProvider implements CliProviderAdapter {
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
+  private replayableEvents: Array<{ event: ProviderEvent; emittedAt: number }> = [];
   private authLoginProcess: ChildProcess | null = null;
   private cachedModels: ProviderModelInfo[] | null = null;
   private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
@@ -629,11 +632,26 @@ export class AcpProvider implements CliProviderAdapter {
 
   onEvent(handler: (event: ProviderEvent) => void): () => void {
     this.emitter.on("event", handler);
+    this.pruneReplayableEvents();
+    for (const item of this.replayableEvents) {
+      handler(item.event);
+    }
     return () => this.emitter.off("event", handler);
   }
 
   emitEvent(event: ProviderEvent): void {
+    if (isReplayableStartupEvent(event)) {
+      this.replayableEvents.push({ event, emittedAt: Date.now() });
+      this.pruneReplayableEvents();
+    }
     this.emitter.emit("event", event);
+  }
+
+  private pruneReplayableEvents(): void {
+    const cutoff = Date.now() - REPLAYABLE_EVENT_TTL_MS;
+    this.replayableEvents = this.replayableEvents
+      .filter((item) => item.emittedAt >= cutoff)
+      .slice(-REPLAYABLE_EVENT_LIMIT);
   }
 
   handleSessionUpdate(sessionId: string, params: SessionNotification): void {
@@ -652,6 +670,16 @@ export class AcpProvider implements CliProviderAdapter {
           args: update.rawInput,
           callId: update.toolCallId,
         });
+        if (readUpdateStatus(update) === "failed") {
+          this.emitEvent({
+            type: "tool.result",
+            sessionId,
+            tool: update.title,
+            ok: false,
+            message: readUpdateMessage(update) ?? "Tool call failed",
+            callId: update.toolCallId,
+          });
+        }
         break;
       case "tool_call_update": {
         if (update.content) {
@@ -889,6 +917,29 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
 function stringifyToolContent(content: unknown): string {
   if (!Array.isArray(content)) return stringifyUnknown(content);
   return content.map((item) => stringifyUnknown(item)).join("\n");
+}
+
+function readUpdateStatus(update: unknown): string | null {
+  if (!update || typeof update !== "object") return null;
+  const status = (update as Record<string, unknown>)["status"];
+  return typeof status === "string" ? status : null;
+}
+
+function readUpdateMessage(update: unknown): string | null {
+  if (!update || typeof update !== "object") return null;
+  const record = update as Record<string, unknown>;
+  const content = record["content"];
+  if (content) return stringifyToolContent(content);
+  const rawOutput = record["rawOutput"];
+  if (rawOutput) return stringifyUnknown(rawOutput);
+  const status = record["status"];
+  return typeof status === "string" ? status : null;
+}
+
+function isReplayableStartupEvent(event: ProviderEvent): boolean {
+  if (event.type !== "tool.start" && event.type !== "tool.result") return false;
+  if (event.tool === "mcp__jait__startup") return true;
+  return typeof event.callId === "string" && event.callId === "mcp_startup.jait";
 }
 
 function stringifyUnknown(value: unknown): string {
