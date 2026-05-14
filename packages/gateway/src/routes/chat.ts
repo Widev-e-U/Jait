@@ -1821,6 +1821,7 @@ export function registerChatRoutes(
             role: "assistant",
             content: fullContent,
             uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
+            segments: cliSegments.length > 0 ? cliSegments : undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
           persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);

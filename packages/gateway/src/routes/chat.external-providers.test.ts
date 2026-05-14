@@ -137,6 +137,32 @@ class MockTodoChatProvider extends MockChatProvider {
   });
 }
 
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+
 describe("chat external provider runtime mode selection", () => {
   it("passes the requested runtime mode to the provider and restarts when the mode changes", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
@@ -352,5 +378,54 @@ describe("chat external provider runtime mode selection", () => {
 
     await app.close();
     sqlite.close();
+  });
+
+  it("keeps external-provider tool calls interleaved with text after completion", { timeout: 30_000 }, async () => {
+    const provider = new MockInterleavedToolChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-interleaved-tool-segments-session";
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "read then answer",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${sessionId}/messages`,
+      headers,
+    });
+
+    expect(messagesResponse.statusCode).toBe(200);
+    const body = messagesResponse.json() as {
+      messages: Array<{
+        role: string;
+        content: string;
+        toolCalls?: Array<{ callId: string }>;
+        segments?: Array<{ type: string; content?: string; callIds?: string[] }>;
+      }>;
+    };
+    const assistantMessage = body.messages.find((message) => message.role === "assistant");
+    expect(assistantMessage?.content).toBe("Before tool.\n\nAfter tool.");
+    expect(assistantMessage?.toolCalls?.map((call) => call.callId)).toEqual(["tool-call-1"]);
+    expect(assistantMessage?.segments).toEqual([
+      { type: "text", content: "Before tool.\n" },
+      { type: "toolGroup", callIds: ["tool-call-1"] },
+      { type: "text", content: "\nAfter tool." },
+    ]);
+
+    await app.close();
   });
 });

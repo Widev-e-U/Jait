@@ -1061,10 +1061,19 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
   return result.message
 }
 
+export function formatElapsedDuration(startedAt: number, completedAt?: number, now?: number): string {
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return '0ms'
+
+  const end = completedAt ?? now ?? Date.now()
+  if (!Number.isFinite(end) || end <= 0) return '0ms'
+
+  const ms = Math.max(0, Math.round(end - startedAt))
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
 function ElapsedLabel({ startedAt, completedAt, now }: { startedAt: number; completedAt?: number; now?: number }) {
-  const ms = (completedAt ?? now ?? Date.now()) - startedAt
-  if (ms < 1000) return <span>{ms}ms</span>
-  return <span>{(ms / 1000).toFixed(1)}s</span>
+  return <span>{formatElapsedDuration(startedAt, completedAt, now)}</span>
 }
 
 function getRunningHint(tool: string, args: Record<string, unknown>): string {

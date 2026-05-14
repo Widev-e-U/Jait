@@ -26,7 +26,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, type ToolCallInfo } from './tool-call-card'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
@@ -546,7 +546,7 @@ function MessageInner({
         const status = call.status === 'success' ? '\u2713' : call.status === 'error' ? '\u2717' : '\u2026'
         const duration =
           call.completedAt && call.startedAt
-            ? `${((call.completedAt - call.startedAt) / 1000).toFixed(1)}s`
+            ? formatElapsedDuration(call.startedAt, call.completedAt)
             : ''
 
         parts.push(`[${status} ${label}] ${summary}`)

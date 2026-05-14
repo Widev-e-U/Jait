@@ -8,6 +8,7 @@ let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCol
 let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
 let formatOutput: typeof import('./tool-call-card')['formatOutput']
 let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
+let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDuration']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -27,8 +28,22 @@ beforeAll(async () => {
     computeAgentNesting,
     formatOutput,
     getThreadControlListItems,
+    formatElapsedDuration,
   } = await import('./tool-call-card'))
 }, 30_000)
+
+describe('formatElapsedDuration', () => {
+  it('formats positive durations', () => {
+    expect(formatElapsedDuration(1_000, 1_750)).toBe('750ms')
+    expect(formatElapsedDuration(1_000, 2_250)).toBe('1.3s')
+  })
+
+  it('clamps missing or out-of-order timestamps', () => {
+    expect(formatElapsedDuration(1_000, 0)).toBe('0ms')
+    expect(formatElapsedDuration(2_000, 1_000)).toBe('0ms')
+    expect(formatElapsedDuration(0, 2_000)).toBe('0ms')
+  })
+})
 
 describe('formatStructuredValue', () => {
   it('renders MCP text content blocks as readable text', () => {

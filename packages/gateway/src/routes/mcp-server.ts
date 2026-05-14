@@ -93,27 +93,35 @@ function resolveMcpToolContextOverrides(
 ): McpToolContextOverrides {
   const headers = request?.headers as Record<string, unknown> | undefined;
   const query = request?.query as Record<string, unknown> | undefined;
+  const args = params?.["arguments"] && typeof params["arguments"] === "object"
+    ? params["arguments"] as Record<string, unknown>
+    : undefined;
   return {
     sessionId:
       readOptionalString(headers?.["x-jait-session-id"])
       ?? readOptionalString(query?.["sessionId"])
-      ?? readOptionalString(params?.["sessionId"]),
+      ?? readOptionalString(params?.["sessionId"])
+      ?? readOptionalString(args?.["sessionId"]),
     workspaceRoot:
       readOptionalString(headers?.["x-jait-workspace-root"])
       ?? readOptionalString(query?.["workspaceRoot"])
-      ?? readOptionalString(params?.["workspaceRoot"]),
+      ?? readOptionalString(params?.["workspaceRoot"])
+      ?? readOptionalString(args?.["workspaceRoot"]),
     providerId:
       readOptionalString(headers?.["x-jait-provider-id"])
       ?? readOptionalString(query?.["providerId"])
-      ?? readOptionalString(params?.["providerId"]),
+      ?? readOptionalString(params?.["providerId"])
+      ?? readOptionalString(args?.["providerId"]),
     model:
       readOptionalString(headers?.["x-jait-model"])
       ?? readOptionalString(query?.["model"])
-      ?? readOptionalString(params?.["model"]),
+      ?? readOptionalString(params?.["model"])
+      ?? readOptionalString(args?.["model"]),
     runtimeMode:
       readOptionalString(headers?.["x-jait-runtime-mode"])
       ?? readOptionalString(query?.["runtimeMode"])
-      ?? readOptionalString(params?.["runtimeMode"]),
+      ?? readOptionalString(params?.["runtimeMode"])
+      ?? readOptionalString(args?.["runtimeMode"]),
   };
 }
 
@@ -151,6 +159,17 @@ async function resolveMcpToolContext(
             };
           })())
     : overrides;
+
+  if (!user && !authBackedOverrides.sessionId && sessionService) {
+    const session = sessionService.lastActive();
+    if (session?.id) {
+      return inferSessionBackedToolContext({
+        ...authBackedOverrides,
+        sessionId: session.id,
+        workspaceRoot: authBackedOverrides.workspaceRoot ?? session.workspacePath ?? undefined,
+      }, sessionService, userService, sessionState);
+    }
+  }
 
   return inferSessionBackedToolContext(authBackedOverrides, sessionService, userService, sessionState);
 }

@@ -82,6 +82,10 @@ function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): Ch
   return attachments.length > 0 ? attachments : undefined
 }
 
+function finiteTimestamp(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
 /**
  * A segment in the ordered response stream. Consecutive tool calls
  * are grouped; text between tool-call groups forms its own segment.
@@ -527,6 +531,14 @@ export function useChat(
                       // Safety net: if the server says streaming is done, no tool
                       // call should remain in 'running' or 'pending' state (handles race conditions).
                       if ((status === 'running' || status === 'pending') && !snapshotStreaming) status = 'error'
+                      const completedAt = finiteTimestamp(tc.completedAt)
+                      const startedAt = finiteTimestamp(tc.startedAt) ?? completedAt ?? Date.now()
+                      const resolvedCompletedAt =
+                        status === 'running' || status === 'pending'
+                          ? undefined
+                          : completedAt != null && completedAt >= startedAt
+                            ? completedAt
+                            : startedAt
                       return {
                         callId: tc.callId,
                         tool: tc.tool,
@@ -542,8 +554,8 @@ export function useChat(
                               data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
                             },
                         streamingOutput: tc.streamingOutput,
-                        startedAt: tc.startedAt ?? 0,
-                        completedAt: tc.completedAt ?? 0,
+                        startedAt,
+                        completedAt: resolvedCompletedAt,
                       }
                     })
                   }

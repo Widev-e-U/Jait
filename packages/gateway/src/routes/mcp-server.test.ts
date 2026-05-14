@@ -450,6 +450,81 @@ describe("mcp-server", () => {
     });
   });
 
+  it("uses the global last active session for unauthenticated local MCP tool calls", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const sessionService = new SessionService(db);
+      const registry = new ToolRegistry();
+      const session = sessionService.create({
+        name: "Local MCP Session",
+        workspacePath: "/tmp/local-workspace",
+      });
+      let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+
+      registry.register({
+        name: "memory.search",
+        description: "Search memory",
+        tier: "standard",
+        category: "memory",
+        source: "builtin",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+          },
+          required: ["query"],
+        },
+        async execute(_input, context) {
+          capturedContext = {
+            sessionId: context.sessionId,
+            workspaceRoot: context.workspaceRoot,
+            userId: context.userId,
+          };
+          return { ok: true, message: "ok" };
+        },
+      });
+
+      const app = Fastify();
+      appsToClose.push(app);
+      registerMcpRoutes(app, {
+        toolRegistry: registry,
+        sessionService,
+        config: {
+          host: "127.0.0.1",
+          port: 3000,
+          jwtSecret: "test-secret",
+        } as any,
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/mcp",
+        headers: {
+          "content-type": "application/json",
+        },
+        payload: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "memory.search",
+            arguments: { query: "salary consulting" },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(capturedContext).toEqual({
+        sessionId: session.id,
+        workspaceRoot: "/tmp/local-workspace",
+        userId: undefined,
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("passes the authenticated user into MCP tool context when a session override is provided", async () => {
     const registry = new ToolRegistry();
     const token = await signAuthToken({ id: "user-456", username: "jakob" }, "test-secret");
@@ -573,6 +648,91 @@ describe("mcp-server", () => {
       sessionId: "query-session",
       workspaceRoot: "/tmp/query-workspace",
       userId: undefined,
+      providerId: "codex",
+      model: "gpt-5-codex",
+      runtimeMode: "supervised",
+    });
+  });
+
+  it("uses MCP tool arguments as context overrides", async () => {
+    const registry = new ToolRegistry();
+    let capturedContext: {
+      sessionId: string;
+      workspaceRoot: string;
+      providerId?: string;
+      model?: string;
+      runtimeMode?: string;
+    } | null = null;
+
+    registry.register({
+      name: "memory.save",
+      description: "Save memory",
+      tier: "standard",
+      category: "memory",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          content: { type: "string" },
+          sessionId: { type: "string" },
+          workspaceRoot: { type: "string" },
+          providerId: { type: "string" },
+          model: { type: "string" },
+          runtimeMode: { type: "string" },
+        },
+        required: ["content"],
+      },
+      async execute(_input, context) {
+        capturedContext = {
+          sessionId: context.sessionId,
+          workspaceRoot: context.workspaceRoot,
+          providerId: context.providerId,
+          model: context.model,
+          runtimeMode: context.runtimeMode,
+        };
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+        jwtSecret: "test-secret",
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        "content-type": "application/json",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "memory.save",
+          arguments: {
+            content: "remember this",
+            sessionId: "argument-session",
+            workspaceRoot: "/tmp/argument-workspace",
+            providerId: "codex",
+            model: "gpt-5-codex",
+            runtimeMode: "supervised",
+          },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedContext).toEqual({
+      sessionId: "argument-session",
+      workspaceRoot: "/tmp/argument-workspace",
       providerId: "codex",
       model: "gpt-5-codex",
       runtimeMode: "supervised",
