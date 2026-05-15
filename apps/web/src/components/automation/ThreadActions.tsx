@@ -9,6 +9,7 @@ import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import {
+  getRecordedThreadChangeTotals,
   getThreadDiffRequest,
   shouldRefreshThreadChangeTotals,
   shouldShowThreadChangesButton,
@@ -69,11 +70,14 @@ export function ThreadActions({
   changeDeletions,
 }: ThreadActionsProps) {
   const isMobile = useIsMobile()
+  const recordedChangeTotals = getRecordedThreadChangeTotals(changeFiles, changeInsertions, changeDeletions)
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
-  const [changeTotals, setChangeTotals] = useState<Pick<GitDiffStatsResult, 'insertions' | 'deletions' | 'hasChanges'> | null>(null)
+  const [changeTotals, setChangeTotals] = useState<Pick<GitDiffStatsResult, 'insertions' | 'deletions' | 'hasChanges'> | null>(() =>
+    recordedChangeTotals
+  )
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -100,13 +104,9 @@ export function ThreadActions({
         if (cancelled) return
         setGitStatus(status)
 
-        // Prefer persisted diff stats from the thread row
-        if (changeFiles != null && changeInsertions != null && changeDeletions != null) {
-          setChangeTotals({
-            insertions: changeInsertions,
-            deletions: changeDeletions,
-            hasChanges: changeFiles > 0,
-          })
+        const recordedTotals = getRecordedThreadChangeTotals(changeFiles, changeInsertions, changeDeletions)
+        if (recordedTotals) {
+          setChangeTotals(recordedTotals)
           return
         }
 
@@ -188,8 +188,9 @@ export function ThreadActions({
   const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, effectivePrState, threadStatus, gitStatus)
   const diffRequest = getThreadDiffRequest(baseBranch, branch, effectivePrState, threadStatus, gitStatus)
   const creatingPr = effectivePrState === 'creating'
+  const displayedChangeTotals = recordedChangeTotals ?? changeTotals
   const showChangesButton = useRecordedBranchDiff
-    ? Boolean(changeTotals?.hasChanges)
+    ? Boolean(displayedChangeTotals?.hasChanges)
     : shouldShowThreadChangesButton(gitStatus, branch, effectivePrState)
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
@@ -284,16 +285,16 @@ export function ThreadActions({
         onReady={handleGhReady}
       />
       <div className="inline-flex items-center gap-1">
-        {showChangesButton && changeTotals && (
+        {showChangesButton && displayedChangeTotals && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2 text-xs sm:h-6 sm:text-2xs"
             onClick={() => setDiffOpen(true)}
             title="View changes"
-            aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
+            aria-label={`View changes: +${displayedChangeTotals.insertions} -${displayedChangeTotals.deletions}`}
           >
-            <DiffCountLabel insertions={changeTotals.insertions} deletions={changeTotals.deletions} />
+            <DiffCountLabel insertions={displayedChangeTotals.insertions} deletions={displayedChangeTotals.deletions} />
             {!isMobile && 'Changes'}
           </Button>
         )}

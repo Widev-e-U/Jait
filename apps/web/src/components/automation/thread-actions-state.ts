@@ -34,6 +34,19 @@ export function shouldRefreshThreadChangeTotals(prState: ThreadPrState): boolean
   return prState !== 'creating'
 }
 
+export function getRecordedThreadChangeTotals(
+  changeFiles: number | null | undefined,
+  changeInsertions: number | null | undefined,
+  changeDeletions: number | null | undefined,
+): { insertions: number; deletions: number; hasChanges: boolean } | null {
+  if (changeFiles == null || changeInsertions == null || changeDeletions == null) return null
+  return {
+    insertions: changeInsertions,
+    deletions: changeDeletions,
+    hasChanges: changeFiles > 0,
+  }
+}
+
 export function shouldShowThreadChangesButton(
   gitStatus: GitStatusResult | null,
   threadBranch: string | null | undefined,

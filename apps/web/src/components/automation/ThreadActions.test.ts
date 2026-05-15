@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusResult } from '@/lib/git-api'
 import {
+  getRecordedThreadChangeTotals,
   getThreadDiffRequest,
   shouldRefreshThreadChangeTotals,
   shouldRenderThreadActions,
@@ -142,6 +143,28 @@ describe('shouldRefreshThreadChangeTotals', () => {
     expect(shouldRefreshThreadChangeTotals('open')).toBe(true)
     expect(shouldRefreshThreadChangeTotals('merged')).toBe(true)
     expect(shouldRefreshThreadChangeTotals('closed')).toBe(true)
+  })
+})
+
+describe('getRecordedThreadChangeTotals', () => {
+  it('uses persisted database counts when all values are present', () => {
+    expect(getRecordedThreadChangeTotals(2, 12, 4)).toEqual({
+      insertions: 12,
+      deletions: 4,
+      hasChanges: true,
+    })
+  })
+
+  it('keeps zero-change persisted counts valid', () => {
+    expect(getRecordedThreadChangeTotals(0, 0, 0)).toEqual({
+      insertions: 0,
+      deletions: 0,
+      hasChanges: false,
+    })
+  })
+
+  it('falls back when any persisted count is missing', () => {
+    expect(getRecordedThreadChangeTotals(2, 12, null)).toBeNull()
   })
 })
 
