@@ -32,6 +32,19 @@ describe('secret input tool matching', () => {
     })).toBe(true)
   })
 
+  it('matches MCP SSH tool names with functions prefix', () => {
+    expect(secretRequestMatchesTool(secret(), 'mcp-tool', {
+      recipient_name: 'functions.mcp__jait__ssh_run',
+      host: '192.168.178.53',
+      username: 'jakob',
+    })).toBe(true)
+  })
+
+  it('matches direct MCP SSH tool names', () => {
+    expect(secretRequestMatchesTool(secret(), 'mcp__jait__ssh_run')).toBe(true)
+    expect(secretRequestMatchesTool(secret(), 'mcp__jait__.ssh_run')).toBe(true)
+  })
+
   it('detects when a visible running tool call can host the inline secret form', () => {
     expect(messageListHasMatchingSecretToolCall(secret(), [
       {
@@ -39,6 +52,18 @@ describe('secret input tool matching', () => {
           tool: 'mcp-tool',
           status: 'running',
           args: { recipient_name: 'mcp__jait__ssh_run' },
+        }],
+      },
+    ])).toBe(true)
+  })
+
+  it('detects visible direct MCP tool calls as inline hosts', () => {
+    expect(messageListHasMatchingSecretToolCall(secret(), [
+      {
+        toolCalls: [{
+          tool: 'mcp__jait__ssh_run',
+          status: 'running',
+          args: {},
         }],
       },
     ])).toBe(true)

@@ -142,7 +142,6 @@ import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
-import { normalizeToolName } from '@/lib/tool-call-body'
 import {
   messageListHasMatchingSecretToolCall,
   secretRequestMatchesTool,
@@ -2041,8 +2040,7 @@ function App() {
   const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
     if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
-    const normalizedTool = normalizeToolName(call.tool)
-    if (!secretRequestMatchesTool(secretInput.activeRequest, normalizedTool, call.args)) return null
+    if (!secretRequestMatchesTool(secretInput.activeRequest, call.tool, call.args)) return null
     return secretInput.form
   }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline])
 

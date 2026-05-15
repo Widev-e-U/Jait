@@ -18,6 +18,15 @@ interface ToolCallLike {
 
 const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run', 'terminal.run', 'jait.terminal', 'execute'])
 
+function normalizeMcpToolIdentity(value: string): string | null {
+  const raw = value.replace(/^functions\./, '')
+  const dotted = raw.match(/^mcp__[^.]+\.(.+)$/)
+  if (dotted?.[1]) return normalizeToolName(dotted[1])
+  const doubleUnderscore = raw.match(/^mcp__[^_]+__(.+)$/)
+  if (doubleUnderscore?.[1]) return normalizeToolName(doubleUnderscore[1].replace(/^\./, ''))
+  return null
+}
+
 export function shouldRenderSecretRequestInline(request: SecretInputRequest | null): boolean {
   if (!request) return false
   return INLINE_SECRET_REQUESTERS.has(request.requestedBy ?? '')
@@ -28,24 +37,26 @@ export function shouldRenderSecretRequestInline(request: SecretInputRequest | nu
 
 export function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string, args?: Record<string, unknown>): boolean {
   if (!shouldRenderSecretRequestInline(request)) return false
-  if (request?.requestedBy && request.requestedBy === tool) return true
+  const normalizedTool = normalizeToolName(tool)
+  const mcpToolFromName = normalizeMcpToolIdentity(tool)
+  if (request?.requestedBy && (request.requestedBy === tool || request.requestedBy === normalizedTool || request.requestedBy === mcpToolFromName)) return true
   if (tool === 'mcp-tool' && args) {
     const mcpLabel = getMcpToolLabel(normalizeToolArgs(tool, args))
-    const mcpTool = mcpLabel.title ? normalizeToolName(mcpLabel.title.replace(/^mcp__[^_]+__/, '')) : ''
+    const mcpTool = mcpLabel.title ? normalizeMcpToolIdentity(mcpLabel.title) ?? normalizeToolName(mcpLabel.title) : ''
     if (request?.requestedBy && request.requestedBy === mcpTool) return true
     if (request?.title === 'SSH password') return mcpTool === 'ssh.run' || mcpTool === 'ssh.session.start'
     if (request?.title === 'Terminal input required') return mcpTool === 'terminal.run' || mcpTool === 'jait.terminal' || mcpTool === 'execute'
   }
-  if (request?.title === 'SSH password') return tool === 'ssh.run' || tool === 'ssh.session.start'
-  if (request?.title === 'Administrator password') return tool === 'elevated.run'
-  if (request?.title === 'Terminal input required') return tool === 'terminal.run' || tool === 'jait.terminal' || tool === 'execute'
+  const effectiveTool = mcpToolFromName ?? normalizedTool
+  if (request?.title === 'SSH password') return effectiveTool === 'ssh.run' || effectiveTool === 'ssh.session.start'
+  if (request?.title === 'Administrator password') return effectiveTool === 'elevated.run'
+  if (request?.title === 'Terminal input required') return effectiveTool === 'terminal.run' || effectiveTool === 'jait.terminal' || effectiveTool === 'execute'
   return false
 }
 
 export function toolCallMatchesSecretRequest(request: SecretInputRequest | null, call: ToolCallLike): boolean {
   if (call.status !== 'running' && call.status !== 'pending') return false
-  const normalizedTool = normalizeToolName(call.tool)
-  return secretRequestMatchesTool(request, normalizedTool, call.args)
+  return secretRequestMatchesTool(request, call.tool, call.args)
 }
 
 export function messageListHasMatchingSecretToolCall(

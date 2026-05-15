@@ -9,6 +9,7 @@ let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting'
 let formatOutput: typeof import('./tool-call-card')['formatOutput']
 let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
 let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDuration']
+let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineSecretPromptForCalls']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -29,6 +30,7 @@ beforeAll(async () => {
     formatOutput,
     getThreadControlListItems,
     formatElapsedDuration,
+    hasInlineSecretPromptForCalls,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -215,6 +217,16 @@ describe('ToolCallGroup', () => {
       ],
       true,
     )).toBe(false)
+  })
+
+  it('detects active inline secret prompts in tool calls', () => {
+    expect(hasInlineSecretPromptForCalls(
+      [
+        { callId: '1', tool: 'mcp__jait__ssh_run', args: {}, status: 'running', startedAt: 1 },
+        { callId: '2', tool: 'read', args: { path: 'b.ts' }, status: 'success', startedAt: 3, completedAt: 4 },
+      ],
+      (call) => call.tool === 'mcp__jait__ssh_run' ? 'secret-form' : null,
+    )).toBe(true)
   })
 })
 

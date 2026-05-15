@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen, Brain } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -1919,6 +1919,11 @@ function ToolCallCardInner({
   const threadListItems = bodyKind === 'threadList'
     ? getThreadControlListItems(normalizedArgs, resultData, call.status)
     : []
+  const effectiveOpen = hasInlineSecretPrompt ? true : open
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (hasInlineSecretPrompt && !nextOpen) return
+    setOpen(nextOpen)
+  }, [hasInlineSecretPrompt])
 
   const StatusIcon = call.status === 'pending'
     ? Loader2
@@ -1968,11 +1973,11 @@ function ToolCallCardInner({
     ) {
       setOpen(false)
     }
-    if (call.status === 'pending' || call.status === 'running' || inlineBody) {
+    if (call.status === 'pending' || call.status === 'running' || inlineBody || hasInlineSecretPrompt) {
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [bodyKind, call.status, inlineBody])
+  }, [bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
 
   useEffect(() => {
     if (
@@ -2180,7 +2185,7 @@ function ToolCallCardInner({
   ) : null
 
   return (
-    <Collapsible open={hasExpandableContent ? open : false} onOpenChange={setOpen}>
+    <Collapsible open={hasExpandableContent ? effectiveOpen : false} onOpenChange={handleOpenChange}>
       <div className="relative pl-8">
         {!hideTopConnector && (
           <span
@@ -2219,7 +2224,7 @@ function ToolCallCardInner({
               <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 <ChevronRight className={cn(
                   'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
-                  open && 'rotate-90'
+                  effectiveOpen && 'rotate-90'
                 )} />
                 {headerContent}
               </CollapsibleTrigger>
@@ -2320,6 +2325,13 @@ interface ToolCallGroupProps {
  */
 const MAX_VISIBLE_COMPLETED = 6
 
+export function hasInlineSecretPromptForCalls(
+  calls: ToolCallInfo[],
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode,
+): boolean {
+  return !!renderInlineSecretPrompt && calls.some((call) => renderInlineSecretPrompt(call) != null)
+}
+
 export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], collapsible?: boolean): boolean {
   if (!collapsible) return false
   if (calls.some(isInlineToolCall)) return false
@@ -2339,14 +2351,19 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, re
   const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
   const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
   const allDone = activeCalls.length === 0 && completedCalls.length > 0
-  const shouldCollapseGroup = collapsible && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
+  const hasInlineSecretPrompt = hasInlineSecretPromptForCalls(calls, renderInlineSecretPrompt)
+  const shouldCollapseGroup = collapsible && !hasInlineSecretPrompt && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
 
   useEffect(() => {
+    if (hasInlineSecretPrompt) {
+      setGroupOpen(true)
+      return
+    }
     if (shouldCollapseGroup && !prevAllDoneRef.current) {
       setGroupOpen(false)
     }
     prevAllDoneRef.current = allDone
-  }, [allDone, shouldCollapseGroup])
+  }, [allDone, hasInlineSecretPrompt, shouldCollapseGroup])
 
   if (calls.length === 0) return null
 
@@ -2497,6 +2514,12 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
   const prevActiveRef = useRef(!shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
 
   const isActive = !!isStreaming || calls.some(c => c.status === 'running' || c.status === 'pending')
+  const hasInlineSecretPrompt = hasInlineSecretPromptForCalls(calls, renderInlineSecretPrompt)
+  const effectiveOpen = hasInlineSecretPrompt ? true : open
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (hasInlineSecretPrompt && !nextOpen) return
+    setOpen(nextOpen)
+  }, [hasInlineSecretPrompt])
   const successCount = calls.filter(c => c.status === 'success').length
   const errorCount = calls.filter(c => c.status === 'error').length
   const startedAt = calls.length > 0 ? Math.min(...calls.map(c => c.startedAt)) : Date.now()
@@ -2520,11 +2543,16 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
 
   // Auto-collapse when the agent finishes
   useEffect(() => {
+    if (hasInlineSecretPrompt) {
+      setOpen(true)
+      prevActiveRef.current = isActive
+      return
+    }
     if (prevActiveRef.current && !isActive && calls.length > 0) {
       setOpen(false)
     }
     prevActiveRef.current = isActive
-  }, [isActive, calls.length])
+  }, [hasInlineSecretPrompt, isActive, calls.length])
 
   // Tick the elapsed timer while active
   useEffect(() => {
@@ -2536,12 +2564,12 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
   if (calls.length === 0) return null
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible open={effectiveOpen} onOpenChange={handleOpenChange}>
       <div className="my-2">
         <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
           <ChevronRight className={cn(
             'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
-            open && 'rotate-90',
+            effectiveOpen && 'rotate-90',
           )} />
           {isActive
             ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
