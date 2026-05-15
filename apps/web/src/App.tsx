@@ -439,46 +439,48 @@ function SecretInputForm({
   showTitle?: boolean
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {showTitle && (
         <div className="space-y-0.5">
-          <p className="text-sm font-medium text-foreground">{request.title}</p>
-          <p className="text-[11px] text-muted-foreground">This prompt is attached to the running tool call.</p>
+          <p className="text-[13px] font-medium leading-4 text-foreground">{request.title}</p>
+          <p className="text-[11px] leading-4 text-muted-foreground">This prompt is attached to the running tool call.</p>
         </div>
       )}
-      <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">
-          {request.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
+      <div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {request.prompt ?? 'Enter the secret to continue.'} <span className="hidden sm:inline">The value goes directly to the local gateway and is not sent to the model.</span>
         </p>
       </div>
-      <div className="relative">
-        <Label htmlFor={`secret-input-${request.id}`}>Secret</Label>
-        <Input
-          id={`secret-input-${request.id}`}
-          type={showPassword ? 'text' : 'password'}
-          autoComplete="current-password"
-          placeholder="Password"
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') void onSubmit()
-          }}
-          className="pr-9"
-          autoFocus
-        />
-        <button
-          type="button"
-          tabIndex={-1}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onShowPasswordChange((prev) => !prev)}
-        >
-          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
+      <div className="space-y-1">
+        <Label className="text-xs" htmlFor={`secret-input-${request.id}`}>Secret</Label>
+        <div className="relative">
+          <Input
+            id={`secret-input-${request.id}`}
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            placeholder="Password"
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void onSubmit()
+            }}
+            className="h-9 pr-10 text-sm"
+            autoFocus
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onShowPasswordChange((prev) => !prev)}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
-        <Button onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
+      <div className="flex justify-end gap-1.5">
+        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
       </div>
     </div>
   )

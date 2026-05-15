@@ -2292,8 +2292,8 @@ function ToolCallCardInner({
         </div>
       )}
       {hasInlineSecretPrompt && (
-        <div className="ml-8 mr-3 mb-2 rounded-md border border-yellow-500/20 bg-yellow-500/[0.025] px-3 py-2">
-          <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/[0.04] p-3">
+        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-yellow-500/[0.035] px-2.5 py-2 ring-1 ring-yellow-500/15 sm:ml-8 sm:mr-3 sm:px-3">
+          <div className="rounded-md bg-background/35 px-2.5 py-2 sm:px-3">
             {resolvedInlineSecretPrompt}
           </div>
         </div>
