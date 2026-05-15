@@ -31,6 +31,7 @@ export {
 export { createGatewayStatusTool } from "./gateway-tools.js";
 export { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
 export { createJaitTodosTool } from "./repo-proposal-tools.js";
+export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
   createBrowserNavigateTool,
@@ -149,6 +150,7 @@ import {
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
+import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
   createBrowserNavigateTool,
@@ -195,6 +197,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import type { UserQuestionService } from "../services/user-questions.js";
 import type { UserSecretService } from "../services/user-secrets.js";
 import type { WorkspaceService } from "../services/workspaces.js";
 import type { RepositoryService } from "../services/repositories.js";
@@ -243,6 +246,7 @@ export interface ToolRegistryDeps {
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
   secretInputService?: SecretInputService;
+  userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
   skillRegistry?: import("../skills/index.js").SkillRegistry;
 }
@@ -340,6 +344,10 @@ export function createToolRegistry(
       repoProposalService: deps.repoProposalService,
       threadService: deps.threadService,
     }));
+  }
+
+  if (deps.userQuestionService) {
+    tools.register(createUserAskTool(deps.userQuestionService));
   }
 
   // Self-update / redeploy tool

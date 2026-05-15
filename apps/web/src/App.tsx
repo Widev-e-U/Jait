@@ -65,6 +65,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
@@ -504,6 +505,253 @@ function SecretInputForm({
       <div className="flex justify-end gap-1.5">
         <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
         <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
+      </div>
+    </div>
+  )
+}
+
+interface UserQuestionOption {
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+interface UserQuestionItem {
+  id: string
+  header: string
+  question: string
+  multiSelect?: boolean
+  options?: UserQuestionOption[]
+  allowFreeformInput?: boolean
+}
+
+interface UserQuestionRequest {
+  id: string
+  sessionId: string
+  requestedBy: string | null
+  title: string
+  questions: UserQuestionItem[]
+  expiresAt: string
+  status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
+}
+
+interface UserQuestionAnswer {
+  selected: string[]
+  freeText: string | null
+  skipped: boolean
+}
+
+function useUserQuestionPrompt({
+  token,
+  sessionId,
+}: {
+  token: string | null
+  sessionId: string | null
+}) {
+  const [requests, setRequests] = useState<UserQuestionRequest[]>([])
+  const [answers, setAnswers] = useState<Record<string, UserQuestionAnswer>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const activeRequest = requests[0] ?? null
+
+  const authHeaders = useCallback((contentType = false) => {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (contentType) headers['Content-Type'] = 'application/json'
+    return headers
+  }, [token])
+
+  const refresh = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/api/user-questions/requests`, {
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      if (!res.ok) return
+      const data = await res.json() as { requests: UserQuestionRequest[] }
+      setRequests(data.requests.filter((request) => !sessionId || request.sessionId === sessionId))
+    } catch {
+      // gateway down or reconnecting
+    }
+  }, [authHeaders, sessionId, token])
+
+  useEffect(() => {
+    if (!token) return
+    void refresh()
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as { type: string; payload?: unknown }
+        if (msg.type === 'user-question.requested') {
+          const request = msg.payload as UserQuestionRequest
+          if (!sessionId || request.sessionId === sessionId) {
+            setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          }
+        }
+        if (msg.type === 'user-question.resolved') {
+          const resolved = msg.payload as { id?: string }
+          if (resolved.id) {
+            setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
+            setAnswers({})
+          }
+        }
+      } catch {
+        // ignore malformed events
+      }
+    }
+    return () => ws.close()
+  }, [refresh, sessionId, token])
+
+  useEffect(() => {
+    if (!activeRequest) {
+      setAnswers({})
+      return
+    }
+    setAnswers(Object.fromEntries(activeRequest.questions.map((question) => [
+      question.id,
+      { selected: [], freeText: null, skipped: false },
+    ])))
+  }, [activeRequest])
+
+  const submitAnswers = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/user-questions/requests/${activeRequest.id}/submit`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({ answers }),
+      })
+      if (!res.ok) throw new Error('Failed to submit answers')
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setAnswers({})
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit answers')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, answers, authHeaders])
+
+  const cancelRequest = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      await fetch(`${API_URL}/api/user-questions/requests/${activeRequest.id}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setAnswers({})
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders])
+
+  const setAnswer = useCallback((questionId: string, update: Partial<UserQuestionAnswer>) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] ?? { selected: [], freeText: null, skipped: false }), ...update },
+    }))
+  }, [])
+
+  const dialog = activeRequest ? (
+    <Dialog open onOpenChange={(open) => { if (!open) void cancelRequest() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{activeRequest.title}</DialogTitle>
+          <DialogDescription>Jait needs your input to continue.</DialogDescription>
+        </DialogHeader>
+        <UserQuestionForm
+          request={activeRequest}
+          answers={answers}
+          submitting={submitting}
+          onAnswerChange={setAnswer}
+          onSubmit={submitAnswers}
+          onCancel={cancelRequest}
+        />
+      </DialogContent>
+    </Dialog>
+  ) : null
+
+  return { activeRequest, dialog }
+}
+
+function UserQuestionForm({
+  request,
+  answers,
+  submitting,
+  onAnswerChange,
+  onSubmit,
+  onCancel,
+}: {
+  request: UserQuestionRequest
+  answers: Record<string, UserQuestionAnswer>
+  submitting: boolean
+  onAnswerChange: (questionId: string, update: Partial<UserQuestionAnswer>) => void
+  onSubmit: () => Promise<void>
+  onCancel: () => Promise<void>
+}) {
+  const canSubmit = request.questions.some((question) => {
+    const answer = answers[question.id]
+    return answer?.skipped || Boolean(answer?.freeText?.trim()) || (answer?.selected.length ?? 0) > 0
+  })
+
+  return (
+    <div className="space-y-4">
+      {request.questions.map((question) => {
+        const answer = answers[question.id] ?? { selected: [], freeText: null, skipped: false }
+        return (
+          <div key={question.id} className="space-y-2">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium leading-5 text-foreground">{question.header}</p>
+              <p className="text-xs leading-5 text-muted-foreground">{question.question}</p>
+            </div>
+            {question.options?.length ? (
+              <div className="space-y-1">
+                {question.options.map((option) => {
+                  const checked = answer.selected.includes(option.label)
+                  return (
+                    <label key={option.label} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs">
+                      <input
+                        type={question.multiSelect ? 'checkbox' : 'radio'}
+                        name={`user-question-${request.id}-${question.id}`}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                        checked={checked}
+                        onChange={(event) => {
+                          const selected = question.multiSelect
+                            ? event.target.checked
+                              ? [...answer.selected, option.label]
+                              : answer.selected.filter((item) => item !== option.label)
+                            : [option.label]
+                          onAnswerChange(question.id, { selected, skipped: false })
+                        }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium text-foreground">{option.label}</span>
+                        {option.recommended && <span className="ml-1 text-primary">Recommended</span>}
+                        {option.description && <span className="block text-muted-foreground">{option.description}</span>}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            ) : null}
+            {question.allowFreeformInput !== false && (
+              <Textarea
+                value={answer.freeText ?? ''}
+                placeholder="Type an answer..."
+                className="min-h-20 text-sm"
+                onChange={(event) => onAnswerChange(question.id, { freeText: event.target.value, skipped: false })}
+              />
+            )}
+          </div>
+        )
+      })}
+      <div className="flex justify-end gap-1.5">
+        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !canSubmit}>Submit</Button>
       </div>
     </div>
   )
@@ -2062,6 +2310,7 @@ function App() {
   }, [activeSessionId])
 
   const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
+  const userQuestionInput = useUserQuestionPrompt({ token, sessionId: activeSessionId })
   const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
     if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
@@ -8484,6 +8733,7 @@ function App() {
         />
 
         {secretInput.dialog}
+        {userQuestionInput.dialog}
 
         {/* Strategy editor modal */}
         {strategyRepo && (

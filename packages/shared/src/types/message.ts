@@ -33,6 +33,8 @@ export type WsEventType =
   | "consent.resolved"
   | "secret.requested"
   | "secret.resolved"
+  | "user-question.requested"
+  | "user-question.resolved"
   | "surface.connected"
   | "surface.disconnected"
   | "surface.registry"
