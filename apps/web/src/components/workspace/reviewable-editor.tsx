@@ -44,7 +44,7 @@ export function ReviewableEditor({
 
   useEffect(() => {
     if (!hasReview || originalContent == null) {
-      setHunks([])
+      setHunks((prev) => (prev.length === 0 ? prev : []))
       return
     }
     setHunks(buildReviewHunks(originalContent, value))
@@ -53,7 +53,7 @@ export function ReviewableEditor({
   const updateActionPositions = useCallback(() => {
     const editor = editorRef.current
     if (!editor || hunks.length === 0) {
-      setActionPositions([])
+      setActionPositions((prev) => (prev.length === 0 ? prev : []))
       return
     }
 
@@ -67,7 +67,18 @@ export function ReviewableEditor({
       if (!Number.isFinite(top) || top < -28 || top > viewportHeight) return []
       return [{ hunkIndex: hunk.index, top }]
     })
-    setActionPositions(next)
+    setActionPositions((prev) => {
+      if (
+        prev.length === next.length
+        && prev.every((position, index) => (
+          position.hunkIndex === next[index]?.hunkIndex
+          && position.top === next[index]?.top
+        ))
+      ) {
+        return prev
+      }
+      return next
+    })
   }, [hunks])
 
   const undecidedCount = useMemo(() => hunks.filter((hunk) => hunk.state === 'undecided').length, [hunks])

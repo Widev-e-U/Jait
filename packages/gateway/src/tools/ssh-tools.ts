@@ -218,7 +218,7 @@ async function getPasswordIfNeeded(
   context: ToolContext,
   requestedBy: string,
 ): Promise<string | null | undefined> {
-  const authMethod = input.authMethod ?? "password";
+  const authMethod = input.authMethod ?? "key";
   if (authMethod === "key") return null;
   if (!secretInput) return undefined;
   return secretInput.requestSecret({
@@ -384,7 +384,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
   return {
     name: "ssh.run",
     description:
-      "Run a command on a remote Linux server over SSH. For password auth, the gateway asks the user for the password through a secret prompt that is never sent to the LLM or included in tool arguments.",
+      "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password.",
     tier: "standard",
     category: "network",
     source: "builtin",
@@ -398,7 +398,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
         command: { type: "string", description: "Command to run on the remote host" },
         port: { type: "number", description: "SSH port, default 22" },
         timeoutMs: { type: "number", description: "Execution timeout in milliseconds, default 30000" },
-        authMethod: { type: "string", enum: ["password", "key"], description: "Authentication method. Password uses a user-only secret prompt." },
+        authMethod: { type: "string", enum: ["password", "key"], description: "Authentication method. Defaults to key. Password uses a user-only secret prompt." },
         strictHostKeyChecking: { type: "boolean", description: "Whether OpenSSH should enforce known_hosts checking, default true" },
       },
       required: ["host", "username", "command"],
@@ -408,7 +408,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
       const userError = validateTargetPart(input.username, "username");
       if (hostError || userError) return { ok: false, message: hostError ?? userError! };
 
-      const authMethod = input.authMethod ?? "password";
+      const authMethod = input.authMethod ?? "key";
       let password: string | null = null;
       if (authMethod === "password") {
         if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
@@ -455,7 +455,7 @@ export function createSshSessionStartTool(secretInput?: SecretInputService, ptyF
   return {
     name: "ssh.session.start",
     description:
-      "Start a persistent SSH PTY session to a remote Linux server. Password authentication uses a user-only secret prompt; the password is never sent to the LLM or included in tool arguments.",
+      "Start a persistent SSH PTY session to a remote Linux server. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password.",
     tier: "standard",
     category: "network",
     source: "builtin",
@@ -467,7 +467,7 @@ export function createSshSessionStartTool(secretInput?: SecretInputService, ptyF
         host: { type: "string", description: "Remote host or IP address" },
         username: { type: "string", description: "Remote SSH username" },
         port: { type: "number", description: "SSH port, default 22" },
-        authMethod: { type: "string", enum: ["password", "key"], description: "Authentication method. Password uses a user-only secret prompt." },
+        authMethod: { type: "string", enum: ["password", "key"], description: "Authentication method. Defaults to key. Password uses a user-only secret prompt." },
         strictHostKeyChecking: { type: "boolean", description: "Whether OpenSSH should enforce known_hosts checking, default true" },
         timeoutMs: { type: "number", description: "Startup timeout in milliseconds, default 30000" },
       },
@@ -480,7 +480,7 @@ export function createSshSessionStartTool(secretInput?: SecretInputService, ptyF
 
       const password = await getPasswordIfNeeded(secretInput, input, context, "ssh.session.start");
       if (password === undefined) return { ok: false, message: "Secret input service is unavailable" };
-      if ((input.authMethod ?? "password") === "password" && !password) {
+      if ((input.authMethod ?? "key") === "password" && !password) {
         return { ok: false, message: "SSH password was not provided" };
       }
 

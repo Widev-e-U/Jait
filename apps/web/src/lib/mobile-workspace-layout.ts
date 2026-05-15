@@ -15,9 +15,9 @@ export function normalizeHydratedWorkspaceLayout(
       : layout
   }
 
-  return layout.tree
-    ? { tree: true, editor: false }
-    : collapseMobileWorkspace()
+  if (layout.tree) return { tree: true, editor: false }
+  if (layout.editor) return showMobileWorkspacePane('editor')
+  return collapseMobileWorkspace()
 }
 
 export function collapseMobileWorkspace(): WorkspaceLayoutState {

@@ -37,8 +37,8 @@ describe('mobile workspace layout', () => {
     expect(toggleMobileWorkspacePane({ tree: true, editor: true }, 'editor')).toEqual({ tree: false, editor: true })
   })
 
-  it('prevents hydrated mobile state from reopening the editor', () => {
-    expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: true }, true)).toEqual({ tree: false, editor: false })
+  it('preserves hydrated mobile editor state without opening both panes', () => {
+    expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: true }, true)).toEqual({ tree: false, editor: true })
     expect(normalizeHydratedWorkspaceLayout({ tree: true, editor: true }, true)).toEqual({ tree: true, editor: false })
   })
 

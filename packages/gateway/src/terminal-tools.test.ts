@@ -80,6 +80,9 @@ function makeSecretPromptTool(secret = "remote-password") {
       if (data === "ssh jakob@host\r") {
         queueMicrotask(() => listener?.("jakob@host's password: "));
       }
+      if (data === "sudo whoami\r") {
+        queueMicrotask(() => listener?.("[sudo] password for jakob: "));
+      }
       if (data === `${secret}\r`) {
         queueMicrotask(() => listener?.("\r\nconnected\r\n\x1b]633;D;0\x07\x1b]633;B\x07"));
       }
@@ -246,10 +249,10 @@ describe("terminal.run tool status reporting", () => {
     expect(writes).toContain("\x03\r");
   });
 
-  it("requests an inline secret when a terminal command asks for a password", async () => {
+  it("requests an inline secret when a non-SSH terminal command asks for a password", async () => {
     const { tool, writes, requests } = makeSecretPromptTool();
 
-    const result = await tool.execute({ command: "ssh jakob@host", terminalId: "term-existing", timeout: 1000 }, {
+    const result = await tool.execute({ command: "sudo whoami", terminalId: "term-existing", timeout: 1000 }, {
       ...makeContext(),
       userId: "user-1",
     });
@@ -259,9 +262,25 @@ describe("terminal.run tool status reporting", () => {
     expect(writes).toContain("remote-password\r");
     expect(requests).toEqual([{
       title: "Terminal input required",
-      prompt: "jakob@host's password:",
+      prompt: "[sudo] password for jakob:",
       requestedBy: "terminal.run",
     }]);
+  });
+
+  it("leaves SSH password prompts in the terminal instead of requesting a chat secret", async () => {
+    const { tool, writes, requests } = makeSecretPromptTool();
+
+    const result = await tool.execute({ command: "ssh jakob@host", terminalId: "term-existing", timeout: 1000 }, {
+      ...makeContext(),
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("user interaction required in terminal");
+    expect((result.data as any).needsInteraction).toBe(true);
+    expect((result.data as any).output).toContain("jakob@host's password:");
+    expect(writes).not.toContain("remote-password\r");
+    expect(requests).toEqual([]);
   });
 });
 

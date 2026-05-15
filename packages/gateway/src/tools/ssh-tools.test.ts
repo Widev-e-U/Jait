@@ -122,6 +122,7 @@ describe("ssh tools for external providers", () => {
         host: "linux-box.local",
         username: "jakob",
         command: "printf codex-remote",
+        authMethod: "password",
         strictHostKeyChecking: false,
       },
       context({ providerId: "codex", requestedBy: "agent" }),
@@ -172,6 +173,7 @@ describe("persistent ssh sessions", () => {
     const startPromise = startTool.execute({
       host: "linux-box.local",
       username: "jakob",
+      authMethod: "password",
       strictHostKeyChecking: false,
     }, context({ providerId: "jait" }));
     const started = await startPromise;

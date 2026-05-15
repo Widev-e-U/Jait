@@ -148,6 +148,14 @@ function getInteractivePromptLabel(output: string): string | null {
   return SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(cleaned)) ? "Terminal input required" : null;
 }
 
+function isSshCommand(command: string): boolean {
+  return /^\s*ssh(?:\s|$)/.test(command);
+}
+
+function shouldLeavePromptInTerminal(command: string, prompt: string): boolean {
+  return isSshCommand(command) && /(?:password|passphrase).*:\s*$/i.test(prompt);
+}
+
 /** Race a promise against an AbortSignal */
 function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) return Promise.reject(new Error("Cancelled"));
@@ -278,7 +286,7 @@ function executeInTerminal(
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
   requestInteractiveSecret?: (prompt: string) => Promise<string | null>,
-): Promise<{ output: string; exitCode: number | null; timedOut: boolean }> {
+): Promise<{ output: string; exitCode: number | null; timedOut: boolean; interactionRequired?: boolean }> {
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
@@ -325,6 +333,11 @@ function executeInTerminal(
       if (requestInteractiveSecret && !promptRequestInFlight && !promptAnswered) {
         const prompt = getInteractivePromptLabel(raw);
         if (prompt) {
+          if (shouldLeavePromptInTerminal(command, prompt)) {
+            if (timer) clearTimeout(timer);
+            finish(false, null, true);
+            return;
+          }
           promptRequestInFlight = true;
           if (timer) clearTimeout(timer);
           void requestInteractiveSecret(prompt).then((secret) => {
@@ -381,7 +394,7 @@ function executeInTerminal(
       }
     };
 
-    const finish = (timedOut: boolean, exitCode: number | null = null) => {
+    const finish = (timedOut: boolean, exitCode: number | null = null, interactionRequired = false) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
@@ -447,7 +460,7 @@ function executeInTerminal(
         output = "…(truncated)\n" + output.slice(-200_000);
       }
 
-      resolve({ output: output || "(no output)", exitCode, timedOut });
+      resolve({ output: output || "(no output)", exitCode, timedOut, interactionRequired });
     };
 
     // Listen BEFORE writing so we don't miss fast output
@@ -612,7 +625,8 @@ export function createTerminalRunTool(
         // 3. Build response
         const ok = !result.timedOut && result.exitCode === 0;
         const pagerDetected = result.timedOut && detectPagerPrompt(result.output);
-        const needsInteraction = result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected);
+        const needsInteraction = Boolean(result.interactionRequired)
+          || (result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected));
         const reason = result.timedOut
           ? `timed out after ${timeout}ms`
           : result.exitCode == null
