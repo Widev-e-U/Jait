@@ -35,6 +35,10 @@ export function shouldRenderSecretRequestInline(request: SecretInputRequest | nu
     || request.title === 'Terminal input required'
 }
 
+export function shouldRenderSecretRequestDialog(request: SecretInputRequest | null): boolean {
+  return Boolean(request && !shouldRenderSecretRequestInline(request))
+}
+
 export function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string, args?: Record<string, unknown>): boolean {
   if (!shouldRenderSecretRequestInline(request)) return false
   const normalizedTool = normalizeToolName(tool)

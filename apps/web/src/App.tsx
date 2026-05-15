@@ -143,8 +143,8 @@ import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
 import {
-  messageListHasMatchingSecretToolCall,
   secretRequestMatchesTool,
+  shouldRenderSecretRequestDialog,
   shouldRenderSecretRequestInline,
   type SecretInputRequest,
 } from '@/lib/secret-input'
@@ -395,7 +395,7 @@ function useSecretInputPrompt({
     />
   ) : null
 
-  const dialog = activeRequest && !renderInline ? (
+  const dialog = shouldRenderSecretRequestDialog(activeRequest) ? (
     <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
       <DialogContent>
         <DialogHeader>
@@ -2188,11 +2188,6 @@ function App() {
     () => activitiesToMessages(automation.activities),
     [automation.activities],
   )
-  const inlineSecretPromptHasVisibleToolCall = useMemo(() => {
-    if (!secretInput.renderInline) return false
-    const visibleMessages = viewMode === 'manager' && automation.selectedThread ? automationMessages : messages
-    return messageListHasMatchingSecretToolCall(secretInput.activeRequest, visibleMessages)
-  }, [automation.selectedThread, automationMessages, messages, secretInput.activeRequest, secretInput.renderInline, viewMode])
   const managerThreads = useMemo(
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
@@ -8464,11 +8459,6 @@ function App() {
         />
 
         {secretInput.dialog}
-        {secretInput.renderInline && !inlineSecretPromptHasVisibleToolCall && secretInput.form && (
-          <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-lg border border-yellow-500/30 bg-background/95 p-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[28rem]">
-            {secretInput.form}
-          </div>
-        )}
 
         {/* Strategy editor modal */}
         {strategyRepo && (

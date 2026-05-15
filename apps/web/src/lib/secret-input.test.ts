@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   messageListHasMatchingSecretToolCall,
+  shouldRenderSecretRequestDialog,
   secretRequestMatchesTool,
   shouldRenderSecretRequestInline,
   type SecretInputRequest,
@@ -22,6 +23,18 @@ function secret(overrides: Partial<SecretInputRequest> = {}): SecretInputRequest
 describe('secret input tool matching', () => {
   it('treats SSH password prompts as inline-capable', () => {
     expect(shouldRenderSecretRequestInline(secret())).toBe(true)
+  })
+
+  it('does not render inline-capable SSH prompts in a detached dialog', () => {
+    expect(shouldRenderSecretRequestDialog(secret())).toBe(false)
+  })
+
+  it('renders unknown secret prompts in a detached dialog', () => {
+    expect(shouldRenderSecretRequestDialog(secret({
+      title: 'API token',
+      prompt: 'Enter token',
+      requestedBy: 'custom.tool',
+    }))).toBe(true)
   })
 
   it('matches MCP SSH tool names normalized from mcp__jait__ssh_run', () => {
