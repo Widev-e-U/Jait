@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import type { UserSecretService } from "../services/user-secrets.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 const require = createRequire(import.meta.url);
@@ -73,6 +74,7 @@ interface SshSession {
 }
 
 const sshSessions = new Map<string, SshSession>();
+const SSH_PASSWORD_SECRET_TYPE = "ssh-password";
 
 function loadNodePty(): SshPtyFactory {
   return (require("node-pty") as { spawn: SshPtyFactory }).spawn;
@@ -98,6 +100,10 @@ function validateTargetPart(value: string, label: string): string | null {
   if (!value.trim()) return `${label} is required`;
   if (/[\s@'"]/u.test(value)) return `${label} cannot contain whitespace, quotes, or @`;
   return null;
+}
+
+function sshPasswordSecretKey(input: { username: string; host: string; port?: number }): string {
+  return `${input.username}@${input.host}:${input.port ?? 22}`;
 }
 
 function buildSshArgs(input: {
@@ -214,12 +220,16 @@ function runCommandInSshSession(
 
 async function getPasswordIfNeeded(
   secretInput: SecretInputService | undefined,
-  input: { authMethod?: "password" | "key"; username: string; host: string; timeoutMs?: number },
+  userSecrets: UserSecretService | undefined,
+  input: { authMethod?: "password" | "key"; username: string; host: string; port?: number; timeoutMs?: number },
   context: ToolContext,
   requestedBy: string,
 ): Promise<string | null | undefined> {
   const authMethod = input.authMethod ?? "key";
   if (authMethod === "key") return null;
+  const secretKey = sshPasswordSecretKey(input);
+  const saved = userSecrets?.getValue(context.userId, SSH_PASSWORD_SECRET_TYPE, secretKey);
+  if (saved) return saved;
   if (!secretInput) return undefined;
   return secretInput.requestSecret({
     sessionId: context.sessionId,
@@ -227,6 +237,10 @@ async function getPasswordIfNeeded(
     title: "SSH password",
     prompt: `Password for ${input.username}@${input.host}`,
     requestedBy,
+    rememberable: true,
+    rememberLabel: `SSH password for ${input.username}@${input.host}`,
+    secretType: SSH_PASSWORD_SECRET_TYPE,
+    secretKey,
     timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
   });
 }
@@ -380,7 +394,7 @@ function runSshInPty(input: {
   });
 }
 
-export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: SshPtyFactory): ToolDefinition<SshRunInput> {
+export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: SshPtyFactory, userSecrets?: UserSecretService): ToolDefinition<SshRunInput> {
   return {
     name: "ssh.run",
     description:
@@ -411,15 +425,25 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
       const authMethod = input.authMethod ?? "key";
       let password: string | null = null;
       if (authMethod === "password") {
-        if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
-        password = await secretInput.requestSecret({
-          sessionId: context.sessionId,
-          userId: context.userId,
-          title: "SSH password",
-          prompt: `Password for ${input.username}@${input.host}`,
-          requestedBy: "ssh.run",
-          timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
-        });
+        const secretKey = sshPasswordSecretKey({ ...input, port: input.port ?? 22 });
+        const saved = userSecrets?.getValue(context.userId, SSH_PASSWORD_SECRET_TYPE, secretKey);
+        if (saved) {
+          password = saved;
+        } else {
+          if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
+          password = await secretInput.requestSecret({
+            sessionId: context.sessionId,
+            userId: context.userId,
+            title: "SSH password",
+            prompt: `Password for ${input.username}@${input.host}`,
+            requestedBy: "ssh.run",
+            rememberable: true,
+            rememberLabel: `SSH password for ${input.username}@${input.host}`,
+            secretType: SSH_PASSWORD_SECRET_TYPE,
+            secretKey,
+            timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
+          });
+        }
         if (!password) return { ok: false, message: "SSH password was not provided" };
       }
 
@@ -451,7 +475,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
   };
 }
 
-export function createSshSessionStartTool(secretInput?: SecretInputService, ptyFactory?: SshPtyFactory): ToolDefinition<SshSessionStartInput> {
+export function createSshSessionStartTool(secretInput?: SecretInputService, ptyFactory?: SshPtyFactory, userSecrets?: UserSecretService): ToolDefinition<SshSessionStartInput> {
   return {
     name: "ssh.session.start",
     description:
@@ -478,7 +502,7 @@ export function createSshSessionStartTool(secretInput?: SecretInputService, ptyF
       const userError = validateTargetPart(input.username, "username");
       if (hostError || userError) return { ok: false, message: hostError ?? userError! };
 
-      const password = await getPasswordIfNeeded(secretInput, input, context, "ssh.session.start");
+      const password = await getPasswordIfNeeded(secretInput, userSecrets, input, context, "ssh.session.start");
       if (password === undefined) return { ok: false, message: "Secret input service is unavailable" };
       if ((input.authMethod ?? "key") === "password" && !password) {
         return { ok: false, message: "SSH password was not provided" };

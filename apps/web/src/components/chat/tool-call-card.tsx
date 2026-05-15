@@ -64,6 +64,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'ssh.session.close': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'elevated.run':      { icon: Terminal,  label: 'Elevated',   color: 'text-amber-500' },
   // ── Legacy / standard tools ─────────────────────────────
+  'jait.terminal':   { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'file.read':       { icon: FileText,  label: 'Read File',  color: 'text-blue-500' },
@@ -146,7 +147,7 @@ function getToolInvocationLabels(
   if (normalized === 'file.stat') {
     return { running: `Inspecting ${fileName || 'file'}`, done: `Inspected ${fileName || 'file'}` }
   }
-  if (normalized === 'execute' || normalized.startsWith('terminal.')) {
+  if (normalized === 'execute' || normalized === 'jait.terminal' || normalized.startsWith('terminal.')) {
     return { running: 'Running command', done: 'Ran command' }
   }
   if (normalized.startsWith('ssh.') || normalized === 'run.ssh') {
@@ -572,7 +573,7 @@ function getCallSummary(
     if (diffCount) return `${fileName} (${diffCount})`
     return fileName
   }
-  if (normalized === 'execute') return displayStr(normalizedArgs.command ?? args.command)
+  if (normalized === 'execute' || normalized === 'jait.terminal') return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'search') {
     const pattern = displayStr(normalizedArgs.pattern ?? args.pattern)
     const mode = displayStr(normalizedArgs.mode ?? args.mode, 'content')
@@ -1090,13 +1091,16 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
   if (normalized === 'agent') return 'Sub-agent is working...'
-  if (tool.startsWith('terminal.') || tool === 'execute' || tool.startsWith('ssh.') || tool === 'run.ssh' || tool === 'elevated.run') return 'Command is still running...'
+  if (tool.startsWith('terminal.') || tool === 'jait.terminal' || tool === 'execute' || tool.startsWith('ssh.') || tool === 'run.ssh' || tool === 'elevated.run') {
+    const command = displayStr(args.command).trim()
+    return command ? `Executing ${command}...` : 'Command is still running...'
+  }
   return 'Tool is still running...'
 }
 
 function isTerminalTool(tool: string): boolean {
   const n = normalizeTool(tool)
-  return n.startsWith('terminal.') || n === 'execute' || n.startsWith('ssh.') || n === 'run.ssh' || n === 'elevated.run'
+  return n.startsWith('terminal.') || n === 'jait.terminal' || n === 'execute' || n.startsWith('ssh.') || n === 'run.ssh' || n === 'elevated.run'
 }
 
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
@@ -1501,7 +1505,7 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
   // Normalise OpenAI name (terminal_run → terminal.run) for meta lookup
   const normalized = normalizeTool(tool)
   const meta = toolMeta[normalized]
-  const isTerminalTool = normalized.startsWith('terminal.')
+  const isTerminalTool = normalized.startsWith('terminal.') || normalized === 'jait.terminal' || normalized === 'execute'
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
   const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
   const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
@@ -1889,7 +1893,7 @@ function ToolCallCardInner({
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
-  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
+  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
     || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
@@ -1902,7 +1906,7 @@ function ToolCallCardInner({
     .map((path) => path.trim())
     .filter(Boolean)
   const filePath = filePaths[0] ?? getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
-  const showFileSummary = !!filePath && isEditLikeTool(normalizedTool)
+  const showFileSummary = !!filePath && (isEditLikeTool(normalizedTool) || normalizedTool === 'read' || normalizedTool === 'file.read')
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
   const bodyKind = getToolCallBodyKind({
@@ -2045,7 +2049,7 @@ function ToolCallCardInner({
             <span className="inline-flex min-w-0 items-center gap-1">
               <FileSummaryButton
                 path={filePath}
-                onOpenDiff={onOpenDiff}
+                onOpenDiff={isEditLikeTool(normalizedTool) ? onOpenDiff : undefined}
                 disabled={call.status !== 'success'}
               />
               {filePaths.length > 1 && (
@@ -2102,7 +2106,7 @@ function ToolCallCardInner({
       )}
       {displayOutput}
       {call.status === 'running' && !displayOutput && (
-        <span className="text-zinc-400">Running...</span>
+        <span className="text-zinc-400">{summary ? `Executing ${summary}...` : 'Running...'}</span>
       )}
       {call.status === 'running' && (
         <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />

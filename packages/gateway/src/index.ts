@@ -29,6 +29,7 @@ import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { SecretInputService } from "./services/secret-input.js";
+import { UserSecretService } from "./services/user-secrets.js";
 import { UserService } from "./services/users.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
@@ -105,6 +106,7 @@ async function main() {
   const planService = new PlanService(db);
   const repoProposalService = new RepoProposalService(db);
   const reminderService = new ReminderService(db);
+  const userSecretService = new UserSecretService(db, config.jwtSecret);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
@@ -338,6 +340,7 @@ async function main() {
     repoProposalService,
     reminderService,
     gitService,
+    userSecretService,
     maintenanceService,
     notifications,
     previewService,
@@ -482,6 +485,7 @@ async function main() {
     previewService,
     architectureDiagramService,
     secretInputService,
+    userSecretService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -658,6 +662,7 @@ async function main() {
     architectureDiagramService,
     gitService,
     secretInputService,
+    userSecretService,
     pluginManager,
     skillRegistry,
     clawhubClient,

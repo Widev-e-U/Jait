@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SecretInputService } from "../services/secret-input.js";
+import { UserSecretService } from "../services/user-secrets.js";
+import { migrateDatabase, openDatabase } from "../db/index.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { ToolRegistry } from "./registry.js";
 import { buildToolSchemas } from "./agent-loop.js";
@@ -142,6 +144,38 @@ describe("ssh tools for external providers", () => {
       toolName: "ssh.run",
       inputs: expect.not.objectContaining({ password: expect.anything() }),
     });
+  });
+
+  it("reuses a remembered SSH password without prompting again", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userSecrets = new UserSecretService(db, "test-secret");
+    userSecrets.save({
+      userId: "user-1",
+      type: "ssh-password",
+      key: "jakob@linux-box.local:22",
+      label: "SSH password for jakob@linux-box.local",
+      value: "remembered-password",
+    });
+    const secretInput = new SecretInputService({
+      onRequest: () => {
+        throw new Error("should not request a password when a saved secret exists");
+      },
+    });
+    const { factory, ptys } = fakePtyFactory();
+    const tool = createSshRunTool(secretInput, factory, userSecrets);
+
+    const result = await tool.execute({
+      host: "linux-box.local",
+      username: "jakob",
+      command: "printf codex-remote",
+      authMethod: "password",
+      strictHostKeyChecking: false,
+    }, context());
+
+    expect(result.ok).toBe(true);
+    expect(ptys[0]?.writes.some((write) => write.includes("remembered-password"))).toBe(true);
+    sqlite.close();
   });
 });
 

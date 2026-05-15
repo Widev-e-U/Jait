@@ -291,6 +291,7 @@ function useSecretInputPrompt({
 }) {
   const [requests, setRequests] = useState<SecretInputRequest[]>([])
   const [value, setValue] = useState('')
+  const [remember, setRemember] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const activeRequest = requests[0] ?? null
@@ -336,6 +337,7 @@ function useSecretInputPrompt({
           if (resolved.id) {
             setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
             setValue('')
+            setRemember(false)
           }
         }
       } catch {
@@ -353,17 +355,18 @@ function useSecretInputPrompt({
         method: 'POST',
         headers: authHeaders(true),
         credentials: 'include',
-        body: JSON.stringify({ value }),
+        body: JSON.stringify({ value, remember: activeRequest.rememberable ? remember : false }),
       })
       if (!res.ok) throw new Error('Failed to submit secret')
       setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
       setValue('')
+      setRemember(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to submit secret')
     } finally {
       setSubmitting(false)
     }
-  }, [activeRequest, authHeaders, value])
+  }, [activeRequest, authHeaders, remember, value])
 
   const cancelSecret = useCallback(async () => {
     if (!activeRequest) return
@@ -376,6 +379,7 @@ function useSecretInputPrompt({
       })
       setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
       setValue('')
+      setRemember(false)
     } finally {
       setSubmitting(false)
     }
@@ -389,6 +393,8 @@ function useSecretInputPrompt({
       submitting={submitting}
       showPassword={showPassword}
       onShowPasswordChange={setShowPassword}
+      remember={remember}
+      onRememberChange={setRemember}
       onSubmit={submitSecret}
       onCancel={cancelSecret}
       showTitle={renderInline}
@@ -424,6 +430,8 @@ function SecretInputForm({
   submitting,
   showPassword,
   onShowPasswordChange,
+  remember,
+  onRememberChange,
   onSubmit,
   onCancel,
   showTitle = false,
@@ -434,6 +442,8 @@ function SecretInputForm({
   submitting: boolean
   showPassword: boolean
   onShowPasswordChange: (value: boolean | ((prev: boolean) => boolean)) => void
+  remember: boolean
+  onRememberChange: (value: boolean) => void
   onSubmit: () => Promise<void>
   onCancel: () => Promise<void>
   showTitle?: boolean
@@ -478,6 +488,19 @@ function SecretInputForm({
           </button>
         </div>
       </div>
+      {request.rememberable && (
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={remember}
+            onChange={(event) => onRememberChange(event.target.checked)}
+          />
+          <span className="min-w-0 flex-1">
+            Remember for {request.rememberLabel || request.prompt || request.title}
+          </span>
+        </label>
+      )}
       <div className="flex justify-end gap-1.5">
         <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
         <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>

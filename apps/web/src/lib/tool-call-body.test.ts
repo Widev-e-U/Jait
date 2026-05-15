@@ -6,8 +6,17 @@ describe('tool call body helpers', () => {
     expect(normalizeToolName('ssh_session_start')).toBe('ssh.session.start')
     expect(normalizeToolName('ssh_session_run')).toBe('ssh.session.run')
     expect(normalizeToolName('ssh_session_close')).toBe('ssh.session.close')
+    expect(normalizeToolName('read_file')).toBe('file.read')
+    expect(normalizeToolName('write_file')).toBe('file.write')
+    expect(normalizeToolName('patch_file')).toBe('file.patch')
+    expect(normalizeToolName('jait_terminal')).toBe('jait.terminal')
     expect(normalizeToolName('browser_sandbox_start')).toBe('browser.sandbox.start')
     expect(normalizeToolName('workspace_assign_repository')).toBe('workspace.assign_repository')
+  })
+
+  it('extracts file paths from ACP-style read/write tool aliases', () => {
+    expect(getToolFilePath('read_file', { file_path: 'apps/web/src/App.tsx' })).toBe('apps/web/src/App.tsx')
+    expect(getToolFilePath('write_file', { path: 'packages/gateway/src/index.ts' })).toBe('packages/gateway/src/index.ts')
   })
 
   it('does not force a diff view for codex edit calls that only provide a path', () => {

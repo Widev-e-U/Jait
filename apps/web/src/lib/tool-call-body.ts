@@ -330,6 +330,9 @@ export function getToolImagePath(
 export function normalizeToolName(name: string): string {
   if (name === 'browser_sandbox_start') return 'browser.sandbox.start'
   if (name === 'run_ssh') return 'run.ssh'
+  if (name === 'read_file') return 'file.read'
+  if (name === 'write_file') return 'file.write'
+  if (name === 'patch_file') return 'file.patch'
   if (name === 'ssh_session_start') return 'ssh.session.start'
   if (name === 'ssh_session_run') return 'ssh.session.run'
   if (name === 'ssh_session_close') return 'ssh.session.close'

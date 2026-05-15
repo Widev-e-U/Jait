@@ -4,7 +4,7 @@
  * Tables: sessions, audit_log, trust_levels, consent_log, consent_session_approvals
  * All IDs are UUIDv7 (sortable by time). Single-operator — no users table.
  */
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // ─── Workspaces ──────────────────────────────────────────────────────
 export const workspaces = sqliteTable(
@@ -173,6 +173,28 @@ export const memories = sqliteTable(
   (table) => [
     index("idx_memories_scope").on(table.scope, table.createdAt),
     index("idx_memories_expires").on(table.expiresAt),
+  ],
+);
+
+// ─── User Secrets ───────────────────────────────────────────────────
+export const userSecrets = sqliteTable(
+  "user_secrets",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    type: text("type").notNull(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    uniqueIndex("idx_user_secrets_unique").on(table.userId, table.type, table.key),
+    index("idx_user_secrets_user_type").on(table.userId, table.type, table.updatedAt),
   ],
 );
 

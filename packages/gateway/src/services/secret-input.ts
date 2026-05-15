@@ -7,6 +7,10 @@ export interface SecretInputRequest {
   title: string;
   prompt: string;
   requestedBy: string | null;
+  rememberable?: boolean;
+  rememberLabel?: string;
+  secretType?: string;
+  secretKey?: string;
   createdAt: string;
   expiresAt: string;
   status: "pending" | "submitted" | "cancelled" | "timeout";
@@ -42,6 +46,10 @@ export class SecretInputService {
     title: string;
     prompt: string;
     requestedBy?: string | null;
+    rememberable?: boolean;
+    rememberLabel?: string;
+    secretType?: string;
+    secretKey?: string;
     timeoutMs?: number;
   }): Promise<string | null> {
     const now = new Date();
@@ -53,6 +61,10 @@ export class SecretInputService {
       title: input.title,
       prompt: input.prompt,
       requestedBy: input.requestedBy ?? null,
+      rememberable: input.rememberable,
+      rememberLabel: input.rememberLabel,
+      secretType: input.secretType,
+      secretKey: input.secretKey,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),
       status: "pending",

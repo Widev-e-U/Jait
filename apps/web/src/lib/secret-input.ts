@@ -6,6 +6,10 @@ export interface SecretInputRequest {
   title: string
   prompt: string
   requestedBy: string | null
+  rememberable?: boolean
+  rememberLabel?: string
+  secretType?: string
+  secretKey?: string
   expiresAt: string
   status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
 }

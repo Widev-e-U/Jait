@@ -82,6 +82,7 @@ import { getSchemaVersion } from "./db/connection.js";
 import type { WorkspaceService } from "./services/workspaces.js";
 import type { AssistantProfileService } from "./services/assistant-profiles.js";
 import type { SecretInputService } from "./services/secret-input.js";
+import type { UserSecretService } from "./services/user-secrets.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -128,6 +129,7 @@ export interface ServerDeps {
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
   secretInputService?: SecretInputService;
+  userSecretService?: UserSecretService;
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
@@ -206,7 +208,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
   if (deps.secretInputService) {
-    registerSecretRoutes(app, config, deps.secretInputService);
+    registerSecretRoutes(app, config, deps.secretInputService, deps.userSecretService);
   }
   if (deps.voiceService && deps.consentManager) {
     registerVoiceRoutes(app, deps.voiceService, deps.consentManager, config, deps.userService);

@@ -337,6 +337,17 @@ export interface ReminderSnapshot {
   threads: AgentThread[]
 }
 
+export interface UserSecretRecord {
+  id: string
+  userId: string | null
+  type: string
+  key: string
+  label: string
+  createdAt: string
+  updatedAt: string
+  lastUsedAt: string | null
+}
+
 export interface CreateReminderRequest {
   content: string
   workspaceId?: string | null
@@ -353,6 +364,13 @@ export interface UpdateReminderRequest {
   sessionId?: string | null
   status?: ReminderRecord['status']
   tags?: string[]
+}
+
+export interface CreateUserSecretRequest {
+  type: string
+  key: string
+  label: string
+  value: string
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -889,6 +907,37 @@ export class AgentsApi {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to delete reminder: ${res.statusText}`)
+  }
+
+  async listUserSecrets(params: { type?: string } = {}): Promise<UserSecretRecord[]> {
+    const search = new URLSearchParams()
+    if (params.type) search.set('type', params.type)
+    const query = search.toString()
+    const res = await fetch(`${API_URL}/api/secrets${query ? `?${query}` : ''}`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to load secrets: ${res.statusText}`)
+    const data = await res.json() as { secrets: UserSecretRecord[] }
+    return data.secrets
+  }
+
+  async createUserSecret(params: CreateUserSecretRequest): Promise<UserSecretRecord> {
+    const res = await fetch(`${API_URL}/api/secrets`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to save secret: ${res.statusText}`)
+    const data = await res.json() as { secret: UserSecretRecord }
+    return data.secret
+  }
+
+  async deleteUserSecret(id: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/secrets/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete secret: ${res.statusText}`)
   }
 
   async listRepoProposals(repoId: string): Promise<RepoProposal[]> {

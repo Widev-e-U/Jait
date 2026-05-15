@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Archive, Brain, CheckCircle2, Clock3, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
+import { AlertCircle, Archive, Brain, CheckCircle2, Clock3, KeyRound, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { agentsApi, type ReminderRecord, type ReminderSnapshot } from '@/lib/agents-api'
+import { agentsApi, type ReminderRecord, type ReminderSnapshot, type UserSecretRecord } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
 
 type ReminderStatusFilter = 'active' | 'archived' | 'all'
@@ -49,6 +49,10 @@ export function MemoryPage() {
   const [newContent, setNewContent] = useState('')
   const [newTags, setNewTags] = useState('')
   const [newWorkspaceId, setNewWorkspaceId] = useState('none')
+  const [secrets, setSecrets] = useState<UserSecretRecord[]>([])
+  const [secretLabel, setSecretLabel] = useState('')
+  const [secretKey, setSecretKey] = useState('')
+  const [secretValue, setSecretValue] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +62,7 @@ export function MemoryPage() {
     setError(null)
     try {
       setSnapshot(await agentsApi.getRemindersSnapshot({ status: statusFilter, limit: 200 }))
+      setSecrets(await agentsApi.listUserSecrets())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load memory')
     } finally {
@@ -147,6 +152,41 @@ export function MemoryPage() {
     }
   }
 
+  const handleAddSecret = async () => {
+    const label = secretLabel.trim()
+    const key = secretKey.trim()
+    if (!label || !key || !secretValue) return
+    setIsSaving(true)
+    setError(null)
+    try {
+      const created = await agentsApi.createUserSecret({
+        type: 'ssh-password',
+        key,
+        label,
+        value: secretValue,
+      })
+      setSecrets((current) => [created, ...current.filter((secret) => secret.id !== created.id)])
+      setSecretLabel('')
+      setSecretKey('')
+      setSecretValue('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save secret')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const removeSecret = async (id: string) => {
+    const previous = secrets
+    setSecrets((current) => current.filter((secret) => secret.id !== id))
+    try {
+      await agentsApi.deleteUserSecret(id)
+    } catch (err) {
+      setSecrets(previous)
+      setError(err instanceof Error ? err.message : 'Failed to delete secret')
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -182,6 +222,7 @@ export function MemoryPage() {
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.workspaces} workspaces</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.sessions} chats</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.threads} threads</Badge>
+        <Badge variant="secondary" className="justify-center px-3 py-1">{secrets.length} secrets</Badge>
       </div>
 
       {error && (
@@ -326,9 +367,10 @@ export function MemoryPage() {
 
         <div className="min-w-0">
           <Tabs defaultValue="workspaces" className="min-w-0">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="workspaces">Workspaces</TabsTrigger>
               <TabsTrigger value="threads">Threads</TabsTrigger>
+              <TabsTrigger value="secrets">Secrets</TabsTrigger>
             </TabsList>
             <TabsContent value="workspaces" className="mt-3">
               <ScrollArea className="max-h-[42rem] pr-1">
@@ -387,6 +429,60 @@ export function MemoryPage() {
                   )}
                 </div>
               </ScrollArea>
+            </TabsContent>
+            <TabsContent value="secrets" className="mt-3">
+              <Card>
+                <CardContent className="space-y-3 p-3">
+                  <div className="grid gap-2">
+                    <Input
+                      value={secretLabel}
+                      onChange={(event) => setSecretLabel(event.target.value)}
+                      placeholder="Label"
+                    />
+                    <Input
+                      value={secretKey}
+                      onChange={(event) => setSecretKey(event.target.value)}
+                      placeholder="SSH key, for example jakob@192.168.178.53:22"
+                    />
+                    <Input
+                      type="password"
+                      value={secretValue}
+                      onChange={(event) => setSecretValue(event.target.value)}
+                      placeholder="Password"
+                    />
+                    <Button onClick={() => void handleAddSecret()} disabled={isSaving || !secretLabel.trim() || !secretKey.trim() || !secretValue}>
+                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                      Save Secret
+                    </Button>
+                  </div>
+                  <Separator />
+                  <ScrollArea className="max-h-[30rem] pr-1">
+                    <div className="space-y-2">
+                      {secrets.map((secret) => (
+                        <Card key={secret.id}>
+                          <CardContent className="p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">{secret.label}</div>
+                                <div className="truncate text-xs text-muted-foreground">{secret.type} · {secret.key}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">Last used {formatDate(secret.lastUsedAt)}</div>
+                              </div>
+                              <Button variant="ghost" size="sm" className="shrink-0" onClick={() => void removeSecret(secret.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {secrets.length === 0 && (
+                        <Card className="border-2 border-dashed shadow-none">
+                          <CardContent className="p-6 text-center text-sm text-muted-foreground">No saved secrets</CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

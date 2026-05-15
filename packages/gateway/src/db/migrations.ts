@@ -807,4 +807,29 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 036: User secret store ───────────────────────────────────────
+  {
+    id: 36,
+    name: "user_secrets_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_secrets (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          type TEXT NOT NULL,
+          key TEXT NOT NULL,
+          label TEXT NOT NULL,
+          encrypted_value TEXT NOT NULL,
+          iv TEXT NOT NULL,
+          auth_tag TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_used_at TEXT
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_secrets_unique ON user_secrets(user_id, type, key)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_user_secrets_user_type ON user_secrets(user_id, type, updated_at DESC)`);
+    },
+  },
+
 ];

@@ -195,6 +195,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import type { UserSecretService } from "../services/user-secrets.js";
 import type { WorkspaceService } from "../services/workspaces.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
@@ -242,6 +243,7 @@ export interface ToolRegistryDeps {
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
   secretInputService?: SecretInputService;
+  userSecretService?: UserSecretService;
   skillRegistry?: import("../skills/index.js").SkillRegistry;
 }
 
@@ -412,7 +414,7 @@ export function createToolRegistry(
   // Network tools
   tools.register(createNetworkScanTool());
   tools.register(createElevatedRunTool(deps.secretInputService));
-  tools.register(createSshRunTool(deps.secretInputService));
+  tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
   // Architecture tools
   tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));
