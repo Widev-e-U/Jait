@@ -142,7 +142,13 @@ import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
-import { getMcpToolLabel, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
+import { normalizeToolName } from '@/lib/tool-call-body'
+import {
+  messageListHasMatchingSecretToolCall,
+  secretRequestMatchesTool,
+  shouldRenderSecretRequestInline,
+  type SecretInputRequest,
+} from '@/lib/secret-input'
 import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
@@ -277,43 +283,13 @@ function readStoredViewMode(): ViewMode {
   return value === 'manager' ? 'manager' : 'developer'
 }
 
-interface SecretInputRequest {
-  id: string
-  sessionId: string
-  title: string
-  prompt: string
-  requestedBy: string | null
-  expiresAt: string
-  status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
-}
-
-const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run', 'terminal.run', 'jait.terminal', 'execute'])
-
-function shouldRenderSecretRequestInline(request: SecretInputRequest | null): boolean {
-  if (!request) return false
-  return INLINE_SECRET_REQUESTERS.has(request.requestedBy ?? '')
-    || request.title === 'SSH password'
-    || request.title === 'Administrator password'
-    || request.title === 'Terminal input required'
-}
-
-function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string, args?: Record<string, unknown>): boolean {
-  if (!shouldRenderSecretRequestInline(request)) return false
-  if (request?.requestedBy && request.requestedBy === tool) return true
-  if (tool === 'mcp-tool' && args) {
-    const mcpLabel = getMcpToolLabel(normalizeToolArgs(tool, args))
-    const mcpTool = mcpLabel.title ? normalizeToolName(mcpLabel.title.replace(/^mcp__[^_]+__/, '')) : ''
-    if (request?.requestedBy && request.requestedBy === mcpTool) return true
-    if (request?.title === 'SSH password') return mcpTool === 'ssh.run' || mcpTool === 'ssh.session.start'
-    if (request?.title === 'Terminal input required') return mcpTool === 'terminal.run' || mcpTool === 'jait.terminal' || mcpTool === 'execute'
-  }
-  if (request?.title === 'SSH password') return tool === 'ssh.run' || tool === 'ssh.session.start'
-  if (request?.title === 'Administrator password') return tool === 'elevated.run'
-  if (request?.title === 'Terminal input required') return tool === 'terminal.run' || tool === 'jait.terminal' || tool === 'execute'
-  return false
-}
-
-function useSecretInputPrompt({ token, sessionId }: { token: string | null; sessionId: string | null }) {
+function useSecretInputPrompt({
+  token,
+  sessionId,
+}: {
+  token: string | null
+  sessionId: string | null
+}) {
   const [requests, setRequests] = useState<SecretInputRequest[]>([])
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -331,14 +307,13 @@ function useSecretInputPrompt({ token, sessionId }: { token: string | null; sess
   const refresh = useCallback(async () => {
     if (!token) return
     try {
-      const suffix = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''
-      const res = await fetch(`${API_URL}/api/secrets/requests${suffix}`, {
+      const res = await fetch(`${API_URL}/api/secrets/requests`, {
         headers: authHeaders(),
         credentials: 'include',
       })
       if (!res.ok) return
       const data = await res.json() as { requests: SecretInputRequest[] }
-      setRequests(data.requests)
+      setRequests(data.requests.filter((request) => !sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)))
     } catch {
       // gateway down or reconnecting
     }
@@ -353,7 +328,7 @@ function useSecretInputPrompt({ token, sessionId }: { token: string | null; sess
         const msg = JSON.parse(event.data) as { type: string; sessionId?: string; payload?: unknown }
         if (msg.type === 'secret.requested') {
           const request = msg.payload as SecretInputRequest
-          if (!sessionId || request.sessionId === sessionId) {
+          if (!sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)) {
             setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
           }
         }
@@ -2064,7 +2039,7 @@ function App() {
 
   const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
   const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
-    if (!secretInput.renderInline || !secretInput.form) return null
+    if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
     const normalizedTool = normalizeToolName(call.tool)
     if (!secretRequestMatchesTool(secretInput.activeRequest, normalizedTool, call.args)) return null
@@ -2215,6 +2190,11 @@ function App() {
     () => activitiesToMessages(automation.activities),
     [automation.activities],
   )
+  const inlineSecretPromptHasVisibleToolCall = useMemo(() => {
+    if (!secretInput.renderInline) return false
+    const visibleMessages = viewMode === 'manager' && automation.selectedThread ? automationMessages : messages
+    return messageListHasMatchingSecretToolCall(secretInput.activeRequest, visibleMessages)
+  }, [automation.selectedThread, automationMessages, messages, secretInput.activeRequest, secretInput.renderInline, viewMode])
   const managerThreads = useMemo(
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
@@ -8486,6 +8466,11 @@ function App() {
         />
 
         {secretInput.dialog}
+        {secretInput.renderInline && !inlineSecretPromptHasVisibleToolCall && secretInput.form && (
+          <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-lg border border-yellow-500/30 bg-background/95 p-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[28rem]">
+            {secretInput.form}
+          </div>
+        )}
 
         {/* Strategy editor modal */}
         {strategyRepo && (
