@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink } from 'lucide-react'
+import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
@@ -497,7 +497,7 @@ export function ProviderModelSelector({
 
   const selectorContent = (
     <>
-      <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'pr-12')}>
+      <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
         <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
       </div>
       {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
@@ -693,7 +693,7 @@ export function ProviderModelSelector({
           {triggerButton}
           <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
-              showCloseButton
+              showCloseButton={false}
               overlayClassName="bg-black/40"
               onOpenAutoFocus={(event) => event.preventDefault()}
               onCloseAutoFocus={(event) => event.preventDefault()}
@@ -708,6 +708,10 @@ export function ProviderModelSelector({
                 transform: 'translateZ(0)',
               }}
             >
+              <DialogClose className="absolute right-2 top-1 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground opacity-80 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogClose>
               <DialogTitle className="sr-only">Provider and model</DialogTitle>
               <DialogDescription className="sr-only">Choose a provider and model</DialogDescription>
               {selectorContent}

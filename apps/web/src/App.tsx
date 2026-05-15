@@ -5968,8 +5968,8 @@ function App() {
             </Button>
           </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
-              {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
+            <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
+              {showSidebar ? <PanelLeftClose className="h-4 w-4 rotate-90" /> : <PanelLeftOpen className="h-4 w-4 rotate-90" />}
             </Button>
           </TooltipTrigger><TooltipContent side="left">Workspaces</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
@@ -6723,13 +6723,13 @@ function App() {
                   <Button
                     variant={showSidebar ? 'secondary' : 'ghost'}
                     size="sm"
-                    className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
+                    className={isMobile ? 'h-8 w-8 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
                     onClick={() => setShowSidebar(s => !s)}
                     aria-label="Toggle workspaces sidebar"
                   >
                     {showSidebar
-                      ? <PanelLeftClose className={`h-3 w-3${isMobile ? ' rotate-90' : ' mr-1'}`} />
-                      : <PanelLeftOpen className={`h-3 w-3${isMobile ? ' rotate-90' : ' mr-1'}`} />
+                      ? <PanelLeftClose className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
+                      : <PanelLeftOpen className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
                     }
                     {!isMobile && 'Workspaces'}
                   </Button>
