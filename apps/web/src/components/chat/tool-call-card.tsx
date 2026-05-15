@@ -58,6 +58,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'skill':           { icon: BookOpen,  label: 'Skill',      color: 'text-violet-500' },
   // ── SSH tools ───────────────────────────────────────────
   'ssh.run':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
+  'run.ssh':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.start': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.run':   { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.close': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
@@ -148,7 +149,7 @@ function getToolInvocationLabels(
   if (normalized === 'execute' || normalized.startsWith('terminal.')) {
     return { running: 'Running command', done: 'Ran command' }
   }
-  if (normalized.startsWith('ssh.')) {
+  if (normalized.startsWith('ssh.') || normalized === 'run.ssh') {
     return { running: 'Running SSH command', done: 'Ran SSH command' }
   }
   if (normalized === 'elevated.run') {
@@ -249,7 +250,7 @@ function getToolInvocationLabels(
     if (verb === 'stop') return { running: 'Stopping surface', done: 'Stopped surface' }
     return { running: 'Listing surfaces', done: 'Listed surfaces' }
   }
-  if (normalized.startsWith('ssh.')) {
+  if (normalized.startsWith('ssh.') || normalized === 'run.ssh') {
     return { running: 'Running SSH command', done: 'Ran SSH command' }
   }
   if (normalized === 'image.view') {
@@ -502,7 +503,7 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
   if (normalized === 'mcp-tool') return 'mcp tool'
-  if (normalized.startsWith('ssh.')) return 'ssh'
+  if (normalized.startsWith('ssh.') || normalized === 'run.ssh') return 'ssh'
 
   return normalized.replace(/[._-]+/g, ' ').trim() || 'tool'
 }
@@ -1089,13 +1090,13 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
   if (normalized === 'agent') return 'Sub-agent is working...'
-  if (tool.startsWith('terminal.') || tool === 'execute' || tool.startsWith('ssh.') || tool === 'elevated.run') return 'Command is still running...'
+  if (tool.startsWith('terminal.') || tool === 'execute' || tool.startsWith('ssh.') || tool === 'run.ssh' || tool === 'elevated.run') return 'Command is still running...'
   return 'Tool is still running...'
 }
 
 function isTerminalTool(tool: string): boolean {
   const n = normalizeTool(tool)
-  return n.startsWith('terminal.') || n === 'execute' || n.startsWith('ssh.') || n === 'elevated.run'
+  return n.startsWith('terminal.') || n === 'execute' || n.startsWith('ssh.') || n === 'run.ssh' || n === 'elevated.run'
 }
 
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
@@ -1889,7 +1890,7 @@ function ToolCallCardInner({
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
-    || normalizedTool.startsWith('ssh.') || normalizedTool === 'elevated.run'
+    || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null

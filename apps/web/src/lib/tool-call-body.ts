@@ -329,6 +329,7 @@ export function getToolImagePath(
 
 export function normalizeToolName(name: string): string {
   if (name === 'browser_sandbox_start') return 'browser.sandbox.start'
+  if (name === 'run_ssh') return 'run.ssh'
   if (name === 'ssh_session_start') return 'ssh.session.start'
   if (name === 'ssh_session_run') return 'ssh.session.run'
   if (name === 'ssh_session_close') return 'ssh.session.close'
@@ -455,7 +456,7 @@ export function canRenderEditDiff(tool: string, args: Record<string, unknown>): 
 export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind {
   const normalizedTool = normalizeToolName(input.tool)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
-    || normalizedTool.startsWith('ssh.') || normalizedTool === 'elevated.run'
+    || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'

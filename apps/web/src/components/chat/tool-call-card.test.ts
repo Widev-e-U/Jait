@@ -228,6 +228,12 @@ describe('ToolCallGroup', () => {
       (call) => call.tool === 'mcp__jait__ssh_run' ? 'secret-form' : null,
     )).toBe(true)
   })
+
+  it('treats run.ssh as an SSH terminal tool', () => {
+    expect(summarizeCollapsedToolCalls([
+      { callId: '1', tool: 'run.ssh', args: { host: '192.168.178.53' }, status: 'running', startedAt: 1 },
+    ])).toBe('1 ssh tool call')
+  })
 })
 
 describe('isInlineToolCall', () => {

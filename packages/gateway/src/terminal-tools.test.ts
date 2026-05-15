@@ -267,7 +267,7 @@ describe("terminal.run tool status reporting", () => {
     }]);
   });
 
-  it("leaves SSH password prompts in the terminal instead of requesting a chat secret", async () => {
+  it("requests an inline secret when an SSH terminal command asks for a password", async () => {
     const { tool, writes, requests } = makeSecretPromptTool();
 
     const result = await tool.execute({ command: "ssh jakob@host", terminalId: "term-existing", timeout: 1000 }, {
@@ -275,12 +275,14 @@ describe("terminal.run tool status reporting", () => {
       userId: "user-1",
     });
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("user interaction required in terminal");
-    expect((result.data as any).needsInteraction).toBe(true);
-    expect((result.data as any).output).toContain("jakob@host's password:");
-    expect(writes).not.toContain("remote-password\r");
-    expect(requests).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect((result.data as any).output).toContain("connected");
+    expect(writes).toContain("remote-password\r");
+    expect(requests).toEqual([{
+      title: "SSH password",
+      prompt: "jakob@host's password:",
+      requestedBy: "terminal.run",
+    }]);
   });
 });
 

@@ -58,6 +58,17 @@ describe('secret input tool matching', () => {
     expect(secretRequestMatchesTool(secret(), 'mcp__jait__.ssh_run')).toBe(true)
   })
 
+  it('matches run.ssh aliases used by some tool cards', () => {
+    expect(secretRequestMatchesTool(secret({ requestedBy: 'run.ssh' }), 'run.ssh')).toBe(true)
+    expect(secretRequestMatchesTool(secret(), 'mcp__jait__run_ssh')).toBe(true)
+    expect(secretRequestMatchesTool(secret(), 'mcp.jait.run.ssh')).toBe(true)
+  })
+
+  it('attaches SSH password prompts raised by terminal tools', () => {
+    expect(secretRequestMatchesTool(secret({ requestedBy: 'terminal.run' }), 'terminal.run')).toBe(true)
+    expect(secretRequestMatchesTool(secret({ requestedBy: 'terminal.run' }), 'terminal_run')).toBe(true)
+  })
+
   it('matches namespaced Jait tool call names', () => {
     expect(secretRequestMatchesTool(secret(), 'jait/ssh.run')).toBe(true)
     expect(secretRequestMatchesTool(secret(), 'jait/ssh_run')).toBe(true)

@@ -2333,6 +2333,7 @@ export function registerChatRoutes(
         type: "snapshot",
         messages: snapshotMessages,
         streaming: isStreaming,
+        seq: sessionStreamSeq.get(sessionId) ?? 0,
         total,
         hasMore,
         limit,

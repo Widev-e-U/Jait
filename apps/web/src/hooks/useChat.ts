@@ -67,6 +67,31 @@ export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; h
   return event.hit_max_rounds === true
 }
 
+export function shouldProcessResumeStreamEvent(
+  lastSeqBySession: Map<string, number>,
+  sessionId: string,
+  event: { seq?: unknown },
+): boolean {
+  if (typeof event.seq !== 'number' || !Number.isFinite(event.seq)) return true
+  const lastSeq = lastSeqBySession.get(sessionId) ?? 0
+  if (event.seq <= lastSeq) return false
+  lastSeqBySession.set(sessionId, event.seq)
+  return true
+}
+
+export function shouldOpenResumeStream(params: {
+  sessionId: string | null
+  activeResumeSessionId: string | null
+  hasActiveResumeStream: boolean
+  directStreamSessionId: string | null
+  hasActiveDirectStream: boolean
+}): boolean {
+  if (!params.sessionId) return false
+  if (params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId) return false
+  if (params.hasActiveResumeStream && params.activeResumeSessionId === params.sessionId) return false
+  return true
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -315,15 +340,23 @@ export function useChat(
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  const streamResumeSessionRef = useRef<string | null>(null)
   const directStreamSessionRef = useRef<string | null>(null)
+  const resumeStreamRunIdRef = useRef(0)
+  const lastResumeSeqBySessionRef = useRef(new Map<string, number>())
   const requestVersionRef = useRef(0)
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const resumeSessionStream = useCallback(() => {
-    if (!sessionId) return
-    if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
+    if (!shouldOpenResumeStream({
+      sessionId,
+      activeResumeSessionId: streamResumeSessionRef.current,
+      hasActiveResumeStream: !!streamAbortRef.current,
+      directStreamSessionId: directStreamSessionRef.current,
+      hasActiveDirectStream: !!abortControllerRef.current,
+    })) return
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
     setRefreshTrigger(n => n + 1)
@@ -341,6 +374,7 @@ export function useChat(
     if (streamAbortRef.current) {
       streamAbortRef.current.abort()
       streamAbortRef.current = null
+      streamResumeSessionRef.current = null
     }
 
     if (!sessionId) {
@@ -367,6 +401,9 @@ export function useChat(
     // It returns a snapshot of current messages, then live tokens if still streaming.
     const streamController = new AbortController()
     streamAbortRef.current = streamController
+    streamResumeSessionRef.current = sessionId
+    const resumeRunId = ++resumeStreamRunIdRef.current
+    const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
 
     ;(async () => {
       try {
@@ -382,7 +419,7 @@ export function useChat(
           setState(prev => ({ ...prev, isLoadingHistory: false }))
           return
         }
-        if (!res.ok || cancelled) return
+        if (!res.ok || !isCurrentResumeRun()) return
         const reader = res.body?.getReader()
         if (!reader) return
 
@@ -436,7 +473,7 @@ export function useChat(
             window.cancelAnimationFrame(pendingSubscribeFrame)
             pendingSubscribeFrame = null
           }
-          if (cancelled || !pendingSubscribeUpdates || !assistantId) return
+          if (!isCurrentResumeRun() || !pendingSubscribeUpdates || !assistantId) return
           const updates = pendingSubscribeUpdates
           const targetId = assistantId
           pendingSubscribeUpdates = null
@@ -468,7 +505,7 @@ export function useChat(
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          if (cancelled) { reader.cancel(); break }
+          if (!isCurrentResumeRun()) { reader.cancel(); break }
 
           lineBuffer += decoder.decode(value, { stream: true })
           const lines = lineBuffer.split('\n')
@@ -478,6 +515,10 @@ export function useChat(
             if (!line.startsWith('data: ')) continue
             try {
               const data = JSON.parse(line.slice(6)) as Record<string, unknown>
+              if (!isCurrentResumeRun()) break
+              if (data.type !== 'snapshot' && !shouldProcessResumeStreamEvent(lastResumeSeqBySessionRef.current, sessionId, data)) {
+                continue
+              }
               pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
               if (data.type === 'snapshot') {
@@ -503,6 +544,10 @@ export function useChat(
                   }>;
                 }>
                 const snapshotStreaming = data.streaming as boolean
+                if (typeof data.seq === 'number' && Number.isFinite(data.seq)) {
+                  const lastSeq = lastResumeSeqBySessionRef.current.get(sessionId) ?? 0
+                  if (data.seq > lastSeq) lastResumeSeqBySessionRef.current.set(sessionId, data.seq)
+                }
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
                   const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
@@ -845,12 +890,17 @@ export function useChat(
               : prev.error,
           }))
         }
+      } finally {
+        if (streamAbortRef.current === streamController) streamAbortRef.current = null
+        if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
       }
     })()
 
     return () => {
       cancelled = true
       streamController.abort()
+      if (streamAbortRef.current === streamController) streamAbortRef.current = null
+      if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
@@ -1528,7 +1578,6 @@ export function useChat(
         messageCount: state.messages.length,
         error: state.error,
       })) return
-      if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
 
@@ -1553,7 +1602,6 @@ export function useChat(
         messageCount: state.messages.length,
         error: state.error,
       })) return
-      if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
 
@@ -1693,6 +1741,7 @@ export function useChat(
     // 3. Abort the stream-resume SSE connection
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    streamResumeSessionRef.current = null
     // 4. Update UI — mark any in-flight tool calls as cancelled so spinners stop
     setState(prev => ({
       ...prev,
@@ -1773,6 +1822,7 @@ export function useChat(
       abortControllerRef.current?.abort()
       streamAbortRef.current?.abort()
       streamAbortRef.current = null
+      streamResumeSessionRef.current = null
       await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers: authHeaders(effectiveToken) }).catch(() => null)
       await waitForStreamingToStop()
 

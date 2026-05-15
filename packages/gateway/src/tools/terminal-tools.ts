@@ -152,7 +152,7 @@ function isSshCommand(command: string): boolean {
   return /^\s*ssh(?:\s|$)/.test(command);
 }
 
-function shouldLeavePromptInTerminal(command: string, prompt: string): boolean {
+function isSshSecretPrompt(command: string, prompt: string): boolean {
   return isSshCommand(command) && /(?:password|passphrase).*:\s*$/i.test(prompt);
 }
 
@@ -333,11 +333,6 @@ function executeInTerminal(
       if (requestInteractiveSecret && !promptRequestInFlight && !promptAnswered) {
         const prompt = getInteractivePromptLabel(raw);
         if (prompt) {
-          if (shouldLeavePromptInTerminal(command, prompt)) {
-            if (timer) clearTimeout(timer);
-            finish(false, null, true);
-            return;
-          }
           promptRequestInFlight = true;
           if (timer) clearTimeout(timer);
           void requestInteractiveSecret(prompt).then((secret) => {
@@ -610,7 +605,7 @@ export function createTerminalRunTool(
             ? (prompt) => secretInput.requestSecret({
                 sessionId: context.sessionId,
                 userId: context.userId,
-                title: "Terminal input required",
+                title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
                 prompt,
                 requestedBy: "terminal.run",
                 timeoutMs: 120_000,
