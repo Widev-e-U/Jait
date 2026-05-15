@@ -58,6 +58,28 @@ describe('secret input tool matching', () => {
     expect(secretRequestMatchesTool(secret(), 'mcp__jait__.ssh_run')).toBe(true)
   })
 
+  it('matches namespaced Jait tool call names', () => {
+    expect(secretRequestMatchesTool(secret(), 'jait/ssh.run')).toBe(true)
+    expect(secretRequestMatchesTool(secret(), 'jait/ssh_run')).toBe(true)
+  })
+
+  it('matches dotted MCP provider tool call names', () => {
+    expect(secretRequestMatchesTool(secret(), 'mcp.jait.ssh.run')).toBe(true)
+    expect(secretRequestMatchesTool(secret(), 'mcp.jait.ssh_run')).toBe(true)
+  })
+
+  it('matches MCP wrapper calls that carry the actual tool in args', () => {
+    expect(secretRequestMatchesTool(secret(), 'mcp.jait.ssh.run', {
+      server: 'jait',
+      tool: 'ssh.run',
+      arguments: {
+        host: '192.168.178.53',
+        username: 'jakob',
+        authMethod: 'password',
+      },
+    })).toBe(true)
+  })
+
   it('detects when a visible running tool call can host the inline secret form', () => {
     expect(messageListHasMatchingSecretToolCall(secret(), [
       {

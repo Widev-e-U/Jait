@@ -20,6 +20,10 @@ const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'eleva
 
 function normalizeMcpToolIdentity(value: string): string | null {
   const raw = value.replace(/^functions\./, '')
+  const namespaced = raw.match(/^[^/]+\/(.+)$/)
+  if (namespaced?.[1]) return normalizeToolName(namespaced[1])
+  const dottedMcp = raw.match(/^mcp\.[^.]+\.(.+)$/)
+  if (dottedMcp?.[1]) return normalizeToolName(dottedMcp[1])
   const dotted = raw.match(/^mcp__[^.]+\.(.+)$/)
   if (dotted?.[1]) return normalizeToolName(dotted[1])
   const doubleUnderscore = raw.match(/^mcp__[^_]+__(.+)$/)
@@ -44,7 +48,7 @@ export function secretRequestMatchesTool(request: SecretInputRequest | null, too
   const normalizedTool = normalizeToolName(tool)
   const mcpToolFromName = normalizeMcpToolIdentity(tool)
   if (request?.requestedBy && (request.requestedBy === tool || request.requestedBy === normalizedTool || request.requestedBy === mcpToolFromName)) return true
-  if (tool === 'mcp-tool' && args) {
+  if ((tool === 'mcp-tool' || normalizedTool.startsWith('mcp.')) && args) {
     const mcpLabel = getMcpToolLabel(normalizeToolArgs(tool, args))
     const mcpTool = mcpLabel.title ? normalizeMcpToolIdentity(mcpLabel.title) ?? normalizeToolName(mcpLabel.title) : ''
     if (request?.requestedBy && request.requestedBy === mcpTool) return true
