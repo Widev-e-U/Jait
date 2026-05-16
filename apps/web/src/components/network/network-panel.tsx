@@ -119,6 +119,12 @@ const NODE_SIZES: Record<string, number> = {
   host: 16,
 }
 
+function getNodeColor(node: TopologyNode | null): string {
+  if (!node) return '#6b7280'
+  if (node.type === 'host' && node.agentStatus === 'running') return '#22c55e'
+  return NODE_COLORS[node.type] ?? '#6b7280'
+}
+
 function assignInitialPositions(nodes: GraphNode[]) {
   if (nodes.length === 0) return nodes
 
@@ -214,7 +220,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
           : Monitor)
     : Monitor
 
-  const color = node ? (NODE_COLORS[node.type] ?? '#6b7280') : '#6b7280'
+  const color = getNodeColor(node)
 
   const showDeploy = node && 'sshReachable' in node && node.sshReachable
     && 'agentStatus' in node && node.agentStatus !== 'running'
@@ -655,6 +661,12 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
     return { nodes: assignInitialPositions(nodes), links }
   }, [topology])
 
+  useEffect(() => {
+    if (!selectedNode) return
+    const updatedNode = graphData.nodes.find((node) => node.data.id === selectedNode.id)?.data ?? null
+    if (updatedNode !== selectedNode) setSelectedNode(updatedNode)
+  }, [graphData, selectedNode])
+
   // Set a tighter initial zoom once the graph first has data
   const didInitialZoom = useRef(false)
   useEffect(() => {
@@ -684,7 +696,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
     const x = node.x ?? 0
     const y = node.y ?? 0
     const size = NODE_SIZES[data.type] ?? 8
-    const color = NODE_COLORS[data.type] ?? '#6b7280'
+    const color = getNodeColor(data)
     const isHovered = hoveredNode === node.id
     const isSelected = selectedNode?.id === data.id
 
@@ -885,6 +897,10 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.host }} />
           Network Host
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.gateway }} />
+          Running Jait
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full border border-amber-500/50" style={{ backgroundColor: 'transparent' }} />
