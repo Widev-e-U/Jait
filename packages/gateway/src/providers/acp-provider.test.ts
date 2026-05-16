@@ -183,6 +183,44 @@ describe("AcpProvider MCP startup events", () => {
       message: "[codex-acp forwarded startup error] MCP server `jait` failed to start: connection refused",
     });
   });
+
+  it("emits readable messages for completed ACP content wrappers", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        title: "read_file",
+        status: "completed",
+        rawOutput: [{
+          type: "content",
+          content: {
+            type: "text",
+            text: "Read packages/gateway/src/providers/acp-provider.ts",
+          },
+        }],
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "tool.result",
+      sessionId: "provider-session-1",
+      tool: "read_file",
+      ok: true,
+      callId: "call-1",
+      message: "Read packages/gateway/src/providers/acp-provider.ts",
+    }));
+  });
 });
 
 describe("AcpProvider Codex ACP tool payloads", () => {

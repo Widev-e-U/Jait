@@ -845,6 +845,121 @@ const TOOL_RESULT_MAX_CHARS = 30_000;
 /** Consecutive rounds with zero successful tool calls before the loop bails out. */
 const MAX_UNPRODUCTIVE_ROUNDS = 3;
 
+function latestUserContent(history: AgentMessage[]): string {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message?.role === "user" && message.content.trim()) return message.content.trim();
+  }
+  return "Complete the user's swarm task.";
+}
+
+function inferSwarmPattern(objective: string): "code" | "research" | "content" | "general" {
+  const lower = objective.toLowerCase();
+  if (/\b(fix|bug|test|typecheck|lint|refactor|implement|code|component|api|route|css|ui|backend|frontend)\b/.test(lower)) return "code";
+  if (/\b(research|compare|investigate|sources|docs|documentation|latest|market|evaluate)\b/.test(lower)) return "research";
+  if (/\b(write|draft|copy|article|post|email|slides|document|proposal|narrative)\b/.test(lower)) return "content";
+  return "general";
+}
+
+function buildSwarmCreateManyArgs(objective: string): Record<string, unknown> {
+  const pattern = inferSwarmPattern(objective);
+  const common = [
+    `Original user objective:\n${objective}`,
+    "",
+    "Return a concise result with findings, actions taken, changed files if any, verification evidence, and unresolved risks.",
+    "Stay within the active workspace and do not duplicate work assigned to other specialists.",
+  ].join("\n");
+
+  const specsByPattern: Record<ReturnType<typeof inferSwarmPattern>, Array<{ title: string; role: string; task: string }>> = {
+    code: [
+      {
+        title: "Swarm Implementation Specialist",
+        role: "Implementation Specialist",
+        task: "Inspect the relevant code path, implement the smallest correct change for the objective, and run focused verification where practical.",
+      },
+      {
+        title: "Swarm Verification Specialist",
+        role: "Verification Specialist",
+        task: "Independently inspect likely failure modes, check tests or missing coverage, and identify regressions or integration risks.",
+      },
+      {
+        title: "Swarm Review Specialist",
+        role: "Code Review Specialist",
+        task: "Review the intended change for correctness, maintainability, UI/UX impact, and consistency with repository patterns.",
+      },
+    ],
+    research: [
+      {
+        title: "Swarm Research Specialist",
+        role: "Deep Research Specialist",
+        task: "Gather source-backed facts, compare options, and return concise evidence with citations or file references.",
+      },
+      {
+        title: "Swarm Analysis Specialist",
+        role: "Analysis Specialist",
+        task: "Evaluate tradeoffs, constraints, risks, and decision criteria for the objective.",
+      },
+      {
+        title: "Swarm Synthesis Reviewer",
+        role: "Synthesis Reviewer",
+        task: "Check the research for gaps, contradictions, stale assumptions, and missing verification.",
+      },
+    ],
+    content: [
+      {
+        title: "Swarm Drafting Specialist",
+        role: "Drafting Specialist",
+        task: "Create the primary deliverable or proposed content structure for the objective.",
+      },
+      {
+        title: "Swarm Editing Specialist",
+        role: "Editing Specialist",
+        task: "Improve clarity, flow, tone, and audience fit while preserving technical accuracy.",
+      },
+      {
+        title: "Swarm QA Specialist",
+        role: "QA Specialist",
+        task: "Check completeness, consistency, formatting, and likely user expectations.",
+      },
+    ],
+    general: [
+      {
+        title: "Swarm Planner Specialist",
+        role: "Planner Specialist",
+        task: "Decompose the objective, identify dependencies, and propose a practical execution path.",
+      },
+      {
+        title: "Swarm Execution Specialist",
+        role: "Execution Specialist",
+        task: "Carry out the most concrete actionable parts of the objective and report results.",
+      },
+      {
+        title: "Swarm Review Specialist",
+        role: "Review Specialist",
+        task: "Validate the work, identify gaps, and recommend next steps.",
+      },
+    ],
+  };
+
+  return {
+    action: "create_many",
+    start: true,
+    kind: "delegation",
+    detach: false,
+    autoStopAfterTurn: true,
+    threads: specsByPattern[pattern].map((spec) => ({
+      title: spec.title,
+      kind: "delegation",
+      prompt: [
+        `Role: ${spec.role}`,
+        `Task: ${spec.task}`,
+        "",
+        common,
+      ].join("\n"),
+    })),
+  };
+}
+
 /**
  * Run the agentic tool-calling loop.
  *
@@ -978,13 +1093,45 @@ export async function runAgentLoop(
   } else if (mode === "plan") {
     onEvent?.({ type: "mode_notice", mode: "plan", message: "Running in Plan mode — mutating actions will be proposed, not executed." });
   } else if (mode === "swarm") {
-    onEvent?.({ type: "mode_notice", mode: "swarm", message: "Running in Swarm mode — specialist sub-agents may collaborate on this task." });
+    onEvent?.({ type: "mode_notice", mode: "swarm", message: "Running in Swarm mode — starting visible specialist threads for this task." });
   }
 
   // Dynamic schema set — starts with filtered schemas, grows when tools.search
   // discovers additional tools (e.g. external/MCP tools).
   const activeSchemas = [...modeFilteredSchemas];
   const activeSchemaNames = new Set(activeSchemas.map((s) => s.function.name));
+
+  if (mode === "swarm") {
+    const callId = `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const swarmArgs = buildSwarmCreateManyArgs(latestUserContent(history));
+    const swarmCall: OpenAIToolCall = {
+      id: callId,
+      type: "function",
+      function: {
+        name: toOpenAIName("thread.control"),
+        arguments: JSON.stringify(swarmArgs),
+      },
+    };
+
+    segments.push({ type: "toolGroup", callIds: [callId] });
+    const { executed, historyEntry } = await executeOneToolCall({
+      tc: swarmCall,
+      sessionId,
+      auth,
+      signal: abort.signal,
+      toolRegistry,
+      maxRetries,
+      onEvent,
+      executeTool,
+    });
+    executedToolCalls.push(executed);
+    history.push({
+      role: "assistant",
+      content: "",
+      tool_calls: [swarmCall],
+    });
+    history.push(historyEntry);
+  }
 
   for (let round = 0; round < maxRounds; round++) {
     // ── Check abort ──

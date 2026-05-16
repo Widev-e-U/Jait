@@ -28,7 +28,7 @@ const TARGETS: Array<{
     value: 'swarm',
     label: 'Swarm',
     icon: Network,
-    description: 'Coordinate specialist sub-agents in the current chat session',
+    description: 'Start visible specialist threads and synthesize their results',
   },
   {
     value: 'thread',

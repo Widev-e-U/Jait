@@ -341,6 +341,10 @@ export function normalizeToolName(name: string): string {
   if (raw === 'read_file') return 'file.read'
   if (raw === 'write_file') return 'file.write'
   if (raw === 'patch_file') return 'file.patch'
+  if (raw === 'create_file') return 'file.write'
+  if (raw === 'replace_string_in_file') return 'edit'
+  if (raw === 'insert_edit_into_file') return 'edit'
+  if (raw === 'multiedit') return 'edit'
   if (raw === 'ssh_session_start') return 'ssh.session.start'
   if (raw === 'ssh_session_run') return 'ssh.session.run'
   if (raw === 'ssh_session_close') return 'ssh.session.close'
@@ -384,6 +388,10 @@ export function normalizeToolArgs(
       nested?.relative_path,
       nested?.name,
       nested?.title,
+      firstPathFromChanges(merged.changes),
+      firstPathFromChanges(nested?.changes),
+      pathsFromUnknown(merged)[0],
+      resultData ? pathsFromUnknown(resultData)[0] : undefined,
     ) ?? merged.path
   }
 
@@ -394,11 +402,15 @@ export function normalizeToolArgs(
       merged.oldString,
       merged.old_text,
       merged.oldText,
+      merged.old_str,
+      merged.oldStr,
       nested?.search,
       nested?.old_string,
       nested?.oldString,
       nested?.old_text,
       nested?.oldText,
+      nested?.old_str,
+      nested?.oldStr,
     ) ?? merged.search
     merged.replace = firstNonEmptyString(
       merged.replace,
@@ -406,12 +418,16 @@ export function normalizeToolArgs(
       merged.newString,
       merged.new_text,
       merged.newText,
+      merged.new_str,
+      merged.newStr,
       merged.replacement,
       nested?.replace,
       nested?.new_string,
       nested?.newString,
       nested?.new_text,
       nested?.newText,
+      nested?.new_str,
+      nested?.newStr,
       nested?.replacement,
     ) ?? merged.replace
     merged.content = firstNonEmptyString(

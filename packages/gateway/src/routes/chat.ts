@@ -1169,6 +1169,12 @@ export function registerChatRoutes(
     let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
+    const swarmWorkerProvider = chatMode === "swarm" && requestProvider && requestProvider !== "jait"
+      ? requestProvider
+      : undefined;
+    if (swarmWorkerProvider) {
+      requestProvider = "jait";
+    }
     const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
     const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
     const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
@@ -1911,7 +1917,7 @@ export function registerChatRoutes(
             auth: {
               userId: authUser.id,
               apiKeys: userApiKeys,
-              providerId: requestProvider,
+              providerId: swarmWorkerProvider ?? requestProvider,
               model: requestBodyModel || undefined,
               jaitBackend,
               runtimeMode: requestRuntimeMode ?? undefined,

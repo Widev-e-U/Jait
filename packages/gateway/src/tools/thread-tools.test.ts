@@ -224,6 +224,60 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("persists streamed assistant text for thread.control-started turns", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async (sessionId) => {
+        provider.emit({ type: "token", sessionId, content: "I checked the " });
+        provider.emit({ type: "token", sessionId, content: "thread state." });
+        provider.emit({ type: "tool.start", sessionId, tool: "read_file", args: { path: "apps/web/src/App.tsx" }, callId: "call-1" });
+        provider.emit({ type: "tool.result", sessionId, tool: "read_file", ok: true, message: "ok", callId: "call-1" });
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Token thread",
+          start: true,
+          prompt: "inspect ui",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string } };
+      const activities = threadService.getActivities(data.thread.id);
+      expect(activities).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "message",
+          summary: "I checked the thread state.",
+          payload: expect.objectContaining({
+            role: "assistant",
+            content: "I checked the thread state.",
+          }),
+        }),
+        expect.objectContaining({
+          kind: "tool.start",
+        }),
+      ]));
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("detaches scheduler-started turns so cron jobs do not block on long provider runs", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

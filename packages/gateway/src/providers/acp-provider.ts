@@ -696,7 +696,7 @@ export class AcpProvider implements CliProviderAdapter {
             sessionId,
             tool: getAcpToolName(update),
             ok: update.status === "completed",
-            message: stringifyUnknown(update.rawOutput ?? update.status),
+            message: stringifyToolContent(update.rawOutput ?? update.status),
             callId: update.toolCallId,
             data: update.rawOutput,
           });

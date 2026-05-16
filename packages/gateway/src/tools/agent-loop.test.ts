@@ -1,15 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
   parseOpenAIStream,
   fromOpenAIName,
+  runAgentLoop,
   retryToolCall,
   ToolCallPriority,
   ToolCallQueue,
+  type AgentLoopEvent,
   type AgentMessage,
   type ExecutedToolCall,
   type OpenAIToolCall,
 } from "./agent-loop.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function toolCall(id: string, name = "file_read"): OpenAIToolCall {
   return {
@@ -181,6 +187,79 @@ describe("executeOneToolCall retry accounting", () => {
 
     expect(calls).toBe(1);
     expect(result.executed.retryCount).toBe(0);
+  });
+});
+
+describe("runAgentLoop swarm mode", () => {
+  it("forces a visible thread.control create_many swarm before model synthesis", async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"Swarm complete."}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 }),
+    );
+    const toolCalls: Array<{ name: string; args: unknown }> = [];
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the broken mobile notification UI and verify it." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-1",
+        abort: new AbortController(),
+        maxRounds: 1,
+        mode: "swarm",
+        onEvent: (event) => events.push(event),
+      },
+      async (name, args) => {
+        toolCalls.push({ name, args });
+        return {
+          ok: true,
+          message: "Created 3 thread(s) and waited for 3 to finish.",
+          data: { threads: [{ title: "Implementation" }, { title: "Verification" }, { title: "Review" }] },
+        };
+      },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(toolCalls[0]?.name).toBe("thread.control");
+    expect(toolCalls[0]?.args).toMatchObject({
+      action: "create_many",
+      start: true,
+      kind: "delegation",
+      detach: false,
+      autoStopAfterTurn: true,
+    });
+    expect(((toolCalls[0]?.args as Record<string, unknown>).threads as unknown[])).toHaveLength(3);
+    expect(events[0]).toMatchObject({ type: "mode_notice", mode: "swarm" });
+    expect(events.some((event) => event.type === "tool_start" && event.tool === "thread.control")).toBe(true);
+    expect(result.content).toBe("Swarm complete.");
+    expect(result.executedToolCalls[0]).toMatchObject({
+      tool: "thread.control",
+      ok: true,
+    });
+    expect(result.segments[0]).toMatchObject({
+      type: "toolGroup",
+      callIds: [result.executedToolCalls[0]!.callId],
+    });
   });
 });
 

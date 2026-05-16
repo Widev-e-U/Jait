@@ -418,6 +418,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       let timeout: ReturnType<typeof setTimeout> | undefined;
       let unsubscribed = false;
       let unsubscribe: (() => void) | undefined;
+      let pendingAssistantContent = "";
       const cleanup = () => {
         if (timeout) {
           clearTimeout(timeout);
@@ -428,10 +429,42 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           unsubscribe();
         }
       };
+      const flushPendingAssistantContent = () => {
+        if (!pendingAssistantContent.trim()) {
+          pendingAssistantContent = "";
+          return;
+        }
+
+        const content = pendingAssistantContent;
+        pendingAssistantContent = "";
+        const activity = deps.threadService.addActivity(effectiveThread.id, "message", content.trim().slice(0, 500), {
+          role: "assistant",
+          content,
+        });
+        broadcastThreadEvent(effectiveThread.id, "activity", {
+          event: { type: "message", sessionId: session.id, role: "assistant", content } satisfies ProviderEvent,
+          activity,
+        });
+      };
 
       unsubscribe = provider.onEvent((event: ProviderEvent) => {
         if (event.sessionId !== session.id) {
           return;
+        }
+
+        if (event.type === "token") {
+          pendingAssistantContent += event.content;
+          return;
+        }
+
+        if (event.type === "message" && event.role === "assistant" && pendingAssistantContent) {
+          if (event.content === pendingAssistantContent || event.content.startsWith(pendingAssistantContent)) {
+            pendingAssistantContent = "";
+          } else {
+            flushPendingAssistantContent();
+          }
+        } else if (event.type !== "turn.started") {
+          flushPendingAssistantContent();
         }
 
         const activity = deps.threadService.logProviderEvent(effectiveThread.id, event);

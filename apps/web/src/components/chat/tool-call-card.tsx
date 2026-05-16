@@ -127,13 +127,17 @@ function getToolMeta(tool: string) {
 function getToolInvocationLabels(
   tool: string,
   args: Record<string, unknown>,
-  resultData?: Record<string, unknown>,
-  _resultMessage?: string | null,
+  resultData?: unknown,
+  resultMessage?: string | null,
 ): { running: string; done: string } {
   const normalized = normalizeTool(tool)
-  const normalizedArgs = normalizeToolArgs(normalized, args)
+  const resultRecord = resultData && typeof resultData === 'object' && !Array.isArray(resultData)
+    ? resultData as Record<string, unknown>
+    : undefined
+  const normalizedArgs = normalizeToolArgs(normalized, args, resultRecord)
   const fileName = (() => {
-    const p = displayStr(normalizedArgs.path ?? normalizedArgs.file)
+    const p = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
+      ?? displayStr(normalizedArgs.path ?? normalizedArgs.file)
     return p ? getBaseName(p) : ''
   })()
   const query = displayStr(normalizedArgs.query ?? normalizedArgs.pattern ?? normalizedArgs.q)
@@ -276,7 +280,7 @@ function getToolInvocationLabels(
     return { running: `Jait: ${action || 'working'}`, done: `Jait: ${action || 'done'}` }
   }
   if (normalized === 'mcp-tool') {
-    const mcp = getMcpToolLabel(normalizedArgs, resultData)
+    const mcp = getMcpToolLabel(normalizedArgs, resultRecord)
     const label = mcp.title || 'MCP Tool'
     return { running: `Running ${label}`, done: `Ran ${label}` }
   }
@@ -566,18 +570,22 @@ function getToolCallWrapperIcon(calls: ToolCallInfo[]) {
 }
 
 /** Format a tool call's primary display text (e.g. the command or file path) */
-function getCallSummary(
+export function getCallSummary(
   tool: string,
   args: Record<string, unknown>,
-  resultData?: Record<string, unknown>,
+  resultData?: unknown,
   resultMessage?: string | null,
 ): string {
   const normalized = normalizeTool(tool)
-  const normalizedArgs = normalizeToolArgs(normalized, args)
+  const resultRecord = resultData && typeof resultData === 'object' && !Array.isArray(resultData)
+    ? resultData as Record<string, unknown>
+    : undefined
+  const normalizedArgs = normalizeToolArgs(normalized, args, resultRecord)
+  const filePath = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
   // ── Core tools ──────────────────────────────────────────
-  if (normalized === 'read') return displayStr(normalizedArgs.path)
+  if (normalized === 'read' || normalized === 'file.read') return filePath ?? displayStr(normalizedArgs.path)
   if (normalized === 'edit') {
-    const path = displayStr(normalizedArgs.path)
+    const path = filePath ?? displayStr(normalizedArgs.path)
     const fileName = getBaseName(path)
     const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
     if (normalizedArgs.search) return `${fileName}${diffCount ? ` (${diffCount})` : ' (patch)'}`
@@ -598,9 +606,9 @@ function getCallSummary(
     const resultSite = extractSiteFromText(
       firstDisplayString(
         resultMessage,
-        typeof resultData?.url === 'string' ? resultData.url : undefined,
-        typeof resultData?.finalUrl === 'string' ? resultData.finalUrl : undefined,
-        typeof resultData?.content === 'string' ? resultData.content : undefined,
+        typeof resultRecord?.url === 'string' ? resultRecord.url : undefined,
+        typeof resultRecord?.finalUrl === 'string' ? resultRecord.finalUrl : undefined,
+        typeof resultRecord?.content === 'string' ? resultRecord.content : undefined,
       ),
     )
     if (resultSite) return resultSite
@@ -612,7 +620,7 @@ function getCallSummary(
   }
   if (normalized === 'thread.control') {
     const action = displayStr(normalizedArgs.action)
-    const threads = getThreadControlListItems(normalizedArgs, resultData)
+    const threads = getThreadControlListItems(normalizedArgs, resultRecord)
     if (action === 'create_many') return `${threads.length || displayStr(normalizedArgs.threads, '0')} threads`
     if (threads[0]) return threads[0].title
     return action || 'thread.control'
@@ -639,11 +647,11 @@ function getCallSummary(
   // ── Legacy tools ─────────────────────────────────────────
   if (normalized.startsWith('terminal.')) return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'file.write' || normalized === 'file.patch') {
-    const path = displayStr(normalizedArgs.path)
+    const path = filePath ?? displayStr(normalizedArgs.path)
     const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
     return diffCount ? `${path} (${diffCount})` : path
   }
-  if (normalized.startsWith('file.')) return displayStr(normalizedArgs.path)
+  if (normalized.startsWith('file.')) return filePath ?? displayStr(normalizedArgs.path)
   if (normalized === 'memory.save') {
     const scope = displayStr(args.scope, 'memory')
     const content = displayStr(args.content).trim()
@@ -834,8 +842,8 @@ export function formatStructuredValue(value: unknown): string | null {
   if (Array.isArray(value)) {
     const textBlocks = value.flatMap((entry) => {
       if (!entry || typeof entry !== 'object') return []
-      const block = entry as Record<string, unknown>
-      return typeof block.text === 'string' ? [formatMcpContentText(block.text)] : []
+      const text = extractAcpOrMcpContentText(entry)
+      return text ? [text] : []
     })
     if (textBlocks.length > 0) return textBlocks.join('\n\n')
   }
@@ -844,6 +852,14 @@ export function formatStructuredValue(value: unknown): string | null {
   } catch {
     return '(complex value)'
   }
+}
+
+function extractAcpOrMcpContentText(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (typeof record.text === 'string') return formatMcpContentText(record.text)
+  if (record.type === 'content' && record.content) return extractAcpOrMcpContentText(record.content)
+  return null
 }
 
 function firstFormattedStructuredText(...values: unknown[]): string | null {
@@ -909,10 +925,9 @@ function formatMcpResultEnvelope(value: unknown): string | null {
   if (Array.isArray(record.content)) {
     const content = record.content
       .flatMap((entry) => {
-        if (!entry || typeof entry !== 'object') return []
-        const block = entry as Record<string, unknown>
-        if (typeof block.text === 'string') return [formatMcpContentText(block.text)]
-        const formatted = formatStructuredValue(block)
+        const text = extractAcpOrMcpContentText(entry)
+        if (text) return [text]
+        const formatted = formatStructuredValue(entry)
         return formatted ? [formatted] : []
       })
       .filter((entry) => entry.trim().length > 0)
@@ -1010,10 +1025,14 @@ function formatTerminalResult(result: ToolCallInfo['result']): string | null {
 /** Format the output data from a tool result */
 export function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
-  const data = result.data as Record<string, unknown> | undefined
+  const data = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+    ? result.data as Record<string, unknown>
+    : undefined
   const normalizedTool = normalizeTool(tool ?? '')
+  const rawDataOutput = formatStructuredValue(result.data)
   const mcpOutput = formatMcpResultEnvelope(data?.result) ?? formatMcpResultEnvelope(data) ?? formatMcpResultEnvelope(parseStructuredRecord(result.message))
   if (mcpOutput) return mcpOutput
+  if (rawDataOutput && Array.isArray(result.data)) return rawDataOutput
 
   if (normalizedTool === 'execute' || normalizedTool.startsWith('terminal.')) {
     const terminalOutput = formatTerminalResult(result)
@@ -1931,7 +1950,7 @@ function ToolCallCardInner({
   const meta = getToolMeta(normalizedTool)
   const Icon = mcpMeta?.icon ?? meta.icon
   const effectiveColor = mcpMeta?.color ?? meta.color
-  const summary = getCallSummary(normalizedTool, normalizedArgs, resultData, call.result?.message)
+  const summary = getCallSummary(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
   const editDiffCount = getEditDiffCountLabel(normalizedTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
@@ -2068,7 +2087,7 @@ function ToolCallCardInner({
     return () => window.clearInterval(id)
   }, [call.status])
 
-  const invocationLabels = getToolInvocationLabels(normalizedTool, normalizedArgs, resultData, call.result?.message)
+  const invocationLabels = getToolInvocationLabels(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
   const isActive = call.status === 'running' || call.status === 'pending'
   const invocationLabel = isActive ? invocationLabels.running : invocationLabels.done
 

@@ -9,6 +9,9 @@ describe('tool call body helpers', () => {
     expect(normalizeToolName('read_file')).toBe('file.read')
     expect(normalizeToolName('write_file')).toBe('file.write')
     expect(normalizeToolName('patch_file')).toBe('file.patch')
+    expect(normalizeToolName('replace_string_in_file')).toBe('edit')
+    expect(normalizeToolName('insert_edit_into_file')).toBe('edit')
+    expect(normalizeToolName('create_file')).toBe('file.write')
     expect(normalizeToolName('jait_terminal')).toBe('jait.terminal')
     expect(normalizeToolName('spawn_agent')).toBe('agent.spawn')
     expect(normalizeToolName('functions.spawn_agent')).toBe('agent.spawn')
@@ -166,6 +169,25 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('normalizes ACP edit aliases and diff fields', () => {
+    expect(
+      normalizeToolArgs('replace_string_in_file', {
+        targetFile: 'packages/gateway/src/providers/acp-provider.ts',
+        old_str: 'before',
+        new_str: 'after',
+      }),
+    ).toMatchObject({
+      path: 'packages/gateway/src/providers/acp-provider.ts',
+      search: 'before',
+      replace: 'after',
+    })
+    expect(canRenderEditDiff('replace_string_in_file', {
+      targetFile: 'packages/gateway/src/providers/acp-provider.ts',
+      old_str: 'before',
+      new_str: 'after',
+    })).toBe(true)
+  })
+
   it('normalizes provider-specific web argument aliases', () => {
     expect(
       normalizeToolArgs('web', {
@@ -206,6 +228,25 @@ describe('tool call body helpers', () => {
     expect(
       getToolFilePath('edit', {}, undefined, 'Edited apps/web/src/components/chat/tool-call-card.tsx successfully'),
     ).toBe('apps/web/src/components/chat/tool-call-card.tsx')
+  })
+
+  it('extracts ACP content-wrapper paths when args omit the path', () => {
+    expect(
+      getToolFilePath(
+        'read_file',
+        {},
+        [
+          {
+            type: 'content',
+            content: {
+              type: 'text',
+              text: 'Read apps/web/src/App.tsx',
+            },
+          },
+        ],
+        'Read apps/web/src/App.tsx',
+      ),
+    ).toBe('apps/web/src/App.tsx')
   })
 
   it('extracts edited file paths from codex change payloads', () => {

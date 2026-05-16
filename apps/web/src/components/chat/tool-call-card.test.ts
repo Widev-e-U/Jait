@@ -11,6 +11,7 @@ let getThreadControlListItems: typeof import('./tool-call-card')['getThreadContr
 let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDuration']
 let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineSecretPromptForCalls']
 let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
+let getCallSummary: typeof import('./tool-call-card')['getCallSummary']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -33,6 +34,7 @@ beforeAll(async () => {
     formatElapsedDuration,
     hasInlineSecretPromptForCalls,
     getRunningHint,
+    getCallSummary,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -91,6 +93,18 @@ describe('formatStructuredValue', () => {
       error: null,
     })).toBe('error: No packages matched the filter')
   })
+
+  it('renders ACP content wrappers as readable text', () => {
+    expect(formatStructuredValue([
+      {
+        type: 'content',
+        content: {
+          type: 'text',
+          text: 'Read apps/web/src/App.tsx',
+        },
+      },
+    ])).toBe('Read apps/web/src/App.tsx')
+  })
 })
 
 describe('formatOutput', () => {
@@ -140,6 +154,57 @@ describe('formatOutput', () => {
         },
       },
     }, 'mcp-tool')).toBe('error: No packages matched the filter')
+  })
+
+  it('renders ACP raw output arrays as readable text', () => {
+    expect(formatOutput({
+      ok: true,
+      message: JSON.stringify([
+        {
+          type: 'content',
+          content: {
+            type: 'text',
+            text: 'Updated packages/gateway/src/providers/acp-provider.ts',
+          },
+        },
+      ]),
+      data: [
+        {
+          type: 'content',
+          content: {
+            type: 'text',
+            text: 'Updated packages/gateway/src/providers/acp-provider.ts',
+          },
+        },
+      ],
+    }, 'read_file')).toBe('Updated packages/gateway/src/providers/acp-provider.ts')
+  })
+})
+
+describe('getCallSummary', () => {
+  it('uses ACP read result text as a file summary when args are empty', () => {
+    expect(getCallSummary(
+      'read_file',
+      {},
+      [
+        {
+          type: 'content',
+          content: {
+            type: 'text',
+            text: 'Read apps/web/src/App.tsx',
+          },
+        },
+      ],
+      'Read apps/web/src/App.tsx',
+    )).toBe('apps/web/src/App.tsx')
+  })
+
+  it('uses ACP edit aliases as an edit filename with diff counts', () => {
+    expect(getCallSummary('replace_string_in_file', {
+      targetFile: 'packages/gateway/src/providers/acp-provider.ts',
+      old_str: 'before',
+      new_str: 'after\nagain',
+    })).toBe('acp-provider.ts (+2 -1)')
   })
 })
 
