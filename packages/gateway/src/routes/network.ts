@@ -13,8 +13,7 @@ import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-too
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import { createRequire } from "node:module";
 import { scanNetwork } from "../lib/network-scan.js";
-import type { SurfaceRegistry } from "../surfaces/index.js";
-import { TerminalSurface } from "../surfaces/terminal.js";
+import type { SecretInputService } from "../services/secret-input.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../../package.json") as { version: string };
@@ -41,82 +40,246 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
-export function buildSshAuthArgs(authMethod: string, password: string): string[] {
-  if (authMethod === "password" && password) {
-    return [
-      "-o", "BatchMode=no",
-      "-o", "PreferredAuthentications=password,keyboard-interactive",
-      "-o", "PubkeyAuthentication=no",
-      "-o", "NumberOfPasswordPrompts=1",
-    ];
-  }
-  return ["-o", "BatchMode=yes"];
+interface PtyProcess {
+  onData(cb: (data: string) => void): void;
+  onExit(cb: (event: { exitCode: number; signal?: number }) => void): void;
+  write(data: string): void;
+  kill(signal?: string): void;
 }
 
-export function buildInteractiveDeployCommand(ip: string, username: string, version = PKG_VERSION): string {
-  const tsEntry = resolve(__dirname, "../index.ts");
-  const jsEntry = resolve(__dirname, "../index.js");
-  const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
+type DeployAuthMethod = "key" | "password" | "auto";
 
+interface DeployRunResult {
+  output: string;
+  exitCode: number | null;
+  timedOut: boolean;
+}
+
+function loadNodePty() {
+  return require("node-pty") as {
+    spawn: (
+      command: string,
+      args: string[],
+      options: {
+        name: string;
+        cols: number;
+        rows: number;
+        cwd: string;
+        env: Record<string, string | undefined>;
+      },
+    ) => PtyProcess;
+  };
+}
+
+function stripAnsi(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
+}
+
+function truncateDeployOutput(value: string): string {
+  const clean = stripAnsi(value).replace(/\r/g, "").trim();
+  if (clean.length > 200_000) return `...(truncated)\n${clean.slice(-200_000)}`;
+  return clean;
+}
+
+function isPasswordFailure(output: string): boolean {
+  return /permission denied|authentication failed|password was not provided|too many authentication failures/i.test(output);
+}
+
+function validateSshTargetPart(value: string, label: string): string | null {
+  if (!value.trim()) return `${label} is required`;
+  if (/[\s@'"]/u.test(value)) return `${label} cannot contain whitespace, quotes, or @`;
+  return null;
+}
+
+export function buildNonInteractiveSshArgs(input: {
+  ip: string;
+  username: string;
+  password: string | null;
+  command: string;
+}): string[] {
+  const args = [
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "ConnectTimeout=10",
+    "-o", "LogLevel=ERROR",
+    "-o", "NumberOfPasswordPrompts=1",
+    "-o", input.password ? "BatchMode=no" : "BatchMode=yes",
+  ];
+  if (input.password) {
+    args.push(
+      "-o", "PreferredAuthentications=password,keyboard-interactive",
+      "-o", "PubkeyAuthentication=no",
+    );
+  }
+  args.push(`${input.username}@${input.ip}`, input.command);
+  return args;
+}
+
+export function buildNonInteractiveScpArgs(input: {
+  ip: string;
+  username: string;
+  password: string | null;
+  source: string;
+  target: string;
+}): string[] {
+  const args = [
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "ConnectTimeout=10",
+    "-o", "LogLevel=ERROR",
+    "-o", "NumberOfPasswordPrompts=1",
+    "-o", input.password ? "BatchMode=no" : "BatchMode=yes",
+  ];
+  if (input.password) {
+    args.push(
+      "-o", "PreferredAuthentications=password,keyboard-interactive",
+      "-o", "PubkeyAuthentication=no",
+    );
+  }
+  args.push(input.source, `${input.username}@${input.ip}:${input.target}`);
+  return args;
+}
+
+function runPtyCommand(input: {
+  command: string;
+  args: string[];
+  password: string | null;
+  stdinAfterAuth?: string;
+  timeoutMs: number;
+  onOutput?: (line: string) => void;
+}): Promise<DeployRunResult> {
+  return new Promise((resolve) => {
+    const pty = loadNodePty().spawn(input.command, input.args, {
+      name: "xterm-256color",
+      cols: 120,
+      rows: 30,
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        SSH_ASKPASS: undefined,
+        DISPLAY: undefined,
+      },
+    });
+    let raw = "";
+    let exitCode: number | null = null;
+    let timedOut = false;
+    let settled = false;
+    let passwordSent = false;
+    let stdinSent = false;
+    let lastOutputLength = 0;
+
+    const sendStdin = () => {
+      if (stdinSent || !input.stdinAfterAuth) return;
+      stdinSent = true;
+      pty.write(input.stdinAfterAuth);
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { pty.kill("SIGTERM"); } catch {}
+      setTimeout(() => finish(), 300);
+    }, input.timeoutMs);
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        output: truncateDeployOutput(raw),
+        exitCode,
+        timedOut,
+      });
+    };
+
+    const sendNewOutput = () => {
+      if (!input.onOutput) return;
+      const clean = truncateDeployOutput(raw);
+      const next = clean.slice(lastOutputLength);
+      lastOutputLength = clean.length;
+      for (const line of next.split("\n").map((value) => value.trim()).filter(Boolean)) {
+        if (!/password|passphrase/i.test(line)) input.onOutput(line);
+      }
+    };
+
+    pty.onData((data) => {
+      raw += data;
+      const visible = stripAnsi(raw).replace(/\r/g, "");
+      if (input.password && !passwordSent && /(?:password|passphrase).*:\s*$/im.test(visible)) {
+        passwordSent = true;
+        pty.write(`${input.password}\r`);
+        setTimeout(sendStdin, 300);
+        return;
+      }
+      sendNewOutput();
+    });
+
+    pty.onExit((event) => {
+      exitCode = typeof event.exitCode === "number" ? event.exitCode : null;
+      finish();
+    });
+
+    if (input.stdinAfterAuth) {
+      setTimeout(sendStdin, input.password ? 1500 : 300);
+    }
+  });
+}
+
+async function requestDeployPassword(input: {
+  secretInput?: SecretInputService;
+  sessionId: string;
+  title: string;
+  prompt: string;
+  requestedBy: string;
+  secretKey: string;
+}): Promise<string | null> {
+  if (!input.secretInput) throw new Error("Secret input service is unavailable");
+  return input.secretInput.requestSecret({
+    sessionId: input.sessionId,
+    title: input.title,
+    prompt: input.prompt,
+    requestedBy: input.requestedBy,
+    rememberable: true,
+    rememberLabel: input.prompt,
+    secretType: "network-deploy-password",
+    secretKey: input.secretKey,
+    timeoutMs: 180_000,
+  });
+}
+
+function buildRemoteSetupScript(input: {
+  username: string;
+  sudoMode: "root" | "nopass" | "password";
+  sudoPassword: string | null;
+}): string {
   return [
-    "bash <<'JAIT_DEPLOY'",
-    "set -euo pipefail",
-    `IP=${shellQuote(ip)}`,
-    `USERNAME=${shellQuote(username)}`,
-    `VERSION=${shellQuote(version)}`,
-    `ENTRY=${shellQuote(entry)}`,
-    "",
-    "echo \"Connecting to ${USERNAME}@${IP}...\"",
-    "raw=\"$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"${USERNAME}@${IP}\" \"uname -m\" | tr -d '\\r' | tail -n 1)\"",
-    "case \"$raw\" in",
-    "  x86_64|amd64) arch='x64' ;;",
-    "  aarch64|arm64) arch='arm64' ;;",
-    "  *) echo \"Unsupported architecture: $raw\"; exit 1 ;;",
-    "esac",
-    "echo \"Detected linux-${arch}\"",
-    "",
-    "echo '[1/3] Compiling gateway binary...'",
-    "cacheDir=\"${TMPDIR:-/tmp}/jait-deploy\"",
-    "mkdir -p \"$cacheDir\"",
-    "outFile=\"$cacheDir/jait-gateway-${VERSION}-linux-${arch}\"",
-    "if [ -f \"$outFile\" ]; then",
-    "  echo \"Using cached binary (v${VERSION})\"",
-    "else",
-    "  target=\"bun-linux-${arch}\"",
-    "  echo \"bun build --compile --target=${target} --minify\"",
-    "  bun build --compile \"--target=${target}\" --minify \"$ENTRY\" --outfile \"$outFile\"",
-    "  echo 'Binary compiled'",
-    "fi",
-    "",
-    "size_mb=\"$(du -m \"$outFile\" | cut -f1)\"",
-    "echo \"[2/3] Transferring binary (${size_mb} MB)...\"",
-    "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"${USERNAME}@${IP}\" 'mkdir -p ~/.jait'",
-    "scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"$outFile\" \"${USERNAME}@${IP}:~/.jait/jait-gateway\"",
-    "echo 'Binary transferred'",
-    "",
-    "echo '[3/3] Configuring and starting...'",
-    `ssh -tt -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${username}@${ip}" 'bash -s' <<'REMOTE_SETUP'`,
     "set -e",
+    `SUDO_MODE=${shellQuote(input.sudoMode)}`,
+    `SUDO_PASSWORD=${shellQuote(input.sudoPassword ?? "")}`,
+    "run_priv() {",
+    "  if [ \"$SUDO_MODE\" = 'root' ]; then",
+    "    sh -c \"$1\"",
+    "  elif [ \"$SUDO_MODE\" = 'nopass' ]; then",
+    "    sudo -n sh -c \"$1\"",
+    "  else",
+    "    printf '%s\\n' \"$SUDO_PASSWORD\" | sudo -S -p '' sh -c \"$1\"",
+    "  fi",
+    "}",
     "chmod +x ~/.jait/jait-gateway",
-    "SUDO=''",
-    "if [ \"$(id -u)\" -ne 0 ] && command -v sudo >/dev/null 2>&1; then",
-    "  SUDO='sudo'",
-    "fi",
-    "",
     "[ -f ~/.jait/.env ] || cat > ~/.jait/.env <<'ENVEOF'",
     "PORT=8000",
     "HOST=0.0.0.0",
     "LOG_LEVEL=info",
     "CORS_ORIGIN=*",
     "ENVEOF",
-    "",
-    "${SUDO:+$SUDO }tee /etc/systemd/system/jait-gateway.service > /dev/null <<'SVCEOF'",
+    "service_file=\"${TMPDIR:-/tmp}/jait-gateway.service.$$\"",
+    "cat > \"$service_file\" <<'SVCEOF'",
     "[Unit]",
     "Description=Jait Gateway",
     "After=network.target",
     "",
     "[Service]",
-    `User=${username}`,
+    `User=${input.username}`,
     "WorkingDirectory=%h/.jait",
     "ExecStart=%h/.jait/jait-gateway",
     "Restart=on-failure",
@@ -124,15 +287,203 @@ export function buildInteractiveDeployCommand(ip: string, username: string, vers
     "[Install]",
     "WantedBy=multi-user.target",
     "SVCEOF",
+    "run_priv \"install -m 0644 '$service_file' /etc/systemd/system/jait-gateway.service\"",
+    "rm -f \"$service_file\"",
+    "run_priv \"systemctl daemon-reload\"",
+    "run_priv \"systemctl enable --now jait-gateway\"",
+    "echo 'Jait Gateway deployed successfully'",
     "",
-    "${SUDO:+$SUDO }systemctl daemon-reload",
-    "${SUDO:+$SUDO }systemctl enable --now jait-gateway",
-    "echo 'Jait Gateway deployed successfully!'",
-    "REMOTE_SETUP",
-    "",
-    "echo \"Gateway v${VERSION} deployed to ${IP}\"",
-    "JAIT_DEPLOY",
   ].join("\n");
+}
+
+async function runGuidedDeploy(input: {
+  ip: string;
+  username: string;
+  authMethod: DeployAuthMethod;
+  sessionId: string;
+  secretInput?: SecretInputService;
+}): Promise<{ ok: true; logs: string[]; url: string } | { ok: false; logs: string[]; error: string }> {
+  const logs: string[] = [];
+  const addLog = (line: string) => {
+    if (!line.trim()) return;
+    logs.push(line);
+  };
+
+  let sshPassword: string | null = null;
+  const passwordKey = `${input.username}@${input.ip}:22`;
+
+  if (input.authMethod === "password") {
+    sshPassword = await requestDeployPassword({
+      secretInput: input.secretInput,
+      sessionId: input.sessionId,
+      title: "SSH password",
+      prompt: `Password for ${input.username}@${input.ip}`,
+      requestedBy: "network.deploy",
+      secretKey: passwordKey,
+    });
+    if (!sshPassword) return { ok: false, logs, error: "SSH password was not provided" };
+  }
+
+  addLog(`Connecting to ${input.username}@${input.ip}...`);
+  let archResult = await runPtyCommand({
+    command: "ssh",
+    args: buildNonInteractiveSshArgs({
+      ip: input.ip,
+      username: input.username,
+      password: sshPassword,
+      command: "uname -m",
+    }),
+    password: sshPassword,
+    timeoutMs: 30_000,
+  });
+
+  if (input.authMethod === "auto" && archResult.exitCode !== 0 && isPasswordFailure(archResult.output)) {
+    sshPassword = await requestDeployPassword({
+      secretInput: input.secretInput,
+      sessionId: input.sessionId,
+      title: "SSH password",
+      prompt: `Password for ${input.username}@${input.ip}`,
+      requestedBy: "network.deploy",
+      secretKey: passwordKey,
+    });
+    if (!sshPassword) return { ok: false, logs, error: "SSH password was not provided" };
+    archResult = await runPtyCommand({
+      command: "ssh",
+      args: buildNonInteractiveSshArgs({
+        ip: input.ip,
+        username: input.username,
+        password: sshPassword,
+        command: "uname -m",
+      }),
+      password: sshPassword,
+      timeoutMs: 30_000,
+    });
+  }
+
+  if (archResult.timedOut || archResult.exitCode !== 0) {
+    return { ok: false, logs, error: archResult.output || "Unable to connect over SSH" };
+  }
+
+  const rawArch = archResult.output.split("\n").map((line) => line.trim()).filter(Boolean).pop() ?? "";
+  const arch = rawArch === "x86_64" || rawArch === "amd64"
+    ? "x64"
+    : rawArch === "aarch64" || rawArch === "arm64"
+      ? "arm64"
+      : null;
+  if (!arch) return { ok: false, logs, error: `Unsupported architecture: ${rawArch}` };
+  addLog(`Detected linux-${arch}`);
+
+  const tsEntry = resolve(__dirname, "../index.ts");
+  const jsEntry = resolve(__dirname, "../index.js");
+  const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
+  const cacheDir = `${process.env.TMPDIR ?? "/tmp"}/jait-deploy`;
+  const outFile = `${cacheDir}/jait-gateway-${PKG_VERSION}-linux-${arch}`;
+  addLog("[1/4] Compiling gateway binary...");
+  await execAsync(`mkdir -p ${shellQuote(cacheDir)}`);
+  if (existsSync(outFile)) {
+    addLog(`Using cached binary (v${PKG_VERSION})`);
+  } else {
+    await execAsync([
+      "bun", "build", "--compile",
+      shellQuote(`--target=bun-linux-${arch}`),
+      "--minify",
+      shellQuote(entry),
+      "--outfile",
+      shellQuote(outFile),
+    ].join(" "), { maxBuffer: 20 * 1024 * 1024 });
+    addLog("Binary compiled");
+  }
+
+  addLog("[2/4] Preparing remote directory...");
+  const mkdirResult = await runPtyCommand({
+    command: "ssh",
+    args: buildNonInteractiveSshArgs({
+      ip: input.ip,
+      username: input.username,
+      password: sshPassword,
+      command: "mkdir -p ~/.jait",
+    }),
+    password: sshPassword,
+    timeoutMs: 30_000,
+  });
+  if (mkdirResult.timedOut || mkdirResult.exitCode !== 0) {
+    return { ok: false, logs, error: mkdirResult.output || "Failed to prepare remote directory" };
+  }
+
+  addLog("[3/4] Transferring gateway binary...");
+  const scpResult = await runPtyCommand({
+    command: "scp",
+    args: buildNonInteractiveScpArgs({
+      ip: input.ip,
+      username: input.username,
+      password: sshPassword,
+      source: outFile,
+      target: "~/.jait/jait-gateway",
+    }),
+    password: sshPassword,
+    timeoutMs: 120_000,
+  });
+  if (scpResult.timedOut || scpResult.exitCode !== 0) {
+    return { ok: false, logs, error: scpResult.output || "Failed to transfer gateway binary" };
+  }
+
+  addLog("[4/4] Configuring service...");
+  const sudoCheck = await runPtyCommand({
+    command: "ssh",
+    args: buildNonInteractiveSshArgs({
+      ip: input.ip,
+      username: input.username,
+      password: sshPassword,
+      command: "if [ \"$(id -u)\" -eq 0 ]; then echo root; elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then echo nopass; elif command -v sudo >/dev/null 2>&1; then echo password; else echo none; fi",
+    }),
+    password: sshPassword,
+    timeoutMs: 30_000,
+  });
+  if (sudoCheck.timedOut || sudoCheck.exitCode !== 0) {
+    return { ok: false, logs, error: sudoCheck.output || "Failed to inspect sudo access" };
+  }
+  const sudoMode = sudoCheck.output.split("\n").map((line) => line.trim()).filter(Boolean).pop();
+  if (sudoMode === "none") {
+    return { ok: false, logs, error: `${input.username} is not root and sudo is unavailable on the target` };
+  }
+  let sudoPassword = sshPassword;
+  if (sudoMode === "password" && !sudoPassword) {
+    sudoPassword = await requestDeployPassword({
+      secretInput: input.secretInput,
+      sessionId: input.sessionId,
+      title: "Administrator password",
+      prompt: `Sudo password for ${input.username}@${input.ip}`,
+      requestedBy: "network.deploy",
+      secretKey: `sudo:${passwordKey}`,
+    });
+    if (!sudoPassword) return { ok: false, logs, error: "Sudo password was not provided" };
+  }
+
+  const setupResult = await runPtyCommand({
+    command: "ssh",
+    args: buildNonInteractiveSshArgs({
+      ip: input.ip,
+      username: input.username,
+      password: sshPassword,
+      command: "bash -s",
+    }),
+    password: sshPassword,
+    stdinAfterAuth: `${buildRemoteSetupScript({
+      username: input.username,
+      sudoMode: sudoMode as "root" | "nopass" | "password",
+      sudoPassword,
+    })}\x04`,
+    timeoutMs: 60_000,
+    onOutput: addLog,
+  });
+  if (setupResult.timedOut || setupResult.exitCode !== 0) {
+    return { ok: false, logs, error: setupResult.output || "Failed to configure remote service" };
+  }
+
+  const url = `http://${input.ip}:8000`;
+  addLog(`Gateway v${PKG_VERSION} deployed to ${input.ip}`);
+  addLog(`Dashboard: ${url}`);
+  return { ok: true, logs, url };
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +662,7 @@ export function registerNetworkRoutes(
   ws?: WsControlPlane,
   sqlite?: SqliteDatabase,
   providerRegistry?: import("../providers/registry.js").ProviderRegistry,
-  surfaceRegistry?: SurfaceRegistry,
+  secretInput?: SecretInputService,
 ) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
@@ -448,32 +799,33 @@ export function registerNetworkRoutes(
     const body = (request.body ?? {}) as Record<string, unknown>;
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
-    const terminalId = String(body["terminalId"] ?? "").trim();
+    const sessionId = String(body["sessionId"] ?? "default").trim() || "default";
+    const authMethodValue = String(body["authMethod"] ?? "auto").trim();
+    const authMethod: DeployAuthMethod = authMethodValue === "password" || authMethodValue === "key"
+      ? authMethodValue
+      : "auto";
 
     if (!ip) {
       return reply.status(400).send({ error: "IP address is required" });
     }
-    if (!terminalId) {
-      return reply.status(400).send({ error: "Terminal ID is required" });
+    const ipError = validateSshTargetPart(ip, "IP address");
+    const usernameError = validateSshTargetPart(username, "username");
+    if (ipError || usernameError) {
+      return reply.status(400).send({ error: ipError ?? usernameError });
     }
-    if (!surfaceRegistry) {
-      return reply.status(503).send({ error: "Terminal support is unavailable" });
-    }
-
-    const surface = surfaceRegistry.getSurface(terminalId);
-    if (!surface || surface.type !== "terminal") {
-      return reply.status(404).send({ error: "Terminal not found" });
-    }
-    const terminal = surface as TerminalSurface;
 
     try {
-      await terminal.waitForPrompt();
-      terminal.write(buildInteractiveDeployCommand(ip, username) + "\r");
-      return {
-        ok: true,
-        terminalId,
-        message: `Deploy started in terminal ${terminalId}`,
-      };
+      const result = await runGuidedDeploy({
+        ip,
+        username,
+        authMethod,
+        sessionId,
+        secretInput,
+      });
+      if (!result.ok) {
+        return reply.status(500).send(result);
+      }
+      return result;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Deployment failed" });
     }

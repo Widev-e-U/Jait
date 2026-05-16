@@ -57,13 +57,10 @@ export interface GatewayNode {
 }
 
 export interface DeployResult {
-  ip: string
-  username: string
-  authMethod: string
-  deployScript: string
-  sshCommand: string
-  instructions: string[]
-  estimatedDuration: string
+  ok: boolean
+  logs: string[]
+  url?: string
+  error?: string
 }
 
 export interface SshEnableInfo {
@@ -176,7 +173,7 @@ export function useNetwork(token?: string | null) {
   }, [headers])
 
   /** Deploy gateway to a remote host */
-  const deploy = useCallback(async (ip: string, username: string, authMethod = 'password'): Promise<DeployResult | null> => {
+  const deploy = useCallback(async (ip: string, username: string, authMethod = 'auto'): Promise<DeployResult | null> => {
     try {
       const res = await fetch(`${API_URL}/api/network/deploy`, {
         method: 'POST',

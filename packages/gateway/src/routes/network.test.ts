@@ -1,32 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { buildInteractiveDeployCommand, buildSshAuthArgs, shellQuote } from "./network.js";
+import { buildNonInteractiveScpArgs, buildNonInteractiveSshArgs, shellQuote } from "./network.js";
 
 describe("network deploy ssh auth helpers", () => {
   it("uses batch mode for key-based auth", () => {
-    expect(buildSshAuthArgs("publickey", "")).toEqual([
-      "-o", "BatchMode=yes",
-    ]);
+    expect(buildNonInteractiveSshArgs({
+      ip: "192.168.1.10",
+      username: "alice",
+      password: null,
+      command: "uname -m",
+    })).toContain("BatchMode=yes");
   });
 
   it("uses password-oriented ssh options when a password is provided", () => {
-    expect(buildSshAuthArgs("password", "secret")).toEqual([
-      "-o", "BatchMode=no",
-      "-o", "PreferredAuthentications=password,keyboard-interactive",
-      "-o", "PubkeyAuthentication=no",
-      "-o", "NumberOfPasswordPrompts=1",
-    ]);
+    expect(buildNonInteractiveSshArgs({
+      ip: "192.168.1.10",
+      username: "alice",
+      password: "secret",
+      command: "uname -m",
+    })).toEqual(expect.arrayContaining([
+      "BatchMode=no",
+      "PreferredAuthentications=password,keyboard-interactive",
+      "PubkeyAuthentication=no",
+      "NumberOfPasswordPrompts=1",
+    ]));
   });
 
   it("shell-quotes single quotes safely", () => {
     expect(shellQuote("pa'ss")).toBe("'pa'\"'\"'ss'");
   });
 
-  it("builds an interactive deploy command that uses terminal prompts instead of askpass", () => {
-    const command = buildInteractiveDeployCommand("192.168.1.10", "alice", "0.1.288");
+  it("builds scp args for the guided deploy transfer", () => {
+    const args = buildNonInteractiveScpArgs({
+      ip: "192.168.1.10",
+      username: "alice",
+      password: null,
+      source: "/tmp/jait-gateway",
+      target: "~/.jait/jait-gateway",
+    });
 
-    expect(command).toContain("ssh -tt -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"alice@192.168.1.10\" 'bash -s'");
-    expect(command).toContain("${SUDO:+$SUDO }systemctl enable --now jait-gateway");
-    expect(command).not.toContain("SUDO_ASKPASS");
-    expect(command).not.toContain("sudo -A");
+    expect(args).toContain("/tmp/jait-gateway");
+    expect(args).toContain("alice@192.168.1.10:~/.jait/jait-gateway");
+    expect(args).toContain("BatchMode=yes");
   });
 });
