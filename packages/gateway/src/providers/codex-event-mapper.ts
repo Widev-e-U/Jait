@@ -57,7 +57,7 @@ export function mapCodexNotification(
       const itemId = extractItemId(params);
       const itemType = normalizeItemType(typeof item.type === "string" ? item.type : "");
       if (isToolItemType(itemType)) {
-        const category = mapItemTypeToCategory(itemType);
+        const category = mapItemToCategory(itemType, item);
         return [{ type: "tool.start", sessionId, tool: category, args: buildToolArgs(item, category), callId: itemId }];
       }
       return [];
@@ -68,7 +68,7 @@ export function mapCodexNotification(
       const itemId = extractItemId(params);
       const itemType = normalizeItemType(typeof item.type === "string" ? item.type : "");
       if (isToolItemType(itemType)) {
-        const category = mapItemTypeToCategory(itemType);
+        const category = mapItemToCategory(itemType, item);
         const status = typeof item.status === "string" ? item.status : "completed";
         const output = typeof item.output === "string" ? item.output
           : typeof item.summary === "string" ? item.summary
@@ -135,7 +135,7 @@ export function mapCodexNotification(
             : "",
       );
       if (isToolItemType(itemType)) {
-        const category = mapItemTypeToCategory(itemType);
+        const category = mapItemToCategory(itemType, msg);
         return [{ type: "tool.start", sessionId, tool: category, args: buildToolArgs(msg, category), callId: itemId }];
       }
       return [];
@@ -150,7 +150,7 @@ export function mapCodexNotification(
             : "",
       );
       if (isToolItemType(itemType)) {
-        const category = mapItemTypeToCategory(itemType);
+        const category = mapItemToCategory(itemType, msg);
         const status = typeof msg.status === "string" ? msg.status : "completed";
         const output = typeof msg.output === "string" ? msg.output
           : typeof msg.summary === "string" ? msg.summary
@@ -339,6 +339,7 @@ function normalizeItemType(raw: string): string {
 
 function isToolItemType(normalized: string): boolean {
   return (
+    normalized.includes("subagent") ||
     normalized.includes("command") ||
     normalized.includes("tool") ||
     normalized.includes("function") ||
@@ -351,7 +352,10 @@ function isToolItemType(normalized: string): boolean {
   );
 }
 
-function mapItemTypeToCategory(normalizedType: string): string {
+function mapItemToCategory(normalizedType: string, item: Record<string, unknown>): string {
+  const providerToolName = extractProviderToolName(item);
+  if (providerToolName && isProviderAgentTool(providerToolName)) return providerToolName;
+  if (normalizedType.includes("subagent")) return "agent";
   if (normalizedType.includes("command")) return "execute";
   if (normalizedType.includes("file change") || normalizedType.includes("file_change") ||
     normalizedType.includes("patch") || normalizedType.includes("edit")) return "edit";
@@ -360,6 +364,37 @@ function mapItemTypeToCategory(normalizedType: string): string {
   if (normalizedType.includes("mcp")) return "mcp-tool";
   if (normalizedType.includes("function") || normalizedType.includes("tool")) return "execute";
   return normalizedType || "tool";
+}
+
+function extractProviderToolName(item: Record<string, unknown>): string | undefined {
+  const nested = firstObject(item.action, item.input, item.arguments);
+  return (
+    asString(item.name) ??
+    asString(item.tool) ??
+    asString(item.toolName) ??
+    asString(item.recipient_name) ??
+    asString(item.recipientName) ??
+    asString(nested?.name) ??
+    asString(nested?.tool) ??
+    asString(nested?.toolName) ??
+    asString(nested?.recipient_name) ??
+    asString(nested?.recipientName)
+  );
+}
+
+function isProviderAgentTool(name: string): boolean {
+  const normalized = name
+    .replace(/^functions[._]/, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .toLowerCase();
+  return normalized === "agent" ||
+    normalized === "spawn_agent" ||
+    normalized === "wait_agent" ||
+    normalized === "close_agent" ||
+    normalized === "resume_agent" ||
+    normalized === "send_input" ||
+    normalized === "run_subagent" ||
+    normalized === "search_subagent";
 }
 
 function buildToolArgs(

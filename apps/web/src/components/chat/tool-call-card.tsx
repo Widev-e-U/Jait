@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isAgentToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
@@ -51,6 +51,13 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'search':          { icon: Search,    label: 'Search',      color: 'text-emerald-500' },
   'web':             { icon: Globe,     label: 'Web',         color: 'text-cyan-500' },
   'agent':           { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.spawn':     { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.wait':      { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.close':     { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.resume':    { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.send':      { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.run':       { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent.search':    { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
   'thread.control':  { icon: Bot,       label: 'Threads',     color: 'text-purple-500' },
@@ -200,9 +207,13 @@ function getToolInvocationLabels(
   if (normalized === 'browser.select') {
     return { running: 'Selecting', done: 'Selected' }
   }
-  if (normalized === 'agent') {
-    const desc = truncate(displayStr(args.description ?? args.prompt), 60)
-    return { running: `Running agent: ${desc}`, done: `Agent completed: ${desc}` }
+  if (isAgentToolName(normalized)) {
+    const desc = truncate(displayStr(args.description ?? args.prompt ?? args.message), 60)
+    if (normalized === 'agent.wait') return { running: 'Waiting for agents', done: 'Collected agent results' }
+    if (normalized === 'agent.close') return { running: 'Closing agent', done: 'Closed agent' }
+    if (normalized === 'agent.resume') return { running: 'Resuming agent', done: 'Resumed agent' }
+    if (normalized === 'agent.send') return { running: 'Sending to agent', done: 'Sent to agent' }
+    return { running: `Running agent${desc ? `: ${desc}` : ''}`, done: `Agent completed${desc ? `: ${desc}` : ''}` }
   }
   if (normalized === 'thread.control') {
     const action = displayStr(normalizedArgs.action)
@@ -499,7 +510,7 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized.startsWith('cron.')) return 'cron'
   if (normalized.startsWith('surfaces.')) return 'surface'
   if (normalized.startsWith('os.')) return 'system'
-  if (normalized === 'agent') return 'agent'
+  if (isAgentToolName(normalized)) return 'agent'
   if (normalized === 'thread.control') return 'thread'
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
@@ -595,7 +606,10 @@ function getCallSummary(
     if (resultSite) return resultSite
     return displayStr(normalizedArgs.query)
   }
-  if (normalized === 'agent') return truncate(displayStr(args.description ?? args.prompt), 80)
+  if (isAgentToolName(normalized)) {
+    if (normalized === 'agent.wait') return displayStr(args.targets, 'waiting')
+    return truncate(displayStr(args.description ?? args.prompt ?? args.message), 80)
+  }
   if (normalized === 'thread.control') {
     const action = displayStr(normalizedArgs.action)
     const threads = getThreadControlListItems(normalizedArgs, resultData)
@@ -1027,7 +1041,7 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
     if (formatted) return formatted
   }
   // Agent/subagent: return content for the SubAgentHistoryView to parse from data
-  if (normalizedTool === 'agent' && data) {
+  if (isAgentToolName(normalizedTool) && data) {
     const content = typeof data.content === 'string' ? data.content : ''
     if (content) return content
     // Fall through to result.message
@@ -1078,7 +1092,35 @@ function ElapsedLabel({ startedAt, completedAt, now }: { startedAt: number; comp
   return <span>{formatElapsedDuration(startedAt, completedAt, now)}</span>
 }
 
-function getRunningHint(tool: string, args: Record<string, unknown>): string {
+function getNestedToolArgs(args: Record<string, unknown>): Record<string, unknown> | null {
+  const rawArguments = args.arguments
+  if (rawArguments && typeof rawArguments === 'object' && !Array.isArray(rawArguments)) {
+    return rawArguments as Record<string, unknown>
+  }
+  if (typeof rawArguments === 'string') {
+    try {
+      const parsed = JSON.parse(rawArguments) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function getCommandFromToolArgs(args: Record<string, unknown>): string {
+  const nested = getNestedToolArgs(args)
+  return displayStr(
+    args.command ??
+    args.cmd ??
+    args.shellCommand ??
+    nested?.command ??
+    nested?.cmd ??
+    nested?.shellCommand,
+  ).trim()
+}
+
+export function getRunningHint(tool: string, args: Record<string, unknown>): string {
   const normalized = normalizeTool(tool)
   if (normalized === 'memory.save') return 'Saving memory entry...'
   if (normalized === 'cron.add') return 'Creating cron job...'
@@ -1090,9 +1132,11 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     const query = String(args.query ?? '').trim()
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
-  if (normalized === 'agent') return 'Sub-agent is working...'
-  if (tool.startsWith('terminal.') || tool === 'jait.terminal' || tool === 'execute' || tool.startsWith('ssh.') || tool === 'run.ssh' || tool === 'elevated.run') {
-    const command = displayStr(args.command).trim()
+  if (isAgentToolName(normalized)) return 'Sub-agent is working...'
+  const command = getCommandFromToolArgs(args)
+  const isKnownTerminal = normalized.startsWith('terminal.') || normalized === 'jait.terminal' || normalized === 'execute' ||
+    normalized.startsWith('ssh.') || normalized === 'run.ssh' || normalized === 'elevated.run'
+  if (isKnownTerminal || command) {
     return command ? `Executing ${command}...` : 'Command is still running...'
   }
   return 'Tool is still running...'
@@ -1679,7 +1723,7 @@ export function computeAgentNesting(calls: ToolCallInfo[]): {
 
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]
-    if (normalizeTool(call.tool) !== 'agent') continue
+    if (!isAgentToolName(call.tool)) continue
 
     const children: ToolCallInfo[] = []
     for (let j = i + 1; j < calls.length; j++) {

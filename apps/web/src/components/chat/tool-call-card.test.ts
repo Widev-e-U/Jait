@@ -10,6 +10,7 @@ let formatOutput: typeof import('./tool-call-card')['formatOutput']
 let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
 let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDuration']
 let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineSecretPromptForCalls']
+let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -31,6 +32,7 @@ beforeAll(async () => {
     getThreadControlListItems,
     formatElapsedDuration,
     hasInlineSecretPromptForCalls,
+    getRunningHint,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -44,6 +46,21 @@ describe('formatElapsedDuration', () => {
     expect(formatElapsedDuration(1_000, 0)).toBe('0ms')
     expect(formatElapsedDuration(2_000, 1_000)).toBe('0ms')
     expect(formatElapsedDuration(0, 2_000)).toBe('0ms')
+  })
+})
+
+describe('getRunningHint', () => {
+  it('shows the command for Jait terminal MCP calls', () => {
+    expect(getRunningHint('mcp.jait.jait.terminal', {
+      command: 'git status -sb',
+    })).toBe('Executing git status -sb...')
+  })
+
+  it('shows the command from wrapped MCP arguments', () => {
+    expect(getRunningHint('mcp-tool', {
+      recipient_name: 'functions.mcp__jait__jait_terminal',
+      arguments: JSON.stringify({ command: 'bun run test' }),
+    })).toBe('Executing bun run test...')
   })
 })
 
@@ -280,6 +297,16 @@ describe('AgentToolCallWrapper', () => {
     expect(nested.parentSet.has('read-1')).toBe(true)
     expect(nested.parentSet.has('search-1')).toBe(true)
     expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['read-1', 'search-1'])
+  })
+
+  it('nests child calls under provider-native spawn_agent calls', () => {
+    const nested = computeAgentNesting([
+      { callId: 'agent-1', tool: 'spawn_agent', args: { message: 'inspect' }, status: 'success', startedAt: 1, completedAt: 10 },
+      { callId: 'read-1', parentCallId: 'agent-1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 2, completedAt: 3 },
+    ])
+
+    expect(nested.parentSet.has('read-1')).toBe(true)
+    expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['read-1'])
   })
 })
 

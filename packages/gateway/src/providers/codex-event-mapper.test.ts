@@ -82,6 +82,53 @@ describe("mapCodexNotification", () => {
     });
   });
 
+  it("maps provider-native spawn_agent function calls as agent tool events", () => {
+    const events = mapCodexNotification("codex/event/item_started", {
+      msg: {
+        id: "agent-call-1",
+        type: "function_call",
+        name: "spawn_agent",
+        arguments: {
+          agent_type: "explorer",
+          message: "Inspect the repo",
+        },
+      },
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "tool.start",
+      sessionId: "session-1",
+      tool: "spawn_agent",
+      args: {
+        id: "agent-call-1",
+        type: "function_call",
+        name: "spawn_agent",
+        arguments: {
+          agent_type: "explorer",
+          message: "Inspect the repo",
+        },
+      },
+      callId: "agent-call-1",
+    }]);
+  });
+
+  it("does not treat assistant agent messages as tool calls", () => {
+    const events = mapCodexNotification("codex/event/item_completed", {
+      msg: {
+        id: "msg-1",
+        type: "agent_message",
+        content: "Agent finished the task.",
+      },
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "message",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "Agent finished the task.",
+    }]);
+  });
+
   it("maps codex task completion last_agent_message as assistant text", () => {
     const events = mapCodexNotification("codex/event/task_complete", {
       msg: {

@@ -10,6 +10,9 @@ describe('tool call body helpers', () => {
     expect(normalizeToolName('write_file')).toBe('file.write')
     expect(normalizeToolName('patch_file')).toBe('file.patch')
     expect(normalizeToolName('jait_terminal')).toBe('jait.terminal')
+    expect(normalizeToolName('spawn_agent')).toBe('agent.spawn')
+    expect(normalizeToolName('functions.spawn_agent')).toBe('agent.spawn')
+    expect(normalizeToolName('wait_agent')).toBe('agent.wait')
     expect(normalizeToolName('browser_sandbox_start')).toBe('browser.sandbox.start')
     expect(normalizeToolName('workspace_assign_repository')).toBe('workspace.assign_repository')
   })
@@ -63,6 +66,30 @@ describe('tool call body helpers', () => {
         screenshotPath: null,
       }),
     ).toBe('threadList')
+  })
+
+  it('renders provider-native agent calls as subagent cards', () => {
+    expect(
+      getToolCallBodyKind({
+        tool: 'spawn_agent',
+        args: { agent_type: 'explorer', message: 'Inspect the repo' },
+        status: 'running',
+        displayOutput: '',
+        snapshotText: null,
+        screenshotPath: null,
+      }),
+    ).toBe('subagent')
+
+    expect(
+      getToolCallBodyKind({
+        tool: 'wait_agent',
+        args: { targets: ['agent-1'] },
+        status: 'running',
+        displayOutput: '',
+        snapshotText: null,
+        screenshotPath: null,
+      }),
+    ).toBe('subagent')
   })
 
   it('renders an edit diff when replacement details are present', () => {

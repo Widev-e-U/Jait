@@ -328,16 +328,29 @@ export function getToolImagePath(
 }
 
 export function normalizeToolName(name: string): string {
-  if (name === 'browser_sandbox_start') return 'browser.sandbox.start'
-  if (name === 'run_ssh') return 'run.ssh'
-  if (name === 'read_file') return 'file.read'
-  if (name === 'write_file') return 'file.write'
-  if (name === 'patch_file') return 'file.patch'
-  if (name === 'ssh_session_start') return 'ssh.session.start'
-  if (name === 'ssh_session_run') return 'ssh.session.run'
-  if (name === 'ssh_session_close') return 'ssh.session.close'
-  const idx = name.indexOf('_')
-  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+  const raw = name.replace(/^functions[._]/, '')
+  if (raw === 'spawn_agent') return 'agent.spawn'
+  if (raw === 'wait_agent') return 'agent.wait'
+  if (raw === 'close_agent') return 'agent.close'
+  if (raw === 'resume_agent') return 'agent.resume'
+  if (raw === 'send_input') return 'agent.send'
+  if (raw === 'run_subagent') return 'agent.run'
+  if (raw === 'search_subagent') return 'agent.search'
+  if (raw === 'browser_sandbox_start') return 'browser.sandbox.start'
+  if (raw === 'run_ssh') return 'run.ssh'
+  if (raw === 'read_file') return 'file.read'
+  if (raw === 'write_file') return 'file.write'
+  if (raw === 'patch_file') return 'file.patch'
+  if (raw === 'ssh_session_start') return 'ssh.session.start'
+  if (raw === 'ssh_session_run') return 'ssh.session.run'
+  if (raw === 'ssh_session_close') return 'ssh.session.close'
+  const idx = raw.indexOf('_')
+  return idx === -1 ? raw : raw.slice(0, idx) + '.' + raw.slice(idx + 1)
+}
+
+export function isAgentToolName(tool: string): boolean {
+  const normalized = normalizeToolName(tool)
+  return normalized === 'agent' || normalized.startsWith('agent.')
 }
 
 export function normalizeToolArgs(
@@ -465,7 +478,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (isTerminal) return 'terminal'
   if (normalizedTool === 'browser.snapshot' && input.snapshotText) return 'browserSnapshot'
   if (input.screenshotPath) return 'browserScreenshot'
-  if (normalizedTool === 'agent') return 'subagent'
+  if (isAgentToolName(normalizedTool)) return 'subagent'
   if (normalizedTool === 'thread.control' && (input.args.action === 'create_many' || input.args.action === 'create')) return 'threadList'
   if (input.status === 'success' && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'
   if (input.displayOutput) return 'output'
