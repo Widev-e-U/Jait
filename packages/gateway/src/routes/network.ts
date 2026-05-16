@@ -11,6 +11,7 @@ import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from 
 import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
+import type { SurfaceRegistry } from "../surfaces/index.js";
 import { createRequire } from "node:module";
 import { scanNetwork } from "../lib/network-scan.js";
 import type { SecretInputService } from "../services/secret-input.js";
@@ -293,6 +294,87 @@ function buildRemoteSetupScript(input: {
     "run_priv \"systemctl enable --now jait-gateway\"",
     "echo 'Jait Gateway deployed successfully'",
     "",
+  ].join("\n");
+}
+
+function buildInteractiveDeployCommand(input: { ip: string; username: string }): string {
+  const cacheDir = `${process.env.TMPDIR ?? "/tmp"}/jait-deploy`;
+  const tsEntry = resolve(__dirname, "../index.ts");
+  const jsEntry = resolve(__dirname, "../index.js");
+  const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
+  const remoteScript = [
+    "set -e",
+    "run_priv() {",
+    "  if [ \"$(id -u)\" -eq 0 ]; then",
+    "    sh -c \"$1\"",
+    "  else",
+    "    sudo sh -c \"$1\"",
+    "  fi",
+    "}",
+    "chmod +x ~/.jait/jait-gateway",
+    "[ -f ~/.jait/.env ] || cat > ~/.jait/.env <<'ENVEOF'",
+    "PORT=8000",
+    "HOST=0.0.0.0",
+    "LOG_LEVEL=info",
+    "CORS_ORIGIN=*",
+    "ENVEOF",
+    "service_file=\"${TMPDIR:-/tmp}/jait-gateway.service.$$\"",
+    "cat > \"$service_file\" <<'SVCEOF'",
+    "[Unit]",
+    "Description=Jait Gateway",
+    "After=network.target",
+    "",
+    "[Service]",
+    `User=${input.username}`,
+    "WorkingDirectory=%h/.jait",
+    "ExecStart=%h/.jait/jait-gateway",
+    "Restart=on-failure",
+    "",
+    "[Install]",
+    "WantedBy=multi-user.target",
+    "SVCEOF",
+    "run_priv \"install -m 0644 '$service_file' /etc/systemd/system/jait-gateway.service\"",
+    "rm -f \"$service_file\"",
+    "run_priv \"systemctl daemon-reload\"",
+    "run_priv \"systemctl enable --now jait-gateway\"",
+    "echo 'Jait Gateway deployed successfully'",
+  ].join("\n");
+
+  return [
+    "set -e",
+    `TARGET=${shellQuote(`${input.username}@${input.ip}`)}`,
+    `CACHE_DIR=${shellQuote(cacheDir)}`,
+    `VERSION=${shellQuote(PKG_VERSION)}`,
+    `ENTRY=${shellQuote(entry)}`,
+    "SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o LogLevel=ERROR)",
+    "mkdir -p \"$CACHE_DIR\"",
+    "echo \"[1/5] Detecting target architecture...\"",
+    "raw_arch=$(ssh \"${SSH_OPTS[@]}\" \"$TARGET\" 'uname -m')",
+    "case \"$raw_arch\" in",
+    "  x86_64|amd64) arch=x64 ;;",
+    "  aarch64|arm64) arch=arm64 ;;",
+    "  *) echo \"Unsupported architecture: $raw_arch\"; exit 1 ;;",
+    "esac",
+    "out=\"$CACHE_DIR/jait-gateway-$VERSION-linux-$arch\"",
+    "if [ -f \"$out\" ]; then",
+    "  echo \"[2/5] Using cached binary v$VERSION for linux-$arch\"",
+    "else",
+    "  echo \"[2/5] Compiling gateway binary for linux-$arch...\"",
+    "  bun build --compile --target=\"bun-linux-$arch\" --minify \"$ENTRY\" --outfile \"$out\"",
+    "fi",
+    "setup_script=$(mktemp)",
+    "cat > \"$setup_script\" <<'JAIT_REMOTE_SCRIPT'",
+    remoteScript,
+    "JAIT_REMOTE_SCRIPT",
+    "echo \"[3/5] Preparing remote directory...\"",
+    "ssh \"${SSH_OPTS[@]}\" \"$TARGET\" 'mkdir -p ~/.jait'",
+    "echo \"[4/5] Transferring gateway binary...\"",
+    "scp \"${SSH_OPTS[@]}\" \"$out\" \"$TARGET:~/.jait/jait-gateway\"",
+    "scp \"${SSH_OPTS[@]}\" \"$setup_script\" \"$TARGET:~/.jait/jait-setup.sh\"",
+    "rm -f \"$setup_script\"",
+    "echo \"[5/5] Configuring service. Enter SSH/sudo passwords here if prompted.\"",
+    "ssh -tt \"${SSH_OPTS[@]}\" \"$TARGET\" 'bash ~/.jait/jait-setup.sh'",
+    `echo "Dashboard: http://${input.ip}:8000"`,
   ].join("\n");
 }
 
@@ -663,6 +745,7 @@ export function registerNetworkRoutes(
   sqlite?: SqliteDatabase,
   providerRegistry?: import("../providers/registry.js").ProviderRegistry,
   secretInput?: SecretInputService,
+  surfaceRegistry?: SurfaceRegistry,
 ) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
@@ -800,6 +883,7 @@ export function registerNetworkRoutes(
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
     const sessionId = String(body["sessionId"] ?? "default").trim() || "default";
+    const terminalId = typeof body["terminalId"] === "string" ? body["terminalId"].trim() : "";
     const authMethodValue = String(body["authMethod"] ?? "auto").trim();
     const authMethod: DeployAuthMethod = authMethodValue === "password" || authMethodValue === "key"
       ? authMethodValue
@@ -815,6 +899,23 @@ export function registerNetworkRoutes(
     }
 
     try {
+      if (terminalId) {
+        const surface = surfaceRegistry?.getSurface(terminalId) as { type?: string; write?: (data: string) => void } | undefined;
+        if (!surface || surface.type !== "terminal" || typeof surface.write !== "function") {
+          return reply.status(404).send({ error: "Deploy terminal not found" });
+        }
+        surface.write(`${buildInteractiveDeployCommand({ ip, username })}\r`);
+        return {
+          ok: true,
+          terminalId,
+          logs: [
+            `Deploy started for ${username}@${ip}.`,
+            "Continue in the embedded terminal.",
+            "SSH and sudo prompts will appear there.",
+          ],
+        };
+      }
+
       const result = await runGuidedDeploy({
         ip,
         username,

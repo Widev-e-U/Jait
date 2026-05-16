@@ -390,8 +390,8 @@ export async function scanNetwork(options: NetworkScanOptions = {}): Promise<Net
       try {
         const res = await fetch(`http://${entry.ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
         if (res.ok) {
-          const health = (await res.json()) as { name?: string };
-          if (health.name === "jait-gateway") {
+          const health = (await res.json()) as { name?: string; healthy?: boolean; version?: string };
+          if (health.name === "jait-gateway" || (health.healthy === true && typeof health.version === "string")) {
             agentStatus = "running";
             try {
               const topologyRes = await fetch(`http://${entry.ip}:8000/api/network/topology`, {
