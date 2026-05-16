@@ -837,7 +837,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 model: spec.model ?? input.model ?? selectedDefaults.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
-                workingDirectory: spec.workingDirectory ?? input.workingDirectory,
+                workingDirectory: spec.workingDirectory ?? input.workingDirectory ?? context.workspaceRoot,
                 branch: spec.branch ?? input.branch,
               });
               broadcastThreadEvent(thread.id, "created", { thread });

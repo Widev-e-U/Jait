@@ -1206,6 +1206,7 @@ export function registerChatRoutes(
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    const jaitCoordinatorModel = swarmWorkerProvider ? "" : requestBodyModel;
     // Use the user's preferred backend, but fall back to the server-level config
     // when the user still has the initial default ("openai") and the server is
     // configured for a different provider (e.g. ollama-only deployments).
@@ -1218,10 +1219,10 @@ export function registerChatRoutes(
       llmRuntime = resolveJaitLlmConfig({
         config,
         apiKeys: userApiKeys,
-        requestedModel: requestBodyModel || undefined,
+        requestedModel: jaitCoordinatorModel || undefined,
         jaitBackend,
       });
-      if (!(requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim())) {
+      if (!(jaitCoordinatorModel || userApiKeys["OPENAI_MODEL"]?.trim())) {
         llmRuntime = { ...llmRuntime, contextWindow: config.contextWindow };
       }
     } catch (error) {

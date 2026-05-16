@@ -179,6 +179,57 @@ describe("chat route OpenRouter backend selection", () => {
     await app.close();
   });
 
+  it("does not use a CLI worker model for the Jait swarm coordinator", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("swarm-openrouter-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Swarm Session" });
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: {
+        OPENROUTER_API_KEY: "openrouter-test-key",
+      },
+    });
+
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      expect(body.model).toBe("openai/gpt-4o");
+      expect(body.model).not.toBe("gpt-5-codex");
+      return createOpenAIStreamResponse();
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: "evaluate rust rewrite",
+        sessionId: session.id,
+        mode: "swarm",
+        provider: "codex",
+        model: "gpt-5-codex",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
   it("fails clearly when OpenRouter is selected without an OpenRouter key", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

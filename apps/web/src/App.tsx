@@ -947,9 +947,10 @@ function TitleSkeleton({ className = '' }: { className?: string }) {
   )
 }
 
-function ManagerStatusDot({ status }: { status: string }) {
+function ManagerStatusDot({ status, kind }: { status: string; kind?: AgentThread['kind'] }) {
   const map: Record<string, { icon: typeof Circle; color: string }> = {
     running: { icon: SpinnerIcon, color: 'text-blue-500 animate-spin' },
+    ...(kind === 'delegation' ? { idle: { icon: SpinnerIcon, color: 'text-blue-500 animate-spin' } } : {}),
     paused: { icon: Pause, color: 'text-yellow-500' },
     interrupted: { icon: Pause, color: 'text-yellow-500' },
     done: { icon: CheckCircle2, color: 'text-green-500' },
@@ -1370,7 +1371,7 @@ function ManagerThreadListItem({
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex w-full min-w-0 items-center gap-1.5">
-          <ManagerStatusDot status={thread.status} />
+          <ManagerStatusDot status={thread.status} kind={thread.kind} />
           <div className="flex-1 truncate text-sm font-medium sm:text-sm">
             {isTitlePending(thread.title) ? (
               <TitleSkeleton className="h-3.5 w-28" />
@@ -1542,7 +1543,7 @@ function ManagerActiveThreadsMenu({
                   }}
                 >
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <ManagerStatusDot status={thread.status} />
+                    <ManagerStatusDot status={thread.status} kind={thread.kind} />
                     <span className="truncate text-sm font-medium">
                       {isTitlePending(thread.title)
                         ? 'Generating title...'

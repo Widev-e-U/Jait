@@ -1311,6 +1311,42 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("defaults create_many threads to the active workspace directory", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const workspaceRoot = process.cwd();
+      const result = await tool.execute(
+        {
+          action: "create_many",
+          prompt: "inspect ui",
+          threads: [
+            { title: "Thread A" },
+            { title: "Thread B" },
+          ],
+        },
+        makeContext("user-1", {
+          providerId: "codex",
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { threads: Array<{ workingDirectory: string | null }> };
+      expect(data.threads).toHaveLength(2);
+      expect(data.threads.every((thread) => thread.workingDirectory === workspaceRoot)).toBe(true);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("creates a PR and returns a direct link while updating thread metadata", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
