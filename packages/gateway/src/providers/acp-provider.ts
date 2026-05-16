@@ -666,15 +666,15 @@ export class AcpProvider implements CliProviderAdapter {
         this.emitEvent({
           type: "tool.start",
           sessionId,
-          tool: update.title,
-          args: update.rawInput,
+          tool: getAcpToolName(update),
+          args: getAcpToolArgs(update),
           callId: update.toolCallId,
         });
         if (readUpdateStatus(update) === "failed") {
           this.emitEvent({
             type: "tool.result",
             sessionId,
-            tool: update.title,
+            tool: getAcpToolName(update),
             ok: false,
             message: readUpdateMessage(update) ?? "Tool call failed",
             callId: update.toolCallId,
@@ -694,7 +694,7 @@ export class AcpProvider implements CliProviderAdapter {
           this.emitEvent({
             type: "tool.result",
             sessionId,
-            tool: update.title ?? update.toolCallId,
+            tool: getAcpToolName(update),
             ok: update.status === "completed",
             message: stringifyUnknown(update.rawOutput ?? update.status),
             callId: update.toolCallId,
@@ -923,6 +923,80 @@ function readUpdateStatus(update: unknown): string | null {
   if (!update || typeof update !== "object") return null;
   const status = (update as Record<string, unknown>)["status"];
   return typeof status === "string" ? status : null;
+}
+
+function getAcpToolName(update: unknown): string {
+  if (!update || typeof update !== "object") return "tool";
+  const record = update as Record<string, unknown>;
+  const kind = typeof record["kind"] === "string" ? record["kind"] : null;
+  if (kind === "read" || kind === "edit" || kind === "search") return kind;
+  const title = typeof record["title"] === "string" && record["title"].trim()
+    ? record["title"]
+    : null;
+  if (kind === "execute" && title) return title;
+  return title ?? (typeof record["toolCallId"] === "string" ? record["toolCallId"] : "tool");
+}
+
+function getAcpToolArgs(update: unknown): unknown {
+  if (!update || typeof update !== "object") return undefined;
+  const record = update as Record<string, unknown>;
+  const rawInput = record["rawInput"];
+  const args = rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+    ? { ...(rawInput as Record<string, unknown>) }
+    : {};
+  const kind = typeof record["kind"] === "string" ? record["kind"] : null;
+
+  if (Array.isArray(record["locations"])) {
+    args.locations = record["locations"];
+    const path = firstPathFromAcpLocations(record["locations"]);
+    if (path && typeof args.path !== "string") args.path = path;
+  }
+  if ((kind === "edit" || kind === "read") && Array.isArray(record["content"])) {
+    args.content = record["content"];
+    const changes = changesFromAcpContent(record["content"]);
+    if (changes.length > 0) {
+      args.changes = changes;
+      if (typeof args.path !== "string") args.path = changes[0]?.path;
+      if (typeof args.search !== "string") args.search = changes[0]?.oldText;
+      if (typeof args.replace !== "string") args.replace = changes[0]?.newText;
+    }
+  }
+  if (Object.keys(args).length > 0) {
+    if (typeof record["title"] === "string" && record["title"].trim()) {
+      args.title = record["title"];
+    }
+    if (kind) args.kind = kind;
+  }
+
+  return Object.keys(args).length > 0 ? args : undefined;
+}
+
+function firstPathFromAcpLocations(locations: unknown[]): string | undefined {
+  for (const location of locations) {
+    if (!location || typeof location !== "object") continue;
+    const path = (location as Record<string, unknown>)["path"];
+    if (typeof path === "string" && path.trim()) return path;
+  }
+  return undefined;
+}
+
+function changesFromAcpContent(content: unknown[]): Array<Record<string, unknown>> {
+  const changes: Array<Record<string, unknown>> = [];
+  for (const item of content) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const path = record["path"];
+    if (typeof path !== "string" || !path.trim()) continue;
+    changes.push({
+      path,
+      oldText: record["oldText"],
+      newText: record["newText"],
+      kind: record["_meta"] && typeof record["_meta"] === "object"
+        ? (record["_meta"] as Record<string, unknown>)["kind"]
+        : undefined,
+    });
+  }
+  return changes;
 }
 
 function readUpdateMessage(update: unknown): string | null {
