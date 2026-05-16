@@ -1196,6 +1196,12 @@ describe("thread.control tool", () => {
       };
       provider.sendTurn.mockImplementation(async (sessionId: string) => {
         setTimeout(() => {
+          provider.emit({
+            type: "message",
+            sessionId,
+            role: "assistant",
+            content: `Specialist ${sessionId} finished with findings.`,
+          });
           provider.emit({ type: "turn.completed", sessionId });
         }, 25);
       });
@@ -1226,10 +1232,19 @@ describe("thread.control tool", () => {
       expect(result.ok).toBe(true);
       expect(result.message).toBe("Created 2 thread(s) and waited for 2 to finish.");
       expect(outputChunks.join("")).toContain("Waiting for 2 thread(s) to finish");
-      const data = result.data as { threads: Array<{ status: string; completedAt: string | null }> };
+      const data = result.data as {
+        threads: Array<{ status: string; completedAt: string | null }>;
+        threadSummaries: Array<{ finalMessage: string | null; assistantMessages: string[] }>;
+      };
       expect(data.threads).toHaveLength(2);
       expect(data.threads.every((thread) => thread.status === "completed")).toBe(true);
       expect(data.threads.every((thread) => Boolean(thread.completedAt))).toBe(true);
+      expect(data.threadSummaries).toHaveLength(2);
+      expect(data.threadSummaries.map((summary) => summary.finalMessage)).toEqual(expect.arrayContaining([
+        "Specialist mock-session-1 finished with findings.",
+        "Specialist mock-session-2 finished with findings.",
+      ]));
+      expect(data.threadSummaries.every((summary) => summary.assistantMessages.length === 1)).toBe(true);
     } finally {
       sqlite.close();
     }

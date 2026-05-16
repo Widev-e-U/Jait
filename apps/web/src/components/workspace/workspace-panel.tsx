@@ -4893,6 +4893,39 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </button>
             </>
           )}
+          {effectiveMobileTab === 'editor' && activeTabEditable && (
+            <>
+              <div className="flex-1" />
+              {(activeTab?.isDirty || activeTabGitDiffEntry) && (
+                <button
+                  type="button"
+                  onClick={() => { if (activeTabId) void handleRevertTab(activeTabId) }}
+                  className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-red-500 disabled:opacity-50 shrink-0"
+                  title={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
+                  aria-label={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
+                  disabled={gitActionBusy}
+                >
+                  <Undo2 className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
+                className={cn(
+                  'flex h-9 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors shrink-0',
+                  activeTab?.isDirty
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+                title={activeTab?.isSaving ? 'Saving...' : 'Save file'}
+                aria-label="Save file"
+                disabled={activeTab?.isSaving}
+              >
+                <Save className={`h-4 w-4 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
+                <span>Save</span>
+              </button>
+            </>
+          )}
         </div>
         )}
 
@@ -5188,6 +5221,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {/* Editor tab */}
         {effectiveMobileTab === 'editor' && showEditorProp && (
           <div className="flex-1 flex flex-col min-h-0">
+            {activeTabEditable && activeTab?.saveError && (
+              <div className="border-b bg-destructive/5 px-3 py-2 text-xs text-destructive shrink-0">
+                {activeTab.saveError}
+              </div>
+            )}
             <div className="flex-1 min-h-0 overflow-auto">
               {scDiffLoading ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">

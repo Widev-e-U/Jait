@@ -474,6 +474,14 @@ function isEditLikeTool(tool: string): boolean {
   return normalized === 'edit' || normalized === 'file.write' || normalized === 'file.patch'
 }
 
+function getFileSummaryActionLabel(tool: string, isActive: boolean): string {
+  const normalized = normalizeTool(tool)
+  if (normalized === 'read' || normalized === 'file.read') return isActive ? 'Reading' : 'Read'
+  if (normalized === 'file.write') return isActive ? 'Writing' : 'Created'
+  if (normalized === 'edit' || normalized === 'file.patch') return isActive ? 'Editing' : 'Edited'
+  return isActive ? 'Working' : 'Done'
+}
+
 function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): string | null {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
@@ -2090,6 +2098,9 @@ function ToolCallCardInner({
   const invocationLabels = getToolInvocationLabels(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
   const isActive = call.status === 'running' || call.status === 'pending'
   const invocationLabel = isActive ? invocationLabels.running : invocationLabels.done
+  const fileSummaryActionLabel = showFileSummary
+    ? getFileSummaryActionLabel(normalizedTool, isActive)
+    : invocationLabel
 
   const headerContent = (
     <>
@@ -2108,7 +2119,7 @@ function ToolCallCardInner({
           </span>
         ) : showFileSummary ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{invocationLabel}:</span>
+            <span>{fileSummaryActionLabel}:</span>
             <span className="inline-flex min-w-0 items-center gap-1">
               <FileSummaryButton
                 path={filePath}

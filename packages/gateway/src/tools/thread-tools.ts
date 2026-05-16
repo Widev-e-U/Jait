@@ -84,6 +84,8 @@ interface ThreadCreateSpec {
 
 const THREAD_TERMINAL_STATUSES = new Set(["completed", "error", "interrupted"]);
 const THREAD_WAIT_POLL_MS = 100;
+const THREAD_RESULT_ACTIVITY_LIMIT = 25;
+const THREAD_RESULT_TEXT_LIMIT = 4_000;
 
 interface ThreadControlGit {
   runStackedAction(
@@ -169,6 +171,12 @@ function shouldGenerateSchedulerThreadTitle(title: unknown): boolean {
   if (typeof title !== "string") return true;
   const normalized = title.trim().toLowerCase();
   return !normalized || normalized === "jait code quality rotation";
+}
+
+function truncateThreadResultText(value: string, limit = THREAD_RESULT_TEXT_LIMIT): string {
+  return value.length > limit
+    ? `${value.slice(0, limit)}\n\n[truncated — ${value.length} chars total]`
+    : value;
 }
 
 function normalizeSchedulerDeliveryPrompt(message: string, thread: ThreadRow, context: ToolContext): string {
@@ -323,6 +331,43 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
 
     return deps.threadService.getById(threadId);
+  };
+
+  const summarizeThreadForToolResult = (thread: ThreadRow) => {
+    const activities = deps.threadService
+      .getActivities(thread.id, THREAD_RESULT_ACTIVITY_LIMIT)
+      .reverse();
+    const assistantMessages = activities.flatMap((activity) => {
+      const payload = activity.payload as { role?: unknown; content?: unknown } | undefined;
+      if (payload?.role !== "assistant" || typeof payload.content !== "string") {
+        return [];
+      }
+      const content = payload.content.trim();
+      return content ? [truncateThreadResultText(content)] : [];
+    });
+
+    const noteworthyActivities = activities
+      .filter((activity) => (
+        activity.kind === "error" ||
+        activity.kind === "tool.error" ||
+        activity.kind === "session"
+      ))
+      .map((activity) => ({
+        kind: activity.kind,
+        summary: truncateThreadResultText(activity.summary, 1_000),
+        createdAt: activity.createdAt,
+      }));
+
+    return {
+      threadId: thread.id,
+      title: thread.title,
+      status: thread.status,
+      completedAt: thread.completedAt,
+      error: thread.error,
+      finalMessage: assistantMessages.at(-1) ?? null,
+      assistantMessages,
+      noteworthyActivities,
+    };
   };
 
   const generateAndApplyThreadTitle = async (
@@ -924,6 +969,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
             const threads = [...threadById.values()];
             const terminalFailures = threads.filter((thread) => thread.status === "error" || thread.status === "interrupted");
+            const threadSummaries = threads.map((thread) => summarizeThreadForToolResult(thread));
 
             return {
               ok: failedStarts.length === 0 && terminalFailures.length === 0,
@@ -940,6 +986,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 startedCount: startResults.length - failedStarts.length,
                 failedStarts,
                 waitedForCompletionCount: waitTargets.length,
+                threadSummaries,
               },
             };
           }
