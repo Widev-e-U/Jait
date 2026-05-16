@@ -185,6 +185,102 @@ describe("AcpProvider MCP startup events", () => {
   });
 });
 
+describe("AcpProvider Codex ACP tool payloads", () => {
+  it("emits read file paths from ACP locations instead of empty rawInput", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call-read",
+        kind: "read",
+        title: "Read file",
+        status: "in_progress",
+        locations: [{ path: "/tmp/jait-acp-capture/sample.txt" }],
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "read",
+      callId: "call-read",
+      args: {
+        title: "Read file",
+        kind: "read",
+        locations: [{ path: "/tmp/jait-acp-capture/sample.txt" }],
+        path: "/tmp/jait-acp-capture/sample.txt",
+      },
+    });
+  });
+
+  it("emits edit file paths and diff text from ACP diff content", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call-edit",
+        kind: "edit",
+        title: "Editing files",
+        status: "in_progress",
+        content: [{
+          type: "diff",
+          path: "/tmp/jait-acp-capture/sample.txt",
+          oldText: "Alpha\n",
+          newText: "Beta\n",
+          _meta: { kind: "update" },
+        }],
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "edit",
+      callId: "call-edit",
+      args: {
+        title: "Editing files",
+        kind: "edit",
+        content: [{
+          type: "diff",
+          path: "/tmp/jait-acp-capture/sample.txt",
+          oldText: "Alpha\n",
+          newText: "Beta\n",
+          _meta: { kind: "update" },
+        }],
+        changes: [{
+          path: "/tmp/jait-acp-capture/sample.txt",
+          oldText: "Alpha\n",
+          newText: "Beta\n",
+          kind: "update",
+        }],
+        path: "/tmp/jait-acp-capture/sample.txt",
+        search: "Alpha\n",
+        replace: "Beta\n",
+      },
+    });
+  });
+});
+
 describe("AcpProvider auth", () => {
   it("exposes ACP-managed login for default ACP providers", () => {
     const providers = loadAcpProviderConfigs().map((config) => new AcpProvider(config));
