@@ -138,6 +138,7 @@ import {
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { getWorkspaceRepositoryId } from '@/lib/workspace-repositories'
+import { getLatestWorkspaceSessionId } from '@/lib/workspace-sessions'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
@@ -4061,8 +4062,7 @@ function App() {
     }
 
     // Determine which session to activate (mirrors switchWorkspace logic)
-    const hasCurrentSession = workspace.sessions.some((s) => s.id === activeSessionId)
-    const nextSessionId = hasCurrentSession ? activeSessionId : workspace.sessions[0]?.id ?? null
+    const nextSessionId = getLatestWorkspaceSessionId(workspace)
 
     switchWorkspace(workspaceId)
 
@@ -4087,7 +4087,7 @@ function App() {
         console.error('Failed to open workspace:', e)
       }
     }
-  }, [workspaces, activeSessionId, switchWorkspace, setSavedWorkspace, isMobile])
+  }, [workspaces, switchWorkspace, setSavedWorkspace, isMobile])
 
   const handleCreateWorkspace = useCallback(() => {
     setWorkspacePickerMode('workspace')

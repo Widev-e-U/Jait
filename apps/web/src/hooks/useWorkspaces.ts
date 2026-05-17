@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { AutomationRepo } from '@/lib/agents-api'
+import { getLatestWorkspaceSessionId } from '@/lib/workspace-sessions'
 
 const API_URL = getApiUrl()
 const WORKSPACE_LIST_LIMIT = 10
@@ -115,7 +116,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
             return prevSessionId
           }
           if (prevSessionId && nextPersonalSessions.some((session) => session.id === prevSessionId)) return prevSessionId
-          return data.session?.id ?? nextPersonalSessions[0]?.id ?? nextWorkspaces[0]?.sessions[0]?.id ?? null
+          return data.session?.id ?? nextPersonalSessions[0]?.id ?? getLatestWorkspaceSessionId(nextWorkspaces[0])
         })
       }
     } catch (err) {
@@ -214,12 +215,11 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
 
   const switchWorkspace = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId)
-    setActiveSessionId((prev) => {
+    setActiveSessionId(() => {
       const workspace = workspaces.find((item) => item.id === workspaceId)
       if (!workspace) return null
-      if (prev && workspace.sessions.some((session) => session.id === prev)) return prev
-      const sessionId = workspace.sessions[0]?.id ?? null
-      persistSelection(workspaceId, sessionId ?? prev)
+      const sessionId = getLatestWorkspaceSessionId(workspace)
+      persistSelection(workspaceId, sessionId)
       return sessionId
     })
   }, [persistSelection, workspaces])
@@ -354,7 +354,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       setWorkspaces(nextWorkspaces)
       if (activeWorkspaceId === workspaceId) {
         setActiveWorkspaceId(nextWorkspaces[0]?.id ?? null)
-        setActiveSessionId(nextWorkspaces[0]?.sessions[0]?.id ?? null)
+        setActiveSessionId(getLatestWorkspaceSessionId(nextWorkspaces[0]))
       }
       setArchivedSessionsByWorkspace((prev) => {
         const next = { ...prev }
