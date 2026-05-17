@@ -37,6 +37,10 @@ import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import type { ResponseStyle } from '@jait/shared'
 import { hasRenderableUserMessageContent } from './message-render-state'
 import {
+  getUserMessageEditComposerShellClassName,
+  getUserMessageEditComposerTransitionClassName,
+} from './message-edit-layout'
+import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
   formatLineRange,
@@ -868,12 +872,12 @@ function MessageInner({
             {hasUserRenderableContent || content ? (
               isUser ? (
                 isEditing ? (
-                  <div className="w-full max-w-3xl" onClick={(event) => event.stopPropagation()}>
+                  <div
+                    className={getUserMessageEditComposerShellClassName()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <div
-                      className={cn(
-                        'space-y-3 origin-bottom transition-all duration-150 ease-out',
-                        showEditComposer ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
-                      )}
+                      className={getUserMessageEditComposerTransitionClassName(showEditComposer)}
                     >
                         <PromptInput
                           key={`edit-${messageId ?? 'user-message'}`}
