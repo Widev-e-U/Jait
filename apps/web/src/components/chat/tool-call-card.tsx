@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen, Brain } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -50,17 +50,17 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'execute':         { icon: Terminal,  label: 'Execute',     color: 'text-yellow-500' },
   'search':          { icon: Search,    label: 'Search',      color: 'text-emerald-500' },
   'web':             { icon: Globe,     label: 'Web',         color: 'text-cyan-500' },
-  'agent':           { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.spawn':     { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.wait':      { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.close':     { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.resume':    { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.send':      { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.run':       { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
-  'agent.search':    { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'agent':           { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.spawn':     { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.wait':      { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.close':     { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.resume':    { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.send':      { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.run':       { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
+  'agent.search':    { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
-  'thread.control':  { icon: Bot,       label: 'Threads',     color: 'text-purple-500' },
+  'thread.control':  { icon: Network,   label: 'Threads',     color: 'text-purple-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
   'skill':           { icon: BookOpen,  label: 'Skill',      color: 'text-violet-500' },
   // ── SSH tools ───────────────────────────────────────────
@@ -1877,7 +1877,7 @@ function ThreadStatusBadge({ status }: { status: ThreadListStatus }) {
       ? XCircle
       : status === 'running' || status === 'starting'
         ? Loader2
-        : Bot
+        : Network
 
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-medium capitalize', classes)}>

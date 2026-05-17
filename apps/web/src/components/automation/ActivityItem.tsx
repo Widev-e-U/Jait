@@ -4,7 +4,7 @@
  * Extracted from AutomationPage for reuse in the merged Chat view.
  */
 
-import { AlertCircle, Bot, CheckCircle2, Info, MessageSquare, Shield, User, Wrench, XCircle, type LucideIcon } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Info, MessageSquare, Network, Shield, User, Wrench, XCircle, type LucideIcon } from 'lucide-react'
 import type { ThreadActivity } from '@/lib/agents-api'
 
 type ActivityMeta = {
@@ -58,7 +58,7 @@ function getMeta(kind: string, role?: string): ActivityMeta {
   }
   if (kind === 'message' && role === 'assistant') {
     return {
-      icon: Bot,
+      icon: Network,
       label: 'Assistant',
       cardClass: 'bg-card mr-12',
     }
@@ -71,7 +71,7 @@ function getMeta(kind: string, role?: string): ActivityMeta {
     'tool.approval': { icon: Shield, label: 'Approval Required', cardClass: 'bg-card mr-8 border-amber-500/30' },
     session: { icon: Info, label: 'Session', cardClass: 'bg-card mr-8' },
     error: { icon: AlertCircle, label: 'Error', cardClass: 'bg-card mr-8 border-red-500/30' },
-    reasoning: { icon: Bot, label: 'Reasoning', cardClass: 'bg-card mr-8' },
+    reasoning: { icon: Network, label: 'Reasoning', cardClass: 'bg-card mr-8' },
   }
   return mapped[kind] ?? { icon: MessageSquare, label: formatKindLabel(kind), cardClass: 'bg-card mr-8' }
 }
