@@ -9,6 +9,7 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
+import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
@@ -70,6 +71,7 @@ export function registerTerminalRoutes(
     context: ToolContext,
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>,
+  ws?: WsControlPlane,
 ) {
   // POST /api/terminals — create a new terminal
   app.post("/api/terminals", async (request, reply) => {
@@ -390,6 +392,7 @@ export function registerTerminalRoutes(
     const input = body["input"] ?? {};
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
     const workspaceRoot = typeof body["workspaceRoot"] === "string" ? body["workspaceRoot"] : process.cwd();
+    const nodeId = typeof body["nodeId"] === "string" ? body["nodeId"].trim() : "";
     const dryRun = body["dryRun"] === true;
     const consentTimeoutMs = typeof body["consentTimeoutMs"] === "number" ? body["consentTimeoutMs"] : undefined;
 
@@ -403,6 +406,33 @@ export function registerTerminalRoutes(
       workspaceRoot,
       requestedBy: "api",
     } as const;
+
+    if (nodeId && nodeId !== "gateway") {
+      if (!ws) {
+        return reply.status(503).send({
+          error: "REMOTE_NODE_UNAVAILABLE",
+          details: "Remote node execution requires the WebSocket control plane",
+        });
+      }
+      try {
+        return await ws.proxyToolOp<ToolResult>(
+          nodeId,
+          toolName,
+          input as Record<string, unknown>,
+          {
+            sessionId,
+            workspaceRoot,
+            timeoutMs: consentTimeoutMs ?? 120_000,
+          },
+        );
+      } catch (err) {
+        return reply.status(502).send({
+          ok: false,
+          message: err instanceof Error ? err.message : "Remote node execution failed",
+        });
+      }
+    }
+
     const result = toolExecutor
       ? await toolExecutor(toolName, input, context, { dryRun, consentTimeoutMs })
       : await toolRegistry.execute(toolName, input, context, audit);

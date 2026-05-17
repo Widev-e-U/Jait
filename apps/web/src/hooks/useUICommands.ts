@@ -19,6 +19,17 @@ import { triggerSystemNotification } from '@/lib/system-notifications'
 
 const WS_URL = getWsUrl()
 
+const DESKTOP_NODE_TOOLS = [
+  'terminal.run',
+  'file.read',
+  'file.write',
+  'file.patch',
+  'file.list',
+  'file.stat',
+  'file.search',
+  'os.query',
+]
+
 // ── Device / platform helpers ───────────────────────────────────────
 
 function getDeviceName(): string {
@@ -572,8 +583,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 protocolVersion: NODE_PROTOCOL_VERSION,
                 capabilities: {
                   providers,
-                  surfaces: ['filesystem'],
-                  tools: [],
+                  surfaces: ['filesystem', 'terminal'],
+                  tools: DESKTOP_NODE_TOOLS,
                   screenShare: true,
                   voice: false,
                   preview: false,

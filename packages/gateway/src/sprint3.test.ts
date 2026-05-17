@@ -2,7 +2,7 @@
  * Sprint 3 Tests — Terminal Surface, File System, Path Guards, Tools, Routes
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -450,5 +450,46 @@ describe("Terminal & Tool routes", () => {
     const body = res.json() as { ok: boolean; data: Record<string, unknown> };
     expect(body.ok).toBe(true);
     expect(body.data.platform).toBeDefined();
+  });
+
+  it("POST /api/tools/execute proxies to nodeId when provided", async () => {
+    const ws = {
+      registerGatewayFsNode: vi.fn(),
+      getFsNodes: vi.fn(() => []),
+      proxyToolOp: vi.fn(async () => ({ ok: true, message: "remote output", data: { node: "node-1" } })),
+    };
+    const config = { ...loadConfig(), logLevel: "silent" };
+    const remoteApp = await createServer(config, {
+      audit: {
+        write: () => "audit-test-id",
+        hasAction: () => false,
+        getBySession: () => [],
+        getAll: () => [],
+      } as unknown as import("./services/audit.js").AuditWriter,
+      surfaceRegistry,
+      toolRegistry,
+      ws: ws as unknown as import("./ws.js").WsControlPlane,
+    });
+
+    const res = await remoteApp.inject({
+      method: "POST",
+      url: "/api/tools/execute",
+      payload: {
+        tool: "terminal.run",
+        input: { command: "docker ps --format '{{.Image}}'" },
+        sessionId: "s1",
+        workspaceRoot: "/repo",
+        nodeId: "node-1",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ws.proxyToolOp).toHaveBeenCalledWith(
+      "node-1",
+      "terminal.run",
+      { command: "docker ps --format '{{.Image}}'" },
+      { sessionId: "s1", workspaceRoot: "/repo", timeoutMs: 120_000 },
+    );
+    expect(res.json()).toEqual({ ok: true, message: "remote output", data: { node: "node-1" } });
   });
 });
