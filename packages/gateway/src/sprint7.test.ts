@@ -49,6 +49,53 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     sqlite.close();
   });
 
+  it("isolates user-owned cron jobs while keeping system jobs visible", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const systemJob = scheduler.create({
+      name: "system-health",
+      cron: "0 * * * *",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "system",
+      workspaceRoot: "/workspace/Jait",
+    });
+    const userJob = scheduler.create({
+      userId: "user-a",
+      name: "user-a-health",
+      cron: "15 * * * *",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+    const otherUserJob = scheduler.create({
+      userId: "user-b",
+      name: "user-b-health",
+      cron: "30 * * * *",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "s2",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    expect(scheduler.list("user-a").map((job) => job.id).sort()).toEqual([
+      systemJob.id,
+      userJob.id,
+    ].sort());
+    expect(scheduler.get(systemJob.id, "user-a")?.id).toBe(systemJob.id);
+    expect(scheduler.get(otherUserJob.id, "user-a")).toBeNull();
+    expect(scheduler.update(otherUserJob.id, { enabled: false }, "user-a")).toBeNull();
+    expect(scheduler.remove(otherUserJob.id, "user-a")).toBe(false);
+    expect(scheduler.get(otherUserJob.id)?.enabled).toBe(true);
+
+    sqlite.close();
+  });
+
   it("runs matching cron jobs on tick and emits execution callback", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
