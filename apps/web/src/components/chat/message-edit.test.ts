@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { createUserMessageEditSubmission } from './message-edit'
+import {
+  getUserMessageEditComposerShellClassName,
+  getUserMessageEditComposerTransitionClassName,
+} from './message-edit-layout'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 
 describe('message edit submission', () => {
@@ -41,5 +45,34 @@ describe('message edit submission', () => {
         { type: 'image', name: 'screen.png', mimeType: 'image/png', data: 'abc123' },
       ],
     })
+  })
+})
+
+describe('message edit mobile layout', () => {
+  it('centers the edit composer above the mobile keyboard instead of inline with the message', () => {
+    const classes = getUserMessageEditComposerShellClassName()
+
+    expect(classes).toContain('fixed')
+    expect(classes).toContain('left-1/2')
+    expect(classes).toContain('-translate-x-1/2')
+    expect(classes).toContain('bottom-[max(0.75rem,env(safe-area-inset-bottom))]')
+    expect(classes).toContain('w-[min(42rem,calc(100vw-1rem))]')
+  })
+
+  it('does not animate vertical position while typing in the edit composer', () => {
+    const classes = getUserMessageEditComposerTransitionClassName(true)
+
+    expect(classes).toContain('transition-opacity')
+    expect(classes).not.toContain('transition-all')
+    expect(classes).not.toContain('translate-y-0')
+  })
+
+  it('restores desktop edits to the original inline message bubble layout', () => {
+    const classes = getUserMessageEditComposerShellClassName()
+
+    expect(classes).toContain('md:static')
+    expect(classes).toContain('md:w-full')
+    expect(classes).toContain('md:max-w-3xl')
+    expect(classes).toContain('md:translate-x-0')
   })
 })
