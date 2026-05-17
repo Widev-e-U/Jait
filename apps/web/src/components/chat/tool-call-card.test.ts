@@ -257,6 +257,27 @@ describe('getThreadControlListItems', () => {
       { title: 'Frontend', status: 'starting', providerId: 'claude-code' },
     ])
   })
+
+  it('merges live thread status into running create_many cards', () => {
+    expect(getThreadControlListItems(
+      {
+        action: 'create_many',
+        threads: [
+          { title: 'Backend' },
+          { title: 'Frontend' },
+        ],
+      },
+      undefined,
+      'running',
+      [
+        { id: 'thread-backend', title: 'Backend', status: 'completed', providerId: 'codex' },
+        { id: 'thread-frontend', title: 'Frontend', status: 'running', providerId: 'codex' },
+      ],
+    ).map((item) => ({ id: item.id, title: item.title, status: item.status, providerId: item.providerId }))).toEqual([
+      { id: 'thread-backend', title: 'Backend', status: 'completed', providerId: 'codex' },
+      { id: 'thread-frontend', title: 'Frontend', status: 'running', providerId: 'codex' },
+    ])
+  })
 })
 
 describe('ToolCallGroup', () => {

@@ -218,6 +218,19 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     });
   };
 
+  const broadcastThreadStatus = (
+    threadId: string,
+    status: "running" | "completed" | "error" | "interrupted",
+    data: Record<string, unknown> = {},
+  ): void => {
+    const thread = deps.threadService.getById(threadId);
+    broadcastThreadEvent(threadId, "status", {
+      status,
+      ...(thread ? { thread } : {}),
+      ...data,
+    });
+  };
+
   const ensureUserId = (context: ToolContext): string => {
     const userId = context.userId?.trim();
     return userId || "system";
@@ -532,18 +545,18 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           } else {
             deps.threadService.markCompleted(effectiveThread.id);
           }
-          broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
+          broadcastThreadStatus(effectiveThread.id, "completed");
           cleanup();
         } else if (event.type === "session.error") {
           deps.threadService.markError(effectiveThread.id, event.error);
-          broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: event.error });
+          broadcastThreadStatus(effectiveThread.id, "error", { error: event.error });
           cleanup();
         } else if (event.type === "turn.started") {
           // Re-assert running when a new turn begins
           const cur = deps.threadService.getById(effectiveThread.id);
           if (cur && cur.status !== "running") {
             deps.threadService.update(effectiveThread.id, { status: "running", error: null, completedAt: null });
-            broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
+            broadcastThreadStatus(effectiveThread.id, "running");
           }
         } else if (event.type === "turn.completed") {
           if (autoFinishAfterFirstTurn) {
@@ -556,7 +569,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           } else {
             deps.threadService.markCompleted(effectiveThread.id);
           }
-          broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
+          broadcastThreadStatus(effectiveThread.id, "completed");
         }
       });
 
@@ -571,7 +584,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           );
           broadcastThreadEvent(effectiveThread.id, "activity", { activity });
           deps.threadService.markInterrupted(effectiveThread.id);
-          broadcastThreadEvent(effectiveThread.id, "status", { status: "interrupted" });
+          broadcastThreadStatus(effectiveThread.id, "interrupted");
           cleanup();
         }, timeoutMs);
         if (typeof timeout === "object" && "unref" in timeout && typeof timeout.unref === "function") {
@@ -580,7 +593,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       }
 
       deps.threadService.markRunning(effectiveThread.id, session.id);
-      broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
+      broadcastThreadStatus(effectiveThread.id, "running");
 
       const historyReplayPrompt = buildThreadHistoryReplayPrompt(deps.threadService, effectiveThread.id);
 
@@ -611,7 +624,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           deps.threadService.markError(effectiveThread.id, errorMessage);
-          broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: errorMessage });
+          broadcastThreadStatus(effectiveThread.id, "error", { error: errorMessage });
           cleanup();
           if (!detach) throw err;
         }
@@ -628,7 +641,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       deps.threadService.markError(effectiveThread.id, errorMessage);
-      broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: errorMessage });
+      broadcastThreadStatus(effectiveThread.id, "error", { error: errorMessage });
       return { ok: false, message: errorMessage };
     }
   };
@@ -807,7 +820,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             } catch (err) {
               const message = err instanceof Error ? err.message : String(err);
               deps.threadService.markError(thread.id, message);
-              broadcastThreadEvent(thread.id, "status", { status: "error", error: message });
+              broadcastThreadStatus(thread.id, "error", { error: message });
               return {
                 ok: false,
                 message: `Thread created but failed to create delivery worktree: ${message}`,
@@ -895,7 +908,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 deps.threadService.markError(thread.id, message);
-                broadcastThreadEvent(thread.id, "status", { status: "error", error: message });
+                broadcastThreadStatus(thread.id, "error", { error: message });
                 return { thread: deps.threadService.getById(thread.id) ?? thread, spec, prompt, worktreeError: message };
               }
               return { thread, spec, prompt };
@@ -1078,7 +1091,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!provider) return { ok: false, message: `Provider '${thread.providerId}' not found` };
 
             deps.threadService.update(thread.id, { status: "running", error: null, completedAt: null });
-            broadcastThreadEvent(thread.id, "status", { status: "running" });
+            broadcastThreadStatus(thread.id, "running");
             await provider.sendTurn(thread.providerSessionId, prompt, input.attachments);
             const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
             broadcastThreadEvent(thread.id, "activity", { activity });
@@ -1102,7 +1115,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
 
             deps.threadService.markInterrupted(thread.id);
-            broadcastThreadEvent(thread.id, "status", { status: "interrupted" });
+            broadcastThreadStatus(thread.id, "interrupted");
             const updated = deps.threadService.getById(thread.id) ?? thread;
             return { ok: true, message: "Thread stopped", data: { thread: updated } };
           }

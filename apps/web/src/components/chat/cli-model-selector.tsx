@@ -9,6 +9,7 @@ import { Bot, ChevronDown, Check, Loader2, Clock, Search } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId } from '@/lib/agents-api'
+import { formatModelDisplayLabel } from '@/components/icons/model-icons'
 
 interface CliModelSelectorProps {
   provider: ProviderId
@@ -135,7 +136,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
   }, [filtered, recentModels, searchLower])
 
   const displayLabel = model
-    ? (models.find((m) => m.id === model)?.name ?? model)
+    ? formatModelDisplayLabel(models.find((m) => m.id === model)?.name ?? model)
     : 'model'
 
   return (
@@ -225,7 +226,7 @@ function ModelItem({ model: m, selected, onSelect }: { model: ModelDef; selected
     >
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">
-          {m.name}
+          {formatModelDisplayLabel(m.name)}
           {m.isDefault && (
             <span className="ml-1.5 text-2xs text-muted-foreground font-normal">(default)</span>
           )}

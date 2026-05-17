@@ -43,6 +43,7 @@ import Mistral from '@lobehub/icons/es/Mistral'
 import DeepSeek from '@lobehub/icons/es/DeepSeek'
 import Gemini from '@lobehub/icons/es/Gemini'
 import Grok from '@lobehub/icons/es/Grok'
+import { formatModelDisplayLabel } from './model-labels'
 
 // Alias Meta as Llama for clarity
 const Llama = Meta
@@ -182,10 +183,10 @@ export function getModelDisplayName(model: string): string {
     .join(' ')
   
   if (version && !['latest', 'stable'].includes(version.toLowerCase())) {
-    return `${formatted} ${version.toUpperCase()}`
+    return formatModelDisplayLabel(`${formatted} ${version.toUpperCase()}`)
   }
   
-  return formatted
+  return formatModelDisplayLabel(formatted)
 }
 
-export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok, JaitIcon }
+export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok, JaitIcon, formatModelDisplayLabel }

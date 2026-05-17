@@ -83,6 +83,7 @@ interface MessageProps {
   preferLlmUi?: boolean
   /** Active chat provider. Non-Jait providers still use inline tool groups. */
   provider?: ProviderId
+  threadControlThreads?: Record<string, unknown>[]
   onOpenTerminal?: (terminalId: string | null) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
   onEditMessage?: (
@@ -433,6 +434,7 @@ function MessageInner({
   compact,
   preferLlmUi,
   provider,
+  threadControlThreads,
   onOpenTerminal,
   renderInlineSecretPrompt,
   onEditMessage,
@@ -783,6 +785,7 @@ function MessageInner({
                         provider={provider}
                         calls={calls}
                         isStreaming={!!isStreaming && i === segments.length - 1}
+                        threadControlThreads={threadControlThreads}
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -792,6 +795,7 @@ function MessageInner({
                         key={`tg-${i}`}
                         calls={calls}
                         collapsible={followedByText}
+                        threadControlThreads={threadControlThreads}
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -854,6 +858,7 @@ function MessageInner({
                   provider={provider}
                   calls={toolCalls}
                   isStreaming={isStreaming}
+                  threadControlThreads={threadControlThreads}
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
                   renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -862,6 +867,7 @@ function MessageInner({
                 <ToolCallGroup
                   calls={toolCalls}
                   collapsible={provider !== 'jait'}
+                  threadControlThreads={threadControlThreads}
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
                   renderInlineSecretPrompt={renderInlineSecretPrompt}

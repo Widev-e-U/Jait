@@ -32,7 +32,8 @@ describe("loadConfig", () => {
     expect(config.logLevel).toBe("info");
     expect(config.corsOrigin).toBe("http://localhost:3000");
     expect(config.nodeEnv).toBe("development");
-    expect(config.jwtSecret).toBe("jait-dev-secret-change-in-production");
+    expect(config.jwtSecret).toHaveLength(64);
+    expect(config.hookSecret).toHaveLength(64);
     expect(config.ollamaUrl).toContain("11434");
     expect(config.ollamaModel).toBeTruthy();
   });

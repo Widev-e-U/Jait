@@ -99,7 +99,7 @@ import { DetachedTerminalView, saveDetachedTerminal } from '@/components/termina
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { GatewayUnavailable } from '@/components/gateway-unavailable'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
-import { ModelIcon, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
+import { ModelIcon, formatModelDisplayLabel, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
@@ -6655,8 +6655,8 @@ function App() {
               const displayProvider = chatProvider === 'codex' ? 'openai'
                 : chatProvider === 'claude-code' ? 'anthropic'
                 : provider ?? 'ollama'
-              const displayModel = chatProvider === 'codex' ? (cliModel ?? 'Codex')
-                : chatProvider === 'claude-code' ? (cliModel ?? 'Claude Code')
+              const displayModel = chatProvider === 'codex' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Codex')
+                : chatProvider === 'claude-code' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Claude Code')
                 : effectiveModel ? getModelDisplayName(effectiveModel) : null
               const tooltipText = chatProvider === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
                 : chatProvider === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
@@ -7807,6 +7807,7 @@ function App() {
                               compact
                               preferLlmUi={false}
                               provider={automation.selectedThread?.providerId as ProviderId | undefined}
+                              threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
                               renderInlineSecretPrompt={renderInlineSecretPrompt}
                               onOpenPath={handleOpenMessagePath}
                               onOpenDiff={handleChangedFileClick}
@@ -8144,6 +8145,7 @@ function App() {
                         compact={showWorkspace || showScreenShare || previewOpen}
                         preferLlmUi
                         provider={chatProvider}
+                        threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
                         onOpenTerminal={handleOpenTerminalFromToolCall}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
                         onEditMessage={handleEditPreviousMessage}

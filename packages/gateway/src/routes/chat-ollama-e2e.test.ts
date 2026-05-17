@@ -2,7 +2,7 @@
  * End-to-end test against a real Ollama instance.
  *
  * Skipped in CI — run manually with:
- *   OLLAMA_E2E_URL=http://192.168.178.60:11434 bun run test -- --run packages/gateway/src/routes/chat-ollama-e2e.test.ts
+ *   OLLAMA_E2E_URL=http://localhost:11434 bun run test -- --run packages/gateway/src/routes/chat-ollama-e2e.test.ts
  */
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../server.js";
@@ -13,7 +13,7 @@ import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
 
-const OLLAMA_URL = process.env["OLLAMA_E2E_URL"] || "http://192.168.178.60:11434";
+const OLLAMA_URL = process.env["OLLAMA_E2E_URL"] || "http://localhost:11434";
 const OLLAMA_MODEL = process.env["OLLAMA_E2E_MODEL"] || "gemma4:26b";
 
 // Skip the entire suite in CI or when SKIP_OLLAMA_E2E is set

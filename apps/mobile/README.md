@@ -17,4 +17,5 @@ bun run --filter '@jait/mobile' dev
 ## Bestehende Integration
 
 - Die bestehende Gateway-Bootstrap-Logik bleibt über `src/mobile-bootstrap.ts` erhalten.
+- Set `EXPO_PUBLIC_JAIT_GATEWAY_URL` to point the native app at a gateway on your LAN or tunnel.
 - Capacitor-Skripte bleiben in `package.json` verfügbar für den bisherigen WebView-Pfad.

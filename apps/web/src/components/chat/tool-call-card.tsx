@@ -223,7 +223,10 @@ function getToolInvocationLabels(
     const action = displayStr(normalizedArgs.action)
     const count = Array.isArray(normalizedArgs.threads) ? normalizedArgs.threads.length : 1
     if (action === 'create_many') return { running: `Running ${count} threads`, done: `Ran ${count} threads` }
-    if (action === 'create') return { running: 'Starting thread', done: 'Started thread' }
+    if ((action === 'create' || action === 'start') && normalizedArgs.start !== false) {
+      return { running: 'Processing thread', done: 'Processed thread' }
+    }
+    if (action === 'create') return { running: 'Creating thread', done: 'Created thread' }
     return { running: 'Managing threads', done: 'Managed threads' }
   }
   if (normalized === 'todo') {
@@ -343,6 +346,8 @@ interface ThreadListItem {
   error: string | null
 }
 
+type ThreadListRecord = Record<string, unknown>
+
 function toRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
@@ -376,32 +381,51 @@ function threadItemFromRecord(record: Record<string, unknown>, fallbackStatus: T
   }
 }
 
+function normalizeThreadTitle(value: string): string {
+  return value.trim().replace(/^\[.*?\]\s*/, '').toLowerCase()
+}
+
+function mergeLiveThreadItems(items: ThreadListItem[], liveThreadRecords?: ThreadListRecord[]): ThreadListItem[] {
+  if (!liveThreadRecords?.length) return items
+  const liveItems = liveThreadRecords.flatMap((record) => [threadItemFromRecord(record, 'created')])
+  const liveById = new Map(liveItems.flatMap((item) => item.id ? [[item.id, item]] : []))
+  const liveByTitle = new Map<string, ThreadListItem>()
+  for (const item of liveItems) {
+    liveByTitle.set(normalizeThreadTitle(item.title), item)
+  }
+  return items.map((item) => {
+    const live = (item.id ? liveById.get(item.id) : undefined) ?? liveByTitle.get(normalizeThreadTitle(item.title))
+    return live ? { ...item, ...live } : item
+  })
+}
+
 export function getThreadControlListItems(
   args: Record<string, unknown>,
   resultData?: Record<string, unknown>,
   status?: ToolCallInfo['status'],
+  liveThreadRecords?: ThreadListRecord[],
 ): ThreadListItem[] {
   const dataThreads = Array.isArray(resultData?.threads) ? resultData.threads : null
   if (dataThreads) {
-    return dataThreads.flatMap((entry) => {
+    return mergeLiveThreadItems(dataThreads.flatMap((entry) => {
       const record = toRecord(entry)
       return record ? [threadItemFromRecord(record, 'created')] : []
-    })
+    }), liveThreadRecords)
   }
 
   const dataThread = toRecord(resultData?.thread)
-  if (dataThread) return [threadItemFromRecord(dataThread, 'created')]
+  if (dataThread) return mergeLiveThreadItems([threadItemFromRecord(dataThread, 'created')], liveThreadRecords)
 
   const fallbackStatus: ThreadListStatus = status === 'running' || status === 'pending' ? 'starting' : 'created'
   if (Array.isArray(args.threads)) {
-    return args.threads.flatMap((entry) => {
+    return mergeLiveThreadItems(args.threads.flatMap((entry) => {
       const record = toRecord(entry)
       return record ? [threadItemFromRecord(record, fallbackStatus)] : []
-    })
+    }), liveThreadRecords)
   }
 
   if (args.action === 'create') {
-    return [threadItemFromRecord(args, fallbackStatus)]
+    return mergeLiveThreadItems([threadItemFromRecord(args, fallbackStatus)], liveThreadRecords)
   }
 
   return []
@@ -1780,6 +1804,7 @@ export function computeAgentNesting(calls: ToolCallInfo[]): {
 interface ToolCallCardProps {
   call: ToolCallInfo
   childCalls?: ToolCallInfo[]
+  threadControlThreads?: ThreadListRecord[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
   inlineSecretPrompt?: ReactNode
@@ -1937,6 +1962,7 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
 function ToolCallCardInner({
   call,
   childCalls,
+  threadControlThreads,
   onOpenTerminal,
   onOpenDiff,
   inlineSecretPrompt,
@@ -1993,7 +2019,7 @@ function ToolCallCardInner({
     ? true
     : bodyKind !== 'none' && !inlineBody
   const threadListItems = bodyKind === 'threadList'
-    ? getThreadControlListItems(normalizedArgs, resultData, call.status)
+    ? getThreadControlListItems(normalizedArgs, resultData, call.status, threadControlThreads)
     : []
   const effectiveOpen = hasInlineSecretPrompt ? true : open
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -2207,6 +2233,7 @@ function ToolCallCardInner({
             <ToolCallCard
               key={child.callId}
               call={child}
+              threadControlThreads={threadControlThreads}
               onOpenTerminal={onOpenTerminal}
               onOpenDiff={onOpenDiff}
               renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2393,6 +2420,7 @@ interface ToolCallGroupProps {
   calls: ToolCallInfo[]
   /** When true and all calls are completed with >= MIN_CALLS_TO_COLLAPSE, the entire group collapses into a summary row */
   collapsible?: boolean
+  threadControlThreads?: ThreadListRecord[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
@@ -2418,7 +2446,7 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
   return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
 }
 
-function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
@@ -2515,6 +2543,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, re
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}
+          threadControlThreads={threadControlThreads}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2527,6 +2556,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, re
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}
+          threadControlThreads={threadControlThreads}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2539,6 +2569,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, re
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}
+          threadControlThreads={threadControlThreads}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2565,6 +2596,7 @@ export const ToolCallGroup = memo(
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
     prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
+    prevProps.threadControlThreads === nextProps.threadControlThreads &&
     prevProps.collapsible === nextProps.collapsible &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
@@ -2576,6 +2608,7 @@ interface AgentToolCallWrapperProps {
   provider: string
   calls: ToolCallInfo[]
   isStreaming?: boolean
+  threadControlThreads?: ThreadListRecord[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
@@ -2586,7 +2619,7 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
-function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: AgentToolCallWrapperProps) {
+function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -2692,6 +2725,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 key={call.callId}
                 call={call}
                 childCalls={childMap.get(call.callId)}
+                threadControlThreads={threadControlThreads}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2704,6 +2738,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 key={call.callId}
                 call={call}
                 childCalls={childMap.get(call.callId)}
+                threadControlThreads={threadControlThreads}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2716,6 +2751,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 key={call.callId}
                 call={call}
                 childCalls={childMap.get(call.callId)}
+                threadControlThreads={threadControlThreads}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
@@ -2738,6 +2774,7 @@ export const AgentToolCallWrapper = memo(
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
     prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
+    prevProps.threadControlThreads === nextProps.threadControlThreads &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
 AgentToolCallWrapper.displayName = 'AgentToolCallWrapper'

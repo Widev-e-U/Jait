@@ -84,9 +84,8 @@ export class WsControlPlane {
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 
   constructor(private config: AppConfig) {
-    // Use the configured JWT secret, or a dev-mode fallback
-    const secret = config.jwtSecret || "jait-dev-secret-change-in-production";
-    this.jwtSecret = new TextEncoder().encode(secret);
+    if (!config.jwtSecret.trim()) throw new Error("JWT secret is not configured");
+    this.jwtSecret = new TextEncoder().encode(config.jwtSecret);
   }
 
   /**

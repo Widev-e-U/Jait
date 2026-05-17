@@ -3,6 +3,7 @@ import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
 import { homedir } from "os";
+import { randomBytes } from "crypto";
 
 // Skip dotenv loading if already handled by CLI entry (bin/jait.mjs)
 if (!process.env["__JAIT_CLI"]) {
@@ -73,6 +74,9 @@ export function loadConfig(): AppConfig {
   const hasOpenAiKey = !!process.env["OPENAI_API_KEY"];
   const explicitProvider = process.env["LLM_PROVIDER"] as LlmProvider | undefined;
 
+  const jwtSecret = process.env["JWT_SECRET"]?.trim() || randomBytes(32).toString("hex");
+  const hookSecret = process.env["HOOK_SECRET"]?.trim() || randomBytes(32).toString("hex");
+
   return {
     port: parseInt(process.env["PORT"] ?? "8000", 10),
     wsPort: parseInt(process.env["WS_PORT"] ?? "18789", 10),
@@ -80,7 +84,7 @@ export function loadConfig(): AppConfig {
     logLevel: process.env["LOG_LEVEL"] ?? "info",
     corsOrigin: process.env["CORS_ORIGIN"] ?? "http://localhost:3000",
     nodeEnv: process.env["NODE_ENV"] ?? "development",
-    jwtSecret: process.env["JWT_SECRET"] ?? "jait-dev-secret-change-in-production",
+    jwtSecret,
     llmProvider: explicitProvider ?? (hasOpenAiKey ? "openai" : "ollama"),
     ollamaUrl: process.env["OLLAMA_URL"] ?? "http://localhost:11434",
     ollamaModel:
@@ -93,7 +97,7 @@ export function loadConfig(): AppConfig {
       process.env["CONTEXT_WINDOW"] ?? "0",
       10,
     ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
-    hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
+    hookSecret,
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
     realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",

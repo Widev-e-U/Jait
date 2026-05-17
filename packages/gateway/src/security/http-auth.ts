@@ -7,7 +7,8 @@ export interface AuthUser {
 }
 
 function getJwtSecret(secret: string): Uint8Array {
-  return new TextEncoder().encode(secret || "jait-dev-secret-change-in-production");
+  if (!secret.trim()) throw new Error("JWT secret is not configured");
+  return new TextEncoder().encode(secret);
 }
 
 export const AUTH_COOKIE_NAME = "jait_token";
@@ -65,4 +66,3 @@ export async function requireAuth(
   }
   return user;
 }
-

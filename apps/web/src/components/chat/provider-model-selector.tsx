@@ -10,6 +10,7 @@ import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo 
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth } from '@/hooks/useAuth'
+import { formatModelDisplayLabel } from '@/components/icons/model-icons'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -389,7 +390,7 @@ export function ProviderModelSelector({
   const currentModel = model ? models.find((entry) => entry.id === model) : null
   const displayModelLabel = loadingModels
       ? 'Loading'
-      : (currentModel?.name ?? model ?? 'Default')
+      : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
   const locationLabel = scopedToRepo
     ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
     : scopedToWorkspaceNode
@@ -806,7 +807,7 @@ function ModelItem({ model, selected, onSelect }: { model: ModelDef; selected: b
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
-          {model.name}
+          {formatModelDisplayLabel(model.name)}
           {model.isDefault && <span className="ml-1.5 text-2xs font-normal text-muted-foreground">(default)</span>}
         </div>
         {model.description && <div className="truncate text-xs leading-snug text-muted-foreground">{model.description}</div>}

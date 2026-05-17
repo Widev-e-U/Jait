@@ -4,6 +4,7 @@ import { designTokens } from '@jait/ui-shared'
 import { AdaptiveLayout } from './src/components/AdaptiveLayout'
 import { BaseCard } from './src/components/BaseCard'
 import { VoiceAssistant } from './src/components/VoiceAssistant'
+import { getMobileGatewayUrl } from './src/gateway-config'
 import { bootstrapMobileClient } from './src/mobile-bootstrap'
 
 type Screen = 'home' | 'assistant'
@@ -15,7 +16,7 @@ export default function App() {
 
   // Auto-discover gateway on launch
   useEffect(() => {
-    const gatewayUrl = 'http://192.168.178.60:1337' // TODO: make configurable / use discovery
+    const gatewayUrl = getMobileGatewayUrl()
     bootstrapMobileClient(gatewayUrl)
       .then(result => setApiBaseUrl(result.apiBaseUrl))
       .catch(err => console.warn('Gateway discovery failed:', err))
