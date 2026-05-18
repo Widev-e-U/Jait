@@ -132,4 +132,25 @@ describe("validateToolInput", () => {
       },
     });
   });
+
+  it("rejects non-finite number values", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        timeoutMs: { type: "number" },
+        retryCount: { type: "integer" },
+      },
+      required: ["timeoutMs", "retryCount"],
+    } as const;
+
+    expect(validateToolInput(schema, { timeoutMs: Number.NaN, retryCount: 1 })).toEqual({
+      valid: false,
+      errors: ["Property 'timeoutMs' expected type 'number', got 'number'"],
+    });
+
+    expect(validateToolInput(schema, { timeoutMs: 1000, retryCount: Number.POSITIVE_INFINITY })).toEqual({
+      valid: false,
+      errors: ["Property 'retryCount' expected type 'integer', got 'number'"],
+    });
+  });
 });

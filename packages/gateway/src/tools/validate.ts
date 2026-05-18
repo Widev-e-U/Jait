@@ -20,7 +20,7 @@ export interface ValidationResult {
 
 const TYPE_CHECKS: Record<string, (v: unknown) => boolean> = {
   string: (v) => typeof v === "string",
-  number: (v) => typeof v === "number",
+  number: (v) => typeof v === "number" && Number.isFinite(v),
   integer: (v) => typeof v === "number" && Number.isInteger(v),
   boolean: (v) => typeof v === "boolean",
   array: (v) => Array.isArray(v),
