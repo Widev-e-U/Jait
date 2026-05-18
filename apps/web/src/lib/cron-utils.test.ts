@@ -94,6 +94,15 @@ describe('cron utils', () => {
     expect(getNextRunTime('0 9x * * *')).toBeNull()
   })
 
+  it('returns null for out-of-range schedules when computing next run times', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:05:30.000Z'))
+
+    expect(getNextRunTime('90 * * * *')).toBeNull()
+    expect(getNextRunTime('0 24 * * *')).toBeNull()
+    expect(getNextRunTime('*/60 * * * *')).toBeNull()
+  })
+
   it('does not round relative times up before the next hour boundary', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-25T10:00:00.000Z'))
