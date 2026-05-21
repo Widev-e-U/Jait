@@ -160,9 +160,10 @@ export function getNextRunTime(cron: string): Date | null {
   // Simple next-run calculation (for display purposes)
   // For accurate calculation, use a proper cron library
   try {
+    if (!validateCron(cron).valid) return null
+
     const now = new Date()
     const parts = normalizeCronExpression(cron).split(' ')
-    if (parts.length !== 5) return null
     
     const [minute, hour] = parts
     
