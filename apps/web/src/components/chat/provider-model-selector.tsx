@@ -159,7 +159,10 @@ export function ProviderModelSelector({
     userCode?: string
     verificationUri?: string
     copied?: boolean
+    requiresCodeInput?: boolean
+    inputPrompt?: string
   } | null>(null)
+  const codeInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const refreshProviders = useCallback((fresh = false) => {
@@ -188,6 +191,26 @@ export function ProviderModelSelector({
     }
   }
 
+  const sendCode = async (providerId: ProviderId) => {
+    const code = codeInputRef.current?.value.trim()
+    if (!code || authBusyProvider) return
+    setAuthBusyProvider(providerId)
+    try {
+      await agentsApi.sendProviderLoginInput(providerId, code)
+      if (codeInputRef.current) codeInputRef.current.value = ''
+      setLoginDialog((prev) => prev && prev.providerId === providerId
+        ? { ...prev, requiresCodeInput: false, message: 'Code sent. Completing login…' }
+        : prev)
+      refreshProviders(true)
+    } catch (error) {
+      setLoginDialog((prev) => prev && prev.providerId === providerId
+        ? { ...prev, tone: 'error', message: error instanceof Error ? error.message : 'Failed to send code.' }
+        : prev)
+    } finally {
+      setAuthBusyProvider(null)
+    }
+  }
+
   const startLogin = async (providerId: ProviderId, label: string) => {
     if (authBusyProvider) return
     setOpen(false)
@@ -209,16 +232,23 @@ export function ProviderModelSelector({
           copied = false
         }
       }
+      if (result.verificationUri) {
+        window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
+      }
       setLoginDialog({
         providerId,
         label,
         tone: 'success',
         message: result.userCode
           ? `Device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
-          : result.message,
+          : result.requiresCodeInput
+            ? (result.inputPrompt ?? `Enter the authorization code from your browser to complete ${label} login.`)
+            : result.message,
         userCode: result.userCode,
         verificationUri: result.verificationUri,
         copied,
+        requiresCodeInput: result.requiresCodeInput,
+        inputPrompt: result.inputPrompt,
       })
       refreshProviders(true)
     } catch (error) {
@@ -773,6 +803,28 @@ export function ProviderModelSelector({
                     <Button variant="outline" size="sm" onClick={() => void copyCode(loginDialog.providerId, loginDialog.userCode!)}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />
                       {loginDialog.copied ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {loginDialog.requiresCodeInput && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Authorization code</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <input
+                      ref={codeInputRef}
+                      type="text"
+                      placeholder="Paste authorization code…"
+                      className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      onKeyDown={(e) => { if (e.key === 'Enter') void sendCode(loginDialog.providerId) }}
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      disabled={Boolean(authBusyProvider)}
+                      onClick={() => void sendCode(loginDialog.providerId)}
+                    >
+                      {authBusyProvider ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Submit'}
                     </Button>
                   </div>
                 </div>
