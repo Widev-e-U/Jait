@@ -12,6 +12,7 @@ let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDurat
 let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineSecretPromptForCalls']
 let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
 let getCallSummary: typeof import('./tool-call-card')['getCallSummary']
+let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -35,6 +36,7 @@ beforeAll(async () => {
     hasInlineSecretPromptForCalls,
     getRunningHint,
     getCallSummary,
+    getEditDiffCounts,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -205,6 +207,21 @@ describe('getCallSummary', () => {
       old_str: 'before',
       new_str: 'after\nagain',
     })).toBe('acp-provider.ts (+2 -1)')
+  })
+
+  it('counts only changed edit lines instead of whole blocks', () => {
+    const oldBlock = ['same 1', 'same 2', 'old value', 'same 3'].join('\n')
+    const newBlock = ['same 1', 'same 2', 'new value', 'same 3'].join('\n')
+    expect(getEditDiffCounts('replace_string_in_file', {
+      targetFile: 'src/app.ts',
+      old_str: oldBlock,
+      new_str: newBlock,
+    })).toEqual({ insertions: 1, deletions: 1 })
+    expect(getCallSummary('replace_string_in_file', {
+      targetFile: 'src/app.ts',
+      old_str: oldBlock,
+      new_str: newBlock,
+    })).toBe('app.ts (+1 -1)')
   })
 })
 

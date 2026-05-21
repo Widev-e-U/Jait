@@ -141,6 +141,7 @@ interface QueuedThreadMessage {
 type QueuedThreadMessagesState = Record<string, QueuedThreadMessage[]>;
 
 const QUEUED_THREAD_MESSAGES_KEY = "queued_thread_messages";
+const THREAD_REGISTRY_SNAPSHOT_LIMIT = 10;
 
 function parseQueuedThreadMessagesState(raw: unknown): QueuedThreadMessagesState {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -213,39 +214,43 @@ export function registerThreadRoutes(
   const remoteProviders = new Map<string, RemoteCliProvider>();
 
   if (ws) {
-    ws.getThreadSnapshot = (userId: string): ThreadRegistrySnapshot => ({
-      serverTime: new Date().toISOString(),
-      threads: threadService.list(userId).map((thread): ThreadInfo => ({
-        id: thread.id,
-        userId: thread.userId,
-        sessionId: thread.sessionId,
-        title: thread.title,
-        providerId: thread.providerId as ThreadInfo["providerId"],
-        model: thread.model,
-        runtimeMode: thread.runtimeMode as ThreadInfo["runtimeMode"],
-        kind: thread.kind as ThreadInfo["kind"],
-        workingDirectory: thread.workingDirectory,
-        branch: thread.branch,
-        status: thread.status as ThreadInfo["status"],
-        providerSessionId: thread.providerSessionId,
-        error: thread.error,
-        prUrl: thread.prUrl,
-        prNumber: thread.prNumber,
-        prTitle: thread.prTitle,
-        prBaseBranch: thread.prBaseBranch,
-        prState: normalizeThreadPrState(thread.prState),
-        executionNodeId: thread.executionNodeId ?? null,
-        executionNodeName: thread.executionNodeName ?? null,
-        routingPlan: thread.routingPlan ?? null,
-        skillIds: thread.skillIds,
-        changeFiles: thread.changeFiles ?? null,
-        changeInsertions: thread.changeInsertions ?? null,
-        changeDeletions: thread.changeDeletions ?? null,
-        createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt,
-        completedAt: thread.completedAt,
-      })),
-    });
+    ws.getThreadSnapshot = (userId: string): ThreadRegistrySnapshot => {
+      const threads = threadService.list(userId, THREAD_REGISTRY_SNAPSHOT_LIMIT + 1);
+      return {
+        serverTime: new Date().toISOString(),
+        hasMore: threads.length > THREAD_REGISTRY_SNAPSHOT_LIMIT,
+        threads: threads.slice(0, THREAD_REGISTRY_SNAPSHOT_LIMIT).map((thread): ThreadInfo => ({
+          id: thread.id,
+          userId: thread.userId,
+          sessionId: thread.sessionId,
+          title: thread.title,
+          providerId: thread.providerId as ThreadInfo["providerId"],
+          model: thread.model,
+          runtimeMode: thread.runtimeMode as ThreadInfo["runtimeMode"],
+          kind: thread.kind as ThreadInfo["kind"],
+          workingDirectory: thread.workingDirectory,
+          branch: thread.branch,
+          status: thread.status as ThreadInfo["status"],
+          providerSessionId: thread.providerSessionId,
+          error: thread.error,
+          prUrl: thread.prUrl,
+          prNumber: thread.prNumber,
+          prTitle: thread.prTitle,
+          prBaseBranch: thread.prBaseBranch,
+          prState: normalizeThreadPrState(thread.prState),
+          executionNodeId: thread.executionNodeId ?? null,
+          executionNodeName: thread.executionNodeName ?? null,
+          routingPlan: thread.routingPlan ?? null,
+          skillIds: thread.skillIds,
+          changeFiles: thread.changeFiles ?? null,
+          changeInsertions: thread.changeInsertions ?? null,
+          changeDeletions: thread.changeDeletions ?? null,
+          createdAt: thread.createdAt,
+          updatedAt: thread.updatedAt,
+          completedAt: thread.completedAt,
+        })),
+      };
+    };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
@@ -1288,6 +1293,9 @@ export function registerThreadRoutes(
         } catch (err) {
           const activeThread = threadService.getById(id);
           if (!activeThread || activeThread.providerSessionId !== session.id) {
+            return;
+          }
+          if (activeThread.status === "completed") {
             return;
           }
           const errorMsg = err instanceof Error ? err.message : String(err);

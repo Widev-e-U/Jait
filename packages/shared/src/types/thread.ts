@@ -108,6 +108,7 @@ export interface ThreadInfo {
 export interface ThreadRegistrySnapshot {
   serverTime: string;
   threads: ThreadInfo[];
+  hasMore?: boolean;
 }
 
 // ── Thread activity ──────────────────────────────────────────────────

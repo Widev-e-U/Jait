@@ -280,6 +280,7 @@ export function useAutomation(enabled = true) {
         const snapshot = payload as unknown as ThreadRegistrySnapshot | undefined
         if (Array.isArray(snapshot?.threads)) {
           setThreads(snapshot.threads as AgentThread[])
+          setHasMoreThreads(Boolean(snapshot.hasMore))
           break
         }
         const thread = payload.thread as AgentThread | undefined
@@ -414,7 +415,7 @@ export function useAutomation(enabled = true) {
         break
       }
     }
-  }, [])
+  }, [refreshProviders])
 
   // Fetch activities once when selected thread changes (no polling)
   useEffect(() => {

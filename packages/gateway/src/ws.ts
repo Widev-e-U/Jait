@@ -79,7 +79,7 @@ export class WsControlPlane {
     reject: (reason: Error) => void;
     timer: ReturnType<typeof setTimeout>;
   }>();
-  getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[] };
+  getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[]; hasMore?: boolean };
   getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 

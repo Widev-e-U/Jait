@@ -1011,6 +1011,10 @@ export function useChat(
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
     const assistantId = createOptimisticMessageId('assistant')
 
+    if (requestSessionId && prevSessionIdRef.current !== requestSessionId) {
+      prevSessionIdRef.current = requestSessionId
+    }
+
     const userMessage: ChatMessage = {
       id: createOptimisticMessageId('user'),
       role: 'user',

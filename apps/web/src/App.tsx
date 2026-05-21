@@ -5993,13 +5993,29 @@ function App() {
     }
 
     const audioBlob = await new Promise<Blob>((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(new Blob(audioChunksRef.current, { type: recorder.mimeType }))
+      }
+      const timeout = window.setTimeout(finish, 1500)
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data)
       }
-      recorder.onstop = () => {
-        resolve(new Blob(audioChunksRef.current, { type: recorder.mimeType }))
+      recorder.onstop = finish
+      recorder.onerror = finish
+      try {
+        recorder.requestData()
+      } catch {
+        // Some browsers throw if the recorder is already stopping.
       }
-      recorder.stop()
+      try {
+        recorder.stop()
+      } catch {
+        finish()
+      }
     })
 
     // Stop mic
@@ -6051,7 +6067,7 @@ function App() {
         setVoiceTranscribing(false)
       }
     }
-  }, [activeSessionId, buildWavBlob, settings.stt_provider, token])
+  }, [activeSessionId, buildWavBlob, settings.stt_provider, stopVoiceVisualizer, token])
 
   const handleVoiceInput = useCallback(async () => {
     if (!token) {

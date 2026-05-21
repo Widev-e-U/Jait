@@ -685,6 +685,7 @@ export function TodoPage({
   const [isGenerating, setIsGenerating] = useState(false)
   const [runningTodoIds, setRunningTodoIds] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
+  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(true)
   const newMessageRef = useRef<HTMLTextAreaElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -1375,27 +1376,36 @@ export function TodoPage({
 
       {completionEvents.length > 0 && (
         <div className="rounded-lg border p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-start gap-2 px-0 py-0 text-sm font-medium hover:bg-transparent"
+            onClick={() => setIsHistoryCollapsed((collapsed) => !collapsed)}
+            aria-expanded={!isHistoryCollapsed}
+          >
+            <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', !isHistoryCollapsed && 'rotate-90')} />
             <History className="h-4 w-4 text-muted-foreground" />
             Completion history
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            {completionEvents.map((event: CompletionEvent) => (
-              <div key={`${event.todoId}-${event.completedAt}`} className="min-w-0 rounded-md border bg-card/40 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  <span>{dateTimeLabel(event.completedAt)}</span>
-                  {event.previousStatus && <span>from {getStatusMeta(event.previousStatus).label}</span>}
-                </div>
-                <div className="mt-1 truncate text-sm">{event.message}</div>
-                {event.tags.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {event.tags.slice(0, 4).map((tag: string) => <Badge key={tag} variant="secondary" className="h-5 rounded px-1.5 text-[11px]">{tag}</Badge>)}
+            <Badge variant="secondary" className="ml-auto">{completionEvents.length}</Badge>
+          </Button>
+          {!isHistoryCollapsed && (
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              {completionEvents.map((event: CompletionEvent) => (
+                <div key={`${event.todoId}-${event.completedAt}`} className="min-w-0 rounded-md border bg-card/40 px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>{dateTimeLabel(event.completedAt)}</span>
+                    {event.previousStatus && <span>from {getStatusMeta(event.previousStatus).label}</span>}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  <div className="mt-1 truncate text-sm">{event.message}</div>
+                  {event.tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {event.tags.slice(0, 4).map((tag: string) => <Badge key={tag} variant="secondary" className="h-5 rounded px-1.5 text-[11px]">{tag}</Badge>)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

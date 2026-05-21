@@ -442,6 +442,38 @@ function countLines(value: string): number {
   return value.split('\n').length
 }
 
+function getLines(value: string): string[] {
+  if (!value) return []
+  const lines = value.split('\n')
+  return lines.length > 1 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines
+}
+
+function countChangedLines(original: string, modified: string): { insertions: number; deletions: number } {
+  const originalLines = getLines(original)
+  const modifiedLines = getLines(modified)
+  if (originalLines.length === 0) return { insertions: modifiedLines.length, deletions: 0 }
+  if (modifiedLines.length === 0) return { insertions: 0, deletions: originalLines.length }
+
+  const previous = new Array(modifiedLines.length + 1).fill(0) as number[]
+  const current = new Array(modifiedLines.length + 1).fill(0) as number[]
+
+  for (let leftIndex = 1; leftIndex <= originalLines.length; leftIndex += 1) {
+    for (let rightIndex = 1; rightIndex <= modifiedLines.length; rightIndex += 1) {
+      current[rightIndex] = originalLines[leftIndex - 1] === modifiedLines[rightIndex - 1]
+        ? previous[rightIndex - 1]! + 1
+        : Math.max(previous[rightIndex]!, current[rightIndex - 1]!)
+    }
+    previous.splice(0, previous.length, ...current)
+    current.fill(0)
+  }
+
+  const unchanged = previous[modifiedLines.length] ?? 0
+  return {
+    insertions: Math.max(0, modifiedLines.length - unchanged),
+    deletions: Math.max(0, originalLines.length - unchanged),
+  }
+}
+
 function getBaseName(path: string): string {
   const normalized = path.replace(/\\/g, '/').trim()
   if (!normalized) return ''
@@ -506,7 +538,7 @@ function getFileSummaryActionLabel(tool: string, isActive: boolean): string {
   return isActive ? 'Working' : 'Done'
 }
 
-function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): string | null {
+export function getEditDiffCounts(tool: string, args: Record<string, unknown>): { insertions: number; deletions: number } | null {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
   const search = typeof normalizedArgs.search === 'string' ? normalizedArgs.search : ''
@@ -515,22 +547,35 @@ function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): str
 
   if (normalized === 'file.write') {
     const added = countLines(content)
-    return added > 0 ? `+${added}` : null
+    return added > 0 ? { insertions: added, deletions: 0 } : null
   }
 
   if (normalized === 'file.patch' || normalized === 'edit') {
     if (search || replace) {
-      const removed = countLines(search)
-      const added = countLines(replace)
-      return `+${added} -${removed}`
+      return countChangedLines(search, replace)
     }
     if (content) {
       const added = countLines(content)
-      return added > 0 ? `+${added}` : null
+      return added > 0 ? { insertions: added, deletions: 0 } : null
     }
   }
 
   return null
+}
+
+function formatEditDiffCounts(counts: { insertions: number; deletions: number } | null): string | null {
+  if (!counts) return null
+  if (counts.insertions === 0 && counts.deletions === 0) return null
+  return `+${counts.insertions} -${counts.deletions}`
+}
+
+function EditDiffCountBadge({ counts }: { counts: { insertions: number; deletions: number } }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border/60 bg-muted/35 px-1.5 py-0.5 text-2xs font-semibold tabular-nums">
+      {counts.insertions > 0 && <span className="text-green-600 dark:text-green-400">+{counts.insertions}</span>}
+      {counts.deletions > 0 && <span className="text-red-600 dark:text-red-400">-{counts.deletions}</span>}
+    </span>
+  )
 }
 
 function getCollapsedToolCategory(tool: string): string {
@@ -619,7 +664,7 @@ export function getCallSummary(
   if (normalized === 'edit') {
     const path = filePath ?? displayStr(normalizedArgs.path)
     const fileName = getBaseName(path)
-    const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
+    const diffCount = formatEditDiffCounts(getEditDiffCounts(normalized, normalizedArgs))
     if (normalizedArgs.search) return `${fileName}${diffCount ? ` (${diffCount})` : ' (patch)'}`
     if (diffCount) return `${fileName} (${diffCount})`
     return fileName
@@ -680,7 +725,7 @@ export function getCallSummary(
   if (normalized.startsWith('terminal.')) return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'file.write' || normalized === 'file.patch') {
     const path = filePath ?? displayStr(normalizedArgs.path)
-    const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
+    const diffCount = formatEditDiffCounts(getEditDiffCounts(normalized, normalizedArgs))
     return diffCount ? `${path} (${diffCount})` : path
   }
   if (normalized.startsWith('file.')) return filePath ?? displayStr(normalizedArgs.path)
@@ -1985,7 +2030,7 @@ function ToolCallCardInner({
   const Icon = mcpMeta?.icon ?? meta.icon
   const effectiveColor = mcpMeta?.color ?? meta.color
   const summary = getCallSummary(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
-  const editDiffCount = getEditDiffCountLabel(normalizedTool, normalizedArgs)
+  const editDiffCounts = getEditDiffCounts(normalizedTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
@@ -2175,10 +2220,8 @@ function ToolCallCardInner({
       <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">
         <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
       </span>
-      {editDiffCount && (
-        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-blue-500 shrink-0">
-          {editDiffCount}
-        </span>
+      {editDiffCounts && (editDiffCounts.insertions > 0 || editDiffCounts.deletions > 0) && (
+        <EditDiffCountBadge counts={editDiffCounts} />
       )}
       {terminalOutcomeBadge && (
         <span
