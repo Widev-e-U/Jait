@@ -1798,6 +1798,34 @@ export function registerChatRoutes(
         // turn.completed fired synchronously inside sendTurn)
         await turnDonePromise;
 
+        // ── Drain steering messages: send follow-up turns for any messages
+        // injected via the /steer endpoint while the CLI provider was running. ──
+        while (!streamAbort.signal.aborted && !sessionError) {
+          const steered = steering.drain();
+          if (steered.length === 0) break;
+
+          const steerContent = steered.map(m => `[STEERING] ${m}`).join("\n\n");
+          app.log.info(`[chat/cli] Steering follow-up for session ${sessionId}: ${steerContent.slice(0, 100)}`);
+
+          // Set up a new turn-completion listener
+          let steerDoneResolve: (() => void) | null = null;
+          const steerDonePromise = new Promise<void>((resolve) => { steerDoneResolve = resolve; });
+          const unsubSteerDone = cliProvider!.onEvent((event: ProviderEvent) => {
+            if (event.sessionId !== providerSessionId) return;
+            if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
+              if (event.type === "session.error") {
+                sessionError = typeof (event as any).message === "string" ? (event as any).message : "Session error";
+                activeCliSessions.delete(sessionId);
+              }
+              unsubSteerDone();
+              steerDoneResolve?.();
+            }
+          });
+
+          await cliProvider!.sendTurn(providerSessionId, steerContent);
+          await steerDonePromise;
+        }
+
         unsubscribe();
         fullContent = contentChunks.join("");
 

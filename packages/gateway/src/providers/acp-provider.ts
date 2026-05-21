@@ -398,6 +398,12 @@ export class AcpProvider implements CliProviderAdapter {
     return this.cachedAuthStatus?.status.authenticated === true;
   }
 
+  sendLoginInput(input: string): void {
+    if (this.authLoginProcess?.stdin?.writable) {
+      this.authLoginProcess.stdin.write(`${input.trim()}\n`);
+    }
+  }
+
   async logout(): Promise<ProviderLogoutResult> {
     if (this.authLoginProcess) {
       killAuthChildTree(this.authLoginProcess);

@@ -211,6 +211,27 @@ export function registerProviderRoutes(
     return result;
   });
 
+  /** Send code input to running login process (reverse device-code / browser-callback flow) */
+  app.post("/api/providers/:id/auth/login/input", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const { code } = (request.body ?? {}) as { code?: string };
+    if (!code || typeof code !== "string" || !code.trim()) {
+      return reply.status(400).send({ error: "Missing or empty code" });
+    }
+
+    const provider = providerRegistry.get(id as ProviderId);
+    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    if (!provider.sendLoginInput) {
+      return reply.status(501).send({ error: `Provider ${id} does not support code input` });
+    }
+
+    provider.sendLoginInput(code.trim());
+    return { ok: true };
+  });
+
   /** Log out provider */
   app.post("/api/providers/:id/auth/logout", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

@@ -49,6 +49,13 @@ export interface ProviderLoginResult {
   verificationUri?: string;
   userCode?: string;
   rawOutput?: string;
+  /**
+   * True when the provider CLI is waiting for the user to paste a code
+   * obtained from the browser back into it (reverse of device-code flow).
+   */
+  requiresCodeInput?: boolean;
+  /** The prompt text the CLI showed (e.g. "Enter the authorization code from your browser"). */
+  inputPrompt?: string;
 }
 
 export interface ProviderLogoutResult {
@@ -147,6 +154,12 @@ export interface CliProviderAdapter {
    * Log out from the provider CLI.
    */
   logout?(): Promise<ProviderLogoutResult>;
+
+  /**
+   * Forward a code entered by the user to the running login process stdin.
+   * Called when a login result has `requiresCodeInput: true`.
+   */
+  sendLoginInput?(input: string): void;
 
   /**
    * Start a provider session for a given thread.

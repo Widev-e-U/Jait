@@ -96,7 +96,7 @@ export function stripAnsi(value: string): string {
   return value.replace(ansiEscapePattern, "");
 }
 
-export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string } {
+export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string } {
   const clean = stripAnsi(output);
   const verificationUri = clean.match(/https?:\/\/[^\s<>"')]+/i)?.[0]?.replace(/[.,;:]+$/, "");
   const codeShape = /^[A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4}$/i;
@@ -153,7 +153,33 @@ export function extractDeviceAuthDetails(output: string): { verificationUri?: st
       break;
     }
   }
-  return { verificationUri, userCode };
+
+  // Detect when the CLI is waiting for the user to paste a code FROM the browser
+  // INTO the CLI (reverse of device-code flow). Only applies when no userCode was
+  // found in the output (i.e. the CLI hasn't shown one — it's asking for one).
+  let requiresCodeInput: boolean | undefined;
+  let inputPrompt: string | undefined;
+  if (!userCode) {
+    const inputRequestPatterns = [
+      /enter\s+(?:the\s+)?authorization\s+code/i,
+      /paste\s+(?:the\s+)?(?:authorization\s+|auth\s+)?code/i,
+      /enter\s+(?:the\s+)?code\s+(?:from|shown|displayed)/i,
+      /code\s+from\s+(?:your\s+)?browser/i,
+      /authorization\s+code\s*:/i,
+    ];
+    for (const line of lines) {
+      for (const pattern of inputRequestPatterns) {
+        if (pattern.test(line)) {
+          requiresCodeInput = true;
+          inputPrompt = line.replace(/[:\s]+$/, "").trim();
+          break;
+        }
+      }
+      if (requiresCodeInput) break;
+    }
+  }
+
+  return { verificationUri, userCode, requiresCodeInput, inputPrompt };
 }
 
 export function runAuthCommand(
@@ -249,7 +275,7 @@ export function startDeviceLoginCommand(options: {
     let settled = false;
     const timeoutMs = options.timeoutMs ?? 30_000;
     let partialDetailsTimer: ReturnType<typeof setTimeout> | null = null;
-    const resolveStarted = (details: { verificationUri?: string; userCode?: string }) => {
+    const resolveStarted = (details: { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -263,6 +289,8 @@ export function startDeviceLoginCommand(options: {
           message: `${options.label} login started.`,
           verificationUri: details.verificationUri,
           userCode: details.userCode,
+          requiresCodeInput: details.requiresCodeInput,
+          inputPrompt: details.inputPrompt,
           rawOutput: stripAnsi(output).trim() || undefined,
         },
       });
@@ -291,8 +319,9 @@ export function startDeviceLoginCommand(options: {
     const tryResolveStarted = () => {
       if (settled) return;
       const details = extractDeviceAuthDetails(output);
-      if (!details.verificationUri && !details.userCode) return;
-      if (details.verificationUri && details.userCode) {
+      if (!details.verificationUri && !details.userCode && !details.requiresCodeInput) return;
+      // Immediately resolve when we have both parts, or when we know the CLI needs user input.
+      if ((details.verificationUri && details.userCode) || details.requiresCodeInput) {
         resolveStarted(details);
         return;
       }

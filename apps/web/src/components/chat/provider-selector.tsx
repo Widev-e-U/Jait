@@ -3,7 +3,7 @@
  * Follows the same pattern as ModeSelector.
  */
 
-import { useState, useEffect, useMemo, type ComponentType } from 'react'
+import { useState, useEffect, useMemo, useRef, type ComponentType } from 'react'
 import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, LogIn, LogOut, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
@@ -100,7 +100,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [localProviders, setLocalProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
-  const [authBusy, setAuthBusy] = useState<{ providerId: ProviderId; action: 'login' | 'logout' } | null>(null)
+  const [authBusy, setAuthBusy] = useState<{ providerId: ProviderId; action: 'login' | 'logout' | 'send-code' } | null>(null)
   const [authMessage, setAuthMessage] = useState<{
     providerId: ProviderId
     tone: 'success' | 'error'
@@ -108,6 +108,8 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
     userCode?: string
     verificationUri?: string
     copied?: boolean
+    requiresCodeInput?: boolean
+    inputPrompt?: string
   } | null>(null)
 
   const refreshProviders = (fresh = false) => {
@@ -133,6 +135,35 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
       setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: true } : prev)
     } catch {
       setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: false } : prev)
+    }
+  }
+
+  const codeInputRef = useRef<HTMLInputElement>(null)
+
+  const sendCode = async (providerId: ProviderId) => {
+    const code = codeInputRef.current?.value.trim()
+    if (!code || authBusy) return
+    setAuthBusy({ providerId, action: 'send-code' })
+    try {
+      await agentsApi.sendProviderLoginInput(providerId, code)
+      if (codeInputRef.current) codeInputRef.current.value = ''
+      setAuthMessage((prev) => prev && prev.providerId === providerId
+        ? { ...prev, requiresCodeInput: false, message: 'Code sent. Completing login…' }
+        : prev)
+      // Poll providers until authenticated or 30s
+      const start = Date.now()
+      const poll = () => {
+        if (Date.now() - start > 30_000) { refreshProviders(true); return }
+        refreshProviders(true)
+        setTimeout(poll, 2_000)
+      }
+      setTimeout(poll, 1_500)
+    } catch (error) {
+      setAuthMessage((prev) => prev && prev.providerId === providerId
+        ? { ...prev, tone: 'error', message: error instanceof Error ? error.message : 'Failed to send code.' }
+        : prev)
+    } finally {
+      setAuthBusy(null)
     }
   }
 
@@ -171,10 +202,14 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
         tone: 'success',
         message: result.userCode
           ? `${label} login started. Device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
-          : result.message,
+          : result.requiresCodeInput
+            ? (result.inputPrompt ?? `Enter the authorization code from your browser to complete ${label} login.`)
+            : result.message,
         userCode: result.userCode,
         verificationUri: result.verificationUri,
         copied,
+        requiresCodeInput: result.requiresCodeInput,
+        inputPrompt: result.inputPrompt,
       })
       refreshProviders(true)
     } catch (error) {
@@ -458,6 +493,25 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
                           <ExternalLink className="h-3 w-3" />
                           Open login page
                         </button>
+                      )}
+                      {providerAuthMessage.requiresCodeInput && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <input
+                            ref={codeInputRef}
+                            type="text"
+                            placeholder="Paste authorization code…"
+                            className="h-6 flex-1 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                            onKeyDown={(e) => { if (e.key === 'Enter') void sendCode(p.value) }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void sendCode(p.value)}
+                            disabled={Boolean(authBusy)}
+                            className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                          >
+                            {authBusy?.action === 'send-code' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Submit'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}

@@ -82,6 +82,10 @@ export interface ProviderLoginResult {
   verificationUri?: string
   userCode?: string
   rawOutput?: string
+  /** True when the provider CLI is waiting for the user to paste a code from the browser into it. */
+  requiresCodeInput?: boolean
+  /** The prompt shown by the CLI (e.g. "Enter the authorization code from your browser"). */
+  inputPrompt?: string
 }
 
 export interface ProviderLogoutResult {
@@ -469,6 +473,18 @@ export class AgentsApi {
       throw new Error(message)
     }
     return data as ProviderLogoutResult
+  }
+
+  async sendProviderLoginInput(providerId: ProviderId, code: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/auth/login/input`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ code }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { error?: string } | null
+      throw new Error(data?.error ?? `Failed to send login code: ${res.statusText}`)
+    }
   }
 
   private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>>()

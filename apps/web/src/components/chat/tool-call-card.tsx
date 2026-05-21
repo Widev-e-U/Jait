@@ -1721,8 +1721,8 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
         'bg-muted/40 text-foreground',
       )}>
         <div className="flex items-center gap-2">
-          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-          <span>{verb} {webTarget}...</span>
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
+          <span className="break-all">{verb} {webTarget}...</span>
         </div>
       </div>
     )
@@ -1737,7 +1737,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
         'bg-muted/40 text-foreground',
       )}>
         <div className="flex items-center gap-2">
-          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
           <span>Saving memory ({scope})...</span>
         </div>
         {content ? <div className="mt-1 opacity-80">"{truncate(content, 120)}"</div> : null}
@@ -1755,7 +1755,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
         'bg-muted/40 text-foreground',
       )}>
         <div className="flex items-center gap-2">
-          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
           <span>Creating cron job{ name ? `: ${name}` : '...' }</span>
         </div>
         {(cron || toolName) && (
@@ -1789,7 +1789,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
       'bg-muted/40 text-foreground',
     )}>
       <div className="flex items-center gap-2">
-        <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+        <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
         <span>Preparing...</span>
       </div>
     </div>
@@ -2324,8 +2324,8 @@ function ToolCallCardInner({
       )}
     >
       <div className="flex items-center gap-2">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        <span>{runningHint}</span>
+        <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+        <span className="break-all">{runningHint}</span>
       </div>
       <div className="mt-1 text-xs opacity-75">
         Elapsed: <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
