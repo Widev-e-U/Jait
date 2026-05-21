@@ -286,7 +286,6 @@ describe("createPreviewOpenTool", () => {
             workspaceRoot: "/workspace/error",
             displayState: "hidden",
             displayTarget: null,
-            storageScope: "unknown",
           },
         },
       }),
@@ -298,7 +297,6 @@ describe("createPreviewOpenTool", () => {
         workspaceRoot: "/workspace/error",
         displayState: "hidden",
         displayTarget: null,
-        storageScope: "unknown",
       },
     });
   });
