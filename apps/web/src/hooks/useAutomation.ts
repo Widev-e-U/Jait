@@ -114,6 +114,8 @@ export function useAutomation(enabled = true) {
   // Threads
   const [threads, setThreads] = useState<AgentThread[]>([])
   const [threadListLimit, setThreadListLimit] = useState(THREAD_LIST_LIMIT)
+  const threadListLimitRef = useRef(threadListLimit)
+  threadListLimitRef.current = threadListLimit
   const [hasMoreThreads, setHasMoreThreads] = useState(false)
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [activities, setActivities] = useState<ThreadActivity[]>([])
@@ -209,13 +211,10 @@ export function useAutomation(enabled = true) {
     if (!getAuthToken()) return // skip when not authenticated
     setLoading(true)
     try {
-      const [ts, provResult, repos] = await Promise.all([
-        agentsApi.listThreadsPage({ limit: threadListLimit }),
+      const [provResult, repos] = await Promise.all([
         agentsApi.listProviders(),
         agentsApi.listRepos(),
       ])
-      setThreads(ts.threads)
-      setHasMoreThreads(ts.hasMore)
       setProviders(provResult.providers)
       setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
       setProvidersLoaded(true)
@@ -226,7 +225,7 @@ export function useAutomation(enabled = true) {
     } finally {
       setLoading(false)
     }
-  }, [threadListLimit])
+  }, [nodeRegistry])
 
   /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
   const refreshProviders = useCallback(async () => {
@@ -252,7 +251,21 @@ export function useAutomation(enabled = true) {
     [localDeviceId, providers, remoteProviders, providersLoaded],
   )
 
-  // Fetch threads + providers once on mount (no polling — WS pushes updates)
+  // Fetch extended thread list when user loads more — initial list comes from WS snapshot
+  useEffect(() => {
+    if (!enabled || threadListLimit === THREAD_LIST_LIMIT) return
+    if (!getAuthToken()) return
+    const fetchMore = async () => {
+      try {
+        const ts = await agentsApi.listThreadsPage({ limit: threadListLimit })
+        setThreads(ts.threads)
+        setHasMoreThreads(ts.hasMore)
+      } catch { /* ignore — WS snapshot is fallback */ }
+    }
+    void fetchMore()
+  }, [enabled, threadListLimit])
+
+  // Fetch providers + repos once on mount (no polling — WS pushes updates; threads come from WS snapshot)
   useEffect(() => {
     if (!enabled) return
     void refresh()
@@ -279,8 +292,12 @@ export function useAutomation(enabled = true) {
       case 'thread.updated': {
         const snapshot = payload as unknown as ThreadRegistrySnapshot | undefined
         if (Array.isArray(snapshot?.threads)) {
-          setThreads(snapshot.threads as AgentThread[])
-          setHasMoreThreads(Boolean(snapshot.hasMore))
+          // Don't replace an expanded list (user clicked "show more") with the
+          // default-limit WS snapshot — that would silently truncate their view.
+          if (threadListLimitRef.current <= THREAD_LIST_LIMIT) {
+            setThreads(snapshot.threads as AgentThread[])
+            setHasMoreThreads(Boolean(snapshot.hasMore))
+          }
           break
         }
         const thread = payload.thread as AgentThread | undefined
@@ -901,6 +918,9 @@ export function useAutomation(enabled = true) {
 
   const showFewerThreads = useCallback(() => {
     setThreadListLimit(THREAD_LIST_LIMIT)
+    // Truncate local list back to the default limit; WS keeps it current going forward
+    setThreads(prev => prev.slice(0, THREAD_LIST_LIMIT))
+    setHasMoreThreads(true)
   }, [])
 
   return {
