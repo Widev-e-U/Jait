@@ -8,7 +8,8 @@ const WINDOWS_ABS_PATH_RE = /^[A-Za-z]:[\\/]/
 const UNIX_ABS_PATH_RE = /^\//
 
 function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  return normalized || (path.startsWith('/') ? '/' : '')
 }
 
 function pathFromFileUrl(url: URL): string {
@@ -134,7 +135,8 @@ export function isPathWithinWorkspace(path: string, workspaceRoot?: string | nul
     ? normalizedRoot.toLowerCase()
     : normalizedRoot
 
-  return comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`)
+  return comparablePath === comparableRoot
+    || (comparableRoot === '/' ? comparablePath.startsWith('/') : comparablePath.startsWith(`${comparableRoot}/`))
 }
 
 export function getWorkspaceRootForPath(path: string): string | null {

@@ -70,6 +70,11 @@ describe('workspace-links', () => {
     expect(isPathWithinWorkspace('/workspace/Jait/apps/web/src/App.tsx', '/workspace/Jait')).toBe(true)
   })
 
+  it('treats the filesystem root as a valid workspace boundary', () => {
+    expect(isPathWithinWorkspace('/workspace/Jait/apps/web/src/App.tsx', '/')).toBe(true)
+    expect(isPathWithinWorkspace('/', '/')).toBe(true)
+  })
+
   it('derives a fallback workspace root from a file path', () => {
     expect(getWorkspaceRootForPath('E:/Jait/apps/web/src/App.tsx')).toBe('E:/Jait/apps/web/src')
     expect(getWorkspaceRootForPath('/workspace/Jait/apps/web/src/App.tsx')).toBe('/workspace/Jait/apps/web/src')
