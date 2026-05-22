@@ -88,12 +88,16 @@ interface WorkspacePanelProps {
   sourceControlRefreshSignal?: number
   /** Persisted editor tab state for this session/workspace */
   savedTabsState?: WorkspaceTabsState | null
+  /** Persisted desktop tree/editor visibility and resize state */
+  savedLayoutState?: WorkspacePanelLayoutState | null
   /** True once the app shell has finished applying the initial WS-pushed state.
    *  The persist effect is suppressed until this becomes true to prevent
    *  overwriting the DB with an empty/interim state during startup. */
   stateReady?: boolean
   /** Called when open tabs/active tab change (for DB + WS sync) */
   onTabsStateChange?: (state: WorkspaceTabsState | null) => void
+  /** Called when the desktop panel/tree resize state changes */
+  onLayoutStateChange?: (state: WorkspacePanelLayoutState) => void
   /** Apply a merged review diff result to the backing file. */
   onApplyDiff?: (filePath: string, resultContent: string) => void | Promise<void>
   /** Active chat provider used for AI-powered git actions. */
@@ -130,6 +134,13 @@ interface WorkspacePanelProps {
   onMaxCollapsedChange?: (collapsed: boolean) => void
   /** Restore the panel from a collapsed state (called externally via button). */
   restoreRef?: React.MutableRefObject<(() => void) | null>
+}
+
+export interface WorkspacePanelLayoutState {
+  tree: boolean
+  editor: boolean
+  panelSize?: number
+  treeSize?: number
 }
 
 export interface WorkspacePanelHandle {
@@ -738,18 +749,20 @@ function useDragResize(
   max: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
   storageKey?: string,
-  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number; minStoredSize?: number },
+  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number; minStoredSize?: number; restoredSize?: number | null },
 ) {
   const snapCollapse = options?.snapCollapse ?? false
   const snapMaxCollapse = options?.snapMaxCollapse ?? false
   const snapMaxSize = options?.snapMaxSize ?? max
   const minStoredSize = options?.minStoredSize ?? min
+  const clampSize = useCallback((value: number) => Math.min(max, Math.max(min, minStoredSize, value)), [max, min, minStoredSize])
   const [size, setSize] = useState(() => {
+    if (Number.isFinite(options?.restoredSize)) return clampSize(options?.restoredSize as number)
     if (!storageKey || typeof window === 'undefined') return initial
     const raw = window.localStorage.getItem(storageKey)
     const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
     if (!Number.isFinite(parsed)) return initial
-    return Math.min(max, Math.max(min, minStoredSize, parsed))
+    return clampSize(parsed)
   })
   const [collapsed, setCollapsed] = useState(false)
   const [maxCollapsed, setMaxCollapsed] = useState(false)
@@ -766,6 +779,14 @@ function useDragResize(
   useEffect(() => {
     if (!collapsed && !maxCollapsed && size >= min) cachedSizeRef.current = size
   }, [size, collapsed, maxCollapsed, min])
+
+  useEffect(() => {
+    if (!Number.isFinite(options?.restoredSize)) return
+    if (dragging.current || collapsed || maxCollapsed) return
+    const next = clampSize(options?.restoredSize as number)
+    cachedSizeRef.current = next
+    setSize((prev) => prev === next ? prev : next)
+  }, [options?.restoredSize, clampSize, collapsed, maxCollapsed])
 
   // Clamp size when constraints change
   useEffect(() => {
@@ -1166,8 +1187,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   fsWatcherPayload,
   sourceControlRefreshSignal,
   savedTabsState,
+  savedLayoutState,
   stateReady,
   onTabsStateChange,
+  onLayoutStateChange,
   onApplyDiff,
   provider,
   cliModel,
@@ -1221,11 +1244,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
   const panelFullWidth = Math.max(panelMax, viewportWidth - sidebarWidth)
   const initialPanel = Math.min(panelMax, Math.max(400, viewportWidth - sidebarWidth - initialChatWidth))
+  const restoredPanelSize = Number.isFinite(savedLayoutState?.panelSize) ? savedLayoutState?.panelSize as number : null
   const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth', {
     snapCollapse: true,
     snapMaxCollapse: true,
     snapMaxSize: panelFullWidth,
     minStoredSize: initialPanel,
+    restoredSize: restoredPanelSize,
   })
 
   // Notify parent when collapse state changes (layout effects prevent one-frame flash)
@@ -1235,9 +1260,35 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Tree max is clamped so the editor pane never disappears
   const treeMax = Math.max(240, panel.size - minEditorWidth)
+  const restoredTreeSize = Number.isFinite(savedLayoutState?.treeSize) ? savedLayoutState?.treeSize as number : null
   const tree = useDragResize(260, 240, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
     snapCollapse: true,
+    restoredSize: restoredTreeSize,
   })
+
+  const lastLayoutStateReportRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!stateReady || isMobile) return
+    const expectedPanelSize = restoredPanelSize == null
+      ? null
+      : Math.min(panelMax, Math.max(400, initialPanel, restoredPanelSize))
+    if (expectedPanelSize != null && panel.size !== expectedPanelSize) return
+    const expectedTreeSize = restoredTreeSize == null
+      ? null
+      : Math.min(treeMax, Math.max(240, restoredTreeSize))
+    if (expectedTreeSize != null && tree.size !== expectedTreeSize) return
+
+    const next: WorkspacePanelLayoutState = {
+      tree: showTreeProp,
+      editor: showEditorProp,
+      panelSize: panel.size,
+      treeSize: tree.size,
+    }
+    const serialized = JSON.stringify(next)
+    if (serialized === lastLayoutStateReportRef.current) return
+    lastLayoutStateReportRef.current = serialized
+    onLayoutStateChange?.(next)
+  }, [initialPanel, isMobile, onLayoutStateChange, panel.size, panelMax, restoredPanelSize, restoredTreeSize, showEditorProp, showTreeProp, stateReady, tree.size, treeMax])
 
   // When workspace panel snaps collapsed via drag, let parent close
   // (component will unmount, so no need to restore drag state here)

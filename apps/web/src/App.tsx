@@ -92,7 +92,7 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals, useAvailableShells } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
+import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspacePanelLayoutState, type WorkspaceTabsState } from '@/components/workspace'
 import type { PreviewInspectInteractiveElement } from '@/components/workspace/workspace-preview-inspect-panel'
 import { DetachedTabView } from '@/components/workspace/detached-tab-view'
 import { DetachedTerminalView, saveDetachedTerminal } from '@/components/terminal/detached-terminal-view'
@@ -2806,7 +2806,7 @@ function App() {
   }, [updateWorkspaceUI])
 
   const loadingWorkspaceLayout = loadingWorkspaceUI && !!activeWorkspaceId && !!token
-  const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
+  const setSavedWorkspaceLayout = useCallback((v: WorkspacePanelLayoutState | null, options?: { immediate?: boolean }) => {
     updateWorkspaceUI('layout', v, { immediate: options?.immediate ?? true })
   }, [updateWorkspaceUI])
 
@@ -3644,7 +3644,7 @@ function App() {
 
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   const applyWorkspaceLayout = useCallback((
-    layout: { tree: boolean; editor: boolean },
+    layout: WorkspacePanelLayoutState,
     options?: { immediateSync?: boolean },
   ) => {
     setShowWorkspaceTree(layout.tree)
@@ -3656,10 +3656,23 @@ function App() {
 
     if (!options?.immediateSync) return
 
-    prevWorkspaceLayoutPayloadRef.current = JSON.stringify(layout)
-    setSavedWorkspaceLayout(layout, { immediate: true })
+    const persistedSizes = workspaceUIRef.current?.layout
+    const persistedLayout = {
+      ...layout,
+      panelSize: layout.panelSize ?? persistedSizes?.panelSize,
+      treeSize: layout.treeSize ?? persistedSizes?.treeSize,
+    }
+    prevWorkspaceLayoutPayloadRef.current = JSON.stringify(persistedLayout)
+    setSavedWorkspaceLayout(persistedLayout, { immediate: true })
     if (activeSessionId) {
-      sendUIState('workspace.layout', layout, activeSessionId)
+      sendUIState('workspace.layout', persistedLayout, activeSessionId)
+    }
+  }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
+
+  const handleWorkspaceLayoutStateChange = useCallback((state: WorkspacePanelLayoutState) => {
+    setSavedWorkspaceLayout(state)
+    if (activeSessionId) {
+      sendUIState('workspace.layout', state, activeSessionId)
     }
   }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
 
@@ -3667,7 +3680,13 @@ function App() {
     if (activeWorkspaceId && token && (!workspaceStateReady || loadingWorkspaceLayout)) {
             return
     }
-    const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
+    const persistedSizes = workspaceUIRef.current?.layout
+    const layout = {
+      tree: showWorkspaceTree,
+      editor: showWorkspaceEditor,
+      panelSize: persistedSizes?.panelSize,
+      treeSize: persistedSizes?.treeSize,
+    }
     const serialized = JSON.stringify(layout)
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
@@ -7588,9 +7607,11 @@ function App() {
                         fsWatcherPayload={fsWatcherPayload}
                         sourceControlRefreshSignal={sourceControlRefreshSignal}
                         savedTabsState={workspaceTabsState}
+                        savedLayoutState={workspaceUI?.layout ?? null}
                         stateReady={workspaceStateReady}
                         previewRequest={workspacePreviewRequest}
                         onTabsStateChange={handleWorkspaceTabsStateChange}
+                        onLayoutStateChange={handleWorkspaceLayoutStateChange}
                         onPreviewOpenChange={handleWorkspacePreviewOpenChange}
                         previewSessionId={activeSessionId}
                         previewToken={token}
@@ -7766,6 +7787,7 @@ function App() {
                     sourceControlRefreshSignal={sourceControlRefreshSignal}
                     isMobile
                     savedTabsState={workspaceTabsState}
+                    savedLayoutState={workspaceUI?.layout ?? null}
                     stateReady={workspaceStateReady}
                     previewRequest={workspacePreviewRequest}
                     onTabsStateChange={handleWorkspaceTabsStateChange}
