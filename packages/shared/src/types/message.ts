@@ -200,8 +200,8 @@ export interface WorkspaceUIState {
     tabs: Array<{ path: string; label: string }>;
     activePath: string | null;
   } | null;
-  /** Tree/editor visibility */
-  layout: { tree: boolean; editor: boolean } | null;
+  /** Tree/editor visibility and desktop resize state */
+  layout: { tree: boolean; editor: boolean; panelSize?: number; treeSize?: number } | null;
   /** Terminal panel */
   terminal: { open: boolean } | null;
   /** Dev preview / VNC browser panel */
