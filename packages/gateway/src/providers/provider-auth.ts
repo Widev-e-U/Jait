@@ -118,8 +118,16 @@ export function extractDeviceAuthDetails(output: string): { verificationUri?: st
     ]);
     if (blocked.has(compact)) return undefined;
     const parts = candidate.split("-").filter(Boolean);
-    if (parts.length > 1 && parts.every((part) => blocked.has(part))) return undefined;
-    if (!/[0-9-]/.test(candidate) && compact.length > 10) return undefined;
+    // Reject instructional text captured by greedy regex. A real auth code is
+    // either random with digits, or uniformly-sized random letters (e.g.
+    // "ABCD-EFGH"). English phrases like "AUTHORIZATION-CODE-FROM-YOUR-BROWSER"
+    // are all-letter, variable-length, and may contain known instruction words.
+    const blockedParts = parts.filter((part) => blocked.has(part)).length;
+    if (parts.length > 1 && blockedParts >= 2) return undefined;
+    if (parts.length > 1 && blockedParts === parts.length) return undefined;
+    const hasDigit = /[0-9]/.test(compact);
+    const uniformPartLengths = parts.length > 1 && parts.every((p) => p.length === parts[0]!.length);
+    if (!hasDigit && !uniformPartLengths && compact.length > 6) return undefined;
     if (!codeShape.test(candidate)) return undefined;
     return candidate;
   };
