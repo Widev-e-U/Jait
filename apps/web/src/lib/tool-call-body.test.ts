@@ -17,7 +17,7 @@ describe('tool call body helpers', () => {
     expect(normalizeToolName('functions.spawn_agent')).toBe('agent.spawn')
     expect(normalizeToolName('wait_agent')).toBe('agent.wait')
     expect(normalizeToolName('browser_sandbox_start')).toBe('browser.sandbox.start')
-    expect(normalizeToolName('workspace_assign_repository')).toBe('workspace.assign_repository')
+    expect(normalizeToolName('project_assign_repository')).toBe('project.assign_repository')
   })
 
   it('extracts file paths from ACP-style read/write tool aliases', () => {

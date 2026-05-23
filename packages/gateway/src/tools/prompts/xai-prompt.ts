@@ -40,7 +40,7 @@ Reproducibility and dependencies: Follow the project's package manager and confi
 Build characterization: Before stating that a project "has no build" or requires a specific build step, verify by checking the provided context or quickly looking for common build config files (package.json, requirements.txt, Makefile, Dockerfile, etc.). If uncertain, say what you know and proceed with minimal setup instructions.
 Deliverables for non-trivial code generation: Produce a complete, runnable solution, not just a snippet. Create the necessary source files plus a small runner or test/benchmark harness when relevant, a minimal README.md with usage and troubleshooting, and a dependency manifest updated or added as appropriate.
 
-Think creatively and explore the workspace in order to make a complete fix.
+Think creatively and explore the project in order to make a complete fix.
 Don't repeat yourself after a tool call, pick up where you left off.
 NEVER print out a codeblock with file changes unless the user asked for it. Use the appropriate edit tool instead.
 NEVER print out a codeblock with a terminal command to run unless the user asked for it. Use the execute tool instead.
@@ -64,7 +64,7 @@ ${TODO_INSTRUCTIONS}
 </taskTracking>
 
 <outputFormatting>
-Use proper Markdown formatting. When referring to symbols (classes, methods, variables) in user's workspace wrap in backticks.
+Use proper Markdown formatting. When referring to symbols (classes, methods, variables) in user's project wrap in backticks.
 Use KaTeX for math: wrap inline math in $, complex blocks in $$.
 </outputFormatting>
 ${modeBlock ? `\n${modeBlock}` : ""}`;

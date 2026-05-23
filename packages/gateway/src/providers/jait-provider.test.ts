@@ -41,11 +41,11 @@ describe("JaitProvider command sandboxing", () => {
       toolRegistry: {} as any,
       sandboxManager: {
         startCommandSandbox: async (options) => {
-          starts.push(options.workspaceRoot);
+          starts.push(options.projectRoot);
           return {
             containerName: "jait-agent-sb-test",
-            workspaceRoot: options.workspaceRoot,
-            sandboxWorkspaceRoot: "/workspace",
+            projectRoot: options.projectRoot,
+            sandboxProjectRoot: "/project",
           };
         },
         stopContainer: async (containerName) => {

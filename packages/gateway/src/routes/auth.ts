@@ -147,8 +147,8 @@ export function registerAuthRoutes(
       chat_provider: settings.chatProvider,
       jait_backend: settings.jaitBackend,
       recent_models: settings.recentModels,
-      workspace_picker_path: settings.workspacePickerPath,
-      workspace_picker_node_id: settings.workspacePickerNodeId,
+      project_picker_path: settings.projectPickerPath,
+      project_picker_node_id: settings.projectPickerNodeId,
       updated_at: settings.updatedAt,
     };
   });
@@ -165,8 +165,8 @@ export function registerAuthRoutes(
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
-      workspacePickerPath?: string | null;
-      workspacePickerNodeId?: string | null;
+      projectPickerPath?: string | null;
+      projectPickerNodeId?: string | null;
     } = {};
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
@@ -198,15 +198,15 @@ export function registerAuthRoutes(
       patch.recentModels = body.recent_models.filter((v: unknown) => typeof v === "string").slice(0, 20) as string[];
     }
 
-    if (typeof body.workspace_picker_path === "string" || body.workspace_picker_path === null) {
-      patch.workspacePickerPath = typeof body.workspace_picker_path === "string"
-        ? body.workspace_picker_path.trim() || null
+    if (typeof body.project_picker_path === "string" || body.project_picker_path === null) {
+      patch.projectPickerPath = typeof body.project_picker_path === "string"
+        ? body.project_picker_path.trim() || null
         : null;
     }
 
-    if (typeof body.workspace_picker_node_id === "string" || body.workspace_picker_node_id === null) {
-      patch.workspacePickerNodeId = typeof body.workspace_picker_node_id === "string"
-        ? body.workspace_picker_node_id.trim() || null
+    if (typeof body.project_picker_node_id === "string" || body.project_picker_node_id === null) {
+      patch.projectPickerNodeId = typeof body.project_picker_node_id === "string"
+        ? body.project_picker_node_id.trim() || null
         : null;
     }
 
@@ -219,8 +219,8 @@ export function registerAuthRoutes(
       chat_provider: updated.chatProvider,
       jait_backend: updated.jaitBackend,
       recent_models: updated.recentModels,
-      workspace_picker_path: updated.workspacePickerPath,
-      workspace_picker_node_id: updated.workspacePickerNodeId,
+      project_picker_path: updated.projectPickerPath,
+      project_picker_node_id: updated.projectPickerNodeId,
       updated_at: updated.updatedAt,
     };
   });

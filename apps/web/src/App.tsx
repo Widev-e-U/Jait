@@ -92,21 +92,21 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals, useAvailableShells } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspacePanelLayoutState, type WorkspaceTabsState } from '@/components/workspace'
-import type { PreviewInspectInteractiveElement } from '@/components/workspace/workspace-preview-inspect-panel'
-import { DetachedTabView } from '@/components/workspace/detached-tab-view'
+import { ProjectPanel, projectLanguageForPath, type ProjectFile, type ProjectPanelHandle, type ProjectTabsState } from '@/components/project'
+import type { PreviewInspectInteractiveElement } from '@/components/project/project-preview-inspect-panel'
+import { DetachedTabView } from '@/components/project/detached-tab-view'
 import { DetachedTerminalView, saveDetachedTerminal } from '@/components/terminal/detached-terminal-view'
-import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
+import { FolderPickerDialog } from '@/components/project/folder-picker-dialog'
 import { GatewayUnavailable } from '@/components/gateway-unavailable'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, formatModelDisplayLabel, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
-import { useWorkspaces } from '@/hooks/useWorkspaces'
+import { useProjects } from '@/hooks/useProjects'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
-import { useWorkspaceState } from '@/hooks/useWorkspaceState'
+import { useProjectState } from '@/hooks/useProjectState'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
@@ -114,7 +114,7 @@ import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import { SendTargetSelector } from '@/components/chat/send-target-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState, ResponseStyle } from '@jait/shared'
+import type { ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
@@ -137,8 +137,8 @@ import {
   getDefaultFloatingScreenSharePosition,
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { getWorkspaceRepositoryId } from '@/lib/workspace-repositories'
-import { getLatestWorkspaceSessionId } from '@/lib/workspace-sessions'
+import { getProjectRepositoryId } from '@/lib/project-repositories'
+import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
@@ -151,21 +151,21 @@ import {
   type SecretInputRequest,
 } from '@/lib/secret-input'
 import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
-import { isPathWithinWorkspace } from '@/lib/workspace-links'
+import { isPathWithinProject } from '@/lib/project-links'
 import {
-  collapseMobileWorkspace,
-  getReopenedMobileWorkspaceLayout,
-  normalizeHydratedWorkspaceLayout,
-  showMobileWorkspacePane,
-  toggleMobileWorkspacePane,
-} from '@/lib/mobile-workspace-layout'
-import { toggleDesktopWorkspaceTreeVisibility } from '@/components/workspace/workspace-panel-layout'
+  collapseMobileProject,
+  getReopenedMobileProjectLayout,
+  normalizeHydratedProjectLayout,
+  showMobileProjectPane,
+  toggleMobileProjectPane,
+} from '@/lib/mobile-project-layout'
+import { toggleDesktopProjectTreeVisibility } from '@/components/project/project-panel-layout'
 import {
-  getMobileWorkspaceActiveTarget,
-  isMobileWorkspaceTargetActive,
+  getMobileProjectActiveTarget,
+  isMobileProjectTargetActive,
   shouldRenderSessionSidebar,
-  type MobileWorkspaceTarget,
-} from '@/lib/mobile-workspace-controls'
+  type MobileProjectTarget,
+} from '@/lib/mobile-project-controls'
 import {
   formatLineRange,
   type UserMessageSegment,
@@ -173,7 +173,7 @@ import {
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
   userReferencedTerminalsFromSegments,
-  userReferencedWorkspacesFromSegments,
+  userReferencedProjectsFromSegments,
 } from '@/lib/user-message-segments'
 import { appendTranscript, normalizeTranscript } from '@/lib/transcript-merge'
 
@@ -183,28 +183,28 @@ const VOICE_LEVEL_BAR_COUNT = 28
 const VOICE_LEVEL_FLOOR = 0.05
 
 type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
-type ActiveWorkspaceState = { surfaceId: string; workspaceRoot: string; nodeId?: string } | null
+type ActiveProjectState = { surfaceId: string; projectRoot: string; nodeId?: string } | null
 const VIEW_MODE_STORAGE_KEY = 'jait.viewMode'
 
-function normalizeWorkspacePath(path: string): string {
+function normalizeProjectPath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
-function getRelativeWorkspacePath(path: string, workspaceRoot: string | null): string {
-  const normalizedPath = normalizeWorkspacePath(path)
-  if (!workspaceRoot) return normalizedPath
-  const normalizedRoot = normalizeWorkspacePath(workspaceRoot)
+function getRelativeProjectPath(path: string, projectRoot: string | null): string {
+  const normalizedPath = normalizeProjectPath(path)
+  if (!projectRoot) return normalizedPath
+  const normalizedRoot = normalizeProjectPath(projectRoot)
   return normalizedPath.startsWith(`${normalizedRoot}/`)
     ? normalizedPath.slice(normalizedRoot.length + 1)
     : normalizedPath
 }
 
-function buildGitDiffCountMap(status: GitStatusResult | null, workspaceRoot: string | null): Map<string, { insertions: number; deletions: number }> {
+function buildGitDiffCountMap(status: GitStatusResult | null, projectRoot: string | null): Map<string, { insertions: number; deletions: number }> {
   const counts = new Map<string, { insertions: number; deletions: number }>()
   if (!status) return counts
 
   const addCounts = (path: string, insertions: number, deletions: number) => {
-    const normalizedPath = normalizeWorkspacePath(path)
+    const normalizedPath = normalizeProjectPath(path)
     const existing = counts.get(normalizedPath) ?? { insertions: 0, deletions: 0 }
     counts.set(normalizedPath, {
       insertions: existing.insertions + insertions,
@@ -214,8 +214,8 @@ function buildGitDiffCountMap(status: GitStatusResult | null, workspaceRoot: str
 
   for (const file of [...status.index.files, ...status.workingTree.files]) {
     addCounts(file.path, file.insertions, file.deletions)
-    if (workspaceRoot) {
-      addCounts(`${normalizeWorkspacePath(workspaceRoot)}/${normalizeWorkspacePath(file.path)}`, file.insertions, file.deletions)
+    if (projectRoot) {
+      addCounts(`${normalizeProjectPath(projectRoot)}/${normalizeProjectPath(file.path)}`, file.insertions, file.deletions)
     }
   }
 
@@ -225,14 +225,14 @@ function buildGitDiffCountMap(status: GitStatusResult | null, workspaceRoot: str
 function enrichChangedFilesWithDiffCounts(
   files: ChangedFile[],
   status: GitStatusResult | null,
-  workspaceRoot: string | null,
+  projectRoot: string | null,
 ): ChangedFile[] {
-  const counts = buildGitDiffCountMap(status, workspaceRoot)
+  const counts = buildGitDiffCountMap(status, projectRoot)
   if (counts.size === 0) return files
 
   return files.map((file) => {
-    const normalizedPath = normalizeWorkspacePath(file.path)
-    const relativePath = getRelativeWorkspacePath(file.path, workspaceRoot)
+    const normalizedPath = normalizeProjectPath(file.path)
+    const relativePath = getRelativeProjectPath(file.path, projectRoot)
     const diffCounts = counts.get(normalizedPath) ?? counts.get(relativePath)
     return diffCounts ? { ...file, ...diffCounts } : file
   })
@@ -249,13 +249,13 @@ function areAvailableFilesEqual(a: AvailableFileForMention[], b: AvailableFileFo
   })
 }
 
-function areActiveWorkspacesEqual(a: ActiveWorkspaceState, b: ActiveWorkspaceState) {
+function areActiveProjectsEqual(a: ActiveProjectState, b: ActiveProjectState) {
   return a?.surfaceId === b?.surfaceId
-    && a?.workspaceRoot === b?.workspaceRoot
+    && a?.projectRoot === b?.projectRoot
     && (a?.nodeId ?? 'gateway') === (b?.nodeId ?? 'gateway')
 }
 
-function getWorkspaceUiRestoreKey(workspaceId: string, ui: WorkspaceUIState) {
+function getProjectUiRestoreKey(projectId: string, ui: ProjectUIState) {
   const panel = ui.panel
     ? {
         open: ui.panel.open,
@@ -264,7 +264,7 @@ function getWorkspaceUiRestoreKey(workspaceId: string, ui: WorkspaceUIState) {
       }
     : null
   return JSON.stringify({
-    workspaceId,
+    projectId,
     panel,
     tabs: ui.tabs,
     layout: ui.layout,
@@ -274,7 +274,7 @@ function getWorkspaceUiRestoreKey(workspaceId: string, ui: WorkspaceUIState) {
 }
 
 
-function areWorkspaceUiValuesEqual(a: unknown, b: unknown) {
+function areProjectUiValuesEqual(a: unknown, b: unknown) {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 }
 
@@ -845,7 +845,7 @@ function buildTerminalSelectionReferenceSegments(
       type: 'terminal',
       terminalId: terminal.terminalId,
       name: terminal.name,
-      ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}),
+      ...(terminal.projectRoot ? { projectRoot: terminal.projectRoot } : {}),
       lineRange,
       selectedText: selection.trim(),
     },
@@ -902,7 +902,7 @@ const suggestions = [
   'What time is it?',
 ]
 
-const workspaceSuggestions = [
+const projectSuggestions = [
   'Generate architecture diagram',
   'Explain this codebase',
   'Find potential issues',
@@ -1650,31 +1650,31 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const sidebarRef = useRef<HTMLElement | null>(null)
-  const [showWorkspace, setShowWorkspace] = useState(false)
+  const [showProject, setShowProject] = useState(false)
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
-  const showWorkspaceRef = useRef(false)
+  const showProjectRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
-  const workspaceRestoreRef = useRef<(() => void) | null>(null)
-  const closeWorkspacePanelRef = useRef<(() => void) | null>(null)
-  const suppressWorkspaceAutoOpenRef = useRef(false)
+  const projectRestoreRef = useRef<(() => void) | null>(null)
+  const closeProjectPanelRef = useRef<(() => void) | null>(null)
+  const suppressProjectAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
-  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
-  const [workspacePreviewState, setWorkspacePreviewState] = useState<DevPreviewPanelState>({
+  const [projectPreviewRequest, setProjectPreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
+  const [projectPreviewState, setProjectPreviewState] = useState<DevPreviewPanelState>({
     open: false,
     target: null,
     displayState: 'hidden',
     displayTarget: null,
   })
   const [showScreenShare, setShowScreenShare] = useState(false)
-  const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
-  const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
+  const [showProjectTree, setShowProjectTree] = useState(true)
+  const [showProjectEditor, setShowProjectEditor] = useState(true)
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
-  const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspaceState>(null)
-  const setActiveWorkspaceIfChanged = useCallback((next: ActiveWorkspaceState) => {
-    setActiveWorkspace((prev) => areActiveWorkspacesEqual(prev, next) ? prev : next)
+  const [activeProject, setActiveProject] = useState<ActiveProjectState>(null)
+  const setActiveProjectIfChanged = useCallback((next: ActiveProjectState) => {
+    setActiveProject((prev) => areActiveProjectsEqual(prev, next) ? prev : next)
   }, [])
-  const activeWorkspaceRef = useRef(activeWorkspace)
-  activeWorkspaceRef.current = activeWorkspace
+  const activeProjectRef = useRef(activeProject)
+  activeProjectRef.current = activeProject
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
@@ -1682,7 +1682,7 @@ function App() {
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
-  const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
+  const loadedArchitectureProjectRef = useRef<string | null>(null)
   const defaultTerminalHeight = 360
   const [terminalHeight, setTerminalHeight] = useState(defaultTerminalHeight)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
@@ -1726,8 +1726,8 @@ function App() {
   const isCapacitor = !!(window as any).Capacitor
   const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
   const { resolvedTheme: appliedThemeMode } = useConfiguredTheme(themeMode)
-  const detachedWorkspaceTabId = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('detachedWorkspaceTab')
+  const detachedProjectTabId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('detachedProjectTab')
     : null
 
   const detachedTerminalId = typeof window !== 'undefined'
@@ -1768,24 +1768,24 @@ function App() {
   )
   const [gatewayChecking, setGatewayChecking] = useState(false)
   const [gatewayError, setGatewayError] = useState<string | null>(null)
-  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
-  const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
+  const [activeProjectFileId, setActiveProjectFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<AvailableFileForMention[]>([])
   const handleAvailableFilesForMentionChange = useCallback((files: AvailableFileForMention[]) => {
     setAvailableFilesForMention((prev) => areAvailableFilesEqual(prev, files) ? prev : files)
   }, [])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
-  const [workspacePickerMode, setWorkspacePickerMode] = useState<'workspace' | 'editor'>('workspace')
-  const [changeDirectoryWorkspaceId, setChangeDirectoryWorkspaceId] = useState<string | null>(null)
+  const [projectPickerMode, setProjectPickerMode] = useState<'project' | 'editor'>('project')
+  const [changeDirectoryProjectId, setChangeDirectoryProjectId] = useState<string | null>(null)
   const [fsNodes, setFsNodes] = useState<import('@jait/shared').FsNode[]>([])
   const isDragging = useRef(false)
-  const workspaceRef = useRef<WorkspacePanelHandle>(null)
+  const projectRef = useRef<ProjectPanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
 
   useEffect(() => {
-    showWorkspaceRef.current = showWorkspace
-  }, [showWorkspace])
+    showProjectRef.current = showProject
+  }, [showProject])
 
   // ── Sync currentView ↔ URL path ────────────────────────────────
   // Push to history when view changes (skip on mount to avoid duplicate entry)
@@ -1876,12 +1876,12 @@ function App() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const [fsWatcherPayload, setFsWatcherPayload] = useState<FsChangesPayload | null>(null)
-  const showDesktopWorkspace = !isMobile && showWorkspace
-  const showMobileWorkspace = isMobile && showWorkspace
+  const showDesktopProject = !isMobile && showProject
+  const showMobileProject = isMobile && showProject
   const shouldUseCompactDeveloperComposer =
     viewMode === 'developer' &&
     currentView === 'chat' &&
-    showDesktopWorkspace &&
+    showDesktopProject &&
     !chatCollapsed
   const compactDeveloperComposer = isMobile || (shouldUseCompactDeveloperComposer && (chatMeasuredWidth ?? 640) < 560)
   const setChatPanelElement = useCallback((el: HTMLDivElement | null) => {
@@ -1907,57 +1907,57 @@ function App() {
   useEffect(() => {
     return () => chatPanelResizeObserverRef.current?.disconnect()
   }, [])
-  const showWorkspaceEditorPanel = useCallback(() => {
+  const showProjectEditorPanel = useCallback(() => {
     if (isMobile) {
-      const nextLayout = showMobileWorkspacePane('editor')
-      setShowWorkspaceTree(nextLayout.tree)
-      setShowWorkspaceEditor(nextLayout.editor)
+      const nextLayout = showMobileProjectPane('editor')
+      setShowProjectTree(nextLayout.tree)
+      setShowProjectEditor(nextLayout.editor)
       return
     }
-    setShowWorkspaceEditor(true)
+    setShowProjectEditor(true)
   }, [isMobile])
-  const openArchitectureInWorkspace = useCallback((workspaceRoot?: string | null) => {
-    const targetWorkspaceRoot = workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null
-    if (!targetWorkspaceRoot) return
-    setActiveWorkspace((prev) => {
-      if (prev?.workspaceRoot === targetWorkspaceRoot) return prev
+  const openArchitectureInProject = useCallback((projectRoot?: string | null) => {
+    const targetProjectRoot = projectRoot?.trim() || activeProject?.projectRoot || null
+    if (!targetProjectRoot) return
+    setActiveProject((prev) => {
+      if (prev?.projectRoot === targetProjectRoot) return prev
       return {
         surfaceId: prev?.surfaceId ?? '',
-        workspaceRoot: targetWorkspaceRoot,
+        projectRoot: targetProjectRoot,
         nodeId: prev?.nodeId,
       }
     })
     setViewMode('developer')
-    if (!showWorkspace) {
-      showWorkspaceRef.current = true
-      setShowWorkspace(true)
+    if (!showProject) {
+      showProjectRef.current = true
+      setShowProject(true)
     }
-    showWorkspaceEditorPanel()
+    showProjectEditorPanel()
     setArchitectureRequest({ key: Date.now() })
-  }, [activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
-  const closeWorkspacePreview = useCallback(() => {
-    workspaceRef.current?.closePreviewTarget()
+  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel])
+  const closeProjectPreview = useCallback(() => {
+    projectRef.current?.closePreviewTarget()
   }, [])
-  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null) => {
+  const routePreviewToProject = useCallback((target?: string | null, projectRoot?: string | null) => {
     const trimmed = target?.trim() || null
     const nextPreviewState: DevPreviewPanelState = {
       open: true,
       target: trimmed,
-      workspaceRoot: workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null,
+      projectRoot: projectRoot?.trim() || activeProject?.projectRoot || null,
       displayState: trimmed ? 'connected' : 'blank',
       displayTarget: trimmed,
     }
     setViewMode('developer')
     setDevPreviewTarget(trimmed)
-    setWorkspacePreviewState(nextPreviewState)
-    if (!showWorkspace) {
-      showWorkspaceRef.current = true
-      setShowWorkspace(true)
+    setProjectPreviewState(nextPreviewState)
+    if (!showProject) {
+      showProjectRef.current = true
+      setShowProject(true)
     }
-    showWorkspaceEditorPanel()
-    setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
+    showProjectEditorPanel()
+    setProjectPreviewRequest({ target: trimmed, key: Date.now() })
     return true
-  }, [activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -2270,7 +2270,7 @@ function App() {
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
-  // Fetch filesystem nodes for workspace node tags
+  // Fetch filesystem nodes for project node tags
   useEffect(() => {
     if (!token) return
     void fetch(`${API_URL}/api/filesystem/nodes`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
@@ -2280,35 +2280,35 @@ function App() {
   }, [token])
 
   const {
-    workspaces,
+    projects,
     personalSessions,
-    archivedSessionsByWorkspace,
-    activeWorkspaceId,
+    archivedSessionsByProject,
+    activeProjectId,
     activeSessionId,
-    loading: workspacesLoading,
+    loading: projectsLoading,
     createSession,
-    createWorkspace,
-    updateWorkspace,
-    assignWorkspaceRepository,
-    switchWorkspace,
+    createProject,
+    updateProject,
+    assignProjectRepository,
+    switchProject,
     switchSession,
     fetchArchivedSessions,
-    removeWorkspace,
-    clearArchivedWorkspaces,
-    fetchArchivedWorkspaces,
-    restoreWorkspace,
+    removeProject,
+    clearArchivedProjects,
+    fetchArchivedProjects,
+    restoreProject,
     renameSession,
-    fetchWorkspaces,
-    hasMoreWorkspaces,
-    showMoreWorkspaces,
-    showFewerWorkspaces,
-    workspaceListLimit,
-  } = useWorkspaces(
+    fetchProjects,
+    hasMoreProjects,
+    showMoreProjects,
+    showFewerProjects,
+    projectListLimit,
+  } = useProjects(
     token,
     onLoginRequired,
   )
   useEffect(() => {
-    suppressWorkspaceAutoOpenRef.current = false
+    suppressProjectAutoOpenRef.current = false
   }, [activeSessionId])
 
   const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
@@ -2320,66 +2320,66 @@ function App() {
     return secretInput.form
   }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline])
 
-  const activeWorkspaceRecord = useMemo(
-    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
-    [workspaces, activeWorkspaceId],
+  const activeProjectRecord = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [projects, activeProjectId],
   )
   const tokenRef = useRef(token)
   tokenRef.current = token
   const authLoadingRef = useRef(authLoading)
   authLoadingRef.current = authLoading
-  const workspacesLoadingRef = useRef(workspacesLoading)
-  workspacesLoadingRef.current = workspacesLoading
-  const workspacesRef = useRef(workspaces)
-  workspacesRef.current = workspaces
+  const projectsLoadingRef = useRef(projectsLoading)
+  projectsLoadingRef.current = projectsLoading
+  const projectsRef = useRef(projects)
+  projectsRef.current = projects
   const activeSessionIdRef = useRef(activeSessionId)
   activeSessionIdRef.current = activeSessionId
-  const activeWorkspaceRecordRef = useRef(activeWorkspaceRecord)
-  activeWorkspaceRecordRef.current = activeWorkspaceRecord
+  const activeProjectRecordRef = useRef(activeProjectRecord)
+  activeProjectRecordRef.current = activeProjectRecord
   const activeSessionRecord = useMemo(
-    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId)
+    () => activeProjectRecord?.sessions.find((session) => session.id === activeSessionId)
       ?? personalSessions.find((session) => session.id === activeSessionId)
       ?? null,
-    [activeSessionId, activeWorkspaceRecord, personalSessions],
+    [activeSessionId, activeProjectRecord, personalSessions],
   )
-  const activeWorkspaceSessions = useMemo(() => {
-    if (!activeWorkspaceRecord) return personalSessions
-    const active = activeWorkspaceRecord.sessions
-    const archived = archivedSessionsByWorkspace[activeWorkspaceRecord.id] ?? []
+  const activeProjectSessions = useMemo(() => {
+    if (!activeProjectRecord) return personalSessions
+    const active = activeProjectRecord.sessions
+    const archived = archivedSessionsByProject[activeProjectRecord.id] ?? []
     const seen = new Set<string>()
     return [...active, ...archived]
       .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
-  }, [activeWorkspaceRecord, archivedSessionsByWorkspace, personalSessions])
-  const waitForWorkspaceHydration = useCallback(async () => {
+  }, [activeProjectRecord, archivedSessionsByProject, personalSessions])
+  const waitForProjectHydration = useCallback(async () => {
     const deadline = Date.now() + 1500
     while (Date.now() < deadline) {
-      if (!authLoadingRef.current && !workspacesLoadingRef.current) return
+      if (!authLoadingRef.current && !projectsLoadingRef.current) return
       await new Promise((resolve) => window.setTimeout(resolve, 50))
     }
   }, [])
-  const handleChangeDirectory = useCallback((workspaceId: string) => {
-    setChangeDirectoryWorkspaceId(workspaceId)
+  const handleChangeDirectory = useCallback((projectId: string) => {
+    setChangeDirectoryProjectId(projectId)
     setFolderPickerOpen(true)
   }, [])
 
   const confirmDialog = useConfirmDialog()
-  const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
-    const workspace = workspaces.find(w => w.id === workspaceId)
+  const handleRemoveProject = useCallback(async (projectId: string) => {
+    const project = projects.find(w => w.id === projectId)
     const confirmed = await confirmDialog({
-      title: 'Archive workspace',
-      description: `Are you sure you want to archive "${workspace?.title || workspace?.rootPath || 'this workspace'}"? You can clear archived workspaces later from Settings.`,
+      title: 'Archive project',
+      description: `Are you sure you want to archive "${project?.title || project?.rootPath || 'this project'}"? You can clear archived projects later from Settings.`,
       confirmLabel: 'Archive',
       variant: 'destructive',
     })
     if (!confirmed) return
-    const removed = await removeWorkspace(workspaceId)
+    const removed = await removeProject(projectId)
     if (removed) {
-      toast.success('Workspace archived.')
+      toast.success('Project archived.')
       return
     }
-    toast.error('Failed to archive workspace.')
-  }, [confirmDialog, removeWorkspace, workspaces])
+    toast.error('Failed to archive project.')
+  }, [confirmDialog, removeProject, projects])
   const {
     messages,
     isLoading,
@@ -2417,7 +2417,7 @@ function App() {
     setOnChangedFilesSync,
     refreshMessages,
     loadOlderMessages,
-  } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
+  } = useChat(activeSessionId, token, onLoginRequired, activeProject?.surfaceId ?? null)
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
@@ -2444,20 +2444,20 @@ function App() {
   // ── Automation / Manager mode state ───────────────────────────────
   const automation = useAutomation()
   automationRefreshRef.current = automation.refresh
-  const activeWorkspaceRepositoryId = useMemo(
-    () => getWorkspaceRepositoryId(activeWorkspaceRecord),
-    [activeWorkspaceRecord],
+  const activeProjectRepositoryId = useMemo(
+    () => getProjectRepositoryId(activeProjectRecord),
+    [activeProjectRecord],
   )
-  const handleAssignWorkspaceRepository = useCallback(async (workspaceId: string) => {
-    const result = await assignWorkspaceRepository(workspaceId)
+  const handleAssignProjectRepository = useCallback(async (projectId: string) => {
+    const result = await assignProjectRepository(projectId)
     if (!result) {
-      toast.error('No repository could be assigned. Make sure the workspace folder contains .git.')
+      toast.error('No repository could be assigned. Make sure the project folder contains .git.')
       return
     }
     await automation.refresh()
     automation.setSelectedRepoId(result.repo.id)
     toast.success(result.skipped ? `Repository already assigned: ${result.repo.name}` : `Assigned repository: ${result.repo.name}`)
-  }, [assignWorkspaceRepository, automation.refresh, automation.setSelectedRepoId])
+  }, [assignProjectRepository, automation.refresh, automation.setSelectedRepoId])
 
   // Convert thread activities → ChatMessage[] for Message rendering
   const automationMessages = useMemo(
@@ -2516,8 +2516,8 @@ function App() {
     const nextSelection = resolveDeveloperThreadRepoAutoSelect({
       viewMode,
       sendTarget,
-      workspaceId: activeWorkspaceId,
-      workspaceRepoId: activeWorkspaceRepositoryId,
+      projectId: activeProjectId,
+      projectRepoId: activeProjectRepositoryId,
       repositories: automation.repositories,
       lastAppliedKey: developerThreadRepoAutoSelectRef.current,
     })
@@ -2529,8 +2529,8 @@ function App() {
       automation.setSelectedRepoId(nextSelection.repoId)
     }
   }, [
-    activeWorkspaceId,
-    activeWorkspaceRepositoryId,
+    activeProjectId,
+    activeProjectRepositoryId,
     automation.repositories,
     automation.selectedRepoId,
     automation.setSelectedRepoId,
@@ -2553,12 +2553,12 @@ function App() {
   const wsFullStateReceivedRef = useRef(false)
   const suppressedUiSyncKeysRef = useRef<Set<string>>(new Set())
 
-  // Workspace-scoped state delivered by WS full-state push that depends on
-  // activeWorkspaceRecord (loaded async from REST). Stashed here by
+  // Project-scoped state delivered by WS full-state push that depends on
+  // activeProjectRecord (loaded async from REST). Stashed here by
   // handleFullState and applied by a deferred effect once the record loads.
-  const pendingWsWorkspaceStateRef = useRef<{
-    workspaceId: string
-    ui: WorkspaceUIState
+  const pendingWsProjectStateRef = useRef<{
+    projectId: string
+    ui: ProjectUIState
   } | null>(null)
 
   const suppressNextUiSync = useCallback((key: string) => {
@@ -2770,51 +2770,51 @@ function App() {
     cancelRequest()
   }, [cancelRequest])
 
-  // ── Unified workspace UI state (single DB row) ─────────────────────
-  const [workspaceUI, setWorkspaceUI, loadingWorkspaceUI] = useWorkspaceState<WorkspaceUIState>(
-    activeWorkspaceId, 'workspace.ui', token,
+  // ── Unified project UI state (single DB row) ─────────────────────
+  const [projectUI, setProjectUI, loadingProjectUI] = useProjectState<ProjectUIState>(
+    activeProjectId, 'project.ui', token,
   )
-  const workspaceUIRef = useRef<WorkspaceUIState | null>(null)
-  workspaceUIRef.current = workspaceUI
+  const projectUIRef = useRef<ProjectUIState | null>(null)
+  projectUIRef.current = projectUI
 
   // Merge helper: updates one slice of the unified state and persists.
   // Eagerly update the ref so consecutive calls within the same render
   // cycle each see the previous call's updates instead of clobbering them.
-  const updateWorkspaceUI = useCallback(<K extends keyof WorkspaceUIState>(
-    key: K, value: WorkspaceUIState[K], options?: { immediate?: boolean },
+  const updateProjectUI = useCallback(<K extends keyof ProjectUIState>(
+    key: K, value: ProjectUIState[K], options?: { immediate?: boolean },
   ) => {
-    const prev = workspaceUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
-    if (areWorkspaceUiValuesEqual(prev[key], value)) return
+    const prev = projectUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
+    if (areProjectUiValuesEqual(prev[key], value)) return
     if (key === 'panel' || key === 'layout') {
           }
     const next = { ...prev, [key]: value }
-    workspaceUIRef.current = next
-    setWorkspaceUI(next, options)
-  }, [activeWorkspaceId, setWorkspaceUI])
+    projectUIRef.current = next
+    setProjectUI(next, options)
+  }, [activeProjectId, setProjectUI])
 
   // Derived convenience setters matching previous per-key API
-  const setSavedWorkspace = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean }) => {
-    updateWorkspaceUI('panel', v, { immediate: options?.immediate ?? true })
-  }, [updateWorkspaceUI])
+  const setSavedProject = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean }) => {
+    updateProjectUI('panel', v, { immediate: options?.immediate ?? true })
+  }, [updateProjectUI])
 
   const setSavedTerminal = useCallback((v: { open: boolean } | null, options?: { immediate?: boolean }) => {
-    updateWorkspaceUI('terminal', v, options)
-  }, [updateWorkspaceUI])
+    updateProjectUI('terminal', v, options)
+  }, [updateProjectUI])
 
   const setSavedDevPreview = useCallback((v: DevPreviewPanelState | null) => {
-    updateWorkspaceUI('preview', v)
-  }, [updateWorkspaceUI])
+    updateProjectUI('preview', v)
+  }, [updateProjectUI])
 
-  const loadingWorkspaceLayout = loadingWorkspaceUI && !!activeWorkspaceId && !!token
-  const setSavedWorkspaceLayout = useCallback((v: WorkspacePanelLayoutState | null, options?: { immediate?: boolean }) => {
-    updateWorkspaceUI('layout', v, { immediate: options?.immediate ?? true })
-  }, [updateWorkspaceUI])
+  const loadingProjectLayout = loadingProjectUI && !!activeProjectId && !!token
+  const setSavedProjectLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
+    updateProjectUI('layout', v, { immediate: options?.immediate ?? true })
+  }, [updateProjectUI])
 
-  const setSavedWorkspaceTabs = useCallback((v: WorkspaceTabsState | null) => {
-    updateWorkspaceUI('tabs', v)
-  }, [updateWorkspaceUI])
+  const setSavedProjectTabs = useCallback((v: ProjectTabsState | null) => {
+    updateProjectUI('tabs', v)
+  }, [updateProjectUI])
 
-  const savedDevPreview = workspaceUI?.preview ?? null
+  const savedDevPreview = projectUI?.preview ?? null
 
   const [, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
@@ -2846,11 +2846,11 @@ function App() {
   const [savedManagerSelectedRepo, setSavedManagerSelectedRepo, loadingManagerSelectedRepo] = useSessionState<PersistedSelectedRepo>(
     activeSessionId, 'manager.selectedRepo', token,
   )
-  const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
-  const [workspaceStateReady, setWorkspaceStateReady] = useState(false)
+  const [projectTabsState, setProjectTabsState] = useState<ProjectTabsState | null>(null)
+  const [projectStateReady, setProjectStateReady] = useState(false)
   const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
-  const workspaceUiRestoreKeyRef = useRef<string | null>(null)
-  const workspaceSurfaceFallbackKeyRef = useRef<string | null>(null)
+  const projectUiRestoreKeyRef = useRef<string | null>(null)
+  const projectSurfaceFallbackKeyRef = useRef<string | null>(null)
 
   const normalizedSavedManagerSelectedRepo = useMemo(
     () => normalizePersistedSelectedRepo(savedManagerSelectedRepo),
@@ -2858,11 +2858,11 @@ function App() {
   )
 
   useEffect(() => {
-        setWorkspaceTabsState(null)
-    setWorkspaceStateReady(false)
-    workspaceUiRestoreKeyRef.current = null
-    workspaceSurfaceFallbackKeyRef.current = null
-  }, [activeWorkspaceId])
+        setProjectTabsState(null)
+    setProjectStateReady(false)
+    projectUiRestoreKeyRef.current = null
+    projectSurfaceFallbackKeyRef.current = null
+  }, [activeProjectId])
 
   useEffect(() => {
     managerRepoRestoreAppliedRef.current = false
@@ -2956,85 +2956,85 @@ function App() {
   ])
 
   useEffect(() => {
-    setWorkspacePreviewRequest(null)
-  }, [activeWorkspaceId])
+    setProjectPreviewRequest(null)
+  }, [activeProjectId])
 
-  // Reset active workspace state when switching workspaces so the editor
-  // doesn't keep showing the previous workspace's directory.
+  // Reset active project state when switching projects so the editor
+  // doesn't keep showing the previous project's directory.
   useEffect(() => {
-    setActiveWorkspaceIfChanged(null)
-  }, [activeWorkspaceId, setActiveWorkspaceIfChanged])
+    setActiveProjectIfChanged(null)
+  }, [activeProjectId, setActiveProjectIfChanged])
 
   // ── Persistent session state for changed files ─────────────────────
   type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
   const [, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
 
-  // ── Deferred workspace state from WS push ──────────────────────────
-  // Panel and preview fields depend on activeWorkspaceRecord (loaded async
+  // ── Deferred project state from WS push ──────────────────────────
+  // Panel and preview fields depend on activeProjectRecord (loaded async
   // from REST). This effect applies the stashed WS state once available.
   useEffect(() => {
-    const pending = pendingWsWorkspaceStateRef.current
+    const pending = pendingWsProjectStateRef.current
     if (!pending) {
-      // No stashed WS state to apply — if the workspace record is loaded,
+      // No stashed WS state to apply — if the project record is loaded,
       // we know there's nothing deferred and can unblock persisting.
-      if (activeWorkspaceRecord && !loadingWorkspaceUI && !workspaceUI) {
-                setWorkspaceStateReady(true)
+      if (activeProjectRecord && !loadingProjectUI && !projectUI) {
+                setProjectStateReady(true)
       }
       return
     }
-    if (!activeWorkspaceRecord) return
+    if (!activeProjectRecord) return
     if (!activeSessionId) return
-    if (pending.workspaceId !== activeWorkspaceId) return
+    if (pending.projectId !== activeProjectId) return
 
     const { ui } = pending
     let cancelled = false
 
-    const applyPendingWorkspaceUI = async () => {
-            // Apply workspace panel
+    const applyPendingProjectUI = async () => {
+            // Apply project panel
       const wp = ui.panel
       if (wp) {
         const savedPath = wp.remotePath?.trim() || null
-        const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
+        const recordedPath = activeProjectRecord.rootPath?.trim() || null
         const restoredPath = recordedPath || savedPath
         if (restoredPath) {
-          const requestedNodeId = activeWorkspaceRecord.nodeId ?? wp.nodeId ?? 'gateway'
-          suppressNextUiSync('workspace.panel')
-          showWorkspaceRef.current = wp.open === true
-          setShowWorkspace(wp.open === true)
+          const requestedNodeId = activeProjectRecord.nodeId ?? wp.nodeId ?? 'gateway'
+          suppressNextUiSync('project.panel')
+          showProjectRef.current = wp.open === true
+          setShowProject(wp.open === true)
           
-          const currentWorkspace = activeWorkspaceRef.current
-          const currentNodeId = currentWorkspace?.nodeId ?? 'gateway'
+          const currentProject = activeProjectRef.current
+          const currentNodeId = currentProject?.nodeId ?? 'gateway'
           if (
-            currentWorkspace?.workspaceRoot === restoredPath
+            currentProject?.projectRoot === restoredPath
             && currentNodeId === requestedNodeId
-            && currentWorkspace.surfaceId
+            && currentProject.surfaceId
           ) {
-            setActiveWorkspaceIfChanged(currentWorkspace)
+            setActiveProjectIfChanged(currentProject)
           } else {
             try {
               const response = activeSessionId
-                ? await fetch(`${API_URL}/api/workspace/open`, {
+                ? await fetch(`${API_URL}/api/project/open`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
                   })
                 : null
-              if (response && !response.ok) throw new Error('Failed to open workspace')
+              if (response && !response.ok) throw new Error('Failed to open project')
               const data = response
-                ? await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+                ? await response.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
                 : null
               if (cancelled) return
-              setActiveWorkspaceIfChanged({
+              setActiveProjectIfChanged({
                 surfaceId: data?.surfaceId ?? wp.surfaceId ?? '',
-                workspaceRoot: data?.workspaceRoot ?? restoredPath,
+                projectRoot: data?.projectRoot ?? restoredPath,
                 nodeId: data?.nodeId || requestedNodeId,
               })
             } catch (error) {
               if (cancelled) return
-              console.error('Failed to restore workspace editor:', error)
-              setActiveWorkspaceIfChanged({
+              console.error('Failed to restore project editor:', error)
+              setActiveProjectIfChanged({
                 surfaceId: wp.surfaceId ?? '',
-                workspaceRoot: restoredPath,
+                projectRoot: restoredPath,
                 nodeId: requestedNodeId,
               })
             }
@@ -3042,11 +3042,11 @@ function App() {
         }
       }
 
-      // Re-apply workspace tabs — the reset effect
-      // (setWorkspaceTabsState(null) on activeWorkspaceId change) may have
+      // Re-apply project tabs — the reset effect
+      // (setProjectTabsState(null) on activeProjectId change) may have
       // wiped the value that handleFullState set if the session state loaded
-      // (changing activeWorkspaceId) after the WS push arrived.
-      if (ui.tabs) setWorkspaceTabsState(ui.tabs)
+      // (changing activeProjectId) after the WS push arrived.
+      if (ui.tabs) setProjectTabsState(ui.tabs)
 
       // Apply dev preview
       const dp = ui.preview
@@ -3054,107 +3054,107 @@ function App() {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
         if (dp.open && ui.panel?.open === true && nextTarget) {
-          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+          routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
 
-      pendingWsWorkspaceStateRef.current = null
+      pendingWsProjectStateRef.current = null
       if (!cancelled) {
-                setWorkspaceStateReady(true)
+                setProjectStateReady(true)
       }
     }
 
-    void applyPendingWorkspaceUI()
+    void applyPendingProjectUI()
 
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, activeWorkspaceRecord, activeWorkspaceId, loadingWorkspaceUI, routePreviewToWorkspace, workspaceUI]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId, activeProjectRecord, activeProjectId, loadingProjectUI, routePreviewToProject, projectUI]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!activeWorkspaceId || !token || !activeSessionId) return
-    if (loadingWorkspaceUI) return
-    if (!activeWorkspaceRecord) return
-    if (pendingWsWorkspaceStateRef.current?.workspaceId === activeWorkspaceId) return
+    if (!activeProjectId || !token || !activeSessionId) return
+    if (loadingProjectUI) return
+    if (!activeProjectRecord) return
+    if (pendingWsProjectStateRef.current?.projectId === activeProjectId) return
 
-    if (!workspaceUI) {
-            setWorkspaceStateReady(true)
+    if (!projectUI) {
+            setProjectStateReady(true)
       return
     }
 
-    const restoreKey = getWorkspaceUiRestoreKey(activeWorkspaceId, workspaceUI)
-    if (workspaceUiRestoreKeyRef.current === restoreKey) {
-      if (!workspaceStateReady) setWorkspaceStateReady(true)
+    const restoreKey = getProjectUiRestoreKey(activeProjectId, projectUI)
+    if (projectUiRestoreKeyRef.current === restoreKey) {
+      if (!projectStateReady) setProjectStateReady(true)
       return
     }
-    workspaceUiRestoreKeyRef.current = restoreKey
+    projectUiRestoreKeyRef.current = restoreKey
 
     let cancelled = false
 
-    const applyWorkspaceUI = async () => {
-      const ui = workspaceUI
+    const applyProjectUI = async () => {
+      const ui = projectUI
       
       if (ui.layout) {
-        suppressNextUiSync('workspace.layout')
-        const hydratedLayout = normalizeHydratedWorkspaceLayout({
+        suppressNextUiSync('project.layout')
+        const hydratedLayout = normalizeHydratedProjectLayout({
           tree: ui.layout.tree !== false,
           editor: ui.layout.editor !== false,
         }, isMobile)
-                setShowWorkspaceTree(hydratedLayout.tree)
-        setShowWorkspaceEditor(hydratedLayout.editor)
+                setShowProjectTree(hydratedLayout.tree)
+        setShowProjectEditor(hydratedLayout.editor)
       }
 
-      if (ui.tabs) setWorkspaceTabsState(ui.tabs)
+      if (ui.tabs) setProjectTabsState(ui.tabs)
 
       const wp = ui.panel
       if (wp) {
         const savedPath = wp.remotePath?.trim() || null
-        const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
+        const recordedPath = activeProjectRecord.rootPath?.trim() || null
         const restoredPath = recordedPath || savedPath
         const shouldOpen = wp.open === true
-        showWorkspaceRef.current = shouldOpen
-        setShowWorkspace(shouldOpen)
+        showProjectRef.current = shouldOpen
+        setShowProject(shouldOpen)
         
         if (restoredPath) {
-          const requestedNodeId = activeWorkspaceRecord.nodeId ?? wp.nodeId ?? 'gateway'
-          suppressNextUiSync('workspace.panel')
-          const currentWorkspace = activeWorkspaceRef.current
-          const currentNodeId = currentWorkspace?.nodeId ?? 'gateway'
+          const requestedNodeId = activeProjectRecord.nodeId ?? wp.nodeId ?? 'gateway'
+          suppressNextUiSync('project.panel')
+          const currentProject = activeProjectRef.current
+          const currentNodeId = currentProject?.nodeId ?? 'gateway'
           if (
-            currentWorkspace?.workspaceRoot === restoredPath
+            currentProject?.projectRoot === restoredPath
             && currentNodeId === requestedNodeId
-            && currentWorkspace.surfaceId
+            && currentProject.surfaceId
           ) {
-            setActiveWorkspaceIfChanged(currentWorkspace)
+            setActiveProjectIfChanged(currentProject)
           } else {
             try {
-              const response = await fetch(`${API_URL}/api/workspace/open`, {
+              const response = await fetch(`${API_URL}/api/project/open`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
               })
-              if (!response.ok) throw new Error('Failed to open workspace')
-              const data = await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+              if (!response.ok) throw new Error('Failed to open project')
+              const data = await response.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
               if (cancelled) return
-              setActiveWorkspaceIfChanged({
+              setActiveProjectIfChanged({
                 surfaceId: data.surfaceId,
-                workspaceRoot: data.workspaceRoot,
+                projectRoot: data.projectRoot,
                 nodeId: data.nodeId || requestedNodeId,
               })
             } catch (error) {
               if (cancelled) return
-              console.error('Failed to restore workspace editor:', error)
-              setActiveWorkspaceIfChanged({
+              console.error('Failed to restore project editor:', error)
+              setActiveProjectIfChanged({
                 surfaceId: wp.surfaceId ?? '',
-                workspaceRoot: restoredPath,
+                projectRoot: restoredPath,
                 nodeId: requestedNodeId,
               })
             }
           }
         }
       } else {
-        showWorkspaceRef.current = false
-        setShowWorkspace(false)
+        showProjectRef.current = false
+        setShowProject(false)
               }
 
       const dp = ui.preview
@@ -3162,69 +3162,69 @@ function App() {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
         if (dp.open && ui.panel?.open === true && nextTarget) {
-          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+          routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
 
       if (!cancelled) {
-                setWorkspaceStateReady(true)
+                setProjectStateReady(true)
       }
     }
 
-    void applyWorkspaceUI()
+    void applyProjectUI()
 
     return () => {
       cancelled = true
     }
   }, [
     activeSessionId,
-    activeWorkspaceId,
-    activeWorkspaceRecord,
+    activeProjectId,
+    activeProjectRecord,
     isMobile,
-    loadingWorkspaceUI,
-    routePreviewToWorkspace,
+    loadingProjectUI,
+    routePreviewToProject,
     suppressNextUiSync,
     token,
-    workspaceStateReady,
-    workspaceUI,
+    projectStateReady,
+    projectUI,
   ])
 
   useEffect(() => {
-    if (!activeWorkspaceId || !activeSessionId || !activeWorkspaceRecord?.rootPath) return
-    if (activeWorkspace) return
-    if (!showWorkspace) return
-    if (!workspaceStateReady && loadingWorkspaceUI) return
+    if (!activeProjectId || !activeSessionId || !activeProjectRecord?.rootPath) return
+    if (activeProject) return
+    if (!showProject) return
+    if (!projectStateReady && loadingProjectUI) return
 
-    const workspaceRoot = activeWorkspaceRecord.rootPath.trim()
-    if (!workspaceRoot) return
-    const requestedNodeId = activeWorkspaceRecord.nodeId ?? 'gateway'
-    const restoreKey = `${activeWorkspaceId}:${activeSessionId}:${workspaceRoot}:${requestedNodeId}`
-    if (workspaceSurfaceFallbackKeyRef.current === restoreKey) return
-    workspaceSurfaceFallbackKeyRef.current = restoreKey
+    const projectRoot = activeProjectRecord.rootPath.trim()
+    if (!projectRoot) return
+    const requestedNodeId = activeProjectRecord.nodeId ?? 'gateway'
+    const restoreKey = `${activeProjectId}:${activeSessionId}:${projectRoot}:${requestedNodeId}`
+    if (projectSurfaceFallbackKeyRef.current === restoreKey) return
+    projectSurfaceFallbackKeyRef.current = restoreKey
 
     
     let cancelled = false
-    void fetch(`${API_URL}/api/workspace/open`, {
+    void fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: workspaceRoot, sessionId: activeSessionId, nodeId: requestedNodeId }),
+      body: JSON.stringify({ path: projectRoot, sessionId: activeSessionId, nodeId: requestedNodeId }),
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Failed to open workspace')
-        return response.json() as Promise<{ surfaceId: string; workspaceRoot: string; nodeId?: string }>
+        if (!response.ok) throw new Error('Failed to open project')
+        return response.json() as Promise<{ surfaceId: string; projectRoot: string; nodeId?: string }>
       })
       .then((data) => {
         if (cancelled) return
-                setActiveWorkspaceIfChanged({
+                setActiveProjectIfChanged({
           surfaceId: data.surfaceId,
-          workspaceRoot: data.workspaceRoot,
+          projectRoot: data.projectRoot,
           nodeId: data.nodeId || requestedNodeId,
         })
       })
       .catch((error) => {
         if (!cancelled) {
-          console.error('Failed to recover workspace editor surface:', error)
-          workspaceSurfaceFallbackKeyRef.current = null
+          console.error('Failed to recover project editor surface:', error)
+          projectSurfaceFallbackKeyRef.current = null
         }
       })
 
@@ -3233,47 +3233,47 @@ function App() {
     }
   }, [
     activeSessionId,
-    activeWorkspace,
-    activeWorkspaceId,
-    activeWorkspaceRecord?.nodeId,
-    activeWorkspaceRecord?.rootPath,
-    loadingWorkspaceUI,
-    showWorkspace,
-    workspaceStateReady,
+    activeProject,
+    activeProjectId,
+    activeProjectRecord?.nodeId,
+    activeProjectRecord?.rootPath,
+    loadingProjectUI,
+    showProject,
+    projectStateReady,
   ])
 
-  const mobileWorkspaceInitKeyRef = useRef<string | null>(null)
+  const mobileProjectInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!showMobileWorkspace) {
-      mobileWorkspaceInitKeyRef.current = null
+    if (!showMobileProject) {
+      mobileProjectInitKeyRef.current = null
       return
     }
-    const workspaceKey = `${activeWorkspaceId ?? 'no-workspace'}:${activeWorkspace?.surfaceId ?? activeWorkspace?.workspaceRoot ?? 'no-workspace'}`
-    if (mobileWorkspaceInitKeyRef.current === workspaceKey) return
-    mobileWorkspaceInitKeyRef.current = workspaceKey
-    if (!showWorkspaceTree || !showWorkspaceEditor) return
-    const nextLayout = collapseMobileWorkspace()
-    setShowWorkspaceTree(nextLayout.tree)
-    setShowWorkspaceEditor(nextLayout.editor)
-  }, [showMobileWorkspace, activeWorkspaceId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor])
+    const projectKey = `${activeProjectId ?? 'no-project'}:${activeProject?.surfaceId ?? activeProject?.projectRoot ?? 'no-project'}`
+    if (mobileProjectInitKeyRef.current === projectKey) return
+    mobileProjectInitKeyRef.current = projectKey
+    if (!showProjectTree || !showProjectEditor) return
+    const nextLayout = collapseMobileProject()
+    setShowProjectTree(nextLayout.tree)
+    setShowProjectEditor(nextLayout.editor)
+  }, [showMobileProject, activeProjectId, activeProject?.surfaceId, activeProject?.projectRoot, showProjectTree, showProjectEditor])
 
   // ── Cross-client state sync handler ───────────────────────────────
   const handleStateSync = useCallback((key: string, value: unknown) => {
     suppressNextUiSync(key)
     switch (key) {
-      case 'workspace.panel':
-        // Legacy session-scoped panel sync is intentionally ignored. Workspace
-        // panel visibility is restored from workspace.ui; applying this older
-        // channel can fight the workspace-scoped state and toggle forever.
+      case 'project.panel':
+        // Legacy session-scoped panel sync is intentionally ignored. Project
+        // panel visibility is restored from project.ui; applying this older
+        // channel can fight the project-scoped state and toggle forever.
         break
-      case 'workspace.layout':
+      case 'project.layout':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const hydratedLayout = normalizeHydratedWorkspaceLayout({
+          const hydratedLayout = normalizeHydratedProjectLayout({
             tree: (value as { tree?: boolean }).tree !== false,
             editor: (value as { editor?: boolean }).editor !== false,
           }, isMobile)
-          setShowWorkspaceTree(hydratedLayout.tree)
-          setShowWorkspaceEditor(hydratedLayout.editor)
+          setShowProjectTree(hydratedLayout.tree)
+          setShowProjectEditor(hydratedLayout.editor)
         }
         break
       case 'screen-share.panel':
@@ -3363,22 +3363,22 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync, activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToProject, closeProjectPreview, isMobile, suppressNextUiSync, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   // This is called when the WebSocket delivers the initial full-state push.
-  // It contains ALL session-scoped state AND workspace-scoped state (in the
-  // `_workspace` envelope) so the UI can hydrate in a single message without
+  // It contains ALL session-scoped state AND project-scoped state (in the
+  // `_project` envelope) so the UI can hydrate in a single message without
   // waiting for REST round-trips.
   //
   // AGENT NOTE: To handle a new persisted state key here:
   //   1. Add a case below for the key (session-scoped keys directly,
-  //      workspace-scoped keys in the `_workspace.state` section).
+  //      project-scoped keys in the `_project.state` section).
   //   2. Session keys: apply directly in this callback.
-  //      Workspace keys that depend on activeWorkspaceRecord: stash in
-  //      `pendingWsWorkspaceStateRef` — the deferred effect will apply them.
-  //   3. Backend: session keys are automatically included.  Workspace keys
-  //      are automatically included via `_workspace` in index.ts.
+  //      Project keys that depend on activeProjectRecord: stash in
+  //      `pendingWsProjectStateRef` — the deferred effect will apply them.
+  //   3. Backend: session keys are automatically included.  Project keys
+  //      are automatically included via `_project` in index.ts.
   const handleFullState = useCallback((state: Record<string, unknown>) => {
     wsFullStateReceivedRef.current = true
     for (const key of Object.keys(state)) suppressNextUiSync(key)
@@ -3462,24 +3462,24 @@ function App() {
       setShowMobileToolbar(false)
     }
 
-    // ── Workspace-scoped state (bundled inside _workspace envelope) ──
-    // The workspace state hook is authoritative for workspace.ui. The
+    // ── Project-scoped state (bundled inside _project envelope) ──
+    // The project state hook is authoritative for project.ui. The
     // full-state packet can arrive after REST hydration and may contain an
     // older panel/layout snapshot, which would close the editor after reload.
-    const wsEnvelope = state._workspace as { id: string; state: Record<string, unknown> } | null | undefined
+    const wsEnvelope = state._project as { id: string; state: Record<string, unknown> } | null | undefined
     if (wsEnvelope?.id && wsEnvelope.state) {
           }
-  }, [activeWorkspaceId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
+  }, [activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
 
-  const loadArchitectureDiagramForWorkspace = useCallback((workspaceRoot: string, signal?: AbortSignal) => {
-    return fetch(`${API_URL}/api/architecture?workspaceRoot=${encodeURIComponent(workspaceRoot)}`, {
+  const loadArchitectureDiagramForProject = useCallback((projectRoot: string, signal?: AbortSignal) => {
+    return fetch(`${API_URL}/api/architecture?projectRoot=${encodeURIComponent(projectRoot)}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal,
     })
       .then(async (response) => {
         if (!response.ok) return null
         const data = await response.json() as {
-          diagram: { workspaceRoot: string; diagram: string; updatedAt: string; filePath?: string | null } | null
+          diagram: { projectRoot: string; diagram: string; updatedAt: string; filePath?: string | null } | null
         }
         return data.diagram
       })
@@ -3494,21 +3494,21 @@ function App() {
     onThreadEvent: automation.handleThreadEvent,
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((payload: FsChangesPayload) => {
-      const activeSurfaceId = activeWorkspaceRef.current?.surfaceId ?? null
+      const activeSurfaceId = activeProjectRef.current?.surfaceId ?? null
       if (payload.surfaceId && activeSurfaceId && payload.surfaceId !== activeSurfaceId) return
       setFsWatcherPayload(payload)
       setFsWatcherVersion(v => v + 1)
-      const workspaceRoot = activeWorkspaceRef.current?.workspaceRoot?.trim() || null
-      if (!workspaceRoot || loadedArchitectureWorkspaceRef.current !== workspaceRoot) return
-      const architectureRelativePath = architectureFilePath?.startsWith(workspaceRoot)
-        ? architectureFilePath.slice(workspaceRoot.length).replace(/^[/\\]+/, '').replace(/\\/g, '/')
+      const projectRoot = activeProjectRef.current?.projectRoot?.trim() || null
+      if (!projectRoot || loadedArchitectureProjectRef.current !== projectRoot) return
+      const architectureRelativePath = architectureFilePath?.startsWith(projectRoot)
+        ? architectureFilePath.slice(projectRoot.length).replace(/^[/\\]+/, '').replace(/\\/g, '/')
         : '.jait/architecture.mmd'
       const architectureChanged = payload.changes.some((change) => {
         const changedPath = change.path.replace(/\\/g, '/')
         return changedPath === architectureRelativePath || changedPath === 'architecture.mmd'
       })
       if (!architectureChanged) return
-      void loadArchitectureDiagramForWorkspace(workspaceRoot)
+      void loadArchitectureDiagramForProject(projectRoot)
         .then((saved) => {
           setArchitectureDiagram(saved?.diagram ?? null)
           setArchitectureFilePath(saved?.filePath ?? null)
@@ -3517,14 +3517,14 @@ function App() {
           setArchitectureDiagram(null)
           setArchitectureFilePath(null)
         })
-    }, [architectureFilePath, loadArchitectureDiagramForWorkspace]),
+    }, [architectureFilePath, loadArchitectureDiagramForProject]),
     listeners: {
-      'workspace.open': useCallback((data: WorkspaceOpenData) => {
-        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
-      }, [setActiveWorkspaceIfChanged]),
-      'workspace.close': useCallback(() => {
-        setActiveWorkspaceIfChanged(null)
-      }, [setActiveWorkspaceIfChanged]),
+      'project.open': useCallback((data: ProjectOpenData) => {
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId })
+      }, [setActiveProjectIfChanged]),
+      'project.close': useCallback(() => {
+        setActiveProjectIfChanged(null)
+      }, [setActiveProjectIfChanged]),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
         setCurrentView('chat')
         setShowTerminal(true)
@@ -3540,13 +3540,13 @@ function App() {
           })
         }
       }, [refresh, setSavedTerminal, setActiveTerminalId]),
-      'dev-preview.open': useCallback((data: { target?: string | null; workspaceRoot?: string | null }) => {
+      'dev-preview.open': useCallback((data: { target?: string | null; projectRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
         setCurrentView('chat')
         setDevPreviewTarget(target || null)
-        setSavedDevPreview({ open: true, target: target || null, workspaceRoot: data.workspaceRoot ?? null })
-        routePreviewToWorkspace(target || null, data.workspaceRoot ?? null)
-      }, [routePreviewToWorkspace, setSavedDevPreview]),
+        setSavedDevPreview({ open: true, target: target || null, projectRoot: data.projectRoot ?? null })
+        routePreviewToProject(target || null, data.projectRoot ?? null)
+      }, [routePreviewToProject, setSavedDevPreview]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -3562,12 +3562,12 @@ function App() {
           setArchitectureFilePath(data.filePath ?? null)
           setArchitectureGenerating(false)
           setShowArchitecture(true)
-          if (data.workspaceRoot?.trim()) {
-            loadedArchitectureWorkspaceRef.current = data.workspaceRoot.trim()
+          if (data.projectRoot?.trim()) {
+            loadedArchitectureProjectRef.current = data.projectRoot.trim()
           }
-          openArchitectureInWorkspace(data.workspaceRoot)
+          openArchitectureInProject(data.projectRoot)
         }
-      }, [openArchitectureInWorkspace]),
+      }, [openArchitectureInProject]),
     },
     onPreviewSessionEvent: emitPreviewSession,
   })
@@ -3579,28 +3579,28 @@ function App() {
     sendArchitectureRenderResult(requestId, result)
   }, [sendArchitectureRenderResult])
 
-  const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
-    setWorkspaceTabsState((prev) => areWorkspaceUiValuesEqual(prev, state) ? prev : state)
-    setSavedWorkspaceTabs(state)
-  }, [setSavedWorkspaceTabs])
+  const handleProjectTabsStateChange = useCallback((state: ProjectTabsState | null) => {
+    setProjectTabsState((prev) => areProjectUiValuesEqual(prev, state) ? prev : state)
+    setSavedProjectTabs(state)
+  }, [setSavedProjectTabs])
 
   useEffect(() => {
-    const workspaceRoot = activeWorkspace?.workspaceRoot?.trim() || null
-    if (!workspaceRoot || !token) {
-      loadedArchitectureWorkspaceRef.current = null
+    const projectRoot = activeProject?.projectRoot?.trim() || null
+    if (!projectRoot || !token) {
+      loadedArchitectureProjectRef.current = null
       setArchitectureDiagram(null)
       setArchitectureFilePath(null)
       setArchitectureGenerating(false)
       return
     }
-    if (loadedArchitectureWorkspaceRef.current === workspaceRoot) return
-    loadedArchitectureWorkspaceRef.current = workspaceRoot
+    if (loadedArchitectureProjectRef.current === projectRoot) return
+    loadedArchitectureProjectRef.current = projectRoot
     setArchitectureDiagram(null)
     setArchitectureFilePath(null)
     let cancelled = false
     const controller = new AbortController()
 
-    void loadArchitectureDiagramForWorkspace(workspaceRoot, controller.signal)
+    void loadArchitectureDiagramForProject(projectRoot, controller.signal)
       .then((saved) => {
         if (cancelled) return
         setArchitectureDiagram(saved?.diagram ?? null)
@@ -3617,85 +3617,66 @@ function App() {
       cancelled = true
       controller.abort()
     }
-  }, [activeWorkspace?.workspaceRoot, loadArchitectureDiagramForWorkspace, token])
+  }, [activeProject?.projectRoot, loadArchitectureDiagramForProject, token])
 
-  const prevWorkspacePanelPayloadRef = useRef<string | null>(null)
+  const prevProjectPanelPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeWorkspaceId && token && !workspaceStateReady) {
+    if (activeProjectId && token && !projectStateReady) {
             return
     }
-    const hasHydratedWorkspaceRecord = Boolean(activeWorkspaceId && token && activeWorkspaceRecord?.rootPath?.trim())
-    if (hasHydratedWorkspaceRecord && !activeWorkspace && workspaceUI?.panel?.open === true) {
+    const hasHydratedProjectRecord = Boolean(activeProjectId && token && activeProjectRecord?.rootPath?.trim())
+    if (hasHydratedProjectRecord && !activeProject && projectUI?.panel?.open === true) {
             return
     }
-    const panel = activeWorkspace
+    const panel = activeProject
       ? {
-          open: showWorkspace,
-          remotePath: activeWorkspace.workspaceRoot,
-          surfaceId: activeWorkspace.surfaceId,
-          nodeId: activeWorkspace.nodeId,
+          open: showProject,
+          remotePath: activeProject.projectRoot,
+          surfaceId: activeProject.surfaceId,
+          nodeId: activeProject.nodeId,
         }
       : null
     const serialized = JSON.stringify(panel)
-    if (serialized === prevWorkspacePanelPayloadRef.current) return
-    prevWorkspacePanelPayloadRef.current = serialized
-        setSavedWorkspace(panel)
-  }, [activeWorkspace, activeWorkspaceId, activeWorkspaceRecord?.rootPath, setSavedWorkspace, showWorkspace, token, workspaceStateReady, workspaceUI?.panel?.open])
+    if (serialized === prevProjectPanelPayloadRef.current) return
+    prevProjectPanelPayloadRef.current = serialized
+        setSavedProject(panel)
+  }, [activeProject, activeProjectId, activeProjectRecord?.rootPath, setSavedProject, showProject, token, projectStateReady, projectUI?.panel?.open])
 
-  const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
-  const applyWorkspaceLayout = useCallback((
-    layout: WorkspacePanelLayoutState,
+  const prevProjectLayoutPayloadRef = useRef<string | null>(null)
+  const applyProjectLayout = useCallback((
+    layout: { tree: boolean; editor: boolean },
     options?: { immediateSync?: boolean },
   ) => {
-    setShowWorkspaceTree(layout.tree)
-    setShowWorkspaceEditor(layout.editor)
+    setShowProjectTree(layout.tree)
+    setShowProjectEditor(layout.editor)
     if (!layout.tree && !layout.editor) {
-      showWorkspaceRef.current = false
-      setShowWorkspace(false)
+      showProjectRef.current = false
+      setShowProject(false)
     }
 
     if (!options?.immediateSync) return
 
-    const persistedSizes = workspaceUIRef.current?.layout
-    const persistedLayout = {
-      ...layout,
-      panelSize: layout.panelSize ?? persistedSizes?.panelSize,
-      treeSize: layout.treeSize ?? persistedSizes?.treeSize,
-    }
-    prevWorkspaceLayoutPayloadRef.current = JSON.stringify(persistedLayout)
-    setSavedWorkspaceLayout(persistedLayout, { immediate: true })
+    prevProjectLayoutPayloadRef.current = JSON.stringify(layout)
+    setSavedProjectLayout(layout, { immediate: true })
     if (activeSessionId) {
-      sendUIState('workspace.layout', persistedLayout, activeSessionId)
+      sendUIState('project.layout', layout, activeSessionId)
     }
-  }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
-
-  const handleWorkspaceLayoutStateChange = useCallback((state: WorkspacePanelLayoutState) => {
-    setSavedWorkspaceLayout(state)
-    if (activeSessionId) {
-      sendUIState('workspace.layout', state, activeSessionId)
-    }
-  }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
+  }, [activeSessionId, sendUIState, setSavedProjectLayout])
 
   useEffect(() => {
-    if (activeWorkspaceId && token && (!workspaceStateReady || loadingWorkspaceLayout)) {
+    if (activeProjectId && token && (!projectStateReady || loadingProjectLayout)) {
             return
     }
-    const persistedSizes = workspaceUIRef.current?.layout
-    const layout = {
-      tree: showWorkspaceTree,
-      editor: showWorkspaceEditor,
-      panelSize: persistedSizes?.panelSize,
-      treeSize: persistedSizes?.treeSize,
-    }
+    const layout = { tree: showProjectTree, editor: showProjectEditor }
     const serialized = JSON.stringify(layout)
-    if (serialized === prevWorkspaceLayoutPayloadRef.current) return
-    prevWorkspaceLayoutPayloadRef.current = serialized
-        setSavedWorkspaceLayout(layout)
+    if (serialized === prevProjectLayoutPayloadRef.current) return
+    prevProjectLayoutPayloadRef.current = serialized
+        setSavedProjectLayout(layout)
     if (activeSessionId) {
-      if (consumeSuppressedUiSync('workspace.layout')) return
-      sendUIState('workspace.layout', layout, activeSessionId)
+      if (consumeSuppressedUiSync('project.layout')) return
+      sendUIState('project.layout', layout, activeSessionId)
     }
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState, workspaceStateReady])
+  }, [showProjectTree, showProjectEditor, setSavedProjectLayout, activeProjectId, loadingProjectLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState, projectStateReady])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   const prevFooterMenuPayloadRef = useRef<string | null>(null)
@@ -3910,15 +3891,15 @@ function App() {
   }, [setSavedScreenShare, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeDevPreviewPanel = useCallback(() => {
-    closeWorkspacePreview()
+    closeProjectPreview()
     setDevPreviewTarget(null)
-    setWorkspacePreviewRequest(null)
-    setWorkspacePreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
+    setProjectPreviewRequest(null)
+    setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
     setSavedDevPreview(null)
-  }, [closeWorkspacePreview, setSavedDevPreview])
+  }, [closeProjectPreview, setSavedDevPreview])
 
   const prevPreviewSyncRef = useRef<string>('')
-  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
+  const handleProjectPreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
     const persistedTarget = getPersistablePreviewTarget(state.target)
     const displayState: DevPreviewPanelState['displayState'] = !state.open
       ? 'hidden'
@@ -3931,7 +3912,7 @@ function App() {
       displayState,
       displayTarget: displayState === 'connected' ? persistedTarget : null,
     }
-    setWorkspacePreviewState((prev) => {
+    setProjectPreviewState((prev) => {
       if (
         prev.open === nextPreviewState.open
         && prev.target === nextPreviewState.target
@@ -3944,11 +3925,11 @@ function App() {
       const nextState: DevPreviewPanelState = {
         open: true,
         target: persistedTarget ?? devPreviewTarget ?? null,
-        workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
+        projectRoot: activeProject?.projectRoot ?? null,
         displayState,
         displayTarget: displayState === 'connected' ? (persistedTarget ?? devPreviewTarget ?? null) : null,
       }
-      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}`
+      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.projectRoot ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}`
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
@@ -3957,9 +3938,9 @@ function App() {
     if (prevPreviewSyncRef.current === '') return
     prevPreviewSyncRef.current = ''
     setSavedDevPreview(null)
-  }, [activeWorkspace?.workspaceRoot, devPreviewTarget, setSavedDevPreview])
+  }, [activeProject?.projectRoot, devPreviewTarget, setSavedDevPreview])
 
-  const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
+  const previewOpen = savedDevPreview?.open === true || projectPreviewState.open
 
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
@@ -3976,382 +3957,382 @@ function App() {
     sendUIState('terminal.panel', null, activeSessionId)
   }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync, isMobile])
 
-  const closeWorkspacePanel = useCallback(() => {
-    suppressWorkspaceAutoOpenRef.current = true
-    showWorkspaceRef.current = false
-    setShowWorkspace(false)
-    const nextPanel = activeWorkspace
+  const closeProjectPanel = useCallback(() => {
+    suppressProjectAutoOpenRef.current = true
+    showProjectRef.current = false
+    setShowProject(false)
+    const nextPanel = activeProject
       ? {
           open: false,
-          remotePath: activeWorkspace.workspaceRoot,
-          surfaceId: activeWorkspace.surfaceId,
-          nodeId: activeWorkspace.nodeId,
+          remotePath: activeProject.projectRoot,
+          surfaceId: activeProject.surfaceId,
+          nodeId: activeProject.nodeId,
         }
       : null
-    prevWorkspacePanelPayloadRef.current = JSON.stringify(nextPanel)
+    prevProjectPanelPayloadRef.current = JSON.stringify(nextPanel)
     if (isMobile) {
-      const collapsedLayout = collapseMobileWorkspace()
-      applyWorkspaceLayout(collapsedLayout, { immediateSync: true })
+      const collapsedLayout = collapseMobileProject()
+      applyProjectLayout(collapsedLayout, { immediateSync: true })
     }
     if (nextPanel) {
-      setSavedWorkspace(nextPanel, { immediate: true })
+      setSavedProject(nextPanel, { immediate: true })
     }
     // Don't clear showArchitecture or architectureRequest — they should
     // persist so architecture restores when the editor is reopened
     // (same behavior as preview). Only explicit close via the header
     // button should dismiss them.
-  }, [activeWorkspace, applyWorkspaceLayout, isMobile, setSavedWorkspace])
-  closeWorkspacePanelRef.current = closeWorkspacePanel
+  }, [activeProject, applyProjectLayout, isMobile, setSavedProject])
+  closeProjectPanelRef.current = closeProjectPanel
 
-  const toggleWorkspaceTree = useCallback(() => {
+  const toggleProjectTree = useCallback(() => {
     if (isMobile) {
-      const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'tree')
-      applyWorkspaceLayout(nextLayout, { immediateSync: true })
+      const nextLayout = toggleMobileProjectPane({ tree: showProjectTree, editor: showProjectEditor }, 'tree')
+      applyProjectLayout(nextLayout, { immediateSync: true })
       return
     }
-    const nextLayout = toggleDesktopWorkspaceTreeVisibility({
-      tree: showWorkspaceTree,
-      editor: showWorkspaceEditor,
+    const nextLayout = toggleDesktopProjectTreeVisibility({
+      tree: showProjectTree,
+      editor: showProjectEditor,
     })
-    applyWorkspaceLayout(nextLayout, { immediateSync: true })
-  }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
+    applyProjectLayout(nextLayout, { immediateSync: true })
+  }, [applyProjectLayout, isMobile, showProjectTree, showProjectEditor])
 
-  const toggleWorkspaceEditor = useCallback(() => {
+  const toggleProjectEditor = useCallback(() => {
     if (isMobile) {
-      const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'editor')
-      applyWorkspaceLayout(nextLayout, { immediateSync: true })
+      const nextLayout = toggleMobileProjectPane({ tree: showProjectTree, editor: showProjectEditor }, 'editor')
+      applyProjectLayout(nextLayout, { immediateSync: true })
       return
     }
-    applyWorkspaceLayout({ tree: showWorkspaceTree, editor: !showWorkspaceEditor }, { immediateSync: true })
-  }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
+    applyProjectLayout({ tree: showProjectTree, editor: !showProjectEditor }, { immediateSync: true })
+  }, [applyProjectLayout, isMobile, showProjectTree, showProjectEditor])
 
-  const showMobileWorkspaceTreeTab = useCallback((tab: 'files' | 'git') => {
+  const showMobileProjectTreeTab = useCallback((tab: 'files' | 'git') => {
     setMobileTreeTab(tab)
-    const nextLayout = showMobileWorkspacePane('tree')
-    applyWorkspaceLayout(nextLayout, { immediateSync: true })
-  }, [applyWorkspaceLayout])
+    const nextLayout = showMobileProjectPane('tree')
+    applyProjectLayout(nextLayout, { immediateSync: true })
+  }, [applyProjectLayout])
 
-  const showMobileWorkspaceEditorTab = useCallback(() => {
-    const nextLayout = showMobileWorkspacePane('editor')
-    applyWorkspaceLayout(nextLayout, { immediateSync: true })
-  }, [applyWorkspaceLayout])
+  const showMobileProjectEditorTab = useCallback(() => {
+    const nextLayout = showMobileProjectPane('editor')
+    applyProjectLayout(nextLayout, { immediateSync: true })
+  }, [applyProjectLayout])
 
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
     const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
     setDevPreviewTarget(nextTarget)
-    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
+    const state = { open: true, target: nextTarget, projectRoot: activeProject?.projectRoot ?? null }
     setSavedDevPreview(state)
-    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
-  }, [setSavedDevPreview, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
+    routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)
+  }, [setSavedDevPreview, devPreviewTarget, routePreviewToProject, activeProject?.projectRoot])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
-  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => {
+  const openRemoteProjectOnGateway = useCallback(async (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => {
     const sessionId = sessionIdOverride ?? activeSessionId
-    const res = await fetch(`${API_URL}/api/workspace/open`, {
+    const res = await fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway' }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
-      throw new Error((err as { message?: string }).message ?? 'Failed to open workspace')
+      throw new Error((err as { message?: string }).message ?? 'Failed to open project')
     }
     if (token) {
       void updateSettings({
-        workspace_picker_path: dirPath,
-        workspace_picker_node_id: nodeId || 'gateway',
+        project_picker_path: dirPath,
+        project_picker_node_id: nodeId || 'gateway',
       }).catch(() => {
-        // Best-effort persistence only; workspace open already succeeded.
+        // Best-effort persistence only; project open already succeeded.
       })
     }
-    // The gateway broadcasts `workspace.open` via WS and persists state.
+    // The gateway broadcasts `project.open` via WS and persists state.
     // All clients (including this one) will receive it and hydrate automatically.
   }, [activeSessionId, token, updateSettings])
 
-  // Wrap switchWorkspace so clicking a workspace also opens its remote directory
+  // Wrap switchProject so clicking a project also opens its remote directory
   // and shows the correct files/session in the editor.
-  const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
-    const workspace = workspaces.find((w) => w.id === workspaceId)
-    if (!workspace) return
+  const handleSwitchProject = useCallback(async (projectId: string) => {
+    const project = projects.find((w) => w.id === projectId)
+    if (!project) return
 
     if (isMobile) {
       setShowSidebar(false)
     }
 
-    // Determine which session to activate (mirrors switchWorkspace logic)
-    const nextSessionId = getLatestWorkspaceSessionId(workspace)
+    // Determine which session to activate (mirrors switchProject logic)
+    const nextSessionId = getLatestProjectSessionId(project)
 
-    switchWorkspace(workspaceId)
+    switchProject(projectId)
 
-    // Open the workspace directory on the gateway and directly hydrate from the
-    // response rather than relying on the WS `workspace.open` event, which is
+    // Open the project directory on the gateway and directly hydrate from the
+    // response rather than relying on the WS `project.open` event, which is
     // session-scoped and may arrive before the WS re-subscribes to the new session.
-    if (workspace.rootPath) {
+    if (project.rootPath) {
       try {
-        const res = await fetch(`${API_URL}/api/workspace/open`, {
+        const res = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: workspace.rootPath, sessionId: nextSessionId, nodeId: workspace.nodeId || 'gateway' }),
+          body: JSON.stringify({ path: project.rootPath, sessionId: nextSessionId, nodeId: project.nodeId || 'gateway' }),
         })
         if (!res.ok) return
-        const data = await res.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
-        const resolvedNodeId = data.nodeId || workspace.nodeId || undefined
-        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: resolvedNodeId })
-        showWorkspaceRef.current = true
-        setShowWorkspace(true)
-        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
+        const data = await res.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
+        const resolvedNodeId = data.nodeId || project.nodeId || undefined
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId })
+        showProjectRef.current = true
+        setShowProject(true)
+        setSavedProject({ open: true, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
       } catch (e) {
-        console.error('Failed to open workspace:', e)
+        console.error('Failed to open project:', e)
       }
     }
-  }, [workspaces, switchWorkspace, setSavedWorkspace, isMobile])
+  }, [projects, switchProject, setSavedProject, isMobile])
 
-  const handleCreateWorkspace = useCallback(() => {
-    setWorkspacePickerMode('workspace')
+  const handleCreateProject = useCallback(() => {
+    setProjectPickerMode('project')
     setFolderPickerOpen(true)
   }, [])
 
   const handleSessionSwitcherOpen = useCallback((open: boolean) => {
-    if (!open || !activeWorkspaceId) return
-    if (!archivedSessionsByWorkspace[activeWorkspaceId]) {
-      void fetchArchivedSessions(activeWorkspaceId)
+    if (!open || !activeProjectId) return
+    if (!archivedSessionsByProject[activeProjectId]) {
+      void fetchArchivedSessions(activeProjectId)
     }
-  }, [activeWorkspaceId, archivedSessionsByWorkspace, fetchArchivedSessions])
+  }, [activeProjectId, archivedSessionsByProject, fetchArchivedSessions])
 
-  const handleWorkspaceFolderSelected = useCallback(async (
+  const handleProjectFolderSelected = useCallback(async (
     path: string,
     nodeId: string,
     options?: { openEditor?: boolean },
   ) => {
-    // If we're changing the directory of an existing workspace
-    if (changeDirectoryWorkspaceId) {
-      setChangeDirectoryWorkspaceId(null)
-      await updateWorkspace(changeDirectoryWorkspaceId, { rootPath: path, nodeId })
+    // If we're changing the directory of an existing project
+    if (changeDirectoryProjectId) {
+      setChangeDirectoryProjectId(null)
+      await updateProject(changeDirectoryProjectId, { rootPath: path, nodeId })
       void automation.refresh()
       return
     }
-    const workspace = await createWorkspace({ rootPath: path, nodeId })
-    if (!workspace) {
-      throw new Error('Failed to create workspace')
+    const project = await createProject({ rootPath: path, nodeId })
+    if (!project) {
+      throw new Error('Failed to create project')
     }
-    const session = workspace.sessions[0] ?? await createSession(workspace.id)
+    const session = project.sessions[0] ?? await createSession(project.id)
     if (!session) {
-      throw new Error('Failed to create workspace session')
+      throw new Error('Failed to create project session')
     }
-    const nextOpen = options?.openEditor ?? workspacePickerMode === 'editor'
-    showWorkspaceRef.current = nextOpen
-    await openRemoteWorkspaceOnGateway(path, nodeId, session.id)
+    const nextOpen = options?.openEditor ?? projectPickerMode === 'editor'
+    showProjectRef.current = nextOpen
+    await openRemoteProjectOnGateway(path, nodeId, session.id)
     void automation.refresh()
-    setShowWorkspace(nextOpen)
+    setShowProject(nextOpen)
     if (nextOpen && isMobile) {
-      const nextLayout = showMobileWorkspacePane('editor')
-      applyWorkspaceLayout(nextLayout, { immediateSync: true })
+      const nextLayout = showMobileProjectPane('editor')
+      applyProjectLayout(nextLayout, { immediateSync: true })
     }
-    setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
-  }, [applyWorkspaceLayout, automation.refresh, changeDirectoryWorkspaceId, createSession, createWorkspace, isMobile, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
+    setSavedProject({ open: nextOpen, remotePath: path, nodeId })
+  }, [applyProjectLayout, automation.refresh, changeDirectoryProjectId, createSession, createProject, isMobile, updateProject, openRemoteProjectOnGateway, setSavedProject, projectPickerMode])
 
-  const reopenPersistedWorkspace = useCallback(async (
+  const reopenPersistedProject = useCallback(async (
     path: string,
     nodeId?: string | null,
     sessionIdOverride?: string | null,
     options?: { mobileTarget?: 'background' | 'editor' },
   ) => {
-    await openRemoteWorkspaceOnGateway(path, nodeId ?? undefined, sessionIdOverride)
-    showWorkspaceRef.current = true
-    setShowWorkspace(true)
+    await openRemoteProjectOnGateway(path, nodeId ?? undefined, sessionIdOverride)
+    showProjectRef.current = true
+    setShowProject(true)
     if (isMobile) {
-      applyWorkspaceLayout(getReopenedMobileWorkspaceLayout(options?.mobileTarget), { immediateSync: true })
+      applyProjectLayout(getReopenedMobileProjectLayout(options?.mobileTarget), { immediateSync: true })
     } else {
-      setShowWorkspaceTree(true)
-      showWorkspaceEditorPanel()
+      setShowProjectTree(true)
+      showProjectEditorPanel()
     }
-    setSavedWorkspace({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
-  }, [applyWorkspaceLayout, isMobile, openRemoteWorkspaceOnGateway, setSavedWorkspace, showWorkspaceEditorPanel])
+    setSavedProject({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
+  }, [applyProjectLayout, isMobile, openRemoteProjectOnGateway, setSavedProject, showProjectEditorPanel])
 
-  const ensureWorkspaceReadyForSidebarAction = useCallback(async () => {
-    if (!activeWorkspaceRef.current && !activeWorkspaceRecordRef.current && (authLoadingRef.current || workspacesLoadingRef.current)) {
-      await waitForWorkspaceHydration()
+  const ensureProjectReadyForSidebarAction = useCallback(async () => {
+    if (!activeProjectRef.current && !activeProjectRecordRef.current && (authLoadingRef.current || projectsLoadingRef.current)) {
+      await waitForProjectHydration()
     }
 
-    if (activeWorkspaceRef.current) return activeWorkspaceRef.current
+    if (activeProjectRef.current) return activeProjectRef.current
 
-    const currentActiveWorkspaceRecord = activeWorkspaceRecordRef.current
+    const currentActiveProjectRecord = activeProjectRecordRef.current
     const currentActiveSessionId = activeSessionIdRef.current
 
-    if (currentActiveWorkspaceRecord?.rootPath) {
-      await reopenPersistedWorkspace(
-        currentActiveWorkspaceRecord.rootPath,
-        currentActiveWorkspaceRecord.nodeId ?? 'gateway',
+    if (currentActiveProjectRecord?.rootPath) {
+      await reopenPersistedProject(
+        currentActiveProjectRecord.rootPath,
+        currentActiveProjectRecord.nodeId ?? 'gateway',
         currentActiveSessionId,
       )
-      return activeWorkspaceRef.current
+      return activeProjectRef.current
     }
 
-    const pendingWorkspacePanel = pendingWsWorkspaceStateRef.current?.ui.panel
-    const pendingWorkspaceRoot = pendingWorkspacePanel?.remotePath?.trim() || null
-    if (pendingWorkspaceRoot && currentActiveSessionId) {
-      await reopenPersistedWorkspace(
-        pendingWorkspaceRoot,
-        pendingWorkspacePanel?.nodeId ?? undefined,
+    const pendingProjectPanel = pendingWsProjectStateRef.current?.ui.panel
+    const pendingProjectRoot = pendingProjectPanel?.remotePath?.trim() || null
+    if (pendingProjectRoot && currentActiveSessionId) {
+      await reopenPersistedProject(
+        pendingProjectRoot,
+        pendingProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
       )
-      return activeWorkspaceRef.current
+      return activeProjectRef.current
     }
 
-    const persistedWorkspacePanel = workspaceUIRef.current?.panel
-    const persistedWorkspaceRoot = persistedWorkspacePanel?.remotePath?.trim() || null
-    if (persistedWorkspaceRoot && currentActiveSessionId) {
-      await reopenPersistedWorkspace(
-        persistedWorkspaceRoot,
-        persistedWorkspacePanel?.nodeId ?? undefined,
+    const persistedProjectPanel = projectUIRef.current?.panel
+    const persistedProjectRoot = persistedProjectPanel?.remotePath?.trim() || null
+    if (persistedProjectRoot && currentActiveSessionId) {
+      await reopenPersistedProject(
+        persistedProjectRoot,
+        persistedProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
       )
-      return activeWorkspaceRef.current
+      return activeProjectRef.current
     }
 
     return null
-  }, [reopenPersistedWorkspace, waitForWorkspaceHydration])
+  }, [reopenPersistedProject, waitForProjectHydration])
 
   const handleSidebarPreviewToggle = useCallback(async () => {
-    const workspace = await ensureWorkspaceReadyForSidebarAction()
-    if (!workspace) return
+    const project = await ensureProjectReadyForSidebarAction()
+    if (!project) return
 
     if (previewOpen) {
       closeDevPreviewPanel()
       return
     }
 
-    const nextTarget = workspacePreviewState.target
+    const nextTarget = projectPreviewState.target
       ?? devPreviewTarget?.trim()
       ?? savedDevPreview?.target?.trim()
       ?? null
-    if (routePreviewToWorkspace(nextTarget, workspace.workspaceRoot ?? null)) return
+    if (routePreviewToProject(nextTarget, project.projectRoot ?? null)) return
     openDevPreviewPanel(nextTarget)
-  }, [closeDevPreviewPanel, devPreviewTarget, ensureWorkspaceReadyForSidebarAction, openDevPreviewPanel, previewOpen, routePreviewToWorkspace, savedDevPreview?.target, workspacePreviewState.target])
+  }, [closeDevPreviewPanel, devPreviewTarget, ensureProjectReadyForSidebarAction, openDevPreviewPanel, previewOpen, routePreviewToProject, savedDevPreview?.target, projectPreviewState.target])
 
   const handleSidebarArchitectureToggle = useCallback(async () => {
-    const workspace = await ensureWorkspaceReadyForSidebarAction()
-    if (!workspace) return
+    const project = await ensureProjectReadyForSidebarAction()
+    if (!project) return
 
     if (showArchitecture) {
-      workspaceRef.current?.closeArchitectureTab()
+      projectRef.current?.closeArchitectureTab()
       setArchitectureRequest(null)
       setShowArchitecture(false)
       return
     }
 
     setShowArchitecture(true)
-    openArchitectureInWorkspace(workspace.workspaceRoot)
-  }, [ensureWorkspaceReadyForSidebarAction, openArchitectureInWorkspace, showArchitecture])
+    openArchitectureInProject(project.projectRoot)
+  }, [ensureProjectReadyForSidebarAction, openArchitectureInProject, showArchitecture])
 
   const handleToggleEditor = useCallback(async () => {
-    if (showWorkspace) {
-      closeWorkspacePanel()
+    if (showProject) {
+      closeProjectPanel()
       return
     }
 
-    suppressWorkspaceAutoOpenRef.current = false
+    suppressProjectAutoOpenRef.current = false
 
-    if (!activeWorkspaceRef.current && !activeWorkspaceRecordRef.current && (authLoadingRef.current || workspacesLoadingRef.current)) {
-      await waitForWorkspaceHydration()
+    if (!activeProjectRef.current && !activeProjectRecordRef.current && (authLoadingRef.current || projectsLoadingRef.current)) {
+      await waitForProjectHydration()
     }
 
-    const currentActiveWorkspace = activeWorkspaceRef.current
-    const currentActiveWorkspaceRecord = activeWorkspaceRecordRef.current
+    const currentActiveProject = activeProjectRef.current
+    const currentActiveProjectRecord = activeProjectRecordRef.current
     const currentActiveSessionId = activeSessionIdRef.current
-    const currentWorkspaces = workspacesRef.current
+    const currentProjects = projectsRef.current
     const currentToken = tokenRef.current
 
     if (viewMode === 'manager' && automation.selectedThread) {
-      const threadWorkspace = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
-      if (threadWorkspace) {
-        if (currentActiveWorkspace?.workspaceRoot === threadWorkspace) {
-          showWorkspaceRef.current = true
-          setShowWorkspace(true)
-          if (isMobile) showMobileWorkspaceEditorTab()
+      const threadProject = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
+      if (threadProject) {
+        if (currentActiveProject?.projectRoot === threadProject) {
+          showProjectRef.current = true
+          setShowProject(true)
+          if (isMobile) showMobileProjectEditorTab()
           else {
-            applyWorkspaceLayout({ tree: true, editor: true }, { immediateSync: true })
+            applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
           }
-          const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
-          setSavedWorkspace(state)
+          const state = { open: true, remotePath: currentActiveProject.projectRoot, surfaceId: currentActiveProject.surfaceId, nodeId: currentActiveProject.nodeId }
+          setSavedProject(state)
           return
         }
-        let workspaceSessionId = currentActiveSessionId
-        if (!workspaceSessionId) {
-          await handleWorkspaceFolderSelected(threadWorkspace, selectedThreadRepo?.deviceId ?? 'gateway', { openEditor: true })
+        let projectSessionId = currentActiveSessionId
+        if (!projectSessionId) {
+          await handleProjectFolderSelected(threadProject, selectedThreadRepo?.deviceId ?? 'gateway', { openEditor: true })
           return
         }
-        if (!workspaceSessionId) return
-        await reopenPersistedWorkspace(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId, { mobileTarget: 'editor' })
+        if (!projectSessionId) return
+        await reopenPersistedProject(threadProject, selectedThreadRepo?.deviceId ?? undefined, projectSessionId, { mobileTarget: 'editor' })
         return
       }
     }
 
-    // If there's an existing remote workspace, just reopen the panel
-    if (currentActiveWorkspace) {
-      showWorkspaceRef.current = true
-      setShowWorkspace(true)
-      if (isMobile) showMobileWorkspaceEditorTab()
+    // If there's an existing remote project, just reopen the panel
+    if (currentActiveProject) {
+      showProjectRef.current = true
+      setShowProject(true)
+      if (isMobile) showMobileProjectEditorTab()
       else {
-        applyWorkspaceLayout({ tree: true, editor: true }, { immediateSync: true })
+        applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
       }
-      const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
-      setSavedWorkspace(state)
+      const state = { open: true, remotePath: currentActiveProject.projectRoot, surfaceId: currentActiveProject.surfaceId, nodeId: currentActiveProject.nodeId }
+      setSavedProject(state)
       return
     }
 
-    // If a workspace record exists with a rootPath, open it directly instead of showing the picker
-    if (currentActiveWorkspaceRecord?.rootPath) {
-      await reopenPersistedWorkspace(currentActiveWorkspaceRecord.rootPath, currentActiveWorkspaceRecord.nodeId ?? 'gateway', currentActiveSessionId, { mobileTarget: 'editor' })
+    // If a project record exists with a rootPath, open it directly instead of showing the picker
+    if (currentActiveProjectRecord?.rootPath) {
+      await reopenPersistedProject(currentActiveProjectRecord.rootPath, currentActiveProjectRecord.nodeId ?? 'gateway', currentActiveSessionId, { mobileTarget: 'editor' })
       return
     }
 
-    const pendingWorkspacePanel = pendingWsWorkspaceStateRef.current?.ui.panel
-    const pendingWorkspaceRoot = pendingWorkspacePanel?.remotePath?.trim() || null
-    if (pendingWorkspaceRoot && currentActiveSessionId) {
-      await reopenPersistedWorkspace(
-        pendingWorkspaceRoot,
-        pendingWorkspacePanel?.nodeId ?? undefined,
+    const pendingProjectPanel = pendingWsProjectStateRef.current?.ui.panel
+    const pendingProjectRoot = pendingProjectPanel?.remotePath?.trim() || null
+    if (pendingProjectRoot && currentActiveSessionId) {
+      await reopenPersistedProject(
+        pendingProjectRoot,
+        pendingProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
         { mobileTarget: 'editor' },
       )
       return
     }
 
-    const persistedWorkspacePanel = workspaceUIRef.current?.panel
-    const persistedWorkspaceRoot = persistedWorkspacePanel?.remotePath?.trim() || null
-    if (persistedWorkspaceRoot && currentActiveSessionId) {
-      await reopenPersistedWorkspace(
-        persistedWorkspaceRoot,
-        persistedWorkspacePanel?.nodeId ?? undefined,
+    const persistedProjectPanel = projectUIRef.current?.panel
+    const persistedProjectRoot = persistedProjectPanel?.remotePath?.trim() || null
+    if (persistedProjectRoot && currentActiveSessionId) {
+      await reopenPersistedProject(
+        persistedProjectRoot,
+        persistedProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
         { mobileTarget: 'editor' },
       )
       return
     }
 
-    // Fallback: the mobile UI can race ahead of workspace hydration after a
-    // reconnect/reload. Recover from the loaded workspace list instead of
-    // dropping the user into the picker when we already know the workspace.
-    const fallbackWorkspace = (
+    // Fallback: the mobile UI can race ahead of project hydration after a
+    // reconnect/reload. Recover from the loaded project list instead of
+    // dropping the user into the picker when we already know the project.
+    const fallbackProject = (
       (currentActiveSessionId
-        ? currentWorkspaces.find((workspace) => workspace.sessions.some((session) => session.id === currentActiveSessionId))
+        ? currentProjects.find((project) => project.sessions.some((session) => session.id === currentActiveSessionId))
         : null)
-      ?? (currentWorkspaces.length === 1 ? currentWorkspaces[0] ?? null : null)
+      ?? (currentProjects.length === 1 ? currentProjects[0] ?? null : null)
     )
-    const fallbackRoot = fallbackWorkspace?.rootPath?.trim() || null
-    if (fallbackWorkspace && fallbackRoot) {
-      const fallbackSession = fallbackWorkspace.sessions.find((session) => session.id === currentActiveSessionId)
-        ?? fallbackWorkspace.sessions[0]
+    const fallbackRoot = fallbackProject?.rootPath?.trim() || null
+    if (fallbackProject && fallbackRoot) {
+      const fallbackSession = fallbackProject.sessions.find((session) => session.id === currentActiveSessionId)
+        ?? fallbackProject.sessions[0]
         ?? null
       if (fallbackSession) {
-        switchSession(fallbackWorkspace.id, fallbackSession.id)
-        await reopenPersistedWorkspace(fallbackRoot, fallbackWorkspace.nodeId ?? undefined, fallbackSession.id, { mobileTarget: 'editor' })
+        switchSession(fallbackProject.id, fallbackSession.id)
+        await reopenPersistedProject(fallbackRoot, fallbackProject.nodeId ?? undefined, fallbackSession.id, { mobileTarget: 'editor' })
         return
       }
-      await handleWorkspaceFolderSelected(fallbackRoot, fallbackWorkspace.nodeId ?? 'gateway', { openEditor: true })
+      await handleProjectFolderSelected(fallbackRoot, fallbackProject.nodeId ?? 'gateway', { openEditor: true })
       return
     }
 
@@ -4363,23 +4344,23 @@ function App() {
         if (sessionRes.ok) {
           const session = await sessionRes.json() as {
             id: string
-            workspaceId?: string | null
-            workspacePath?: string | null
+            projectId?: string | null
+            projectPath?: string | null
           }
-          let serverWorkspace: { id: string; rootPath?: string | null; nodeId?: string | null } | null = null
-          if (session.workspaceId) {
-            const workspaceRes = await fetch(`${API_URL}/api/workspaces/${session.workspaceId}`, {
+          let serverProject: { id: string; rootPath?: string | null; nodeId?: string | null } | null = null
+          if (session.projectId) {
+            const projectRes = await fetch(`${API_URL}/api/projects/${session.projectId}`, {
               headers: { Authorization: `Bearer ${currentToken}` },
             })
-            if (workspaceRes.ok) {
-              serverWorkspace = await workspaceRes.json() as { id: string; rootPath?: string | null; nodeId?: string | null }
+            if (projectRes.ok) {
+              serverProject = await projectRes.json() as { id: string; rootPath?: string | null; nodeId?: string | null }
             }
           }
 
-          const serverRoot = serverWorkspace?.rootPath?.trim() || session.workspacePath?.trim() || null
+          const serverRoot = serverProject?.rootPath?.trim() || session.projectPath?.trim() || null
           if (serverRoot) {
-            if (serverWorkspace?.id) switchSession(serverWorkspace.id, session.id)
-            await reopenPersistedWorkspace(serverRoot, serverWorkspace?.nodeId ?? undefined, session.id, { mobileTarget: 'editor' })
+            if (serverProject?.id) switchSession(serverProject.id, session.id)
+            await reopenPersistedProject(serverRoot, serverProject?.nodeId ?? undefined, session.id, { mobileTarget: 'editor' })
             return
           }
         }
@@ -4390,21 +4371,21 @@ function App() {
 
     if (currentToken) {
       try {
-        const lastActiveRes = await fetch(`${API_URL}/api/workspaces/last-active`, {
+        const lastActiveRes = await fetch(`${API_URL}/api/projects/last-active`, {
           headers: { Authorization: `Bearer ${currentToken}` },
         })
         if (lastActiveRes.ok) {
           const lastActive = await lastActiveRes.json() as {
-            workspace: { id: string; rootPath?: string | null; nodeId?: string | null } | null
+            project: { id: string; rootPath?: string | null; nodeId?: string | null } | null
             session: { id: string } | null
           }
-          const lastActiveRoot = lastActive.workspace?.rootPath?.trim() || persistedWorkspaceRoot
+          const lastActiveRoot = lastActive.project?.rootPath?.trim() || persistedProjectRoot
           const lastActiveSessionId = lastActive.session?.id ?? currentActiveSessionId
-          if (lastActive.workspace?.id && lastActiveRoot && lastActiveSessionId) {
-            switchSession(lastActive.workspace.id, lastActiveSessionId)
-            await reopenPersistedWorkspace(
+          if (lastActive.project?.id && lastActiveRoot && lastActiveSessionId) {
+            switchSession(lastActive.project.id, lastActiveSessionId)
+            await reopenPersistedProject(
               lastActiveRoot,
-              lastActive.workspace.nodeId ?? persistedWorkspacePanel?.nodeId ?? undefined,
+              lastActive.project.nodeId ?? persistedProjectPanel?.nodeId ?? undefined,
               lastActiveSessionId,
               { mobileTarget: 'editor' },
             )
@@ -4416,61 +4397,61 @@ function App() {
       }
     }
 
-    setWorkspacePickerMode('editor')
+    setProjectPickerMode('editor')
     setFolderPickerOpen(true)
   }, [
-    showWorkspace,
-    activeWorkspace,
-    activeWorkspaceRecord,
-    closeWorkspacePanel,
-    setSavedWorkspace,
+    showProject,
+    activeProject,
+    activeProjectRecord,
+    closeProjectPanel,
+    setSavedProject,
     activeSessionId,
     viewMode,
     automation.selectedThread,
     selectedThreadRepo,
-    workspaces,
+    projects,
     switchSession,
     token,
-    handleWorkspaceFolderSelected,
+    handleProjectFolderSelected,
     isMobile,
-    showMobileWorkspaceEditorTab,
-    applyWorkspaceLayout,
-    reopenPersistedWorkspace,
-    waitForWorkspaceHydration,
+    showMobileProjectEditorTab,
+    applyProjectLayout,
+    reopenPersistedProject,
+    waitForProjectHydration,
   ])
 
-  // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
+  // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
-    if (!activeWorkspace?.workspaceRoot || !activeSessionId) return
+    if (!activeProject?.projectRoot || !activeSessionId) return
     let cancelled = false
     ;(async () => {
       try {
-        if (activeWorkspace.surfaceId) {
-          const res = await fetch(`${API_URL}/api/workspace/list?path=${encodeURIComponent(activeWorkspace.workspaceRoot)}&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`)
+        if (activeProject.surfaceId) {
+          const res = await fetch(`${API_URL}/api/project/list?path=${encodeURIComponent(activeProject.projectRoot)}&surfaceId=${encodeURIComponent(activeProject.surfaceId)}`)
           if (res.ok || cancelled) return // surface is alive
         }
         // Surface is missing or stale — re-create it
-        const openRes = await fetch(`${API_URL}/api/workspace/open`, {
+        const openRes = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            path: activeWorkspace.workspaceRoot,
+            path: activeProject.projectRoot,
             sessionId: activeSessionId,
-            nodeId: activeWorkspace.nodeId || 'gateway',
+            nodeId: activeProject.nodeId || 'gateway',
           }),
         })
         if (!openRes.ok || cancelled) return
-        const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+        const data = (await openRes.json()) as { surfaceId: string; projectRoot: string; nodeId?: string }
         if (cancelled) return
-        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
-        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
-        setSavedWorkspace(state)
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId })
+        const state = { open: showProjectRef.current, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
+        setSavedProject(state)
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
     return () => { cancelled = true }
-  }, [activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open workspace panel when the agent modifies files
+  // Auto-open project panel when the agent modifies files
   useEffect(() => {
     const previousCount = previousChangedFilesCountRef.current
     previousChangedFilesCountRef.current = changedFiles.length
@@ -4478,14 +4459,14 @@ function App() {
     if (previousCount === null) return
     if (changedFiles.length === 0) return
     if (changedFiles.length <= previousCount) return
-    if (suppressWorkspaceAutoOpenRef.current) return
-    if (!showWorkspace) {
-      showWorkspaceRef.current = true
-      setShowWorkspace(true)
+    if (suppressProjectAutoOpenRef.current) return
+    if (!showProject) {
+      showProjectRef.current = true
+      setShowProject(true)
     }
   }, [changedFiles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the workspace editor
+  // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the project editor
   const changedPaths = useMemo(
     () => changedFiles.filter((f) => f.state === 'undecided').map((f) => f.path),
     [changedFiles],
@@ -4645,20 +4626,20 @@ function App() {
     window.addEventListener('blur', cleanup)
   }, [terminalColumnWidth])
 
-  const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
+  const activeProjectRoot = activeProject?.projectRoot ?? activeProjectRecord?.rootPath ?? null
   const [composerGitStatus, setComposerGitStatus] = useState<GitStatusResult | null>(null)
   const changedFilesKey = useMemo(
     () => changedFiles.map((file) => file.path).join('\0'),
     [changedFiles],
   )
   useEffect(() => {
-    if (!activeWorkspaceRoot || changedFiles.length === 0) {
+    if (!activeProjectRoot || changedFiles.length === 0) {
       setComposerGitStatus(null)
       return
     }
 
     let cancelled = false
-    gitApi.status(activeWorkspaceRoot)
+    gitApi.status(activeProjectRoot)
       .then((status) => {
         if (!cancelled) setComposerGitStatus(status)
       })
@@ -4669,44 +4650,44 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeWorkspaceRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
+  }, [activeProjectRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
   const changedFilesForComposer = useMemo(
-    () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeWorkspaceRoot),
-    [activeWorkspaceRoot, changedFiles, composerGitStatus],
+    () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeProjectRoot),
+    [activeProjectRoot, changedFiles, composerGitStatus],
   )
-  const previewWorkspaceRoot =
-    workspacePreviewState.workspaceRoot
-    ?? savedDevPreview?.workspaceRoot
-    ?? activeWorkspace?.workspaceRoot
+  const previewProjectRoot =
+    projectPreviewState.projectRoot
+    ?? savedDevPreview?.projectRoot
+    ?? activeProject?.projectRoot
     ?? null
-  const activeWorkspaceDisplayName = useMemo(() => {
-    const title = activeWorkspaceRecord?.title?.trim()
+  const activeProjectDisplayName = useMemo(() => {
+    const title = activeProjectRecord?.title?.trim()
     if (title) return title
-    const root = activeWorkspaceRoot?.trim()
+    const root = activeProjectRoot?.trim()
     if (!root) return null
     const normalizedRoot = root.replace(/[\\/]+$/, '')
     return normalizedRoot.split(/[\\/]/).pop() || normalizedRoot
-  }, [activeWorkspaceRecord?.title, activeWorkspaceRoot])
+  }, [activeProjectRecord?.title, activeProjectRoot])
 
-  // Filter terminals to only show those belonging to the active workspace
-  const workspaceTerminals = useMemo(() => {
-    if (!activeWorkspaceRoot) return terminals
+  // Filter terminals to only show those belonging to the active project
+  const projectTerminals = useMemo(() => {
+    if (!activeProjectRoot) return terminals
     return terminals.filter((t) => {
-      if (!t.workspaceRoot) return false
+      if (!t.projectRoot) return false
       // Normalize path separators for comparison
-      const tRoot = t.workspaceRoot.replace(/\\/g, '/').toLowerCase()
-      const wRoot = activeWorkspaceRoot.replace(/\\/g, '/').toLowerCase()
+      const tRoot = t.projectRoot.replace(/\\/g, '/').toLowerCase()
+      const wRoot = activeProjectRoot.replace(/\\/g, '/').toLowerCase()
       return tRoot === wRoot
     })
-  }, [terminals, activeWorkspaceRoot])
+  }, [terminals, activeProjectRoot])
 
   const ensureActiveTerminal = useCallback(async (preferredTerminalId: string | null = null) => {
     const refreshed = await refresh()
-    // Filter refreshed terminals to current workspace
-    const wsRoot = activeWorkspaceRoot
+    // Filter refreshed terminals to current project
+    const wsRoot = activeProjectRoot
     const wsTerminals = wsRoot
       ? refreshed.filter((t) => {
-          const tRoot = (t.workspaceRoot ?? '').replace(/\\/g, '/').toLowerCase()
+          const tRoot = (t.projectRoot ?? '').replace(/\\/g, '/').toLowerCase()
           return tRoot === wsRoot.replace(/\\/g, '/').toLowerCase()
         })
       : refreshed
@@ -4729,9 +4710,9 @@ function App() {
       return fallbackId
     }
 
-    const created = await createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)
+    const created = await createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined)
     return created.id
-  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeWorkspaceRoot])
+  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeProjectRoot])
 
   const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
     setCurrentView('chat')
@@ -4739,7 +4720,7 @@ function App() {
     await ensureActiveTerminal(terminalId)
   }, [ensureActiveTerminal, openTerminalPanel])
 
-  const handleMobileWorkspaceTargetAction = useCallback(async (target: MobileWorkspaceTarget) => {
+  const handleMobileProjectTargetAction = useCallback(async (target: MobileProjectTarget) => {
     if (showSidebar) {
       setShowSidebar(false)
     }
@@ -4747,7 +4728,7 @@ function App() {
     // Simple switch: always navigate to the target, no toggle-off logic
     if (target === 'terminal') {
       setCurrentView('chat')
-      closeWorkspacePanel()
+      closeProjectPanel()
       openTerminalPanel()
       await ensureActiveTerminal()
       return
@@ -4758,19 +4739,19 @@ function App() {
     }
 
     if (target === 'editor') {
-      if (!showWorkspace) {
+      if (!showProject) {
         await handleToggleEditor()
       }
-      showMobileWorkspaceEditorTab()
+      showMobileProjectEditorTab()
       return
     }
 
     // files / git
-    if (!showWorkspace) {
+    if (!showProject) {
       await handleToggleEditor()
     }
-    showMobileWorkspaceTreeTab(target)
-  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showSidebar, showTerminal, showWorkspace])
+    showMobileProjectTreeTab(target)
+  }, [closeTerminalPanel, closeProjectPanel, ensureActiveTerminal, handleToggleEditor, openTerminalPanel, setCurrentView, showMobileProjectEditorTab, showMobileProjectTreeTab, showSidebar, showTerminal, showProject])
 
   const handleReferenceFile = useCallback((file: ReferencedFile) => {
     promptInputRef.current?.insertChip(file)
@@ -4784,14 +4765,14 @@ function App() {
     promptInputRef.current?.focus()
   }, [])
 
-  const handleReferenceTerminalSelection = useCallback((terminalId: string, selection: string, workspaceRoot?: string | null, startLine?: number, endLine?: number) => {
+  const handleReferenceTerminalSelection = useCallback((terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => {
     const trimmed = selection.trim()
     if (!trimmed) return
     const name = terminalId.replace(/^term-/, '').slice(0, 8) || terminalId
     promptInputRef.current?.insertSegments(buildTerminalSelectionReferenceSegments({
       terminalId,
       name,
-      ...(workspaceRoot ? { workspaceRoot } : {}),
+      ...(projectRoot ? { projectRoot } : {}),
     }, trimmed, startLine, endLine))
     promptInputRef.current?.focus()
   }, [])
@@ -4814,15 +4795,15 @@ function App() {
   }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel])
 
   const handleKillTerminal = useCallback(async (id: string) => {
-    const isLastWorkspaceTerminal = workspaceTerminals.length === 1 && workspaceTerminals[0]?.id === id
+    const isLastProjectTerminal = projectTerminals.length === 1 && projectTerminals[0]?.id === id
     await killTerminal(id)
-    if (isLastWorkspaceTerminal) {
+    if (isLastProjectTerminal) {
       closeTerminalPanel()
     }
-  }, [workspaceTerminals, killTerminal, closeTerminalPanel])
+  }, [projectTerminals, killTerminal, closeTerminalPanel])
 
   const handleDetachTerminal = useCallback((terminalId: string) => {
-    const t = workspaceTerminals.find(term => term.id === terminalId)
+    const t = projectTerminals.find(term => term.id === terminalId)
     const detachedId = `detached-terminal-${terminalId}-${Date.now()}`
     saveDetachedTerminal({
       id: detachedId,
@@ -4830,20 +4811,20 @@ function App() {
       token: token ?? null,
       label: (t?.metadata?.cwd as string) ?? `Terminal ${terminalId.slice(0, 6)}`,
       theme: appliedThemeMode === 'dark' ? 'dark' : 'light',
-      workspaceRoot: (t?.workspaceRoot as string) ?? activeWorkspaceRoot ?? null,
+      projectRoot: (t?.projectRoot as string) ?? activeProjectRoot ?? null,
     })
     const detachedUrl = `${window.location.origin}${window.location.pathname}?detachedTerminal=${encodeURIComponent(detachedId)}`
-    if ((window as any).jaitDesktop?.openWorkspaceWindow) {
-      void (window as any).jaitDesktop.openWorkspaceWindow({ url: detachedUrl, title: 'Terminal' })
+    if ((window as any).jaitDesktop?.openProjectWindow) {
+      void (window as any).jaitDesktop.openProjectWindow({ url: detachedUrl, title: 'Terminal' })
     } else {
       const popup = window.open(detachedUrl, `jait-detached-terminal-${terminalId}`, 'popup=yes,width=800,height=600,resizable=yes,scrollbars=yes')
       popup?.focus?.()
     }
-  }, [workspaceTerminals, token, appliedThemeMode, activeWorkspaceRoot])
+  }, [projectTerminals, token, appliedThemeMode, activeProjectRoot])
 
-  const mergeWorkspaceFiles = useCallback((incoming: WorkspaceFile[]) => {
+  const mergeProjectFiles = useCallback((incoming: ProjectFile[]) => {
     if (incoming.length === 0) return
-    setWorkspaceFiles((prev) => {
+    setProjectFiles((prev) => {
       const next = [...prev]
       for (const file of incoming) {
         const idx = next.findIndex((existing) => existing.path === file.path)
@@ -4852,68 +4833,68 @@ function App() {
       }
       return next
     })
-    setActiveWorkspaceFileId((prev) => prev ?? incoming[0]?.id ?? null)
+    setActiveProjectFileId((prev) => prev ?? incoming[0]?.id ?? null)
   }, [])
 
-  const resolveKnownWorkspaceRootForFile = useCallback((filePath: string) => {
-    if (isPathWithinWorkspace(filePath, activeWorkspace?.workspaceRoot)) {
-      return activeWorkspace?.workspaceRoot ?? null
+  const resolveKnownProjectRootForFile = useCallback((filePath: string) => {
+    if (isPathWithinProject(filePath, activeProject?.projectRoot)) {
+      return activeProject?.projectRoot ?? null
     }
-    if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
-      return activeWorkspaceRecord.rootPath
+    if (activeProjectRecord?.rootPath && isPathWithinProject(filePath, activeProjectRecord.rootPath)) {
+      return activeProjectRecord.rootPath
     }
     return null
-  }, [activeWorkspace?.workspaceRoot, activeWorkspaceRecord?.rootPath])
+  }, [activeProject?.projectRoot, activeProjectRecord?.rootPath])
 
   /** Open a changed file in the diff view (fetches backup + current content) */
   const handleChangedFileClick = useCallback(async (filePath: string) => {
     try {
-      const targetWorkspaceRoot = resolveKnownWorkspaceRootForFile(filePath)
+      const targetProjectRoot = resolveKnownProjectRootForFile(filePath)
 
-      if (!targetWorkspaceRoot) {
-        toast('File is outside the active workspace. Open its directory explicitly to browse it.')
+      if (!targetProjectRoot) {
+        toast('File is outside the active project. Open its directory explicitly to browse it.')
         return
       }
 
-      if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
-        await openRemoteWorkspaceOnGateway(targetWorkspaceRoot, activeWorkspace?.nodeId, activeSessionId)
+      if (targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
+        await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
       }
 
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const surfaceQuery = activeWorkspace?.surfaceId && targetWorkspaceRoot === activeWorkspace.workspaceRoot
-        ? `&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`
+      const surfaceQuery = activeProject?.surfaceId && targetProjectRoot === activeProject.projectRoot
+        ? `&surfaceId=${encodeURIComponent(activeProject.surfaceId)}`
         : ''
       const name = filePath.split(/[/\\]/).pop() ?? filePath
-      const language = workspaceLanguageForPath(name)
+      const language = projectLanguageForPath(name)
 
-      const ensureWorkspaceDiffHostReady = async () => {
-        if (!showWorkspace) {
-          showWorkspaceRef.current = true
-          setShowWorkspace(true)
+      const ensureProjectDiffHostReady = async () => {
+        if (!showProject) {
+          showProjectRef.current = true
+          setShowProject(true)
         }
-        showWorkspaceEditorPanel()
-        if (workspaceRef.current) return true
+        showProjectEditorPanel()
+        if (projectRef.current) return true
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-        return workspaceRef.current != null
+        return projectRef.current != null
       }
 
       const openReviewDiff = async (path: string, originalContent: string | null | undefined, modifiedContent: string) => {
-        const ready = await ensureWorkspaceDiffHostReady()
+        const ready = await ensureProjectDiffHostReady()
         if (!ready) return
-        await workspaceRef.current?.openReviewDiff({
+        await projectRef.current?.openReviewDiff({
           path,
           originalContent: originalContent ?? '',
           modifiedContent,
           language,
         })
-        showWorkspaceEditorPanel()
+        showProjectEditorPanel()
       }
 
       const openGitDiffFallback = async (path: string, currentContent: string): Promise<boolean> => {
-        if (!targetWorkspaceRoot) return false
+        if (!targetProjectRoot) return false
         try {
-          const diffs = await gitApi.fileDiffs(targetWorkspaceRoot)
+          const diffs = await gitApi.fileDiffs(targetProjectRoot)
           const normalizedPath = path.replace(/\\/g, '/')
           const entry = diffs.find((diff) => diff.path === normalizedPath)
             ?? diffs.find((diff) => normalizedPath.endsWith(`/${diff.path}`))
@@ -4927,7 +4908,7 @@ function App() {
 
       // Try to fetch the backup (original) content from the gateway
       const backupRes = await fetch(
-        `${API_URL}/api/workspace/backup?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
+        `${API_URL}/api/project/backup?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
         { headers },
       )
 
@@ -4941,15 +4922,15 @@ function App() {
         return
       }
 
-      const file = await workspaceRef.current?.readFileByPath(filePath)
+      const file = await projectRef.current?.readFileByPath(filePath)
       if (file) {
         if (await openGitDiffFallback(file.path, file.content)) return
         await openReviewDiff(file.path, file.content, file.content)
         return
       }
-      // Fallback: fetch from the workspace REST API and still open a review diff
+      // Fallback: fetch from the project REST API and still open a review diff
       const readRes = await fetch(
-        `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
+        `${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
         { headers },
       )
       if (!readRes.ok) return
@@ -4960,51 +4941,51 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [activeSessionId, activeWorkspace, openRemoteWorkspaceOnGateway, resolveKnownWorkspaceRootForFile, token, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeSessionId, activeProject, openRemoteProjectOnGateway, resolveKnownProjectRootForFile, token, showProject, showProjectEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
-      const targetWorkspaceRoot = resolveKnownWorkspaceRootForFile(filePath)
+      const targetProjectRoot = resolveKnownProjectRootForFile(filePath)
 
-      if (!targetWorkspaceRoot) {
-        const existing = workspaceFiles.find((file) => file.path === filePath)
+      if (!targetProjectRoot) {
+        const existing = projectFiles.find((file) => file.path === filePath)
         if (existing) {
-          mergeWorkspaceFiles([existing])
-          setActiveWorkspaceFileId(existing.id)
-          if (!showWorkspace) {
-            showWorkspaceRef.current = true
-            setShowWorkspace(true)
+          mergeProjectFiles([existing])
+          setActiveProjectFileId(existing.id)
+          if (!showProject) {
+            showProjectRef.current = true
+            setShowProject(true)
           }
-          showWorkspaceEditorPanel()
+          showProjectEditorPanel()
           return
         }
-        toast('File is outside the active workspace. Open its directory explicitly to browse it.')
+        toast('File is outside the active project. Open its directory explicitly to browse it.')
         return
       }
 
-      if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
-        await openRemoteWorkspaceOnGateway(targetWorkspaceRoot, activeWorkspace?.nodeId, activeSessionId)
+      if (targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
+        await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
       }
 
-      const openedInTree = await workspaceRef.current?.openFileByPath(filePath)
+      const openedInTree = await projectRef.current?.openFileByPath(filePath)
       if (openedInTree) {
-        if (!showWorkspace) {
-          showWorkspaceRef.current = true
-          setShowWorkspace(true)
+        if (!showProject) {
+          showProjectRef.current = true
+          setShowProject(true)
         }
-        showWorkspaceEditorPanel()
+        showProjectEditorPanel()
         return
       }
 
-      const existing = workspaceFiles.find((file) => file.path === filePath)
+      const existing = projectFiles.find((file) => file.path === filePath)
       if (existing) {
-        mergeWorkspaceFiles([existing])
-        setActiveWorkspaceFileId(existing.id)
+        mergeProjectFiles([existing])
+        setActiveProjectFileId(existing.id)
       } else {
         const headers: Record<string, string> = {}
         if (token) headers.Authorization = `Bearer ${token}`
         const readRes = await fetch(
-          `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`,
+          `${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}`,
           { headers },
         )
         if (!readRes.ok) {
@@ -5013,43 +4994,43 @@ function App() {
 
         const readData = await readRes.json() as { path: string; content: string }
         const name = filePath.split(/[\\/]/).pop() ?? filePath
-        const file: WorkspaceFile = {
+        const file: ProjectFile = {
           id: readData.path,
           name,
           path: readData.path,
           content: readData.content,
-          language: workspaceLanguageForPath(name),
+          language: projectLanguageForPath(name),
         }
-        mergeWorkspaceFiles([file])
-        setActiveWorkspaceFileId(file.id)
+        mergeProjectFiles([file])
+        setActiveProjectFileId(file.id)
       }
 
-      if (!showWorkspace) {
-        showWorkspaceRef.current = true
-        setShowWorkspace(true)
+      if (!showProject) {
+        showProjectRef.current = true
+        setShowProject(true)
       }
-      showWorkspaceEditorPanel()
+      showProjectEditorPanel()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to open linked file')
     }
   }, [
     activeSessionId,
-    activeWorkspace,
-    mergeWorkspaceFiles,
-    openRemoteWorkspaceOnGateway,
-    resolveKnownWorkspaceRootForFile,
-    showWorkspace,
-    showWorkspaceEditorPanel,
+    activeProject,
+    mergeProjectFiles,
+    openRemoteProjectOnGateway,
+    resolveKnownProjectRootForFile,
+    showProject,
+    showProjectEditorPanel,
     token,
-    workspaceFiles,
+    projectFiles,
   ])
 
   /** Apply the merged diff result — write to server and clear backup */
-  const handleApplyWorkspaceDiff = useCallback(async (filePath: string, resultContent: string) => {
+  const handleApplyProjectDiff = useCallback(async (filePath: string, resultContent: string) => {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
-      await fetch(`${API_URL}/api/workspace/apply-diff`, {
+      await fetch(`${API_URL}/api/project/apply-diff`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ path: filePath, content: resultContent }),
@@ -5072,16 +5053,16 @@ function App() {
             name: file.name,
             path,
             content,
-            language: workspaceLanguageForPath(path),
-          } satisfies WorkspaceFile
+            language: projectLanguageForPath(path),
+          } satisfies ProjectFile
         }),
     )
-    mergeWorkspaceFiles(resolved)
-  }, [mergeWorkspaceFiles])
+    mergeProjectFiles(resolved)
+  }, [mergeProjectFiles])
 
-  /** Lazy search files in the workspace directory for @ mention autocomplete */
+  /** Lazy search files in the project directory for @ mention autocomplete */
   const handleSearchFiles = useCallback(async (query: string, limit: number, signal?: AbortSignal) => {
-    return workspaceRef.current?.searchFiles(query, limit, signal) ?? []
+    return projectRef.current?.searchFiles(query, limit, signal) ?? []
   }, [])
 
   const preparePromptSubmission = useCallback(async (
@@ -5096,14 +5077,14 @@ function App() {
       : chipFiles?.length
         ? chipFiles.map((file) => ({ path: file.path, name: file.name, ...(file.lineRange ? { lineRange: file.lineRange } : {}) }))
         : []
-    const referencedWorkspaces = normalizedSegments?.length
-      ? userReferencedWorkspacesFromSegments(normalizedSegments)
+    const referencedProjects = normalizedSegments?.length
+      ? userReferencedProjectsFromSegments(normalizedSegments)
       : []
     const referencedTerminals = normalizedSegments?.length
       ? userReferencedTerminalsFromSegments(normalizedSegments)
       : []
 
-    if (!text && referencedFiles.length === 0 && referencedWorkspaces.length === 0 && referencedTerminals.length === 0) return null
+    if (!text && referencedFiles.length === 0 && referencedProjects.length === 0 && referencedTerminals.length === 0) return null
 
     const fileContents: { path: string; content: string; lineRange?: { startLine: number; endLine: number } }[] = []
     const attachments = new Set<string>()
@@ -5122,13 +5103,13 @@ function App() {
           return lines.slice(fileRef.lineRange.startLine - 1, fileRef.lineRange.endLine).join('\n')
         }
 
-        const cached = workspaceFiles.find((file) => file.path === fileRef.path)
+        const cached = projectFiles.find((file) => file.path === fileRef.path)
         if (cached) {
           fileContents.push({ path: cached.path, content: applyLineRange(cached.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}) })
           continue
         }
 
-        const referenced = await workspaceRef.current?.readReferencePath(fileRef.path)
+        const referenced = await projectRef.current?.readReferencePath(fileRef.path)
         if (referenced?.length) {
           for (const file of referenced) {
             if (fileContents.some((entry) => entry.path === file.path && entry.lineRange?.startLine === fileRef.lineRange?.startLine && entry.lineRange?.endLine === fileRef.lineRange?.endLine)) continue
@@ -5140,16 +5121,16 @@ function App() {
 
     const referenceSections: string[] = []
 
-    if (referencedWorkspaces.length > 0) {
-      referenceSections.push(`Referenced workspaces:\n${referencedWorkspaces
-        .map((workspace) => `- ${workspace.path}`)
+    if (referencedProjects.length > 0) {
+      referenceSections.push(`Referenced projects:\n${referencedProjects
+        .map((project) => `- ${project.path}`)
         .join('\n')}`)
     }
 
     if (referencedTerminals.length > 0) {
       referenceSections.push(`Referenced terminals:\n${referencedTerminals
         .map((terminal) => [
-          `- ${terminal.terminalId}${terminal.lineRange ? ` (${formatLineRange(terminal.lineRange)} selected)` : ''}${terminal.workspaceRoot ? ` (workspace: ${terminal.workspaceRoot})` : ''}`,
+          `- ${terminal.terminalId}${terminal.lineRange ? ` (${formatLineRange(terminal.lineRange)} selected)` : ''}${terminal.projectRoot ? ` (project: ${terminal.projectRoot})` : ''}`,
           terminal.selectedText ? `\`\`\`\n${terminal.selectedText.slice(0, 2000)}\n\`\`\`` : null,
         ].filter(Boolean).join('\n'))
         .join('\n')}\nUse the terminal ID when you need to run commands in one of these existing terminals.`)
@@ -5172,7 +5153,7 @@ function App() {
       displaySegments: normalizedSegments,
       attachments: attachments.size > 0 ? [...attachments] : undefined,
     }
-  }, [workspaceFiles])
+  }, [projectFiles])
 
   const handleQueue = useCallback(async (
     chipFiles?: ReferencedFile[],
@@ -5647,7 +5628,7 @@ function App() {
       setArchitectureGenerating(true)
       setShowArchitecture(true)
       sendMessage(
-        'Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
+        'Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
         { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
@@ -5780,19 +5761,19 @@ function App() {
 
   const handleClearArchive = async () => {
     const result = await clearSessionArchive()
-    await fetchWorkspaces()
+    await fetchProjects()
     return result.removed
   }
 
-  const handleClearArchivedWorkspaces = async () => {
-    const removed = await clearArchivedWorkspaces()
-    await fetchWorkspaces()
+  const handleClearArchivedProjects = async () => {
+    const removed = await clearArchivedProjects()
+    await fetchProjects()
     return removed
   }
 
-  const handleRestoreWorkspace = async (workspaceId: string) => {
-    const restored = await restoreWorkspace(workspaceId)
-    if (restored) await fetchWorkspaces()
+  const handleRestoreProject = async (projectId: string) => {
+    const restored = await restoreProject(projectId)
+    if (restored) await fetchProjects()
     return restored
   }
 
@@ -6164,7 +6145,7 @@ function App() {
     currentView,
     requiresAuthGate,
     authLoading,
-    workspacesLoading,
+    projectsLoading,
     activeSessionId,
     isLoadingHistory,
     loadingChatMode,
@@ -6179,34 +6160,34 @@ function App() {
     isLoadingHistory,
     todoCount: todoList.length,
   })
-  const mobileActiveWorkspaceTarget = useMemo(
-    () => getMobileWorkspaceActiveTarget({
-      showWorkspace,
+  const mobileActiveProjectTarget = useMemo(
+    () => getMobileProjectActiveTarget({
+      showProject,
       showTerminal,
-      showWorkspaceTree,
-      showWorkspaceEditor,
+      showProjectTree,
+      showProjectEditor,
       treeTab: mobileTreeTab,
     }),
-    [mobileTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree],
+    [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree],
   )
-  const showMobileWorkspaceFullscreen =
+  const showMobileProjectFullscreen =
     isMobile &&
-    showMobileWorkspace &&
-    mobileActiveWorkspaceTarget !== null &&
-    mobileActiveWorkspaceTarget !== 'terminal'
+    showMobileProject &&
+    mobileActiveProjectTarget !== null &&
+    mobileActiveProjectTarget !== 'terminal'
   const showMobileTerminalFullscreen =
     isMobile &&
     currentView === 'chat' &&
     viewMode === 'developer' &&
-    mobileActiveWorkspaceTarget === 'terminal'
-  const mobileWorkspaceControlState = useMemo(() => ({
-    showWorkspace,
+    mobileActiveProjectTarget === 'terminal'
+  const mobileProjectControlState = useMemo(() => ({
+    showProject,
     showTerminal,
-    showWorkspaceTree,
-    showWorkspaceEditor,
+    showProjectTree,
+    showProjectEditor,
     treeTab: mobileTreeTab,
-  }), [mobileTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
-  const mobileWorkspaceMenuActive = showSidebar || activeWorkspaceId !== null
+  }), [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree])
+  const mobileProjectMenuActive = showSidebar || activeProjectId !== null
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -6246,37 +6227,37 @@ function App() {
       {!isManagerThread && (
         <>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { closeWorkspacePanel(); closeTerminalPanel(); setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
+            <Button variant={!showProject && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { closeProjectPanel(); closeTerminalPanel(); setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
               <MessageSquare className="h-5 w-5" />
             </Button>
           </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
+            <Button variant={mobileProjectMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Projects">
               {showSidebar ? <PanelLeftClose className="h-4 w-4 rotate-90" /> : <PanelLeftOpen className="h-4 w-4 rotate-90" />}
             </Button>
-          </TooltipTrigger><TooltipContent side="left">Workspaces</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent side="left">Projects</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }} aria-label="Terminal">
+            <Button variant={isMobileProjectTargetActive(mobileProjectControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileProjectTargetAction('terminal') }} aria-label="Terminal">
               <TerminalIcon className="h-5 w-5" />
             </Button>
           </TooltipTrigger><TooltipContent side="left">Terminal</TooltipContent></Tooltip>
         </>
       )}
-      {activeWorkspaceId && (
+      {activeProjectId && (
         <>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('files') }} aria-label="Files">
+            <Button variant={isMobileProjectTargetActive(mobileProjectControlState, 'files') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileProjectTargetAction('files') }} aria-label="Files">
               <FolderOpen className="h-5 w-5" />
             </Button>
           </TooltipTrigger><TooltipContent side="left">Files</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'} size="sm" className="relative h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('git') }} aria-label="Changes">
+            <Button variant={isMobileProjectTargetActive(mobileProjectControlState, 'git') ? 'secondary' : 'ghost'} size="sm" className="relative h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileProjectTargetAction('git') }} aria-label="Changes">
               <GitBranch className="h-5 w-5" />
               {changedFiles.length > 0 && <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">{changedFiles.length > 99 ? '99+' : changedFiles.length}</span>}
             </Button>
           </TooltipTrigger><TooltipContent side="left">Changes</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('editor') }} aria-label="Editor">
+            <Button variant={isMobileProjectTargetActive(mobileProjectControlState, 'editor') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileProjectTargetAction('editor') }} aria-label="Editor">
               <Code className="h-5 w-5" />
             </Button>
           </TooltipTrigger><TooltipContent side="left">Editor</TooltipContent></Tooltip>
@@ -6292,10 +6273,10 @@ function App() {
             developerThreadToolbarRepoPicker
           ) : (
             <SessionSwitcher
-              sessions={activeWorkspaceSessions}
+              sessions={activeProjectSessions}
               activeSessionId={activeSessionId}
-              workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
-              onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
+              projectTitle={activeProjectRecord?.title ?? 'Personal chat'}
+              onSelectSession={(sessionId) => { switchSession(activeProjectId, sessionId) }}
               onNewSession={() => { void createSession() }}
               onOpenChange={handleSessionSwitcherOpen}
               showTitle={false}
@@ -6382,15 +6363,15 @@ function App() {
     onCliModelChange: handleCliModelChange,
     availableFiles: availableFilesForMention,
     onSearchFiles: handleSearchFiles,
-    workspaceOpen: showWorkspace,
+    projectOpen: showProject,
     sessionInfo,
-    workspaceNodeId: activeWorkspace?.nodeId,
+    projectNodeId: activeProject?.nodeId,
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
     chatMode, setChatMode, chatProvider, handleChatProviderChange,
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
-    availableFilesForMention, handleSearchFiles, showWorkspace, sessionInfo, activeWorkspace?.nodeId,
+    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId,
   ])
 
   const activityEvents: ActivityEvent[] = [
@@ -6409,8 +6390,8 @@ function App() {
   ]
 
   // ── Early returns for special/detached views (must come after all hooks) ──
-  if (detachedWorkspaceTabId) {
-    return <DetachedTabView detachedTabId={detachedWorkspaceTabId} />
+  if (detachedProjectTabId) {
+    return <DetachedTabView detachedTabId={detachedProjectTabId} />
   }
 
   if (detachedTerminalId) {
@@ -6474,8 +6455,8 @@ function App() {
                   setCurrentView('chat')
                   automation.setSelectedThreadId(threadId)
                   setSendTarget('thread')
-                  setShowWorkspace(false)
-                  setShowWorkspaceEditor(false)
+                  setShowProject(false)
+                  setShowProjectEditor(false)
                 }}
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
@@ -6678,8 +6659,8 @@ function App() {
                   setCurrentView('chat')
                   automation.setSelectedThreadId(threadId)
                   setSendTarget('thread')
-                  setShowWorkspace(false)
-                  setShowWorkspaceEditor(false)
+                  setShowProject(false)
+                  setShowProjectEditor(false)
                 }}
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
@@ -7008,16 +6989,16 @@ function App() {
                     size="sm"
                     className={isMobile ? 'h-8 w-8 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
                     onClick={() => setShowSidebar(s => !s)}
-                    aria-label="Toggle workspaces sidebar"
+                    aria-label="Toggle projects sidebar"
                   >
                     {showSidebar
                       ? <PanelLeftClose className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
                       : <PanelLeftOpen className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
                     }
-                    {!isMobile && 'Workspaces'}
+                    {!isMobile && 'Projects'}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Toggle workspaces sidebar</TooltipContent>
+                <TooltipContent side="bottom">Toggle projects sidebar</TooltipContent>
               </Tooltip>
             )}
 
@@ -7042,11 +7023,11 @@ function App() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'}
+                    variant={isMobileProjectTargetActive(mobileProjectControlState, 'terminal') ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-9 w-9 shrink-0 rounded-md p-0"
                     aria-label="Terminal"
-                    onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }}
+                    onClick={() => { void handleMobileProjectTargetAction('terminal') }}
                   >
                     <TerminalIcon className="h-4 w-4" />
                   </Button>
@@ -7071,8 +7052,8 @@ function App() {
               </Button>
             )}
 
-            {/* Chat workspace / editor controls */}
-            {activeWorkspaceId && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && !(isMobile && viewMode === 'manager') && (
+            {/* Chat project / editor controls */}
+            {activeProjectId && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && !(isMobile && viewMode === 'manager') && (
               <>
 
                 <div className={`flex items-center shrink-0 ${isMobile ? 'gap-1' : ''}`}>
@@ -7081,11 +7062,11 @@ function App() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'}
+                            variant={isMobileProjectTargetActive(mobileProjectControlState, 'files') ? 'secondary' : 'ghost'}
                             size="sm"
                             className="h-9 w-9 rounded-md p-0"
                             aria-label="Files"
-                            onClick={() => { void handleMobileWorkspaceTargetAction('files') }}
+                            onClick={() => { void handleMobileProjectTargetAction('files') }}
                           >
                             <FolderOpen className="h-4 w-4" />
                           </Button>
@@ -7095,11 +7076,11 @@ function App() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'}
+                            variant={isMobileProjectTargetActive(mobileProjectControlState, 'git') ? 'secondary' : 'ghost'}
                             size="sm"
                             className="relative h-9 w-9 rounded-md p-0"
                             aria-label="Changes"
-                            onClick={() => { void handleMobileWorkspaceTargetAction('git') }}
+                            onClick={() => { void handleMobileProjectTargetAction('git') }}
                           >
                             <GitBranch className="h-4 w-4" />
                             {changedFiles.length > 0 && (
@@ -7114,11 +7095,11 @@ function App() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'}
+                            variant={isMobileProjectTargetActive(mobileProjectControlState, 'editor') ? 'secondary' : 'ghost'}
                             size="sm"
                             className="h-9 w-9 rounded-md p-0"
                             aria-label="Editor"
-                            onClick={() => { void handleMobileWorkspaceTargetAction('editor') }}
+                            onClick={() => { void handleMobileProjectTargetAction('editor') }}
                           >
                             <Code className="h-4 w-4" />
                           </Button>
@@ -7130,22 +7111,22 @@ function App() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          variant={showWorkspace ? 'secondary' : 'ghost'}
+                          variant={showProject ? 'secondary' : 'ghost'}
                           size="sm"
                           className="h-7 rounded-md px-2 text-xs"
                           onClick={() => { void handleToggleEditor() }}
                         >
                           <Code className="h-3 w-3 mr-1" />
                           Editor
-                          {showWorkspace && <X className="h-3 w-3 ml-1" />}
+                          {showProject && <X className="h-3 w-3 ml-1" />}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom">{showWorkspace ? 'Hide editor' : 'Show editor'}</TooltipContent>
+                      <TooltipContent side="bottom">{showProject ? 'Hide editor' : 'Show editor'}</TooltipContent>
                     </Tooltip>
                   )}
                 </div>
 
-                {viewMode === 'developer' && showWorkspace && activeWorkspace && (
+                {viewMode === 'developer' && showProject && activeProject && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -7157,11 +7138,11 @@ function App() {
                           if (previewOpen) {
                             closeDevPreviewPanel()
                           } else {
-                            const nextTarget = workspacePreviewState.target
+                            const nextTarget = projectPreviewState.target
                               ?? devPreviewTarget?.trim()
                               ?? savedDevPreview?.target?.trim()
                               ?? null
-                            if (routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)) {
+                            if (routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)) {
                               return
                             }
                             openDevPreviewPanel()
@@ -7179,7 +7160,7 @@ function App() {
               </>
             )}
 
-            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
+            {viewMode === 'developer' && showProject && activeProject && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -7189,12 +7170,12 @@ function App() {
                     aria-label={showArchitecture ? 'Close architecture' : 'Open architecture'}
                     onClick={() => {
                       if (showArchitecture) {
-                        workspaceRef.current?.closeArchitectureTab()
+                        projectRef.current?.closeArchitectureTab()
                         setArchitectureRequest(null)
                         setShowArchitecture(false)
                       } else {
                         setShowArchitecture(true)
-                        openArchitectureInWorkspace()
+                        openArchitectureInProject()
                       }
                     }}
                   >
@@ -7207,7 +7188,7 @@ function App() {
               </Tooltip>
             )}
 
-            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
+            {viewMode === 'developer' && showProject && activeProject && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -7433,9 +7414,9 @@ function App() {
                   await updateSettings({ jait_backend: next })
                 }}
                 onClearArchive={handleClearArchive}
-                onClearArchivedWorkspaces={handleClearArchivedWorkspaces}
-                onFetchArchivedWorkspaces={fetchArchivedWorkspaces}
-                onRestoreWorkspace={handleRestoreWorkspace}
+                onClearArchivedProjects={handleClearArchivedProjects}
+                onFetchArchivedProjects={fetchArchivedProjects}
+                onRestoreProject={handleRestoreProject}
                 activityEvents={activityEvents}
                 updateInfo={updateInfo}
                 updateChecking={updateChecking}
@@ -7461,12 +7442,12 @@ function App() {
                         size="sm"
                         className="h-9 w-9 rounded-md p-0"
                         onClick={() => setShowSidebar((s) => !s)}
-                        aria-label="Toggle workspaces panel"
+                        aria-label="Toggle projects panel"
                       >
                         {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="right">Workspaces</TooltipContent>
+                    <TooltipContent side="right">Projects</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -7478,7 +7459,7 @@ function App() {
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant={showWorkspace ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => { void handleToggleEditor() }} aria-label="Editor">
+                      <Button variant={showProject ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => { void handleToggleEditor() }} aria-label="Editor">
                         <Code className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
@@ -7491,7 +7472,7 @@ function App() {
                         size="sm"
                         className="h-9 w-9 rounded-md p-0"
                         aria-label="Preview"
-                        disabled={authLoading || workspacesLoading}
+                        disabled={authLoading || projectsLoading}
                         onClick={() => { void handleSidebarPreviewToggle() }}
                       >
                         <Globe className="h-4 w-4" />
@@ -7505,7 +7486,7 @@ function App() {
                         variant={showArchitecture ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-9 w-9 rounded-md p-0"
-                        disabled={authLoading || workspacesLoading}
+                        disabled={authLoading || projectsLoading}
                         aria-label="Architecture"
                         onClick={() => { void handleSidebarArchitectureToggle() }}
                       >
@@ -7521,7 +7502,7 @@ function App() {
                         variant={showDebugPanel ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-9 w-9 rounded-md p-0"
-                        disabled={!showWorkspace || !activeWorkspace}
+                        disabled={!showProject || !activeProject}
                         aria-label="Debug"
                         onClick={() => setShowDebugPanel((d) => !d)}
                       >
@@ -7540,24 +7521,24 @@ function App() {
                   onBlur={handleSidebarBlur}
                   className={`overflow-hidden outline-none ${isMobile ? 'fixed right-[3.25rem] top-1/2 z-50 h-[min(28rem,80vh)] w-[min(20rem,calc(100vw-5rem))] -translate-y-1/2 rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}
                 >
-                  <ErrorBoundary name="Workspace sidebar" variant="section" className="h-full" resetKeys={[activeWorkspaceId, activeSessionId, workspaces.length, personalSessions.length]}>
+                  <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
                     <SessionSelector
-                      workspaces={workspaces}
+                      projects={projects}
                       personalSessions={personalSessions}
-                      activeWorkspaceId={activeWorkspaceId}
+                      activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}
-                      loading={workspacesLoading}
-                      hasMoreWorkspaces={hasMoreWorkspaces}
-                      showFewerWorkspaces={workspaces.length > workspaceListLimit}
-                      onSelectWorkspace={handleSwitchWorkspace}
+                      loading={projectsLoading}
+                      hasMoreProjects={hasMoreProjects}
+                      showFewerProjects={projects.length > projectListLimit}
+                      onSelectProject={handleSwitchProject}
                       onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
                       onNewPersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
-                      onCreateWorkspace={handleCreateWorkspace}
-                      onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                      onCreateProject={handleCreateProject}
+                      onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
                       onChangeDirectory={handleChangeDirectory}
-                      onAssignRepository={(workspaceId) => { void handleAssignWorkspaceRepository(workspaceId) }}
-                      onShowMore={showMoreWorkspaces}
-                      onShowFewer={showFewerWorkspaces}
+                      onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
+                      onShowMore={showMoreProjects}
+                      onShowFewer={showFewerProjects}
                       sessionInfo={sessionInfo}
                       nodes={fsNodes}
                       repositories={automation.repositories}
@@ -7566,56 +7547,54 @@ function App() {
                 </aside>
               )}
 
-              {((viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopWorkspace || showTerminal))
-                || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
+              {((viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopProject || showTerminal))
+                || (viewMode === 'manager' && automation.selectedThread && showDesktopProject)) && (
                 <div
-                  className={`relative flex min-h-0 flex-col ${!showDesktopWorkspace && showTerminal ? 'flex-1 min-w-0' : chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}
-                  style={!showDesktopWorkspace && showTerminal ? { width: terminalColumnWidth, maxWidth: '70vw' } : undefined}
+                  className={`relative flex min-h-0 flex-col ${!showDesktopProject && showTerminal ? 'flex-1 min-w-0' : chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}
+                  style={!showDesktopProject && showTerminal ? { width: terminalColumnWidth, maxWidth: '70vw' } : undefined}
                 >
-                {!showDesktopWorkspace && showTerminal && (
+                {!showDesktopProject && showTerminal && (
                   <div
                     onMouseDown={handleTerminalColumnDragStart}
                     className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize hover:bg-primary/30 transition-colors z-10"
                   />
                 )}
-                {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
+                {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopProject && (
                   <div className="flex min-h-0 flex-1">
                     <ErrorBoundary
-                      name="Editor workspace"
+                      name="Editor project"
                       variant="section"
                       className="flex-1 min-h-0"
-                      resetKeys={[activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                      resetKeys={[activeProject?.projectRoot, showProjectTree, showProjectEditor, mobileTreeTab]}
                     >
-                      <WorkspacePanel
-                        ref={workspaceRef}
-                        autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                        surfaceId={activeWorkspace?.surfaceId ?? null}
-                        files={workspaceFiles}
-                        activeFileId={activeWorkspaceFileId}
-                        onActiveFileChange={setActiveWorkspaceFileId}
+                      <ProjectPanel
+                        ref={projectRef}
+                        autoOpenRemotePath={activeProject?.projectRoot ?? null}
+                        surfaceId={activeProject?.surfaceId ?? null}
+                        files={projectFiles}
+                        activeFileId={activeProjectFileId}
+                        onActiveFileChange={setActiveProjectFileId}
                         onFileDrop={(files) => { void handleFileDrop(files) }}
                         onReferenceFile={handleReferenceFile}
                         onReferenceSelection={handleReferenceFileSelection}
                         onReferencePreviewElement={handleReferencePreviewElement}
                         onAvailableFilesChange={handleAvailableFilesForMentionChange}
-                        showTree={showWorkspaceTree}
-                        showEditor={showWorkspaceEditor}
-                        onToggleTree={toggleWorkspaceTree}
-                        onToggleEditor={toggleWorkspaceEditor}
+                        showTree={showProjectTree}
+                        showEditor={showProjectEditor}
+                        onToggleTree={toggleProjectTree}
+                        onToggleEditor={toggleProjectEditor}
                         changedPaths={changedPaths}
                         fsWatcherVersion={fsWatcherVersion}
                         fsWatcherPayload={fsWatcherPayload}
                         sourceControlRefreshSignal={sourceControlRefreshSignal}
-                        savedTabsState={workspaceTabsState}
-                        savedLayoutState={workspaceUI?.layout ?? null}
-                        stateReady={workspaceStateReady}
-                        previewRequest={workspacePreviewRequest}
-                        onTabsStateChange={handleWorkspaceTabsStateChange}
-                        onLayoutStateChange={handleWorkspaceLayoutStateChange}
-                        onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                        savedTabsState={projectTabsState}
+                        stateReady={projectStateReady}
+                        previewRequest={projectPreviewRequest}
+                        onTabsStateChange={handleProjectTabsStateChange}
+                        onPreviewOpenChange={handleProjectPreviewOpenChange}
                         previewSessionId={activeSessionId}
                         previewToken={token}
-                        previewWorkspaceRoot={previewWorkspaceRoot}
+                        previewProjectRoot={previewProjectRoot}
                         previewInitialTarget={devPreviewTarget}
                         architectureDiagram={architectureDiagram}
                         architectureGenerating={architectureGenerating}
@@ -7624,19 +7603,19 @@ function App() {
                         onArchitectureRenderResult={handleArchitectureRenderResult}
                         onGenerateArchitecture={() => {
                           setArchitectureGenerating(true)
-                          handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                          handleSuggestion('Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
                         }}
-                        onApplyDiff={handleApplyWorkspaceDiff}
+                        onApplyDiff={handleApplyProjectDiff}
                         provider={chatProvider}
                         cliModel={cliModel}
                         onMaxCollapsedChange={setChatCollapsed}
-                        restoreRef={workspaceRestoreRef}
+                        restoreRef={projectRestoreRef}
                       />
                     </ErrorBoundary>
                   </div>
                 )}
                 {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
-                  <div className={`flex min-h-0 flex-col bg-background ${terminalFullscreen ? 'absolute inset-0 z-20 border-r' : `relative border-r border-t ${showDesktopWorkspace ? 'shrink-0' : 'flex-1'}`}`} style={terminalFullscreen || !showDesktopWorkspace ? undefined : { height: terminalHeight }}>
+                  <div className={`flex min-h-0 flex-col bg-background ${terminalFullscreen ? 'absolute inset-0 z-20 border-r' : `relative border-r border-t ${showDesktopProject ? 'shrink-0' : 'flex-1'}`}`} style={terminalFullscreen || !showDesktopProject ? undefined : { height: terminalHeight }}>
                     {!terminalFullscreen && (
                       <div
                         onMouseDown={handleTerminalDragStart}
@@ -7645,16 +7624,16 @@ function App() {
                     )}
                     <div className="relative shrink-0">
                       <TerminalTabs
-                        terminals={workspaceTerminals}
+                        terminals={projectTerminals}
                         activeTerminalId={activeTerminalId}
                         onSelect={setActiveTerminalId}
-                        onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined, shell)}
+                        onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined, shell)}
                         onKill={handleKillTerminal}
                         onDetach={handleDetachTerminal}
                         availableShells={terminalShells}
                       />
                       <div className="absolute right-0 top-0 bottom-px flex items-center gap-1 pr-2 pl-3 bg-background z-[9]">
-                        {showDesktopWorkspace && (
+                        {showDesktopProject && (
                         <button
                           onClick={() => {
                             if (terminalFullscreen) {
@@ -7688,20 +7667,20 @@ function App() {
                       </div>
                     </div>
                     {activeTerminalId ? (
-                      <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeWorkspaceRoot]}>
+                      <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeProjectRoot]}>
                         <TerminalView
                           ref={terminalViewRef}
                           terminalId={activeTerminalId}
                           className="flex-1 min-h-0"
                           token={token}
-                          workspaceRoot={activeWorkspaceRoot ?? undefined}
+                          projectRoot={activeProjectRoot ?? undefined}
                           onReferenceSelection={handleReferenceTerminalSelection}
                         />
                       </ErrorBoundary>
                     ) : (
                       <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                         <button
-                          onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                          onClick={() => createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined)}
                           className="hover:text-foreground transition-colors"
                         >
                           + New Terminal
@@ -7717,10 +7696,10 @@ function App() {
               <section className="flex flex-1 min-h-0 flex-col overflow-hidden border-b bg-background pt-16">
                 <div className="relative shrink-0 border-b">
                   <TerminalTabs
-                    terminals={workspaceTerminals}
+                    terminals={projectTerminals}
                     activeTerminalId={activeTerminalId}
                     onSelect={setActiveTerminalId}
-                    onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined, shell)}
+                    onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined, shell)}
                     onKill={handleKillTerminal}
                     availableShells={terminalShells}
                   />
@@ -7733,20 +7712,20 @@ function App() {
                   </button>
                 </div>
                 {activeTerminalId ? (
-                  <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeWorkspaceRoot]}>
+                  <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeProjectRoot]}>
                     <TerminalView
                       ref={terminalViewRef}
                       terminalId={activeTerminalId}
                       className="flex-1 min-h-0"
                       token={token}
-                      workspaceRoot={activeWorkspaceRoot ?? undefined}
+                      projectRoot={activeProjectRoot ?? undefined}
                       onReferenceSelection={handleReferenceTerminalSelection}
                     />
                   </ErrorBoundary>
                 ) : (
                   <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                     <button
-                      onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                      onClick={() => createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined)}
                       className="hover:text-foreground transition-colors"
                     >
                       + New Terminal
@@ -7755,30 +7734,30 @@ function App() {
                 )}
               </section>
             )}
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileProjectFullscreen && (
               <section className={`flex-1 min-h-0 overflow-hidden border-b bg-background ${viewMode === 'manager' ? '' : 'pt-16'}`}>
                 <ErrorBoundary
-                  name="Editor workspace"
+                  name="Editor project"
                   variant="section"
                   className="h-full min-h-0"
-                  resetKeys={[activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                  resetKeys={[activeProject?.projectRoot, showProjectTree, showProjectEditor, mobileTreeTab]}
                 >
-                  <WorkspacePanel
-                    ref={workspaceRef}
-                    autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                    surfaceId={activeWorkspace?.surfaceId ?? null}
-                    files={workspaceFiles}
-                    activeFileId={activeWorkspaceFileId}
-                    onActiveFileChange={setActiveWorkspaceFileId}
+                  <ProjectPanel
+                    ref={projectRef}
+                    autoOpenRemotePath={activeProject?.projectRoot ?? null}
+                    surfaceId={activeProject?.surfaceId ?? null}
+                    files={projectFiles}
+                    activeFileId={activeProjectFileId}
+                    onActiveFileChange={setActiveProjectFileId}
                     onFileDrop={(files) => { void handleFileDrop(files) }}
                     onReferenceFile={handleReferenceFile}
                     onReferenceSelection={handleReferenceFileSelection}
                     onReferencePreviewElement={handleReferencePreviewElement}
                     onAvailableFilesChange={handleAvailableFilesForMentionChange}
-                    showTree={showWorkspaceTree}
-                    showEditor={showWorkspaceEditor}
-                    onToggleTree={toggleWorkspaceTree}
-                    onToggleEditor={toggleWorkspaceEditor}
+                    showTree={showProjectTree}
+                    showEditor={showProjectEditor}
+                    onToggleTree={toggleProjectTree}
+                    onToggleEditor={toggleProjectEditor}
                     treeTab={mobileTreeTab}
                     onTreeTabChange={setMobileTreeTab}
                     changedPaths={changedPaths}
@@ -7786,15 +7765,14 @@ function App() {
                     fsWatcherPayload={fsWatcherPayload}
                     sourceControlRefreshSignal={sourceControlRefreshSignal}
                     isMobile
-                    savedTabsState={workspaceTabsState}
-                    savedLayoutState={workspaceUI?.layout ?? null}
-                    stateReady={workspaceStateReady}
-                    previewRequest={workspacePreviewRequest}
-                    onTabsStateChange={handleWorkspaceTabsStateChange}
-                    onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                    savedTabsState={projectTabsState}
+                    stateReady={projectStateReady}
+                    previewRequest={projectPreviewRequest}
+                    onTabsStateChange={handleProjectTabsStateChange}
+                    onPreviewOpenChange={handleProjectPreviewOpenChange}
                     previewSessionId={activeSessionId}
                     previewToken={token}
-                    previewWorkspaceRoot={previewWorkspaceRoot}
+                    previewProjectRoot={previewProjectRoot}
                     previewInitialTarget={devPreviewTarget}
                     architectureDiagram={architectureDiagram}
                     architectureGenerating={architectureGenerating}
@@ -7803,9 +7781,9 @@ function App() {
                     onArchitectureRenderResult={handleArchitectureRenderResult}
                     onGenerateArchitecture={() => {
                       setArchitectureGenerating(true)
-                      handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                      handleSuggestion('Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
                     }}
-                    onApplyDiff={handleApplyWorkspaceDiff}
+                    onApplyDiff={handleApplyProjectDiff}
                     provider={chatProvider}
                     cliModel={cliModel}
                   />
@@ -7813,7 +7791,7 @@ function App() {
               </section>
             )}
 
-            {!showMobileWorkspaceFullscreen && !showMobileTerminalFullscreen && (viewMode === 'manager' ? (
+            {!showMobileProjectFullscreen && !showMobileTerminalFullscreen && (viewMode === 'manager' ? (
               /* ── Manager main content ────────────────────────────── */
               <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${isMobile && !automation.selectedThread ? 'pt-12' : ''}`}>
                 {automation.selectedThread ? (
@@ -7905,7 +7883,7 @@ function App() {
                               onMoveToGateway={handleMoveRepoToGateway}
                               availableFiles={availableFilesForMention}
                               onSearchFiles={handleSearchFiles}
-                              workspaceOpen={showWorkspace}
+                              projectOpen={showProject}
                             />
                           </ErrorBoundary>
                           <div className="flex items-center gap-2 px-1 mt-1.5">
@@ -8040,7 +8018,7 @@ function App() {
                                     repoName={repoName}
                                     prState={prState}
                                     ghAvailable={automation.ghAvailable}
-                                    onOpen={() => { automation.setSelectedThreadId(thread.id); setShowWorkspace(false); setShowWorkspaceEditor(false) }}
+                                    onOpen={() => { automation.setSelectedThreadId(thread.id); setShowProject(false); setShowProjectEditor(false) }}
                                     onStop={() => { void automation.handleStop(thread.id) }}
                                     onDelete={() => automation.handleDelete(thread.id)}
                                   />
@@ -8083,16 +8061,16 @@ function App() {
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
                   </div>
-                  {!workspacesLoading && workspaces.length === 0 ? (
+                  {!projectsLoading && projects.length === 0 ? (
                     <div className="text-center space-y-3">
-                      <p className="text-sm text-muted-foreground">Add a workspace folder to start chatting with your code.</p>
-                      <Button variant="default" size="lg" onClick={() => { setWorkspacePickerMode('workspace'); setFolderPickerOpen(true) }}>
+                      <p className="text-sm text-muted-foreground">Add a project folder to start chatting with your code.</p>
+                      <Button variant="default" size="lg" onClick={() => { setProjectPickerMode('project'); setFolderPickerOpen(true) }}>
                         <FolderOpen className="h-4 w-4 mr-2" />
-                        Add Workspace
+                        Add Project
                       </Button>
                     </div>
                   ) : (
-                    <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
+                    <Suggestions suggestions={showProject && activeProject ? projectSuggestions : suggestions} onSelect={handleSuggestion} />
                   )}
                   {developerChatUiState.showTodoList && (
                     <TodoList items={todoList} onClear={() => setTodoList([])} />
@@ -8133,11 +8111,11 @@ function App() {
                       onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
-                      workspaceOpen={showWorkspace}
-                      workspaceName={activeWorkspaceDisplayName}
-                      workspacePath={activeWorkspaceRoot}
+                      projectOpen={showProject}
+                      projectName={activeProjectDisplayName}
+                      projectPath={activeProjectRoot}
                       sessionInfo={sessionInfo}
-                      workspaceNodeId={activeWorkspace?.nodeId}
+                      projectNodeId={activeProject?.nodeId}
                     />
                   </ErrorBoundary>
                   {developerComposerControlRow}
@@ -8151,11 +8129,11 @@ function App() {
               >
 
                 {!chatCollapsed && (<>
-                <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopWorkspace]}>
+                <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
                   <Conversation
                     key={activeSessionId ?? 'developer-empty'}
                     className="min-h-0 flex-1 border-b"
-                    compact={showDesktopWorkspace}
+                    compact={showDesktopProject}
                     loading={isLoadingHistory}
                     loadingLabel="Loading chat"
                     messageContents={messageContents}
@@ -8180,7 +8158,7 @@ function App() {
                         toolCalls={msg.toolCalls}
                         segments={msg.segments}
                         isStreaming={isLoading && msg === messages[messages.length - 1]}
-                        compact={showWorkspace || showScreenShare || previewOpen}
+                        compact={showProject || showScreenShare || previewOpen}
                         preferLlmUi
                         provider={chatProvider}
                         threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
@@ -8204,7 +8182,7 @@ function App() {
                   </Conversation>
                 </ErrorBoundary>
 
-                <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
+                <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
                     <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
                       {developerChatUiState.showTodoList && (
@@ -8294,11 +8272,11 @@ function App() {
                         onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
                         availableFiles={availableFilesForMention}
                         onSearchFiles={handleSearchFiles}
-                        workspaceOpen={showWorkspace}
-                        workspaceName={activeWorkspaceDisplayName}
-                        workspacePath={activeWorkspaceRoot}
+                        projectOpen={showProject}
+                        projectName={activeProjectDisplayName}
+                        projectPath={activeProjectRoot}
                         sessionInfo={sessionInfo}
-                        workspaceNodeId={activeWorkspace?.nodeId}
+                        projectNodeId={activeProject?.nodeId}
                       />
                     </ErrorBoundary>
                     {developerComposerControlRow}
@@ -8755,13 +8733,13 @@ function App() {
 
         <FolderPickerDialog
           open={folderPickerOpen}
-          onOpenChange={(open) => { setFolderPickerOpen(open); if (!open) setChangeDirectoryWorkspaceId(null) }}
-          initialPath={settings.workspace_picker_path}
-          initialNodeId={settings.workspace_picker_node_id}
+          onOpenChange={(open) => { setFolderPickerOpen(open); if (!open) setChangeDirectoryProjectId(null) }}
+          initialPath={settings.project_picker_path}
+          initialNodeId={settings.project_picker_node_id}
           onSelect={(path, nodeId) => {
-            void handleWorkspaceFolderSelected(path, nodeId).catch((err) => {
-              console.error('Failed to select workspace:', err)
-              toast.error(`Failed to select workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            void handleProjectFolderSelected(path, nodeId).catch((err) => {
+              console.error('Failed to select project:', err)
+              toast.error(`Failed to select project: ${err instanceof Error ? err.message : 'Unknown error'}`)
             })
           }}
         />

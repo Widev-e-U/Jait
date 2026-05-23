@@ -26,10 +26,10 @@ function perm(
 // Read-only. No terminal, no installs, no writes.
 
 const MINIMAL: ToolPermission[] = [
-  perm("file.read", "none", "low", "Read a file from the workspace."),
-  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.read", "none", "low", "Read a file from the project."),
+  perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
-  perm("file.write", "dangerous", "high", "Create or overwrite files in the workspace."),
+  perm("file.write", "dangerous", "high", "Create or overwrite files in the project."),
   perm("file.patch", "dangerous", "high", "Apply targeted edits to existing files."),
   perm("terminal.run", "dangerous", "high", "Run a non-interactive shell command."),
   perm("terminal.stream", "dangerous", "high", "Open an interactive terminal session."),
@@ -41,17 +41,17 @@ const MINIMAL: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "dangerous", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
-  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
+  perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
 // ── Coding Profile ───────────────────────────────────────────────────
 // File read/write/patch auto, terminal requires consent.
 
 const CODING: ToolPermission[] = [
-  perm("file.read", "none", "low", "Read a file from the workspace."),
-  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.read", "none", "low", "Read a file from the project."),
+  perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
-  perm("file.write", "once", "medium", "Create or overwrite files in the workspace."),
+  perm("file.write", "once", "medium", "Create or overwrite files in the project."),
   perm("file.patch", "once", "medium", "Apply targeted edits to existing files."),
   perm("terminal.run", "once", "medium", "Run a non-interactive shell command.", {
     deniedCommands: ["rm -rf *", "del /s /q *", "format *", "mkfs*", "dd if=*"],
@@ -65,17 +65,17 @@ const CODING: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
-  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
+  perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
 // ── Full Profile ─────────────────────────────────────────────────────
 // Maximum capability. Dangerous ops still require consent.
 
 const FULL: ToolPermission[] = [
-  perm("file.read", "none", "low", "Read a file from the workspace."),
-  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.read", "none", "low", "Read a file from the project."),
+  perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
-  perm("file.write", "none", "low", "Create or overwrite files in the workspace."),
+  perm("file.write", "none", "low", "Create or overwrite files in the project."),
   perm("file.patch", "none", "low", "Apply targeted edits to existing files."),
   perm("terminal.run", "once", "medium", "Run a non-interactive shell command.", {
     deniedCommands: ["rm -rf /", "format C:", "mkfs*", "dd if=/dev/zero*"],
@@ -89,7 +89,7 @@ const FULL: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
-  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
+  perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
 // ── Profile Map ──────────────────────────────────────────────────────

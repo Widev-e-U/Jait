@@ -18,11 +18,11 @@ afterEach(() => {
 });
 
 describe("ReminderService", () => {
-  it("creates and lists active reminders by user and workspace", () => {
+  it("creates and lists active reminders by user and project", () => {
     const service = new ReminderService(db);
     const created = service.create({
       userId: "user-1",
-      workspaceId: "workspace-1",
+      projectId: "project-1",
       sessionId: "session-1",
       content: "Remember the deployment note",
       tags: ["Deploy", "deploy", "Notes"],
@@ -30,14 +30,14 @@ describe("ReminderService", () => {
 
     expect(created).toMatchObject({
       userId: "user-1",
-      workspaceId: "workspace-1",
+      projectId: "project-1",
       sessionId: "session-1",
       content: "Remember the deployment note",
       status: "active",
       tags: JSON.stringify(["deploy", "notes"]),
     });
 
-    expect(service.list({ userId: "user-1", workspaceId: "workspace-1" })).toHaveLength(1);
+    expect(service.list({ userId: "user-1", projectId: "project-1" })).toHaveLength(1);
     expect(service.list({ userId: "user-2" })).toHaveLength(0);
   });
 

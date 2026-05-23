@@ -10,7 +10,7 @@ import { AuditWriter } from "../services/audit.js";
 import { RepositoryService } from "../services/repositories.js";
 import { SessionService } from "../services/sessions.js";
 import { UserService } from "../services/users.js";
-import { WorkspaceService } from "../services/workspaces.js";
+import { ProjectService } from "../services/projects.js";
 
 const testConfig = {
   ...loadConfig(),
@@ -63,7 +63,7 @@ describe("assistant profile and environment routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let userService: UserService;
-  let workspaceService: WorkspaceService;
+  let projectService: ProjectService;
   let assistantProfileService: AssistantProfileService;
   let repoService: RepositoryService;
   let sessionService: SessionService;
@@ -73,7 +73,7 @@ describe("assistant profile and environment routes", () => {
     sqlite = opened.sqlite;
     migrateDatabase(sqlite);
     userService = new UserService(opened.db);
-    workspaceService = new WorkspaceService(opened.db);
+    projectService = new ProjectService(opened.db);
     assistantProfileService = new AssistantProfileService(opened.db);
     repoService = new RepositoryService(opened.db);
     sessionService = new SessionService(opened.db);
@@ -125,7 +125,7 @@ describe("assistant profile and environment routes", () => {
       sqlite: opened.sqlite,
       userService,
       sessionService,
-      workspaceService,
+      projectService,
       assistantProfileService,
       repoService,
       providerRegistry,
@@ -197,7 +197,7 @@ describe("assistant profile and environment routes", () => {
     expect(updated.profile.enabledPlugins).toEqual(["calendar"]);
   });
 
-  it("returns an environment snapshot across assistants, workspaces, repositories, providers, and network hosts", async () => {
+  it("returns an environment snapshot across assistants, projects, repositories, providers, and network hosts", async () => {
     const user = userService.createUser("env-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
 
@@ -206,7 +206,7 @@ describe("assistant profile and environment routes", () => {
       enabledSkills: ["tmux"],
     });
 
-    const workspace = workspaceService.create({
+    const project = projectService.create({
       userId: user.id,
       title: "Jait",
       rootPath: "/home/jakob/jait",
@@ -215,8 +215,8 @@ describe("assistant profile and environment routes", () => {
 
     sessionService.create({
       userId: user.id,
-      workspaceId: workspace.id,
-      workspacePath: workspace.rootPath ?? undefined,
+      projectId: project.id,
+      projectPath: project.rootPath ?? undefined,
       name: "Main session",
     });
 
@@ -254,7 +254,7 @@ describe("assistant profile and environment routes", () => {
       snapshot: {
         assistants: Array<{ name: string }>;
         nodes: Array<{ id: string }>;
-        workspaces: Array<{ id: string; sessionCount: number }>;
+        projects: Array<{ id: string; sessionCount: number }>;
         repositories: Array<{ name: string; connected: boolean }>;
         networkHosts: Array<{ hostname: string | null }>;
         connectors: Array<{ id: string; status: string }>;
@@ -262,7 +262,7 @@ describe("assistant profile and environment routes", () => {
     };
     expect(body.snapshot.assistants.map((profile) => profile.name)).toContain("Daily operator");
     expect(body.snapshot.nodes.map((node) => node.id)).toContain("gateway");
-    expect(body.snapshot.workspaces.find((entry) => entry.id === workspace.id)?.sessionCount).toBe(1);
+    expect(body.snapshot.projects.find((entry) => entry.id === project.id)?.sessionCount).toBe(1);
     expect(body.snapshot.repositories.find((entry) => entry.name === "Jait")?.connected).toBe(true);
     expect(body.snapshot.networkHosts.find((host) => host.hostname === "nas")).toBeTruthy();
     expect(body.snapshot.connectors.find((connector) => connector.id === "codex")?.status).toBe("ready");

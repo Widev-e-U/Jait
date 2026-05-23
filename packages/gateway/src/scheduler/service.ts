@@ -9,7 +9,7 @@ export interface SchedulerToolExecution {
   toolName: string;
   input: unknown;
   sessionId: string;
-  workspaceRoot: string;
+  projectRoot: string;
   userId?: string | null;
 }
 
@@ -29,7 +29,7 @@ export interface ScheduledJobRecord {
   toolName: string;
   input: unknown;
   sessionId: string;
-  workspaceRoot: string;
+  projectRoot: string;
   enabled: boolean;
   lastRunAt: string | null;
   createdAt: string;
@@ -140,7 +140,7 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
       toolName,
       input,
       sessionId: job.sessionId,
-      workspaceRoot: job.workspaceRoot,
+      projectRoot: job.projectRoot,
       userId: job.userId,
     };
   }
@@ -157,12 +157,12 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
         kind: "delivery",
         workingDirectory: typeof inputWithoutTitle["workingDirectory"] === "string"
           ? inputWithoutTitle["workingDirectory"]
-          : job.workspaceRoot,
+          : job.projectRoot,
         start: true,
         detach: true,
       },
       sessionId: job.sessionId,
-      workspaceRoot: job.workspaceRoot,
+      projectRoot: job.projectRoot,
       userId: job.userId,
     };
   }
@@ -172,7 +172,7 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
       toolName,
       input: inputWithoutTitle,
       sessionId: job.sessionId,
-      workspaceRoot: job.workspaceRoot,
+      projectRoot: job.projectRoot,
       userId: job.userId,
     };
   }
@@ -187,7 +187,7 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
     input: {
       action: "create",
       kind: "delivery",
-      workingDirectory: job.workspaceRoot,
+      workingDirectory: job.projectRoot,
       providerId,
       model,
       start: true,
@@ -195,7 +195,7 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
       prompt,
     },
     sessionId: job.sessionId,
-    workspaceRoot: job.workspaceRoot,
+    projectRoot: job.projectRoot,
     userId: job.userId,
   };
 }
@@ -209,7 +209,7 @@ function mapJob(row: typeof scheduledJobs.$inferSelect): ScheduledJobRecord {
     toolName: normalizeToolName(row.toolName),
     input: parseInput(row.input),
     sessionId: row.sessionId ?? "default",
-    workspaceRoot: row.workspaceRoot ?? process.cwd(),
+    projectRoot: row.projectRoot ?? process.cwd(),
     enabled: row.enabled === 1,
     lastRunAt: row.lastRunAt,
     createdAt: row.createdAt,
@@ -255,7 +255,7 @@ export class SchedulerService {
     toolName: string;
     input?: unknown;
     sessionId?: string;
-    workspaceRoot?: string;
+    projectRoot?: string;
     enabled?: boolean;
   }): ScheduledJobRecord {
     const now = new Date().toISOString();
@@ -268,7 +268,7 @@ export class SchedulerService {
       toolName: normalizeToolName(params.toolName),
       input: JSON.stringify(params.input ?? {}),
       sessionId: params.sessionId ?? "default",
-      workspaceRoot: params.workspaceRoot ?? process.cwd(),
+      projectRoot: params.projectRoot ?? process.cwd(),
       enabled: params.enabled === false ? 0 : 1,
       createdAt: now,
       updatedAt: now,

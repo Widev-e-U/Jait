@@ -583,7 +583,7 @@ describe("WsControlPlane", () => {
         { command: "echo hi" },
         {
           sessionId: "tool-stream-session",
-          workspaceRoot: "/tmp",
+          projectRoot: "/tmp",
           onOutputChunk: (chunk, metadata) => {
             chunks.push({ chunk, metadata });
           },
@@ -656,7 +656,7 @@ describe("WsControlPlane", () => {
             type: "terminal",
             state: "running",
             sessionId: "session-1",
-            metadata: { workspaceRoot: "/tmp/project" },
+            metadata: { projectRoot: "/tmp/project" },
           },
         ],
       });

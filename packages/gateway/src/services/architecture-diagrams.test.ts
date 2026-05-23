@@ -7,7 +7,7 @@ import { ArchitectureDiagramService, DEFAULT_ARCHITECTURE_DIAGRAM_FILE } from ".
 
 describe("ArchitectureDiagramService", () => {
   let service: ArchitectureDiagramService;
-  let workspaceRoot: string;
+  let projectRoot: string;
 
   beforeEach(async () => {
     const { db, sqlite } = await openDatabase(":memory:");
@@ -15,39 +15,39 @@ describe("ArchitectureDiagramService", () => {
       CREATE TABLE architecture_diagrams (
         id TEXT PRIMARY KEY,
         user_id TEXT,
-        workspace_root TEXT NOT NULL,
+        project_root TEXT NOT NULL,
         diagram TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
     `);
-    sqlite.exec(`CREATE UNIQUE INDEX idx_architecture_diagrams_user_workspace ON architecture_diagrams(user_id, workspace_root)`);
+    sqlite.exec(`CREATE UNIQUE INDEX idx_architecture_diagrams_user_project ON architecture_diagrams(user_id, project_root)`);
     service = new ArchitectureDiagramService(db);
-    workspaceRoot = await mkdtemp(join(tmpdir(), "jait-architecture-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "jait-architecture-"));
   });
 
-  it("writes diagrams to .jait/architecture.mmd in the workspace", async () => {
+  it("writes diagrams to .jait/architecture.mmd in the project", async () => {
     const saved = await service.save({
       userId: "user-1",
-      workspaceRoot,
+      projectRoot,
       diagram: "flowchart LR\nA-->B",
     });
 
-    const filePath = join(workspaceRoot, DEFAULT_ARCHITECTURE_DIAGRAM_FILE);
+    const filePath = join(projectRoot, DEFAULT_ARCHITECTURE_DIAGRAM_FILE);
     expect(saved.filePath).toBe(filePath);
     expect(await readFile(filePath, "utf8")).toContain("A-->B");
-    expect(service.getByWorkspace(workspaceRoot, "user-1")?.source).toBe("file");
+    expect(service.getByProject(projectRoot, "user-1")?.source).toBe("file");
   });
 
-  it("updates the same workspace file on subsequent saves", async () => {
+  it("updates the same project file on subsequent saves", async () => {
     const created = await service.save({
       userId: "user-1",
-      workspaceRoot,
+      projectRoot,
       diagram: "flowchart LR\nA-->B",
     });
     const updated = await service.save({
       userId: "user-1",
-      workspaceRoot,
+      projectRoot,
       diagram: "flowchart LR\nA-->C",
     });
 
@@ -59,21 +59,21 @@ describe("ArchitectureDiagramService", () => {
   it("falls back to the legacy database value when the file does not exist yet", async () => {
     const saved = await service.save({
       userId: "user-1",
-      workspaceRoot,
+      projectRoot,
       diagram: "flowchart LR\nA-->B",
     });
 
     await writeFile(saved.filePath, "", "utf8");
 
-    const legacyWorkspace = await mkdtemp(join(tmpdir(), "jait-architecture-legacy-"));
+    const legacyProject = await mkdtemp(join(tmpdir(), "jait-architecture-legacy-"));
     const legacy = await service.save({
       userId: "user-1",
-      workspaceRoot: legacyWorkspace,
+      projectRoot: legacyProject,
       diagram: "flowchart LR\nLegacy-->Diagram",
     });
     await writeFile(legacy.filePath, "", "utf8");
 
-    const loaded = service.getByWorkspace(legacyWorkspace, "user-1");
+    const loaded = service.getByProject(legacyProject, "user-1");
     expect(loaded?.diagram).toContain("Legacy-->Diagram");
     expect(loaded?.source).toBe("database");
   });

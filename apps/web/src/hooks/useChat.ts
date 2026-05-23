@@ -203,7 +203,7 @@ interface ChatState {
 /** Execution context info sent by the gateway at the start of a CLI session */
 export interface SessionInfo {
   provider: string
-  workspacePath: string
+  projectPath: string
   isRemote: boolean
   remoteNode?: { nodeId: string; nodeName: string; platform: string }
 }
@@ -262,12 +262,12 @@ function hasImageAttachment(context: ChatHttpErrorContext): boolean {
 export function formatChatHttpError(status: number, context: ChatHttpErrorContext = {}): string {
   if (status === 413) {
     if (context.provider === 'codex' && hasImageAttachment(context)) {
-      return 'Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a workspace file path instead.'
+      return 'Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a project file path instead.'
     }
     if (hasImageAttachment(context)) {
-      return 'That image is too large for this chat request. Use a smaller image or reference it as a workspace file path instead.'
+      return 'That image is too large for this chat request. Use a smaller image or reference it as a project file path instead.'
     }
-    return 'That chat request is too large for the gateway. Remove large attachments or reference files from the workspace instead.'
+    return 'That chat request is too large for the gateway. Remove large attachments or reference files from the project instead.'
   }
   return `HTTP ${status}`
 }
@@ -315,7 +315,7 @@ export function useChat(
   sessionId: string | null,
   authToken?: string | null,
   onLoginRequired?: () => void,
-  workspaceSurfaceId?: string | null,
+  projectSurfaceId?: string | null,
 ) {
   const [state, setState] = useState<ChatState>({
     messages: [],
@@ -805,14 +805,14 @@ export function useChat(
                 // Provider was unavailable, gateway fell back to jait
                 setSessionInfo({
                   provider: 'jait',
-                  workspacePath: '',
+                  projectPath: '',
                   isRemote: false,
                 })
               } else if (data.type === 'session_info') {
                 // Execution context info from the gateway
                 setSessionInfo({
                   provider: data.provider as string,
-                  workspacePath: data.workspacePath as string,
+                  projectPath: data.projectPath as string,
                   isRemote: data.isRemote as boolean,
                   remoteNode: data.remoteNode as SessionInfo['remoteNode'],
                 })
@@ -1321,13 +1321,13 @@ export function useChat(
               // Provider was unavailable, gateway fell back to jait
               setSessionInfo({
                 provider: 'jait',
-                workspacePath: '',
+                projectPath: '',
                 isRemote: false,
               })
             } else if (data.type === 'session_info') {
               setSessionInfo({
                 provider: data.provider as string,
-                workspacePath: data.workspacePath as string,
+                projectPath: data.projectPath as string,
                 isRemote: data.isRemote as boolean,
                 remoteNode: data.remoteNode as SessionInfo['remoteNode'],
               })
@@ -1648,17 +1648,17 @@ export function useChat(
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-      await fetch(`${API_URL}/api/workspace/apply-diff`, {
+      await fetch(`${API_URL}/api/project/apply-diff`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           path,
           content: null,
-          ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+          ...(projectSurfaceId ? { surfaceId: projectSurfaceId } : {}),
         }), // null content = just clear backup
       })
     } catch { /* ignore */ }
-  }, [authToken, updateAndBroadcastFiles, workspaceSurfaceId])
+  }, [authToken, updateAndBroadcastFiles, projectSurfaceId])
 
   const rejectFile = useCallback(async (path: string) => {
     // Call undo endpoint to restore the original file
@@ -1666,12 +1666,12 @@ export function useChat(
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-      const res = await fetch(`${API_URL}/api/workspace/undo`, {
+      const res = await fetch(`${API_URL}/api/project/undo`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           path,
-          ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+          ...(projectSurfaceId ? { surfaceId: projectSurfaceId } : {}),
         }),
       })
       restored = res.ok
@@ -1680,7 +1680,7 @@ export function useChat(
     }
     if (!restored) return
     updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
-  }, [authToken, updateAndBroadcastFiles, workspaceSurfaceId])
+  }, [authToken, updateAndBroadcastFiles, projectSurfaceId])
 
   const acceptAllFiles = useCallback(() => {
     updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' as FileChangeState } : f))
@@ -1694,12 +1694,12 @@ export function useChat(
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-        const res = await fetch(`${API_URL}/api/workspace/undo-all`, {
+        const res = await fetch(`${API_URL}/api/project/undo-all`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
             paths: undecidedPaths,
-            ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+            ...(projectSurfaceId ? { surfaceId: projectSurfaceId } : {}),
           }),
         })
         if (res.ok) {
@@ -1717,7 +1717,7 @@ export function useChat(
       ))
       return
     }
-  }, [authToken, changedFiles, updateAndBroadcastFiles, workspaceSurfaceId])
+  }, [authToken, changedFiles, updateAndBroadcastFiles, projectSurfaceId])
 
   // Auto-hide the files-changed list once every file has been decided
   useEffect(() => {

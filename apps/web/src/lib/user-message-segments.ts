@@ -5,7 +5,7 @@ export interface UserReferencedFile {
   lineRange?: UserLineRange
 }
 
-export interface UserWorkspaceReference {
+export interface UserProjectReference {
   path: string
   name: string
 }
@@ -13,7 +13,7 @@ export interface UserWorkspaceReference {
 export interface UserTerminalReference {
   terminalId: string
   name: string
-  workspaceRoot?: string | null
+  projectRoot?: string | null
   lineRange?: UserLineRange
   selectedText?: string
 }
@@ -34,7 +34,7 @@ const JAIT_REF_MIME = 'application/x-jait-user-message+json'
 export type UserMessageSegment =
   | { type: 'text'; text: string }
   | ({ type: 'file' } & UserReferencedFile)
-  | ({ type: 'workspace' } & UserWorkspaceReference)
+  | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
   | ({ type: 'image' } & UserImageAttachment)
 
@@ -66,10 +66,10 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       continue
     }
 
-    if (segment.type === 'workspace') {
+    if (segment.type === 'project') {
       if (!segment.path.trim()) continue
       normalized.push({
-        type: 'workspace',
+        type: 'project',
         path: segment.path,
         name: segment.name || segment.path.split(/[\\/]/).pop() || segment.path,
       })
@@ -82,7 +82,7 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
         type: 'terminal',
         terminalId: segment.terminalId,
         name: segment.name || segment.terminalId,
-        ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
+        ...(segment.projectRoot ? { projectRoot: segment.projectRoot } : {}),
         ...(normalizeLineRange(segment.lineRange) ? { lineRange: normalizeLineRange(segment.lineRange)! } : {}),
         ...(segment.selectedText ? { selectedText: segment.selectedText } : {}),
       })
@@ -122,17 +122,17 @@ export function userReferencedFilesFromSegments(segments: UserMessageSegment[] |
   return files
 }
 
-export function userReferencedWorkspacesFromSegments(segments: UserMessageSegment[] | null | undefined): UserWorkspaceReference[] {
-  const workspaces: UserWorkspaceReference[] = []
+export function userReferencedProjectsFromSegments(segments: UserMessageSegment[] | null | undefined): UserProjectReference[] {
+  const projects: UserProjectReference[] = []
   const seen = new Set<string>()
 
   for (const segment of normalizeUserMessageSegments(segments)) {
-    if (segment.type !== 'workspace' || seen.has(segment.path)) continue
+    if (segment.type !== 'project' || seen.has(segment.path)) continue
     seen.add(segment.path)
-    workspaces.push({ path: segment.path, name: segment.name })
+    projects.push({ path: segment.path, name: segment.name })
   }
 
-  return workspaces
+  return projects
 }
 
 export function userReferencedTerminalsFromSegments(segments: UserMessageSegment[] | null | undefined): UserTerminalReference[] {
@@ -146,7 +146,7 @@ export function userReferencedTerminalsFromSegments(segments: UserMessageSegment
     terminals.push({
       terminalId: segment.terminalId,
       name: segment.name,
-      ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
+      ...(segment.projectRoot ? { projectRoot: segment.projectRoot } : {}),
       ...(segment.lineRange ? { lineRange: segment.lineRange } : {}),
       ...(segment.selectedText ? { selectedText: segment.selectedText } : {}),
     })
@@ -215,17 +215,17 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
   return normalizeUserMessageSegments(segments).map((segment) => {
     if (segment.type === 'text') return segment.text
     if (segment.type === 'file') return `@${segment.path}${formatLineRangeSuffix(segment.lineRange)}`
-    if (segment.type === 'workspace') return `[workspace:${segment.path}]`
+    if (segment.type === 'project') return `[project:${segment.path}]`
     if (segment.type === 'terminal') return `[terminal:${segment.terminalId}${formatLineRangeSuffix(segment.lineRange)}]`
     return `[image:${segment.name}]`
   }).join('')
 }
 
 export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[] {
-  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[workspace:')) return []
+  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[project:')) return []
 
   const segments: UserMessageSegment[] = []
-  const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[workspace:([^\]]+)\])/g
+  const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[project:([^\]]+)\])/g
   let lastIndex = 0
 
   for (const match of markdown.matchAll(pattern)) {
@@ -237,7 +237,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     const fileLineRange = parseLineRangeSuffix(match[3])
     const terminalId = match[4]?.trim()
     const terminalLineRange = parseLineRangeSuffix(match[5])
-    const workspacePath = match[6]?.trim()
+    const projectPath = match[6]?.trim()
     const pathStart = index + prefix.length
     if (pathStart > lastIndex) {
       segments.push({ type: 'text', text: markdown.slice(lastIndex, pathStart) })
@@ -248,8 +248,8 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     } else if (terminalId) {
       segments.push({ type: 'terminal', terminalId, name: terminalId, ...(terminalLineRange ? { lineRange: terminalLineRange } : {}) })
       lastIndex = index + full.length
-    } else if (workspacePath) {
-      segments.push({ type: 'workspace', path: workspacePath, name: workspacePath.split(/[\\/]/).pop() || workspacePath })
+    } else if (projectPath) {
+      segments.push({ type: 'project', path: projectPath, name: projectPath.split(/[\\/]/).pop() || projectPath })
       lastIndex = index + full.length
     } else {
       segments.push({ type: 'text', text: full })
@@ -262,7 +262,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
   }
 
   const normalized = normalizeUserMessageSegments(segments)
-  return normalized.some((segment) => segment.type === 'file' || segment.type === 'workspace' || segment.type === 'terminal') ? normalized : []
+  return normalized.some((segment) => segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal') ? normalized : []
 }
 
 export function serializeUserMessageSegmentsForClipboard(segments: UserMessageSegment[] | null | undefined): string | null {
@@ -304,9 +304,9 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
       })
       continue
     }
-    if (record.type === 'workspace' && typeof record.path === 'string') {
+    if (record.type === 'project' && typeof record.path === 'string') {
       parsed.push({
-        type: 'workspace',
+        type: 'project',
         path: record.path,
         name: typeof record.name === 'string' ? record.name : record.path.split(/[\\/]/).pop() ?? record.path,
       })
@@ -317,7 +317,7 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         type: 'terminal',
         terminalId: record.terminalId,
         name: typeof record.name === 'string' ? record.name : record.terminalId,
-        ...(typeof record.workspaceRoot === 'string' ? { workspaceRoot: record.workspaceRoot } : {}),
+        ...(typeof record.projectRoot === 'string' ? { projectRoot: record.projectRoot } : {}),
         ...(parseLineRangeRecord(record) ? { lineRange: parseLineRangeRecord(record)! } : {}),
         ...(typeof record.selectedText === 'string' ? { selectedText: record.selectedText } : {}),
       })

@@ -7,7 +7,7 @@ import { createMemoryForgetTool, createMemoryListTool, createMemorySaveTool, cre
 const context: ToolContext = {
   sessionId: "session-1",
   actionId: "action-1",
-  workspaceRoot: "/workspace/jait",
+  projectRoot: "/project/jait",
   requestedBy: "user",
   userId: "user-1",
 };
@@ -15,7 +15,7 @@ const context: ToolContext = {
 function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   return {
     id: "memory-1",
-    scope: "workspace",
+    scope: "project",
     content: "Memory",
     source: { type: "agent", id: "action-1", surface: "chat" },
     embedding: {},
@@ -29,7 +29,7 @@ function reminder(overrides: Partial<ReminderRow> = {}): ReminderRow {
   return {
     id: "reminder-1",
     userId: "user-1",
-    workspaceId: "workspace-1",
+    projectId: "project-1",
     sessionId: "session-1",
     content: "Reminder",
     sourceType: "agent",
@@ -59,7 +59,7 @@ describe("memory tools with reminders", () => {
 
     const result = await tool.execute({
       kind: "reminder",
-      scope: "workspace",
+      scope: "project",
       content: "Remember this",
       sourceType: "agent",
       sourceId: "action-1",

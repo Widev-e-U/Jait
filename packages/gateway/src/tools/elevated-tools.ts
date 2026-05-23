@@ -291,7 +291,7 @@ export function createElevatedRunTool(
       properties: {
         command: { type: "string", description: "Shell command to run with elevated privileges" },
         username: { type: "string", description: "Windows only: administrator account username. When omitted on Windows, the native UAC dialog is shown instead." },
-        cwd: { type: "string", description: "Working directory for the command. Defaults to the workspace root." },
+        cwd: { type: "string", description: "Working directory for the command. Defaults to the project root." },
         timeoutMs: { type: "number", description: "Execution timeout in milliseconds, default 30000" },
         reason: { type: "string", description: "Short human-readable reason shown in the password prompt context." },
       },
@@ -329,7 +329,7 @@ export function createElevatedRunTool(
 
       const result = await runElevatedCommand({
         command: shellCommand,
-        cwd: input.cwd ?? context.workspaceRoot,
+        cwd: input.cwd ?? context.projectRoot,
         timeoutMs: input.timeoutMs ?? 30_000,
         username: windowsUsername,
         password,
@@ -364,7 +364,7 @@ export function createElevatedRunTool(
           exitCode,
           signal: result.signal,
           timedOut: result.timedOut,
-          cwd: input.cwd ?? context.workspaceRoot,
+          cwd: input.cwd ?? context.projectRoot,
           elevated: !isElevatedAlready,
         },
       };

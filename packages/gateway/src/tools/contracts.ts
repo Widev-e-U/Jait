@@ -6,7 +6,7 @@ export interface ToolOutputStreamMetadata {
 export interface ToolContext {
   sessionId: string;
   actionId: string;
-  workspaceRoot: string;
+  projectRoot: string;
   requestedBy: string;
   userId?: string;
   apiKeys?: Record<string, string>;

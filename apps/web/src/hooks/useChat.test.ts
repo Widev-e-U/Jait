@@ -14,7 +14,7 @@ describe('formatChatHttpError', () => {
     expect(formatChatHttpError(413, {
       provider: 'codex',
       attachments: [{ name: 'screen.png', mimeType: 'image/png', data: 'abc' }],
-    })).toBe('Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a workspace file path instead.')
+    })).toBe('Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a project file path instead.')
   })
 
   it('detects oversized image data stored in display segments', () => {
@@ -79,7 +79,7 @@ describe('shouldResumeChatSession', () => {
 
 describe('getVisibleChangedFiles', () => {
   const changedFiles = [
-    { path: '/workspace/app.ts', name: 'app.ts', state: 'undecided' as const },
+    { path: '/project/app.ts', name: 'app.ts', state: 'undecided' as const },
   ]
 
   it('hides file review prompts while switching sessions', () => {

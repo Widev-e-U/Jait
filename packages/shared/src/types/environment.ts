@@ -2,7 +2,7 @@ import type { AssistantProfile } from "./assistant.js";
 import type { NetworkHost } from "./network.js";
 import type { NodeState } from "./node.js";
 
-export interface EnvironmentWorkspace {
+export interface EnvironmentProject {
   id: string;
   title: string | null;
   rootPath: string | null;
@@ -36,7 +36,7 @@ export interface EnvironmentSnapshot {
   serverTime: string;
   assistants: AssistantProfile[];
   nodes: NodeState[];
-  workspaces: EnvironmentWorkspace[];
+  projects: EnvironmentProject[];
   repositories: EnvironmentRepository[];
   networkHosts: NetworkHost[];
   connectors: EnvironmentConnector[];

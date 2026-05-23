@@ -867,7 +867,7 @@ function buildSwarmCreateManyArgs(objective: string): Record<string, unknown> {
     `Original user objective:\n${objective}`,
     "",
     "Return a concise result with findings, actions taken, changed files if any, verification evidence, and unresolved risks.",
-    "Stay within the active workspace and do not duplicate work assigned to other specialists.",
+    "Stay within the active project and do not duplicate work assigned to other specialists.",
   ].join("\n");
 
   const specsByPattern: Record<ReturnType<typeof inferSwarmPattern>, Array<{ title: string; role: string; task: string }>> = {

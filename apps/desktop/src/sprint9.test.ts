@@ -40,14 +40,14 @@ describe("sprint9 desktop app", () => {
       },
       terminalAdapter: {
         async spawn(command, cwd) {
-          expect(cwd).toBe("/workspace/Jait");
+          expect(cwd).toBe("/project/Jait");
           expect(command === "bash" || command === "pwsh").toBe(true);
           return { terminalId: "term-99", pid: 99 };
         },
       },
     });
 
-    const started = await app.startNativeTerminal("/workspace/Jait");
+    const started = await app.startNativeTerminal("/project/Jait");
 
     expect(started.terminalId).toBe("term-99");
     expect(app.activityFeed.list()[0]?.source).toBe("terminal");

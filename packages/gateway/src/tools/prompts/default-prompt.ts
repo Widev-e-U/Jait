@@ -40,7 +40,7 @@ ${TODO_INSTRUCTIONS}
 </taskTracking>
 
 <outputFormatting>
-Use proper Markdown formatting in your answers. When referring to a filename or symbol in the user's workspace, wrap it in backticks.
+Use proper Markdown formatting in your answers. When referring to a filename or symbol in the user's project, wrap it in backticks.
 
 Example:
   The class \`Person\` is in \`src/models/person.ts\`.

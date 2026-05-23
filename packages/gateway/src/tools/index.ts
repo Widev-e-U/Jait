@@ -29,7 +29,7 @@ export {
   createCronUpdateTool,
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
-export { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
+export { createProjectAssignRepositoryTool } from "./project-tools.js";
 export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -148,7 +148,7 @@ import {
   createCronUpdateTool,
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
-import { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
+import { createProjectAssignRepositoryTool } from "./project-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -199,7 +199,7 @@ import type { ArchitectureDiagramService } from "../services/architecture-diagra
 import type { SecretInputService } from "../services/secret-input.js";
 import type { UserQuestionService } from "../services/user-questions.js";
 import type { UserSecretService } from "../services/user-secrets.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
 import type { RepoProposalService } from "../services/repo-proposals.js";
@@ -234,7 +234,7 @@ export interface ToolRegistryDeps {
   providerRegistry?: ProviderRegistry;
   userService?: UserService;
   sessionState?: SessionStateService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   repoService?: RepositoryService;
   repoProposalService?: RepoProposalService;
   reminderService?: ReminderService;
@@ -327,10 +327,10 @@ export function createToolRegistry(
     );
   }
 
-  if (deps.workspaceService && deps.repoService) {
+  if (deps.projectService && deps.repoService) {
     tools.register(
-      createWorkspaceAssignRepositoryTool({
-        workspaceService: deps.workspaceService,
+      createProjectAssignRepositoryTool({
+        projectService: deps.projectService,
         repoService: deps.repoService,
         gitService: deps.gitService,
         ws: deps.ws,

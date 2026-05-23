@@ -306,7 +306,7 @@ if (!gotLock) {
         const resolved = path.resolve(arg);
         if (existsSync(resolved) && statSync(resolved).isDirectory()) {
           openedFolder = resolved;
-          // Tell the renderer to open this folder as a workspace
+          // Tell the renderer to open this folder as a project
           mainWindow?.webContents.send("desktop:open-folder", resolved);
           break;
         }
@@ -639,7 +639,7 @@ ipcMain.handle("desktop:pick-directory", async () => {
   const win = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
   const opts: Electron.OpenDialogOptions = {
     properties: ["openDirectory"],
-    title: "Open Workspace Directory",
+    title: "Open Project Directory",
   };
   const result = win
     ? await dialog.showOpenDialog(win, opts)
@@ -1201,7 +1201,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
 
         // Start thread
         const approvalPolicy = mode === "supervised" ? "on-failure" : "never";
-        const sandbox = mode === "supervised" ? "workspace-write" : "danger-full-access";
+        const sandbox = mode === "supervised" ? "project-write" : "danger-full-access";
         const threadResult = await rpcSend(sess, "thread/start", {
           model: model ?? null,
           cwd: workingDirectory,
@@ -1360,7 +1360,7 @@ ipcMain.handle("desktop:get-roots", async () => {
   return { roots };
 });
 
-// ── Generic filesystem operation handler (for remote workspace ops) ──────────
+// ── Generic filesystem operation handler (for remote project ops) ──────────
 ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
   const { resolve, dirname, join, relative } = await import("node:path");
 
@@ -1370,8 +1370,8 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
     return rest;
   };
 
-  const runWorkspaceSearch = async (
-    workspaceRoot: string,
+  const runProjectSearch = async (
+    projectRoot: string,
     query: string,
     mode: "files" | "content",
     maxResults: number,
@@ -1379,7 +1379,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
     const { exec } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const execAsync = promisify(exec);
-    const safeDir = workspaceRoot.replace(/"/g, '\\"');
+    const safeDir = projectRoot.replace(/"/g, '\\"');
     const safeQuery = query.replace(/"/g, '\\"');
     const isWin = process.platform === "win32";
 
@@ -1397,7 +1397,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           const match = line.match(/^(.+?):(\d+):(.*)$/);
           if (!match) return null;
           return {
-            file: relative(workspaceRoot, match[1]!).replace(/\\/g, "/"),
+            file: relative(projectRoot, match[1]!).replace(/\\/g, "/"),
             line: parseInt(match[2]!, 10),
             content: match[3]!.trim(),
           };
@@ -1413,7 +1413,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         : `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
       const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
       const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
-        const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
+        const relPath = relative(projectRoot, absPath.trim()).replace(/\\/g, "/");
         return { path: relPath, name: relPath.split("/").pop() || relPath };
       });
       return { query, mode, files };
@@ -1479,12 +1479,12 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         type: d.isDirectory() ? "dir" : "file",
       }));
     }
-    case "search-workspace": {
-      const workspaceRoot = resolve(params.path as string);
+    case "search-project": {
+      const projectRoot = resolve(params.path as string);
       const query = String(params.query ?? "");
       const mode = params.mode === "content" ? "content" : "files";
       const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 200);
-      return runWorkspaceSearch(workspaceRoot, query, mode, limit);
+      return runProjectSearch(projectRoot, query, mode, limit);
     }
     case "git": {
       // Run a git command in a given cwd — used by the gateway to proxy git ops
@@ -2189,20 +2189,20 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 });
 
 // ── Remote tool execution handler ─────────────────────────────────────
-// Executes Jait tool calls on behalf of the gateway when the workspace
+// Executes Jait tool calls on behalf of the gateway when the project
 // lives on this desktop node. Supports terminal.run (via child_process),
 // file.read/write/patch/list/stat, os.query, and search tools.
 ipcMain.handle("desktop:tool-op", async (
   _event,
   tool: string,
   args: Record<string, unknown>,
-  meta: { sessionId?: string; workspaceRoot?: string },
+  meta: { sessionId?: string; projectRoot?: string },
 ) => {
   const { resolve, dirname, basename } = await import("node:path");
   const { promisify } = await import("node:util");
   const { exec: execAsync } = await import("node:child_process");
   const execP = promisify(execAsync);
-  const cwd = meta.workspaceRoot ? resolve(meta.workspaceRoot) : process.cwd();
+  const cwd = meta.projectRoot ? resolve(meta.projectRoot) : process.cwd();
 
   switch (tool) {
     // ── Terminal execution ──────────────────────────────────────────

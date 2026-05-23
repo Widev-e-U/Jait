@@ -20,7 +20,7 @@ export interface LiveViewSession {
  * and the websocket URL the frontend can connect to.
  */
 export async function startLiveView(options?: {
-  workspaceRoot?: string;
+  projectRoot?: string;
   preferContainer?: boolean;
   displayNumber?: number;
   width?: number;
@@ -39,9 +39,9 @@ export async function startLiveView(options?: {
 }
 
 async function startContainerLiveView(options?: {
-  workspaceRoot?: string;
+  projectRoot?: string;
 }): Promise<LiveViewSession> {
-  const workspaceRoot = options?.workspaceRoot ?? process.cwd();
+  const projectRoot = options?.projectRoot ?? process.cwd();
   const [novncPort, vncPort, cdpPort] = await Promise.all([
     reserveLocalPort(),
     reserveLocalPort(),
@@ -49,7 +49,7 @@ async function startContainerLiveView(options?: {
   ]);
   const sandboxManager = new SandboxManager();
   const session = await sandboxManager.startBrowserSandbox({
-    workspaceRoot,
+    projectRoot,
     mountMode: "none",
     networkEnabled: true,
     hostGateway: true,

@@ -181,16 +181,16 @@ function truncateThreadResultText(value: string, limit = THREAD_RESULT_TEXT_LIMI
 
 function normalizeSchedulerDeliveryPrompt(message: string, thread: ThreadRow, context: ToolContext): string {
   const worktreePath = thread.workingDirectory?.trim();
-  const workspaceRoot = context.workspaceRoot?.trim();
+  const projectRoot = context.projectRoot?.trim();
   if (context.requestedBy !== "scheduler" || thread.kind !== "delivery" || !worktreePath) {
     return message;
   }
 
-  const rewrittenMessage = workspaceRoot && workspaceRoot !== worktreePath
-    ? message.split(workspaceRoot).join(worktreePath)
+  const rewrittenMessage = projectRoot && projectRoot !== worktreePath
+    ? message.split(projectRoot).join(worktreePath)
     : message;
-  const originalPathLine = workspaceRoot && workspaceRoot !== worktreePath
-    ? `Do not modify the scheduler source workspace directly: ${workspaceRoot}`
+  const originalPathLine = projectRoot && projectRoot !== worktreePath
+    ? `Do not modify the scheduler source project directly: ${projectRoot}`
     : "Do not modify any other checkout unless explicitly asked.";
 
   return [
@@ -198,7 +198,7 @@ function normalizeSchedulerDeliveryPrompt(message: string, thread: ThreadRow, co
     "Jait created this scheduled delivery thread in an isolated git worktree.",
     `Use this working directory for all file reads, edits, commands, tests, commits, and relative paths: ${worktreePath}`,
     originalPathLine,
-    "If any earlier instruction mentions a different workspace path, treat this managed worktree as the active workspace.",
+    "If any earlier instruction mentions a different project path, treat this managed worktree as the active project.",
     "</jaitManagedWorktree>",
     "",
     rewrittenMessage,
@@ -895,7 +895,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 model: spec.model ?? input.model ?? selectedDefaults.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
-                workingDirectory: spec.workingDirectory ?? input.workingDirectory ?? context.workspaceRoot,
+                workingDirectory: spec.workingDirectory ?? input.workingDirectory ?? context.projectRoot,
                 branch: spec.branch ?? input.branch,
               });
               broadcastThreadEvent(thread.id, "created", { thread });
@@ -1178,7 +1178,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               };
             }
 
-            const cwd = input.cwd || thread?.workingDirectory || context.workspaceRoot;
+            const cwd = input.cwd || thread?.workingDirectory || context.projectRoot;
             if (!cwd) return { ok: false, message: "create_pr requires `cwd` or a thread with `workingDirectory`." };
 
             const action = input.gitAction ?? "commit_push_pr";

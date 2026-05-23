@@ -9,7 +9,7 @@ export interface DetachedTerminalPayload {
   token: string | null
   label: string
   theme: 'light' | 'dark'
-  workspaceRoot: string | null
+  projectRoot: string | null
 }
 
 const STORAGE_PREFIX = 'jait:detached-terminal:'
@@ -81,7 +81,7 @@ export function DetachedTerminalView({ detachedId }: { detachedId: string }) {
         terminalId={payload.terminalId}
         className="flex-1"
         token={payload.token}
-        workspaceRoot={payload.workspaceRoot}
+        projectRoot={payload.projectRoot}
       />
     </div>
   )

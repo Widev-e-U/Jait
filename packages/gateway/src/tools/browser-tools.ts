@@ -16,7 +16,7 @@ type BrowserSessionRecord = {
   secretSafe?: boolean;
   previewUrl?: string;
   targetUrl?: string;
-  workspaceRoot?: string;
+  projectRoot?: string;
   name?: string;
   origin?: string;
   mode?: string;
@@ -174,7 +174,7 @@ async function ensureBrowserSurface(
   }
   const started = await registry.startSurface("browser", id, {
     sessionId: context.sessionId,
-    workspaceRoot: context.workspaceRoot,
+    projectRoot: context.projectRoot,
   });
   if (started.type !== "browser") {
     throw new Error(`Surface '${id}' is not a browser surface`);
@@ -1200,13 +1200,13 @@ export function createBrowserSandboxStartTool(sandboxManager = new SandboxManage
       properties: {
         novncPort: { type: "number", description: "Host noVNC port (default 6080)" },
         vncPort: { type: "number", description: "Host VNC port (default 5900)" },
-        mountMode: { type: "string", description: "Workspace mount mode: none, read-only, read-write" },
+        mountMode: { type: "string", description: "Project mount mode: none, read-only, read-write" },
       },
       required: [],
     },
     async execute(input, context): Promise<ToolResult> {
       const result = await sandboxManager.startBrowserSandbox({
-        workspaceRoot: context.workspaceRoot,
+        projectRoot: context.projectRoot,
         novncPort: input.novncPort,
         vncPort: input.vncPort,
         mountMode: input.mountMode ?? "read-only",

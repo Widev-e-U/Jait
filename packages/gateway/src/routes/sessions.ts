@@ -16,7 +16,7 @@ import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
 import { requireAuth } from "../security/http-auth.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
@@ -25,7 +25,7 @@ export function registerSessionRoutes(
   audit: AuditWriter,
   hooks?: HookBus,
   sessionState?: SessionStateService,
-  workspaceService?: WorkspaceService,
+  projectService?: ProjectService,
 ) {
   const parseSessionListLimit = (value: unknown) => {
     if (typeof value !== "string") return undefined;
@@ -39,31 +39,31 @@ export function registerSessionRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
-    let workspaceId =
-      typeof body["workspaceId"] === "string"
-        ? body["workspaceId"]
+    let projectId =
+      typeof body["projectId"] === "string"
+        ? body["projectId"]
         : undefined;
-    if (workspaceId) {
-      const workspace = workspaceService?.getById(workspaceId, authUser.id);
-      if (!workspace) {
-        return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+    if (projectId) {
+      const project = projectService?.getById(projectId, authUser.id);
+      if (!project) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
       }
-    } else if (workspaceService && typeof body["workspacePath"] === "string" && body["workspacePath"].trim().length > 0) {
-      const workspace = workspaceService.getOrCreateForRoot({
+    } else if (projectService && typeof body["projectPath"] === "string" && body["projectPath"].trim().length > 0) {
+      const project = projectService.getOrCreateForRoot({
         userId: authUser.id,
-        title: typeof body["workspaceTitle"] === "string" ? body["workspaceTitle"] : undefined,
-        rootPath: body["workspacePath"],
+        title: typeof body["projectTitle"] === "string" ? body["projectTitle"] : undefined,
+        rootPath: body["projectPath"],
         nodeId: typeof body["nodeId"] === "string" ? body["nodeId"] : "gateway",
       });
-      workspaceId = workspace.id;
+      projectId = project.id;
     }
     const session = sessionService.create({
       userId: authUser.id,
-      workspaceId,
+      projectId,
       name: typeof body["name"] === "string" ? body["name"] : undefined,
-      workspacePath:
-        typeof body["workspacePath"] === "string"
-          ? body["workspacePath"]
+      projectPath:
+        typeof body["projectPath"] === "string"
+          ? body["projectPath"]
           : undefined,
     });
 
@@ -77,10 +77,10 @@ export function registerSessionRoutes(
 
     hooks?.emit("session.start", {
       sessionId: session.id,
-      workspaceRoot: session.workspacePath ?? process.cwd(),
+      projectRoot: session.projectPath ?? process.cwd(),
     });
-    if (session.workspaceId) {
-      workspaceService?.touch(session.workspaceId);
+    if (session.projectId) {
+      projectService?.touch(session.projectId);
     }
 
     return reply.status(201).send(session);
@@ -205,7 +205,7 @@ export function registerSessionRoutes(
 
   // ─── Session State (per-session key-value store) ───────────────────
   if (sessionState) {
-    // GET /api/sessions/:id/state?keys=workspace.panel,terminal.visible
+    // GET /api/sessions/:id/state?keys=project.panel,terminal.visible
     app.get("/api/sessions/:id/state", async (request, reply) => {
       const authUser = await requireAuth(request, reply, config.jwtSecret);
       if (!authUser) return;
@@ -220,7 +220,7 @@ export function registerSessionRoutes(
       return sessionState.get(id, keys);
     });
 
-    // PATCH /api/sessions/:id/state  — body: { "workspace.panel": {...}, "key2": null }
+    // PATCH /api/sessions/:id/state  — body: { "project.panel": {...}, "key2": null }
     app.patch("/api/sessions/:id/state", async (request, reply) => {
       const authUser = await requireAuth(request, reply, config.jwtSecret);
       if (!authUser) return;

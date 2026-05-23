@@ -272,7 +272,7 @@ describe("chat external provider runtime mode selection", () => {
     const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
     expect(typeof firstTurnMessage).toBe("string");
     expect(firstTurnMessage).toContain("Jait session instructions:");
-    expect(firstTurnMessage).toContain("You are operating inside Jait, a tool-centric coding workspace and gateway.");
+    expect(firstTurnMessage).toContain("You are operating inside Jait, a tool-centric coding project and gateway.");
     expect(firstTurnMessage).toContain("Use `jait.terminal` for direct terminal execution in Jait");
     expect(firstTurnMessage).toContain("The live preview is a controllable browser session.");
     expect(firstTurnMessage).toContain("Use the edit tool to modify files precisely.");

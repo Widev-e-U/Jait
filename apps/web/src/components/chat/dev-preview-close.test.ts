@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
  * off/on should NOT restore the preview panel.
  *
  * The bug was that the header close button took two code paths depending on
- * `workspacePreviewState.open`:
+ * `projectPreviewState.open`:
  *   - true  → only called closePreviewTarget() (tab removal), skipping saved state cleanup
  *   - false → called closeDevPreviewPanel() (tab removal + persisted state cleanup)
  *
@@ -15,78 +15,78 @@ import { describe, expect, it, vi } from 'vitest'
  * The fix unifies both paths to always call closeDevPreviewPanel().
  */
 describe('close preview clears persisted state', () => {
-  it('preview routing keeps the active workspace root unchanged', () => {
+  it('preview routing keeps the active project root unchanged', () => {
     const setViewMode = vi.fn()
     const setDevPreviewTarget = vi.fn()
-    const setWorkspacePreviewState = vi.fn()
-    const setShowWorkspace = vi.fn()
-    const showWorkspaceEditorPanel = vi.fn()
-    const setWorkspacePreviewRequest = vi.fn()
-    const showWorkspaceRef = { current: false }
-    const activeWorkspace = { surfaceId: 'fs-root', workspaceRoot: '/home/jakob/jait', nodeId: 'gateway' }
+    const setProjectPreviewState = vi.fn()
+    const setShowProject = vi.fn()
+    const showProjectEditorPanel = vi.fn()
+    const setProjectPreviewRequest = vi.fn()
+    const showProjectRef = { current: false }
+    const activeProject = { surfaceId: 'fs-root', projectRoot: '/home/jakob/jait', nodeId: 'gateway' }
 
-    const routePreviewToWorkspace = (target?: string | null, workspaceRoot?: string | null) => {
+    const routePreviewToProject = (target?: string | null, projectRoot?: string | null) => {
       const trimmed = target?.trim() || null
       const nextPreviewState = {
         open: true,
         target: trimmed,
-        workspaceRoot: workspaceRoot?.trim() || activeWorkspace.workspaceRoot || null,
+        projectRoot: projectRoot?.trim() || activeProject.projectRoot || null,
         displayState: trimmed ? 'connected' as const : 'blank' as const,
         displayTarget: trimmed,
       }
       setViewMode('developer')
       setDevPreviewTarget(trimmed)
-      setWorkspacePreviewState(nextPreviewState)
-      if (!showWorkspaceRef.current) {
-        showWorkspaceRef.current = true
-        setShowWorkspace(true)
+      setProjectPreviewState(nextPreviewState)
+      if (!showProjectRef.current) {
+        showProjectRef.current = true
+        setShowProject(true)
       }
-      showWorkspaceEditorPanel()
-      setWorkspacePreviewRequest({ target: trimmed, key: 123 })
+      showProjectEditorPanel()
+      setProjectPreviewRequest({ target: trimmed, key: 123 })
       return true
     }
 
-    routePreviewToWorkspace('http://127.0.0.1:4173/', '/home/jakob/jait/apps/web')
+    routePreviewToProject('http://127.0.0.1:4173/', '/home/jakob/jait/apps/web')
 
-    expect(setWorkspacePreviewState).toHaveBeenCalledWith({
+    expect(setProjectPreviewState).toHaveBeenCalledWith({
       open: true,
       target: 'http://127.0.0.1:4173/',
-      workspaceRoot: '/home/jakob/jait/apps/web',
+      projectRoot: '/home/jakob/jait/apps/web',
       displayState: 'connected',
       displayTarget: 'http://127.0.0.1:4173/',
     })
-    expect(activeWorkspace.workspaceRoot).toBe('/home/jakob/jait')
+    expect(activeProject.projectRoot).toBe('/home/jakob/jait')
   })
 
-  it('closeDevPreviewPanel clears workspace preview tab AND all local + saved state', () => {
+  it('closeDevPreviewPanel clears project preview tab AND all local + saved state', () => {
     const closePreviewTarget = vi.fn()
-    const closeWorkspacePreview = vi.fn(() => closePreviewTarget())
+    const closeProjectPreview = vi.fn(() => closePreviewTarget())
     const setDevPreviewTarget = vi.fn()
-    const setWorkspacePreviewRequest = vi.fn()
-    const setWorkspacePreviewState = vi.fn()
+    const setProjectPreviewRequest = vi.fn()
+    const setProjectPreviewState = vi.fn()
     const setSavedDevPreview = vi.fn()
 
     // This mirrors the fixed closeDevPreviewPanel from App.tsx
     const closeDevPreviewPanel = () => {
-      closeWorkspacePreview()
+      closeProjectPreview()
       setDevPreviewTarget(null)
-      setWorkspacePreviewRequest(null)
-      setWorkspacePreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
+      setProjectPreviewRequest(null)
+      setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
       setSavedDevPreview(null)
     }
 
     closeDevPreviewPanel()
 
-    expect(closeWorkspacePreview).toHaveBeenCalledOnce()
+    expect(closeProjectPreview).toHaveBeenCalledOnce()
     expect(setDevPreviewTarget).toHaveBeenCalledWith(null)
-    expect(setWorkspacePreviewRequest).toHaveBeenCalledWith(null)
-    expect(setWorkspacePreviewState).toHaveBeenCalledWith({
+    expect(setProjectPreviewRequest).toHaveBeenCalledWith(null)
+    expect(setProjectPreviewState).toHaveBeenCalledWith({
       open: false, target: null, displayState: 'hidden', displayTarget: null,
     })
     expect(setSavedDevPreview).toHaveBeenCalledWith(null)
   })
 
-  it('header close button always calls closeDevPreviewPanel regardless of workspacePreviewState', () => {
+  it('header close button always calls closeDevPreviewPanel regardless of projectPreviewState', () => {
     const closeDevPreviewPanel = vi.fn()
 
     // Simulate the fixed header button click handler
@@ -96,29 +96,29 @@ describe('close preview clears persisted state', () => {
       }
     }
 
-    // Case 1: workspacePreviewState.open = true (the previously broken path)
+    // Case 1: projectPreviewState.open = true (the previously broken path)
     handlePreviewButtonClick(true)
     expect(closeDevPreviewPanel).toHaveBeenCalledOnce()
 
     closeDevPreviewPanel.mockClear()
 
-    // Case 2: workspacePreviewState.open = false
+    // Case 2: projectPreviewState.open = false
     handlePreviewButtonClick(true)
     expect(closeDevPreviewPanel).toHaveBeenCalledOnce()
   })
 
   it('hydration should not restore preview when saved state is null', () => {
-    const routePreviewToWorkspace = vi.fn()
+    const routePreviewToProject = vi.fn()
     const setDevPreviewTarget = vi.fn()
 
     // Simulate the hydration effect from App.tsx (lines ~2282-2292)
-    function hydratePreview(savedPreview: { open: boolean; target: string | null; workspaceRoot?: string | null } | null, panelOpen: boolean) {
+    function hydratePreview(savedPreview: { open: boolean; target: string | null; projectRoot?: string | null } | null, panelOpen: boolean) {
       const dp = savedPreview
       if (dp) {
         const nextTarget = dp.target?.trim() || null
         if (nextTarget) setDevPreviewTarget(nextTarget)
         if (dp.open && panelOpen && nextTarget) {
-          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+          routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
     }
@@ -126,89 +126,89 @@ describe('close preview clears persisted state', () => {
     // After closeDevPreviewPanel, savedDevPreview is null
     hydratePreview(null, true)
 
-    expect(routePreviewToWorkspace).not.toHaveBeenCalled()
+    expect(routePreviewToProject).not.toHaveBeenCalled()
     expect(setDevPreviewTarget).not.toHaveBeenCalled()
   })
 
   it('hydration restores preview only when saved state has open=true', () => {
-    const routePreviewToWorkspace = vi.fn()
+    const routePreviewToProject = vi.fn()
     const setDevPreviewTarget = vi.fn()
 
-    function hydratePreview(savedPreview: { open: boolean; target: string | null; workspaceRoot?: string | null } | null, panelOpen: boolean) {
+    function hydratePreview(savedPreview: { open: boolean; target: string | null; projectRoot?: string | null } | null, panelOpen: boolean) {
       const dp = savedPreview
       if (dp) {
         const nextTarget = dp.target?.trim() || null
         if (nextTarget) setDevPreviewTarget(nextTarget)
         if (dp.open && panelOpen && nextTarget) {
-          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+          routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
     }
 
     // Preview was NOT cleared — should restore
-    hydratePreview({ open: true, target: 'http://localhost:3000', workspaceRoot: '/project' }, true)
+    hydratePreview({ open: true, target: 'http://localhost:3000', projectRoot: '/project' }, true)
 
     expect(setDevPreviewTarget).toHaveBeenCalledWith('http://localhost:3000')
-    expect(routePreviewToWorkspace).toHaveBeenCalledWith('http://localhost:3000', '/project')
+    expect(routePreviewToProject).toHaveBeenCalledWith('http://localhost:3000', '/project')
   })
 
   it('close preview → close editor → reopen editor: preview stays closed', () => {
     // Simulate the full user scenario
     let devPreviewTarget: string | null = 'http://localhost:3000'
-    let workspacePreviewState = { open: true, target: 'http://localhost:3000', displayState: 'connected' as const, displayTarget: 'http://localhost:3000' }
-    let workspacePreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
+    let projectPreviewState = { open: true, target: 'http://localhost:3000', displayState: 'connected' as const, displayTarget: 'http://localhost:3000' }
+    let projectPreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
     let savedDevPreview: { open: boolean; target: string | null } | null = { open: true, target: 'http://localhost:3000' }
-    let showWorkspace = true
+    let showProject = true
 
-    const closeWorkspacePreview = vi.fn()
+    const closeProjectPreview = vi.fn()
 
     // Step 1: User clicks "Close preview" in the header
     const closeDevPreviewPanel = () => {
-      closeWorkspacePreview()
+      closeProjectPreview()
       devPreviewTarget = null
-      workspacePreviewRequest = null
-      workspacePreviewState = { open: false, target: null, displayState: 'hidden', displayTarget: null }
+      projectPreviewRequest = null
+      projectPreviewState = { open: false, target: null, displayState: 'hidden', displayTarget: null }
       savedDevPreview = null
     }
     closeDevPreviewPanel()
 
-    const previewOpenAfterClose = savedDevPreview?.open === true || workspacePreviewState.open
+    const previewOpenAfterClose = savedDevPreview?.open === true || projectPreviewState.open
     expect(previewOpenAfterClose).toBe(false)
-    expect(workspacePreviewRequest).toBeNull()
+    expect(projectPreviewRequest).toBeNull()
 
-    // Step 2: User closes editor mode (WorkspacePanel unmounts)
-    showWorkspace = false
+    // Step 2: User closes editor mode (ProjectPanel unmounts)
+    showProject = false
 
-    // Step 3: User reopens editor mode (WorkspacePanel remounts with fresh refs)
-    showWorkspace = true
+    // Step 3: User reopens editor mode (ProjectPanel remounts with fresh refs)
+    showProject = true
 
-    // Simulate WorkspacePanel remount: previewRequest effect checks the request
-    // With our fix, workspacePreviewRequest is null, so no preview tab is created
+    // Simulate ProjectPanel remount: previewRequest effect checks the request
+    // With our fix, projectPreviewRequest is null, so no preview tab is created
     let handledPreviewRequestKey: number | null = null // fresh ref on remount
-    if (workspacePreviewRequest && handledPreviewRequestKey !== workspacePreviewRequest.key) {
-      // This block should NOT execute because workspacePreviewRequest is null
-      handledPreviewRequestKey = workspacePreviewRequest.key
+    if (projectPreviewRequest && handledPreviewRequestKey !== projectPreviewRequest.key) {
+      // This block should NOT execute because projectPreviewRequest is null
+      handledPreviewRequestKey = projectPreviewRequest.key
       // would call handleOpenPreviewTarget here
     }
 
     // previewOpen should still be false — no ghost restoration
-    const previewOpenAfterReopen = savedDevPreview?.open === true || workspacePreviewState.open
+    const previewOpenAfterReopen = savedDevPreview?.open === true || projectPreviewState.open
     expect(previewOpenAfterReopen).toBe(false)
     expect(devPreviewTarget).toBeNull()
-    expect(workspacePreviewRequest).toBeNull()
-    expect(showWorkspace).toBe(true)
+    expect(projectPreviewRequest).toBeNull()
+    expect(showProject).toBe(true)
   })
 
   it('without fix: stale previewRequest would replay on remount', () => {
-    // Demonstrate the bug scenario: if workspacePreviewRequest is NOT cleared,
-    // the WorkspacePanel remount replays the preview request
-    const workspacePreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
+    // Demonstrate the bug scenario: if projectPreviewRequest is NOT cleared,
+    // the ProjectPanel remount replays the preview request
+    const projectPreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
     let handledPreviewRequestKey: number | null = null // fresh ref on remount
     let previewOpened = false
 
-    // Simulate the effect at WorkspacePanel line 3526
-    if (workspacePreviewRequest && handledPreviewRequestKey !== workspacePreviewRequest.key) {
-      handledPreviewRequestKey = workspacePreviewRequest.key
+    // Simulate the effect at ProjectPanel line 3526
+    if (projectPreviewRequest && handledPreviewRequestKey !== projectPreviewRequest.key) {
+      handledPreviewRequestKey = projectPreviewRequest.key
       previewOpened = true // handleOpenPreviewTarget would run
     }
 
@@ -240,7 +240,7 @@ describe('close architecture clears request state', () => {
   it('explicit close architecture → close editor → reopen editor: architecture stays closed', () => {
     let showArchitecture = true
     let architectureRequest: { key: number } | null = { key: 12345 }
-    let showWorkspace = true
+    let showProject = true
     const closeArchitectureTab = vi.fn()
 
     // Step 1: Explicitly close architecture via header button
@@ -248,11 +248,11 @@ describe('close architecture clears request state', () => {
     architectureRequest = null
     showArchitecture = false
 
-    // Step 2: Close editor (closeWorkspacePanel does NOT clear architecture)
-    showWorkspace = false
+    // Step 2: Close editor (closeProjectPanel does NOT clear architecture)
+    showProject = false
 
-    // Step 3: Reopen editor — WorkspacePanel remounts with fresh refs
-    showWorkspace = true
+    // Step 3: Reopen editor — ProjectPanel remounts with fresh refs
+    showProject = true
     let handledArchitectureRequestKey: number | null = null
     let architectureOpened = false
 
@@ -264,20 +264,20 @@ describe('close architecture clears request state', () => {
     expect(architectureOpened).toBe(false)
     expect(showArchitecture).toBe(false)
     expect(architectureRequest).toBeNull()
-    expect(showWorkspace).toBe(true)
+    expect(showProject).toBe(true)
   })
 
   it('architecture open → close editor → reopen editor: architecture persists', () => {
     let showArchitecture = true
     const architectureRequest: { key: number } | null = { key: 12345 }
-    let showWorkspace = true
+    let showProject = true
 
-    // Step 1: Close editor — closeWorkspacePanel does NOT clear architectureRequest
-    showWorkspace = false
+    // Step 1: Close editor — closeProjectPanel does NOT clear architectureRequest
+    showProject = false
     // showArchitecture and architectureRequest survive
 
-    // Step 2: Reopen editor — WorkspacePanel remounts
-    showWorkspace = true
+    // Step 2: Reopen editor — ProjectPanel remounts
+    showProject = true
     let handledArchitectureRequestKey: number | null = null
     let architectureOpened = false
 
@@ -293,21 +293,21 @@ describe('close architecture clears request state', () => {
   })
 
   it('preview open → close editor → reopen editor: preview persists', () => {
-    // Preview request and state survive closeWorkspacePanel
-    const workspacePreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
+    // Preview request and state survive closeProjectPanel
+    const projectPreviewRequest: { target: string | null; key: number } | null = { target: 'http://localhost:3000', key: 1 }
     const savedDevPreview: { open: boolean; target: string | null } | null = { open: true, target: 'http://localhost:3000' }
-    let showWorkspace = true
+    let showProject = true
 
     // Close editor — preview state survives
-    showWorkspace = false
+    showProject = false
 
-    // Reopen editor — WorkspacePanel remounts with fresh ref
-    showWorkspace = true
+    // Reopen editor — ProjectPanel remounts with fresh ref
+    showProject = true
     let handledPreviewRequestKey: number | null = null
     let previewOpened = false
 
-    if (workspacePreviewRequest && handledPreviewRequestKey !== workspacePreviewRequest.key) {
-      handledPreviewRequestKey = workspacePreviewRequest.key
+    if (projectPreviewRequest && handledPreviewRequestKey !== projectPreviewRequest.key) {
+      handledPreviewRequestKey = projectPreviewRequest.key
       previewOpened = true
     }
 

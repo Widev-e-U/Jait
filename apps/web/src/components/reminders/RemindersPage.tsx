@@ -45,10 +45,10 @@ function formatDate(value: string | null | undefined): string {
 export function MemoryPage() {
   const [snapshot, setSnapshot] = useState<ReminderSnapshot | null>(null)
   const [statusFilter, setStatusFilter] = useState<ReminderStatusFilter>('active')
-  const [workspaceFilter, setWorkspaceFilter] = useState('all')
+  const [projectFilter, setProjectFilter] = useState('all')
   const [newContent, setNewContent] = useState('')
   const [newTags, setNewTags] = useState('')
-  const [newWorkspaceId, setNewWorkspaceId] = useState('none')
+  const [newProjectId, setNewProjectId] = useState('none')
   const [secrets, setSecrets] = useState<UserSecretRecord[]>([])
   const [secretLabel, setSecretLabel] = useState('')
   const [secretKey, setSecretKey] = useState('')
@@ -74,32 +74,32 @@ export function MemoryPage() {
     void loadSnapshot()
   }, [loadSnapshot])
 
-  const workspaces = snapshot?.workspaces ?? []
+  const projects = snapshot?.projects ?? []
   const reminders = useMemo(() => {
     const all = snapshot?.reminders ?? []
-    return workspaceFilter === 'all'
+    return projectFilter === 'all'
       ? all
-      : all.filter((reminder) => reminder.workspaceId === workspaceFilter)
-  }, [snapshot?.reminders, workspaceFilter])
+      : all.filter((reminder) => reminder.projectId === projectFilter)
+  }, [snapshot?.reminders, projectFilter])
   const threads = snapshot?.threads ?? []
 
-  const workspaceById = useMemo(() => new Map(workspaces.map((workspace) => [workspace.id, workspace])), [workspaces])
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
   const sessionsById = useMemo(() => {
-    const map = new Map<string, { name: string | null; workspaceId: string | null }>()
-    for (const workspace of workspaces) {
-      for (const session of workspace.sessions) {
-        map.set(session.id, { name: session.name, workspaceId: session.workspaceId })
+    const map = new Map<string, { name: string | null; projectId: string | null }>()
+    for (const project of projects) {
+      for (const session of project.sessions) {
+        map.set(session.id, { name: session.name, projectId: session.projectId })
       }
     }
     return map
-  }, [workspaces])
+  }, [projects])
 
   const counts = useMemo(() => ({
     reminders: snapshot?.reminders.length ?? 0,
-    workspaces: workspaces.length,
-    sessions: workspaces.reduce((total, workspace) => total + workspace.sessions.length, 0),
+    projects: projects.length,
+    sessions: projects.reduce((total, project) => total + project.sessions.length, 0),
     threads: threads.length,
-  }), [snapshot?.reminders.length, threads.length, workspaces])
+  }), [snapshot?.reminders.length, threads.length, projects])
 
   const handleAdd = async () => {
     const content = newContent.trim()
@@ -109,7 +109,7 @@ export function MemoryPage() {
     try {
       const created = await agentsApi.createReminder({
         content,
-        workspaceId: newWorkspaceId === 'none' ? null : newWorkspaceId,
+        projectId: newProjectId === 'none' ? null : newProjectId,
         tags: normalizeTags(newTags),
         sourceType: 'user',
         sourceSurface: 'web',
@@ -196,7 +196,7 @@ export function MemoryPage() {
             Memory
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Agent-readable memory with workspace chat history and completed thread context.
+            Agent-readable memory with project chat history and completed thread context.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -219,7 +219,7 @@ export function MemoryPage() {
 
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <Badge variant="outline" className="justify-center px-3 py-1">{counts.reminders} memories</Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1">{counts.workspaces} workspaces</Badge>
+        <Badge variant="secondary" className="justify-center px-3 py-1">{counts.projects} projects</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.sessions} chats</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{counts.threads} threads</Badge>
         <Badge variant="secondary" className="justify-center px-3 py-1">{secrets.length} secrets</Badge>
@@ -248,16 +248,16 @@ export function MemoryPage() {
             />
           </div>
           <div className="min-w-0 space-y-2">
-            <Label>Workspace</Label>
-            <Select value={newWorkspaceId} onValueChange={setNewWorkspaceId}>
+            <Label>Project</Label>
+            <Select value={newProjectId} onValueChange={setNewProjectId}>
               <SelectTrigger className="h-10">
-                <SelectValue placeholder="Workspace" />
+                <SelectValue placeholder="Project" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No workspace</SelectItem>
-                {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.title || workspace.rootPath || 'Untitled workspace'}
+                <SelectItem value="none">No project</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.title || project.rootPath || 'Untitled project'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -283,15 +283,15 @@ export function MemoryPage() {
         <div className="min-w-0 space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">Memory List</h2>
-            <Select value={workspaceFilter} onValueChange={setWorkspaceFilter}>
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
               <SelectTrigger className="h-10 w-full sm:w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All workspaces</SelectItem>
-                {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.title || workspace.rootPath || 'Untitled workspace'}
+                <SelectItem value="all">All projects</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.title || project.rootPath || 'Untitled project'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -312,7 +312,7 @@ export function MemoryPage() {
             </Card>
           ) : (
             reminders.map((reminder) => {
-              const workspace = reminder.workspaceId ? workspaceById.get(reminder.workspaceId) : null
+              const project = reminder.projectId ? projectById.get(reminder.projectId) : null
               const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
               const tags = parseTags(reminder.tags)
               return (
@@ -329,7 +329,7 @@ export function MemoryPage() {
                     <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center">
                       <span className="inline-flex items-center gap-1">
                         <Workflow className="h-3.5 w-3.5" />
-                        {workspace?.title || workspace?.rootPath || 'No workspace'}
+                        {project?.title || project?.rootPath || 'No project'}
                       </span>
                       {session && (
                         <span className="inline-flex items-center gap-1">
@@ -366,41 +366,41 @@ export function MemoryPage() {
         </div>
 
         <div className="min-w-0">
-          <Tabs defaultValue="workspaces" className="min-w-0">
+          <Tabs defaultValue="projects" className="min-w-0">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="workspaces">Workspaces</TabsTrigger>
+              <TabsTrigger value="projects">Projects</TabsTrigger>
               <TabsTrigger value="threads">Threads</TabsTrigger>
               <TabsTrigger value="secrets">Secrets</TabsTrigger>
             </TabsList>
-            <TabsContent value="workspaces" className="mt-3">
+            <TabsContent value="projects" className="mt-3">
               <ScrollArea className="max-h-[42rem] pr-1">
                 <div className="space-y-2">
-                  {workspaces.map((workspace) => (
-                    <Card key={workspace.id}>
+                  {projects.map((project) => (
+                    <Card key={project.id}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">{workspace.title || workspace.rootPath || 'Untitled workspace'}</div>
-                            <div className="truncate text-xs text-muted-foreground">{workspace.rootPath || workspace.nodeId || 'No path'}</div>
+                            <div className="truncate text-sm font-medium">{project.title || project.rootPath || 'Untitled project'}</div>
+                            <div className="truncate text-xs text-muted-foreground">{project.rootPath || project.nodeId || 'No path'}</div>
                           </div>
-                          <Badge variant="outline" className="shrink-0">{workspace.reminderCount}</Badge>
+                          <Badge variant="outline" className="shrink-0">{project.reminderCount}</Badge>
                         </div>
                         <Separator className="my-3" />
                         <div className="space-y-1.5">
-                          {workspace.sessions.slice(0, 6).map((session) => (
+                          {project.sessions.slice(0, 6).map((session) => (
                             <div key={session.id} className="flex items-center justify-between gap-2 text-xs">
                               <span className="min-w-0 truncate">{session.name || 'Chat'}</span>
                               <span className="shrink-0 text-muted-foreground">{formatDate(session.lastActiveAt)}</span>
                             </div>
                           ))}
-                          {workspace.sessions.length === 0 && <div className="text-xs text-muted-foreground">No chats yet</div>}
+                          {project.sessions.length === 0 && <div className="text-xs text-muted-foreground">No chats yet</div>}
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                  {workspaces.length === 0 && (
+                  {projects.length === 0 && (
                     <Card className="border-2 border-dashed shadow-none">
-                      <CardContent className="p-6 text-center text-sm text-muted-foreground">No workspaces yet</CardContent>
+                      <CardContent className="p-6 text-center text-sm text-muted-foreground">No projects yet</CardContent>
                     </Card>
                   )}
                 </div>

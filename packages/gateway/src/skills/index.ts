@@ -27,7 +27,7 @@ export interface Skill {
   /** Absolute path to the SKILL.md file. */
   filePath: string;
   /** Source directory. */
-  source: "bundled" | "user" | "workspace" | "plugin";
+  source: "bundled" | "user" | "project" | "plugin";
   /** Whether the skill is enabled. */
   enabled: boolean;
 }

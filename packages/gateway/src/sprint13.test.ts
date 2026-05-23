@@ -6,12 +6,12 @@ import { createTerminalRunTool } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { createBrowserSandboxStartTool } from "./tools/browser-tools.js";
 
-const testWorkspace = join(tmpdir(), "jait-test-sandbox");
+const testProject = join(tmpdir(), "jait-test-sandbox");
 
 const baseContext = {
   actionId: "a1",
   sessionId: "s1",
-  workspaceRoot: testWorkspace,
+  projectRoot: testProject,
   requestedBy: "test",
 };
 
@@ -50,7 +50,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
 
     const result = await manager.runCommand({
       command: "sleep 99",
-      workspaceRoot: testWorkspace,
+      projectRoot: testProject,
       timeoutMs: 1000,
       mountMode: "read-only",
       networkEnabled: false,
@@ -62,7 +62,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     expect(captured.join(" ")).toContain("--network none");
     expect(captured.join(" ")).toContain("--memory 128m");
     expect(captured.join(" ")).toContain("--cpus 0.5");
-    expect(captured.join(" ")).toContain(":/workspace:ro");
+    expect(captured.join(" ")).toContain(":/project:ro");
   });
 
   it("starts sandbox browser and returns noVNC URL", async () => {
@@ -95,7 +95,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     });
 
     const result = await manager.startBrowserSandbox({
-      workspaceRoot: testWorkspace,
+      projectRoot: testProject,
       mountMode: "none",
       networkEnabled: true,
       hostGateway: true,
@@ -146,7 +146,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     });
 
     const result = await manager.startBrowserSandbox({
-      workspaceRoot: testWorkspace,
+      projectRoot: testProject,
       novncPort: 6080,
       vncPort: 5900,
     });

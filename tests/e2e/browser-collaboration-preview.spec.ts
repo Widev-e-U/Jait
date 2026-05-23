@@ -19,7 +19,7 @@ test.describe('browser collaboration preview integration', () => {
 
   test('attached collaboration sessions open into the unified preview surface', async ({ page, request }, testInfo) => {
     test.setTimeout(90000)
-    test.skip(testInfo.project.name.startsWith('mobile'), 'desktop workspace assertions only')
+    test.skip(testInfo.project.name.startsWith('mobile'), 'desktop project assertions only')
 
     const { token, username, password } = await registerUser(request)
 

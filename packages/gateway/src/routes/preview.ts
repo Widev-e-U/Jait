@@ -58,7 +58,7 @@ export function registerPreviewRoutes(
     if (!authUser) return;
     const body = (request.body ?? {}) as {
       sessionId?: string;
-      workspaceRoot?: string | null;
+      projectRoot?: string | null;
       target?: string | null;
       command?: string | null;
       port?: number | null;
@@ -69,7 +69,7 @@ export function registerPreviewRoutes(
     }
     const session = await deps.previewService.start({
       sessionId: body.sessionId,
-      workspaceRoot: body.workspaceRoot ?? null,
+      projectRoot: body.projectRoot ?? null,
       target: body.target ?? null,
       command: body.command ?? null,
       port: typeof body.port === "number" ? body.port : null,

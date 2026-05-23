@@ -31,7 +31,7 @@ export type SandboxMountMode = "none" | "read-only" | "read-write";
 
 export interface SandboxRunOptions {
   command: string;
-  workspaceRoot: string;
+  projectRoot: string;
   timeoutMs: number;
   mountMode?: SandboxMountMode;
   networkEnabled?: boolean;
@@ -48,7 +48,7 @@ export interface SandboxRunResult {
 }
 
 export interface SandboxSessionOptions {
-  workspaceRoot: string;
+  projectRoot: string;
   mountMode?: SandboxMountMode;
   networkEnabled?: boolean;
   memoryLimitMb?: number;
@@ -57,8 +57,8 @@ export interface SandboxSessionOptions {
 
 export interface SandboxSessionResult {
   containerName: string;
-  workspaceRoot: string;
-  sandboxWorkspaceRoot: string;
+  projectRoot: string;
+  sandboxProjectRoot: string;
 }
 
 export interface SandboxExecOptions {
@@ -68,7 +68,7 @@ export interface SandboxExecOptions {
 }
 
 export interface SandboxBrowserOptions {
-  workspaceRoot: string;
+  projectRoot: string;
   novncPort?: number;
   vncPort?: number;
   cdpPort?: number;
@@ -103,12 +103,12 @@ export class SandboxManager {
   ) {}
 
   async runCommand(options: SandboxRunOptions): Promise<SandboxRunResult> {
-    const workspaceRoot = resolve(options.workspaceRoot);
+    const projectRoot = resolve(options.projectRoot);
     const mountMode = options.mountMode ?? "read-write";
     const containerName = `jait-sb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const timeoutMs = Math.max(1000, options.timeoutMs);
 
-    const mountArgs = this.buildMountArgs(workspaceRoot, mountMode);
+    const mountArgs = this.buildMountArgs(projectRoot, mountMode);
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
     const memoryArgs = options.memoryLimitMb ? ["--memory", `${options.memoryLimitMb}m`] : [];
     const cpuArgs = options.cpuLimit ? ["--cpus", options.cpuLimit] : [];
@@ -124,7 +124,7 @@ export class SandboxManager {
       ...cpuArgs,
       ...mountArgs,
       "-w",
-      "/workspace",
+      "/project",
       "jait/sandbox:latest",
       "bash",
       "-lc",
@@ -142,11 +142,11 @@ export class SandboxManager {
   }
 
   async startCommandSandbox(options: SandboxSessionOptions): Promise<SandboxSessionResult> {
-    const workspaceRoot = resolve(options.workspaceRoot);
+    const projectRoot = resolve(options.projectRoot);
     const mountMode = options.mountMode ?? "read-write";
     const containerName = `jait-agent-sb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const mountArgs = this.buildMountArgs(workspaceRoot, mountMode);
+    const mountArgs = this.buildMountArgs(projectRoot, mountMode);
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
     const memoryArgs = options.memoryLimitMb ? ["--memory", `${options.memoryLimitMb}m`] : [];
     const cpuArgs = options.cpuLimit ? ["--cpus", options.cpuLimit] : [];
@@ -163,7 +163,7 @@ export class SandboxManager {
       ...cpuArgs,
       ...mountArgs,
       "-w",
-      "/workspace",
+      "/project",
       "jait/sandbox:latest",
       "tail",
       "-f",
@@ -177,8 +177,8 @@ export class SandboxManager {
 
     return {
       containerName,
-      workspaceRoot,
-      sandboxWorkspaceRoot: "/workspace",
+      projectRoot,
+      sandboxProjectRoot: "/project",
     };
   }
 
@@ -189,7 +189,7 @@ export class SandboxManager {
       containerBinary(),
       "exec",
       "-w",
-      "/workspace",
+      "/project",
       containerName,
       "bash",
       "-lc",
@@ -208,11 +208,11 @@ export class SandboxManager {
 
   async startBrowserSandbox(options: SandboxBrowserOptions): Promise<SandboxBrowserResult> {
     await this.ensureBrowserSandboxImage();
-    const workspaceRoot = resolve(options.workspaceRoot);
+    const projectRoot = resolve(options.projectRoot);
     const novncPort = options.novncPort ?? await reserveLocalPort();
     const vncPort = options.vncPort ?? await reserveLocalPort();
     const cdpPort = options.cdpPort;
-    const mountArgs = this.buildMountArgs(workspaceRoot, options.mountMode ?? "read-only");
+    const mountArgs = this.buildMountArgs(projectRoot, options.mountMode ?? "read-only");
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
     const hostGatewayArgs = options.hostGateway
       ? ["--add-host", `host.docker.internal:${await resolveHostGatewayValue(this.runProcess)}`]
@@ -314,11 +314,11 @@ export class SandboxManager {
     return stopped;
   }
 
-  private buildMountArgs(workspaceRoot: string, mode: SandboxMountMode): string[] {
-    mkdirSync(workspaceRoot, { recursive: true });
+  private buildMountArgs(projectRoot: string, mode: SandboxMountMode): string[] {
+    mkdirSync(projectRoot, { recursive: true });
     if (mode === "none") return [];
     const readOnly = mode === "read-only" ? ":ro" : "";
-    return ["-v", `${workspaceRoot}:/workspace${readOnly}`];
+    return ["-v", `${projectRoot}:/project${readOnly}`];
   }
 
   private async ensureBrowserSandboxImage(): Promise<void> {

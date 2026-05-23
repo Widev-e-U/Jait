@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { loadConfig } from "../config.js";
 import { createServer } from "../server.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
-import { WorkspaceService } from "../services/workspaces.js";
+import { ProjectService } from "../services/projects.js";
 import { RepositoryService } from "../services/repositories.js";
 import { signAuthToken } from "../security/http-auth.js";
 
@@ -11,14 +11,14 @@ describe("Environment snapshot route", () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
-    const workspaceService = new WorkspaceService(db);
+    const projectService = new ProjectService(db);
     const repoService = new RepositoryService(db);
     const userId = "u1";
-    const w = workspaceService.create({ userId, title: "Repo A", rootPath: "/home/user/repo-a", nodeId: "gateway" });
+    const w = projectService.create({ userId, title: "Repo A", rootPath: "/home/user/repo-a", nodeId: "gateway" });
     const r = repoService.create({ userId, name: "Repo A", localPath: "/home/user/repo-a", defaultBranch: "main" });
 
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
-    const app = await createServer(config, { sqlite, workspaceService, repoService });
+    const app = await createServer(config, { sqlite, projectService, repoService });
 
     const token = await signAuthToken({ id: userId, username: "tester" }, config.jwtSecret);
     const res = await app.inject({ method: "GET", url: "/api/environment/snapshot", headers: { Authorization: `Bearer ${token}` } });
@@ -29,8 +29,8 @@ describe("Environment snapshot route", () => {
     expect(snapshot.serverTime).toBeTypeOf("string");
     expect(Array.isArray(snapshot.nodes)).toBe(true);
 
-    // Workspace/repo reflections
-    expect(snapshot.workspaces?.some((x: any) => x.id === w.id)).toBe(true);
+    // Project/repo reflections
+    expect(snapshot.projects?.some((x: any) => x.id === w.id)).toBe(true);
     expect(snapshot.repositories?.some((x: any) => x.id === r.id)).toBe(true);
 
     sqlite.close();

@@ -28,7 +28,7 @@ export function createCronAddTool(scheduler: SchedulerService): ToolDefinition {
         toolName: { type: "string" },
         input: { type: "object" },
         sessionId: { type: "string" },
-        workspaceRoot: { type: "string" },
+        projectRoot: { type: "string" },
       },
       required: ["name", "cron", "toolName"],
     },
@@ -41,7 +41,7 @@ export function createCronAddTool(scheduler: SchedulerService): ToolDefinition {
         toolName: normalizeToolName(body["toolName"]),
         input: (body["input"] as Record<string, unknown> | undefined) ?? {},
         sessionId: normalizeString(body["sessionId"], "default"),
-        workspaceRoot: normalizeString(body["workspaceRoot"], process.cwd()),
+        projectRoot: normalizeString(body["projectRoot"], process.cwd()),
       });
       return { ok: true, message: "Cron job created", data: job };
     },

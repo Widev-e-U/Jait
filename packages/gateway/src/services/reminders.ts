@@ -8,7 +8,7 @@ export type ReminderRow = typeof reminders.$inferSelect;
 
 export interface CreateReminderParams {
   userId?: string | null;
-  workspaceId?: string | null;
+  projectId?: string | null;
   sessionId?: string | null;
   content: string;
   sourceType?: string | null;
@@ -20,7 +20,7 @@ export interface CreateReminderParams {
 
 export interface UpdateReminderParams {
   content?: string;
-  workspaceId?: string | null;
+  projectId?: string | null;
   sessionId?: string | null;
   status?: ReminderStatus;
   tags?: string[];
@@ -29,7 +29,7 @@ export interface UpdateReminderParams {
 export interface ListReminderOptions {
   userId?: string;
   status?: ReminderStatus | "all";
-  workspaceId?: string;
+  projectId?: string;
   sessionId?: string;
   limit?: number;
 }
@@ -57,7 +57,7 @@ export class ReminderService {
     const conditions = [];
     if (options.userId) conditions.push(eq(reminders.userId, options.userId));
     if (options.status && options.status !== "all") conditions.push(eq(reminders.status, options.status));
-    if (options.workspaceId) conditions.push(eq(reminders.workspaceId, options.workspaceId));
+    if (options.projectId) conditions.push(eq(reminders.projectId, options.projectId));
     if (options.sessionId) conditions.push(eq(reminders.sessionId, options.sessionId));
 
     let query = this.db.select().from(reminders).$dynamic();
@@ -94,7 +94,7 @@ export class ReminderService {
     this.db.insert(reminders).values({
       id,
       userId: params.userId ?? null,
-      workspaceId: params.workspaceId ?? null,
+      projectId: params.projectId ?? null,
       sessionId: params.sessionId ?? null,
       content,
       sourceType: params.sourceType?.trim() || "agent",
@@ -117,7 +117,7 @@ export class ReminderService {
       if (!content) throw new Error("Reminder content must not be empty");
       set.content = content;
     }
-    if (params.workspaceId !== undefined) set.workspaceId = params.workspaceId;
+    if (params.projectId !== undefined) set.projectId = params.projectId;
     if (params.sessionId !== undefined) set.sessionId = params.sessionId;
     if (params.status !== undefined) set.status = params.status;
     if (params.tags !== undefined) set.tags = normalizeTags(params.tags);
@@ -140,19 +140,19 @@ export class ReminderService {
     return true;
   }
 
-  countByWorkspace(userId: string): Map<string, number> {
+  countByProject(userId: string): Map<string, number> {
     const rows = this.db
       .select({
-        workspaceId: reminders.workspaceId,
+        projectId: reminders.projectId,
         count: sql<number>`count(*)`,
       })
       .from(reminders)
       .where(and(eq(reminders.userId, userId), eq(reminders.status, "active")))
-      .groupBy(reminders.workspaceId)
+      .groupBy(reminders.projectId)
       .all();
     const counts = new Map<string, number>();
     for (const row of rows) {
-      if (row.workspaceId) counts.set(row.workspaceId, Number(row.count));
+      if (row.projectId) counts.set(row.projectId, Number(row.count));
     }
     return counts;
   }

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectFramework, detectPreviewCommand } from "./preview-runner.js";
 
-function createWorkspace(files: Record<string, string>): string {
+function createProject(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "preview-runner-"));
   for (const [relativePath, content] of Object.entries(files)) {
     writeFileSync(join(root, relativePath), content, "utf8");
@@ -14,7 +14,7 @@ function createWorkspace(files: Record<string, string>): string {
 
 describe("preview-runner command detection", () => {
   it("builds npm exec commands with the required separator for vite", () => {
-    const workspaceRoot = createWorkspace({
+    const projectRoot = createProject({
       "package.json": JSON.stringify({
         name: "fixture",
         private: true,
@@ -24,17 +24,17 @@ describe("preview-runner command detection", () => {
     });
 
     try {
-      expect(detectFramework(workspaceRoot)?.name).toBe("vite");
-      expect(detectPreviewCommand(workspaceRoot, null, 3002)).toBe(
+      expect(detectFramework(projectRoot)?.name).toBe("vite");
+      expect(detectPreviewCommand(projectRoot, null, 3002)).toBe(
         "npm exec -- vite --host 127.0.0.1 --port 3002",
       );
     } finally {
-      rmSync(workspaceRoot, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
     }
   });
 
   it("builds npm exec commands with the required separator for next", () => {
-    const workspaceRoot = createWorkspace({
+    const projectRoot = createProject({
       "package.json": JSON.stringify({
         name: "fixture",
         private: true,
@@ -44,12 +44,12 @@ describe("preview-runner command detection", () => {
     });
 
     try {
-      expect(detectFramework(workspaceRoot)?.name).toBe("next");
-      expect(detectPreviewCommand(workspaceRoot, null, 4010)).toBe(
+      expect(detectFramework(projectRoot)?.name).toBe("next");
+      expect(detectPreviewCommand(projectRoot, null, 4010)).toBe(
         "npm exec -- next dev --hostname 127.0.0.1 --port 4010",
       );
     } finally {
-      rmSync(workspaceRoot, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
     }
   });
 });

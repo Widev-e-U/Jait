@@ -37,7 +37,7 @@ export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinitio
 interface SurfaceStartInput {
   type: string;
   sessionId?: string;
-  workspaceRoot?: string;
+  projectRoot?: string;
 }
 
 export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefinition<SurfaceStartInput> {
@@ -52,7 +52,7 @@ export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefiniti
       properties: {
         type: { type: "string", description: "Surface type to start", enum: ["terminal", "filesystem", "browser"] },
         sessionId: { type: "string", description: "Session to attach the surface to" },
-        workspaceRoot: { type: "string", description: "Working directory for the surface" },
+        projectRoot: { type: "string", description: "Working directory for the surface" },
       },
       required: ["type"],
     },
@@ -62,7 +62,7 @@ export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefiniti
         const surfaceId = `${input.type}-${uuidv7()}`;
         const surface = await registry.startSurface(input.type, surfaceId, {
           sessionId: input.sessionId ?? context.sessionId,
-          workspaceRoot: input.workspaceRoot ?? context.workspaceRoot,
+          projectRoot: input.projectRoot ?? context.projectRoot,
         });
 
         return {

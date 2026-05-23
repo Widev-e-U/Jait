@@ -6,11 +6,11 @@ import { requireAuth } from "../security/http-auth.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { AssistantProfileService } from "../services/assistant-profiles.js";
 import type { RepositoryService } from "../services/repositories.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 import type { WsControlPlane } from "../ws.js";
 import type { AssistantProfileRecord } from "../services/assistant-profiles.js";
 
-interface EnvironmentWorkspace {
+interface EnvironmentProject {
   id: string;
   title: string | null;
   rootPath: string | null;
@@ -44,7 +44,7 @@ interface EnvironmentSnapshot {
   serverTime: string;
   assistants: AssistantProfileRecord[];
   nodes: ReturnType<WsControlPlane["getNodeRegistry"]>["nodes"];
-  workspaces: EnvironmentWorkspace[];
+  projects: EnvironmentProject[];
   repositories: EnvironmentRepository[];
   networkHosts: NetworkHost[];
   connectors: EnvironmentConnector[];
@@ -52,7 +52,7 @@ interface EnvironmentSnapshot {
 
 interface EnvironmentRouteDeps {
   assistantProfileService?: AssistantProfileService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   repoService?: RepositoryService;
   providerRegistry?: ProviderRegistry;
   ws?: WsControlPlane;
@@ -100,16 +100,16 @@ export function registerEnvironmentRoutes(
 
     const assistants = deps.assistantProfileService?.list(user.id) ?? [];
     const nodes = deps.ws?.getNodeRegistry().nodes ?? [];
-    const workspaces = deps.workspaceService?.list("active", user.id) ?? [];
-    const sessionCounts = deps.workspaceService?.getActiveSessionCounts(user.id) ?? new Map<string, number>();
-    const environmentWorkspaces: EnvironmentWorkspace[] = workspaces.map((workspace) => ({
-      id: workspace.id,
-      title: workspace.title,
-      rootPath: workspace.rootPath,
-      nodeId: workspace.nodeId,
-      status: workspace.status,
-      sessionCount: sessionCounts.get(workspace.id) ?? 0,
-      lastActiveAt: workspace.lastActiveAt,
+    const projects = deps.projectService?.list("active", user.id) ?? [];
+    const sessionCounts = deps.projectService?.getActiveSessionCounts(user.id) ?? new Map<string, number>();
+    const environmentProjects: EnvironmentProject[] = projects.map((project) => ({
+      id: project.id,
+      title: project.title,
+      rootPath: project.rootPath,
+      nodeId: project.nodeId,
+      status: project.status,
+      sessionCount: sessionCounts.get(project.id) ?? 0,
+      lastActiveAt: project.lastActiveAt,
     }));
 
     const connectedNodes = new Map((deps.ws?.getFsNodes() ?? []).map((node) => [node.id, node.name]));
@@ -146,7 +146,7 @@ export function registerEnvironmentRoutes(
       serverTime: new Date().toISOString(),
       assistants,
       nodes,
-      workspaces: environmentWorkspaces,
+      projects: environmentProjects,
       repositories,
       networkHosts: loadNetworkHosts(deps.sqlite),
       connectors: [...providerConnectors, ...nodeConnectors],

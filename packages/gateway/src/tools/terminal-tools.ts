@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 // ── Constants ────────────────────────────────────────────────────
 
 const MAX_TERMINALS = 10;
-const SANDBOX_WORKSPACE_PATH = "/workspace";
+const SANDBOX_PROJECT_PATH = "/project";
 const INTERACTIVE_PROMPT_PATTERNS = [
   /\[sudo\]\s+password\s+for\s+[^:]+:/i,
   /password:\s*$/im,
@@ -115,15 +115,15 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function rewriteWorkspacePathForSandboxCommand(command: string, workspaceRoot: string): string {
-  const root = workspaceRoot.trim();
+export function rewriteProjectPathForSandboxCommand(command: string, projectRoot: string): string {
+  const root = projectRoot.trim();
   if (!root) return command;
   const escapedRoot = escapeRegExp(root);
   const rootPattern = new RegExp(
     `(?<![A-Za-z0-9._~\\\\/-])${escapedRoot}(?=$|[\\\\/\\s"'\\\`:;,|&()\\[\\]{}<>])`,
     "g",
   );
-  return command.replace(rootPattern, SANDBOX_WORKSPACE_PATH);
+  return command.replace(rootPattern, SANDBOX_PROJECT_PATH);
 }
 
 export function detectInteractivePrompt(output: string): boolean {
@@ -226,7 +226,7 @@ async function ensureSessionTerminal(
   const terminalId = `term-${uuidv7()}`;
   const surface = (await registry.startSurface("terminal", terminalId, {
     sessionId: context.sessionId,
-    workspaceRoot: context.workspaceRoot,
+    projectRoot: context.projectRoot,
   })) as TerminalSurface;
 
   sessionTerminalMap.set(context.sessionId, terminalId);
@@ -500,7 +500,7 @@ interface TerminalRunInput {
 
 interface TerminalStreamInput {
   sessionId: string;
-  workspaceRoot?: string;
+  projectRoot?: string;
   cols?: number;
   rows?: number;
 }
@@ -536,7 +536,7 @@ export function createTerminalRunTool(
       const { command, timeout = 30000, terminalId: preferredId, isBackground } = input;
 
       if (input.sandbox) {
-        const sandboxCommand = rewriteWorkspacePathForSandboxCommand(command, context.workspaceRoot);
+        const sandboxCommand = rewriteProjectPathForSandboxCommand(command, context.projectRoot);
         const result = context.sandboxContainerName
           ? await sandboxManager.execInContainer({
               containerName: context.sandboxContainerName,
@@ -545,7 +545,7 @@ export function createTerminalRunTool(
             })
           : await sandboxManager.runCommand({
               command: sandboxCommand,
-              workspaceRoot: context.workspaceRoot,
+              projectRoot: context.projectRoot,
               timeoutMs: timeout,
               mountMode: input.sandboxMountMode ?? "read-write",
               networkEnabled: false,
@@ -704,7 +704,7 @@ export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinit
       type: "object",
       properties: {
         sessionId: { type: "string", description: "Session to attach the terminal to" },
-        workspaceRoot: { type: "string", description: "Working directory for the terminal" },
+        projectRoot: { type: "string", description: "Working directory for the terminal" },
         cols: { type: "number", description: "Terminal width in columns" },
         rows: { type: "number", description: "Terminal height in rows" },
       },
@@ -712,11 +712,11 @@ export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinit
     },
     async execute(input: TerminalStreamInput, context: ToolContext): Promise<ToolResult> {
       const termId = `term-${uuidv7()}`;
-      const workspaceRoot = input.workspaceRoot ?? context.workspaceRoot;
+      const projectRoot = input.projectRoot ?? context.projectRoot;
 
       const surface = await registry.startSurface("terminal", termId, {
         sessionId: input.sessionId || context.sessionId,
-        workspaceRoot,
+        projectRoot,
       });
 
       return {

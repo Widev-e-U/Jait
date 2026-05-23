@@ -2,16 +2,16 @@
  * Shared helper — resolve the FileSystemSurface for the current session.
  *
  * Priority:
- * 1. If `targetPath` is absolute and outside the current workspace boundary,
+ * 1. If `targetPath` is absolute and outside the current project boundary,
  *    find or create a surface scoped to contain that path.
  * 2. Look for an existing surface with the conventional ID `fs-{sessionId}`
  *    that is running (the auto-created surface for the session).
  * 3. Look for *any* running filesystem surface belonging to the session
- *    (e.g. one started via `surfaces.start` with a custom workspace root).
- * 4. If nothing exists, auto-start one with `context.workspaceRoot`.
+ *    (e.g. one started via `surfaces.start` with a custom project root).
+ * 4. If nothing exists, auto-start one with `context.projectRoot`.
  *
  * This ensures that when the user asks to read/edit files anywhere on their
- * local filesystem, the agent can access them without "escapes workspace
+ * local filesystem, the agent can access them without "escapes project
  * boundary" errors — while still maintaining PathGuard isolation per surface.
  */
 
@@ -22,12 +22,12 @@ import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import { FileSystemSurface } from "../../surfaces/filesystem.js";
 
 /**
- * Given a `targetPath`, determine the correct workspace root.
+ * Given a `targetPath`, determine the correct project root.
  * If the path is a directory, use it directly.
  * If the path is a file, use its parent directory.
  * Falls back to the path itself if stat fails (e.g. doesn't exist yet).
  */
-async function deriveWorkspaceRoot(targetPath: string): Promise<string> {
+async function deriveProjectRoot(targetPath: string): Promise<string> {
   const abs = resolve(targetPath);
   try {
     const info = await stat(abs);
@@ -40,7 +40,7 @@ async function deriveWorkspaceRoot(targetPath: string): Promise<string> {
 
 /**
  * Check if `surface` can serve `targetPath` (i.e. the path is within
- * the surface's workspace boundary).
+ * the surface's project boundary).
  */
 function surfaceCovers(surface: FileSystemSurface, targetPath: string): boolean {
   return surface.isPathAllowed(targetPath);
@@ -48,14 +48,14 @@ function surfaceCovers(surface: FileSystemSurface, targetPath: string): boolean 
 
 /**
  * Among multiple surfaces that cover a path, prefer the most specific one
- * (deepest workspace root).
+ * (deepest project root).
  */
 function pickMostSpecific(surfaces: FileSystemSurface[], targetPath: string): FileSystemSurface | null {
   let best: FileSystemSurface | null = null;
   let bestLen = -1;
   for (const s of surfaces) {
     if (!surfaceCovers(s, targetPath)) continue;
-    const root = s.snapshot().metadata?.workspaceRoot as string | undefined;
+    const root = s.snapshot().metadata?.projectRoot as string | undefined;
     const len = root?.length ?? 0;
     if (len > bestLen) {
       best = s;
@@ -70,7 +70,7 @@ export async function getFs(
   context: ToolContext,
   targetPath?: string,
 ): Promise<FileSystemSurface> {
-  const absTarget = targetPath ? resolve(context.workspaceRoot, targetPath) : undefined;
+  const absTarget = targetPath ? resolve(context.projectRoot, targetPath) : undefined;
 
   // ── If target is absolute and we already have a surface that covers it, use it ──
   if (absTarget) {
@@ -91,7 +91,7 @@ export async function getFs(
 
     // No existing surface covers this path — create one scoped to the target
     if (isAbsolute(targetPath!)) {
-      const newRoot = await deriveWorkspaceRoot(absTarget);
+      const newRoot = await deriveProjectRoot(absTarget);
       const safeName = newRoot.replace(/[:\\\/]/g, "_").replace(/_+$/, "").toLowerCase();
       const surfaceId = `fs-${context.sessionId}-${safeName}`;
       const existing = registry.getSurface(surfaceId) as FileSystemSurface | undefined;
@@ -99,7 +99,7 @@ export async function getFs(
 
       const started = await registry.startSurface("filesystem", surfaceId, {
         sessionId: context.sessionId,
-        workspaceRoot: newRoot,
+        projectRoot: newRoot,
       });
       return started as FileSystemSurface;
     }
@@ -128,36 +128,36 @@ export async function getFs(
   // 3. Nothing found — auto-start one
   const started = await registry.startSurface("filesystem", fsId, {
     sessionId: context.sessionId,
-    workspaceRoot: context.workspaceRoot,
+    projectRoot: context.projectRoot,
   });
   return started as FileSystemSurface;
 }
 
 /**
- * Resolve the effective workspace root for a session.
+ * Resolve the effective project root for a session.
  *
- * Prefers the most specific (deepest) workspace root among all running
+ * Prefers the most specific (deepest) project root among all running
  * filesystem surfaces for this session — avoids returning a broad drive root
- * when a more specific workspace surface exists.
+ * when a more specific project surface exists.
  * Falls back to `process.cwd()`.
  */
-export function resolveWorkspaceRoot(
+export function resolveProjectRoot(
   registry: SurfaceRegistry,
   sessionId: string,
   /** Optional fallback from session record before falling back to process.cwd() */
-  sessionWorkspacePath?: string | null,
+  sessionProjectPath?: string | null,
 ): string {
   let best: string | null = null;
   let bestLen = -1;
   for (const s of registry.getBySession(sessionId)) {
     if (s instanceof FileSystemSurface && s.state === "running") {
       const root = (s.snapshot().metadata as Record<string, unknown>)
-        ?.workspaceRoot as string | undefined;
+        ?.projectRoot as string | undefined;
       if (root && root.length > bestLen) {
         best = root;
         bestLen = root.length;
       }
     }
   }
-  return best ?? sessionWorkspacePath?.trim() ?? process.cwd();
+  return best ?? sessionProjectPath?.trim() ?? process.cwd();
 }

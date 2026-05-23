@@ -1,14 +1,14 @@
 export interface SessionDescriptor {
   id: string;
   name: string;
-  workspaceId: string;
+  projectId: string;
   createdAt: string;
   lastActivityAt: string;
 }
 
 export interface SessionRouter {
-  create(name: string, workspaceId: string): Promise<SessionDescriptor>;
-  list(workspaceId?: string): Promise<SessionDescriptor[]>;
+  create(name: string, projectId: string): Promise<SessionDescriptor>;
+  list(projectId?: string): Promise<SessionDescriptor[]>;
   activate(sessionId: string): Promise<void>;
-  getActive(workspaceId: string): Promise<SessionDescriptor | null>;
+  getActive(projectId: string): Promise<SessionDescriptor | null>;
 }

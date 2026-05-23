@@ -23,7 +23,7 @@ export class RemoteFileSystemSurface implements Surface {
   private _state: SurfaceState = "idle";
   private _sessionId: string | null = null;
   private _startedAt: string | null = null;
-  private _workspaceRoot: string | null = null;
+  private _projectRoot: string | null = null;
   private _nodeId: string | null = null;
   private _opCount = 0;
 
@@ -56,7 +56,7 @@ export class RemoteFileSystemSurface implements Surface {
   async start(input: SurfaceStartInput & { nodeId?: string }): Promise<void> {
     this._sessionId = input.sessionId;
     this._startedAt = new Date().toISOString();
-    this._workspaceRoot = input.workspaceRoot;
+    this._projectRoot = input.projectRoot;
     this._nodeId = input.nodeId ?? null;
     this._setState("running");
   }
@@ -73,7 +73,7 @@ export class RemoteFileSystemSurface implements Surface {
       sessionId: this._sessionId ?? "",
       startedAt: this._startedAt ?? undefined,
       metadata: {
-        workspaceRoot: this._workspaceRoot,
+        projectRoot: this._projectRoot,
         nodeId: this._nodeId,
         operationCount: this._opCount,
         remote: true,
@@ -155,11 +155,11 @@ export class RemoteFileSystemSurface implements Surface {
     return this.ws.proxyFsOp(this._nodeId!, "stat", { path: filePath });
   }
 
-  /** Check if a path is within workspace boundary (basic check for remote paths) */
+  /** Check if a path is within project boundary (basic check for remote paths) */
   isPathAllowed(filePath: string): boolean {
-    if (!this._workspaceRoot) return false;
+    if (!this._projectRoot) return false;
     // Normalize separators for cross-platform comparison
-    const normRoot = this._workspaceRoot.replace(/\\/g, "/").toLowerCase();
+    const normRoot = this._projectRoot.replace(/\\/g, "/").toLowerCase();
     const normPath = filePath.replace(/\\/g, "/").toLowerCase();
     return normPath.startsWith(normRoot);
   }

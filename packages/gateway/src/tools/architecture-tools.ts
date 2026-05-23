@@ -16,7 +16,7 @@ export function createArchitectureTool(
   return {
     name: "architecture.generate",
     description:
-      "Generate and display a Mermaid architecture diagram of the current workspace. " +
+      "Generate and display a Mermaid architecture diagram of the current project. " +
       "Analyze the project structure, dependencies, modules, and data flow, then produce " +
       "a valid Mermaid diagram (flowchart, graph, C4, etc.). The diagram will be rendered " +
       "in the editor Architecture tab and saved to .jait/architecture.mmd. Output the Mermaid source as the `diagram` parameter.",
@@ -40,17 +40,17 @@ export function createArchitectureTool(
       if (!diagram) {
         return { ok: false, message: "No diagram content provided" };
       }
-      const workspaceRoot = context.workspaceRoot?.trim();
-      if (!workspaceRoot) {
-        return { ok: false, message: "A workspace is required to store architecture diagrams" };
+      const projectRoot = context.projectRoot?.trim();
+      if (!projectRoot) {
+        return { ok: false, message: "A project is required to store architecture diagrams" };
       }
 
       const requestId = nanoid();
       const filePath = typeof diagrams?.getFilePath === "function"
-        ? diagrams.getFilePath(workspaceRoot)
+        ? diagrams.getFilePath(projectRoot)
         : undefined;
       const saved = await diagrams?.save({
-        workspaceRoot,
+        projectRoot,
         diagram,
         userId: context.userId,
       });
@@ -60,7 +60,7 @@ export function createArchitectureTool(
         ws.sendUICommand(
           {
             command: "architecture.update",
-            data: { diagram, requestId, workspaceRoot, filePath: saved?.filePath ?? filePath },
+            data: { diagram, requestId, projectRoot, filePath: saved?.filePath ?? filePath },
           },
           context.sessionId,
         );
@@ -72,7 +72,7 @@ export function createArchitectureTool(
         data: {
           requestId,
           diagramLength: diagram.length,
-          workspaceRoot,
+          projectRoot,
           filePath: saved?.filePath ?? filePath ?? null,
           updatedAt: saved?.updatedAt ?? null,
         },

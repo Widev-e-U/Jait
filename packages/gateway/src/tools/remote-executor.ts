@@ -1,24 +1,24 @@
 /**
  * Remote Tool Executor — delegates tool execution to remote nodes.
  *
- * When a session's workspace is bound to a remote node (i.e. the
- * workspace path doesn't exist on the gateway), tool calls are proxied
+ * When a session's project is bound to a remote node (i.e. the
+ * project path doesn't exist on the gateway), tool calls are proxied
  * to the remote node via the `tool.op-request` / `tool.op-response`
  * WS protocol instead of executing locally on the gateway.
  *
  * This solves the fundamental problem where CLI providers (Codex, Claude)
  * and built-in tools (terminal.run, file.write, etc.) need to operate
- * on the same machine where the workspace lives.
+ * on the same machine where the project lives.
  *
  * Tools that are gateway-local by nature (e.g. surfaces.list, cron.*,
- * gateway.status) are always executed locally regardless of the workspace
+ * gateway.status) are always executed locally regardless of the project
  * binding.
  */
 
 import type { ToolResult, ToolContext } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
 
-/** Tools that always run on the gateway regardless of workspace location */
+/** Tools that always run on the gateway regardless of project location */
 const GATEWAY_LOCAL_TOOLS = new Set([
   "surfaces.list",
   "surfaces.start",
@@ -56,27 +56,27 @@ export interface RemoteToolExecutorOptions {
 /**
  * Resolve which node ID (if any) should execute tools for a given session.
  *
- * Returns `null` if the workspace is local to the gateway or no matching
+ * Returns `null` if the project is local to the gateway or no matching
  * remote node is connected.
  */
 export function resolveRemoteNodeForSession(
   ws: WsControlPlane,
-  workspacePath: string | undefined,
+  projectPath: string | undefined,
 ): string | null {
-  if (!workspacePath) return null;
+  if (!projectPath) return null;
 
-  // Check if the workspace path exists on the gateway
+  // Check if the project path exists on the gateway
   // We use a lightweight sync check — existsSync is fine here since this
   // is called once per chat request, not in a hot loop.
   try {
     const { existsSync } = require("node:fs");
-    if (existsSync(workspacePath)) return null;
+    if (existsSync(projectPath)) return null;
   } catch {
     return null;
   }
 
   // Path doesn't exist locally — find a matching remote node
-  const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(workspacePath);
+  const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(projectPath);
   const expectedPlatform = isWindowsPath ? "windows" : null;
 
   for (const node of ws.getFsNodes()) {
@@ -90,7 +90,7 @@ export function resolveRemoteNodeForSession(
 
 /**
  * Create a tool executor that transparently delegates to a remote node
- * when the session's workspace is on that node.
+ * when the session's project is on that node.
  *
  * If `remoteNodeId` is null, all calls go to the local executor.
  */
@@ -127,7 +127,7 @@ export function createRemoteToolExecutor(
         {
           timeoutMs: 120_000,
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           onOutputChunk: context.onOutputChunk,
         },
       );

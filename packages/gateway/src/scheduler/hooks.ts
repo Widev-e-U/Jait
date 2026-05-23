@@ -58,11 +58,11 @@ export class HookBus {
 
 interface SessionStartPayload {
   sessionId: string;
-  workspaceRoot?: string;
+  projectRoot?: string;
 }
 
 interface BuiltInHooksOptions {
-  defaultWorkspaceRoot?: string;
+  defaultProjectRoot?: string;
 }
 
 const BOOTSTRAP_PATHS = [
@@ -71,10 +71,10 @@ const BOOTSTRAP_PATHS = [
   "BOOTSTRAP.md",
 ] as const;
 
-function loadBootstrapFiles(workspaceRoot: string): Array<{ path: string; content: string }> {
+function loadBootstrapFiles(projectRoot: string): Array<{ path: string; content: string }> {
   const loaded: Array<{ path: string; content: string }> = [];
   for (const relativePath of BOOTSTRAP_PATHS) {
-    const absolutePath = join(workspaceRoot, relativePath);
+    const absolutePath = join(projectRoot, relativePath);
     if (!existsSync(absolutePath)) continue;
     loaded.push({ path: relativePath, content: readFileSync(absolutePath, "utf8") });
   }
@@ -84,11 +84,11 @@ function loadBootstrapFiles(workspaceRoot: string): Array<{ path: string; conten
 export function registerBuiltInHooks(hooks: HookBus, options: BuiltInHooksOptions = {}): void {
   hooks.on("session.start", (event) => {
     const payload = (event.payload ?? {}) as SessionStartPayload;
-    const workspaceRoot = payload.workspaceRoot ?? options.defaultWorkspaceRoot ?? process.cwd();
-    const files = loadBootstrapFiles(workspaceRoot);
+    const projectRoot = payload.projectRoot ?? options.defaultProjectRoot ?? process.cwd();
+    const files = loadBootstrapFiles(projectRoot);
     hooks.emit("session.bootstrap.loaded", {
       sessionId: payload.sessionId,
-      workspaceRoot,
+      projectRoot,
       fileCount: files.length,
       files,
     });

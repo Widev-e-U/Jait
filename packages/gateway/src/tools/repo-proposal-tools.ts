@@ -42,13 +42,13 @@ function readDueDate(record: Record<string, unknown>): string | null | undefined
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
-function matchRepositoryForWorkspace(
+function matchRepositoryForProject(
   repositories: RepoRow[],
-  workspaceRoot: string,
+  projectRoot: string,
 ): RepoRow | null {
-  const direct = repositories.find((repo) => workspaceRoot.startsWith(repo.localPath));
+  const direct = repositories.find((repo) => projectRoot.startsWith(repo.localPath));
   if (direct) return direct;
-  return repositories.find((repo) => workspaceRoot.includes(repo.name)) ?? null;
+  return repositories.find((repo) => projectRoot.includes(repo.name)) ?? null;
 }
 
 export function createJaitTodosTool(deps: {
@@ -75,7 +75,7 @@ export function createJaitTodosTool(deps: {
         },
         repoId: {
           type: "string",
-          description: "Explicit repository ID. Omit to infer it from the current workspaceRoot.",
+          description: "Explicit repository ID. Omit to infer it from the current projectRoot.",
         },
         todoId: {
           type: "string",
@@ -120,7 +120,7 @@ export function createJaitTodosTool(deps: {
       const repoId = readString(body, "repoId");
       const repo = repoId
         ? repositories.find((item) => item.id === repoId) ?? null
-        : matchRepositoryForWorkspace(repositories, context.workspaceRoot);
+        : matchRepositoryForProject(repositories, context.projectRoot);
       if (!repo) {
         return { ok: false, message: "Could not resolve a repository for this todo action." };
       }

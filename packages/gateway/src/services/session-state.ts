@@ -2,7 +2,7 @@
  * Session state service — per-session key-value store for UI and app state.
  *
  * Each entry is (session_id, key) → JSON value.
- * Keys are namespaced strings like "workspace.panel", "terminal.visible", etc.
+ * Keys are namespaced strings like "project.panel", "terminal.visible", etc.
  */
 import { and, eq, inArray } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";

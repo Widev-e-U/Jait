@@ -31,7 +31,7 @@ describe('resolvePreviewTarget', () => {
     })
   })
 
-  it('accepts local html files from the workspace', () => {
+  it('accepts local html files from the project', () => {
     expect(resolvePreviewTarget('docs/site/index.html')).toEqual({
       iframeSrc: 'http://localhost:8000/api/dev-file/ZG9jcy9zaXRlL2luZGV4Lmh0bWw',
       label: 'docs/site/index.html',

@@ -10,7 +10,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function createTempWorkspace(fileName: string, content: string): Promise<string> {
+async function createTempProject(fileName: string, content: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "jait-search-test-"));
   tempDirs.push(dir);
   await writeFile(join(dir, fileName), content, "utf8");
@@ -27,7 +27,7 @@ function createRegistryStub() {
 
 describe("search core tool retry behavior", () => {
   it("retries a literal search as regex when the initial pass finds no matches", async () => {
-    const workspaceRoot = await createTempWorkspace("sample.txt", "foo\n");
+    const projectRoot = await createTempProject("sample.txt", "foo\n");
     const tool = createSearchTool(createRegistryStub() as any);
 
     const result = await tool.execute(
@@ -35,7 +35,7 @@ describe("search core tool retry behavior", () => {
       {
         sessionId: "session-1",
         actionId: "action-1",
-        workspaceRoot,
+        projectRoot,
         requestedBy: "user",
       } as any,
     );
@@ -46,7 +46,7 @@ describe("search core tool retry behavior", () => {
       pattern: "fo+",
       matches: [
         {
-          file: join(workspaceRoot, "sample.txt"),
+          file: join(projectRoot, "sample.txt"),
           line: 1,
           content: "foo",
         },
@@ -55,7 +55,7 @@ describe("search core tool retry behavior", () => {
   });
 
   it("retries a regex search as literal when the pattern contains regex metacharacters", async () => {
-    const workspaceRoot = await createTempWorkspace("sample.txt", "literal[1]\n");
+    const projectRoot = await createTempProject("sample.txt", "literal[1]\n");
     const tool = createSearchTool(createRegistryStub() as any);
 
     const result = await tool.execute(
@@ -63,7 +63,7 @@ describe("search core tool retry behavior", () => {
       {
         sessionId: "session-2",
         actionId: "action-2",
-        workspaceRoot,
+        projectRoot,
         requestedBy: "user",
       } as any,
     );
@@ -74,7 +74,7 @@ describe("search core tool retry behavior", () => {
       pattern: "literal[1]",
       matches: [
         {
-          file: join(workspaceRoot, "sample.txt"),
+          file: join(projectRoot, "sample.txt"),
           line: 1,
           content: "literal[1]",
         },

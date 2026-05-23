@@ -31,8 +31,8 @@ export interface UserSettingsRecord {
   chatProvider: ChatProvider;
   jaitBackend: JaitBackend;
   recentModels: string[];
-  workspacePickerPath: string | null;
-  workspacePickerNodeId: string | null;
+  projectPickerPath: string | null;
+  projectPickerNodeId: string | null;
   updatedAt: string;
 }
 
@@ -130,8 +130,8 @@ export class UserService {
       theme: "system",
       apiKeys: JSON.stringify({}),
       sttProvider: "whisper",
-      workspacePickerPath: null,
-      workspacePickerNodeId: null,
+      projectPickerPath: null,
+      projectPickerNodeId: null,
       updatedAt: now,
     }).run();
     return this.findById(id)!;
@@ -163,8 +163,8 @@ export class UserService {
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: JSON.stringify([]),
-        workspacePickerPath: null,
-        workspacePickerNodeId: null,
+        projectPickerPath: null,
+        projectPickerNodeId: null,
         updatedAt: now,
       }).run();
       return {
@@ -176,8 +176,8 @@ export class UserService {
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: [],
-        workspacePickerPath: null,
-        workspacePickerNodeId: null,
+        projectPickerPath: null,
+        projectPickerNodeId: null,
         updatedAt: now,
       };
     }
@@ -190,8 +190,8 @@ export class UserService {
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
       jaitBackend: ((row as any).jaitBackend as JaitBackend) || "openai",
       recentModels: parseStringArray((row as any).recentModels ?? null),
-      workspacePickerPath: typeof (row as any).workspacePickerPath === "string" ? (row as any).workspacePickerPath : null,
-      workspacePickerNodeId: typeof (row as any).workspacePickerNodeId === "string" ? (row as any).workspacePickerNodeId : null,
+      projectPickerPath: typeof (row as any).projectPickerPath === "string" ? (row as any).projectPickerPath : null,
+      projectPickerNodeId: typeof (row as any).projectPickerNodeId === "string" ? (row as any).projectPickerNodeId : null,
       updatedAt: row.updatedAt,
     };
   }
@@ -206,8 +206,8 @@ export class UserService {
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
-      workspacePickerPath?: string | null;
-      workspacePickerNodeId?: string | null;
+      projectPickerPath?: string | null;
+      projectPickerNodeId?: string | null;
     },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
@@ -218,12 +218,12 @@ export class UserService {
     const chatProvider = patch.chatProvider ?? existing.chatProvider;
     const jaitBackend = patch.jaitBackend ?? existing.jaitBackend;
     const recentModels = patch.recentModels ?? existing.recentModels;
-    const workspacePickerPath = patch.workspacePickerPath !== undefined
-      ? patch.workspacePickerPath
-      : existing.workspacePickerPath;
-    const workspacePickerNodeId = patch.workspacePickerNodeId !== undefined
-      ? patch.workspacePickerNodeId
-      : existing.workspacePickerNodeId;
+    const projectPickerPath = patch.projectPickerPath !== undefined
+      ? patch.projectPickerPath
+      : existing.projectPickerPath;
+    const projectPickerNodeId = patch.projectPickerNodeId !== undefined
+      ? patch.projectPickerNodeId
+      : existing.projectPickerNodeId;
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -235,8 +235,8 @@ export class UserService {
         chatProvider,
         jaitBackend,
         recentModels: JSON.stringify(recentModels),
-        workspacePickerPath,
-        workspacePickerNodeId,
+        projectPickerPath,
+        projectPickerNodeId,
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))

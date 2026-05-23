@@ -750,7 +750,7 @@ export class GitService {
     };
   }
 
-  async bumpWorkspacePackageVersions(cwd: string): Promise<GitVersionBumpResult> {
+  async bumpProjectPackageVersions(cwd: string): Promise<GitVersionBumpResult> {
     const candidateFiles = [
       join(cwd, "package.json"),
       ...await listChildPackageJsonFiles(join(cwd, "packages")),
@@ -777,7 +777,7 @@ export class GitService {
     }
 
     if (!previousVersion || !nextVersion || updatedFiles.length === 0) {
-      throw new Error("No bumpable package.json version fields found in this workspace.");
+      throw new Error("No bumpable package.json version fields found in this project.");
     }
 
     return {
@@ -815,7 +815,7 @@ export class GitService {
       }
     }
 
-    const version = await this.bumpWorkspacePackageVersions(cwd);
+    const version = await this.bumpProjectPackageVersions(cwd);
     const commitMessage = `chore: bump version to v${version.nextVersion}`;
     const git = await this.runStackedAction(cwd, "commit_push", commitMessage, false, undefined, githubToken);
 

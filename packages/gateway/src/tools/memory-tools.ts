@@ -10,7 +10,7 @@ export function createMemorySaveTool(memory: MemoryService, reminders?: Reminder
   sourceSurface: string;
   ttlSeconds?: number;
   kind?: "memory" | "reminder";
-  workspaceId?: string | null;
+  projectId?: string | null;
   sessionId?: string | null;
   tags?: string[];
 }> {
@@ -23,14 +23,14 @@ export function createMemorySaveTool(memory: MemoryService, reminders?: Reminder
     parameters: {
       type: "object",
       properties: {
-        scope: { type: "string", enum: ["workspace", "project", "contact"] },
+        scope: { type: "string", enum: ["project", "contact"] },
         content: { type: "string" },
         sourceType: { type: "string" },
         sourceId: { type: "string" },
         sourceSurface: { type: "string" },
         ttlSeconds: { type: "number" },
         kind: { type: "string", enum: ["memory", "reminder"] },
-        workspaceId: { type: "string" },
+        projectId: { type: "string" },
         sessionId: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
       },
@@ -43,7 +43,7 @@ export function createMemorySaveTool(memory: MemoryService, reminders?: Reminder
         }
         const reminder = reminders.create({
           userId: context.userId,
-          workspaceId: input.workspaceId ?? null,
+          projectId: input.projectId ?? null,
           sessionId: input.sessionId ?? context.sessionId,
           content: input.content,
           sourceType: input.sourceType,
@@ -70,7 +70,7 @@ export function createMemorySaveTool(memory: MemoryService, reminders?: Reminder
   };
 }
 
-export function createMemorySearchTool(memory: MemoryService, reminders?: ReminderService): ToolDefinition<{ query: string; limit?: number; scope?: MemoryScope; includeReminders?: boolean; workspaceId?: string }> {
+export function createMemorySearchTool(memory: MemoryService, reminders?: ReminderService): ToolDefinition<{ query: string; limit?: number; scope?: MemoryScope; includeReminders?: boolean; projectId?: string }> {
   return {
     name: "memory.search",
     description: "Search saved memories and optionally include explicit agent reminders.",
@@ -82,9 +82,9 @@ export function createMemorySearchTool(memory: MemoryService, reminders?: Remind
       properties: {
         query: { type: "string" },
         limit: { type: "number" },
-        scope: { type: "string", enum: ["workspace", "project", "contact"] },
+        scope: { type: "string", enum: ["project", "contact"] },
         includeReminders: { type: "boolean" },
-        workspaceId: { type: "string" },
+        projectId: { type: "string" },
       },
       required: ["query"],
     },
@@ -94,7 +94,7 @@ export function createMemorySearchTool(memory: MemoryService, reminders?: Remind
         ? []
         : reminders?.list({
           userId: context.userId,
-          workspaceId: input.workspaceId,
+          projectId: input.projectId,
           status: "active",
           limit: input.limit ?? 5,
         }) ?? [];
@@ -142,7 +142,7 @@ export function createMemoryForgetTool(memory: MemoryService, reminders?: Remind
 
 export function createMemoryListTool(reminders?: ReminderService): ToolDefinition<{
   status?: ReminderStatus | "all";
-  workspaceId?: string;
+  projectId?: string;
   sessionId?: string;
   limit?: number;
 }> {
@@ -156,7 +156,7 @@ export function createMemoryListTool(reminders?: ReminderService): ToolDefinitio
       type: "object",
       properties: {
         status: { type: "string", enum: ["active", "archived", "all"] },
-        workspaceId: { type: "string" },
+        projectId: { type: "string" },
         sessionId: { type: "string" },
         limit: { type: "number" },
       },
@@ -168,7 +168,7 @@ export function createMemoryListTool(reminders?: ReminderService): ToolDefinitio
       const rows = reminders.list({
         userId: context.userId,
         status: input.status ?? "active",
-        workspaceId: input.workspaceId,
+        projectId: input.projectId,
         sessionId: input.sessionId,
         limit: input.limit ?? 50,
       });
@@ -181,13 +181,13 @@ export function createMemoryUpdateTool(reminders?: ReminderService): ToolDefinit
   id: string;
   content?: string;
   status?: ReminderStatus;
-  workspaceId?: string | null;
+  projectId?: string | null;
   sessionId?: string | null;
   tags?: string[];
 }> {
   return {
     name: "memory.update",
-    description: "Update a Memory page entry by ID, including content, tags, workspace/session links, or archive/restore status.",
+    description: "Update a Memory page entry by ID, including content, tags, project/session links, or archive/restore status.",
     tier: "standard",
     category: "memory",
     source: "builtin",
@@ -197,7 +197,7 @@ export function createMemoryUpdateTool(reminders?: ReminderService): ToolDefinit
         id: { type: "string" },
         content: { type: "string" },
         status: { type: "string", enum: ["active", "archived"] },
-        workspaceId: { type: "string" },
+        projectId: { type: "string" },
         sessionId: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
       },
@@ -210,7 +210,7 @@ export function createMemoryUpdateTool(reminders?: ReminderService): ToolDefinit
       const updated = reminders.update(input.id, {
         content: input.content,
         status: input.status,
-        workspaceId: input.workspaceId,
+        projectId: input.projectId,
         sessionId: input.sessionId,
         tags: input.tags,
       }, context.userId);

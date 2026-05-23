@@ -41,7 +41,7 @@ describe("createPreviewOpenTool", () => {
     const context: ToolContext = {
       sessionId: "session-123",
       actionId: "action-123",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     };
 
@@ -54,7 +54,7 @@ describe("createPreviewOpenTool", () => {
     expect(sendUICommand).toHaveBeenCalledWith(
       {
         command: "dev-preview.open",
-        data: { target: "3000", workspaceRoot: "/workspace/app" },
+        data: { target: "3000", projectRoot: "/project/app" },
       },
       "session-123",
     );
@@ -68,7 +68,7 @@ describe("createPreviewOpenTool", () => {
           value: {
             open: true,
             target: "3000",
-            workspaceRoot: "/workspace/app",
+            projectRoot: "/project/app",
             displayState: "connected",
             displayTarget: "3000",
           },
@@ -79,7 +79,7 @@ describe("createPreviewOpenTool", () => {
       "dev-preview.panel": {
         open: true,
         target: "3000",
-        workspaceRoot: "/workspace/app",
+        projectRoot: "/project/app",
         displayState: "connected",
         displayTarget: "3000",
       },
@@ -107,7 +107,7 @@ describe("createPreviewOpenTool", () => {
     const context: ToolContext = {
       sessionId: "mcp-session",
       actionId: "action-456",
-      workspaceRoot: "/workspace/mcp",
+      projectRoot: "/project/mcp",
       requestedBy: "mcp-client",
     };
 
@@ -120,7 +120,7 @@ describe("createPreviewOpenTool", () => {
     expect(sendUICommand).toHaveBeenCalledWith(
       {
         command: "dev-preview.open",
-        data: { target: "8765", workspaceRoot: "/workspace/mcp" },
+        data: { target: "8765", projectRoot: "/project/mcp" },
       },
       "mcp-session",
     );
@@ -135,7 +135,7 @@ describe("createPreviewOpenTool", () => {
       "dev-preview.panel": {
         open: true,
         target: "8765",
-        workspaceRoot: "/workspace/mcp",
+        projectRoot: "/project/mcp",
         displayState: "connected",
         displayTarget: "8765",
       },
@@ -164,12 +164,12 @@ describe("createPreviewOpenTool", () => {
     const context: ToolContext = {
       sessionId: "session-999",
       actionId: "action-999",
-      workspaceRoot: "/workspace/live",
+      projectRoot: "/project/live",
       requestedBy: "assistant",
       userId: "user-999",
     };
 
-    const result = await tool.execute({ workspaceRoot: "/workspace/live" }, context);
+    const result = await tool.execute({ projectRoot: "/project/live" }, context);
 
     expect(result.ok).toBe(true);
   });
@@ -200,7 +200,7 @@ describe("createPreviewOpenTool", () => {
     const result = await tool.execute({ target: "3000" }, {
       sessionId: "session-error",
       actionId: "action-error",
-      workspaceRoot: "/workspace/error",
+      projectRoot: "/project/error",
       requestedBy: "assistant",
       userId: "user-error",
     });
@@ -218,7 +218,7 @@ describe("createPreviewOpenTool", () => {
           value: {
             open: false,
             target: null,
-            workspaceRoot: "/workspace/error",
+            projectRoot: "/project/error",
             displayState: "hidden",
             displayTarget: null,
           },
@@ -229,7 +229,7 @@ describe("createPreviewOpenTool", () => {
       "dev-preview.panel": {
         open: false,
         target: null,
-        workspaceRoot: "/workspace/error",
+        projectRoot: "/project/error",
         displayState: "hidden",
         displayTarget: null,
       },
@@ -264,7 +264,7 @@ describe("createPreviewOpenTool", () => {
     const result = await tool.execute({ target: "3000" }, {
       sessionId: "session-error",
       actionId: "action-error",
-      workspaceRoot: "/workspace/error",
+      projectRoot: "/project/error",
       requestedBy: "assistant",
       userId: "user-error",
     });
@@ -283,7 +283,7 @@ describe("createPreviewOpenTool", () => {
           value: {
             open: false,
             target: null,
-            workspaceRoot: "/workspace/error",
+            projectRoot: "/project/error",
             displayState: "hidden",
             displayTarget: null,
           },
@@ -294,7 +294,7 @@ describe("createPreviewOpenTool", () => {
       "dev-preview.panel": {
         open: false,
         target: null,
-        workspaceRoot: "/workspace/error",
+        projectRoot: "/project/error",
         displayState: "hidden",
         displayTarget: null,
       },
@@ -325,7 +325,7 @@ describe("createPreviewInspectTool", () => {
     const result = await tool.execute({}, {
       sessionId: "session-1",
       actionId: "action-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     });
 
@@ -359,7 +359,7 @@ describe("createPreviewInspectTool", () => {
     const result = await tool.execute({ screenshot: true }, {
       sessionId: "session-1",
       actionId: "action-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     });
 
@@ -376,7 +376,7 @@ describe("createPreviewRestartTool", () => {
     const restartedSession = {
       id: "preview-session-1",
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "http://127.0.0.1:5173/",
       status: "ready",
       url: "/noVNC/vnc_lite.html?path=api/live-view/38345/websockify",
@@ -394,7 +394,7 @@ describe("createPreviewRestartTool", () => {
     const result = await tool.execute({}, {
       sessionId: "session-1",
       actionId: "action-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
       userId: "user-1",
     });

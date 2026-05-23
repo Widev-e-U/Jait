@@ -105,7 +105,7 @@ describe("BrowserSurface idle tracking", () => {
       driverFactory: async () => driver,
     });
 
-    await surface.start({ sessionId: "session-1", workspaceRoot: "/workspace" });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
     now.mockReturnValue(5 * 60 * 1000);
 
     expect(surface.idleMs).toBe(5 * 60 * 1000);

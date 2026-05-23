@@ -2,7 +2,7 @@
  * useSessionState — Syncs per-session key-value state with the backend.
  *
  * Usage:
- *   const [value, setValue] = useSessionState<MyType>(sessionId, 'workspace.panel')
+ *   const [value, setValue] = useSessionState<MyType>(sessionId, 'project.panel')
  *
  * - On mount / sessionId change: fetches value from GET /api/sessions/:id/state?keys=<key>
  * - setValue does an optimistic local update + debounced PATCH to server
@@ -78,7 +78,7 @@ export function useSessionState<T>(
     }
 
     // Reset to null immediately so stale values from the previous session
-    // don't briefly leak into UI (e.g. terminal panel flash on workspace switch).
+    // don't briefly leak into UI (e.g. terminal panel flash on project switch).
     setValueLocal(null)
     latestRef.current = null
     setLoadedRequestKey(null)

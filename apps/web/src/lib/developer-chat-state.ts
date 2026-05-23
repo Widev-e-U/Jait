@@ -9,7 +9,7 @@ export interface DeveloperChatSubmitLoadingInput {
   currentView: string
   requiresAuthGate: boolean
   authLoading: boolean
-  workspacesLoading: boolean
+  projectsLoading: boolean
   activeSessionId: string | null | undefined
   isLoadingHistory: boolean
   loadingChatMode: boolean
@@ -35,7 +35,7 @@ export function getDeveloperChatSubmitLoading(input: DeveloperChatSubmitLoadingI
     return false
   }
 
-  if (input.authLoading || input.workspacesLoading) return true
+  if (input.authLoading || input.projectsLoading) return true
   if (!input.activeSessionId) return false
 
   return (

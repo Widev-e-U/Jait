@@ -474,7 +474,7 @@ describe("ConsentAwareExecutor", () => {
     const result = await executor.execute("file.read", { path: "test.txt" }, {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -501,7 +501,7 @@ describe("ConsentAwareExecutor", () => {
     const promise = executor.execute("terminal.run", { command: "ls" }, {
       sessionId: "s1",
       actionId: "a2",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -534,7 +534,7 @@ describe("ConsentAwareExecutor", () => {
     const promise = executor.execute("terminal.run", { command: "ls" }, {
       sessionId: "s1",
       actionId: "a3",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -563,7 +563,7 @@ describe("ConsentAwareExecutor", () => {
     const result = await executor.execute("terminal.run", { command: "ls" }, {
       sessionId: "s1",
       actionId: "a4",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     }, { dryRun: true });
 
@@ -593,7 +593,7 @@ describe("ConsentAwareExecutor", () => {
     const result = await executor.execute("custom.unknown", { value: 1 }, {
       sessionId: "s1",
       actionId: "a4b",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     }, { dryRun: true });
 
@@ -633,7 +633,7 @@ describe("ConsentAwareExecutor", () => {
     const result = await executor.execute("terminal.run", { command: "rm -rf *" }, {
       sessionId: "s1",
       actionId: "a5",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -660,7 +660,7 @@ describe("ConsentAwareExecutor", () => {
       await executor.execute("file.read", { path: "test.txt" }, {
         sessionId: "s1",
         actionId: `a${i}`,
-        workspaceRoot: "/tmp",
+        projectRoot: "/tmp",
         requestedBy: "test",
       });
     }
@@ -687,7 +687,7 @@ describe("ConsentAwareExecutor", () => {
     const result = await executor.execute("terminal.run", { command: "echo hi" }, {
       sessionId: "s-approve-all",
       actionId: "a-approve-all",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 

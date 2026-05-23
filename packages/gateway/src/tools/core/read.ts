@@ -20,7 +20,7 @@ import { getFs } from "./get-fs.js";
 const MAX_LINES_PER_READ = 2000;
 
 interface ReadInput {
-  /** File or directory path (relative to workspace root, or absolute) */
+  /** File or directory path (relative to project root, or absolute) */
   path: string;
   /** Start line (1-based, optional — for reading a range of a file) */
   startLine?: number;

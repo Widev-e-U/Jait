@@ -189,7 +189,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
         const subContext: ToolContext = {
           sessionId: sid,
           actionId: uuidv7(),
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           requestedBy: `sub-agent:${subAgentId}`,
           userId: context.userId,
           apiKeys: context.apiKeys,

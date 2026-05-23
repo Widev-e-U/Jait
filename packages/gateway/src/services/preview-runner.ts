@@ -16,7 +16,7 @@ export interface PreviewRunnerResult {
 }
 
 export interface PreviewRunnerInput {
-  workspaceRoot: string;
+  projectRoot: string;
   command?: string | null;
   port?: number | null;
   target?: string | null;
@@ -33,14 +33,14 @@ export interface PreviewRunner {
 
 // ── Detection helpers ────────────────────────────────────────────────
 
-export function detectPackageManager(workspaceRoot: string): "bun" | "pnpm" | "npm" {
-  if (existsSync(join(workspaceRoot, "bun.lockb"))) return "bun";
-  if (existsSync(join(workspaceRoot, "pnpm-lock.yaml"))) return "pnpm";
+export function detectPackageManager(projectRoot: string): "bun" | "pnpm" | "npm" {
+  if (existsSync(join(projectRoot, "bun.lockb"))) return "bun";
+  if (existsSync(join(projectRoot, "pnpm-lock.yaml"))) return "pnpm";
   return "npm";
 }
 
-export function loadPackageJson(workspaceRoot: string): Record<string, any> | null {
-  const file = join(workspaceRoot, "package.json");
+export function loadPackageJson(projectRoot: string): Record<string, any> | null {
+  const file = join(projectRoot, "package.json");
   if (!existsSync(file)) return null;
   try {
     return JSON.parse(readFileSync(file, "utf8")) as Record<string, any>;
@@ -86,10 +86,10 @@ function buildExecCommand(
   return `${packageManager} exec ${executable}${suffix}`;
 }
 
-export function detectFramework(workspaceRoot: string, hint?: string | null): DetectedFramework | null {
+export function detectFramework(projectRoot: string, hint?: string | null): DetectedFramework | null {
   if (hint) {
     const lower = hint.toLowerCase();
-    const pm = detectPackageManager(workspaceRoot);
+    const pm = detectPackageManager(projectRoot);
     if (lower === "vite") return { name: "vite", devCommand: buildExecCommand(pm, "vite", []), likelyPort: 5173 };
     if (lower === "next" || lower === "nextjs") return { name: "next", devCommand: buildExecCommand(pm, "next", ["dev"]), likelyPort: 3000 };
     if (lower === "nuxt" || lower === "nuxtjs") return { name: "nuxt", devCommand: buildExecCommand(pm, "nuxt", ["dev"]), likelyPort: 3000 };
@@ -97,21 +97,21 @@ export function detectFramework(workspaceRoot: string, hint?: string | null): De
     if (lower === "astro") return { name: "astro", devCommand: buildExecCommand(pm, "astro", ["dev"]), likelyPort: 4321 };
   }
 
-  const pm = detectPackageManager(workspaceRoot);
-  const pkg = loadPackageJson(workspaceRoot);
+  const pm = detectPackageManager(projectRoot);
+  const pkg = loadPackageJson(projectRoot);
   const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) } as Record<string, string>;
 
   // Config-file detection (works even without deps in package.json)
-  if (existsSync(join(workspaceRoot, "vite.config.ts")) || existsSync(join(workspaceRoot, "vite.config.js"))) {
+  if (existsSync(join(projectRoot, "vite.config.ts")) || existsSync(join(projectRoot, "vite.config.js"))) {
     return { name: "vite", devCommand: buildExecCommand(pm, "vite", []), likelyPort: 5173 };
   }
-  if (existsSync(join(workspaceRoot, "next.config.ts")) || existsSync(join(workspaceRoot, "next.config.js")) || existsSync(join(workspaceRoot, "next.config.mjs"))) {
+  if (existsSync(join(projectRoot, "next.config.ts")) || existsSync(join(projectRoot, "next.config.js")) || existsSync(join(projectRoot, "next.config.mjs"))) {
     return { name: "next", devCommand: buildExecCommand(pm, "next", ["dev"]), likelyPort: 3000 };
   }
-  if (existsSync(join(workspaceRoot, "nuxt.config.ts")) || existsSync(join(workspaceRoot, "nuxt.config.js"))) {
+  if (existsSync(join(projectRoot, "nuxt.config.ts")) || existsSync(join(projectRoot, "nuxt.config.js"))) {
     return { name: "nuxt", devCommand: buildExecCommand(pm, "nuxt", ["dev"]), likelyPort: 3000 };
   }
-  if (existsSync(join(workspaceRoot, "astro.config.mjs")) || existsSync(join(workspaceRoot, "astro.config.ts"))) {
+  if (existsSync(join(projectRoot, "astro.config.mjs")) || existsSync(join(projectRoot, "astro.config.ts"))) {
     return { name: "astro", devCommand: buildExecCommand(pm, "astro", ["dev"]), likelyPort: 4321 };
   }
 
@@ -125,11 +125,11 @@ export function detectFramework(workspaceRoot: string, hint?: string | null): De
   return null;
 }
 
-export function detectPreviewCommand(workspaceRoot: string, requestedCommand: string | null, port: number, frameworkHint?: string | null): string {
+export function detectPreviewCommand(projectRoot: string, requestedCommand: string | null, port: number, frameworkHint?: string | null): string {
   if (requestedCommand?.trim()) return requestedCommand.trim();
 
-  const framework = detectFramework(workspaceRoot, frameworkHint);
-  const pm = detectPackageManager(workspaceRoot);
+  const framework = detectFramework(projectRoot, frameworkHint);
+  const pm = detectPackageManager(projectRoot);
 
   if (framework) {
     switch (framework.name) {
@@ -146,7 +146,7 @@ export function detectPreviewCommand(workspaceRoot: string, requestedCommand: st
     }
   }
 
-  const pkg = loadPackageJson(workspaceRoot);
+  const pkg = loadPackageJson(projectRoot);
   if (!pkg) {
     throw new Error("No package.json found and no preview command was provided.");
   }
@@ -213,13 +213,13 @@ export class LocalPreviewRunner implements PreviewRunner {
 
   async start(input: PreviewRunnerInput, onLog: PreviewLogCallback): Promise<PreviewRunnerResult> {
     const port = await allocatePort(input.port);
-    const command = detectPreviewCommand(input.workspaceRoot, input.command ?? null, port, input.frameworkHint);
+    const command = detectPreviewCommand(input.projectRoot, input.command ?? null, port, input.frameworkHint);
     const url = normalizeTargetUrl(input.target ?? "", port);
 
     onLog("system", `Running: ${command} (port ${port})`);
 
     const child = spawn(command, {
-      cwd: input.workspaceRoot,
+      cwd: input.projectRoot,
       env: {
         ...process.env,
         PORT: String(port),

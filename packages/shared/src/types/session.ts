@@ -1,9 +1,9 @@
 // @jait/shared — Session types
 export interface SessionInfo {
   id: string;
-  workspaceId: string | null;
+  projectId: string | null;
   name: string | null;
-  workspacePath: string | null;
+  projectPath: string | null;
   status: "active" | "archived" | "deleted";
   createdAt: string;
   lastActiveAt: string;
@@ -11,7 +11,7 @@ export interface SessionInfo {
 }
 
 export interface SessionCreateParams {
-  workspaceId?: string;
+  projectId?: string;
   name?: string;
-  workspacePath?: string;
+  projectPath?: string;
 }

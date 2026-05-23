@@ -19,7 +19,7 @@ function context(overrides: Partial<Parameters<ReturnType<typeof createSshRunToo
   return {
     sessionId: "ssh-test-session",
     actionId: "ssh-test-action",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: "agent",
     userId: "user-1",
     providerId: "codex",

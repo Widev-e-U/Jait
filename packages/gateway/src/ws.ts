@@ -1129,9 +1129,9 @@ export class WsControlPlane {
     nodeId: string,
     tool: string,
     args: Record<string, unknown>,
-    options: { timeoutMs?: number; sessionId?: string; workspaceRoot?: string; onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void } = {},
+    options: { timeoutMs?: number; sessionId?: string; projectRoot?: string; onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void } = {},
   ): Promise<T> {
-    const { timeoutMs = 120_000, sessionId, workspaceRoot, onOutputChunk } = options;
+    const { timeoutMs = 120_000, sessionId, projectRoot, onOutputChunk } = options;
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local execution for gateway node"));
@@ -1150,7 +1150,7 @@ export class WsControlPlane {
         type: "tool.op-request" as WsEvent["type"],
         sessionId: sessionId ?? "",
         timestamp: new Date().toISOString(),
-        payload: { requestId, tool, args, sessionId, workspaceRoot },
+        payload: { requestId, tool, args, sessionId, projectRoot },
       });
     });
   }

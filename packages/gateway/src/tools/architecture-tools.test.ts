@@ -10,7 +10,7 @@ describe("architecture.generate", () => {
     });
     const save = vi.fn().mockResolvedValue({
       updatedAt: "2026-03-21T00:00:00.000Z",
-      filePath: "/workspace/app/.jait/architecture.mmd",
+      filePath: "/project/app/.jait/architecture.mmd",
     });
 
     const tool = createArchitectureTool({
@@ -22,7 +22,7 @@ describe("architecture.generate", () => {
 
     const result = await tool.execute(
       { diagram: "flowchart LR\nA[@bad]" },
-      { sessionId: "session-1", workspaceRoot: "/workspace/app", userId: "user-1" } as any,
+      { sessionId: "session-1", projectRoot: "/project/app", userId: "user-1" } as any,
     );
 
     expect(sendUICommand).toHaveBeenCalledTimes(1);
@@ -35,10 +35,10 @@ describe("architecture.generate", () => {
   it("succeeds when the client confirms the render", async () => {
     const sendUICommand = vi.fn();
     const waitForArchitectureRenderResult = vi.fn().mockResolvedValue({ ok: true });
-    const getFilePath = vi.fn().mockReturnValue("/workspace/app/.jait/architecture.mmd");
+    const getFilePath = vi.fn().mockReturnValue("/project/app/.jait/architecture.mmd");
     const save = vi.fn().mockResolvedValue({
       updatedAt: "2026-03-21T00:00:00.000Z",
-      filePath: "/workspace/app/.jait/architecture.mmd",
+      filePath: "/project/app/.jait/architecture.mmd",
     });
 
     const tool = createArchitectureTool({
@@ -51,25 +51,25 @@ describe("architecture.generate", () => {
 
     const result = await tool.execute(
       { diagram: "flowchart LR\nA[ok]-->B[ok]" },
-      { sessionId: "session-1", workspaceRoot: "/workspace/app", userId: "user-1" } as any,
+      { sessionId: "session-1", projectRoot: "/project/app", userId: "user-1" } as any,
     );
 
     expect(result.ok).toBe(true);
-    expect(getFilePath).toHaveBeenCalledWith("/workspace/app");
+    expect(getFilePath).toHaveBeenCalledWith("/project/app");
     expect(sendUICommand).toHaveBeenCalledWith(
       {
         command: "architecture.update",
         data: {
           diagram: "flowchart LR\nA[ok]-->B[ok]",
           requestId: expect.any(String),
-          workspaceRoot: "/workspace/app",
-          filePath: "/workspace/app/.jait/architecture.mmd",
+          projectRoot: "/project/app",
+          filePath: "/project/app/.jait/architecture.mmd",
         },
       },
       "session-1",
     );
     expect(save).toHaveBeenCalledWith({
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       diagram: "flowchart LR\nA[ok]-->B[ok]",
       userId: "user-1",
     });

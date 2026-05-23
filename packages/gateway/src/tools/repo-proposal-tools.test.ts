@@ -10,7 +10,7 @@ const repo: RepoRow = {
   deviceId: "gateway",
   name: "Jait",
   defaultBranch: "main",
-  localPath: "/workspace/jait",
+  localPath: "/project/jait",
   githubUrl: null,
   strategy: null,
   createdAt: "2026-05-06T00:00:00.000Z",
@@ -20,7 +20,7 @@ const repo: RepoRow = {
 const context: ToolContext = {
   sessionId: "thread-1",
   actionId: "action-1",
-  workspaceRoot: "/workspace/jait",
+  projectRoot: "/project/jait",
   requestedBy: "user",
   userId: "user-1",
 };

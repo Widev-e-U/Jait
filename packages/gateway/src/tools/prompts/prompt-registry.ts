@@ -81,8 +81,8 @@ import { formatSkillsForPrompt } from "../../skills/index.js";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 export interface PromptContext {
-  /** The resolved workspace root for the current session (if any) */
-  workspaceRoot?: string;
+  /** The resolved project root for the current session (if any) */
+  projectRoot?: string;
   /** Enabled skills to inject into the system prompt */
   skills?: Skill[];
   /** Optional response style override for this session */
@@ -99,8 +99,8 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
   if (isLocalModel) {
     // Minimal prompt for local / slow models — skip identity, safety, and wrapper blocks
     prompt = resolver.resolveSystemPrompt(mode, endpoint);
-    if (ctx?.workspaceRoot) {
-      prompt += `\nWorkspace: ${ctx.workspaceRoot}`;
+    if (ctx?.projectRoot) {
+      prompt += `\nProject: ${ctx.projectRoot}`;
     }
   } else {
     const identity = resolver.resolveIdentityRules?.(endpoint) ?? DEFAULT_IDENTITY;
@@ -110,9 +110,9 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
     const extProviderBlock = JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS;
     prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${extProviderBlock}\n</jaitExternalProvider>\n\n${systemPrompt}`;
 
-    // Inject workspace context so the agent knows its working directory
-    if (ctx?.workspaceRoot) {
-      prompt += `\n\n<workspaceContext>\nYou are working in the workspace: ${ctx.workspaceRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this workspace.\n</workspaceContext>`;
+    // Inject project context so the agent knows its working directory
+    if (ctx?.projectRoot) {
+      prompt += `\n\n<projectContext>\nYou are working in the project: ${ctx.projectRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this project.\n</projectContext>`;
     }
 
     // Inject available skills

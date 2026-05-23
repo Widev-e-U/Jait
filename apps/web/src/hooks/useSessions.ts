@@ -7,7 +7,7 @@ const SESSION_LIST_LIMIT = 10
 export interface Session {
   id: string
   name: string | null
-  workspacePath: string | null
+  projectPath: string | null
   status: 'active' | 'archived' | 'deleted'
   createdAt: string
   lastActiveAt: string

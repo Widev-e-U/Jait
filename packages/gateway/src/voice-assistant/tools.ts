@@ -10,7 +10,7 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { ThreadService } from "../services/threads.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { UserService } from "../services/users.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 import type { MemoryService } from "../memory/contracts.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
@@ -26,7 +26,7 @@ export interface VoiceToolDeps {
   sessionService?: SessionService;
   sessionState?: SessionStateService;
   threadService?: ThreadService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   memoryService?: MemoryService;
   toolRegistry?: ToolRegistry;
   providerRegistry?: ProviderRegistry;
@@ -277,7 +277,7 @@ const systemStatus: VoiceTool = {
   schema: {
     type: "function",
     name: "jait_system_status",
-    description: "Get the Jait system status: active sessions, workspaces, running threads. Use when the user asks what's going on or the system state.",
+    description: "Get the Jait system status: active sessions, projects, running threads. Use when the user asks what's going on or the system state.",
     parameters: { type: "object", properties: {}, required: [] },
   },
   execute: async (_args, deps) => {
@@ -306,17 +306,17 @@ const listSessions: VoiceTool = {
   },
 };
 
-const listWorkspaces: VoiceTool = {
+const listProjects: VoiceTool = {
   schema: {
     type: "function",
-    name: "list_workspaces",
-    description: "List configured Jait workspaces. Use when the user asks about their projects or workspaces.",
+    name: "list_projects",
+    description: "List configured Jait projects. Use when the user asks about their projects or projects.",
     parameters: { type: "object", properties: {}, required: [] },
   },
   execute: async (_args, deps) => {
-    const workspaces = deps.workspaceService?.list?.() ?? [];
-    if (!Array.isArray(workspaces) || workspaces.length === 0) return "No workspaces configured.";
-    return workspaces.map((w: any) => `- ${w.title ?? w.rootPath ?? "Unknown"} (id: ${w.id})`).join("\n");
+    const projects = deps.projectService?.list?.() ?? [];
+    if (!Array.isArray(projects) || projects.length === 0) return "No projects configured.";
+    return projects.map((w: any) => `- ${w.title ?? w.rootPath ?? "Unknown"} (id: ${w.id})`).join("\n");
   },
 };
 
@@ -382,7 +382,7 @@ const saveMemory: VoiceTool = {
     if (!content) return "Nothing to save.";
     try {
       await deps.memoryService.save({
-        scope: "workspace",
+        scope: "project",
         content,
         source: { type: "voice-assistant", id: "voice", surface: "voice" },
       });
@@ -400,7 +400,7 @@ const askAgentAboutRequest: VoiceTool = {
     description:
       "Ask a regular Jait agent for the answer. Default to this for most non-trivial user questions. " +
       "Use it whenever the user asks what something is, how it works, why it happened, what an error means, " +
-      "what Jait/threads/tools/providers/workspaces are doing, or wants a deeper explanation than the voice assistant should invent.",
+      "what Jait/threads/tools/providers/projects are doing, or wants a deeper explanation than the voice assistant should invent.",
     parameters: {
       type: "object",
       properties: {
@@ -412,7 +412,7 @@ const askAgentAboutRequest: VoiceTool = {
         },
         workingDirectory: {
           type: "string",
-          description: "Optional working directory if the answer should be grounded in a specific workspace.",
+          description: "Optional working directory if the answer should be grounded in a specific project.",
         },
         timeoutMs: {
           type: "number",
@@ -468,7 +468,7 @@ const askAgentAboutRequest: VoiceTool = {
           deps.providerRegistry.buildJaitMcpServerRef(
             { host: deps.config.host, port: deps.config.port },
             undefined,
-            { sessionId: thread.id, workspaceRoot: workingDirectory },
+            { sessionId: thread.id, projectRoot: workingDirectory },
           ),
         ],
       });
@@ -571,7 +571,7 @@ const searchWeb: VoiceTool = {
         deps.toolExecutor("web.search", { query }, {
           sessionId: "voice-assistant",
           actionId: `va-${Date.now()}`,
-          workspaceRoot: "",
+          projectRoot: "",
           requestedBy: "voice-assistant",
           apiKeys: mergedKeys,
         }),
@@ -655,7 +655,7 @@ const ALL_TOOLS: VoiceTool[] = [
   getSystemInfo,
   systemStatus,
   listSessions,
-  listWorkspaces,
+  listProjects,
   listThreads,
   searchMemory,
   saveMemory,

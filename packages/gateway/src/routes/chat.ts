@@ -13,12 +13,12 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from "../providers/contracts.js";
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
-import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
+import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { existsSync } from "node:fs";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -212,8 +212,8 @@ interface QueuedChatMessage {
   displaySegments?: Array<
     { type: "text"; text: string }
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
-    | { type: "workspace"; path: string; name: string }
-    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "project"; path: string; name: string }
+    | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   >;
 }
@@ -226,16 +226,16 @@ interface UserDisplayLineRange {
 function parseUserDisplaySegments(raw: unknown): Array<
   { type: "text"; text: string }
   | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
-  | { type: "workspace"; path: string; name: string }
-  | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+  | { type: "project"; path: string; name: string }
+  | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
   | { type: "image"; name: string; mimeType: string; data: string }
 > | undefined {
   if (!Array.isArray(raw)) return undefined;
   const segments: Array<
     { type: "text"; text: string }
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
-    | { type: "workspace"; path: string; name: string }
-    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "project"; path: string; name: string }
+    | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   > = [];
   for (const entry of raw) {
@@ -254,9 +254,9 @@ function parseUserDisplaySegments(raw: unknown): Array<
       });
       continue;
     }
-    if (record.type === "workspace" && typeof record.path === "string") {
+    if (record.type === "project" && typeof record.path === "string") {
       segments.push({
-        type: "workspace",
+        type: "project",
         path: record.path,
         name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
       });
@@ -267,7 +267,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
         type: "terminal",
         terminalId: record.terminalId,
         name: typeof record.name === "string" ? record.name : record.terminalId,
-        ...(typeof record.workspaceRoot === "string" ? { workspaceRoot: record.workspaceRoot } : {}),
+        ...(typeof record.projectRoot === "string" ? { projectRoot: record.projectRoot } : {}),
         ...(parseDisplayLineRange(record) ? { lineRange: parseDisplayLineRange(record)! } : {}),
         ...(typeof record.selectedText === "string" ? { selectedText: record.selectedText } : {}),
       });
@@ -837,7 +837,7 @@ export interface ChatRouteDeps {
   memoryService?: MemoryService;
   ws?: WsControlPlane;
   sessionState?: SessionStateService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   providerRegistry?: ProviderRegistry;
   skillRegistry?: SkillRegistry;
   toolExecutor?: (
@@ -865,7 +865,7 @@ export function registerChatRoutes(
   let memoryService: MemoryService | undefined;
   let ws: WsControlPlane | undefined;
   let sessionStateService: SessionStateService | undefined;
-  let workspaceService: WorkspaceService | undefined;
+  let projectService: ProjectService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
   let skillRegistry: SkillRegistry | undefined;
 
@@ -881,7 +881,7 @@ export function registerChatRoutes(
     memoryService = deps.memoryService;
     ws = deps.ws;
     sessionStateService = deps.sessionState;
-    workspaceService = deps.workspaceService;
+    projectService = deps.projectService;
     providerRegistry = deps.providerRegistry;
     skillRegistry = deps.skillRegistry;
   } else {
@@ -1102,15 +1102,15 @@ export function registerChatRoutes(
       return { ok: false, message: "Cancelled" };
     }
     const sessionRecord = sessionService?.getById(sessionId);
-    const workspaceRecord = sessionRecord?.workspaceId
-      ? workspaceService?.getById(sessionRecord.workspaceId, auth?.userId)
+    const projectRecord = sessionRecord?.projectId
+      ? projectService?.getById(sessionRecord.projectId, auth?.userId)
       : null;
-    const wsPath = workspaceRecord?.rootPath ?? sessionRecord?.workspacePath;
+    const wsPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
-      workspaceRoot: surfaceRegistry
-        ? resolveWorkspaceRoot(surfaceRegistry, sessionId, wsPath)
+      projectRoot: surfaceRegistry
+        ? resolveProjectRoot(surfaceRegistry, sessionId, wsPath)
         : (wsPath?.trim() || process.cwd()),
       requestedBy: "agent",
       userId: auth?.userId,
@@ -1255,16 +1255,16 @@ export function registerChatRoutes(
     // Build conversation history (hydrate from DB if needed)
     hydrateSession(sessionId);
 
-    // Resolve workspace root so the system prompt includes it
+    // Resolve project root so the system prompt includes it
     const sessionRecord = sessionService?.getById(sessionId);
-    const workspaceRecord = sessionRecord?.workspaceId
-      ? workspaceService?.getById(sessionRecord.workspaceId, authUser.id)
+    const projectRecord = sessionRecord?.projectId
+      ? projectService?.getById(sessionRecord.projectId, authUser.id)
       : null;
     const wsRoot = surfaceRegistry
-      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
-      : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
+      ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
+      : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
     const promptCtx: PromptContext = {
-      workspaceRoot: wsRoot,
+      projectRoot: wsRoot,
       skills: skillRegistry?.listEnabled(),
       responseStyle,
       backend: llmRuntime.backend,
@@ -1275,7 +1275,7 @@ export function registerChatRoutes(
         { role: "system", content: buildSystemPrompt(chatMode, modelEndpoint, promptCtx) },
       ]);
     } else {
-      // Update system prompt if mode/model/workspace changed mid-session
+      // Update system prompt if mode/model/project changed mid-session
       const h = sessionHistory.get(sessionId)!;
       const modePrompt = buildSystemPrompt(chatMode, modelEndpoint, promptCtx);
       if (h[0]?.role === "system" && h[0].content !== modePrompt) {
@@ -1310,8 +1310,8 @@ export function registerChatRoutes(
     }
     try {
       sessionService?.touch(sessionId);
-      if (sessionRecord?.workspaceId) {
-        workspaceService?.touch(sessionRecord.workspaceId);
+      if (sessionRecord?.projectId) {
+        projectService?.touch(sessionRecord.projectId);
       }
     } catch { /* session may not exist */ }
 
@@ -1364,10 +1364,10 @@ export function registerChatRoutes(
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const cliWsRoot = surfaceRegistry
-          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
-          : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
+          ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
+          : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
 
-        // Detect if the workspace lives on a remote node (e.g. Windows
+        // Detect if the project lives on a remote node (e.g. Windows
         // desktop) and route the CLI provider session there instead of
         // trying to spawn codex/claude-code locally on the gateway.
         const pathExistsLocally = existsSync(cliWsRoot);
@@ -1411,12 +1411,12 @@ export function registerChatRoutes(
           safeWrite(`data: ${JSON.stringify({ type: "provider_fallback", from: requestProvider, to: "jait", reason })}\n\n`);
         } else {
 
-        console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
+        console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.projectPath="${sessionRecord?.projectPath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
 
         // Ensure a FileSystemSurface exists for this session so we can
         // back up files before CLI providers (Codex/Claude) write them,
         // enabling the keep/discard (undo) flow.
-        // Use _skipBroadcast so the UI doesn't open the workspace panel.
+        // Use _skipBroadcast so the UI doesn't open the project panel.
         let cliFsSurface: FileSystemSurface | null = null;
         if (surfaceRegistry) {
           const fsId = `fs-${sessionId}`;
@@ -1429,7 +1429,7 @@ export function registerChatRoutes(
               surfaceRegistry.onSurfaceStarted = null as any;
               const started = await surfaceRegistry.startSurface("filesystem", fsId, {
                 sessionId,
-                workspaceRoot: cliWsRoot,
+                projectRoot: cliWsRoot,
               });
               surfaceRegistry.onSurfaceStarted = prevHandler;
               cliFsSurface = started as FileSystemSurface;
@@ -1439,7 +1439,7 @@ export function registerChatRoutes(
 
         const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request), {
           sessionId,
-          workspaceRoot: cliWsRoot,
+          projectRoot: cliWsRoot,
         })];
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
@@ -1472,11 +1472,11 @@ export function registerChatRoutes(
           console.log(`[chat/cli] Started new ${requestProvider}/${runtimeMode}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
 
-        // Tell the frontend about the execution context (node, workspace)
+        // Tell the frontend about the execution context (node, project)
         safeWrite(`data: ${JSON.stringify({
           type: "session_info",
           provider: requestProvider,
-          workspacePath: cliWsRoot,
+          projectPath: cliWsRoot,
           isRemote,
           ...(remoteNodeInfo ? { remoteNode: remoteNodeInfo } : {}),
         })}\n\n`);

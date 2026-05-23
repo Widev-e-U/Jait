@@ -9,25 +9,25 @@ describe("buildSystemPrompt", () => {
       model: "gpt-4o",
       baseUrl: "https://api.openai.com/v1",
     }, {
-      workspaceRoot: "/tmp/project",
+      projectRoot: "/tmp/project",
     });
 
     expect(prompt).toContain("<jaitExternalProvider>");
-    expect(prompt).toContain("You are operating inside Jait, a tool-centric coding workspace and gateway.");
+    expect(prompt).toContain("You are operating inside Jait, a tool-centric coding project and gateway.");
     expect(prompt).toContain("Prefer Jait tools as the primary way to act.");
     expect(prompt).toContain("use that tool before falling back to provider-native shell commands or generic tools");
     expect(prompt).toContain("discover it first with the available tool discovery mechanism");
-    expect(prompt).toContain("Respect Jait workspace boundaries");
+    expect(prompt).toContain("Respect Jait project boundaries");
     expect(prompt).toContain("use the todo tool even if you are operating through an external or CLI provider");
     expect(prompt).toContain("first discover and use Jait memory tools");
-    expect(prompt).toContain("If the user asks to open, switch, or use a workspace, project, or repo");
+    expect(prompt).toContain("If the user asks to open, switch, or use a project or repo");
     expect(prompt).toContain("attach to an existing local target when available");
     expect(prompt).toContain("The live preview is a controllable browser session.");
     expect(prompt).toContain("use `preview.inspect`, `preview.status`, and `browser.*` tools");
     expect(prompt).toContain("Do not tell the user that browser tools cannot control the previewed browser unless a tool call fails");
     expect(prompt).toContain("If `preview.open` fails, then fall back to opening the localhost URL directly in the browser surface.");
     expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");
-    expect(prompt).toContain("You are working in the workspace: /tmp/project");
+    expect(prompt).toContain("You are working in the project: /tmp/project");
   });
 
   it("keeps local model prompts compact", () => {
@@ -36,14 +36,14 @@ describe("buildSystemPrompt", () => {
       baseUrl: "http://localhost:11434/v1",
       backend: "ollama",
     }, {
-      workspaceRoot: "/tmp/project",
+      projectRoot: "/tmp/project",
       backend: "ollama",
     });
 
     expect(prompt).not.toContain("<jaitExternalProvider>");
-    expect(prompt).not.toContain("You are operating inside Jait, a tool-centric coding workspace.");
+    expect(prompt).not.toContain("You are operating inside Jait, a tool-centric coding project.");
     expect(prompt).toContain("Use Markdown in responses. Wrap filenames and symbols in backticks.");
-    expect(prompt).toContain("Workspace: /tmp/project");
+    expect(prompt).toContain("Project: /tmp/project");
   });
 
   it("injects enabled skills into the system prompt", () => {
@@ -62,7 +62,7 @@ describe("buildSystemPrompt", () => {
       model: "gpt-4o",
       baseUrl: "https://api.openai.com/v1",
     }, {
-      workspaceRoot: "/tmp/project",
+      projectRoot: "/tmp/project",
       skills,
     });
 
@@ -90,7 +90,7 @@ describe("buildSystemPrompt", () => {
       model: "gpt-4o",
       baseUrl: "https://api.openai.com/v1",
     }, {
-      workspaceRoot: "/tmp/project",
+      projectRoot: "/tmp/project",
     });
 
     expect(prompt).not.toContain("<skill-evaluation>");

@@ -38,7 +38,7 @@ describe("PreviewService", () => {
 
     const session = await service.start({
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "4173",
     });
 
@@ -52,7 +52,7 @@ describe("PreviewService", () => {
     });
     expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requireLiveView: true,
     });
     expect(browser.navigate).toHaveBeenCalledWith("http://127.0.0.1:4173/");
@@ -91,7 +91,7 @@ describe("PreviewService", () => {
 
     const session = await service.start({
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "http://172.17.0.1:4174/",
     });
 
@@ -160,7 +160,7 @@ describe("PreviewService", () => {
 
     await service.start({
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "4173",
     });
 
@@ -242,7 +242,7 @@ describe("PreviewService", () => {
 
     await service.start({
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "4173",
     });
 
@@ -281,13 +281,13 @@ describe("PreviewService", () => {
 
     const session = await service.start({
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       target: "4173",
     });
 
     expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
       sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requireLiveView: true,
     });
     expect(session.status).toBe("error");

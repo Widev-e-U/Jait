@@ -1,17 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
+import { SurfaceRegistry } from "../surfaces/registry.js";
+import { createToolRegistry } from "./index.js";
 import { ToolRegistry } from "./registry.js";
 
 function context() {
   return {
     sessionId: "s-registry",
     actionId: "a-registry",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: "test",
   };
 }
 
 describe("ToolRegistry audit and validation behavior", () => {
+  it("registers project.assign_repository and does not expose any workspace.* alias", () => {
+    const registry = createToolRegistry(new SurfaceRegistry(), {
+      projectService: {},
+      repoService: {},
+    } as any);
+
+    expect(registry.get("project.assign_repository")?.description).toContain("project");
+    expect(registry.get("workspace.assign_repository")).toBeUndefined();
+  });
+
   it("normalizes builtin tools with builtin source metadata", () => {
     const registry = new ToolRegistry();
     registry.register({

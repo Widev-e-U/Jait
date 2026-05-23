@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Loader2, X, FileCode, FilePlus, FileX, FileEdit } from 'lucide-react'
 import { gitApi, type FileDiffEntry } from '@/lib/git-api'
-import { workspaceLanguageForPath } from '@/components/workspace'
+import { projectLanguageForPath } from '@/components/project'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 
 interface GitDiffViewerProps {
@@ -74,7 +74,7 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
   }, [])
 
   const selected = files[selectedIndex] ?? null
-  const language = selected ? workspaceLanguageForPath(selected.path) : 'plaintext'
+  const language = selected ? projectLanguageForPath(selected.path) : 'plaintext'
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

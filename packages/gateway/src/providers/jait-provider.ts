@@ -58,8 +58,8 @@ function buildJaitThreadSandboxPrompt(): string {
     "<jaitThreadSandbox>",
     "Jait native provider threads follow a Sandcastle-style local sandbox flow.",
     "File operations target the thread working directory, which may be a managed git worktree.",
-    "Shell-command tools (`execute`, `terminal.run`, `jait.terminal`) are forced through a long-lived Jait Docker sandbox with the working directory mounted at /workspace.",
-    "Use relative paths or /workspace paths inside shell commands; host absolute workspace paths are remapped for shell commands.",
+    "Shell-command tools (`execute`, `terminal.run`, `jait.terminal`) are forced through a long-lived Jait Docker sandbox with the working directory mounted at /project.",
+    "Use relative paths or /project paths inside shell commands; host absolute project paths are remapped for shell commands.",
     "</jaitThreadSandbox>",
   ].join("\n");
 }
@@ -149,7 +149,7 @@ export class JaitProvider implements CliProviderAdapter {
     const prompt = buildSystemPrompt(
       "agent",
       { model: llm.openaiModel, baseUrl: llm.openaiBaseUrl },
-      { workspaceRoot: options.workingDirectory },
+      { projectRoot: options.workingDirectory },
     ) + `\n\n${buildJaitThreadSandboxPrompt()}`;
     const session: ProviderSession = {
       id: uuidv7(),
@@ -330,7 +330,7 @@ export class JaitProvider implements CliProviderAdapter {
     auth: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string } | undefined,
     onOutputChunk: ((chunk: string) => void) | undefined,
     signal: AbortSignal | undefined,
-    workspaceRoot: string,
+    projectRoot: string,
   ): Promise<ToolResult> {
     if (!this.deps.toolRegistry) {
       return { ok: false, message: "Tool registry not available" };
@@ -351,7 +351,7 @@ export class JaitProvider implements CliProviderAdapter {
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
-      workspaceRoot,
+      projectRoot,
       requestedBy: "agent",
       userId: auth?.userId,
       apiKeys: auth?.apiKeys,
@@ -376,7 +376,7 @@ export class JaitProvider implements CliProviderAdapter {
     if (state.sandboxContainerName) return state.sandboxContainerName;
     if (!state.sandboxStart) {
       state.sandboxStart = this.sandboxManager.startCommandSandbox({
-        workspaceRoot: state.workingDirectory,
+        projectRoot: state.workingDirectory,
         mountMode: "read-write",
         networkEnabled: true,
       }).then((result) => {

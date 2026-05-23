@@ -40,7 +40,7 @@ export interface PluginManagerDeps {
   sqlite: SqliteDatabase;
   toolRegistry: ToolRegistry;
   gatewayVersion: string;
-  workspaceRoot: string;
+  projectRoot: string;
   extensionsDir?: string;
   /** Additional directories to scan for OpenClaw-format plugins. */
   openclawExtensionsDirs?: string[];
@@ -50,7 +50,7 @@ export class PluginManager {
   private readonly sqlite: SqliteDatabase;
   private readonly toolRegistry: ToolRegistry;
   private readonly gatewayVersion: string;
-  private readonly workspaceRoot: string;
+  private readonly projectRoot: string;
   private readonly extensionsDir: string;
   private readonly openclawExtensionsDirs: string[];
 
@@ -63,7 +63,7 @@ export class PluginManager {
     this.sqlite = deps.sqlite;
     this.toolRegistry = deps.toolRegistry;
     this.gatewayVersion = deps.gatewayVersion;
-    this.workspaceRoot = deps.workspaceRoot;
+    this.projectRoot = deps.projectRoot;
     this.extensionsDir = deps.extensionsDir ?? defaultExtensionsDir();
     this.openclawExtensionsDirs = deps.openclawExtensionsDirs ?? [];
   }
@@ -260,7 +260,7 @@ export class PluginManager {
     const self = this;
     return {
       gatewayVersion: this.gatewayVersion,
-      workspaceRoot: this.workspaceRoot,
+      projectRoot: this.projectRoot,
       getConfig<T = Record<string, unknown>>(): T {
         // Re-read from DB to get latest
         const current = self.getInstalled(installed.id);

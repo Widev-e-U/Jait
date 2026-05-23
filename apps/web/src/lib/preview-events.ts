@@ -2,7 +2,7 @@
  * Lightweight preview-session event bus.
  *
  * The WS handler in App pushes `preview.session` events here; the
- * workspace-panel and dev-preview-panel subscribe to receive them
+ * project-panel and dev-preview-panel subscribe to receive them
  * instead of polling.
  */
 type PreviewSessionListener = (session: Record<string, unknown>) => void

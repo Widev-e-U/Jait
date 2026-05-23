@@ -77,7 +77,7 @@ export function registerTerminalRoutes(
   app.post("/api/terminals", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
-    const workspaceRoot = typeof body["workspaceRoot"] === "string" ? body["workspaceRoot"] : process.cwd();
+    const projectRoot = typeof body["projectRoot"] === "string" ? body["projectRoot"] : process.cwd();
     const cols = typeof body["cols"] === "number" ? body["cols"] : 120;
     const rows = typeof body["rows"] === "number" ? body["rows"] : 30;
     const shell = typeof body["shell"] === "string" ? body["shell"] : undefined;
@@ -90,12 +90,12 @@ export function registerTerminalRoutes(
         // Create terminal with a specific shell, bypassing the default factory
         surface = new TerminalSurface(termId, { shell });
         surfaceRegistry.registerInstance(termId, surface);
-        await surface.start({ sessionId, workspaceRoot });
+        await surface.start({ sessionId, projectRoot });
         surfaceRegistry.onSurfaceStarted?.(termId, surface);
       } else {
         surface = await surfaceRegistry.startSurface("terminal", termId, {
           sessionId,
-          workspaceRoot,
+          projectRoot,
         }) as TerminalSurface;
       }
 
@@ -107,7 +107,7 @@ export function registerTerminalRoutes(
         actionId: uuidv7(),
         actionType: "terminal.create",
         toolName: "terminal.stream",
-        inputs: { termId, workspaceRoot },
+        inputs: { termId, projectRoot },
         status: "executed",
       });
 
@@ -391,7 +391,7 @@ export function registerTerminalRoutes(
     const toolName = typeof body["tool"] === "string" ? body["tool"] : "";
     const input = body["input"] ?? {};
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
-    const workspaceRoot = typeof body["workspaceRoot"] === "string" ? body["workspaceRoot"] : process.cwd();
+    const projectRoot = typeof body["projectRoot"] === "string" ? body["projectRoot"] : process.cwd();
     const nodeId = typeof body["nodeId"] === "string" ? body["nodeId"].trim() : "";
     const dryRun = body["dryRun"] === true;
     const consentTimeoutMs = typeof body["consentTimeoutMs"] === "number" ? body["consentTimeoutMs"] : undefined;
@@ -403,7 +403,7 @@ export function registerTerminalRoutes(
     const context = {
       sessionId,
       actionId: uuidv7(),
-      workspaceRoot,
+      projectRoot,
       requestedBy: "api",
     } as const;
 
@@ -421,7 +421,7 @@ export function registerTerminalRoutes(
           input as Record<string, unknown>,
           {
             sessionId,
-            workspaceRoot,
+            projectRoot,
             timeoutMs: consentTimeoutMs ?? 120_000,
           },
         );

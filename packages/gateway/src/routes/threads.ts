@@ -1042,7 +1042,7 @@ export function registerThreadRoutes(
     // Build MCP server references so CLI agents can call Jait's tools
     const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request), {
       sessionId: id,
-      workspaceRoot: workingDirectory,
+      projectRoot: workingDirectory,
     })];
 
     // Store remote provider for /send, /stop, /interrupt access
@@ -1635,7 +1635,7 @@ export function registerThreadRoutes(
               const wdir = thread.workingDirectory ?? process.cwd();
               const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request), {
                 sessionId: id,
-                workspaceRoot: wdir,
+                projectRoot: wdir,
               })];
               const newSession = await provider.startSession({
                 threadId: id,

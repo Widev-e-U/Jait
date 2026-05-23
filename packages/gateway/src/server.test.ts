@@ -122,7 +122,7 @@ describe("@jait/gateway health", () => {
     rmSync(devFileFixtureDir, { recursive: true, force: true });
   });
 
-  it("GET /api/dev-file serves workspace html previews with rewritten asset paths", async () => {
+  it("GET /api/dev-file serves project html previews with rewritten asset paths", async () => {
     const app = await createServer(testConfig);
     // Encode relative path from cwd — avoids platform-specific absolute path issues
     const relPath = relative(process.cwd(), devFileHtml);
@@ -152,7 +152,7 @@ describe("@jait/gateway health", () => {
     await app.close();
   });
 
-  it("GET /api/dev-file accepts relative workspace html paths", async () => {
+  it("GET /api/dev-file accepts relative project html paths", async () => {
     const app = await createServer(testConfig);
     const relPath = relative(process.cwd(), devFileHtml);
     const encodedPath = Buffer.from(relPath, "utf8")

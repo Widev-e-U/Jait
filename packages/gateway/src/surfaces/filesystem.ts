@@ -52,7 +52,7 @@ export class FileSystemSurface implements Surface {
     this._sessionId = input.sessionId;
     this._startedAt = new Date().toISOString();
     this.guard = new PathGuard({
-      workspaceRoot: input.workspaceRoot,
+      projectRoot: input.projectRoot,
       ...this.guardOpts,
     });
     this._setState("running");
@@ -71,7 +71,7 @@ export class FileSystemSurface implements Surface {
       sessionId: this._sessionId ?? "",
       startedAt: this._startedAt ?? undefined,
       metadata: {
-        workspaceRoot: this.guard?.workspaceRoot ?? null,
+        projectRoot: this.guard?.projectRoot ?? null,
         operationCount: this._opCount,
       },
     };
@@ -84,7 +84,7 @@ export class FileSystemSurface implements Surface {
     const abs = await this.guard!.validateWithSymlinkCheck(filePath);
     this._opCount++;
     const content = await readFile(abs, "utf-8");
-    this.onOutput?.(`read ${relative(this.guard!.workspaceRoot, abs)} (${content.length} bytes)`);
+    this.onOutput?.(`read ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
     return content;
   }
 
@@ -107,7 +107,7 @@ export class FileSystemSurface implements Surface {
     // Ensure parent directory exists
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf-8");
-    this.onOutput?.(`wrote ${relative(this.guard!.workspaceRoot, abs)} (${content.length} bytes)`);
+    this.onOutput?.(`wrote ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
   }
 
   async patch(filePath: string, search: string, replace: string): Promise<{ matched: boolean }> {
@@ -127,7 +127,7 @@ export class FileSystemSurface implements Surface {
 
     const patched = original.replace(search, replace);
     await writeFile(abs, patched, "utf-8");
-    this.onOutput?.(`patched ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`patched ${relative(this.guard!.projectRoot, abs)}`);
     return { matched: true };
   }
 
@@ -161,7 +161,7 @@ export class FileSystemSurface implements Surface {
     };
   }
 
-  /** Check if a path is within workspace boundary */
+  /** Check if a path is within project boundary */
   isPathAllowed(filePath: string): boolean {
     return this.guard?.isAllowed(filePath) ?? false;
   }
@@ -184,7 +184,7 @@ export class FileSystemSurface implements Surface {
       await writeFile(abs, backup, "utf-8");
     }
     this._backups.delete(abs);
-    this.onOutput?.(`restored ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`restored ${relative(this.guard!.projectRoot, abs)}`);
     return true;
   }
 
@@ -249,7 +249,7 @@ export class FileSystemSurface implements Surface {
     const abs = await this.guard!.validateWithSymlinkCheck(filePath);
     this._opCount++;
     await unlink(abs);
-    this.onOutput?.(`deleted ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`deleted ${relative(this.guard!.projectRoot, abs)}`);
   }
 
   async deleteDirectory(dirPath: string): Promise<void> {
@@ -257,19 +257,19 @@ export class FileSystemSurface implements Surface {
     const abs = await this.guard!.validateWithSymlinkCheck(dirPath);
     this._opCount++;
     await rm(abs, { recursive: true });
-    this.onOutput?.(`deleted directory ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`deleted directory ${relative(this.guard!.projectRoot, abs)}`);
   }
 
   async renameFile(oldPath: string, newName: string): Promise<string> {
     this.ensureRunning();
     const absOld = await this.guard!.validateWithSymlinkCheck(oldPath);
     const absNew = join(dirname(absOld), newName);
-    // Validate the new path is also within workspace
+    // Validate the new path is also within project
     this.guard!.validate(absNew);
     this._opCount++;
     await rename(absOld, absNew);
-    const relNew = relative(this.guard!.workspaceRoot, absNew);
-    this.onOutput?.(`renamed ${relative(this.guard!.workspaceRoot, absOld)} → ${relNew}`);
+    const relNew = relative(this.guard!.projectRoot, absNew);
+    this.onOutput?.(`renamed ${relative(this.guard!.projectRoot, absOld)} → ${relNew}`);
     return absNew;
   }
 
@@ -279,13 +279,13 @@ export class FileSystemSurface implements Surface {
     const absDestDir = await this.guard!.validateWithSymlinkCheck(destDir);
     const fileName = basename(absSrc);
     const absDest = join(absDestDir, fileName);
-    // Validate destination is also within workspace
+    // Validate destination is also within project
     this.guard!.validate(absDest);
     this._opCount++;
     await mkdir(absDestDir, { recursive: true });
     await rename(absSrc, absDest);
-    const relDest = relative(this.guard!.workspaceRoot, absDest);
-    this.onOutput?.(`moved ${relative(this.guard!.workspaceRoot, absSrc)} → ${relDest}`);
+    const relDest = relative(this.guard!.projectRoot, absDest);
+    this.onOutput?.(`moved ${relative(this.guard!.projectRoot, absSrc)} → ${relDest}`);
     return absDest;
   }
 
@@ -294,7 +294,7 @@ export class FileSystemSurface implements Surface {
     const abs = this.guard!.validate(dirPath);
     this._opCount++;
     await mkdir(abs, { recursive: true });
-    this.onOutput?.(`created directory ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`created directory ${relative(this.guard!.projectRoot, abs)}`);
   }
 
   async createFile(filePath: string, content = ""): Promise<void> {
@@ -303,7 +303,7 @@ export class FileSystemSurface implements Surface {
     this._opCount++;
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf-8");
-    this.onOutput?.(`created ${relative(this.guard!.workspaceRoot, abs)}`);
+    this.onOutput?.(`created ${relative(this.guard!.projectRoot, abs)}`);
   }
 
   async copyFile(srcPath: string, destPath: string): Promise<void> {
@@ -318,7 +318,7 @@ export class FileSystemSurface implements Surface {
     } else {
       await cp(absSrc, absDest);
     }
-    this.onOutput?.(`copied ${relative(this.guard!.workspaceRoot, absSrc)} → ${relative(this.guard!.workspaceRoot, absDest)}`);
+    this.onOutput?.(`copied ${relative(this.guard!.projectRoot, absSrc)} → ${relative(this.guard!.projectRoot, absDest)}`);
   }
 
   private ensureRunning() {

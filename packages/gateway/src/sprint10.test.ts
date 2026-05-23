@@ -19,7 +19,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
     }, {
       actionId: "a1",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
 
@@ -29,7 +29,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
     }, {
       actionId: "a2",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
 
@@ -40,14 +40,14 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
     }, {
       actionId: "a3",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
 
     const state = await tools.execute("os_tool", { action: "state" }, {
       actionId: "a4",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
 

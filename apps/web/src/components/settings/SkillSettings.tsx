@@ -34,7 +34,7 @@ const SOURCE_BADGE: Record<
 > = {
   bundled: { variant: 'default', label: 'bundled' },
   user: { variant: 'secondary', label: 'user' },
-  workspace: { variant: 'outline', label: 'workspace' },
+  project: { variant: 'outline', label: 'project' },
   plugin: { variant: 'secondary', label: 'plugin' },
 }
 

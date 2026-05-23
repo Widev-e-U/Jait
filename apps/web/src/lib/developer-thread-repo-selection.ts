@@ -8,8 +8,8 @@ interface RepositoryIdLike {
 interface DeveloperThreadRepoAutoSelectArgs<T extends RepositoryIdLike> {
   viewMode: ViewMode
   sendTarget: SendTarget
-  workspaceId: string | null
-  workspaceRepoId: string | null
+  projectId: string | null
+  projectRepoId: string | null
   repositories: T[]
   lastAppliedKey: string | null
 }
@@ -20,17 +20,17 @@ export interface DeveloperThreadRepoAutoSelectResult {
 }
 
 export function getDeveloperThreadRepoAutoSelectKey(
-  workspaceId: string | null,
-  workspaceRepoId: string | null,
+  projectId: string | null,
+  projectRepoId: string | null,
 ): string {
-  return `${workspaceId ?? ''}::${workspaceRepoId ?? ''}`
+  return `${projectId ?? ''}::${projectRepoId ?? ''}`
 }
 
 export function resolveDeveloperThreadRepoAutoSelect<T extends RepositoryIdLike>({
   viewMode,
   sendTarget,
-  workspaceId,
-  workspaceRepoId,
+  projectId,
+  projectRepoId,
   repositories,
   lastAppliedKey,
 }: DeveloperThreadRepoAutoSelectArgs<T>): DeveloperThreadRepoAutoSelectResult | null {
@@ -38,24 +38,24 @@ export function resolveDeveloperThreadRepoAutoSelect<T extends RepositoryIdLike>
     return null
   }
 
-  const nextAppliedKey = getDeveloperThreadRepoAutoSelectKey(workspaceId, workspaceRepoId)
+  const nextAppliedKey = getDeveloperThreadRepoAutoSelectKey(projectId, projectRepoId)
   if (lastAppliedKey === nextAppliedKey) {
     return null
   }
 
-  if (!workspaceRepoId) {
+  if (!projectRepoId) {
     return {
       nextAppliedKey,
       repoId: null,
     }
   }
 
-  if (!repositories.some((repo) => repo.id === workspaceRepoId)) {
+  if (!repositories.some((repo) => repo.id === projectRepoId)) {
     return null
   }
 
   return {
     nextAppliedKey,
-    repoId: workspaceRepoId,
+    repoId: projectRepoId,
   }
 }

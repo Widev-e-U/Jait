@@ -1,10 +1,10 @@
 /**
  * Microtask-batched state fetcher.
  *
- * Multiple `useSessionState` / `useWorkspaceState` hooks fire their fetch
+ * Multiple `useSessionState` / `useProjectState` hooks fire their fetch
  * effects in the same React commit.  Instead of one HTTP request per key,
  * this module collects all keys requested in the same microtask and issues
- * a single `GET /api/{sessions|workspaces}/:id/state?keys=a,b,c` call.
+ * a single `GET /api/{sessions|projects}/:id/state?keys=a,b,c` call.
  */
 import { getApiUrl } from '@/lib/gateway-url'
 
@@ -32,7 +32,7 @@ const pending = new Map<string, BatchEntry>()
  * for the same entity are merged into one HTTP request.
  */
 export function fetchStateBatched(
-  entityType: 'sessions' | 'workspaces',
+  entityType: 'sessions' | 'projects',
   entityId: string,
   key: string,
   token: string,

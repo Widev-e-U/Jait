@@ -71,7 +71,7 @@ describe("Sprint 11 — Voice (STT/TTS)", () => {
     const result = await tool.execute({ text: "Build succeeded" }, {
       actionId: "a2",
       sessionId: "s2",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
     expect(result.ok).toBe(true);

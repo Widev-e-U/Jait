@@ -19,7 +19,7 @@ import { SSRFGuard } from "./security/ssrf-guard.js";
 const toolContext = {
   sessionId: "sprint5",
   actionId: "a1",
-  workspaceRoot: "/workspace/Jait",
+  projectRoot: "/project/Jait",
   requestedBy: "test",
 };
 

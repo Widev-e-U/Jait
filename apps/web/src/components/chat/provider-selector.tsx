@@ -40,8 +40,8 @@ interface ProviderSelectorProps {
   onMoveToGateway?: () => void
   /** Active session info — shows where the current session is running. */
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
-  /** Node ID of the open developer-mode workspace (scopes CLI providers to that device). */
-  workspaceNodeId?: string
+  /** Node ID of the open developer-mode project (scopes CLI providers to that device). */
+  projectNodeId?: string
 }
 
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
@@ -96,7 +96,7 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
-export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo, workspaceNodeId }: ProviderSelectorProps) {
+export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo, projectNodeId }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [localProviders, setLocalProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
@@ -254,10 +254,10 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const repoLoading = repoRuntime?.loading ?? false
   const repoIsGateway = repoRuntime?.hostType === 'gateway'
 
-  // Developer-mode workspace scoping: if workspace is on a non-gateway node, scope providers
-  const wsNodeIsRemote = Boolean(workspaceNodeId && workspaceNodeId !== 'gateway')
-  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === workspaceNodeId) : undefined
-  const scopedToWorkspaceNode = wsNodeIsRemote && !scopedToRepo
+  // Developer-mode project scoping: if project is on a non-gateway node, scope providers
+  const wsNodeIsRemote = Boolean(projectNodeId && projectNodeId !== 'gateway')
+  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === projectNodeId) : undefined
+  const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
     const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
@@ -289,7 +289,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           reason = isAvailable ? undefined : 'Not available on this device'
           nodeLabel = repoRuntime?.locationLabel ?? 'device'
         }
-      } else if (scopedToWorkspaceNode) {
+      } else if (scopedToProjectNode) {
         if (item.value === 'jait') {
           isAvailable = true
           nodeLabel = 'Gateway'
@@ -313,7 +313,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
 
       return { ...item, isAvailable, reason, nodeLabel, auth }
     })
-  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
+  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToProjectNode, wsRemoteNode])
 
   const current = providerEntries.find((p) => p.value === provider) ?? providerEntries[0] ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
@@ -321,8 +321,8 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   // Determine location label for the trigger button
   const locationLabel = scopedToRepo
     ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
-    : scopedToWorkspaceNode
-      ? (wsRemoteNode?.nodeName ?? workspaceNodeId)
+    : scopedToProjectNode
+      ? (wsRemoteNode?.nodeName ?? projectNodeId)
       : sessionInfo?.isRemote && sessionInfo.remoteNode
         ? sessionInfo.remoteNode.nodeName
         : undefined
@@ -371,7 +371,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
             <DropdownMenuSeparator />
           </>
         )}
-        {scopedToWorkspaceNode && !wsRemoteNode && (
+        {scopedToProjectNode && !wsRemoteNode && (
           <>
             <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
               Device is offline — only Jait (gateway) is available
@@ -387,7 +387,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           const reason = p.reason
           const nodeLabel = p.nodeLabel
 
-          const showLocalAuthActions = Boolean(auth?.login || auth?.logout) && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
+          const showLocalAuthActions = Boolean(auth?.login || auth?.logout) && !scopedToProjectNode && (!scopedToRepo || repoIsGateway)
           const busyForProvider = authBusy?.providerId === p.value ? authBusy.action : null
           const providerAuthMessage = authMessage?.providerId === p.value ? authMessage : null
 

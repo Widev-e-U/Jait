@@ -48,7 +48,7 @@ interface McpResponse {
 
 interface McpToolContextOverrides {
   sessionId?: string;
-  workspaceRoot?: string;
+  projectRoot?: string;
   userId?: string;
   providerId?: string;
   model?: string;
@@ -102,11 +102,11 @@ function resolveMcpToolContextOverrides(
       ?? readOptionalString(query?.["sessionId"])
       ?? readOptionalString(params?.["sessionId"])
       ?? readOptionalString(args?.["sessionId"]),
-    workspaceRoot:
-      readOptionalString(headers?.["x-jait-workspace-root"])
-      ?? readOptionalString(query?.["workspaceRoot"])
-      ?? readOptionalString(params?.["workspaceRoot"])
-      ?? readOptionalString(args?.["workspaceRoot"]),
+    projectRoot:
+      readOptionalString(headers?.["x-jait-project-root"])
+      ?? readOptionalString(query?.["projectRoot"])
+      ?? readOptionalString(params?.["projectRoot"])
+      ?? readOptionalString(args?.["projectRoot"]),
     providerId:
       readOptionalString(headers?.["x-jait-provider-id"])
       ?? readOptionalString(query?.["providerId"])
@@ -154,7 +154,7 @@ async function resolveMcpToolContext(
             return {
               ...overrides,
               sessionId: session.id,
-              workspaceRoot: overrides.workspaceRoot ?? session.workspacePath ?? undefined,
+              projectRoot: overrides.projectRoot ?? session.projectPath ?? undefined,
               userId: user.id,
             };
           })())
@@ -166,7 +166,7 @@ async function resolveMcpToolContext(
       return inferSessionBackedToolContext({
         ...authBackedOverrides,
         sessionId: session.id,
-        workspaceRoot: authBackedOverrides.workspaceRoot ?? session.workspacePath ?? undefined,
+        projectRoot: authBackedOverrides.projectRoot ?? session.projectPath ?? undefined,
       }, sessionService, userService, sessionState);
     }
   }
@@ -184,7 +184,7 @@ function inferSessionBackedToolContext(
     ? sessionService.getById(overrides.sessionId)
     : null;
   const userId = overrides.userId ?? session?.userId ?? undefined;
-  const workspaceRoot = overrides.workspaceRoot ?? session?.workspacePath ?? undefined;
+  const projectRoot = overrides.projectRoot ?? session?.projectPath ?? undefined;
 
   const defaults = resolveThreadSelectionDefaults({
     userId,
@@ -196,7 +196,7 @@ function inferSessionBackedToolContext(
   return {
     ...overrides,
     userId,
-    workspaceRoot,
+    projectRoot,
     providerId: overrides.providerId ?? defaults.providerId,
     model: overrides.model ?? defaults.model,
     runtimeMode: overrides.runtimeMode ?? defaults.runtimeMode,
@@ -246,12 +246,12 @@ export function resolveMcpBaseUrl(
 
 function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>): string {
   const sessionId = readOptionalString(query?.["sessionId"]);
-  const workspaceRoot = readOptionalString(query?.["workspaceRoot"]);
-  if (!sessionId && !workspaceRoot) return baseUrl;
+  const projectRoot = readOptionalString(query?.["projectRoot"]);
+  if (!sessionId && !projectRoot) return baseUrl;
 
   const url = new URL(baseUrl);
   if (sessionId) url.searchParams.set("sessionId", sessionId);
-  if (workspaceRoot) url.searchParams.set("workspaceRoot", workspaceRoot);
+  if (projectRoot) url.searchParams.set("projectRoot", projectRoot);
   return url.toString();
 }
 
@@ -541,7 +541,7 @@ export async function handleMcpRequest(
       const context: ToolContext = {
         sessionId: contextOverrides.sessionId,
         actionId: uuidv7(),
-        workspaceRoot: contextOverrides.workspaceRoot ?? process.cwd(),
+        projectRoot: contextOverrides.projectRoot ?? process.cwd(),
         requestedBy: "mcp-client",
         userId: contextOverrides.userId,
         providerId: contextOverrides.providerId,

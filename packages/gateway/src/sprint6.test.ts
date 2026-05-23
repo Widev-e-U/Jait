@@ -18,24 +18,24 @@ describe("MemoryEngine (Sprint 6)", () => {
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
 
     await memory.save({
-      scope: "workspace",
+      scope: "project",
       content: "Use pnpm install for this monorepo.",
       source: { type: "chat", id: "msg-1", surface: "web" },
     });
 
     await memory.save({
-      scope: "project",
+      scope: "contact",
       content: "Payment API retries failed webhooks 3 times.",
       source: { type: "doc", id: "doc-1", surface: "filesystem" },
     });
 
-    const workspaceOnly = await memory.search("install dependencies", 5, "workspace");
-    const projectOnly = await memory.search("webhook retries", 5, "project");
+    const projectOnly = await memory.search("install dependencies", 5, "project");
+    const contactOnly = await memory.search("webhook retries", 5, "contact");
 
-    expect(workspaceOnly).toHaveLength(1);
-    expect(workspaceOnly[0]?.content).toContain("pnpm");
     expect(projectOnly).toHaveLength(1);
-    expect(projectOnly[0]?.source.type).toBe("doc");
+    expect(projectOnly[0]?.content).toContain("pnpm");
+    expect(contactOnly).toHaveLength(1);
+    expect(contactOnly[0]?.source.type).toBe("doc");
 
     sqlite.close();
   });
@@ -46,13 +46,13 @@ describe("MemoryEngine (Sprint 6)", () => {
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
     const expired = await memory.save({
-      scope: "workspace",
+      scope: "project",
       content: "Old note to expire",
       source: { type: "chat", id: "msg-old", surface: "web" },
       expiresAt: new Date(Date.now() - 1000).toISOString(),
     });
     const alive = await memory.save({
-      scope: "workspace",
+      scope: "project",
       content: "Important permanent note",
       source: { type: "chat", id: "msg-new", surface: "web" },
     });
@@ -60,7 +60,7 @@ describe("MemoryEngine (Sprint 6)", () => {
     const deleted = await memory.forgetExpired();
     expect(deleted).toBe(1);
 
-    const results = await memory.search("note", 10, "workspace");
+    const results = await memory.search("note", 10, "project");
     expect(results.map((r) => r.id)).not.toContain(expired.id);
 
     const forgotten = await memory.forget(alive.id);
@@ -108,7 +108,7 @@ describe("MemoryEngine (Sprint 6)", () => {
 
     expect(saved).toBe(2);
 
-    const results = await memory.search("release checklist", 5, "workspace");
+    const results = await memory.search("release checklist", 5, "project");
     expect(results).toHaveLength(1);
     expect(results[0]?.source.type).toBe("pre_compaction");
     expect(results[0]?.source.id).toBe("session-42");
@@ -128,7 +128,7 @@ describe("MemoryEngine (Sprint 6)", () => {
     const context = {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     };
 

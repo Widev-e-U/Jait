@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { isNoVncViewerUrl, isWebSocketUrl } from '@/lib/no-vnc'
-import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/components/workspace/workspace-preview-inspect-panel'
+import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/components/project/project-preview-inspect-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
@@ -18,7 +18,7 @@ interface DevPreviewPanelProps {
   autoOpenKey?: number
   sessionId?: string | null
   token?: string | null
-  workspaceRoot?: string | null
+  projectRoot?: string | null
 }
 
 interface ResolvedPreviewTarget {
@@ -56,7 +56,7 @@ interface PreviewLogEntry {
 interface PreviewSessionState {
   id: string
   sessionId: string
-  workspaceRoot: string | null
+  projectRoot: string | null
   mode: 'local' | 'docker' | 'url'
   status: 'starting' | 'ready' | 'error' | 'stopped'
   target: string | null
@@ -176,7 +176,7 @@ export function getPreviewTargetWarning(input: string): string | null {
   const apiUrl = getApiUrl()
   if (!isRemoteGatewayUrl(apiUrl)) return null
 
-  return `Preview proxy requests go through ${apiUrl}, so localhost resolves on that gateway host, not this browser device. Use a workspace-backed managed preview or connect to a local gateway to preview local ports.`
+  return `Preview proxy requests go through ${apiUrl}, so localhost resolves on that gateway host, not this browser device. Use a project-backed managed preview or connect to a local gateway to preview local ports.`
 }
 
 export function DevPreviewPanel({
@@ -185,7 +185,7 @@ export function DevPreviewPanel({
   autoOpenKey = 0,
   sessionId = null,
   token = null,
-  workspaceRoot = null,
+  projectRoot = null,
 }: DevPreviewPanelProps) {
   const managedPreviewSessionId = deriveManagedPreviewSessionId(sessionId)
   const [input, setInput] = useState(initialTarget?.trim() || '')
@@ -264,7 +264,7 @@ export function DevPreviewPanel({
         headers: authHeaders(token),
         body: JSON.stringify({
           sessionId: managedPreviewSessionId,
-          workspaceRoot,
+          projectRoot,
           target: input.trim() || null,
           command: command.trim() || null,
           port: port.trim() ? Number.parseInt(port.trim(), 10) : null,
@@ -282,7 +282,7 @@ export function DevPreviewPanel({
     } finally {
       setIsBusy(false)
     }
-  }, [command, input, managedPreviewSessionId, port, token, workspaceRoot])
+  }, [command, input, managedPreviewSessionId, port, token, projectRoot])
 
   const handleOpenPreview = useCallback(() => {
     void startManagedPreview()
@@ -485,25 +485,25 @@ export function DevPreviewPanel({
           <Input
             value={command}
             onChange={(event) => setCommand(event.target.value)}
-            placeholder={workspaceRoot ? 'Optional command override' : 'Command override unavailable without workspace'}
+            placeholder={projectRoot ? 'Optional command override' : 'Command override unavailable without project'}
             className="h-8"
-            disabled={!workspaceRoot}
+            disabled={!projectRoot}
           />
           <Input
             value={port}
             onChange={(event) => setPort(event.target.value)}
             placeholder="Port"
             className="h-8"
-            disabled={!workspaceRoot}
+            disabled={!projectRoot}
           />
           <Button type="button" size="sm" className="h-8 shrink-0" onClick={handleOpenPreview} disabled={isBusy || !sessionId || !token}>
             <Play className="mr-1 h-3 w-3" />
             Start Live Preview
           </Button>
         </div>
-        {workspaceRoot ? (
+        {projectRoot ? (
           <p className="text-xs text-muted-foreground">
-            Workspace: <code>{workspaceRoot}</code>
+            Project: <code>{projectRoot}</code>
           </p>
         ) : null}
         {managedBrowserSession ? (

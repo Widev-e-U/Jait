@@ -19,7 +19,7 @@ export type SkillVisual = {
 const SOURCE_STYLES: Record<SkillInfo['source'], string> = {
   bundled: 'bg-sky-500/10 text-sky-600',
   user: 'bg-amber-500/10 text-amber-600',
-  workspace: 'bg-emerald-500/10 text-emerald-600',
+  project: 'bg-emerald-500/10 text-emerald-600',
   plugin: 'bg-fuchsia-500/10 text-fuchsia-600',
 }
 

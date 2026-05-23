@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { FileIcon } from '@/components/icons/file-icons'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
-import { workspaceLanguageForPath } from '@/components/workspace/workspace-panel'
+import { projectLanguageForPath } from '@/components/project/project-panel'
 import { cn } from '@/lib/utils'
 
 interface EditDiffViewProps {
@@ -27,7 +27,7 @@ export function EditDiffView({
   className,
 }: EditDiffViewProps) {
   const fileName = filePath.split('/').pop() ?? filePath
-  const language = workspaceLanguageForPath(filePath)
+  const language = projectLanguageForPath(filePath)
 
   const diffContent = useMemo(() => {
     if (oldText != null && newText != null) {

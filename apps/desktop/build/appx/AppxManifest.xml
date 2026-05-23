@@ -46,7 +46,7 @@
       <uap:VisualElements
         AppListEntry="none"
         DisplayName="Jait"
-        Description="AI-powered development workspace"
+        Description="AI-powered development project"
         BackgroundColor="transparent"
         Square150x150Logo="icon-150.png"
         Square44x44Logo="icon-44.png" />

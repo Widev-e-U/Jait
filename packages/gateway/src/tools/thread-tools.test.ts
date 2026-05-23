@@ -88,7 +88,7 @@ function makeContext(
   return {
     sessionId: "s-thread-tools",
     actionId: "a-thread-tools",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: overrides.requestedBy ?? "test",
     userId,
     providerId: overrides.providerId,
@@ -546,7 +546,7 @@ describe("thread.control tool", () => {
       provider.sendTurn.mockImplementation(async () => new Promise<void>(() => {}));
       providerRegistry.register(provider);
 
-      const workspaceRoot = process.cwd();
+      const projectRoot = process.cwd();
       const worktreePath = "/tmp/jait-worktrees/jait-abcdef12";
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -576,11 +576,11 @@ describe("thread.control tool", () => {
           action: "create",
           title: "Cron task",
           kind: "delivery",
-          workingDirectory: workspaceRoot,
+          workingDirectory: projectRoot,
           start: true,
-          prompt: `<system>\nWorkspace: ${workspaceRoot}\n</system>\n\nWork in ${workspaceRoot}\nRun the code quality rotation.`,
+          prompt: `<system>\nProject: ${projectRoot}\n</system>\n\nWork in ${projectRoot}\nRun the code quality rotation.`,
         },
-        { ...context, requestedBy: "scheduler", workspaceRoot },
+        { ...context, requestedBy: "scheduler", projectRoot },
       );
 
       expect(result.ok).toBe(true);
@@ -590,10 +590,10 @@ describe("thread.control tool", () => {
       expect(sentPrompt).toContain(
         `Use this working directory for all file reads, edits, commands, tests, commits, and relative paths: ${worktreePath}`,
       );
-      expect(sentPrompt).toContain(`Workspace: ${worktreePath}`);
+      expect(sentPrompt).toContain(`Project: ${worktreePath}`);
       expect(sentPrompt).toContain(`Work in ${worktreePath}`);
-      expect(sentPrompt).not.toContain(`Workspace: ${workspaceRoot}`);
-      expect(sentPrompt).not.toContain(`Work in ${workspaceRoot}`);
+      expect(sentPrompt).not.toContain(`Project: ${projectRoot}`);
+      expect(sentPrompt).not.toContain(`Work in ${projectRoot}`);
     } finally {
       sqlite.close();
     }
@@ -1326,7 +1326,7 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("defaults create_many threads to the active workspace directory", async () => {
+  it("defaults create_many threads to the active project directory", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1338,7 +1338,7 @@ describe("thread.control tool", () => {
         providerRegistry,
       });
 
-      const workspaceRoot = process.cwd();
+      const projectRoot = process.cwd();
       const result = await tool.execute(
         {
           action: "create_many",
@@ -1356,7 +1356,7 @@ describe("thread.control tool", () => {
       expect(result.ok).toBe(true);
       const data = result.data as { threads: Array<{ workingDirectory: string | null }> };
       expect(data.threads).toHaveLength(2);
-      expect(data.threads.every((thread) => thread.workingDirectory === workspaceRoot)).toBe(true);
+      expect(data.threads.every((thread) => thread.workingDirectory === projectRoot)).toBe(true);
     } finally {
       sqlite.close();
     }

@@ -13,7 +13,7 @@ function context(overrides: Record<string, unknown> = {}) {
   return {
     sessionId: "elevated-test-session",
     actionId: "elevated-test-action",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: "agent",
     userId: "user-1",
     providerId: "codex",

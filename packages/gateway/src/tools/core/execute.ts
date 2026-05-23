@@ -27,7 +27,7 @@ interface ExecuteInput {
    *  If true, the command runs asynchronously and you won't see the output immediately.
    *  If false (default), the command blocks until complete and returns output. */
   isBackground?: boolean;
-  /** Working directory for the command (defaults to workspace root) */
+  /** Working directory for the command (defaults to project root) */
   cwd?: string;
   /** Reuse a specific terminal (omit to auto-select or create) */
   terminalId?: string;
@@ -74,7 +74,7 @@ export function createExecuteTool(registry: SurfaceRegistry, secretInput?: Secre
         },
         cwd: {
           type: "string",
-          description: "Working directory (defaults to workspace root).",
+          description: "Working directory (defaults to project root).",
         },
         terminalId: {
           type: "string",

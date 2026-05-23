@@ -343,7 +343,7 @@ describe("remote provider e2e flow", () => {
       expect.objectContaining({
         name: "jait",
         transport: "http",
-        url: expect.stringMatching(/\/mcp\?sessionId=.*workspaceRoot=/),
+        url: expect.stringMatching(/\/mcp\?sessionId=.*projectRoot=/),
       }),
     ]);
 

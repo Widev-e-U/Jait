@@ -48,7 +48,7 @@ interface ProviderModelSelectorProps {
   repoRuntime?: RepositoryRuntimeInfo | null
   onMoveToGateway?: () => void
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
-  workspaceNodeId?: string
+  projectNodeId?: string
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
@@ -136,7 +136,7 @@ export function ProviderModelSelector({
   repoRuntime,
   onMoveToGateway,
   sessionInfo,
-  workspaceNodeId,
+  projectNodeId,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings } = useAuth()
@@ -358,9 +358,9 @@ export function ProviderModelSelector({
   const repoLoading = repoRuntime?.loading ?? false
   const repoIsGateway = repoRuntime?.hostType === 'gateway'
 
-  const wsNodeIsRemote = Boolean(workspaceNodeId && workspaceNodeId !== 'gateway')
-  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === workspaceNodeId) : undefined
-  const scopedToWorkspaceNode = wsNodeIsRemote && !scopedToRepo
+  const wsNodeIsRemote = Boolean(projectNodeId && projectNodeId !== 'gateway')
+  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === projectNodeId) : undefined
+  const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
     const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
@@ -389,7 +389,7 @@ export function ProviderModelSelector({
           reason = isAvailable ? undefined : 'Not available on this device'
           nodeLabel = repoRuntime?.locationLabel ?? 'device'
         }
-      } else if (scopedToWorkspaceNode) {
+      } else if (scopedToProjectNode) {
         if (item.value === 'jait') {
           isAvailable = true
           nodeLabel = 'Gateway'
@@ -413,7 +413,7 @@ export function ProviderModelSelector({
 
       return { ...item, isAvailable, reason, nodeLabel, auth: status?.auth }
     })
-  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
+  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToProjectNode, wsRemoteNode])
 
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
@@ -423,8 +423,8 @@ export function ProviderModelSelector({
       : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
   const locationLabel = scopedToRepo
     ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
-    : scopedToWorkspaceNode
-      ? (wsRemoteNode?.nodeName ?? workspaceNodeId)
+    : scopedToProjectNode
+      ? (wsRemoteNode?.nodeName ?? projectNodeId)
       : sessionInfo?.isRemote && sessionInfo.remoteNode
         ? sessionInfo.remoteNode.nodeName
         : undefined
@@ -542,7 +542,7 @@ export function ProviderModelSelector({
           Connecting to device…
         </div>
       )}
-      {scopedToWorkspaceNode && !wsRemoteNode && (
+      {scopedToProjectNode && !wsRemoteNode && (
         <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
           Device is offline — only Jait (gateway) is available
         </div>
@@ -551,7 +551,7 @@ export function ProviderModelSelector({
         {providerEntries.map((entry) => {
           const Icon = entry.icon
           const active = entry.value === provider
-          const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
+          const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToProjectNode && (!scopedToRepo || repoIsGateway)
           const loginBusy = authBusyProvider === entry.value
           return (
             <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>

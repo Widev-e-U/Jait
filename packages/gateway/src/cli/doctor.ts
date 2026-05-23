@@ -204,7 +204,7 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
           label: "Playwright package",
           status: "warn",
           message: "playwright dependency is not resolvable",
-          fix: "Run the workspace install so browser tooling is available.",
+          fix: "Run the project install so browser tooling is available.",
         },
   );
 

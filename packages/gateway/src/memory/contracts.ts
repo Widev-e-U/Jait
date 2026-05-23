@@ -1,4 +1,4 @@
-export type MemoryScope = "workspace" | "project" | "contact";
+export type MemoryScope = "project" | "contact";
 
 export interface MemorySource {
   type: string;

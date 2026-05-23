@@ -6,7 +6,7 @@ import type { PreviewService } from "../services/preview.js";
 interface DevPreviewPanelState {
   open: boolean;
   target?: string | null;
-  workspaceRoot?: string | null;
+  projectRoot?: string | null;
   displayState?: "hidden" | "blank" | "connected";
   displayTarget?: string | null;
 }
@@ -17,7 +17,7 @@ interface PreviewStartInput {
   target?: string;
   command?: string;
   port?: number;
-  workspaceRoot?: string;
+  projectRoot?: string;
   frameworkHint?: string;
 }
 
@@ -45,15 +45,15 @@ export function createPreviewStartTool(
         },
         command: {
           type: "string",
-          description: "Optional explicit preview command to run inside the workspace",
+          description: "Optional explicit preview command to run inside the project",
         },
         port: {
           type: "number",
           description: "Optional preferred preview port",
         },
-        workspaceRoot: {
+        projectRoot: {
           type: "string",
-          description: "Optional workspace root override for the preview session",
+          description: "Optional project root override for the preview session",
         },
         frameworkHint: {
           type: "string",
@@ -64,14 +64,14 @@ export function createPreviewStartTool(
     async execute(input, context) {
       const target = input.target?.trim() || "";
       const sessionId = resolvePreviewSessionId(context);
-      const workspaceRoot = input.workspaceRoot?.trim() || context.workspaceRoot || "";
+      const projectRoot = input.projectRoot?.trim() || context.projectRoot || "";
 
       if (!previewService) return { ok: false, message: "Preview service is not available" };
       if (!sessionId) return { ok: false, message: "A valid session is required to start a preview" };
 
       const preview = await previewService.start({
         sessionId,
-        workspaceRoot: workspaceRoot || undefined,
+        projectRoot: projectRoot || undefined,
         target: target || undefined,
         command: input.command?.trim() || undefined,
         port: typeof input.port === "number" ? input.port : undefined,
@@ -87,7 +87,7 @@ export function createPreviewStartTool(
         const panelState: DevPreviewPanelState = {
           open: true,
           target: stableTarget,
-          workspaceRoot: workspaceRoot || null,
+          projectRoot: projectRoot || null,
           displayState: "connected",
           displayTarget: stableTarget,
         };
@@ -95,7 +95,7 @@ export function createPreviewStartTool(
           ws.sendUICommand(
             {
               command: "dev-preview.open",
-              data: { target: panelState.target, workspaceRoot: panelState.workspaceRoot },
+              data: { target: panelState.target, projectRoot: panelState.projectRoot },
             },
             sessionId,
           );
@@ -111,7 +111,7 @@ export function createPreviewStartTool(
         const panelState: DevPreviewPanelState = {
           open: false,
           target: null,
-          workspaceRoot: workspaceRoot || null,
+          projectRoot: projectRoot || null,
           displayState: "hidden",
           displayTarget: null,
         };
@@ -177,13 +177,13 @@ export function createPreviewStopTool(
       const panelState: DevPreviewPanelState = {
         open: false,
         target: null,
-        workspaceRoot: null,
+        projectRoot: null,
         displayState: "hidden",
         displayTarget: null,
       };
       if (ws) {
         ws.sendUICommand(
-          { command: "dev-preview.open", data: { target: null, workspaceRoot: null } },
+          { command: "dev-preview.open", data: { target: null, projectRoot: null } },
           sessionId,
         );
         ws.broadcast(sessionId, {

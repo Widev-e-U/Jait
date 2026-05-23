@@ -65,7 +65,7 @@ export class MemoryEngine implements MemoryService {
       if (!content) continue;
 
       await this.save({
-        scope: "workspace",
+        scope: "project",
         content,
         source: {
           type: "pre_compaction",

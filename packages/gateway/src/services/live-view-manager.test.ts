@@ -28,7 +28,7 @@ describe("startLiveView", () => {
 
     const { startLiveView } = await import("./live-view-manager.js");
 
-    await expect(startLiveView({ workspaceRoot: "/workspace/app" })).rejects.toThrow(
+    await expect(startLiveView({ projectRoot: "/project/app" })).rejects.toThrow(
       "Docker sandbox browser failed: docker run failed",
     );
     expect(spawn).not.toHaveBeenCalled();

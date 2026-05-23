@@ -49,7 +49,7 @@ describe('detectMobileViewport', () => {
     }))).toBe(true)
   })
 
-  it('treats coarse-pointer tablets as mobile workspaces', () => {
+  it('treats coarse-pointer tablets as mobile projects', () => {
     expect(detectMobileViewport(createWindowStub({
       innerWidth: 1024,
       innerHeight: 768,

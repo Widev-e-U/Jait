@@ -8,9 +8,9 @@ import { uuidv7 } from "../db/uuidv7.js";
 
 export interface CreateSessionParams {
   userId?: string;
-  workspaceId?: string | null;
+  projectId?: string | null;
   name?: string;
-  workspacePath?: string;
+  projectPath?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -25,9 +25,9 @@ export class SessionService {
     this.db.insert(sessions).values({
       id,
       userId: params.userId ?? null,
-      workspaceId: params.workspaceId ?? null,
+      projectId: params.projectId ?? null,
       name: params.name ?? "New Chat",
-      workspacePath: params.workspacePath ?? null,
+      projectPath: params.projectPath ?? null,
       createdAt: now,
       lastActiveAt: now,
       status: "active",
@@ -75,18 +75,18 @@ export class SessionService {
     return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
-  listByWorkspace(workspaceId: string, status?: string, userId?: string, limit?: number) {
+  listByProject(projectId: string, status?: string, userId?: string, limit?: number) {
     const normalizedLimit =
       typeof limit === "number" && Number.isFinite(limit) && limit > 0
         ? Math.floor(limit)
         : undefined;
-    let query = this.db.select().from(sessions).where(eq(sessions.workspaceId, workspaceId)).$dynamic();
+    let query = this.db.select().from(sessions).where(eq(sessions.projectId, projectId)).$dynamic();
     if (status && userId) {
-      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.status, status), eq(sessions.userId, userId)));
+      query = query.where(and(eq(sessions.projectId, projectId), eq(sessions.status, status), eq(sessions.userId, userId)));
     } else if (status) {
-      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.status, status)));
+      query = query.where(and(eq(sessions.projectId, projectId), eq(sessions.status, status)));
     } else if (userId) {
-      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.userId, userId)));
+      query = query.where(and(eq(sessions.projectId, projectId), eq(sessions.userId, userId)));
     }
     query = query.orderBy(desc(sessions.lastActiveAt));
     return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
@@ -155,34 +155,34 @@ export class SessionService {
       .run();
   }
 
-  /** Archive all active sessions in a workspace. */
-  archiveByWorkspace(workspaceId: string, userId?: string) {
-    const conditions = [eq(sessions.workspaceId, workspaceId), eq(sessions.status, "active")];
+  /** Archive all active sessions in a project. */
+  archiveByProject(projectId: string, userId?: string) {
+    const conditions = [eq(sessions.projectId, projectId), eq(sessions.status, "active")];
     if (userId) conditions.push(eq(sessions.userId, userId));
     this.db.update(sessions).set({ status: "archived" }).where(and(...conditions)).run();
   }
 
-  /** Restore all archived sessions in a workspace back to active. */
-  restoreByWorkspace(workspaceId: string, userId?: string) {
-    const conditions = [eq(sessions.workspaceId, workspaceId), eq(sessions.status, "archived")];
+  /** Restore all archived sessions in a project back to active. */
+  restoreByProject(projectId: string, userId?: string) {
+    const conditions = [eq(sessions.projectId, projectId), eq(sessions.status, "archived")];
     if (userId) conditions.push(eq(sessions.userId, userId));
     this.db.update(sessions).set({ status: "active" }).where(and(...conditions)).run();
   }
 
-  /** Delete (soft) all non-deleted sessions in a workspace. */
-  deleteByWorkspace(workspaceId: string, userId?: string) {
-    const conditions = [eq(sessions.workspaceId, workspaceId), not(eq(sessions.status, "deleted"))];
+  /** Delete (soft) all non-deleted sessions in a project. */
+  deleteByProject(projectId: string, userId?: string) {
+    const conditions = [eq(sessions.projectId, projectId), not(eq(sessions.status, "deleted"))];
     if (userId) conditions.push(eq(sessions.userId, userId));
     this.db.update(sessions).set({ status: "deleted" }).where(and(...conditions)).run();
   }
 
-  /** Update session name, metadata, or workspacePath. */
-  update(id: string, data: { name?: string; metadata?: Record<string, unknown>; workspacePath?: string | null; workspaceId?: string | null }, userId?: string) {
+  /** Update session name, metadata, or projectPath. */
+  update(id: string, data: { name?: string; metadata?: Record<string, unknown>; projectPath?: string | null; projectId?: string | null }, userId?: string) {
     const set: Record<string, string> = {};
     if (data.name !== undefined) set["name"] = data.name;
     if (data.metadata !== undefined) set["metadata"] = JSON.stringify(data.metadata);
-    if (data.workspacePath != null) set["workspacePath"] = data.workspacePath;
-    if (data.workspaceId != null) set["workspaceId"] = data.workspaceId;
+    if (data.projectPath != null) set["projectPath"] = data.projectPath;
+    if (data.projectId != null) set["projectId"] = data.projectId;
     if (Object.keys(set).length > 0) {
       this.db
         .update(sessions)

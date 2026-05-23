@@ -10,7 +10,7 @@ function isGatewayRelativeAsset(value: string): boolean {
   return value.startsWith('/api/browser/screenshot') || value.startsWith('/api/dev-proxy/')
 }
 
-function isWorkspaceImagePath(value: string): boolean {
+function isProjectImagePath(value: string): boolean {
   return (
     IMAGE_FILE_RE.test(value)
     && (
@@ -43,7 +43,7 @@ export function resolveChatImageUrl(src: string, apiUrl = getApiUrl()): string |
     return null
   }
 
-  if (isWorkspaceImagePath(trimmed)) {
+  if (isProjectImagePath(trimmed)) {
     return `${apiUrl}/api/browser/screenshot?path=${encodeURIComponent(trimmed)}`
   }
 

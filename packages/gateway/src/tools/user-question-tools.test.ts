@@ -7,7 +7,7 @@ function context(): ToolContext {
   return {
     sessionId: "session-1",
     actionId: "action-1",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: "agent",
     userId: "user-1",
   };

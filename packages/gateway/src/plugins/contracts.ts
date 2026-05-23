@@ -16,7 +16,7 @@ import type { PluginManifest } from "./manifest.js";
 
 export interface PluginContext {
   gatewayVersion: string;
-  workspaceRoot: string;
+  projectRoot: string;
   /** Read plugin-scoped config (persisted in DB). */
   getConfig<T = Record<string, unknown>>(): T;
   /** Write plugin-scoped config. */

@@ -7,7 +7,7 @@ import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
-import { WorkspaceStateService } from "./services/workspace-state.js";
+import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface } from "./surfaces/index.js";
 import type { SurfaceRegistrySnapshot } from "@jait/shared";
@@ -45,16 +45,16 @@ import { JaitProvider } from "./providers/jait-provider.js";
 import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
 import { VoiceAssistantService } from "./voice-assistant/service.js";
 import { verifyAuthToken } from "./security/http-auth.js";
-import { WorkspaceWatcher } from "./services/workspace-watcher.js";
-import type { FileChangeEvent } from "./services/workspace-watcher.js";
+import { ProjectWatcher } from "./services/project-watcher.js";
+import type { FileChangeEvent } from "./services/project-watcher.js";
 import { GitService } from "./services/git.js";
 import { MaintenanceService } from "./services/maintenance.js";
 import { NotificationService } from "./services/notifications.js";
 import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
-import { WorkspaceService } from "./services/workspaces.js";
-import { autoAssignWorkspaceRepositories } from "./services/workspace-repositories.js";
+import { ProjectService } from "./services/projects.js";
+import { autoAssignProjectRepositories } from "./services/project-repositories.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
@@ -78,9 +78,9 @@ async function main() {
   // Services
   const sessionService = new SessionService(db);
   const sessionState = new SessionStateService(db);
-  const workspaceService = new WorkspaceService(db);
+  const projectService = new ProjectService(db);
   const assistantProfileService = new AssistantProfileService(db);
-  const workspaceState = new WorkspaceStateService(db);
+  const projectState = new ProjectStateService(db);
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
   const deviceRegistry = new DeviceRegistry();
@@ -128,15 +128,15 @@ async function main() {
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
 
-  // Workspace file watcher — uses @parcel/watcher (same as VS Code) for
+  // Project file watcher — uses @parcel/watcher (same as VS Code) for
   // native recursive watching with event coalescing.
-  const workspaceWatcher = new WorkspaceWatcher();
-  /** Active session ID for the current workspace watcher */
+  const projectWatcher = new ProjectWatcher();
+  /** Active session ID for the current project watcher */
   let watcherSessionId = "";
-  /** Active surface ID for the current workspace watcher */
+  /** Active surface ID for the current project watcher */
   let watcherSurfaceId = "";
 
-  workspaceWatcher.on("changes", (changes: FileChangeEvent[]) => {
+  projectWatcher.on("changes", (changes: FileChangeEvent[]) => {
     if (!watcherSessionId) return;
     ws.broadcast(watcherSessionId, {
       type: "fs.changes" as any,
@@ -145,8 +145,8 @@ async function main() {
       payload: { surfaceId: watcherSurfaceId, changes },
     });
   });
-  workspaceWatcher.on("error", (err: Error) => {
-    console.error("Workspace watcher error:", err.message);
+  projectWatcher.on("error", (err: Error) => {
+    console.error("Project watcher error:", err.message);
   });
 
   // Register remote-filesystem factory (needs ws reference for proxying ops to nodes)
@@ -175,7 +175,7 @@ async function main() {
   });
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
-  // Also broadcast workspace activation for filesystem surfaces.
+  // Also broadcast project activation for filesystem surfaces.
   surfaceRegistry.onSurfaceStarted = (id, surface) => {
     ws.broadcastAll({
       type: "surface.updated",
@@ -190,26 +190,26 @@ async function main() {
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
-      const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
+      const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
       const nodeId = (snap.metadata as Record<string, unknown>)?.nodeId as string | undefined;
-      const panelState = { open: true, remotePath: workspaceRoot, surfaceId: id, nodeId: nodeId ?? 'gateway' };
+      const panelState = { open: true, remotePath: projectRoot, surfaceId: id, nodeId: nodeId ?? 'gateway' };
 
       // Start native file watcher for local filesystems
-      if (surface.type === "filesystem" && typeof workspaceRoot === "string") {
+      if (surface.type === "filesystem" && typeof projectRoot === "string") {
         watcherSessionId = sid;
         watcherSurfaceId = id;
-        workspaceWatcher.watch(workspaceRoot).catch((err) =>
-          console.error("Failed to start workspace watcher:", err.message),
+        projectWatcher.watch(projectRoot).catch((err) =>
+          console.error("Failed to start project watcher:", err.message),
         );
       }
 
-      // Push a UI command to open the workspace panel
+      // Push a UI command to open the project panel
       ws.sendUICommand(
         {
-          command: "workspace.open",
+          command: "project.open",
           data: {
             surfaceId: id,
-            workspaceRoot: workspaceRoot as string,
+            projectRoot: projectRoot as string,
             nodeId: nodeId ?? 'gateway',
           },
         },
@@ -220,21 +220,21 @@ async function main() {
         type: "ui.state-sync",
         sessionId: sid,
         timestamp: new Date().toISOString(),
-        payload: { key: "workspace.panel", value: panelState },
+        payload: { key: "project.panel", value: panelState },
       });
       if (sid) {
         const session = sessionService.getById(sid);
-        if (session?.workspaceId) {
+        if (session?.projectId) {
           try {
-            const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+            const existing = projectState.get(session.projectId, ["project.ui"])["project.ui"] as {
               panel?: unknown;
               tabs?: unknown;
               layout?: unknown;
               terminal?: unknown;
               preview?: unknown;
             } | null | undefined;
-            workspaceState.set(session.workspaceId, {
-              "workspace.ui": {
+            projectState.set(session.projectId, {
+              "project.ui": {
                 panel: panelState,
                 tabs: existing?.tabs ?? null,
                 layout: existing?.layout ?? null,
@@ -243,7 +243,7 @@ async function main() {
               },
             });
           } catch (err) {
-            console.error("Failed to persist workspace state:", err);
+            console.error("Failed to persist project state:", err);
           }
         }
       }
@@ -260,8 +260,8 @@ async function main() {
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       // Stop the file watcher if it was watching this surface
       if (watcherSurfaceId === id) {
-        workspaceWatcher.stop().catch((err) =>
-          console.error("Failed to stop workspace watcher:", err.message),
+        projectWatcher.stop().catch((err) =>
+          console.error("Failed to stop project watcher:", err.message),
         );
         watcherSessionId = "";
         watcherSurfaceId = "";
@@ -271,7 +271,7 @@ async function main() {
       const sid = snap.sessionId ?? "";
       ws.sendUICommand(
         {
-          command: "workspace.close",
+          command: "project.close",
           data: { surfaceId: id },
         },
         sid,
@@ -281,21 +281,21 @@ async function main() {
         type: "ui.state-sync",
         sessionId: sid,
         timestamp: new Date().toISOString(),
-        payload: { key: "workspace.panel", value: null },
+        payload: { key: "project.panel", value: null },
       });
       if (sid && context?.reason !== "shutdown") {
         const session = sessionService.getById(sid);
-        if (session?.workspaceId) {
+        if (session?.projectId) {
           try {
-            const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+            const existing = projectState.get(session.projectId, ["project.ui"])["project.ui"] as {
               panel?: unknown;
               tabs?: unknown;
               layout?: unknown;
               terminal?: unknown;
               preview?: unknown;
             } | null | undefined;
-            workspaceState.set(session.workspaceId, {
-              "workspace.ui": {
+            projectState.set(session.projectId, {
+              "project.ui": {
                 panel: null,
                 tabs: existing?.tabs ?? null,
                 layout: existing?.layout ?? null,
@@ -304,7 +304,7 @@ async function main() {
               },
             });
           } catch (err) {
-            console.error("Failed to clear workspace state:", err);
+            console.error("Failed to clear project state:", err);
           }
         }
       }
@@ -336,7 +336,7 @@ async function main() {
     providerRegistry,
     userService,
     sessionState,
-    workspaceService,
+    projectService,
     repoService,
     repoProposalService,
     reminderService,
@@ -459,7 +459,7 @@ async function main() {
       const context = {
         sessionId: execution.sessionId,
         actionId: `sched-${Date.now()}`,
-        workspaceRoot: execution.workspaceRoot,
+        projectRoot: execution.projectRoot,
         requestedBy: "scheduler",
         userId: execution.userId ?? undefined,
         apiKeys: userApiKeys,
@@ -495,7 +495,7 @@ async function main() {
     threadService,
     providerRegistry,
     userService,
-    workspaceService,
+    projectService,
     repoService,
     repoProposalService,
     reminderService,
@@ -513,17 +513,17 @@ async function main() {
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   try {
-    const workspaceRepoAssignments = await autoAssignWorkspaceRepositories({
-      workspaceService,
+    const projectRepoAssignments = await autoAssignProjectRepositories({
+      projectService,
       repoService,
       gitService,
       ws,
     });
-    if (workspaceRepoAssignments.length > 0) {
-      console.log(`Auto-assigned ${workspaceRepoAssignments.length} workspace repos`);
+    if (projectRepoAssignments.length > 0) {
+      console.log(`Auto-assigned ${projectRepoAssignments.length} project repos`);
     }
   } catch (err) {
-    console.error("Workspace repo auto-assignment failed:", err);
+    console.error("Project repo auto-assignment failed:", err);
   }
 
   scheduler.start(30_000);
@@ -600,20 +600,20 @@ async function main() {
     sqlite,
     toolRegistry,
     gatewayVersion: GATEWAY_VERSION,
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     openclawExtensionsDirs: openclawDirs,
   });
   await pluginManager.syncAndLoad();
 
-  // Skill registry — discover skills from bundled, user dir, workspace, and OpenClaw
+  // Skill registry — discover skills from bundled, user dir, project, and OpenClaw
   const { SkillRegistry, userSkillsDir } = await import("./skills/index.js");
   const skillRegistry = new SkillRegistry();
-  const skillScanDirs: { path: string; source: "bundled" | "user" | "workspace" | "plugin" }[] = [
+  const skillScanDirs: { path: string; source: "bundled" | "user" | "project" | "plugin" }[] = [
     // Bundled skills shipped with the gateway package
     { path: join(typeof (import.meta as any).dir === "string" ? (import.meta as any).dir : dirname(fileURLToPath(import.meta.url)), "..", "skills"), source: "bundled" },
     { path: userSkillsDir(), source: "user" },
-    { path: join(process.cwd(), ".jait", "skills"), source: "workspace" },
-    { path: join(process.cwd(), ".agents", "skills"), source: "workspace" },
+    { path: join(process.cwd(), ".jait", "skills"), source: "project" },
+    { path: join(process.cwd(), ".agents", "skills"), source: "project" },
   ];
   // Scan OpenClaw skills directory if present
   const siblingOpenClawSkills = join(process.cwd(), "..", "openclaw", "skills");
@@ -627,7 +627,7 @@ async function main() {
   const { ClawHubClient } = await import("./clawhub/client.js");
   const clawhubClient = new ClawHubClient(process.env.CLAWHUB_REGISTRY);
 
-  // Voice assistant (OpenAI Realtime — global session, not workspace-scoped)
+  // Voice assistant (OpenAI Realtime — global session, not project-scoped)
   const voiceAssistantService = new VoiceAssistantService({
     config,
     verifyToken: (token) => verifyAuthToken(token, config.jwtSecret),
@@ -635,7 +635,7 @@ async function main() {
     sessionService,
     sessionState,
     threadService,
-    workspaceService,
+    projectService,
     memoryService: memory,
     toolRegistry,
     providerRegistry,
@@ -667,9 +667,9 @@ async function main() {
     memoryService: memory,
     deviceRegistry,
     sessionState,
-    workspaceService,
+    projectService,
     assistantProfileService,
-    workspaceState,
+    projectState,
     voiceService,
     toolExecutor,
     screenShare,
@@ -740,21 +740,21 @@ async function main() {
   ws.onUIStateUpdate = (sid, key, value, clientId) => {
     try {
       sessionState.set(sid, { [key]: value });
-      if (key === "workspace.layout" || key === "workspace.panel") {
+      if (key === "project.layout" || key === "project.panel") {
         const session = sessionService.getById(sid);
-        if (session?.workspaceId) {
-          const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+        if (session?.projectId) {
+          const existing = projectState.get(session.projectId, ["project.ui"])["project.ui"] as {
             panel?: unknown;
             tabs?: unknown;
             layout?: unknown;
             terminal?: unknown;
             preview?: unknown;
           } | null | undefined;
-          workspaceState.set(session.workspaceId, {
-            "workspace.ui": {
-              panel: key === "workspace.panel" ? value : existing?.panel ?? null,
+          projectState.set(session.projectId, {
+            "project.ui": {
+              panel: key === "project.panel" ? value : existing?.panel ?? null,
               tabs: existing?.tabs ?? null,
-              layout: key === "workspace.layout" ? value : existing?.layout ?? null,
+              layout: key === "project.layout" ? value : existing?.layout ?? null,
               terminal: existing?.terminal ?? null,
               preview: existing?.preview ?? null,
             },
@@ -788,27 +788,27 @@ async function main() {
   // ── Full state push on client subscribe ─────────────────────────────
   // This is the single authoritative source for initial UI state.
   // When a client subscribes to a session, push ALL session-scoped AND
-  // workspace-scoped state in one message so the frontend can hydrate
+  // project-scoped state in one message so the frontend can hydrate
   // immediately without waiting for REST round-trips.
   //
   // AGENT NOTE: To add new persisted state keys to the initial push:
   //   1. Session-scoped keys: automatically included (sessionState.get
   //      returns all keys for the session).
-  //   2. Workspace-scoped keys: all workspace state lives in a single
-  //      `workspace.ui` key (WorkspaceUIState). Add new fields there.
-  //      The _workspace envelope below includes it automatically.
+  //   2. Project-scoped keys: all project state lives in a single
+  //      `project.ui` key (ProjectUIState). Add new fields there.
+  //      The _project envelope below includes it automatically.
   //   3. Frontend: handle in handleFullState() in App.tsx.
   ws.onClientSubscribe = (sid, clientId) => {
     try {
       const allState: Record<string, unknown> = sessionState.get(sid);
 
-      // Include workspace-scoped state (workspace.ui) so the client
+      // Include project-scoped state (project.ui) so the client
       // doesn't need a separate REST round-trip.
       const session = sessionService.getById(sid);
-      if (session?.workspaceId) {
-        allState._workspace = {
-          id: session.workspaceId,
-          state: workspaceState.get(session.workspaceId),
+      if (session?.projectId) {
+        allState._project = {
+          id: session.projectId,
+          state: projectState.get(session.projectId),
         };
       }
 

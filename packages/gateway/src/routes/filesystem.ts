@@ -3,7 +3,7 @@
  *
  * These endpoints let any client explore directories on the gateway machine
  * or on remote filesystem nodes (Electron apps, phones, etc.) via WS proxy.
- * Used by the folder-picker dialog so users can choose a workspace root
+ * Used by the folder-picker dialog so users can choose a project root
  * from any device on the network.
  */
 

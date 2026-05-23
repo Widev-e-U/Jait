@@ -296,16 +296,16 @@ export type UpdateRepoProposalRequest = UpdateJaitTodoRequest
 export interface ReminderSession {
   id: string
   userId: string | null
-  workspaceId: string | null
+  projectId: string | null
   name: string | null
-  workspacePath: string | null
+  projectPath: string | null
   createdAt: string
   lastActiveAt: string
   status: string | null
   metadata: string | null
 }
 
-export interface ReminderWorkspace {
+export interface ReminderProject {
   id: string
   userId: string | null
   title: string | null
@@ -322,7 +322,7 @@ export interface ReminderWorkspace {
 export interface ReminderRecord {
   id: string
   userId: string | null
-  workspaceId: string | null
+  projectId: string | null
   sessionId: string | null
   content: string
   sourceType: string
@@ -336,8 +336,8 @@ export interface ReminderRecord {
 
 export interface ReminderSnapshot {
   reminders: ReminderRecord[]
-  workspaces: ReminderWorkspace[]
-  hasMoreWorkspaces: boolean
+  projects: ReminderProject[]
+  hasMoreProjects: boolean
   threads: AgentThread[]
 }
 
@@ -354,7 +354,7 @@ export interface UserSecretRecord {
 
 export interface CreateReminderRequest {
   content: string
-  workspaceId?: string | null
+  projectId?: string | null
   sessionId?: string | null
   tags?: string[]
   sourceType?: string
@@ -364,7 +364,7 @@ export interface CreateReminderRequest {
 
 export interface UpdateReminderRequest {
   content?: string
-  workspaceId?: string | null
+  projectId?: string | null
   sessionId?: string | null
   status?: ReminderRecord['status']
   tags?: string[]

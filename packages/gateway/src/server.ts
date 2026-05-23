@@ -29,8 +29,8 @@ import { registerMobileRoutes } from "./routes/mobile.js";
 import { registerNetworkRoutes } from "./routes/network.js";
 import { registerEnvironmentRoutes } from "./routes/environment.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
-import { registerWorkspaceRoutes } from "./routes/workspace.js";
-import { registerWorkspaceEntityRoutes } from "./routes/workspaces.js";
+import { registerProjectRoutes } from "./routes/project.js";
+import { registerProjectEntityRoutes } from "./routes/projects.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
@@ -70,7 +70,7 @@ import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
-import type { WorkspaceStateService } from "./services/workspace-state.js";
+import type { ProjectStateService } from "./services/project-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
@@ -80,7 +80,7 @@ import type { ReminderService } from "./services/reminders.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
-import type { WorkspaceService } from "./services/workspaces.js";
+import type { ProjectService } from "./services/projects.js";
 import type { AssistantProfileService } from "./services/assistant-profiles.js";
 import type { SecretInputService } from "./services/secret-input.js";
 import type { UserQuestionService } from "./services/user-questions.js";
@@ -107,9 +107,9 @@ export interface ServerDeps {
   memoryService?: MemoryService;
   deviceRegistry?: DeviceRegistry;
   sessionState?: SessionStateService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   assistantProfileService?: AssistantProfileService;
-  workspaceState?: WorkspaceStateService;
+  projectState?: ProjectStateService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -173,16 +173,16 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     userService: deps.userService,
     ws: deps.ws,
     sessionState: deps.sessionState,
-    workspaceService: deps.workspaceService,
+    projectService: deps.projectService,
     providerRegistry: deps.providerRegistry,
     skillRegistry: deps.skillRegistry,
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.workspaceService);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.projectService);
   }
-  if (deps.workspaceService && deps.sessionService) {
-    registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState, {
+  if (deps.projectService && deps.sessionService) {
+    registerProjectEntityRoutes(app, config, deps.projectService, deps.sessionService, deps.projectState, {
       repoService: deps.repoService,
       gitService: deps.gitService,
       ws: deps.ws,
@@ -193,7 +193,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   registerEnvironmentRoutes(app, config, {
     assistantProfileService: deps.assistantProfileService,
-    workspaceService: deps.workspaceService,
+    projectService: deps.projectService,
     repoService: deps.repoService,
     providerRegistry: deps.providerRegistry,
     ws: deps.ws,
@@ -251,7 +251,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   registerFilesystemRoutes(app, deps.ws);
   registerBrowserAssetRoutes(app);
-  registerWorkspacePreviewRoutes(app);
+  registerProjectPreviewRoutes(app);
   registerDevProxyRoutes(app);
   registerLiveViewProxyRoutes(app);
   if (deps.previewService) {
@@ -264,7 +264,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.workspaceService, deps.workspaceState);
+    registerProjectRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.projectService, deps.projectState);
   }
 
   // Git API routes
@@ -303,7 +303,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       repoService: deps.repoService,
       userService: deps.userService,
       ws: deps.ws,
-      workspaceService: deps.workspaceService,
+      projectService: deps.projectService,
       gitService: deps.gitService,
     });
   }
@@ -333,7 +333,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.reminderService) {
     registerReminderRoutes(app, config, {
       reminderService: deps.reminderService,
-      workspaceService: deps.workspaceService,
+      projectService: deps.projectService,
       sessionService: deps.sessionService,
       threadService: deps.threadService,
     });
@@ -438,7 +438,7 @@ function registerBrowserAssetRoutes(app: FastifyInstance): void {
 
     const resolvedPath = resolve(path);
     if (!isPathWithin(resolve(process.cwd()), resolvedPath)) {
-      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the gateway workspace" });
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the gateway project" });
     }
 
     const extension = extname(resolvedPath).toLowerCase();
@@ -474,7 +474,7 @@ function registerBrowserAssetRoutes(app: FastifyInstance): void {
   });
 }
 
-function registerWorkspacePreviewRoutes(app: FastifyInstance): void {
+function registerProjectPreviewRoutes(app: FastifyInstance): void {
   const handler = async (request: any, reply: any) => {
     const params = request.params as { encodedPath?: string; "*"?: string };
     const rootPath = decodePreviewFilePath(params.encodedPath);
@@ -482,10 +482,10 @@ function registerWorkspacePreviewRoutes(app: FastifyInstance): void {
       return reply.status(400).send({ error: "INVALID_PATH", message: "A valid HTML file path is required" });
     }
 
-    const workspaceRoot = resolve(process.cwd());
+    const projectRoot = resolve(process.cwd());
     const resolvedRoot = resolve(rootPath);
-    if (!isPathWithin(workspaceRoot, resolvedRoot)) {
-      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview path must stay within the gateway workspace" });
+    if (!isPathWithin(projectRoot, resolvedRoot)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview path must stay within the gateway project" });
     }
 
     const rootExtension = extname(resolvedRoot).toLowerCase();

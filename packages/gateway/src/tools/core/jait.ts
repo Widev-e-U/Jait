@@ -35,7 +35,7 @@ interface JaitInput {
   // ── Memory params ──
   /** Memory content to save */
   content?: string;
-  /** Memory scope: workspace, project, or contact */
+  /** Memory scope: project or contact */
   scope?: string;
   /** Search query for memory.search */
   query?: string;
@@ -51,8 +51,8 @@ interface JaitInput {
   limit?: number;
   /** Save memory.save content into the reminders table instead of semantic memory */
   asReminder?: boolean;
-  /** Workspace ID for reminders */
-  workspaceId?: string | null;
+  /** Project ID for reminders */
+  projectId?: string | null;
   /** Reminder ID for reminder actions */
   reminderId?: string;
   /** Reminder tags */
@@ -107,7 +107,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
         scope: {
           type: "string",
           description: "Memory scope.",
-          enum: ["workspace", "project", "contact"],
+          enum: ["project", "contact"],
         },
         query: {
           type: "string",
@@ -137,9 +137,9 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
           type: "boolean",
           description: "For memory.save, save content to the reminders table instead of semantic memory.",
         },
-        workspaceId: {
+        projectId: {
           type: "string",
-          description: "Workspace ID for reminder actions.",
+          description: "Project ID for reminder actions.",
         },
         reminderId: {
           type: "string",
@@ -201,7 +201,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               }
               const reminder = deps.reminderService.create({
                 userId: context.userId,
-                workspaceId: input.workspaceId ?? null,
+                projectId: input.projectId ?? null,
                 sessionId: input.sessionId ?? context.sessionId,
                 content: input.content,
                 sourceType: input.sourceType ?? "agent",
@@ -221,7 +221,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               ? new Date(Date.now() + input.ttlSeconds * 1000).toISOString()
               : undefined;
             const entry = await deps.memoryService.save({
-              scope: (input.scope as MemoryScope) ?? "workspace",
+              scope: (input.scope as MemoryScope) ?? "project",
               content: input.content,
               source: {
                 type: input.sourceType ?? "agent",
@@ -242,7 +242,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             }
             const reminder = deps.reminderService.create({
               userId: context.userId,
-              workspaceId: input.workspaceId ?? null,
+              projectId: input.projectId ?? null,
               sessionId: input.sessionId ?? context.sessionId,
               content: input.content,
               sourceType: input.sourceType ?? "agent",
@@ -283,7 +283,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             }
             const reminders = deps.reminderService.list({
               userId: context.userId,
-              workspaceId: input.workspaceId ?? undefined,
+              projectId: input.projectId ?? undefined,
               status: input.status === "archived" || input.status === "all" ? input.status : "active",
               sessionId: input.sessionId ?? undefined,
               limit: input.limit ?? 50,
@@ -309,7 +309,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             }
             const reminder = deps.reminderService.update(id, {
               content: input.content,
-              workspaceId: input.workspaceId,
+              projectId: input.projectId,
               sessionId: input.sessionId,
               status,
               tags: input.tags,
@@ -375,7 +375,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               toolName: toolNameNormalized,
               input: input.input ?? {},
               sessionId: context.sessionId,
-              workspaceRoot: process.cwd(),
+              projectRoot: process.cwd(),
             });
             return { ok: true, message: "Cron job created", data: job };
           }

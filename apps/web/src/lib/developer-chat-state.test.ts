@@ -29,7 +29,7 @@ describe('getDeveloperChatSubmitLoading', () => {
     currentView: 'chat',
     requiresAuthGate: false,
     authLoading: false,
-    workspacesLoading: false,
+    projectsLoading: false,
     activeSessionId: 'session-1',
     isLoadingHistory: false,
     loadingChatMode: false,
@@ -45,11 +45,11 @@ describe('getDeveloperChatSubmitLoading', () => {
     })).toBe(true)
   })
 
-  it('shows submit loading while initial workspace state is loading', () => {
+  it('shows submit loading while initial project state is loading', () => {
     expect(getDeveloperChatSubmitLoading({
       ...readyInput,
       activeSessionId: null,
-      workspacesLoading: true,
+      projectsLoading: true,
     })).toBe(true)
   })
 

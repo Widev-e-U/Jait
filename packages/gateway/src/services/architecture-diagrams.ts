@@ -18,8 +18,8 @@ export interface ArchitectureDiagramRecord extends ArchitectureDiagramRow {
 export class ArchitectureDiagramService {
   constructor(private readonly db: JaitDB) {}
 
-  private getStoredRow(workspaceRoot: string, userId?: string): ArchitectureDiagramRow | null {
-    const normalizedRoot = workspaceRoot.trim();
+  private getStoredRow(projectRoot: string, userId?: string): ArchitectureDiagramRow | null {
+    const normalizedRoot = projectRoot.trim();
     if (!normalizedRoot) return null;
     if (userId) {
       return this.db
@@ -27,7 +27,7 @@ export class ArchitectureDiagramService {
         .from(architectureDiagrams)
         .where(and(
           eq(architectureDiagrams.userId, userId),
-          eq(architectureDiagrams.workspaceRoot, normalizedRoot),
+          eq(architectureDiagrams.projectRoot, normalizedRoot),
         ))
         .get() ?? null;
     }
@@ -36,20 +36,20 @@ export class ArchitectureDiagramService {
       .from(architectureDiagrams)
       .where(and(
         isNull(architectureDiagrams.userId),
-        eq(architectureDiagrams.workspaceRoot, normalizedRoot),
+        eq(architectureDiagrams.projectRoot, normalizedRoot),
       ))
       .get() ?? null;
   }
 
-  getFilePath(workspaceRoot: string): string {
-    const normalizedRoot = workspaceRoot.trim();
-    if (!normalizedRoot) throw new Error("workspaceRoot is required");
-    const guard = new PathGuard({ workspaceRoot: normalizedRoot });
+  getFilePath(projectRoot: string): string {
+    const normalizedRoot = projectRoot.trim();
+    if (!normalizedRoot) throw new Error("projectRoot is required");
+    const guard = new PathGuard({ projectRoot: normalizedRoot });
     return guard.validate(DEFAULT_ARCHITECTURE_DIAGRAM_FILE);
   }
 
-  getByWorkspace(workspaceRoot: string, userId?: string): ArchitectureDiagramRecord | null {
-    const normalizedRoot = workspaceRoot.trim();
+  getByProject(projectRoot: string, userId?: string): ArchitectureDiagramRecord | null {
+    const normalizedRoot = projectRoot.trim();
     if (!normalizedRoot) return null;
 
     const filePath = this.getFilePath(normalizedRoot);
@@ -61,7 +61,7 @@ export class ArchitectureDiagramService {
         return {
           id: existing?.id ?? `file:${normalizedRoot}`,
           userId: userId ?? existing?.userId ?? null,
-          workspaceRoot: normalizedRoot,
+          projectRoot: normalizedRoot,
           diagram,
           createdAt: existing?.createdAt ?? now,
           updatedAt: existing?.updatedAt ?? now,
@@ -82,18 +82,18 @@ export class ArchitectureDiagramService {
     };
   }
 
-  async save(params: { workspaceRoot: string; diagram: string; userId?: string }): Promise<ArchitectureDiagramRecord> {
-    const workspaceRoot = params.workspaceRoot.trim();
+  async save(params: { projectRoot: string; diagram: string; userId?: string }): Promise<ArchitectureDiagramRecord> {
+    const projectRoot = params.projectRoot.trim();
     const diagram = params.diagram.trim();
-    if (!workspaceRoot) throw new Error("workspaceRoot is required");
+    if (!projectRoot) throw new Error("projectRoot is required");
     if (!diagram) throw new Error("diagram is required");
 
-    const filePath = this.getFilePath(workspaceRoot);
+    const filePath = this.getFilePath(projectRoot);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, `${diagram}\n`, "utf8");
 
     const now = new Date().toISOString();
-    const existing = this.getStoredRow(workspaceRoot, params.userId);
+    const existing = this.getStoredRow(projectRoot, params.userId);
     if (existing) {
       this.db
         .update(architectureDiagrams)
@@ -103,7 +103,7 @@ export class ArchitectureDiagramService {
         })
         .where(eq(architectureDiagrams.id, existing.id))
         .run();
-      return this.getByWorkspace(workspaceRoot, params.userId)!;
+      return this.getByProject(projectRoot, params.userId)!;
     }
 
     const id = uuidv7();
@@ -112,13 +112,13 @@ export class ArchitectureDiagramService {
       .values({
         id,
         userId: params.userId ?? null,
-        workspaceRoot,
+        projectRoot,
         diagram,
         createdAt: now,
         updatedAt: now,
       })
       .run();
-    return this.getByWorkspace(workspaceRoot, params.userId)!;
+    return this.getByProject(projectRoot, params.userId)!;
   }
 
   list(userId?: string): ArchitectureDiagramRow[] {

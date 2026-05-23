@@ -3,8 +3,8 @@ import {
   UICommandType,
   UICommandPayload,
   UIStateKey,
-  WorkspaceOpenData,
-  WorkspaceCloseData,
+  ProjectOpenData,
+  ProjectCloseData,
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,
@@ -67,8 +67,8 @@ function canActAsFsNode(): boolean {
 
 // ── Listener map ────────────────────────────────────────────────────
 type CommandDataMap = {
-  'workspace.open': WorkspaceOpenData
-  'workspace.close': WorkspaceCloseData
+  'project.open': ProjectOpenData
+  'project.close': ProjectCloseData
   'terminal.focus': TerminalFocusData
   'file.highlight': FileHighlightData
   'dev-preview.open': DevPreviewOpenData
@@ -79,8 +79,8 @@ type UICommandListener<T extends UICommandType = UICommandType> =
   T extends keyof CommandDataMap ? (data: CommandDataMap[T]) => void : (data: Record<string, unknown>) => void
 
 interface Listeners {
-  'workspace.open'?: UICommandListener<'workspace.open'>
-  'workspace.close'?: UICommandListener<'workspace.close'>
+  'project.open'?: UICommandListener<'project.open'>
+  'project.close'?: UICommandListener<'project.close'>
   'terminal.focus'?: UICommandListener<'terminal.focus'>
   'file.highlight'?: UICommandListener<'file.highlight'>
   'dev-preview.open'?: UICommandListener<'dev-preview.open'>
@@ -91,7 +91,7 @@ interface Listeners {
 
 /**
  * Callback for `ui.state-sync` events from other clients / the gateway.
- * `key` is the state key (e.g. "workspace.panel", "todo_list", "file_changed").
+ * `key` is the state key (e.g. "project.panel", "todo_list", "file_changed").
  */
 export type StateSyncHandler = (key: string, value: unknown) => void
 
@@ -243,7 +243,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // Assistant message finished on another device — refresh chat
         onMessageCompleteRef.current?.()
       } else if (msg.type === 'fs.changes') {
-        // Native filesystem change events from the workspace watcher
+        // Native filesystem change events from the project watcher
         const payload = msg.payload as FsChangesPayload
         onFsChangesRef.current?.(payload)
       } else if (msg.type === 'fs.browse-request') {
@@ -260,7 +260,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         void handleProviderOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
       } else if (msg.type === 'tool.op-request') {
         // Gateway is asking us to execute a Jait tool locally (terminal.run, file.write, etc.)
-        void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; workspaceRoot?: string })
+        void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; projectRoot?: string })
       } else if (msg.type === 'notification') {
         // Cross-platform notification from the gateway
         void handleGatewayNotification(msg.payload as {
@@ -474,18 +474,18 @@ export function useUICommands(opts: UseUICommandsOptions) {
    */
   const handleToolOpRequest = useCallback(async (payload: {
     requestId: string; tool: string; args: Record<string, unknown>;
-    sessionId?: string; workspaceRoot?: string
+    sessionId?: string; projectRoot?: string
   }) => {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
-    const { requestId, tool, args, sessionId, workspaceRoot } = payload
+    const { requestId, tool, args, sessionId, projectRoot } = payload
     try {
       const platform = detectPlatform()
       if (platform === 'electron' && window.jaitDesktop?.toolOp) {
         const result = await window.jaitDesktop.toolOp(
           tool,
           args,
-          { sessionId, workspaceRoot },
+          { sessionId, projectRoot },
         )
         ws.send(JSON.stringify({
           type: 'tool.op-response',

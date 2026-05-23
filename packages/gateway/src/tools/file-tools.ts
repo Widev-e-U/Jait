@@ -40,7 +40,7 @@ const IMAGE_FILE_PATTERN = /\.(?:png|jpe?g|gif|webp)$/i;
 export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<FileReadInput> {
   return {
     name: "file.read",
-    description: "Read the contents of a file within the workspace",
+    description: "Read the contents of a file within the project",
     tier: "standard",
     category: "filesystem",
     source: "builtin",
@@ -73,7 +73,7 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
 export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<FileWriteInput> {
   return {
     name: "file.write",
-    description: "Write content to a file within the workspace (creates parent directories)",
+    description: "Write content to a file within the project (creates parent directories)",
     tier: "standard",
     category: "filesystem",
     source: "builtin",
@@ -145,7 +145,7 @@ export function createFilePatchTool(registry: SurfaceRegistry): ToolDefinition<F
 export function createFileListTool(registry: SurfaceRegistry): ToolDefinition<FileListInput> {
   return {
     name: "file.list",
-    description: "List files and directories at a path within the workspace",
+    description: "List files and directories at a path within the project",
     tier: "standard",
     category: "filesystem",
     source: "builtin",
@@ -211,7 +211,7 @@ export function createFileStatTool(registry: SurfaceRegistry): ToolDefinition<Fi
 export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<ImageViewInput> {
   return {
     name: "image.view",
-    description: "Display an image file from the workspace in chat",
+    description: "Display an image file from the project in chat",
     tier: "standard",
     category: "filesystem",
     source: "builtin",

@@ -6,9 +6,9 @@
  */
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-// ─── Workspaces ──────────────────────────────────────────────────────
-export const workspaces = sqliteTable(
-  "workspaces",
+// ─── Projects ──────────────────────────────────────────────────────
+export const projects = sqliteTable(
+  "projects",
   {
     id: text("id").primaryKey(),
     userId: text("user_id"),
@@ -21,8 +21,8 @@ export const workspaces = sqliteTable(
     metadata: text("metadata"),
   },
   (table) => [
-    index("idx_workspaces_user_status").on(table.userId, table.status, table.lastActiveAt),
-    index("idx_workspaces_user_root").on(table.userId, table.rootPath, table.nodeId),
+    index("idx_projects_user_status").on(table.userId, table.status, table.lastActiveAt),
+    index("idx_projects_user_root").on(table.userId, table.rootPath, table.nodeId),
   ],
 );
 
@@ -30,9 +30,9 @@ export const workspaces = sqliteTable(
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(), // UUIDv7
   userId: text("user_id"),
-  workspaceId: text("workspace_id"),
+  projectId: text("project_id"),
   name: text("name"),
-  workspacePath: text("workspace_path"),
+  projectPath: text("project_path"),
   createdAt: text("created_at").notNull(),
   lastActiveAt: text("last_active_at").notNull(),
   status: text("status").default("active"), // 'active' | 'archived' | 'deleted'
@@ -64,8 +64,8 @@ export const userSettings = sqliteTable("user_settings", {
   chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
   jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids
-  workspacePickerPath: text("workspace_picker_path"),
-  workspacePickerNodeId: text("workspace_picker_node_id"),
+  projectPickerPath: text("project_picker_path"),
+  projectPickerNodeId: text("project_picker_node_id"),
   updatedAt: text("updated_at").notNull(),
 });
 
@@ -204,7 +204,7 @@ export const reminders = sqliteTable(
   {
     id: text("id").primaryKey(),
     userId: text("user_id"),
-    workspaceId: text("workspace_id"),
+    projectId: text("project_id"),
     sessionId: text("session_id"),
     content: text("content").notNull(),
     sourceType: text("source_type").notNull().default("agent"),
@@ -217,7 +217,7 @@ export const reminders = sqliteTable(
   },
   (table) => [
     index("idx_reminders_user_status").on(table.userId, table.status, table.updatedAt),
-    index("idx_reminders_workspace").on(table.workspaceId, table.updatedAt),
+    index("idx_reminders_project").on(table.projectId, table.updatedAt),
     index("idx_reminders_session").on(table.sessionId, table.updatedAt),
   ],
 );
@@ -255,33 +255,33 @@ export const sessionState = sqliteTable(
   ],
 );
 
-// ─── Workspace State (per-workspace key-value UI/app state) ─────────
-export const workspaceState = sqliteTable(
-  "workspace_state",
+// ─── Project State (per-project key-value UI/app state) ─────────
+export const projectState = sqliteTable(
+  "project_state",
   {
-    workspaceId: text("workspace_id").notNull(),
+    projectId: text("project_id").notNull(),
     key: text("key").notNull(),
     value: text("value"),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("idx_workspace_state_workspace").on(table.workspaceId),
+    index("idx_project_state_project").on(table.projectId),
   ],
 );
 
-// ─── Workspace Architecture Diagrams ───────────────────────────────
+// ─── Project Architecture Diagrams ───────────────────────────────
 export const architectureDiagrams = sqliteTable(
   "architecture_diagrams",
   {
     id: text("id").primaryKey(),
     userId: text("user_id"),
-    workspaceRoot: text("workspace_root").notNull(),
+    projectRoot: text("project_root").notNull(),
     diagram: text("diagram").notNull(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("idx_architecture_diagrams_user_workspace").on(table.userId, table.workspaceRoot),
+    index("idx_architecture_diagrams_user_project").on(table.userId, table.projectRoot),
     index("idx_architecture_diagrams_updated").on(table.updatedAt),
   ],
 );
@@ -440,7 +440,7 @@ export const scheduledJobs = sqliteTable(
     toolName: text("tool_name").notNull(),
     input: text("input"), // JSON object
     sessionId: text("session_id"),
-    workspaceRoot: text("workspace_root"),
+    projectRoot: text("project_root"),
     enabled: integer("enabled").notNull().default(1),
     lastRunAt: text("last_run_at"),
     createdAt: text("created_at").notNull(),
@@ -478,7 +478,7 @@ export const browserSessions = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    workspaceRoot: text("workspace_root"),
+    projectRoot: text("project_root"),
     targetUrl: text("target_url"),
     previewUrl: text("preview_url"),
     previewSessionId: text("preview_session_id"),

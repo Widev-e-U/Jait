@@ -176,7 +176,7 @@ describe("job routes", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "default",
-      workspaceRoot: process.cwd(),
+      projectRoot: process.cwd(),
     });
 
     await scheduler.tick(new Date("2026-05-12T12:34:00.000Z"));

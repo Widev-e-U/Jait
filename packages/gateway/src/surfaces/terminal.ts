@@ -251,7 +251,7 @@ export class TerminalSurface implements Surface {
 
     this._setState("starting");
     this._sessionId = input.sessionId;
-    this._cwd = input.workspaceRoot;
+    this._cwd = input.projectRoot;
     this._startedAt = new Date().toISOString();
 
     try {
@@ -278,7 +278,7 @@ export class TerminalSurface implements Surface {
         name: "xterm-256color",
         cols: this._cols,
         rows: this._rows,
-        cwd: input.workspaceRoot,
+        cwd: input.projectRoot,
         env: { ...process.env, TERM: "xterm-256color", ...this.extraEnv },
         ...(platform() === "win32" ? { useConpty: !isGitBash } : {}),
       });

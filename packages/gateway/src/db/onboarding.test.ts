@@ -60,8 +60,8 @@ describe("fresh onboarding", () => {
       "trust_levels",
       "user_settings",
       "users",
-      "workspace_state",
-      "workspaces",
+      "project_state",
+      "projects",
     ];
 
     for (const table of expected) {
@@ -138,7 +138,7 @@ describe("fresh onboarding", () => {
     // Attempt a SELECT from every table — if any column is missing,
     // Drizzle will generate SQL referencing it and SQLite will throw.
     const schemaTables = [
-      schema.workspaces,
+      schema.projects,
       schema.sessions,
       schema.users,
       schema.userSettings,
@@ -149,7 +149,7 @@ describe("fresh onboarding", () => {
       schema.memories,
       schema.messages,
       schema.sessionState,
-      schema.workspaceState,
+      schema.projectState,
       schema.architectureDiagrams,
       schema.agentThreads,
       schema.agentThreadActivities,
@@ -297,8 +297,8 @@ describe("upgrade scenario — legacy DB without kind column", () => {
     expect(usCols).toContain("disabled_tools");
     expect(usCols).toContain("stt_provider");
     expect(usCols).toContain("chat_provider");
-    expect(usCols).toContain("workspace_picker_path");
-    expect(usCols).toContain("workspace_picker_node_id");
+    expect(usCols).toContain("project_picker_path");
+    expect(usCols).toContain("project_picker_node_id");
 
     // Check messages got its missing columns
     const msgCols = (
@@ -350,9 +350,9 @@ describe("full startup simulation", () => {
       .all();
     expect(jobs).toEqual([]);
 
-    // 5. Query workspaces (WorkspaceService)
-    const workspaces = db.select().from(schema.workspaces).all();
-    expect(workspaces).toEqual([]);
+    // 5. Query projects (ProjectService)
+    const projects = db.select().from(schema.projects).all();
+    expect(projects).toEqual([]);
 
     // 6. Query memories
     const memories = db.select().from(schema.memories).all();

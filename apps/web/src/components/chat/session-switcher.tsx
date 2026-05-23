@@ -7,12 +7,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorkspaceSession } from '@/hooks/useWorkspaces'
+import type { ProjectSession } from '@/hooks/useProjects'
 
 interface SessionSwitcherProps {
-  sessions: WorkspaceSession[]
+  sessions: ProjectSession[]
   activeSessionId: string | null
-  workspaceTitle: string | null
+  projectTitle: string | null
   onSelectSession: (sessionId: string) => void
   onNewSession: () => void
   onOpenChange?: (open: boolean) => void
@@ -33,7 +33,7 @@ function formatTime(iso: string) {
 export function SessionSwitcher({
   sessions,
   activeSessionId,
-  workspaceTitle,
+  projectTitle,
   onSelectSession,
   onNewSession,
   onOpenChange,
@@ -85,7 +85,7 @@ export function SessionSwitcher({
             <div>
               <div className="text-sm font-medium">Sessions</div>
               <div className="text-xs text-muted-foreground">
-                {workspaceTitle || 'Current workspace'}
+                {projectTitle || 'Current project'}
               </div>
             </div>
             <Button

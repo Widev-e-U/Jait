@@ -1,14 +1,14 @@
 /**
  * Path traversal guards — Sprint 3.9
  *
- * Enforces workspace boundary, blocks symlink escapes, and
+ * Enforces project boundary, blocks symlink escapes, and
  * checks against a configurable set of denied paths.
  */
 
 import { resolve, normalize, relative, sep } from "node:path";
 import { lstat } from "node:fs/promises";
 
-/** Paths that are ALWAYS denied regardless of workspace root */
+/** Paths that are ALWAYS denied regardless of project root */
 const GLOBAL_DENIED: readonly string[] = Object.freeze([
   // Windows system dirs
   "C:\\Windows",
@@ -31,9 +31,9 @@ const GLOBAL_DENIED: readonly string[] = Object.freeze([
 ]);
 
 export interface PathGuardOptions {
-  /** Workspace root — all file ops are confined here */
-  workspaceRoot: string;
-  /** Extra denied paths (absolute or relative to workspace) */
+  /** Project root — all file ops are confined here */
+  projectRoot: string;
+  /** Extra denied paths (absolute or relative to project) */
   deniedPaths?: string[];
   /** Whether to resolve symlinks and verify they stay inside boundary */
   checkSymlinks?: boolean;
@@ -45,7 +45,7 @@ export class PathGuard {
   private readonly checkSymlinks: boolean;
 
   constructor(opts: PathGuardOptions) {
-    this.root = resolve(opts.workspaceRoot);
+    this.root = resolve(opts.projectRoot);
     this.checkSymlinks = opts.checkSymlinks ?? true;
     this.denied = [
       ...GLOBAL_DENIED,
@@ -54,18 +54,18 @@ export class PathGuard {
   }
 
   /**
-   * Validate that `target` is within the workspace boundary.
+   * Validate that `target` is within the project boundary.
    * Returns the resolved absolute path if valid, throws otherwise.
    */
   validate(target: string): string {
     const abs = resolve(this.root, target);
     const norm = normalize(abs);
 
-    // Must start with workspace root
+    // Must start with project root
     const rel = relative(this.root, norm);
     if (rel.startsWith("..") || rel.startsWith(".." + sep)) {
       throw new PathTraversalError(
-        `Path escapes workspace boundary: ${target}`,
+        `Path escapes project boundary: ${target}`,
         target,
         this.root,
       );
@@ -122,7 +122,7 @@ export class PathGuard {
         const rel = relative(this.root, real);
         if (rel.startsWith("..") || rel.startsWith(".." + sep)) {
           throw new PathTraversalError(
-            `Symlink escapes workspace boundary: ${target} -> ${real}`,
+            `Symlink escapes project boundary: ${target} -> ${real}`,
             target,
             this.root,
           );
@@ -147,7 +147,7 @@ export class PathGuard {
     }
   }
 
-  get workspaceRoot(): string {
+  get projectRoot(): string {
     return this.root;
   }
 }

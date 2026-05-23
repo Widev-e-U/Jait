@@ -21,7 +21,7 @@ export interface TerminalInfo {
   type: string
   state: string
   sessionId: string
-  workspaceRoot: string | null
+  projectRoot: string | null
   metadata: Record<string, unknown>
 }
 
@@ -30,7 +30,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 }
 
 function enrichTerminal(raw: TerminalInfo): TerminalInfo {
-  return { ...raw, workspaceRoot: (raw.metadata?.cwd as string) ?? raw.workspaceRoot ?? null }
+  return { ...raw, projectRoot: (raw.metadata?.cwd as string) ?? raw.projectRoot ?? null }
 }
 
 function getCssVarColor(styles: CSSStyleDeclaration, name: string, fallback: string): string {
@@ -160,8 +160,8 @@ export function useTerminals(token?: string | null) {
 
   const creatingRef = useRef(false)
   const createTerminal = useCallback(
-    async (sessionId: string, workspaceRoot?: string, shell?: string) => {
-      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, workspaceRoot: workspaceRoot ?? null, metadata: {} } as TerminalInfo)
+    async (sessionId: string, projectRoot?: string, shell?: string) => {
+      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, projectRoot: projectRoot ?? null, metadata: {} } as TerminalInfo)
       creatingRef.current = true
       try {
         const res = await fetch(`${GATEWAY}/api/terminals`, {
@@ -170,7 +170,7 @@ export function useTerminals(token?: string | null) {
             'Content-Type': 'application/json',
             ...authHeaders(token),
           },
-          body: JSON.stringify({ sessionId, workspaceRoot, ...(shell ? { shell } : {}) }),
+          body: JSON.stringify({ sessionId, projectRoot, ...(shell ? { shell } : {}) }),
         })
         const info = enrichTerminal((await res.json()) as TerminalInfo)
         setTerminals((prev) => [...prev, info])
@@ -231,15 +231,15 @@ interface TerminalViewProps {
   terminalId: string
   className?: string
   token?: string | null
-  workspaceRoot?: string | null
-  onReferenceSelection?: (terminalId: string, selection: string, workspaceRoot?: string | null, startLine?: number, endLine?: number) => void
+  projectRoot?: string | null
+  onReferenceSelection?: (terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
 export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, workspaceRoot, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -308,7 +308,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       if (lastSelectionKeyRef.current === selectionKey) return
       lastSelectionKeyRef.current = selectionKey
       const range = term.getSelectionPosition()
-      onReferenceSelection?.(terminalId, selection, workspaceRoot, range?.start.y, range?.end.y)
+      onReferenceSelection?.(terminalId, selection, projectRoot, range?.start.y, range?.end.y)
     }
 
     // Initial fit + focus so the terminal can receive keyboard input
@@ -491,7 +491,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, workspaceRoot, onReferenceSelection])
+  }, [terminalId, token, projectRoot, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current
@@ -618,7 +618,7 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
               JSON.stringify(buildTerminalDragPayload(
                 t.id,
                 t.id.replace(/^term-/, '').slice(0, 8),
-                t.workspaceRoot,
+                t.projectRoot,
               )),
             )
           }}

@@ -4,11 +4,11 @@ import { requireAuth } from "../security/http-auth.js";
 import type { ReminderService, ReminderStatus } from "../services/reminders.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ThreadService } from "../services/threads.js";
-import type { WorkspaceService } from "../services/workspaces.js";
+import type { ProjectService } from "../services/projects.js";
 
 export interface ReminderRouteDeps {
   reminderService: ReminderService;
-  workspaceService?: WorkspaceService;
+  projectService?: ProjectService;
   sessionService?: SessionService;
   threadService?: ThreadService;
 }
@@ -37,7 +37,7 @@ export function registerReminderRoutes(
   config: AppConfig,
   deps: ReminderRouteDeps,
 ): void {
-  const { reminderService, workspaceService, sessionService, threadService } = deps;
+  const { reminderService, projectService, sessionService, threadService } = deps;
 
   app.get("/api/reminders", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
@@ -47,8 +47,8 @@ export function registerReminderRoutes(
     const status = statusValue === "all" || validStatuses.has(statusValue as ReminderStatus)
       ? statusValue as ReminderStatus | "all"
       : "active";
-    const workspaceId = typeof query["workspaceId"] === "string" && query["workspaceId"].trim()
-      ? query["workspaceId"].trim()
+    const projectId = typeof query["projectId"] === "string" && query["projectId"].trim()
+      ? query["projectId"].trim()
       : undefined;
     const sessionId = typeof query["sessionId"] === "string" && query["sessionId"].trim()
       ? query["sessionId"].trim()
@@ -58,22 +58,22 @@ export function registerReminderRoutes(
     const reminders = reminderService.list({
       userId: user.id,
       status,
-      workspaceId,
+      projectId,
       sessionId,
       limit,
     });
-    const workspacesPayload = workspaceService?.listWithSessions(user.id, "active", 200);
-    const reminderCountsByWorkspace = reminderService.countByWorkspace(user.id);
-    const workspaces = (workspacesPayload?.workspaces ?? []).map((workspace) => ({
-      ...workspace,
-      reminderCount: reminderCountsByWorkspace.get(workspace.id) ?? 0,
+    const projectsPayload = projectService?.listWithSessions(user.id, "active", 200);
+    const reminderCountsByProject = reminderService.countByProject(user.id);
+    const projects = (projectsPayload?.projects ?? []).map((project) => ({
+      ...project,
+      reminderCount: reminderCountsByProject.get(project.id) ?? 0,
     }));
     const threads = threadService?.list(user.id, 100) ?? [];
 
     return {
       reminders,
-      workspaces,
-      hasMoreWorkspaces: workspacesPayload?.hasMore ?? false,
+      projects,
+      hasMoreProjects: projectsPayload?.hasMore ?? false,
       threads,
     };
   });
@@ -86,11 +86,11 @@ export function registerReminderRoutes(
     if (!content) {
       return reply.status(400).send({ error: "content is required" });
     }
-    const workspaceId = typeof body["workspaceId"] === "string" && body["workspaceId"].trim()
-      ? body["workspaceId"].trim()
+    const projectId = typeof body["projectId"] === "string" && body["projectId"].trim()
+      ? body["projectId"].trim()
       : null;
-    if (workspaceId && workspaceService && !workspaceService.getById(workspaceId, user.id)) {
-      return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+    if (projectId && projectService && !projectService.getById(projectId, user.id)) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
     const sessionId = typeof body["sessionId"] === "string" && body["sessionId"].trim()
       ? body["sessionId"].trim()
@@ -101,7 +101,7 @@ export function registerReminderRoutes(
 
     const reminder = reminderService.create({
       userId: user.id,
-      workspaceId,
+      projectId,
       sessionId,
       content,
       sourceType: typeof body["sourceType"] === "string" ? body["sourceType"] : "user",
@@ -135,7 +135,7 @@ export function registerReminderRoutes(
 
     const reminder = reminderService.update(existing.id, {
       content,
-      workspaceId: body["workspaceId"] === undefined ? undefined : typeof body["workspaceId"] === "string" && body["workspaceId"].trim() ? body["workspaceId"].trim() : null,
+      projectId: body["projectId"] === undefined ? undefined : typeof body["projectId"] === "string" && body["projectId"].trim() ? body["projectId"].trim() : null,
       sessionId: body["sessionId"] === undefined ? undefined : typeof body["sessionId"] === "string" && body["sessionId"].trim() ? body["sessionId"].trim() : null,
       status,
       tags: normalizeTags(body["tags"]),

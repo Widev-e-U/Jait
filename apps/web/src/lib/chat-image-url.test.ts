@@ -21,7 +21,7 @@ describe('resolveChatImageUrl', () => {
     expect(resolveChatImageUrl('https://example.com/image.png', apiUrl)).toBe('https://example.com/image.png')
   })
 
-  it('proxies local workspace image paths through the gateway', () => {
+  it('proxies local project image paths through the gateway', () => {
     expect(resolveChatImageUrl('/home/user/project/.tmp-docs-site.png', apiUrl)).toBe(
       'http://localhost:8000/api/browser/screenshot?path=%2Fhome%2Fuser%2Fproject%2F.tmp-docs-site.png',
     )

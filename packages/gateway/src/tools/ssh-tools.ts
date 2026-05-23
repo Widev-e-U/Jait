@@ -137,7 +137,7 @@ function spawnSshPty(args: string[], context: ToolContext, ptyFactory = loadNode
     name: "xterm-256color",
     cols: 120,
     rows: 30,
-    cwd: context.workspaceRoot,
+    cwd: context.projectRoot,
     env: {
       ...process.env,
       SSH_ASKPASS: undefined,

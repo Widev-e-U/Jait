@@ -24,7 +24,7 @@ export interface ToolPermission {
   allowedCommands?: string[];
   /** Denied shell commands (glob patterns). Takes precedence over allowed. */
   deniedCommands?: string[];
-  /** Allowed file paths (glob patterns). Empty = all within workspace. */
+  /** Allowed file paths (glob patterns). Empty = all within project. */
   allowedPaths?: string[];
   /** Denied file paths (glob patterns). Takes precedence over allowed. */
   deniedPaths?: string[];

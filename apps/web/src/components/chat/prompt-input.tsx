@@ -15,7 +15,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
-import { JAIT_TERMINAL_REF_MIME, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
+import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
 import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
 import {
   JAIT_REF_MIME,
@@ -27,7 +27,7 @@ import {
   serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
   type UserTerminalReference,
-  type UserWorkspaceReference,
+  type UserProjectReference,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
@@ -47,7 +47,7 @@ export interface ReferencedFile {
 
 type PromptChipReference =
   | ReferencedFile
-  | ({ type: 'workspace' } & UserWorkspaceReference)
+  | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
 
 interface PromptInputProps {
@@ -95,20 +95,20 @@ interface PromptInputProps {
   onMoveToGateway?: () => void
   /** Active session info — shows where the current session is running. */
   sessionInfo?: SessionInfo | null
-  /** Node ID of the open workspace (scopes CLI providers to that device). */
-  workspaceNodeId?: string
-  /** Display name for the currently selected workspace. */
-  workspaceName?: string | null
-  /** Full path for the currently selected workspace, used as hover context. */
-  workspacePath?: string | null
+  /** Node ID of the open project (scopes CLI providers to that device). */
+  projectNodeId?: string
+  /** Display name for the currently selected project. */
+  projectName?: string | null
+  /** Full path for the currently selected project, used as hover context. */
+  projectPath?: string | null
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Ordered text/file segments for restoring an existing draft. */
   segments?: UserMessageSegment[]
-  /** Lazy search across the entire workspace directory */
+  /** Lazy search across the entire project directory */
   onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
-  /** Whether a workspace directory is currently open — @ mentions only work when true */
-  workspaceOpen?: boolean
+  /** Whether a project directory is currently open — @ mentions only work when true */
+  projectOpen?: boolean
   /** Stable key for preserving local attachment draft state across remounts. */
   draftStateKey?: string
   /** Bumped when the parent externally changes `value` (e.g. clear on submit). */
@@ -123,7 +123,7 @@ interface PromptInputProps {
 function getChipRefKey(ref: PromptChipReference): string {
   const lineRange = 'lineRange' in ref ? ref.lineRange : undefined
   const rangeKey = lineRange ? `:L${lineRange.startLine}-L${lineRange.endLine}` : ''
-  if ('type' in ref && ref.type === 'workspace') return `workspace:${ref.path}`
+  if ('type' in ref && ref.type === 'project') return `project:${ref.path}`
   if ('type' in ref && ref.type === 'terminal') {
     const selectionKey = ref.selectedText ? `:${hashString(ref.selectedText)}` : ''
     return `terminal:${ref.terminalId}${rangeKey}${selectionKey}`
@@ -144,15 +144,15 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
   chip.contentEditable = 'false'
   const refKey = getChipRefKey(file)
   chip.setAttribute('data-chip-ref', refKey)
-  if ('type' in file && file.type === 'workspace') {
-    chip.setAttribute('data-segment-type', 'workspace')
-    chip.setAttribute('data-workspace-path', file.path)
+  if ('type' in file && file.type === 'project') {
+    chip.setAttribute('data-segment-type', 'project')
+    chip.setAttribute('data-project-path', file.path)
     chip.setAttribute('data-chip-name', file.name)
   } else if ('type' in file && file.type === 'terminal') {
     chip.setAttribute('data-segment-type', 'terminal')
     chip.setAttribute('data-terminal-id', file.terminalId)
     chip.setAttribute('data-chip-name', file.name)
-    if (file.workspaceRoot) chip.setAttribute('data-workspace-root', file.workspaceRoot)
+    if (file.projectRoot) chip.setAttribute('data-project-root', file.projectRoot)
     if (file.lineRange) {
       chip.setAttribute('data-line-start', String(file.lineRange.startLine))
       chip.setAttribute('data-line-end', String(file.lineRange.endLine))
@@ -174,7 +174,7 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
   // Icon (file or folder)
   const icon = document.createElement('span')
   icon.className = 'inline-flex items-center shrink-0'
-  if ('type' in file && file.type === 'workspace') {
+  if ('type' in file && file.type === 'project') {
     icon.innerHTML = `<img src="${ICON_CDN}${DEFAULT_FOLDER}" alt="" class="h-3.5 w-3.5" draggable="false" />`
   } else if ('type' in file && file.type === 'terminal') {
     icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>'
@@ -293,11 +293,11 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
 
     if (node.hasAttribute('data-chip-ref')) {
       const segmentType = node.getAttribute('data-segment-type')
-      if (segmentType === 'workspace') {
-        const path = node.getAttribute('data-workspace-path')
+      if (segmentType === 'project') {
+        const path = node.getAttribute('data-project-path')
         if (!path) return
         segments.push({
-          type: 'workspace',
+          type: 'project',
           path,
           name: node.getAttribute('data-chip-name') || path.split(/[\\/]/).pop() || path,
         })
@@ -306,12 +306,12 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
       if (segmentType === 'terminal') {
         const terminalId = node.getAttribute('data-terminal-id')
         if (!terminalId) return
-        const workspaceRoot = node.getAttribute('data-workspace-root')
+        const projectRoot = node.getAttribute('data-project-root')
         segments.push({
           type: 'terminal',
           terminalId,
           name: node.getAttribute('data-chip-name') || terminalId,
-          ...(workspaceRoot ? { workspaceRoot } : {}),
+          ...(projectRoot ? { projectRoot } : {}),
           ...readChipLineRange(node),
           ...(node.getAttribute('data-selected-text') ? { selectedText: node.getAttribute('data-selected-text')! } : {}),
         })
@@ -406,7 +406,7 @@ function appendSegmentNode(
     parent.appendChild(document.createTextNode(segment.text))
     return
   }
-  if (segment.type === 'file' || segment.type === 'workspace' || segment.type === 'terminal') {
+  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal') {
     parent.appendChild(createChipNode(segment, onRemove))
     return
   }
@@ -511,7 +511,7 @@ function appendSegmentNodes(
 }
 
 export interface PromptInputHandle {
-  /** Insert a file chip into the input (used by workspace Send button). */
+  /** Insert a file chip into the input (used by project Send button). */
   insertChip: (file: ReferencedFile) => void
   /** Insert text and/or structured references into the composer. */
   insertSegments: (segments: UserMessageSegment[]) => void
@@ -595,13 +595,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   repoRuntime,
   onMoveToGateway,
   sessionInfo,
-  workspaceNodeId,
-  workspaceName,
-  workspacePath,
+  projectNodeId,
+  projectName,
+  projectPath,
   availableFiles = EMPTY_FILES,
   segments,
   onSearchFiles,
-  workspaceOpen = false,
+  projectOpen = false,
   draftStateKey,
   syncKey,
 }: PromptInputProps, ref) {
@@ -643,8 +643,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   const onSearchFilesRef = useRef(onSearchFiles)
   useEffect(() => { onSearchFilesRef.current = onSearchFiles }, [onSearchFiles])
-  const workspaceOpenRef = useRef(workspaceOpen)
-  useEffect(() => { workspaceOpenRef.current = workspaceOpen }, [workspaceOpen])
+  const projectOpenRef = useRef(projectOpen)
+  useEffect(() => { projectOpenRef.current = projectOpen }, [projectOpen])
   const pushUndoRef = useRef<(immediate?: boolean) => void>(() => {})
 
   // Async search results for @ mention
@@ -659,7 +659,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && sendTarget !== 'swarm' && (!provider || provider === 'jait'))
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
-  const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
+  const projectDisplayName = projectName?.trim() || projectPath?.trim() || null
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
   const hasFooterLeftContent = hasFooterControls
   const submitEmpty = isEmpty && attachments.length === 0
@@ -1074,7 +1074,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         if (cursor > 0 && textContent[cursor - 1] === '@') {
           const charBefore = cursor > 1 ? textContent[cursor - 2] : ' '
           if (charBefore === ' ' || charBefore === '\n' || charBefore === '\u00a0' || cursor === 1) {
-            if (workspaceOpenRef.current) {
+            if (projectOpenRef.current) {
               setMentionQuery('')
               setMentionOpen(true)
             }
@@ -1269,19 +1269,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (!(node instanceof HTMLElement)) return
       if (node.hasAttribute('data-chip-ref')) {
         const segmentType = node.getAttribute('data-segment-type')
-        if (segmentType === 'workspace') {
-          const path = node.getAttribute('data-workspace-path')!
-          segments.push({ type: 'workspace', path, name: node.getAttribute('data-chip-name') || path.split('/').pop() || path })
+        if (segmentType === 'project') {
+          const path = node.getAttribute('data-project-path')!
+          segments.push({ type: 'project', path, name: node.getAttribute('data-chip-name') || path.split('/').pop() || path })
           return
         }
         if (segmentType === 'terminal') {
           const terminalId = node.getAttribute('data-terminal-id')!
-          const workspaceRoot = node.getAttribute('data-workspace-root')
+          const projectRoot = node.getAttribute('data-project-root')
           segments.push({
             type: 'terminal',
             terminalId,
             name: node.getAttribute('data-chip-name') || terminalId,
-            ...(workspaceRoot ? { workspaceRoot } : {}),
+            ...(projectRoot ? { projectRoot } : {}),
             ...readChipLineRange(node),
             ...(node.getAttribute('data-selected-text') ? { selectedText: node.getAttribute('data-selected-text')! } : {}),
           })
@@ -1306,7 +1306,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     for (const child of tempDiv.childNodes) visit(child)
 
-    if (segments.some(s => s.type === 'file' || s.type === 'workspace' || s.type === 'terminal')) {
+    if (segments.some(s => s.type === 'file' || s.type === 'project' || s.type === 'terminal')) {
       e.preventDefault()
       e.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(segments))
       const structured = serializeUserMessageSegmentsForClipboard(segments)
@@ -1392,7 +1392,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       return true
     }
 
-    // Handle workspace tree file/folder drop
+    // Handle project tree file/folder drop
     const jaitFile = e.dataTransfer.getData('text/jait-file')
     if (jaitFile) {
       try {
@@ -1402,11 +1402,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       return
     }
 
-    const jaitWorkspace = e.dataTransfer.getData(JAIT_WORKSPACE_REF_MIME)
-    if (jaitWorkspace) {
+    const jaitProject = e.dataTransfer.getData(JAIT_PROJECT_REF_MIME)
+    if (jaitProject) {
       try {
-        const workspace = JSON.parse(jaitWorkspace) as UserWorkspaceReference
-        appendChip({ type: 'workspace', ...workspace })
+        const project = JSON.parse(jaitProject) as UserProjectReference
+        appendChip({ type: 'project', ...project })
       } catch { /* invalid JSON */ }
       return
     }
@@ -1461,14 +1461,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      {workspaceDisplayName && (
+      {projectDisplayName && (
         <div
           className="absolute top-2 right-3 z-10 text-[10px] leading-none text-muted-foreground pointer-events-none"
-          title={workspacePath?.trim() || workspaceDisplayName}
+          title={projectPath?.trim() || projectDisplayName}
         >
           <span className="block truncate max-w-[180px]">
-            <span className="font-semibold text-foreground/60">WORKSPACE</span>{' '}
-            {workspaceDisplayName}
+            <span className="font-semibold text-foreground/60">PROJECT</span>{' '}
+            {projectDisplayName}
           </span>
         </div>
       )}
@@ -1611,7 +1611,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       repoRuntime={repoRuntime}
                       onMoveToGateway={onMoveToGateway}
                       sessionInfo={sessionInfo}
-                      workspaceNodeId={workspaceNodeId}
+                      projectNodeId={projectNodeId}
                     />
                   )}
                   {showProviderRuntimeSelector && (

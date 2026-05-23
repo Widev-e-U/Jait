@@ -15,7 +15,7 @@ function signature(value: string, segments: UserMessageSegment[] | undefined): s
 }
 
 describe('shouldSyncComposerDraft', () => {
-  it('does not wipe local workspace refs when props are unchanged', () => {
+  it('does not wipe local project refs when props are unchanged', () => {
     const localSegments: UserMessageSegment[] = [
       { type: 'file', path: 'apps/web/src/App.tsx', name: 'App.tsx' },
       { type: 'text', text: ' explain this' },

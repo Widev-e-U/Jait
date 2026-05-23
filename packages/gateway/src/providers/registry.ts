@@ -67,7 +67,7 @@ export class ProviderRegistry {
   buildJaitMcpServerRef(
     config: { host: string; port: number },
     baseUrl?: string,
-    context?: { sessionId?: string; workspaceRoot?: string },
+    context?: { sessionId?: string; projectRoot?: string },
   ): McpServerRef {
     const normalizedBaseUrl = baseUrl?.trim().replace(/\/+$/, "");
     const host = config.host === "0.0.0.0" ? "127.0.0.1" : config.host;
@@ -77,8 +77,8 @@ export class ProviderRegistry {
     if (context?.sessionId) {
       url.searchParams.set("sessionId", context.sessionId);
     }
-    if (context?.workspaceRoot) {
-      url.searchParams.set("workspaceRoot", context.workspaceRoot);
+    if (context?.projectRoot) {
+      url.searchParams.set("projectRoot", context.projectRoot);
     }
 
     return {

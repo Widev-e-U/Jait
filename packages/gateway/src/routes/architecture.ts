@@ -12,16 +12,16 @@ export function registerArchitectureRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 
-    const query = request.query as { workspaceRoot?: string };
-    const workspaceRoot = query.workspaceRoot?.trim();
-    if (!workspaceRoot) {
-      return reply.status(400).send({ error: "workspaceRoot is required" });
+    const query = request.query as { projectRoot?: string };
+    const projectRoot = query.projectRoot?.trim();
+    if (!projectRoot) {
+      return reply.status(400).send({ error: "projectRoot is required" });
     }
 
-    const diagram = diagrams.getByWorkspace(workspaceRoot, authUser.id);
+    const diagram = diagrams.getByProject(projectRoot, authUser.id);
     return {
       diagram: diagram ? {
-        workspaceRoot: diagram.workspaceRoot,
+        projectRoot: diagram.projectRoot,
         diagram: diagram.diagram,
         filePath: diagram.filePath,
         updatedAt: diagram.updatedAt,
@@ -33,24 +33,24 @@ export function registerArchitectureRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 
-    const body = (request.body ?? {}) as { workspaceRoot?: string; diagram?: string };
-    const workspaceRoot = body.workspaceRoot?.trim();
+    const body = (request.body ?? {}) as { projectRoot?: string; diagram?: string };
+    const projectRoot = body.projectRoot?.trim();
     const diagram = body.diagram?.trim();
-    if (!workspaceRoot) {
-      return reply.status(400).send({ error: "workspaceRoot is required" });
+    if (!projectRoot) {
+      return reply.status(400).send({ error: "projectRoot is required" });
     }
     if (!diagram) {
       return reply.status(400).send({ error: "diagram is required" });
     }
 
     const saved = await diagrams.save({
-      workspaceRoot,
+      projectRoot,
       diagram,
       userId: authUser.id,
     });
     return {
       diagram: {
-        workspaceRoot: saved.workspaceRoot,
+        projectRoot: saved.projectRoot,
         diagram: saved.diagram,
         filePath: saved.filePath,
         updatedAt: saved.updatedAt,

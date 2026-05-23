@@ -23,7 +23,7 @@ async function createTerminal(
   const res = await request.post(`${API_URL}/api/terminals`, {
     data: {
       sessionId: sessionId ?? `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      workspaceRoot: process.cwd(),
+      projectRoot: process.cwd(),
     },
   })
   expect(res.ok()).toBeTruthy()
@@ -46,7 +46,7 @@ test.describe('Terminal execution', () => {
     const res = await request.post(`${API_URL}/api/terminals`, {
       data: {
         sessionId: `e2e-create-${Date.now()}`,
-        workspaceRoot: process.cwd(),
+        projectRoot: process.cwd(),
       },
     })
     expect(res.ok()).toBeTruthy()
@@ -167,7 +167,7 @@ test.describe('Terminal execution', () => {
           timeout: 15000,
         },
         sessionId: `e2e-tool-run-${Date.now()}`,
-        workspaceRoot: process.cwd(),
+        projectRoot: process.cwd(),
       },
     })
     expect(res.ok()).toBeTruthy()
@@ -192,7 +192,7 @@ test.describe('Terminal execution', () => {
         tool: 'terminal.run',
         input: { command: 'echo cmd-1' },
         sessionId,
-        workspaceRoot: process.cwd(),
+        projectRoot: process.cwd(),
       },
     })
     const body1 = await res1.json()
@@ -202,7 +202,7 @@ test.describe('Terminal execution', () => {
         tool: 'terminal.run',
         input: { command: 'echo cmd-2' },
         sessionId,
-        workspaceRoot: process.cwd(),
+        projectRoot: process.cwd(),
       },
     })
     const body2 = await res2.json()

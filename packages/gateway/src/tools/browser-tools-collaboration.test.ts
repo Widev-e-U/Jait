@@ -17,7 +17,7 @@ describe("browser tools with collaboration", () => {
     await expect(tool.execute({ url: "https://example.com", browserId: "browser-live-1" }, {
       sessionId: "session-1",
       actionId: "action-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     })).rejects.toThrow(/controlled by the user/i);
 
@@ -62,7 +62,7 @@ describe("browser tools with collaboration", () => {
     const result = await tool.execute({ selector: "#continue", browserId: "browser-live-2" }, {
       sessionId: "session-2",
       actionId: "action-2",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     });
 
@@ -99,7 +99,7 @@ describe("browser tools with collaboration", () => {
     await expect(tool.execute({ url: "https://example.com", browserId: "browser-sidecar-1" }, {
       sessionId: "session-1",
       actionId: "action-1",
-      workspaceRoot: "/workspace/app",
+      projectRoot: "/project/app",
       requestedBy: "assistant",
     })).rejects.toThrow(/visible preview browser/i);
 

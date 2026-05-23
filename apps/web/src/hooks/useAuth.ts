@@ -21,8 +21,8 @@ interface UserSettings {
   chat_provider: ChatProvider
   jait_backend: JaitBackend
   recent_models: string[]
-  workspace_picker_path: string | null
-  workspace_picker_node_id: string | null
+  project_picker_path: string | null
+  project_picker_node_id: string | null
   updated_at: string
 }
 
@@ -45,8 +45,8 @@ const EMPTY_SETTINGS: UserSettings = {
   chat_provider: 'jait',
   jait_backend: 'openai',
   recent_models: [],
-  workspace_picker_path: null,
-  workspace_picker_node_id: null,
+  project_picker_path: null,
+  project_picker_node_id: null,
   updated_at: new Date(0).toISOString(),
 }
 
@@ -185,8 +185,8 @@ export function useAuth() {
     chat_provider?: ChatProvider
     jait_backend?: JaitBackend
     recent_models?: string[]
-    workspace_picker_path?: string | null
-    workspace_picker_node_id?: string | null
+    project_picker_path?: string | null
+    project_picker_node_id?: string | null
   }) => {
     if (!state.token) throw new Error('Not authenticated')
     const response = await fetch(`${API_URL}/api/auth/settings`, {

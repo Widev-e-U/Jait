@@ -12,39 +12,39 @@ import { tmpdir } from "node:os";
 import { PathGuard, PathTraversalError } from "./security/path-guard.js";
 
 describe("PathGuard", () => {
-  let workspace: string;
+  let project: string;
 
   beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jait-pathguard-"));
-    mkdirSync(join(workspace, "src"), { recursive: true });
-    writeFileSync(join(workspace, "src", "index.ts"), "console.log('hello')");
+    project = mkdtempSync(join(tmpdir(), "jait-pathguard-"));
+    mkdirSync(join(project, "src"), { recursive: true });
+    writeFileSync(join(project, "src", "index.ts"), "console.log('hello')");
   });
 
   afterEach(() => {
-    rmSync(workspace, { recursive: true, force: true });
+    rmSync(project, { recursive: true, force: true });
   });
 
-  it("allows paths inside workspace", () => {
-    const guard = new PathGuard({ workspaceRoot: workspace });
+  it("allows paths inside project", () => {
+    const guard = new PathGuard({ projectRoot: project });
     const result = guard.validate("src/index.ts");
     expect(result).toContain("src");
     expect(result).toContain("index.ts");
   });
 
   it("blocks path traversal with ..", () => {
-    const guard = new PathGuard({ workspaceRoot: workspace });
+    const guard = new PathGuard({ projectRoot: project });
     expect(() => guard.validate("../../etc/passwd")).toThrow(PathTraversalError);
   });
 
   it("blocks null bytes", () => {
-    const guard = new PathGuard({ workspaceRoot: workspace });
+    const guard = new PathGuard({ projectRoot: project });
     expect(() => guard.validate("src/\0malicious")).toThrow(PathTraversalError);
   });
 
   it("blocks paths in global denied list", () => {
     const guard = process.platform === "win32"
-      ? new PathGuard({ workspaceRoot: "C:\\Users\\test\\project" })
-      : new PathGuard({ workspaceRoot: "/tmp/project" });
+      ? new PathGuard({ projectRoot: "C:\\Users\\test\\project" })
+      : new PathGuard({ projectRoot: "/tmp/project" });
     const deniedTarget = process.platform === "win32"
       ? "C:\\Windows\\System32\\cmd.exe"
       : "/etc/passwd";
@@ -53,25 +53,25 @@ describe("PathGuard", () => {
 
   it("blocks custom denied paths", () => {
     const guard = new PathGuard({
-      workspaceRoot: workspace,
+      projectRoot: project,
       deniedPaths: [".env"],
     });
     expect(() => guard.validate(".env")).toThrow(PathTraversalError);
   });
 
   it("isAllowed returns boolean without throwing", () => {
-    const guard = new PathGuard({ workspaceRoot: workspace });
+    const guard = new PathGuard({ projectRoot: project });
     expect(guard.isAllowed("src/index.ts")).toBe(true);
     expect(guard.isAllowed("../../etc/passwd")).toBe(false);
   });
 
-  it("validates symlinks that escape workspace", async () => {
-    const guard = new PathGuard({ workspaceRoot: workspace, checkSymlinks: true });
+  it("validates symlinks that escape project", async () => {
+    const guard = new PathGuard({ projectRoot: project, checkSymlinks: true });
     const outsideDir = mkdtempSync(join(tmpdir(), "jait-outside-"));
     writeFileSync(join(outsideDir, "secret.txt"), "secret");
 
     try {
-      symlinkSync(join(outsideDir, "secret.txt"), join(workspace, "src", "link.txt"));
+      symlinkSync(join(outsideDir, "secret.txt"), join(project, "src", "link.txt"));
       await expect(
         guard.validateWithSymlinkCheck("src/link.txt")
       ).rejects.toThrow(PathTraversalError);
@@ -88,7 +88,7 @@ describe("PathGuard", () => {
   });
 
   it("allows files that don't exist yet (for writes)", async () => {
-    const guard = new PathGuard({ workspaceRoot: workspace });
+    const guard = new PathGuard({ projectRoot: project });
     const result = await guard.validateWithSymlinkCheck("src/newfile.ts");
     expect(result).toContain("newfile.ts");
   });
@@ -99,21 +99,21 @@ describe("PathGuard", () => {
 import { FileSystemSurface } from "./surfaces/filesystem.js";
 
 describe("FileSystemSurface", () => {
-  let workspace: string;
+  let project: string;
   let fs: FileSystemSurface;
 
   beforeEach(async () => {
-    workspace = mkdtempSync(join(tmpdir(), "jait-fs-"));
-    mkdirSync(join(workspace, "src"), { recursive: true });
-    writeFileSync(join(workspace, "src", "hello.ts"), 'export const x = 42;\n');
+    project = mkdtempSync(join(tmpdir(), "jait-fs-"));
+    mkdirSync(join(project, "src"), { recursive: true });
+    writeFileSync(join(project, "src", "hello.ts"), 'export const x = 42;\n');
 
     fs = new FileSystemSurface("fs-test");
-    await fs.start({ sessionId: "test-session", workspaceRoot: workspace });
+    await fs.start({ sessionId: "test-session", projectRoot: project });
   });
 
   afterEach(async () => {
     await fs.stop();
-    rmSync(workspace, { recursive: true, force: true });
+    rmSync(project, { recursive: true, force: true });
   });
 
   it("starts in running state", () => {
@@ -121,21 +121,21 @@ describe("FileSystemSurface", () => {
     expect(fs.sessionId).toBe("test-session");
   });
 
-  it("reads files within workspace", async () => {
+  it("reads files within project", async () => {
     const content = await fs.read("src/hello.ts");
     expect(content).toBe("export const x = 42;\n");
   });
 
   it("writes files and creates parent dirs", async () => {
     await fs.write("src/deep/nested/file.ts", "const y = 1;\n");
-    const content = readFileSync(join(workspace, "src", "deep", "nested", "file.ts"), "utf-8");
+    const content = readFileSync(join(project, "src", "deep", "nested", "file.ts"), "utf-8");
     expect(content).toBe("const y = 1;\n");
   });
 
   it("patches files (search & replace)", async () => {
     const result = await fs.patch("src/hello.ts", "42", "99");
     expect(result.matched).toBe(true);
-    const content = readFileSync(join(workspace, "src", "hello.ts"), "utf-8");
+    const content = readFileSync(join(project, "src", "hello.ts"), "utf-8");
     expect(content).toContain("99");
     expect(content).not.toContain("42");
   });
@@ -146,7 +146,7 @@ describe("FileSystemSurface", () => {
   });
 
   it("lists directory entries", async () => {
-    writeFileSync(join(workspace, "src", "other.ts"), "");
+    writeFileSync(join(project, "src", "other.ts"), "");
     const entries = await fs.list("src");
     expect(entries).toContain("hello.ts");
     expect(entries).toContain("other.ts");
@@ -163,11 +163,11 @@ describe("FileSystemSurface", () => {
     expect(info.isDirectory).toBe(false);
   });
 
-  it("blocks reads outside workspace", async () => {
+  it("blocks reads outside project", async () => {
     await expect(fs.read("../../etc/passwd")).rejects.toThrow();
   });
 
-  it("blocks writes outside workspace", async () => {
+  it("blocks writes outside project", async () => {
     await expect(fs.write("../../tmp/evil.txt", "pwned")).rejects.toThrow();
   });
 
@@ -185,14 +185,14 @@ import { SurfaceRegistry } from "./surfaces/registry.js";
 import { FileSystemSurfaceFactory } from "./surfaces/filesystem.js";
 
 describe("SurfaceRegistry (async lifecycle)", () => {
-  let workspace: string;
+  let project: string;
 
   beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jait-registry-"));
+    project = mkdtempSync(join(tmpdir(), "jait-registry-"));
   });
 
   afterEach(() => {
-    rmSync(workspace, { recursive: true, force: true });
+    rmSync(project, { recursive: true, force: true });
   });
 
   it("starts a file-system surface", async () => {
@@ -201,7 +201,7 @@ describe("SurfaceRegistry (async lifecycle)", () => {
 
     const s = await registry.startSurface("filesystem", "fs-1", {
       sessionId: "s1",
-      workspaceRoot: workspace,
+      projectRoot: project,
     });
 
     expect(s.state).toBe("running");
@@ -215,7 +215,7 @@ describe("SurfaceRegistry (async lifecycle)", () => {
 
     await registry.startSurface("filesystem", "fs-1", {
       sessionId: "s1",
-      workspaceRoot: workspace,
+      projectRoot: project,
     });
 
     const stopped = await registry.stopSurface("fs-1");
@@ -227,9 +227,9 @@ describe("SurfaceRegistry (async lifecycle)", () => {
     const registry = new SurfaceRegistry();
     registry.register(new FileSystemSurfaceFactory());
 
-    await registry.startSurface("filesystem", "fs-a", { sessionId: "a", workspaceRoot: workspace });
-    await registry.startSurface("filesystem", "fs-b", { sessionId: "b", workspaceRoot: workspace });
-    await registry.startSurface("filesystem", "fs-a2", { sessionId: "a", workspaceRoot: workspace });
+    await registry.startSurface("filesystem", "fs-a", { sessionId: "a", projectRoot: project });
+    await registry.startSurface("filesystem", "fs-b", { sessionId: "b", projectRoot: project });
+    await registry.startSurface("filesystem", "fs-a2", { sessionId: "a", projectRoot: project });
 
     expect(registry.getBySession("a")).toHaveLength(2);
     expect(registry.getBySession("b")).toHaveLength(1);
@@ -274,7 +274,7 @@ describe("ToolRegistry", () => {
     const result = await registry.execute("echo", { text: "hello" }, {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -287,7 +287,7 @@ describe("ToolRegistry", () => {
     const result = await registry.execute("nope", {}, {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
     expect(result.ok).toBe(false);
@@ -331,7 +331,7 @@ describe("os.query tool", () => {
     const result = await tool.execute({ query: "info" }, {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -348,7 +348,7 @@ describe("os.query tool", () => {
     const result = await tool.execute({ query: "env" }, {
       sessionId: "s1",
       actionId: "a1",
-      workspaceRoot: "/tmp",
+      projectRoot: "/tmp",
       requestedBy: "test",
     });
 
@@ -478,7 +478,7 @@ describe("Terminal & Tool routes", () => {
         tool: "terminal.run",
         input: { command: "docker ps --format '{{.Image}}'" },
         sessionId: "s1",
-        workspaceRoot: "/repo",
+        projectRoot: "/repo",
         nodeId: "node-1",
       },
     });
@@ -488,7 +488,7 @@ describe("Terminal & Tool routes", () => {
       "node-1",
       "terminal.run",
       { command: "docker ps --format '{{.Image}}'" },
-      { sessionId: "s1", workspaceRoot: "/repo", timeoutMs: 120_000 },
+      { sessionId: "s1", projectRoot: "/repo", timeoutMs: 120_000 },
     );
     expect(res.json()).toEqual({ ok: true, message: "remote output", data: { node: "node-1" } });
   });

@@ -32,7 +32,7 @@ import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useCha
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
 import type { ReferencedFile } from './prompt-input'
-import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
+import { parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import type { ResponseStyle } from '@jait/shared'
 import { hasRenderableUserMessageContent } from './message-render-state'
@@ -113,10 +113,10 @@ interface MessageProps {
     cliModel?: string | null
     onCliModelChange?: (model: string | null) => void
     sessionInfo?: SessionInfo | null
-    workspaceNodeId?: string
+    projectNodeId?: string
     availableFiles?: ReferencedFile[]
     onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
-    workspaceOpen?: boolean
+    projectOpen?: boolean
   }
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
@@ -212,13 +212,13 @@ function getFileLinkLabel(path: string): string {
   return parts[parts.length - 1] ?? normalized
 }
 
-function WorkspacePathLink({
+function ProjectPathLink({
   href,
   target,
   onOpenPath,
 }: {
   href?: string
-  target: NonNullable<ReturnType<typeof parseWorkspaceLinkTarget>>
+  target: NonNullable<ReturnType<typeof parseProjectLinkTarget>>
   onOpenPath: NonNullable<MessageProps['onOpenPath']>
 }) {
   const fileName = getFileLinkLabel(target.path)
@@ -299,7 +299,7 @@ function buildMarkdownComponents(
         )
       }
 
-      const target = parseWorkspaceLinkTarget(href)
+      const target = parseProjectLinkTarget(href)
       if (!target) {
         return (
           <a href={href} {...props}>
@@ -308,7 +308,7 @@ function buildMarkdownComponents(
         )
       }
 
-      return <WorkspacePathLink href={href} target={target} onOpenPath={onOpenPath} />
+      return <ProjectPathLink href={href} target={target} onOpenPath={onOpenPath} />
     },
     img: ({ src, alt, ref: _ref, ...props }) => {
       const resolvedSrc = typeof src === 'string' ? resolveChatImageUrl(src) : null
@@ -920,10 +920,10 @@ function MessageInner({
                           cliModel={editComposer?.cliModel}
                           onCliModelChange={editComposer?.onCliModelChange}
                           sessionInfo={editComposer?.sessionInfo}
-                          workspaceNodeId={editComposer?.workspaceNodeId}
+                          projectNodeId={editComposer?.projectNodeId}
                           availableFiles={editComposer?.availableFiles ?? userReferencedFilesFromSegments(userDisplaySegments)}
                           onSearchFiles={editComposer?.onSearchFiles}
-                          workspaceOpen={editComposer?.workspaceOpen ?? userReferencedFilesFromSegments(userDisplaySegments).length > 0}
+                          projectOpen={editComposer?.projectOpen ?? userReferencedFilesFromSegments(userDisplaySegments).length > 0}
                           footerTrailingContent={(
                             <Button
                               type="button"
@@ -970,7 +970,7 @@ function MessageInner({
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
-                                ) : segment.type === 'workspace' ? (
+                                ) : segment.type === 'project' ? (
                                   <span
                                     key={`${segment.path}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
@@ -983,7 +983,7 @@ function MessageInner({
                                   <span
                                     key={`${segment.terminalId}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={segment.workspaceRoot ? `${segment.terminalId} · ${segment.workspaceRoot}` : segment.terminalId}
+                                    title={segment.projectRoot ? `${segment.terminalId} · ${segment.projectRoot}` : segment.terminalId}
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>

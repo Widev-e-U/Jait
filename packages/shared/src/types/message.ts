@@ -70,8 +70,8 @@ export interface WsEvent<T = unknown> {
 
 // ── UI command channel (server → client) ────────────────────────────
 export type UICommandType =
-  | "workspace.open"
-  | "workspace.close"
+  | "project.open"
+  | "project.close"
   | "terminal.focus"
   | "file.highlight"
   | "dev-preview.open"
@@ -85,13 +85,13 @@ export interface UICommandPayload<T = Record<string, unknown>> {
   data: T;
 }
 
-export interface WorkspaceOpenData {
+export interface ProjectOpenData {
   surfaceId: string;
-  workspaceRoot: string;
+  projectRoot: string;
   nodeId?: string;
 }
 
-export interface WorkspaceCloseData {
+export interface ProjectCloseData {
   surfaceId: string;
 }
 
@@ -108,7 +108,7 @@ export interface FileHighlightData {
 
 export interface DevPreviewOpenData {
   target?: string | null;
-  workspaceRoot?: string | null;
+  projectRoot?: string | null;
 }
 
 export interface ScreenShareOpenData {
@@ -121,8 +121,8 @@ export interface ArchitectureUpdateData {
   diagram: string;
   /** Correlates the browser render result with the originating tool call */
   requestId?: string;
-  /** Workspace the diagram belongs to */
-  workspaceRoot?: string;
+  /** Project the diagram belongs to */
+  projectRoot?: string;
   /** Absolute path to the persisted Mermaid file, when available */
   filePath?: string;
 }
@@ -131,7 +131,7 @@ export interface ArchitectureUpdateData {
 export type FsChangeType = "created" | "updated" | "deleted";
 
 export interface FsChangeEvent {
-  /** Workspace-relative path (forward slashes) */
+  /** Project-relative path (forward slashes) */
   path: string;
   type: FsChangeType;
 }
@@ -148,10 +148,10 @@ export interface FsChangesPayload {
  * Each key maps to a specific panel/component that the agent can control.
  */
 export type UIStateKey =
-  | "workspace.panel"
+  | "project.panel"
   | "dev-preview.panel"
-  | "workspace.tabs"
-  | "workspace.layout"
+  | "project.tabs"
+  | "project.layout"
   | "screen-share.panel"
   | "terminal.panel"
   | "footer.menu"
@@ -177,17 +177,17 @@ export interface UIStateUpdate {
 export interface DevPreviewPanelState {
   open: boolean;
   target?: string | null;
-  workspaceRoot?: string | null;
+  projectRoot?: string | null;
   displayState?: "hidden" | "blank" | "connected";
   displayTarget?: string | null;
 }
 
 /**
- * Unified workspace UI state — single DB row per workspace.
- * Stored under key `workspace.ui` in the workspace_state table.
+ * Unified project UI state — single DB row per project.
+ * Stored under key `project.ui` in the project_state table.
  */
-export interface WorkspaceUIState {
-  /** Workspace editor panel */
+export interface ProjectUIState {
+  /** Project editor panel */
   panel: {
     open: boolean;
     remotePath: string;

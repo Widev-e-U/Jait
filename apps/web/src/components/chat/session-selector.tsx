@@ -3,28 +3,28 @@ import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Arch
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorkspaceRecord, WorkspaceSession } from '@/hooks/useWorkspaces'
+import type { ProjectRecord, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
-import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
+import { buildProjectDragPayload, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
-import { getWorkspaceRepository } from '@/lib/workspace-repositories'
+import { getProjectRepository } from '@/lib/project-repositories'
 
 interface SessionSelectorProps {
-  workspaces: WorkspaceRecord[]
-  personalSessions?: WorkspaceSession[]
-  activeWorkspaceId: string | null
+  projects: ProjectRecord[]
+  personalSessions?: ProjectSession[]
+  activeProjectId: string | null
   activeSessionId?: string | null
   loading?: boolean
-  hasMoreWorkspaces?: boolean
-  showFewerWorkspaces?: boolean
-  onSelectWorkspace: (workspaceId: string) => void
+  hasMoreProjects?: boolean
+  showFewerProjects?: boolean
+  onSelectProject: (projectId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onNewPersonalSession?: () => void
-  onCreateWorkspace: () => void
-  onRemoveWorkspace: (workspaceId: string) => void
-  onChangeDirectory: (workspaceId: string) => void
-  onAssignRepository?: (workspaceId: string) => void
+  onCreateProject: () => void
+  onRemoveProject: (projectId: string) => void
+  onChangeDirectory: (projectId: string) => void
+  onAssignRepository?: (projectId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
   sessionInfo?: SessionInfo | null
@@ -62,18 +62,18 @@ function NodeIcon({ platform }: { platform: string }) {
 }
 
 export function SessionSelector({
-  workspaces,
+  projects,
   personalSessions = [],
-  activeWorkspaceId,
+  activeProjectId,
   activeSessionId,
   loading = false,
-  hasMoreWorkspaces = false,
-  showFewerWorkspaces = false,
-  onSelectWorkspace,
+  hasMoreProjects = false,
+  showFewerProjects = false,
+  onSelectProject,
   onSelectPersonalSession,
   onNewPersonalSession,
-  onCreateWorkspace,
-  onRemoveWorkspace,
+  onCreateProject,
+  onRemoveProject,
   onChangeDirectory,
   onAssignRepository,
   onShowMore,
@@ -90,28 +90,28 @@ export function SessionSelector({
   const [searchQuery, setSearchQuery] = useState('')
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
-  const filteredWorkspaces = useMemo(() => {
-    if (!normalizedSearchQuery) return workspaces
-    return workspaces.filter((workspace) => {
-      const repository = getWorkspaceRepository(workspace, repositories)
-      const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
-        ? nodes.find((n) => n.id === workspace.nodeId)
+  const filteredProjects = useMemo(() => {
+    if (!normalizedSearchQuery) return projects
+    return projects.filter((project) => {
+      const repository = getProjectRepository(project, repositories)
+      const remoteNode = project.nodeId && project.nodeId !== 'gateway'
+        ? nodes.find((n) => n.id === project.nodeId)
         : null
       const terms = [
-        workspace.title,
-        workspace.rootPath,
+        project.title,
+        project.rootPath,
         repository?.name,
         remoteNode?.name,
-        ...workspace.sessions.flatMap((session) => [session.name, session.workspacePath]),
+        ...project.sessions.flatMap((session) => [session.name, session.projectPath]),
       ]
       return terms.some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     })
-  }, [nodes, normalizedSearchQuery, repositories, workspaces])
+  }, [nodes, normalizedSearchQuery, repositories, projects])
 
   const filteredPersonalSessions = useMemo(() => {
     if (!normalizedSearchQuery) return personalSessions
     return personalSessions.filter((session) => (
-      [session.name, session.workspacePath]
+      [session.name, session.projectPath]
         .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     ))
   }, [normalizedSearchQuery, personalSessions])
@@ -125,18 +125,18 @@ export function SessionSelector({
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search chats and workspaces"
-            aria-label="Search chats and workspaces"
+            placeholder="Search chats and projects"
+            aria-label="Search chats and projects"
             className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
           />
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCreateWorkspace}>
+            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCreateProject}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">New workspace</TooltipContent>
+          <TooltipContent side="right">New project</TooltipContent>
         </Tooltip>
       </div>
 
@@ -146,57 +146,57 @@ export function SessionSelector({
         </div>
       ) : (
         <>
-          {/* ── Top half: Workspaces ──────────────────────────── */}
+          {/* ── Top half: Projects ──────────────────────────── */}
           <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
             <div className="flex h-7 shrink-0 items-center justify-between px-3">
-              <span className="text-2xs font-medium text-muted-foreground">Workspaces</span>
+              <span className="text-2xs font-medium text-muted-foreground">Projects</span>
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {workspaces.length === 0 && (
+                {projects.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    No workspaces yet.
+                    No projects yet.
                     <br />
-                    <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                      Choose workspace folder
+                    <button onClick={onCreateProject} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
+                      Choose project folder
                     </button>
                   </p>
                 )}
-                {workspaces.length > 0 && filteredWorkspaces.length === 0 && (
+                {projects.length > 0 && filteredProjects.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    No matching workspaces.
+                    No matching projects.
                   </p>
                 )}
-                {filteredWorkspaces.map((workspace) => {
-                  const isActiveWorkspace = workspace.id === activeWorkspaceId
-                  const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
-                    ? nodes.find((n) => n.id === workspace.nodeId)
+                {filteredProjects.map((project) => {
+                  const isActiveProject = project.id === activeProjectId
+                  const remoteNode = project.nodeId && project.nodeId !== 'gateway'
+                    ? nodes.find((n) => n.id === project.nodeId)
                     : null
-                  const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
-                  const repository = getWorkspaceRepository(workspace, repositories)
+                  const offline = isNodeOffline(project.nodeId, onlineNodeIds)
+                  const repository = getProjectRepository(project, repositories)
                   return (
                     <div
-                      key={workspace.id}
+                      key={project.id}
                       className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${
-                        offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
+                        offline || isActiveProject ? 'cursor-default' : 'cursor-pointer'
                       } ${
-                        isActiveWorkspace ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
+                        isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
                       }`}
-                      draggable={Boolean(workspace.rootPath)}
+                      draggable={Boolean(project.rootPath)}
                       onDragStart={(e) => {
-                        if (!workspace.rootPath) {
+                        if (!project.rootPath) {
                           e.preventDefault()
                           return
                         }
                         e.dataTransfer.effectAllowed = 'copy'
                         e.dataTransfer.setData(
-                          JAIT_WORKSPACE_REF_MIME,
-                          JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
+                          JAIT_PROJECT_REF_MIME,
+                          JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined)),
                         )
                       }}
-                      onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
+                      onClick={() => { if (!offline && !isActiveProject) onSelectProject(project.id) }}
                     >
-                      {isActiveWorkspace ? (
+                      {isActiveProject ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       ) : (
                         <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -204,7 +204,7 @@ export function SessionSelector({
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                           <span className="min-w-0 truncate text-xs font-medium">
-                            {workspace.title || 'Untitled Workspace'}
+                            {project.title || 'Untitled Project'}
                           </span>
                           {repository && (
                             <>
@@ -217,9 +217,9 @@ export function SessionSelector({
                           )}
                         </div>
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
-                          <span className="min-w-0 truncate">{workspace.rootPath || 'No folder linked'}</span>
+                          <span className="min-w-0 truncate">{project.rootPath || 'No folder linked'}</span>
                           <span className="shrink-0">·</span>
-                          <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
+                          <span className="shrink-0">{formatTime(project.lastActiveAt)}</span>
                         </div>
                         {offline && (
                           <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
@@ -235,7 +235,7 @@ export function SessionSelector({
                             </span>
                           </div>
                         )}
-                        {isActiveWorkspace && sessionInfo && (
+                        {isActiveProject && sessionInfo && (
                           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
                             <span className="truncate">{sessionInfo.provider}</span>
                             <span className="shrink-0 text-muted-foreground">·</span>
@@ -256,13 +256,13 @@ export function SessionSelector({
                                 variant="ghost"
                                 size="icon"
                                 aria-label={repository ? `Repository: ${repository.name}` : 'Assign repository'}
-                                disabled={!workspace.rootPath}
+                                disabled={!project.rootPath}
                                 className={`h-5.5 w-5.5 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${
                                   repository ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'
                                 }`}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  onAssignRepository(workspace.id)
+                                  onAssignRepository(project.id)
                                 }}
                               >
                                 <GitBranch className="h-3 w-3" />
@@ -280,7 +280,7 @@ export function SessionSelector({
                               className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                onChangeDirectory(workspace.id)
+                                onChangeDirectory(project.id)
                               }}
                             >
                               <FolderInput className="h-3 w-3" />
@@ -293,36 +293,36 @@ export function SessionSelector({
                             <Button
                               variant="ghost"
                               size="icon"
-                              aria-label="Archive workspace"
+                              aria-label="Archive project"
                               className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                onRemoveWorkspace(workspace.id)
+                                onRemoveProject(project.id)
                               }}
                             >
                               <Archive className="h-3 w-3" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent side="right">Archive workspace</TooltipContent>
+                          <TooltipContent side="right">Archive project</TooltipContent>
                         </Tooltip>
                       </div>
                     </div>
                   )
                 })}
-                {!normalizedSearchQuery && hasMoreWorkspaces && onShowMore && (
+                {!normalizedSearchQuery && hasMoreProjects && onShowMore && (
                   <button
                     className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
                     onClick={onShowMore}
                   >
-                    Show more workspaces
+                    Show more projects
                   </button>
                 )}
-                {!normalizedSearchQuery && showFewerWorkspaces && onShowFewer && (
+                {!normalizedSearchQuery && showFewerProjects && onShowFewer && (
                   <button
                     className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
                     onClick={onShowFewer}
                   >
-                    Show fewer workspaces
+                    Show fewer projects
                   </button>
                 )}
               </div>
@@ -365,7 +365,7 @@ export function SessionSelector({
                   </p>
                 )}
                 {filteredPersonalSessions.map((session) => {
-                  const isActive = activeWorkspaceId === null && session.id === activeSessionId
+                  const isActive = activeProjectId === null && session.id === activeSessionId
                   return (
                     <div
                       key={session.id}

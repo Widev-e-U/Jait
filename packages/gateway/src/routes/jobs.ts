@@ -255,7 +255,7 @@ export function registerJobRoutes(
       input,
       enabled: parseBool(body["enabled"], true),
       sessionId: "default",
-      workspaceRoot: process.cwd(),
+      projectRoot: process.cwd(),
     });
 
     return reply.status(201).send(mapJob(created));
@@ -314,7 +314,7 @@ export function registerJobRoutes(
         prompt: nextPrompt,
         providerId: nextMeta.provider,
         model: nextMeta.model,
-        workingDirectory: existing.workspaceRoot,
+        workingDirectory: existing.projectRoot,
         start: true,
         detach: true,
       };

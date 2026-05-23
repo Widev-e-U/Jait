@@ -263,11 +263,11 @@ describe("mcp-server", () => {
     expect(response.body).toBe("");
   });
 
-  it("passes session, workspace, and provider overrides into MCP tool context", async () => {
+  it("passes session, project, and provider overrides into MCP tool context", async () => {
     const registry = new ToolRegistry();
     let capturedContext: {
       sessionId: string;
-      workspaceRoot: string;
+      projectRoot: string;
       userId?: string;
       providerId?: string;
       model?: string;
@@ -284,7 +284,7 @@ describe("mcp-server", () => {
       async execute(_input, context) {
         capturedContext = {
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           userId: context.userId,
           providerId: context.providerId,
           model: context.model,
@@ -308,7 +308,7 @@ describe("mcp-server", () => {
       "2025-03-26",
       {
         sessionId: "web-session-123",
-        workspaceRoot: "/tmp/project",
+        projectRoot: "/tmp/project",
         providerId: "codex",
         model: "gpt-5-codex",
         runtimeMode: "supervised",
@@ -325,7 +325,7 @@ describe("mcp-server", () => {
     });
     expect(capturedContext).toEqual({
       sessionId: "web-session-123",
-      workspaceRoot: "/tmp/project",
+      projectRoot: "/tmp/project",
       userId: undefined,
       providerId: "codex",
       model: "gpt-5-codex",
@@ -384,10 +384,10 @@ describe("mcp-server", () => {
     const session = sessionService.create({
       userId,
       name: "Active Session",
-      workspacePath: "/tmp/current-workspace",
+      projectPath: "/tmp/current-project",
     });
     const token = await signAuthToken({ id: userId, username: "jakob" }, "test-secret");
-    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+    let capturedContext: { sessionId: string; projectRoot: string; userId?: string } | null = null;
 
     registry.register({
       name: "surfaces.start",
@@ -405,7 +405,7 @@ describe("mcp-server", () => {
       async execute(_input, context) {
         capturedContext = {
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           userId: context.userId,
         };
         return { ok: true, message: "ok" };
@@ -445,7 +445,7 @@ describe("mcp-server", () => {
     expect(response.statusCode).toBe(200);
     expect(capturedContext).toEqual({
       sessionId: session.id,
-      workspaceRoot: "/tmp/current-workspace",
+      projectRoot: "/tmp/current-project",
       userId,
     });
   });
@@ -458,9 +458,9 @@ describe("mcp-server", () => {
       const registry = new ToolRegistry();
       const session = sessionService.create({
         name: "Local MCP Session",
-        workspacePath: "/tmp/local-workspace",
+        projectPath: "/tmp/local-project",
       });
-      let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+      let capturedContext: { sessionId: string; projectRoot: string; userId?: string } | null = null;
 
       registry.register({
         name: "memory.search",
@@ -478,7 +478,7 @@ describe("mcp-server", () => {
         async execute(_input, context) {
           capturedContext = {
             sessionId: context.sessionId,
-            workspaceRoot: context.workspaceRoot,
+            projectRoot: context.projectRoot,
             userId: context.userId,
           };
           return { ok: true, message: "ok" };
@@ -517,7 +517,7 @@ describe("mcp-server", () => {
       expect(response.statusCode).toBe(200);
       expect(capturedContext).toEqual({
         sessionId: session.id,
-        workspaceRoot: "/tmp/local-workspace",
+        projectRoot: "/tmp/local-project",
         userId: undefined,
       });
     } finally {
@@ -528,7 +528,7 @@ describe("mcp-server", () => {
   it("passes the authenticated user into MCP tool context when a session override is provided", async () => {
     const registry = new ToolRegistry();
     const token = await signAuthToken({ id: "user-456", username: "jakob" }, "test-secret");
-    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+    let capturedContext: { sessionId: string; projectRoot: string; userId?: string } | null = null;
 
     registry.register({
       name: "surfaces.list",
@@ -540,7 +540,7 @@ describe("mcp-server", () => {
       async execute(_input, context) {
         capturedContext = {
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           userId: context.userId,
         };
         return { ok: true, message: "ok" };
@@ -560,7 +560,7 @@ describe("mcp-server", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace",
+      url: "/mcp?sessionId=query-session&projectRoot=%2Ftmp%2Fquery-project",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${token}`,
@@ -579,7 +579,7 @@ describe("mcp-server", () => {
     expect(response.statusCode).toBe(200);
     expect(capturedContext).toEqual({
       sessionId: "query-session",
-      workspaceRoot: "/tmp/query-workspace",
+      projectRoot: "/tmp/query-project",
       userId: "user-456",
     });
   });
@@ -588,7 +588,7 @@ describe("mcp-server", () => {
     const registry = new ToolRegistry();
     let capturedContext: {
       sessionId: string;
-      workspaceRoot: string;
+      projectRoot: string;
       userId?: string;
       providerId?: string;
       model?: string;
@@ -605,7 +605,7 @@ describe("mcp-server", () => {
       async execute(_input, context) {
         capturedContext = {
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           userId: context.userId,
           providerId: context.providerId,
           model: context.model,
@@ -628,7 +628,7 @@ describe("mcp-server", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace&providerId=codex&model=gpt-5-codex&runtimeMode=supervised",
+      url: "/mcp?sessionId=query-session&projectRoot=%2Ftmp%2Fquery-project&providerId=codex&model=gpt-5-codex&runtimeMode=supervised",
       headers: {
         "content-type": "application/json",
       },
@@ -646,7 +646,7 @@ describe("mcp-server", () => {
     expect(response.statusCode).toBe(200);
     expect(capturedContext).toEqual({
       sessionId: "query-session",
-      workspaceRoot: "/tmp/query-workspace",
+      projectRoot: "/tmp/query-project",
       userId: undefined,
       providerId: "codex",
       model: "gpt-5-codex",
@@ -658,7 +658,7 @@ describe("mcp-server", () => {
     const registry = new ToolRegistry();
     let capturedContext: {
       sessionId: string;
-      workspaceRoot: string;
+      projectRoot: string;
       providerId?: string;
       model?: string;
       runtimeMode?: string;
@@ -675,7 +675,7 @@ describe("mcp-server", () => {
         properties: {
           content: { type: "string" },
           sessionId: { type: "string" },
-          workspaceRoot: { type: "string" },
+          projectRoot: { type: "string" },
           providerId: { type: "string" },
           model: { type: "string" },
           runtimeMode: { type: "string" },
@@ -685,7 +685,7 @@ describe("mcp-server", () => {
       async execute(_input, context) {
         capturedContext = {
           sessionId: context.sessionId,
-          workspaceRoot: context.workspaceRoot,
+          projectRoot: context.projectRoot,
           providerId: context.providerId,
           model: context.model,
           runtimeMode: context.runtimeMode,
@@ -720,7 +720,7 @@ describe("mcp-server", () => {
           arguments: {
             content: "remember this",
             sessionId: "argument-session",
-            workspaceRoot: "/tmp/argument-workspace",
+            projectRoot: "/tmp/argument-project",
             providerId: "codex",
             model: "gpt-5-codex",
             runtimeMode: "supervised",
@@ -732,7 +732,7 @@ describe("mcp-server", () => {
     expect(response.statusCode).toBe(200);
     expect(capturedContext).toEqual({
       sessionId: "argument-session",
-      workspaceRoot: "/tmp/argument-workspace",
+      projectRoot: "/tmp/argument-project",
       providerId: "codex",
       model: "gpt-5-codex",
       runtimeMode: "supervised",
@@ -751,7 +751,7 @@ describe("mcp-server", () => {
       const session = sessionService.create({
         userId: user.id,
         name: "Codex Session",
-        workspacePath: "/tmp/current-workspace",
+        projectPath: "/tmp/current-project",
       });
       sessionState.set(session.id, {
         "chat.providerRuntimeMode": "supervised",
@@ -761,7 +761,7 @@ describe("mcp-server", () => {
       const registry = new ToolRegistry();
       let capturedContext: {
         sessionId: string;
-        workspaceRoot: string;
+        projectRoot: string;
         userId?: string;
         providerId?: string;
         model?: string;
@@ -778,7 +778,7 @@ describe("mcp-server", () => {
         async execute(_input, context) {
           capturedContext = {
             sessionId: context.sessionId,
-            workspaceRoot: context.workspaceRoot,
+            projectRoot: context.projectRoot,
             userId: context.userId,
             providerId: context.providerId,
             model: context.model,
@@ -822,7 +822,7 @@ describe("mcp-server", () => {
       expect(response.statusCode).toBe(200);
       expect(capturedContext).toEqual({
         sessionId: session.id,
-        workspaceRoot: "/tmp/current-workspace",
+        projectRoot: "/tmp/current-project",
         userId: user.id,
         providerId: "codex",
         model: "gpt-5-codex",
@@ -844,7 +844,7 @@ describe("mcp-server", () => {
       const session = sessionService.create({
         userId: user.id,
         name: "MCP Todo Session",
-        workspacePath: "/tmp/mcp-workspace",
+        projectPath: "/tmp/mcp-project",
       });
 
       const registry = new ToolRegistry();

@@ -26,7 +26,7 @@ export interface PreviewLogEntry {
 export interface PreviewSession {
   id: string;
   sessionId: string;
-  workspaceRoot: string | null;
+  projectRoot: string | null;
   mode: PreviewMode;
   status: PreviewStatus;
   target: string | null;
@@ -55,7 +55,7 @@ export interface PreviewRemoteBrowserSession {
 
 export interface StartPreviewInput {
   sessionId: string;
-  workspaceRoot?: string | null;
+  projectRoot?: string | null;
   target?: string | null;
   command?: string | null;
   port?: number | null;
@@ -151,11 +151,11 @@ export class PreviewService {
 
     const createdAt = nowIso();
     const normalizedTarget = normalizeTargetUrl(input.target ?? "");
-    const isLocal = Boolean(input.command?.trim()) || (!normalizedTarget && Boolean(input.workspaceRoot?.trim()));
+    const isLocal = Boolean(input.command?.trim()) || (!normalizedTarget && Boolean(input.projectRoot?.trim()));
     const session: InternalPreviewSession = {
       id: `preview-${input.sessionId}`,
       sessionId: input.sessionId,
-      workspaceRoot: input.workspaceRoot?.trim() || null,
+      projectRoot: input.projectRoot?.trim() || null,
       mode: isLocal ? this.runner.mode : "url",
       status: "starting",
       target: input.target?.trim() || null,
@@ -182,12 +182,12 @@ export class PreviewService {
 
     try {
       if (session.mode !== "url") {
-        if (!session.workspaceRoot) {
-          throw new Error("workspaceRoot is required for managed project previews");
+        if (!session.projectRoot) {
+          throw new Error("projectRoot is required for managed project previews");
         }
         const result = await this.runner.start(
           {
-            workspaceRoot: session.workspaceRoot,
+            projectRoot: session.projectRoot,
             command: input.command?.trim() || null,
             port: input.port,
             target: input.target?.trim() || null,
@@ -251,7 +251,7 @@ export class PreviewService {
     if (!existing) return null;
     return this.start({
       sessionId,
-      workspaceRoot: existing.workspaceRoot,
+      projectRoot: existing.projectRoot,
       target: existing.target,
       command: existing.command,
       port: existing.port,
@@ -381,7 +381,7 @@ export class PreviewService {
     await this.surfaceRegistry.stopSurface(browserId, "preview-refresh").catch(() => {});
     const started = await this.surfaceRegistry.startSurface("browser", browserId, {
       sessionId: session.sessionId,
-      workspaceRoot: session.workspaceRoot ?? process.cwd(),
+      projectRoot: session.projectRoot ?? process.cwd(),
       requireLiveView: true,
     });
     if (started.type !== "browser") {
@@ -477,7 +477,7 @@ export class PreviewService {
     return {
       id: session.id,
       sessionId: session.sessionId,
-      workspaceRoot: session.workspaceRoot,
+      projectRoot: session.projectRoot,
       mode: session.mode,
       status: session.status,
       target: session.target,

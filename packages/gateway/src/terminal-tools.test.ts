@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTerminalRunTool,
   detectInteractivePrompt,
-  rewriteWorkspacePathForSandboxCommand,
+  rewriteProjectPathForSandboxCommand,
 } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
@@ -13,7 +13,7 @@ function makeContext() {
   return {
     sessionId: "s-test",
     actionId: "a-test",
-    workspaceRoot: process.cwd(),
+    projectRoot: process.cwd(),
     requestedBy: "test",
   };
 }
@@ -110,32 +110,32 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).timedOut).toBe(false);
   });
 
-  it("rewrites host workspace paths to the sandbox mount path", async () => {
+  it("rewrites host project paths to the sandbox mount path", async () => {
     const commands: string[][] = [];
     const sandbox = new SandboxManager(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait" };
+    const context = { ...makeContext(), projectRoot: "/home/jakob/jait" };
 
     await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
 
-    expect(commands[0]).toContain("cd /workspace && bun test");
+    expect(commands[0]).toContain("cd /project && bun test");
   });
 
-  it("rewrites quoted workspace file paths to the sandbox mount path", () => {
+  it("rewrites quoted project file paths to the sandbox mount path", () => {
     const command = "cat '/home/jakob/jait/packages/gateway/src/tools/terminal-tools.ts'";
 
-    const rewritten = rewriteWorkspacePathForSandboxCommand(command, "/home/jakob/jait");
+    const rewritten = rewriteProjectPathForSandboxCommand(command, "/home/jakob/jait");
 
-    expect(rewritten).toBe("cat '/workspace/packages/gateway/src/tools/terminal-tools.ts'");
+    expect(rewritten).toBe("cat '/project/packages/gateway/src/tools/terminal-tools.ts'");
   });
 
-  it("does not rewrite path prefixes that only partially match the workspace root", () => {
+  it("does not rewrite path prefixes that only partially match the project root", () => {
     const command = "echo /home/jakob/jait-backup && cat /tmp/home/jakob/jait";
 
-    const rewritten = rewriteWorkspacePathForSandboxCommand(command, "/home/jakob/jait");
+    const rewritten = rewriteProjectPathForSandboxCommand(command, "/home/jakob/jait");
 
     expect(rewritten).toBe(command);
   });
@@ -147,12 +147,12 @@ describe("terminal.run tool status reporting", () => {
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+    const context = { ...makeContext(), projectRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
 
     const result = await tool.execute({ command: "pwd", sandbox: true }, context);
 
     expect(result.ok).toBe(true);
-    expect(commands[0]).toEqual(["docker", "exec", "-w", "/workspace", "jait-agent-sb-test", "bash", "-lc", "pwd"]);
+    expect(commands[0]).toEqual(["docker", "exec", "-w", "/project", "jait-agent-sb-test", "bash", "-lc", "pwd"]);
     expect((result.data as any).threadSandbox).toBe(true);
   });
 
@@ -163,11 +163,11 @@ describe("terminal.run tool status reporting", () => {
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+    const context = { ...makeContext(), projectRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
 
     await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
 
-    expect(commands[0]).toContain("cd /workspace && bun test");
+    expect(commands[0]).toContain("cd /project && bun test");
   });
 
   it("returns ok=false when sandbox exit code is non-zero", async () => {

@@ -18,9 +18,9 @@ export type {
   UIStateUpdate,
   ResponseStyle,
   DevPreviewPanelState,
-  WorkspaceUIState,
-  WorkspaceOpenData,
-  WorkspaceCloseData,
+  ProjectUIState,
+  ProjectOpenData,
+  ProjectCloseData,
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,
@@ -91,7 +91,7 @@ export type {
 } from "./assistant.js";
 
 export type {
-  EnvironmentWorkspace,
+  EnvironmentProject,
   EnvironmentRepository,
   EnvironmentConnector,
   EnvironmentSnapshot,

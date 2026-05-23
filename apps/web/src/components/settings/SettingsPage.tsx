@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { ActivityFeed } from '@/components/activity'
-import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
+import type { ProjectRecord } from '@/hooks/useProjects'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
@@ -111,9 +111,9 @@ interface SettingsPageProps {
   jaitBackend: JaitBackend
   onJaitBackendChange: (next: JaitBackend) => Promise<void>
   onClearArchive: () => Promise<number>
-  onClearArchivedWorkspaces: () => Promise<number>
-  onFetchArchivedWorkspaces: () => Promise<WorkspaceRecord[]>
-  onRestoreWorkspace: (workspaceId: string) => Promise<boolean>
+  onClearArchivedProjects: () => Promise<number>
+  onFetchArchivedProjects: () => Promise<ProjectRecord[]>
+  onRestoreProject: (projectId: string) => Promise<boolean>
   activityEvents?: ActivityEvent[]
   updateInfo: UpdateInfo | null
   updateChecking: boolean
@@ -133,9 +133,9 @@ export function SettingsPage({
   jaitBackend,
   onJaitBackendChange,
   onClearArchive,
-  onClearArchivedWorkspaces,
-  onFetchArchivedWorkspaces,
-  onRestoreWorkspace,
+  onClearArchivedProjects,
+  onFetchArchivedProjects,
+  onRestoreProject,
   activityEvents,
   updateInfo,
   updateChecking,
@@ -147,8 +147,8 @@ export function SettingsPage({
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
   const [saving, setSaving] = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [clearingWorkspaces, setClearingWorkspaces] = useState(false)
-  const [archivedWorkspaces, setArchivedWorkspaces] = useState<WorkspaceRecord[]>([])
+  const [clearingProjects, setClearingProjects] = useState(false)
+  const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
   const [loadingArchived, setLoadingArchived] = useState(false)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -276,43 +276,43 @@ export function SettingsPage({
     }
   }
 
-  const handleClearArchivedWorkspaces = async () => {
-    setClearingWorkspaces(true)
+  const handleClearArchivedProjects = async () => {
+    setClearingProjects(true)
     setError(null)
     setStatus(null)
     try {
-      const removed = await onClearArchivedWorkspaces()
-      setArchivedWorkspaces([])
-      setStatus(`Cleared ${removed} archived workspace(s).`)
+      const removed = await onClearArchivedProjects()
+      setArchivedProjects([])
+      setStatus(`Cleared ${removed} archived project(s).`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear archived workspaces')
+      setError(err instanceof Error ? err.message : 'Failed to clear archived projects')
     } finally {
-      setClearingWorkspaces(false)
+      setClearingProjects(false)
     }
   }
 
-  const loadArchivedWorkspaces = useCallback(async () => {
+  const loadArchivedProjects = useCallback(async () => {
     setLoadingArchived(true)
     try {
-      const list = await onFetchArchivedWorkspaces()
-      setArchivedWorkspaces(list)
+      const list = await onFetchArchivedProjects()
+      setArchivedProjects(list)
     } finally {
       setLoadingArchived(false)
     }
-  }, [onFetchArchivedWorkspaces])
+  }, [onFetchArchivedProjects])
 
-  const handleRestoreWorkspace = async (workspaceId: string) => {
-    setRestoringId(workspaceId)
+  const handleRestoreProject = async (projectId: string) => {
+    setRestoringId(projectId)
     try {
-      const ok = await onRestoreWorkspace(workspaceId)
+      const ok = await onRestoreProject(projectId)
       if (ok) {
-        setArchivedWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId))
-        setStatus('Workspace restored.')
+        setArchivedProjects((prev) => prev.filter((w) => w.id !== projectId))
+        setStatus('Project restored.')
       } else {
-        setError('Failed to restore workspace.')
+        setError('Failed to restore project.')
       }
     } catch {
-      setError('Failed to restore workspace.')
+      setError('Failed to restore project.')
     } finally {
       setRestoringId(null)
     }
@@ -374,8 +374,8 @@ export function SettingsPage({
   const showArchiveSection = matchesSearch(
     'session archive archived clear delete messages history',
   )
-  const showWorkspaceArchiveSection = matchesSearch(
-    'workspace archive archived clear delete workspaces remove',
+  const showProjectArchiveSection = matchesSearch(
+    'project archive archived clear delete projects remove',
   )
   const showJaitBackendSection = matchesSearch(
     'jait backend provider openai openrouter model api llm',
@@ -639,32 +639,32 @@ export function SettingsPage({
             </Card>
           )}
 
-          {showWorkspaceArchiveSection && (
+          {showProjectArchiveSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">{highlight('Workspace archive')}</h2>
+                <h2 className="text-base font-medium">{highlight('Project archive')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Restore or permanently remove archived workspaces and their sessions.
+                  Restore or permanently remove archived projects and their sessions.
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                <Button className="w-full sm:w-auto" variant="outline" onClick={() => { void loadArchivedWorkspaces() }} disabled={loadingArchived}>
-                  {loadingArchived ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Loading...</> : 'Show archived workspaces'}
+                <Button className="w-full sm:w-auto" variant="outline" onClick={() => { void loadArchivedProjects() }} disabled={loadingArchived}>
+                  {loadingArchived ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Loading...</> : 'Show archived projects'}
                 </Button>
-                <Button className="w-full sm:w-auto" variant="destructive" onClick={() => { void handleClearArchivedWorkspaces() }} disabled={clearingWorkspaces}>
-                  {clearingWorkspaces ? 'Clearing...' : 'Clear all archived'}
+                <Button className="w-full sm:w-auto" variant="destructive" onClick={() => { void handleClearArchivedProjects() }} disabled={clearingProjects}>
+                  {clearingProjects ? 'Clearing...' : 'Clear all archived'}
                 </Button>
               </div>
-              {archivedWorkspaces.length > 0 && (
+              {archivedProjects.length > 0 && (
                 <div className="space-y-2">
-                  {archivedWorkspaces.map((workspace) => (
-                    <div key={workspace.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                  {archivedProjects.map((project) => (
+                    <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{workspace.title || workspace.rootPath || workspace.id}</p>
-                          {workspace.rootPath && workspace.title && (
-                            <p className="text-xs text-muted-foreground truncate">{workspace.rootPath}</p>
+                          <p className="text-sm font-medium truncate">{project.title || project.rootPath || project.id}</p>
+                          {project.rootPath && project.title && (
+                            <p className="text-xs text-muted-foreground truncate">{project.rootPath}</p>
                           )}
                         </div>
                       </div>
@@ -672,10 +672,10 @@ export function SettingsPage({
                         variant="outline"
                         size="sm"
                         className="shrink-0 h-7 text-xs"
-                        onClick={() => { void handleRestoreWorkspace(workspace.id) }}
-                        disabled={restoringId === workspace.id}
+                        onClick={() => { void handleRestoreProject(project.id) }}
+                        disabled={restoringId === project.id}
                       >
-                        {restoringId === workspace.id ? (
+                        {restoringId === project.id ? (
                           <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                         ) : (
                           <ArchiveRestore className="mr-1.5 h-3 w-3" />
@@ -837,7 +837,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showProviderAccountsSection && !showSpeechSection && emptyState}
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showJaitBackendSection && !showProviderAccountsSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6 pb-20">

@@ -123,8 +123,8 @@ export function verifySchema(sqlite: SqliteDatabase) {
       disabled_tools: "TEXT",
       stt_provider: "TEXT NOT NULL DEFAULT 'simulated'",
       chat_provider: "TEXT NOT NULL DEFAULT 'jait'",
-      workspace_picker_path: "TEXT",
-      workspace_picker_node_id: "TEXT",
+      project_picker_path: "TEXT",
+      project_picker_node_id: "TEXT",
     },
     messages: {
       tool_calls: "TEXT",
@@ -132,7 +132,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
     },
     sessions: {
       user_id: "TEXT",
-      workspace_id: "TEXT",
+      project_id: "TEXT",
     },
     automation_repositories: {
       device_id: "TEXT",

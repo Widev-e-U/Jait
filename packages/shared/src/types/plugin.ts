@@ -22,7 +22,7 @@ export interface SkillInfo {
   name: string;
   description: string;
   filePath: string;
-  source: "bundled" | "user" | "workspace" | "plugin";
+  source: "bundled" | "user" | "project" | "plugin";
   enabled: boolean;
 }
 

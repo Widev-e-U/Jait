@@ -12,7 +12,7 @@ async function authHeader(jwtSecret: string, userId: string) {
 }
 
 describe("auth settings routes", () => {
-  it("persists workspace picker location in user settings", async () => {
+  it("persists project picker location in user settings", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
@@ -29,15 +29,15 @@ describe("auth settings routes", () => {
       url: "/api/auth/settings",
       headers,
       payload: {
-        workspace_picker_path: "/tmp/project",
-        workspace_picker_node_id: "gateway",
+        project_picker_path: "/tmp/project",
+        project_picker_node_id: "gateway",
       },
     });
 
     expect(patchResponse.statusCode).toBe(200);
     expect(patchResponse.json()).toMatchObject({
-      workspace_picker_path: "/tmp/project",
-      workspace_picker_node_id: "gateway",
+      project_picker_path: "/tmp/project",
+      project_picker_node_id: "gateway",
     });
 
     const getResponse = await app.inject({
@@ -48,8 +48,8 @@ describe("auth settings routes", () => {
 
     expect(getResponse.statusCode).toBe(200);
     expect(getResponse.json()).toMatchObject({
-      workspace_picker_path: "/tmp/project",
-      workspace_picker_node_id: "gateway",
+      project_picker_path: "/tmp/project",
+      project_picker_node_id: "gateway",
     });
 
     await app.close();

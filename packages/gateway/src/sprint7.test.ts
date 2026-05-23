@@ -28,7 +28,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: { source: "test" },
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     expect(schedulerA.list()).toHaveLength(1);
@@ -62,7 +62,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "system",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
     const userJob = scheduler.create({
       userId: "user-a",
@@ -71,7 +71,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
     const otherUserJob = scheduler.create({
       userId: "user-b",
@@ -80,7 +80,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "s2",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     expect(scheduler.list("user-a").map((job) => job.id).sort()).toEqual([
@@ -110,7 +110,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     await scheduler.tick(new Date("2026-03-02T10:15:00.000Z"));
@@ -145,7 +145,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
         },
       },
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     await scheduler.trigger(job.id);
@@ -153,11 +153,11 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
       toolName: "thread.control",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       input: expect.objectContaining({
         action: "create",
         kind: "delivery",
-        workingDirectory: "/workspace/Jait",
+        workingDirectory: "/project/Jait",
         providerId: "codex",
         model: "gpt-5-codex",
         start: true,
@@ -195,7 +195,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
         },
       },
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     await scheduler.trigger(job.id);
@@ -240,7 +240,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
         },
       },
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     await scheduler.trigger(job.id);
@@ -274,7 +274,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     const runAt = new Date("2026-03-02T09:05:00.000Z");
@@ -299,7 +299,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       toolName: "gateway.status",
       input: {},
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
     });
 
     await scheduler.tick(new Date("2026-03-02T09:00:00.000Z"));
@@ -323,15 +323,15 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
 
   it("fires session.start built-in hook and loads bootstrap files", () => {
     const hooks = new HookBus();
-    const workspaceRoot = join(tmpdir(), `jait-sprint7-${Date.now()}`);
-    mkdirSync(join(workspaceRoot, ".jait"), { recursive: true });
-    writeFileSync(join(workspaceRoot, ".jait", "bootstrap.md"), "# Bootstrap\nload me");
+    const projectRoot = join(tmpdir(), `jait-sprint7-${Date.now()}`);
+    mkdirSync(join(projectRoot, ".jait"), { recursive: true });
+    writeFileSync(join(projectRoot, ".jait", "bootstrap.md"), "# Bootstrap\nload me");
 
     const bootstrapSpy = vi.fn();
     hooks.on("session.bootstrap.loaded", bootstrapSpy);
-    registerBuiltInHooks(hooks, { defaultWorkspaceRoot: workspaceRoot });
+    registerBuiltInHooks(hooks, { defaultProjectRoot: projectRoot });
 
-    hooks.emit("session.start", { sessionId: "s-bootstrap", workspaceRoot });
+    hooks.emit("session.start", { sessionId: "s-bootstrap", projectRoot });
 
     expect(bootstrapSpy).toHaveBeenCalledOnce();
     const payload = bootstrapSpy.mock.calls[0]?.[0]?.payload as {
@@ -431,7 +431,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     const status = await tools.execute("gateway.status", {}, {
       actionId: "a1",
       sessionId: "s1",
-      workspaceRoot: "/workspace/Jait",
+      projectRoot: "/project/Jait",
       requestedBy: "test",
     });
 

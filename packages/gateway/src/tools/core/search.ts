@@ -1,5 +1,5 @@
 /**
- * search — Search files in the workspace by content or name.
+ * search — Search files in the project by content or name.
  *
  * Inspired by VS Code Copilot's grep_search + file_search:
  * - `isRegexp` flag for explicit regex vs literal mode
@@ -12,7 +12,7 @@
 
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
-import { resolveWorkspaceRoot } from "./get-fs.js";
+import { resolveProjectRoot } from "./get-fs.js";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { platform } from "node:os";
@@ -49,7 +49,7 @@ interface SearchInput {
   pattern: string;
   /** Whether the pattern is a regex (default: false = literal text search) */
   isRegexp?: boolean;
-  /** Directory to search in (defaults to workspace root) */
+  /** Directory to search in (defaults to project root) */
   path?: string;
   /** Search mode: "content" (grep) or "files" (find by name). Default: "content" */
   mode?: string;
@@ -67,7 +67,7 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
   return {
     name: "search",
     description:
-      "Search for files or text in the workspace. " +
+      "Search for files or text in the project. " +
       'mode="content" (default): grep through file contents, returns matching lines. ' +
       'mode="files": find files by name substring. ' +
       "Use isRegexp for regex patterns (e.g. 'word1|word2' for alternation).",
@@ -87,7 +87,7 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
         },
         path: {
           type: "string",
-          description: "Directory to search in (defaults to workspace root).",
+          description: "Directory to search in (defaults to project root).",
         },
         mode: {
           type: "string",
@@ -110,7 +110,7 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
       required: ["pattern"],
     },
     async execute(input: SearchInput, context: ToolContext): Promise<ToolResult> {
-      const effectiveRoot = resolveWorkspaceRoot(registry, context.sessionId, context.workspaceRoot);
+      const effectiveRoot = resolveProjectRoot(registry, context.sessionId, context.projectRoot);
       const searchDir = input.path || effectiveRoot;
       const limit = Math.min(input.limit ?? DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP);
       const mode = input.mode ?? "content";

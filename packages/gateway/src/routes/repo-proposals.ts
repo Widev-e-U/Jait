@@ -239,7 +239,7 @@ export function registerRepoProposalRoutes(
       : "";
 
     const systemPrompt = [
-      "You are a senior software engineer reviewing a workspace for useful future todo items.",
+      "You are a senior software engineer reviewing a project for useful future todo items.",
       "Generate concrete, actionable follow-up tasks that an AI coding agent could later run.",
       "Prefer high-signal items: tests, bugs, cleanup, missing docs, UX polish, reliability, and developer workflow improvements.",
       "Do not include vague tasks, duplicates, or work that is already represented by existing todos.",

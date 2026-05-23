@@ -832,4 +832,72 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 037: Rename workspace concept → project ──────────────────────
+  // Pure terminology rename: tables, columns, and indexes go from
+  // `workspace*` to `project*`. Preserves all existing data.
+  {
+    id: 37,
+    name: "rename_workspace_to_project",
+    run(db) {
+      function renameTable(from: string, to: string): void {
+        const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(from);
+        const newExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(to);
+        if (exists && !newExists) {
+          db.exec(`ALTER TABLE "${from}" RENAME TO "${to}"`);
+        }
+      }
+      function renameColumn(table: string, from: string, to: string): void {
+        const tableExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+        if (!tableExists) return;
+        const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+        const names = new Set(cols.map((c) => c.name));
+        if (names.has(from) && !names.has(to)) {
+          db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${from}" TO "${to}"`);
+        }
+      }
+      function dropIndex(name: string): void {
+        db.exec(`DROP INDEX IF EXISTS "${name}"`);
+      }
+
+      // Tables
+      renameTable("workspaces", "projects");
+      renameTable("workspace_state", "project_state");
+
+      // Columns
+      renameColumn("project_state", "workspace_id", "project_id");
+      renameColumn("sessions", "workspace_id", "project_id");
+      renameColumn("sessions", "workspace_path", "project_path");
+      renameColumn("user_settings", "workspace_picker_path", "project_picker_path");
+      renameColumn("user_settings", "workspace_picker_node_id", "project_picker_node_id");
+      renameColumn("reminders", "workspace_id", "project_id");
+      renameColumn("architecture_diagrams", "workspace_root", "project_root");
+      renameColumn("scheduled_jobs", "workspace_root", "project_root");
+      renameColumn("browser_sessions", "workspace_root", "project_root");
+
+      // Old indexes (drop; recreate under new names below).
+      dropIndex("idx_workspaces_user_status");
+      dropIndex("idx_workspaces_user_root");
+      dropIndex("idx_workspace_state_workspace");
+      dropIndex("idx_reminders_workspace");
+      dropIndex("idx_architecture_diagrams_user_workspace");
+
+      // New indexes
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_status ON projects(user_id, status, last_active_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_root ON projects(user_id, root_path, node_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_project_state_project ON project_state(project_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_project ON reminders(project_id, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_user_project ON architecture_diagrams(user_id, project_root)`);
+      db.exec(`UPDATE memories SET scope = 'project' WHERE scope = 'workspace'`);
+      db.exec(`UPDATE project_state SET key = 'project.ui' WHERE key = 'workspace.ui'`);
+      db.exec(`UPDATE project_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
+      db.exec(`UPDATE project_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
+      db.exec(`UPDATE project_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
+      db.exec(`UPDATE project_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
+      db.exec(`UPDATE session_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
+      db.exec(`UPDATE session_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
+      db.exec(`UPDATE session_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
+      db.exec(`UPDATE session_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
+    },
+  },
+
 ];

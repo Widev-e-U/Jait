@@ -1157,7 +1157,7 @@ async function startOptionalLiveView(
   const { startLiveView } = await import("../services/live-view-manager.js");
   try {
     const liveViewSession = await startLiveView({
-      workspaceRoot: input.workspaceRoot,
+      projectRoot: input.projectRoot,
       preferContainer: true,
     });
     if (liveViewSession.kind === "host") {

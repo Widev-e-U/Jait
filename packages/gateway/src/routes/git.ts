@@ -450,7 +450,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
   });
 
-  /** Bump workspace version(s), commit everything, and push with pull/retry handling. */
+  /** Bump project version(s), commit everything, and push with pull/retry handling. */
   app.post("/api/git/run-commit-flow", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
