@@ -17,7 +17,13 @@ export function estimateTokens(text: string): number {
 
 /** Estimate tokens for a JSON-stringified payload. */
 export function estimateJsonTokens(obj: unknown): number {
-  const json = typeof obj === "string" ? obj : JSON.stringify(obj);
+  let json: string | undefined;
+  try {
+    json = typeof obj === "string" ? obj : JSON.stringify(obj);
+  } catch {
+    return 0;
+  }
+  if (!json) return 0;
   return Math.ceil(json.length / JSON_CHARS_PER_TOKEN);
 }
 
