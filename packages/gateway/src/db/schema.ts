@@ -212,6 +212,8 @@ export const reminders = sqliteTable(
     sourceSurface: text("source_surface").notNull().default("chat"),
     status: text("status").notNull().default("active"),
     tags: text("tags").notNull().default("[]"),
+    usageCount: integer("usage_count").notNull().default(0),
+    lastRetrievedAt: text("last_retrieved_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

@@ -51,6 +51,7 @@ const DEFAULT_SUBAGENT_TOOLS = new Set([
   ToolName.FileStat,
   ToolName.OsQuery,
   ToolName.MemorySearch,
+  ToolName.SessionSearch,
   ToolName.WebFetch,
   ToolName.WebSearch,
   ToolName.GatewayStatus,

@@ -176,7 +176,7 @@ export function summarizeToolArguments(
   args: Record<string, unknown>,
   options?: { excludeKeys?: string[]; maxEntries?: number },
 ): string | null {
-  const exclude = new Set(options?.excludeKeys ?? [])
+  const exclude = new Set(['arguments', ...(options?.excludeKeys ?? [])])
   const maxEntries = options?.maxEntries ?? 3
   const parts = Object.entries(args)
     .filter(([key, value]) => !exclude.has(key) && value !== undefined && value !== null && value !== '')

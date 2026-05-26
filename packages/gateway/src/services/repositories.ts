@@ -8,26 +8,15 @@ import { eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { automationRepositories } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { CreateRepoRequest, UpdateRepoRequest } from "@jait/shared/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface CreateRepoParams {
+export interface CreateRepoParams extends CreateRepoRequest {
   userId?: string;
-  deviceId?: string;
-  name: string;
-  defaultBranch?: string;
-  localPath: string;
-  githubUrl?: string;
 }
 
-export interface UpdateRepoParams {
-  name?: string;
-  defaultBranch?: string;
-  localPath?: string;
-  deviceId?: string;
-  githubUrl?: string;
-  strategy?: string | null;
-}
+export interface UpdateRepoParams extends UpdateRepoRequest {}
 
 export type RepoRow = typeof automationRepositories.$inferSelect;
 
@@ -48,7 +37,7 @@ export class RepositoryService {
         name: params.name,
         defaultBranch: params.defaultBranch ?? "main",
         localPath: params.localPath,
-        githubUrl: params.githubUrl ?? null,
+        githubUrl: params.githubUrl ?? params.forgeUrl ?? null,
         createdAt: now,
         updatedAt: now,
       })
@@ -82,9 +71,17 @@ export class RepositoryService {
 
   update(id: string, params: UpdateRepoParams): RepoRow | undefined {
     const now = new Date().toISOString();
+    const { forgeUrl, ...repoParams } = params;
+    const updates: Partial<typeof automationRepositories.$inferInsert> & { updatedAt: string } = {
+      ...repoParams,
+      updatedAt: now,
+    };
+    if (forgeUrl !== undefined && repoParams.githubUrl === undefined) {
+      updates.githubUrl = forgeUrl;
+    }
     this.db
       .update(automationRepositories)
-      .set({ ...params, updatedAt: now })
+      .set(updates)
       .where(eq(automationRepositories.id, id))
       .run();
     return this.getById(id);

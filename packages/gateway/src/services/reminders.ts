@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
-import { reminders } from "../db/schema.js";
+import { messages, reminders, sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 export type ReminderStatus = "active" | "archived";
@@ -32,6 +32,16 @@ export interface ListReminderOptions {
   projectId?: string;
   sessionId?: string;
   limit?: number;
+}
+
+export interface MemoryHygieneResult {
+  archived: number;
+  flagged: number;
+}
+
+export interface OldChatMemoryScanResult {
+  scanned: number;
+  created: number;
 }
 
 function normalizeTags(tags: string[] | undefined): string {
@@ -140,6 +150,125 @@ export class ReminderService {
     return true;
   }
 
+  markRetrieved(ids: string[], userId?: string): number {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (uniqueIds.length === 0) return 0;
+    const now = new Date().toISOString();
+    let updated = 0;
+    for (const id of uniqueIds) {
+      const existing = this.getById(id, userId);
+      if (!existing) continue;
+      this.db
+        .update(reminders)
+        .set({
+          usageCount: (existing.usageCount ?? 0) + 1,
+          lastRetrievedAt: now,
+          updatedAt: now,
+        })
+        .where(userId ? and(eq(reminders.id, id), eq(reminders.userId, userId)) : eq(reminders.id, id))
+        .run();
+      updated += 1;
+    }
+    return updated;
+  }
+
+  exportMarkdown(options: ListReminderOptions = {}): string {
+    const rows = this.list({ ...options, status: options.status ?? "all", limit: options.limit ?? 500 });
+    const lines = ["# Memory Export", ""];
+    for (const row of rows) {
+      const tags = normalizeTagsForDisplay(row.tags);
+      const meta = [
+        row.status,
+        row.projectId ? `project=${row.projectId}` : "project=none",
+        row.sessionId ? `session=${row.sessionId}` : null,
+        `source=${row.sourceType}:${row.sourceId ?? "none"}@${row.sourceSurface}`,
+        `usage=${row.usageCount ?? 0}`,
+        row.lastRetrievedAt ? `lastRetrieved=${row.lastRetrievedAt}` : null,
+        tags.length > 0 ? `tags=${tags.join(",")}` : null,
+        `updated=${row.updatedAt}`,
+      ].filter(Boolean).join("; ");
+      lines.push(`- ${row.content} (${meta})`);
+    }
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  runHygiene(userId?: string): MemoryHygieneResult {
+    const active = this.list({ userId, status: "active", limit: 500 });
+    const now = Date.now();
+    let archived = 0;
+    let flagged = 0;
+
+    for (const row of active) {
+      const updatedAt = new Date(row.updatedAt).getTime();
+      const ageDays = Number.isFinite(updatedAt) ? (now - updatedAt) / 86_400_000 : 0;
+      if ((row.usageCount ?? 0) === 0 && ageDays >= 180 && row.sourceType !== "user") {
+        this.update(row.id, { status: "archived" }, userId);
+        archived += 1;
+      }
+    }
+
+    const bySubject = new Map<string, ReminderRow[]>();
+    for (const row of active) {
+      const subject = memorySubject(row.content);
+      if (!subject) continue;
+      const bucket = bySubject.get(subject) ?? [];
+      bucket.push(row);
+      bySubject.set(subject, bucket);
+    }
+
+    for (const bucket of bySubject.values()) {
+      const uniqueContents = new Set(bucket.map((row) => normalizeMemoryText(row.content)));
+      if (uniqueContents.size < 2) continue;
+      for (const row of bucket) {
+        const tags = [...new Set([...normalizeTagsForDisplay(row.tags), "review:conflict", "memory:hygiene"])];
+        this.update(row.id, { tags }, userId);
+        flagged += 1;
+      }
+    }
+
+    return { archived, flagged };
+  }
+
+  scanOldChatsForMemory(userId?: string, limit = 200): OldChatMemoryScanResult {
+    const rows = this.db
+      .select({
+        messageId: messages.id,
+        sessionId: messages.sessionId,
+        projectId: sessions.projectId,
+        content: messages.content,
+      })
+      .from(messages)
+      .innerJoin(sessions, eq(messages.sessionId, sessions.id))
+      .where(userId ? and(eq(sessions.userId, userId), eq(messages.role, "user")) : eq(messages.role, "user"))
+      .orderBy(desc(messages.createdAt))
+      .limit(normalizeLimit(limit, 200))
+      .all();
+
+    const existing = new Set(this.list({ userId, status: "all", limit: 500 }).map((row) => normalizeMemoryText(row.content)));
+    let created = 0;
+    for (const row of rows) {
+      const candidate = extractDurableMemoryCandidate(row.content);
+      if (!candidate) continue;
+      const normalized = normalizeMemoryText(candidate);
+      if (existing.has(normalized)) continue;
+      this.create({
+        userId: userId ?? null,
+        projectId: row.projectId,
+        sessionId: row.sessionId,
+        content: candidate,
+        sourceType: "background_memory_scan",
+        sourceId: row.messageId,
+        sourceSurface: "chat",
+        tags: ["memory-scan"],
+      });
+      existing.add(normalized);
+      created += 1;
+    }
+
+    return { scanned: rows.length, created };
+  }
+
   countByProject(userId: string): Map<string, number> {
     const rows = this.db
       .select({
@@ -156,4 +285,31 @@ export class ReminderService {
     }
     return counts;
   }
+}
+
+function normalizeTagsForDisplay(tags: string): string[] {
+  try {
+    const parsed = JSON.parse(tags) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((tag): tag is string => typeof tag === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeMemoryText(content: string): string {
+  return content.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function memorySubject(content: string): string | null {
+  const tokens = normalizeMemoryText(content)
+    .split(/[^a-z0-9_]+/)
+    .filter((token) => token.length >= 3 && !["the", "and", "for", "with", "that", "this", "memory", "prefer", "always", "should", "use", "not", "don", "never"].includes(token));
+  return tokens.slice(0, 5).join(" ") || null;
+}
+
+function extractDurableMemoryCandidate(content: string): string | null {
+  const compact = content.replace(/\s+/g, " ").trim();
+  if (compact.length < 12 || compact.length > 600) return null;
+  if (!/\b(remember|always|prefer|preference|use .+ by default|do not|don't|never)\b/i.test(compact)) return null;
+  return compact.length <= 280 ? compact : `${compact.slice(0, 279)}…`;
 }

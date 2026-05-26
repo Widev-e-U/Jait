@@ -38,6 +38,22 @@ export class SqliteMemoryBackend implements MemoryBackend {
     });
   }
 
+  async update(entry: MemoryEntry): Promise<void> {
+    await this.db
+      .update(schema.memories)
+      .set({
+        scope: entry.scope,
+        content: entry.content,
+        sourceType: entry.source.type,
+        sourceId: entry.source.id,
+        sourceSurface: entry.source.surface,
+        embedding: JSON.stringify(entry.embedding),
+        updatedAt: entry.updatedAt,
+        expiresAt: entry.expiresAt ?? null,
+      })
+      .where(eq(schema.memories.id, entry.id));
+  }
+
   async list(scope?: MemoryScope): Promise<MemoryEntry[]> {
     const nowIso = new Date().toISOString();
     const rows = await this.db

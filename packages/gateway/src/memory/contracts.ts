@@ -33,6 +33,7 @@ export interface SearchMemoryInput {
 
 export interface MemoryBackend {
   save(entry: MemoryEntry): Promise<void>;
+  update(entry: MemoryEntry): Promise<void>;
   list(scope?: MemoryScope): Promise<MemoryEntry[]>;
   forget(id: string): Promise<boolean>;
   forgetExpired(now?: Date): Promise<number>;

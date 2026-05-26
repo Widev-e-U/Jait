@@ -101,15 +101,16 @@ describe("MemoryEngine (Sprint 6)", () => {
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
     const saved = await memory.flushPreCompaction("session-42", [
-      "  Keep note about release checklist.  ",
-      "",
-      "User asked to revisit DB migration risk.",
+      "[user] Remember that the release checklist lives in docs/release.md.",
+      "[assistant] ok",
+      "[user] Can you run tests?",
     ]);
 
-    expect(saved).toBe(2);
+    expect(saved).toBe(1);
 
     const results = await memory.search("release checklist", 5, "project");
     expect(results).toHaveLength(1);
+    expect(results[0]?.content).toBe("the release checklist lives in docs/release.md.");
     expect(results[0]?.source.type).toBe("pre_compaction");
     expect(results[0]?.source.id).toBe("session-42");
 

@@ -46,6 +46,7 @@ export const ASK_MODE_TOOLS = new Set([
   "os.query",
   "memory.search",
   "memory.list",
+  "session.search",
   "web.fetch",
   "web.search",
   "browser.navigate",
@@ -154,6 +155,7 @@ Key capabilities:
 - web: Search the web or fetch pages for information.
 - todo: Track tasks and progress.
 - jait: Search memories (action: memory.search), check status (action: status), list cron jobs.
+- Additional prior conversation search is available through tools.search with keyword "session".
 
 Guidelines:
 - Be thorough and educational in your explanations.

@@ -19,7 +19,8 @@ Run from repository root unless noted.
 - `bun run typecheck`: strict TypeScript checks.
 - `bun run test`: run Vitest unit/integration tests.
 - `bun run lint`: run `oxlint` across repo.
-- `cd tests/e2e && npm test`: run Playwright suite.
+- `bun run healthcheck`: run the release guard, typecheck, build, tests, and lint in CI order.
+- `bun run test:e2e`: run the Playwright suite from the repo root.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (ES modules, strict mode).
@@ -63,6 +64,7 @@ To deploy to a server after publish: `npm install -g @jait/gateway@<version>` an
 - Copy `.env.example` for local setup; never commit secrets.
 - Treat high-impact tools (terminal, file writes, OS/service control) as consent-sensitive paths.
 - Keep path boundaries and SSRF protections intact when adding new tools or surfaces.
+- Memory behavior is documented in `docs/memory-model.md`; keep privacy, scope, and provenance rules aligned there when changing memory features.
 
 ## Preview Workflow Preference
 - When the user asks for a preview, the goal is to show the actual live web UI they can iterate on while prompting, not just any responding local URL.

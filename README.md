@@ -220,13 +220,14 @@ bun run build        # production build
 bun run typecheck    # strict TypeScript checks
 bun run test         # run Vitest tests
 bun run lint         # oxlint
+bun run healthcheck  # release guard, typecheck, build, test, lint
 ```
 
 ### Running tests
 
 ```bash
 bun run test                        # unit & integration
-cd e2e && npm test                  # Playwright E2E (requires running gateway)
+bun run test:e2e                    # Playwright E2E (requires running gateway)
 ```
 
 ---

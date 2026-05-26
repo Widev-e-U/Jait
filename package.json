@@ -29,9 +29,12 @@
     "build": "bun run --filter '!@jait/web' build",
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
+    "test:e2e": "npm --prefix tests/e2e test",
     "test:watch": "vitest",
     "lint": "bunx oxlint .",
     "typecheck": "bun run --filter '*' typecheck",
+    "release:check": "node scripts/check-release-version-source.js",
+    "healthcheck": "bun run release:check && bun run typecheck && bun run build && bun run test && bun run lint",
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
   },
   "devDependencies": {

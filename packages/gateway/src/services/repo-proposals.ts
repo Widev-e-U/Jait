@@ -2,26 +2,14 @@ import { desc, eq } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { automationRepoProposals } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { CreateJaitTodoRequest, UpdateJaitTodoRequest } from "@jait/shared/types";
 
-export interface CreateRepoProposalParams {
+export interface CreateRepoProposalParams extends CreateJaitTodoRequest {
   repoId: string;
   userId?: string;
-  message: string;
-  status?: string;
-  priority?: string;
-  dueDate?: string | null;
-  tags?: string[];
-  sourceThreadId?: string | null;
-  sourceThreadTitle?: string | null;
 }
 
-export interface UpdateRepoProposalParams {
-  message?: string;
-  status?: string;
-  priority?: string;
-  dueDate?: string | null;
-  tags?: string[];
-}
+export interface UpdateRepoProposalParams extends UpdateJaitTodoRequest {}
 
 export type RepoProposalRow = typeof automationRepoProposals.$inferSelect;
 

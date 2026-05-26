@@ -4,7 +4,7 @@ import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { Check, Copy, Eye, Pencil, RotateCcw, X, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Brain, Check, Copy, Eye, Loader2, MessageSquare, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -34,6 +34,8 @@ import type { ChatMode } from './mode-selector'
 import type { ReferencedFile } from './prompt-input'
 import { parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
+import { getInjectedMemoryProvenanceEntries, type MemoryProvenanceSource } from '@/lib/memory-provenance'
+import { getMemoryFeedbackLabel, type MemoryFeedbackKind } from '@/lib/memory-feedback'
 import type { ResponseStyle } from '@jait/shared'
 import { hasRenderableUserMessageContent } from './message-render-state'
 import {
@@ -120,6 +122,12 @@ interface MessageProps {
   }
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
+  onOpenMemorySource?: (source: MemoryProvenanceSource) => void
+  onMemoryFeedback?: (feedback: {
+    messageId: string
+    kind: MemoryFeedbackKind
+    content: string
+  }) => Promise<void> | void
 }
 
 const CODE_HTML_MATCHER = /<pre[^>]*><code>([\s\S]*)<\/code><\/pre>/
@@ -441,6 +449,8 @@ function MessageInner({
   editComposer,
   onOpenPath,
   onOpenDiff,
+  onOpenMemorySource,
+  onMemoryFeedback,
 }: MessageProps) {
   const isUser = role === 'user'
 
@@ -474,6 +484,10 @@ function MessageInner({
   const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [contextOpen, setContextOpen] = useState(false)
+  const [memoryFeedbackState, setMemoryFeedbackState] = useState<{
+    kind: MemoryFeedbackKind
+    status: 'saving' | 'saved'
+  } | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [editSegments, setEditSegments] = useState<UserMessageSegment[]>([])
   const [optimisticUserDisplayText, setOptimisticUserDisplayText] = useState<string | null>(null)
@@ -500,12 +514,14 @@ function MessageInner({
     imageAttachmentCount: userImageAttachments.length,
   })
   const copyTimerRef = useRef<number | null>(null)
+  const memoryFeedbackTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+      if (memoryFeedbackTimerRef.current !== null) window.clearTimeout(memoryFeedbackTimerRef.current)
     }
   }, [])
 
@@ -614,6 +630,8 @@ function MessageInner({
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
   const canCopyMessage = isUser || !isStreaming
+  const canSendMemoryFeedback = !isUser && !!messageId && !!onMemoryFeedback && !isStreaming
+  const memoryFeedbackSaving = memoryFeedbackState?.status === 'saving'
 
   const startEditing = useCallback(() => {
     if (!canEdit || isSavingEdit) return
@@ -690,6 +708,25 @@ function MessageInner({
     }
   }
 
+  const handleMemoryFeedback = async (kind: MemoryFeedbackKind) => {
+    if (!canSendMemoryFeedback || !messageId || memoryFeedbackSaving) return
+    setMemoryFeedbackState({ kind, status: 'saving' })
+    try {
+      await onMemoryFeedback?.({ messageId, kind, content })
+      setMemoryFeedbackState({ kind, status: 'saved' })
+      if (memoryFeedbackTimerRef.current !== null) window.clearTimeout(memoryFeedbackTimerRef.current)
+      memoryFeedbackTimerRef.current = window.setTimeout(() => setMemoryFeedbackState(null), 1200)
+    } catch {
+      setMemoryFeedbackState(null)
+    }
+  }
+
+  const renderMemoryFeedbackIcon = (kind: MemoryFeedbackKind, fallback: ReactNode) => {
+    if (memoryFeedbackState?.kind !== kind) return fallback
+    if (memoryFeedbackState.status === 'saving') return <Loader2 className="h-3.5 w-3.5 animate-spin" />
+    return <Check className="h-3.5 w-3.5" />
+  }
+
   const renderActions = (outsideBubble?: boolean) => {
     if (isEditing || !canCopyMessage || !content) return null
     return (
@@ -742,6 +779,36 @@ function MessageInner({
               <Eye className="h-3.5 w-3.5" />
             </MessageAction>
           ) : null}
+          {canSendMemoryFeedback ? (
+            <>
+              <MessageAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  void handleMemoryFeedback('should_have_remembered')
+                }}
+                disabled={memoryFeedbackSaving}
+                aria-label={getMemoryFeedbackLabel('should_have_remembered')}
+                tooltip={getMemoryFeedbackLabel('should_have_remembered')}
+                className="h-6 w-6"
+              >
+                {renderMemoryFeedbackIcon('should_have_remembered', <Brain className="h-3.5 w-3.5" />)}
+              </MessageAction>
+              <MessageAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  void handleMemoryFeedback('wrong_memory_used')
+                }}
+                disabled={memoryFeedbackSaving}
+                aria-label={getMemoryFeedbackLabel('wrong_memory_used')}
+                tooltip={getMemoryFeedbackLabel('wrong_memory_used')}
+                className="h-6 w-6"
+              >
+                {renderMemoryFeedbackIcon('wrong_memory_used', <AlertTriangle className="h-3.5 w-3.5" />)}
+              </MessageAction>
+            </>
+          ) : null}
           <MessageAction
             onClick={copyToClipboard}
             aria-label={copied ? 'Copied' : 'Copy message'}
@@ -757,6 +824,51 @@ function MessageInner({
 
   const assistantActions = !isUser ? renderActions() : null
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
+  const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(contextFlow) : []
+  const memoryProvenance = memoryProvenanceEntries.length > 0 ? (
+    <div className="not-prose flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <button
+        type="button"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-amber-200"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          setContextOpen(true)
+        }}
+        title="Open retrieved memory context"
+      >
+        <Brain className="h-3.5 w-3.5 shrink-0" />
+        <span>Memory</span>
+        <span className="rounded bg-background/75 px-1 text-2xs">{memoryProvenanceEntries.length}</span>
+      </button>
+      {memoryProvenanceEntries.slice(0, 3).map((entry) => {
+        const source: MemoryProvenanceSource = {
+          memoryId: entry.id,
+          sourceType: entry.sourceType,
+          sourceId: entry.sourceId,
+          sourceSurface: entry.sourceSurface,
+        }
+        const canOpenSource = Boolean(onOpenMemorySource && entry.sourceSurface === 'chat' && entry.sourceId)
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              if (canOpenSource) onOpenMemorySource?.(source)
+              else setContextOpen(true)
+            }}
+            title={entry.source || entry.id}
+          >
+            {canOpenSource ? <MessageSquare className="h-3.5 w-3.5 shrink-0" /> : <Brain className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate">{entry.source || entry.id}</span>
+          </button>
+        )
+      })}
+    </div>
+  ) : null
 
   return (
     <>
@@ -849,6 +961,7 @@ function MessageInner({
             )}
 
             {assistantActions}
+            {memoryProvenance}
           </div>
         ) : (
           <>
@@ -1047,6 +1160,7 @@ function MessageInner({
                     />
                   </AIMessageContent>
                   {assistantActions}
+                  {memoryProvenance}
                 </div>
               )
             ) : showStreamingIndicator ? (

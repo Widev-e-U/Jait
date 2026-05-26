@@ -1,5 +1,6 @@
+import { delimiter } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extractDeviceAuthDetails, parseCommandLine, stripAnsi } from "./provider-auth.js";
+import { extractDeviceAuthDetails, buildProviderAuthEnv, parseCommandLine, stripAnsi } from "./provider-auth.js";
 
 describe("provider auth helpers", () => {
   it("parses quoted command paths and quoted default arguments", () => {
@@ -174,5 +175,14 @@ describe("provider auth helpers", () => {
       command: "codex",
       args: ["login", "--profile", "dev"],
     });
+  });
+
+  it("adds npm global bin directories to auth command PATH", () => {
+    const env = buildProviderAuthEnv({
+      PATH: "/usr/bin",
+      NPM_CONFIG_PREFIX: "/tmp/jait-npm-global",
+    });
+
+    expect(env.PATH?.split(delimiter)).toContain("/tmp/jait-npm-global/bin");
   });
 });

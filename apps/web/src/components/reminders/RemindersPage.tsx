@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Archive, Brain, CheckCircle2, Clock3, KeyRound, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
+import { Activity, AlertCircle, Archive, Brain, CheckCircle2, Clock3, Copy, KeyRound, Loader2, MessageSquare, Plus, RefreshCw, Trash2, Workflow } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -55,6 +55,7 @@ export function MemoryPage() {
   const [secretValue, setSecretValue] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [exportCopied, setExportCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadSnapshot = useCallback(async () => {
@@ -187,6 +188,22 @@ export function MemoryPage() {
     }
   }
 
+  const copyMarkdownExport = async () => {
+    setError(null)
+    try {
+      const markdown = await agentsApi.exportMemoryMarkdown({
+        status: statusFilter,
+        projectId: projectFilter,
+        limit: 500,
+      })
+      await navigator.clipboard.writeText(markdown)
+      setExportCopied(true)
+      window.setTimeout(() => setExportCopied(false), 1400)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy memory export')
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -213,6 +230,10 @@ export function MemoryPage() {
           <Button variant="outline" onClick={() => void loadSnapshot()} disabled={isLoading}>
             <RefreshCw className={cn('mr-2 h-4 w-4', isLoading && 'animate-spin')} />
             Refresh
+          </Button>
+          <Button variant="outline" onClick={() => void copyMarkdownExport()}>
+            <Copy className="mr-2 h-4 w-4" />
+            {exportCopied ? 'Copied' : 'Copy Markdown'}
           </Button>
         </div>
       </div>
@@ -315,6 +336,7 @@ export function MemoryPage() {
               const project = reminder.projectId ? projectById.get(reminder.projectId) : null
               const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
               const tags = parseTags(reminder.tags)
+              const sourceLabel = `${reminder.sourceType}:${reminder.sourceId || 'none'}@${reminder.sourceSurface}`
               return (
                 <Card key={reminder.id}>
                   <CardContent className="p-3">
@@ -329,7 +351,7 @@ export function MemoryPage() {
                     <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center">
                       <span className="inline-flex items-center gap-1">
                         <Workflow className="h-3.5 w-3.5" />
-                        {project?.title || project?.rootPath || 'No project'}
+                        {project ? (project.title || project.rootPath || 'Project') : 'Global memory'}
                       </span>
                       {session && (
                         <span className="inline-flex items-center gap-1">
@@ -337,9 +359,21 @@ export function MemoryPage() {
                           {session.name || 'Chat'}
                         </span>
                       )}
+                      <span className="inline-flex min-w-0 items-center gap-1" title={sourceLabel}>
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span className="truncate">{sourceLabel}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1" title="Usage count">
+                        <Activity className="h-3.5 w-3.5" />
+                        {reminder.usageCount ?? 0} uses
+                      </span>
                       <span className="inline-flex items-center gap-1">
                         <Clock3 className="h-3.5 w-3.5" />
-                        {formatDate(reminder.updatedAt)}
+                        Updated {formatDate(reminder.updatedAt)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Retrieved {formatDate(reminder.lastRetrievedAt)}
                       </span>
                     </div>
                     {tags.length > 0 && (

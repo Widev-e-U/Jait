@@ -6,129 +6,89 @@ import type { GitStepResult } from './git-api'
 import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
+import type {
+  AgentThread,
+  AutomationPlan,
+  AutomationRepo,
+  CreateJaitTodoRequest,
+  CreatePlanRequest,
+  CreateReminderRequest,
+  CreateRepoProposalRequest,
+  CreateRepoRequest,
+  CreateThreadRequest,
+  CreateUserSecretRequest,
+  GenerateJaitTodosRequest,
+  GeneratePlanTasksRequest,
+  JaitTodo,
+  PlanTask,
+  ProviderAuthStatus,
+  ProviderId,
+  ProviderInfo,
+  ProviderLoginResult,
+  ProviderLogoutResult,
+  ProviderModelInfo,
+  RemoteProviderInfo,
+  ReminderRecord,
+  ReminderSnapshot,
+  RepoProposal,
+  ThreadActivity,
+  UpdateJaitTodoRequest,
+  UpdatePlanRequest,
+  UpdateReminderRequest,
+  UpdateRepoProposalRequest,
+  UpdateRepoRequest,
+  UpdateThreadRequest,
+  UserSecretRecord,
+} from '@jait/shared'
 
 const API_URL = getApiUrl()
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type ProviderId = string
-export type ThreadStatus = 'idle' | 'running' | 'completed' | 'error' | 'interrupted'
-export type RuntimeMode = 'full-access' | 'supervised'
-export type ThreadKind = 'delivery' | 'delegation'
+export type {
+  AgentThread,
+  AutomationPlan,
+  AutomationRepo,
+  CreateJaitTodoRequest,
+  CreatePlanRequest,
+  CreateReminderRequest,
+  CreateRepoProposalRequest,
+  CreateRepoRequest,
+  CreateThreadRequest,
+  CreateUserSecretRequest,
+  GenerateJaitTodosRequest,
+  GeneratePlanTasksRequest,
+  JaitTodo,
+  PlanStatus,
+  PlanTask,
+  PlanTaskStatus,
+  ProviderAuthStatus,
+  ProviderId,
+  ProviderInfo,
+  ProviderLoginResult,
+  ProviderLogoutResult,
+  ProviderModelInfo,
+  RemoteProviderInfo,
+  ReminderRecord,
+  ReminderSnapshot,
+  RepoProposal,
+  RuntimeMode,
+  ThreadActivity,
+  ThreadKind,
+  ThreadStatus,
+  UpdateJaitTodoRequest,
+  UpdatePlanRequest,
+  UpdateReminderRequest,
+  UpdateRepoProposalRequest,
+  UpdateRepoRequest,
+  UpdateThreadRequest,
+  UserSecretRecord,
+} from '@jait/shared'
 
-export interface AgentThread {
-  id: string
-  userId: string | null
-  sessionId: string | null
-  title: string
-  providerId: ProviderId
-  model: string | null
-  runtimeMode: RuntimeMode
-  kind: ThreadKind
-  skillIds: string[] | null
-  workingDirectory: string | null
-  branch: string | null
-  status: ThreadStatus
-  providerSessionId: string | null
-  error: string | null
-  prUrl: string | null
-  prNumber: number | null
-  prTitle: string | null
-  prBaseBranch: string | null
-  prState: 'creating' | 'open' | 'closed' | 'merged' | null
-  executionNodeId: string | null
-  executionNodeName: string | null
-  changeFiles: number | null
-  changeInsertions: number | null
-  changeDeletions: number | null
-  createdAt: string
-  updatedAt: string
-  completedAt: string | null
-}
-
-export interface ThreadActivity {
-  id: string
-  threadId: string
-  kind: string
-  summary: string
-  payload?: unknown
-  createdAt: string
-}
-
-export interface ProviderInfo {
-  id: ProviderId
-  name: string
-  description: string
-  available: boolean
-  unavailableReason?: string
-  modes: RuntimeMode[]
-  auth?: ProviderAuthStatus
-}
-
-export interface ProviderAuthStatus {
-  login: boolean
-  logout: boolean
-  deviceCode: boolean
-  authenticated: boolean | null
-  detail?: string
-  username?: string
-}
-
-export interface ProviderLoginResult {
-  ok: boolean
-  status: 'started' | 'completed' | 'unsupported' | 'error'
-  providerId: ProviderId
-  message: string
-  verificationUri?: string
-  userCode?: string
-  rawOutput?: string
-  /** True when the provider CLI is waiting for the user to paste a code from the browser into it. */
-  requiresCodeInput?: boolean
-  /** The prompt shown by the CLI (e.g. "Enter the authorization code from your browser"). */
-  inputPrompt?: string
-}
-
-export interface ProviderLogoutResult {
-  ok: boolean
-  status: 'completed' | 'unsupported' | 'error'
-  providerId: ProviderId
-  message: string
-  rawOutput?: string
-}
-
-export interface RemoteProviderInfo {
-  nodeId: string
-  nodeName: string
-  platform: string
-  providers: string[]
-}
-
-export interface CreateThreadRequest {
-  sessionId?: string
-  title: string
-  providerId: ProviderId
-  model?: string
-  runtimeMode?: RuntimeMode
-  kind?: ThreadKind
-  skillIds?: string[] | null
-  workingDirectory?: string
-  branch?: string
-  prBaseBranch?: string | null
-}
-
-export interface UpdateThreadRequest {
-  title?: string
-  model?: string
-  runtimeMode?: RuntimeMode
-  kind?: ThreadKind
-  skillIds?: string[] | null
-  workingDirectory?: string
-  branch?: string
-  prUrl?: string | null
-  prNumber?: number | null
-  prTitle?: string | null
-  prBaseBranch?: string | null
-  prState?: 'creating' | 'open' | 'closed' | 'merged' | null
+type ProviderModelsResponse = {
+  models: ProviderModelInfo[]
+  recentModels?: string[]
+  currentBackend?: string
 }
 
 export interface ThreadReferencedFile {
@@ -168,213 +128,6 @@ export interface CreateThreadPrResponse {
   thread?: AgentThread
   pushFailed?: boolean
   resumed?: boolean
-}
-
-export interface AutomationRepo {
-  id: string
-  userId: string | null
-  deviceId: string | null
-  name: string
-  defaultBranch: string
-  localPath: string
-  githubUrl: string | null
-  /** @deprecated Use forgeUrl */
-  forgeUrl: string | null
-  strategy: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface CreateRepoRequest {
-  name: string
-  defaultBranch?: string
-  localPath: string
-  deviceId?: string
-  /** Remote URL for any git forge (GitHub, GitLab, Gitea, Azure DevOps, Bitbucket) */
-  forgeUrl?: string
-  /** @deprecated Use forgeUrl */
-  githubUrl?: string
-}
-
-export interface UpdateRepoRequest {
-  name?: string
-  defaultBranch?: string
-  localPath?: string
-  deviceId?: string
-  forgeUrl?: string
-  /** @deprecated Use forgeUrl */
-  githubUrl?: string
-  strategy?: string | null
-}
-
-// ── Plan Types ──────────────────────────────────────────────────────
-
-export type PlanStatus = 'draft' | 'active' | 'completed' | 'archived'
-export type PlanTaskStatus = 'proposed' | 'approved' | 'running' | 'completed' | 'skipped'
-
-export interface PlanTask {
-  id: string
-  title: string
-  description: string
-  status: PlanTaskStatus
-  skillCandidate?: boolean
-  skillTitle?: string
-  skillRationale?: string
-  threadId?: string
-  dependsOn?: string[]
-}
-
-export interface AutomationPlan {
-  id: string
-  repoId: string
-  userId: string | null
-  title: string
-  status: PlanStatus
-  tasks: PlanTask[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface CreatePlanRequest {
-  title?: string
-  tasks?: PlanTask[]
-}
-
-export interface UpdatePlanRequest {
-  title?: string
-  status?: PlanStatus
-  tasks?: PlanTask[]
-}
-
-export interface GeneratePlanTasksRequest {
-  prompt?: string
-  provider?: ProviderId
-  model?: string | null
-}
-
-export interface JaitTodo {
-  id: string
-  repoId: string
-  userId: string | null
-  message: string
-  status: 'open' | 'in_progress' | 'done'
-  priority: 'low' | 'normal' | 'high'
-  dueDate: string | null
-  tags: string
-  completedAt: string | null
-  completionHistory: string
-  sourceThreadId: string | null
-  sourceThreadTitle: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export type RepoProposal = JaitTodo
-
-export interface CreateJaitTodoRequest {
-  message: string
-  status?: JaitTodo['status']
-  priority?: JaitTodo['priority']
-  dueDate?: string | null
-  tags?: string[]
-  sourceThreadId?: string | null
-  sourceThreadTitle?: string | null
-}
-
-export type CreateRepoProposalRequest = CreateJaitTodoRequest
-
-export interface UpdateJaitTodoRequest {
-  message?: string
-  status?: JaitTodo['status']
-  priority?: JaitTodo['priority']
-  dueDate?: string | null
-  tags?: string[]
-}
-
-export type UpdateRepoProposalRequest = UpdateJaitTodoRequest
-
-export interface ReminderSession {
-  id: string
-  userId: string | null
-  projectId: string | null
-  name: string | null
-  projectPath: string | null
-  createdAt: string
-  lastActiveAt: string
-  status: string | null
-  metadata: string | null
-}
-
-export interface ReminderProject {
-  id: string
-  userId: string | null
-  title: string | null
-  rootPath: string | null
-  nodeId: string | null
-  createdAt: string
-  lastActiveAt: string
-  status: string | null
-  metadata: string | null
-  sessions: ReminderSession[]
-  reminderCount: number
-}
-
-export interface ReminderRecord {
-  id: string
-  userId: string | null
-  projectId: string | null
-  sessionId: string | null
-  content: string
-  sourceType: string
-  sourceId: string | null
-  sourceSurface: string
-  status: 'active' | 'archived'
-  tags: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ReminderSnapshot {
-  reminders: ReminderRecord[]
-  projects: ReminderProject[]
-  hasMoreProjects: boolean
-  threads: AgentThread[]
-}
-
-export interface UserSecretRecord {
-  id: string
-  userId: string | null
-  type: string
-  key: string
-  label: string
-  createdAt: string
-  updatedAt: string
-  lastUsedAt: string | null
-}
-
-export interface CreateReminderRequest {
-  content: string
-  projectId?: string | null
-  sessionId?: string | null
-  tags?: string[]
-  sourceType?: string
-  sourceId?: string | null
-  sourceSurface?: string
-}
-
-export interface UpdateReminderRequest {
-  content?: string
-  projectId?: string | null
-  sessionId?: string | null
-  status?: ReminderRecord['status']
-  tags?: string[]
-}
-
-export interface CreateUserSecretRequest {
-  type: string
-  key: string
-  label: string
-  value: string
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -487,10 +240,10 @@ export class AgentsApi {
     }
   }
 
-  private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>>()
+  private _modelsInflight = new Map<string, Promise<ProviderModelsResponse>>()
   private _modelsCachedAt = new Map<string, number>()
 
-  async listProviderModels(providerId: ProviderId): Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }> {
+  async listProviderModels(providerId: ProviderId): Promise<ProviderModelsResponse> {
     const now = Date.now()
     const cachedAt = this._modelsCachedAt.get(providerId) ?? 0
     const existing = this._modelsInflight.get(providerId)
@@ -505,7 +258,7 @@ export class AgentsApi {
         const err = await res.json().catch(() => ({})) as { error?: string; message?: string }
         throw new Error(err.error || err.message || `Failed to list models: ${res.statusText}`)
       }
-      return res.json() as Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>
+      return res.json() as Promise<ProviderModelsResponse>
     })()
     this._modelsInflight.set(providerId, promise)
     promise.catch(() => {
@@ -851,7 +604,7 @@ export class AgentsApi {
     return data.todo
   }
 
-  async generateJaitTodos(repoId: string, params: { prompt?: string; provider?: ProviderId; model?: string | null; runtimeMode?: RuntimeMode } = {}): Promise<{ todos: JaitTodo[]; generated: number }> {
+  async generateJaitTodos(repoId: string, params: GenerateJaitTodosRequest = {}): Promise<{ todos: JaitTodo[]; generated: number }> {
     const res = await fetch(`${API_URL}/api/repos/${repoId}/todos/generate`, {
       method: 'POST',
       headers: this.getHeaders(true),
@@ -893,6 +646,19 @@ export class AgentsApi {
     })
     if (!res.ok) throw new Error(`Failed to load reminders: ${res.statusText}`)
     return res.json() as Promise<ReminderSnapshot>
+  }
+
+  async exportMemoryMarkdown(params: { status?: 'active' | 'archived' | 'all'; projectId?: string; limit?: number } = {}): Promise<string> {
+    const search = new URLSearchParams()
+    if (params.status) search.set('status', params.status)
+    if (params.projectId && params.projectId !== 'all') search.set('projectId', params.projectId)
+    if (typeof params.limit === 'number') search.set('limit', String(params.limit))
+    const query = search.toString()
+    const res = await fetch(`${API_URL}/api/reminders/export.md${query ? `?${query}` : ''}`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to export memory: ${res.statusText}`)
+    return res.text()
   }
 
   async createReminder(params: CreateReminderRequest): Promise<ReminderRecord> {

@@ -97,12 +97,12 @@ describe("POST /api/project/open", () => {
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
-    await rm(writableTestRoot, { recursive: true, force: true });
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   });
 
   it("should create a filesystem surface and return surfaceId", async () => {

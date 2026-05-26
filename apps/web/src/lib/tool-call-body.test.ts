@@ -208,6 +208,15 @@ describe('tool call body helpers', () => {
     ).toBe('action: create • working directory: /home/user/project • start: true')
   })
 
+  it('omits provider wrapper arguments from generic summaries', () => {
+    expect(
+      summarizeToolArguments({
+        arguments: { action: 'create' },
+        status: 'running',
+      }),
+    ).toBe('status: running')
+  })
+
   it('extracts MCP tool identity and argument details from nested payloads', () => {
     expect(
       getMcpToolLabel({

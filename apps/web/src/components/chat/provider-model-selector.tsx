@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X } from 'lucide-react'
+import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -64,7 +64,7 @@ function providerDefFromInfo(info: ProviderInfo): ProviderDef {
   return known ?? {
     value: info.id,
     label: info.name || info.id,
-    icon: Bot,
+    icon: Network,
     description: info.description,
   }
 }

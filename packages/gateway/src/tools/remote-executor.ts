@@ -35,6 +35,7 @@ const GATEWAY_LOCAL_TOOLS = new Set([
   "memory.list",
   "memory.update",
   "memory.search",
+  "session.search",
   "voice.say",
   "voice.listen",
   "screen.share",

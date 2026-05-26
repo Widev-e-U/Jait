@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Play, Plus, RefreshCw, Save, Search, Sparkles, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { agentsApi, type AutomationRepo, type JaitTodo, type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { persistTodoRepoSelection, resolveTodoRepoSelection } from '@/lib/todo-repo-selection-storage'
@@ -18,6 +20,7 @@ type TodoPriority = JaitTodo['priority']
 
 const TODO_ORDER_STORAGE_KEY = 'jait.todo.order.v1'
 const TODO_FILTER_STORAGE_KEY = 'jait.todo.filters.v1'
+const COMPLETION_HISTORY_PAGE_SIZE = 8
 
 const statusOptions: { value: TodoStatus; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -106,6 +109,19 @@ function TodoStatusIcon({ status, className }: { status: TodoStatus; className?:
   if (status === 'done') return <CheckCircle2 className={cn('h-5 w-5', meta.iconClassName, className)} />
   if (status === 'in_progress') return <CircleDashed className={cn('h-5 w-5', meta.iconClassName, className)} />
   return <Circle className={cn('h-5 w-5', meta.iconClassName, className)} />
+}
+
+function TodoPriorityIcon({ priority, className }: { priority: TodoPriority; className?: string }) {
+  return <Flag className={cn('h-4 w-4', getPriorityClassName(priority), className)} />
+}
+
+function ControlTooltip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function readTodoOrderMap(): Record<string, string[]> {
@@ -397,6 +413,15 @@ function buildCompletionEvents(todos: JaitTodo[]): CompletionEvent[] {
   }).sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
 }
 
+function sortPendingTodosFirst(items: JaitTodo[]): JaitTodo[] {
+  return [...items].sort((a, b) => {
+    const aDone = a.status === 'done'
+    const bDone = b.status === 'done'
+    if (aDone !== bDone) return aDone ? 1 : -1
+    return 0
+  })
+}
+
 function buildCalendarDays(month: Date): Date[] {
   const first = new Date(month.getFullYear(), month.getMonth(), 1)
   const start = new Date(first)
@@ -413,11 +438,13 @@ function DatePicker({
   onChange,
   placeholder = 'Add date',
   className,
+  iconOnly = false,
 }: {
   value?: string | null
   onChange: (value: string | null) => void
   placeholder?: string
   className?: string
+  iconOnly?: boolean
 }) {
   const selectedDate = parseDateKey(value)
   const [open, setOpen] = useState(false)
@@ -438,10 +465,16 @@ function DatePicker({
         <Button
           type="button"
           variant="outline"
-          className={cn('h-10 w-full justify-start gap-2 px-3 text-left font-normal', !value && 'text-muted-foreground', className)}
+          className={cn(
+            iconOnly ? 'h-8 w-8 justify-center px-0' : 'h-10 w-full justify-start gap-2 px-3 text-left font-normal',
+            !value && 'text-muted-foreground',
+            className,
+          )}
+          title={value ? `Due ${dateLabel(value)}` : placeholder}
+          aria-label={value ? `Due ${dateLabel(value)}` : placeholder}
         >
           <CalendarDays className="h-4 w-4 shrink-0" />
-          <span className="truncate">{value ? dateLabel(value) : placeholder}</span>
+          {!iconOnly && <span className="truncate">{value ? dateLabel(value) : placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[19rem] p-3">
@@ -509,10 +542,12 @@ function OptionalDatePicker({
   value,
   onChange,
   className,
+  iconOnly = false,
 }: {
   value: string | null
   onChange: (value: string | null) => void
   className?: string
+  iconOnly?: boolean
 }) {
   const [isPicking, setIsPicking] = useState(Boolean(value))
 
@@ -522,9 +557,16 @@ function OptionalDatePicker({
 
   if (!isPicking) {
     return (
-      <Button type="button" variant="outline" className={cn('h-10 justify-start gap-2 text-muted-foreground', className)} onClick={() => setIsPicking(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        className={cn(iconOnly ? 'h-8 w-8 justify-center px-0 text-muted-foreground' : 'h-10 justify-start gap-2 text-muted-foreground', className)}
+        onClick={() => setIsPicking(true)}
+        title="Add date"
+        aria-label="Add date"
+      >
         <CalendarDays className="h-4 w-4" />
-        Add date
+        {!iconOnly && 'Add date'}
       </Button>
     )
   }
@@ -537,6 +579,7 @@ function OptionalDatePicker({
         if (!nextValue) setIsPicking(false)
       }}
       className={className}
+      iconOnly={iconOnly}
     />
   )
 }
@@ -548,6 +591,8 @@ function OptionSelect<T extends string>({
   placeholder,
   disabled,
   className,
+  triggerLabel,
+  triggerIcon,
 }: {
   value: T
   onChange: (value: T) => void
@@ -555,11 +600,14 @@ function OptionSelect<T extends string>({
   placeholder?: string
   disabled?: boolean
   className?: string
+  triggerLabel?: string
+  triggerIcon?: React.ReactElement
 }) {
+  const label = options.find((option) => option.value === value)?.label ?? placeholder ?? value
   return (
     <Select value={value} onValueChange={(next) => onChange(next as T)} disabled={disabled}>
-      <SelectTrigger className={className}>
-        <SelectValue placeholder={placeholder} />
+      <SelectTrigger className={className} title={triggerLabel ? `${triggerLabel}: ${label}` : label} aria-label={triggerLabel ? `${triggerLabel}: ${label}` : label}>
+        {triggerIcon ? triggerIcon : <SelectValue placeholder={placeholder} />}
       </SelectTrigger>
       <SelectContent>
         {options.map((option) => (
@@ -685,7 +733,8 @@ export function TodoPage({
   const [isGenerating, setIsGenerating] = useState(false)
   const [runningTodoIds, setRunningTodoIds] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
-  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(true)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [historyPage, setHistoryPage] = useState(0)
   const newMessageRef = useRef<HTMLTextAreaElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -758,13 +807,13 @@ export function TodoPage({
     })
   }, [hydratedFilterRepoId, metadataSearch, repoId, savedTagFilters, tagFilters])
 
-  const filteredTodos = useMemo(() => todos.filter((todo) => {
+  const filteredTodos = useMemo(() => sortPendingTodosFirst(todos.filter((todo) => {
     if (statusFilter !== 'all' && todo.status !== statusFilter) return false
     const todoTags = parseTags(todo.tags)
     if (tagFilters.length > 0 && !tagFilters.every((tag) => todoTags.includes(tag))) return false
     if (!matchesMetadataSearch(todo, metadataSearch)) return false
     return true
-  }), [metadataSearch, statusFilter, tagFilters, todos])
+  })), [metadataSearch, statusFilter, tagFilters, todos])
 
   const counts = useMemo(() => ({
     open: todos.filter((todo) => todo.status === 'open').length,
@@ -778,7 +827,16 @@ export function TodoPage({
   const selectedVisibleCount = useMemo(() => filteredTodos.filter((todo) => selectedTodoIds.has(todo.id)).length, [filteredTodos, selectedTodoIds])
   const allVisibleSelected = filteredTodos.length > 0 && selectedVisibleCount === filteredTodos.length
   const activeSavedTagFilter = savedTagFilters.find((filter) => areTagsEqual(filter.tags, tagFilters)) ?? null
-  const completionEvents = useMemo(() => buildCompletionEvents(todos).slice(0, 8), [todos])
+  const completionEvents = useMemo(() => buildCompletionEvents(todos), [todos])
+  const historyPageCount = Math.max(1, Math.ceil(completionEvents.length / COMPLETION_HISTORY_PAGE_SIZE))
+  const pagedCompletionEvents = completionEvents.slice(
+    historyPage * COMPLETION_HISTORY_PAGE_SIZE,
+    historyPage * COMPLETION_HISTORY_PAGE_SIZE + COMPLETION_HISTORY_PAGE_SIZE,
+  )
+
+  useEffect(() => {
+    setHistoryPage((page) => Math.min(page, historyPageCount - 1))
+  }, [historyPageCount])
 
   useEffect(() => {
     setSelectedTodoIds((current) => {
@@ -1231,24 +1289,35 @@ export function TodoPage({
               inputClassName="text-xs"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground lg:max-w-64 lg:justify-end">
-            <OptionSelect
-              value={newStatus}
-              onChange={setNewStatus}
-              options={statusOptions}
-              className="h-8 w-[8.25rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-            />
-            <OptionSelect
-              value={newPriority}
-              onChange={setNewPriority}
-              options={priorityOptions}
-              className="h-8 w-[6.75rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-            />
-            <OptionalDatePicker
-              value={newDueDate}
-              onChange={setNewDueDate}
-              className="h-8 w-[7.25rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-            />
+          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground lg:max-w-44 lg:justify-end">
+            <ControlTooltip label={`Status: ${getStatusMeta(newStatus).label}`}>
+              <OptionSelect
+                value={newStatus}
+                onChange={setNewStatus}
+                options={statusOptions}
+                triggerLabel="Status"
+                triggerIcon={<TodoStatusIcon status={newStatus} className="h-4 w-4" />}
+                className="h-8 w-8 justify-center rounded-md border-transparent bg-transparent px-0 text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0 [&>svg:last-child]:hidden"
+              />
+            </ControlTooltip>
+            <ControlTooltip label={`Priority: ${priorityOptions.find((option) => option.value === newPriority)?.label ?? newPriority}`}>
+              <OptionSelect
+                value={newPriority}
+                onChange={setNewPriority}
+                options={priorityOptions}
+                triggerLabel="Priority"
+                triggerIcon={<TodoPriorityIcon priority={newPriority} />}
+                className="h-8 w-8 justify-center rounded-md border-transparent bg-transparent px-0 text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0 [&>svg:last-child]:hidden"
+              />
+            </ControlTooltip>
+            <ControlTooltip label={newDueDate ? `Due ${dateLabel(newDueDate)}` : 'Add date'}>
+              <OptionalDatePicker
+                value={newDueDate}
+                onChange={setNewDueDate}
+                iconOnly
+                className="rounded-md border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
+              />
+            </ControlTooltip>
             <Button onClick={() => void handleAdd()} disabled={isSaving || !repoId || !newMessage.trim()} size="sm">
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Add
@@ -1375,39 +1444,62 @@ export function TodoPage({
       )}
 
       {completionEvents.length > 0 && (
-        <div className="rounded-lg border p-3">
+        <div className="rounded-lg border px-3 py-2">
           <Button
             variant="ghost"
-            className="h-auto w-full justify-start gap-2 px-0 py-0 text-sm font-medium hover:bg-transparent"
-            onClick={() => setIsHistoryCollapsed((collapsed) => !collapsed)}
-            aria-expanded={!isHistoryCollapsed}
+            className="h-8 w-full justify-start gap-2 px-0 text-sm font-medium hover:bg-transparent"
+            onClick={() => setIsHistoryOpen(true)}
           >
-            <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', !isHistoryCollapsed && 'rotate-90')} />
             <History className="h-4 w-4 text-muted-foreground" />
             Completion history
             <Badge variant="secondary" className="ml-auto">{completionEvents.length}</Badge>
           </Button>
-          {!isHistoryCollapsed && (
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
-              {completionEvents.map((event: CompletionEvent) => (
-                <div key={`${event.todoId}-${event.completedAt}`} className="min-w-0 rounded-md border bg-card/40 px-3 py-2">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>{dateTimeLabel(event.completedAt)}</span>
-                    {event.previousStatus && <span>from {getStatusMeta(event.previousStatus).label}</span>}
-                  </div>
-                  <div className="mt-1 truncate text-sm">{event.message}</div>
-                  {event.tags.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {event.tags.slice(0, 4).map((tag: string) => <Badge key={tag} variant="secondary" className="h-5 rounded px-1.5 text-[11px]">{tag}</Badge>)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
+
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
+          <DialogHeader className="border-b px-4 py-3">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <History className="h-4 w-4 text-muted-foreground" />
+              Completion history
+            </DialogTitle>
+            <DialogDescription>{completionEvents.length} completed event{completionEvents.length === 1 ? '' : 's'}</DialogDescription>
+          </DialogHeader>
+          <div className="grid max-h-[56vh] gap-2 overflow-y-auto px-4 py-3">
+            {pagedCompletionEvents.map((event: CompletionEvent) => (
+              <div key={`${event.todoId}-${event.completedAt}`} className="min-w-0 rounded-md border bg-card/40 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>{dateTimeLabel(event.completedAt)}</span>
+                  {event.previousStatus && <span>from {getStatusMeta(event.previousStatus).label}</span>}
+                </div>
+                <div className="mt-1 text-sm">{event.message}</div>
+                {event.tags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {event.tags.slice(0, 6).map((tag: string) => <Badge key={tag} variant="secondary" className="h-5 rounded px-1.5 text-[11px]">{tag}</Badge>)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="flex-row items-center justify-between border-t px-4 py-3 sm:justify-between sm:space-x-0">
+            <div className="text-xs text-muted-foreground">
+              Page {historyPage + 1} of {historyPageCount}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setHistoryPage((page) => Math.max(0, page - 1))} disabled={historyPage === 0}>
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Prev
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setHistoryPage((page) => Math.min(historyPageCount - 1, page + 1))} disabled={historyPage >= historyPageCount - 1}>
+                Next
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading && todos.length === 0 ? (
         <div className="flex items-center justify-center py-24">
@@ -1544,25 +1636,36 @@ export function TodoPage({
                       inputClassName="text-xs"
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground lg:max-w-64 lg:justify-end">
-                    <OptionSelect
-                      value={todo.status}
-                      onChange={(status) => void updateTodoStatus(todo, status)}
-                      options={statusOptions}
-                      className="h-8 w-[8.25rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-                    />
-                    <OptionSelect
-                      value={todo.priority}
-                      onChange={(priority) => void updateTodo(todo, { priority })}
-                      options={priorityOptions}
-                      className="h-8 w-[6.75rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-                    />
-                    <DatePicker
-                      value={todo.dueDate ?? null}
-                      onChange={(dueDate) => void updateTodo(todo, { dueDate })}
-                      placeholder="Date"
-                      className="h-8 w-[7.25rem] rounded-md border-transparent bg-transparent px-2 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
-                    />
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground lg:max-w-40 lg:justify-end">
+                    <ControlTooltip label={`Status: ${statusMeta.label}`}>
+                      <OptionSelect
+                        value={todo.status}
+                        onChange={(status) => void updateTodoStatus(todo, status)}
+                        options={statusOptions}
+                        triggerLabel="Status"
+                        triggerIcon={<TodoStatusIcon status={todo.status} className="h-4 w-4" />}
+                        className="h-8 w-8 justify-center rounded-md border-transparent bg-transparent px-0 text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0 [&>svg:last-child]:hidden"
+                      />
+                    </ControlTooltip>
+                    <ControlTooltip label={`Priority: ${priorityOptions.find((option) => option.value === todo.priority)?.label ?? todo.priority}`}>
+                      <OptionSelect
+                        value={todo.priority}
+                        onChange={(priority) => void updateTodo(todo, { priority })}
+                        options={priorityOptions}
+                        triggerLabel="Priority"
+                        triggerIcon={<TodoPriorityIcon priority={todo.priority} />}
+                        className="h-8 w-8 justify-center rounded-md border-transparent bg-transparent px-0 text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0 [&>svg:last-child]:hidden"
+                      />
+                    </ControlTooltip>
+                    <ControlTooltip label={todo.dueDate ? `Due ${dateLabel(todo.dueDate)}` : 'Date'}>
+                      <DatePicker
+                        value={todo.dueDate ?? null}
+                        onChange={(dueDate) => void updateTodo(todo, { dueDate })}
+                        placeholder="Date"
+                        iconOnly
+                        className="rounded-md border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
+                      />
+                    </ControlTooltip>
                     <Button
                       variant="ghost"
                       size="icon"

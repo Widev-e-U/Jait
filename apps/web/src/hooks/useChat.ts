@@ -6,6 +6,7 @@ import type { QueuedMessage } from '@/components/chat/message-queue'
 import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
+import { parseContextFlowEvent } from '@/lib/context-flow'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import type { ResponseStyle } from '@jait/shared'
@@ -156,6 +157,22 @@ export interface LlmContextFlow {
   model?: string
   rounds: LlmContextFlowRound[]
   note?: string
+  memory?: {
+    query: string
+    retrieved: Array<{
+      id: string
+      scope: 'project' | 'contact'
+      source: string
+      sourceType?: string
+      sourceId?: string
+      sourceSurface?: string
+      updatedAt: string
+      content: string
+    }>
+    injectedIds: string[]
+    ignoredIds: string[]
+    savedIds: string[]
+  }
 }
 
 export interface ChatMessage {
@@ -786,17 +803,14 @@ export function useChat(
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
               } else if (data.type === 'context_flow' && assistantId) {
+                const contextFlow = parseContextFlowEvent(data as Record<string, unknown>)
                 setState(prev => ({
                   ...prev,
                   messages: prev.messages.map(m =>
                     m.id === assistantId
                       ? {
                           ...m,
-                          contextFlow: {
-                            provider: String(data.provider ?? 'jait'),
-                            model: typeof data.model === 'string' ? data.model : undefined,
-                            rounds: Array.isArray(data.rounds) ? data.rounds as LlmContextFlowRound[] : [],
-                          },
+                          contextFlow,
                         }
                       : m
                   ),
@@ -1310,12 +1324,9 @@ export function useChat(
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
             } else if (data.type === 'context_flow') {
+              const contextFlow = parseContextFlowEvent(data as Record<string, unknown>)
               updateMessage({
-                contextFlow: {
-                  provider: String(data.provider ?? 'jait'),
-                  model: typeof data.model === 'string' ? data.model : undefined,
-                  rounds: Array.isArray(data.rounds) ? data.rounds as LlmContextFlowRound[] : [],
-                },
+                contextFlow,
               }, { immediate: true })
             } else if (data.type === 'provider_fallback') {
               // Provider was unavailable, gateway fell back to jait

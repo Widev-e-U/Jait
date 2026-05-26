@@ -900,4 +900,126 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 038: Memory usage metadata ───────────────────────────────────
+  {
+    id: 38,
+    name: "reminders_usage_metadata",
+    run(db) {
+      try { db.exec(`ALTER TABLE reminders ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE reminders ADD COLUMN last_retrieved_at TEXT`); } catch { /* exists */ }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_retrieved ON reminders(user_id, last_retrieved_at)`);
+    },
+  },
+
+  // ─── 039: FTS search over sessions and thread activities ───────────
+  {
+    id: 39,
+    name: "session_search_fts",
+    run(db) {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+          body,
+          role UNINDEXED,
+          session_id UNINDEXED,
+          message_id UNINDEXED,
+          created_at UNINDEXED
+        )
+      `);
+
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS agent_thread_activities_fts USING fts5(
+          body,
+          kind UNINDEXED,
+          thread_id UNINDEXED,
+          activity_id UNINDEXED,
+          created_at UNINDEXED
+        )
+      `);
+
+      db.exec(`DELETE FROM messages_fts`);
+      db.exec(`
+        INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)
+        SELECT rowid, content, role, session_id, id, created_at
+        FROM messages
+      `);
+
+      db.exec(`DELETE FROM agent_thread_activities_fts`);
+      db.exec(`
+        INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)
+        SELECT
+          rowid,
+          summary || CASE WHEN payload IS NOT NULL AND payload != '' THEN ' ' || payload ELSE '' END,
+          kind,
+          thread_id,
+          id,
+          created_at
+        FROM agent_thread_activities
+      `);
+
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS messages_fts_ai
+        AFTER INSERT ON messages
+        BEGIN
+          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)
+          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS messages_fts_ad
+        AFTER DELETE ON messages
+        BEGIN
+          DELETE FROM messages_fts WHERE rowid = old.rowid;
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS messages_fts_au
+        AFTER UPDATE ON messages
+        BEGIN
+          DELETE FROM messages_fts WHERE rowid = old.rowid;
+          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)
+          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);
+        END
+      `);
+
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_ai
+        AFTER INSERT ON agent_thread_activities
+        BEGIN
+          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)
+          VALUES (
+            new.rowid,
+            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,
+            new.kind,
+            new.thread_id,
+            new.id,
+            new.created_at
+          );
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_ad
+        AFTER DELETE ON agent_thread_activities
+        BEGIN
+          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS agent_thread_activities_fts_au
+        AFTER UPDATE ON agent_thread_activities
+        BEGIN
+          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;
+          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)
+          VALUES (
+            new.rowid,
+            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,
+            new.kind,
+            new.thread_id,
+            new.id,
+            new.created_at
+          );
+        END
+      `);
+    },
+  },
+
 ];

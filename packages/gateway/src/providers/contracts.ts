@@ -8,67 +8,27 @@
  * to access custom tools (memory, cron, web, todo, etc.).
  */
 
-// ── Provider identity ────────────────────────────────────────────────
+import type {
+  ProviderAuthStatus,
+  ProviderId,
+  ProviderInfo,
+  ProviderLoginResult,
+  ProviderLogoutResult,
+  ProviderModelInfo,
+  RuntimeMode,
+} from "@jait/shared/types";
 
-export type ProviderId = string;
-
-export interface ProviderInfo {
-  id: ProviderId;
-  name: string;
-  description: string;
-  /** Whether this provider is available (binary found, API key set, etc.) */
-  available: boolean;
-  /** Why it's unavailable */
-  unavailableReason?: string;
-  /** Supported runtime modes */
-  modes: RuntimeMode[];
-  /** Authentication actions available for this provider. */
-  auth?: ProviderAuthCapabilities;
-}
-
-// ── Provider authentication ─────────────────────────────────────────
-
-export interface ProviderAuthCapabilities {
-  login: boolean;
-  logout: boolean;
-  /** Login can produce a browser verification URL and user code. */
-  deviceCode: boolean;
-}
-
-export interface ProviderAuthStatus extends ProviderAuthCapabilities {
-  authenticated: boolean | null;
-  detail?: string;
-  username?: string;
-}
-
-export interface ProviderLoginResult {
-  ok: boolean;
-  status: "started" | "completed" | "unsupported" | "error";
-  providerId: ProviderId;
-  message: string;
-  verificationUri?: string;
-  userCode?: string;
-  rawOutput?: string;
-  /**
-   * True when the provider CLI is waiting for the user to paste a code
-   * obtained from the browser back into it (reverse of device-code flow).
-   */
-  requiresCodeInput?: boolean;
-  /** The prompt text the CLI showed (e.g. "Enter the authorization code from your browser"). */
-  inputPrompt?: string;
-}
-
-export interface ProviderLogoutResult {
-  ok: boolean;
-  status: "completed" | "unsupported" | "error";
-  providerId: ProviderId;
-  message: string;
-  rawOutput?: string;
-}
-
-// ── Runtime modes ────────────────────────────────────────────────────
-
-export type RuntimeMode = "full-access" | "supervised";
+export type {
+  ProviderAuthCapabilities,
+  ProviderAuthInfo,
+  ProviderAuthStatus,
+  ProviderId,
+  ProviderInfo,
+  ProviderLoginResult,
+  ProviderLogoutResult,
+  ProviderModelInfo,
+  RuntimeMode,
+} from "@jait/shared/types";
 
 // ── Session lifecycle ────────────────────────────────────────────────
 
@@ -108,19 +68,6 @@ export type ProviderEvent =
   | { type: "activity"; sessionId: string; kind: string; summary: string; payload?: unknown };
 
 // ── Provider interface ───────────────────────────────────────────────
-
-export interface ProviderModelInfo {
-  /** Model identifier / slug */
-  id: string;
-  /** Human-readable model name */
-  name: string;
-  /** Optional description */
-  description?: string;
-  /** Whether this is the provider's current/default model */
-  isDefault?: boolean;
-  /** Grouping label for display (e.g. "OpenAI", "OpenRouter", "Ollama") */
-  group?: string;
-}
 
 export interface CliProviderAdapter {
   readonly id: ProviderId;

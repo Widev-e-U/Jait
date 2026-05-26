@@ -18,6 +18,7 @@ import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { assertOwnership } from "../security/ownership.js";
 import type { WsEventType } from "@jait/shared";
+import type { CreateRepoRequest, UpdateRepoRequest } from "@jait/shared/types";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -77,13 +78,7 @@ export function registerRepoRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const body = request.body as {
-      name: string;
-      defaultBranch?: string;
-      localPath: string;
-      deviceId?: string;
-      githubUrl?: string;
-    };
+    const body = request.body as CreateRepoRequest;
 
     if (!body.name || !body.localPath) {
       return reply.status(400).send({ error: "name and localPath are required" });
@@ -109,6 +104,7 @@ export function registerRepoRoutes(
       name: body.name,
       defaultBranch: body.defaultBranch,
       localPath: body.localPath,
+      forgeUrl: body.forgeUrl,
       githubUrl: body.githubUrl,
     });
 
@@ -122,14 +118,7 @@ export function registerRepoRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const body = request.body as {
-      name?: string;
-      defaultBranch?: string;
-      localPath?: string;
-      githubUrl?: string;
-      deviceId?: string;
-      strategy?: string | null;
-    };
+    const body = request.body as UpdateRepoRequest;
 
     const existing = getOwnedRepo(request.params.id, user.id);
     if (!assertOwnership(reply, existing, user.id, "Repository not found")) return;

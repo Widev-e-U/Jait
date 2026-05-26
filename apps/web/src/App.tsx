@@ -145,6 +145,11 @@ import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
 import {
+  buildMemoryFeedbackReminder,
+  getMemoryFeedbackSuccessMessage,
+  type MemoryFeedbackKind,
+} from '@/lib/memory-feedback'
+import {
   secretRequestMatchesTool,
   shouldRenderSecretRequestDialog,
   shouldRenderSecretRequestInline,
@@ -4051,6 +4056,49 @@ function App() {
     // All clients (including this one) will receive it and hydrate automatically.
   }, [activeSessionId, token, updateSettings])
 
+  const handleOpenMemorySource = useCallback((source: { sourceId?: string; sourceSurface?: string }) => {
+    if (source.sourceSurface === 'chat' && source.sourceId) {
+      const project = projects.find((candidate) => candidate.sessions.some((session) => session.id === source.sourceId))
+      if (project) {
+        setCurrentView('chat')
+        switchSession(project.id, source.sourceId)
+        return
+      }
+      if (personalSessions.some((session) => session.id === source.sourceId)) {
+        setCurrentView('chat')
+        switchSession(null, source.sourceId)
+        return
+      }
+    }
+    setCurrentView('memory')
+  }, [personalSessions, projects, switchSession])
+
+  const handleMemoryFeedback = useCallback(async (feedback: {
+    messageId: string
+    kind: MemoryFeedbackKind
+    content: string
+  }) => {
+    if (!activeSessionId) {
+      const error = new Error('No active chat session')
+      toast.error(error.message)
+      throw error
+    }
+
+    try {
+      await agentsApi.createReminder(buildMemoryFeedbackReminder({
+        kind: feedback.kind,
+        messageId: feedback.messageId,
+        sessionId: activeSessionId,
+        projectId: activeProjectId,
+        answerContent: feedback.content,
+      }))
+      toast.success(getMemoryFeedbackSuccessMessage(feedback.kind))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save memory feedback')
+      throw error
+    }
+  }, [activeProjectId, activeSessionId])
+
   // Wrap switchProject so clicking a project also opens its remote directory
   // and shows the correct files/session in the editor.
   const handleSwitchProject = useCallback(async (projectId: string) => {
@@ -7827,6 +7875,7 @@ function App() {
                               renderInlineSecretPrompt={renderInlineSecretPrompt}
                               onOpenPath={handleOpenMessagePath}
                               onOpenDiff={handleChangedFileClick}
+                              onOpenMemorySource={handleOpenMemorySource}
                             />
                           ))}
                         </Conversation>
@@ -8168,6 +8217,8 @@ function App() {
                         editComposer={editComposerBag}
                         onOpenPath={handleOpenMessagePath}
                         onOpenDiff={handleChangedFileClick}
+                        onOpenMemorySource={handleOpenMemorySource}
+                        onMemoryFeedback={handleMemoryFeedback}
                       />
                     ))}
                     {messageQueue.length > 0 && (
