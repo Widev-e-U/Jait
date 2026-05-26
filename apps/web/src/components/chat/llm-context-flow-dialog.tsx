@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Editor from '@monaco-editor/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Check, ChevronRight, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
+import { Brain, Check, ChevronRight, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import {
   Dialog,
@@ -19,6 +19,7 @@ import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 type TraceRow =
   | { id: string; kind: 'summary'; flow: LlmContextFlow }
+  | { id: string; kind: 'memory'; flow: NonNullable<LlmContextFlow['memory']> }
   | { id: string; kind: 'round'; round: LlmContextFlowRound; messageCount: number; toolCount: number }
   | { id: string; kind: 'message'; roundNumber: number; index: number; role: string; content: string; raw: unknown; toolCalls: ToolTraceCall[] }
   | { id: string; kind: 'tools'; roundNumber: number; tools: ToolSchemaSummary[] }
@@ -294,6 +295,9 @@ function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): Trac
   if (contextFlow.rounds.some(r => r.metrics)) {
     rows.push({ id: 'summary', kind: 'summary', flow: contextFlow })
   }
+  if (contextFlow.memory) {
+    rows.push({ id: 'memory', kind: 'memory', flow: contextFlow.memory })
+  }
 
   for (const round of contextFlow.rounds) {
     const messages = Array.isArray(round.messages) ? round.messages : []
@@ -337,6 +341,35 @@ function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): Trac
 function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?: () => void }) {
   if (row.kind === 'summary') {
     return <SummaryMetrics flow={row.flow} />
+  }
+
+  if (row.kind === 'memory') {
+    return (
+      <div className="min-w-0 overflow-hidden rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Brain className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+          <span className="text-xs font-semibold text-foreground">Relevant memory</span>
+          <span className="text-xs text-muted-foreground">
+            {row.flow.injectedIds.length} injected / {row.flow.retrieved.length} retrieved
+          </span>
+        </div>
+        <div className="mt-2 space-y-1">
+          {row.flow.retrieved.length > 0 ? row.flow.retrieved.map((entry) => (
+            <div key={entry.id} className="min-w-0 rounded border border-border/60 bg-background/65 px-2 py-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <span>{entry.scope}</span>
+                <span className="truncate" title={entry.source}>{entry.source}</span>
+                {entry.sourceId ? <span className="truncate" title={entry.sourceId}>source {entry.sourceId}</span> : null}
+                <span>{new Date(entry.updatedAt).toLocaleDateString()}</span>
+              </div>
+              <div className="mt-0.5 break-words text-xs text-foreground">{entry.content}</div>
+            </div>
+          )) : (
+            <div className="text-xs text-muted-foreground">No memory injected for this turn.</div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (row.kind === 'round') {
@@ -472,6 +505,7 @@ function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[
       const row = rows[index]
       if (!row) return 120
       if (row.kind === 'summary') return 110
+      if (row.kind === 'memory') return Math.min(360, 84 + row.flow.retrieved.length * 74)
       if (row.kind === 'round') return 120
       if (row.kind === 'tools') return Math.min(420, 110 + row.tools.length * 72)
       if (row.kind === 'response') return 72

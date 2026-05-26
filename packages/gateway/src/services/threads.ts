@@ -10,70 +10,22 @@ import { and, eq, desc, gt } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { ProviderEvent } from "../providers/contracts.js";
 import type {
-  ProviderId,
-  RuntimeMode,
-  ProviderEvent,
-} from "../providers/contracts.js";
-import type { RoutingPlan } from "@jait/shared/types";
+  CreateThreadParams,
+  RoutingPlan,
+  ThreadActivity,
+  UpdateThreadParams,
+} from "@jait/shared/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type ThreadStatus =
-  | "idle"
-  | "running"
-  | "completed"
-  | "error"
-  | "interrupted";
-
-export interface CreateThreadParams {
-  userId?: string;
-  sessionId?: string;
-  title: string;
-  providerId: ProviderId;
-  model?: string;
-  runtimeMode?: RuntimeMode;
-  kind?: "delivery" | "delegation";
-  skillIds?: string[] | null;
-  workingDirectory?: string;
-  branch?: string;
-  prBaseBranch?: string | null;
-}
-
-export interface UpdateThreadParams {
-  title?: string;
-  providerId?: ProviderId;
-  model?: string;
-  runtimeMode?: RuntimeMode;
-  kind?: "delivery" | "delegation";
-  skillIds?: string[] | null;
-  workingDirectory?: string | null;
-  branch?: string | null;
-  prUrl?: string | null;
-  prNumber?: number | null;
-  prTitle?: string | null;
-  prBaseBranch?: string | null;
-  prState?: "creating" | "open" | "closed" | "merged" | null;
-  status?: ThreadStatus;
-  providerSessionId?: string | null;
-  error?: string | null;
-  completedAt?: string | null;
-  executionNodeId?: string | null;
-  executionNodeName?: string | null;
-  routingPlan?: RoutingPlan | null;
-  changeFiles?: number | null;
-  changeInsertions?: number | null;
-  changeDeletions?: number | null;
-}
-
-export interface ThreadActivity {
-  id: string;
-  threadId: string;
-  kind: string;
-  summary: string;
-  payload?: unknown;
-  createdAt: string;
-}
+export type {
+  CreateThreadParams,
+  ThreadActivity,
+  ThreadStatus,
+  UpdateThreadParams,
+} from "@jait/shared/types";
 
 type ThreadRowRecord = typeof agentThreads.$inferSelect;
 export type ThreadRow = Omit<ThreadRowRecord, "skillIds" | "routingPlan"> & {

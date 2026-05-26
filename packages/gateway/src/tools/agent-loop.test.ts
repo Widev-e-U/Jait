@@ -157,6 +157,56 @@ describe("repairToolCallHistory", () => {
   });
 });
 
+describe("context pruning summary", () => {
+  it("replaces pruned turns with a structured summary", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system prompt" },
+      {
+        role: "user",
+        content: "Goal: replace placeholder pruning. Keep implementation minimal and avoid changing unrelated files.",
+      },
+      {
+        role: "assistant",
+        content: "Decision: use deterministic structured summaries that preserve goal, constraints, decisions, files, progress, and next steps.",
+      },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [toolCall("call-1", "file_read")],
+      },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "Read packages/gateway/src/tools/agent-loop.ts" }),
+        tool_call_id: "call-1",
+        name: "file_read",
+      },
+      {
+        role: "assistant",
+        content: "Progress: the pruning helper is ready. Run the focused agent-loop tests next.",
+      },
+      { role: "user", content: "Please continue with the current implementation." },
+    ];
+
+    const pruned = __testUtils.pruneHistory(history, 40, []);
+    const summary = history[1]?.content ?? "";
+
+    expect(pruned).toBe(true);
+    expect(summary).toContain("[conversation-summary]");
+    expect(summary).toContain("Goal:");
+    expect(summary).toContain("Constraints:");
+    expect(summary).toContain("Decisions:");
+    expect(summary).toContain("Files:");
+    expect(summary).toContain("Progress:");
+    expect(summary).toContain("Next steps:");
+    expect(summary).toContain("Keep implementation minimal");
+    expect(summary).toContain("deterministic structured summaries");
+    expect(summary).toContain("packages/gateway/src/tools/agent-loop.ts");
+    expect(summary).toContain("Tool file.read");
+    expect(summary).toContain("Run the focused agent-loop tests next");
+    expect(history.at(-1)).toMatchObject({ role: "user", content: "Please continue with the current implementation." });
+  });
+});
+
 describe("executeOneToolCall retry accounting", () => {
   it("tracks only actual retries when transient failures exhaust the budget", async () => {
     const events: string[] = [];

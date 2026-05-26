@@ -16,10 +16,64 @@ export interface ProviderInfo {
   available: boolean;
   unavailableReason?: string;
   modes: RuntimeMode[];
+  auth?: ProviderAuthInfo;
 }
 
 export type RuntimeMode = "full-access" | "supervised";
 export type ThreadKind = "delivery" | "delegation";
+
+export interface ProviderAuthCapabilities {
+  login: boolean;
+  logout: boolean;
+  deviceCode: boolean;
+}
+
+export interface ProviderAuthInfo extends ProviderAuthCapabilities {
+  authenticated?: boolean | null;
+  detail?: string;
+  username?: string;
+}
+
+export interface ProviderAuthStatus extends ProviderAuthCapabilities {
+  authenticated: boolean | null;
+  detail?: string;
+  username?: string;
+}
+
+export interface ProviderLoginResult {
+  ok: boolean;
+  status: "started" | "completed" | "unsupported" | "error";
+  providerId: ProviderId;
+  message: string;
+  verificationUri?: string;
+  userCode?: string;
+  rawOutput?: string;
+  requiresCodeInput?: boolean;
+  inputPrompt?: string;
+}
+
+export interface ProviderLogoutResult {
+  ok: boolean;
+  status: "completed" | "unsupported" | "error";
+  providerId: ProviderId;
+  message: string;
+  rawOutput?: string;
+}
+
+export interface ProviderModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault?: boolean;
+  group?: string;
+}
+
+export interface RemoteProviderInfo {
+  nodeId: string;
+  nodeName: string;
+  platform: string;
+  providers: string[];
+}
 
 // ── Routing plan ─────────────────────────────────────────────────────
 
@@ -111,6 +165,8 @@ export interface ThreadRegistrySnapshot {
   hasMore?: boolean;
 }
 
+export type AgentThread = ThreadInfo;
+
 // ── Thread activity ──────────────────────────────────────────────────
 
 export type ThreadActivityKind =
@@ -135,7 +191,7 @@ export interface ThreadActivity {
 
 // ── Create / Update params ───────────────────────────────────────────
 
-export interface CreateThreadParams {
+export interface CreateThreadRequest {
   sessionId?: string;
   title: string;
   providerId: ProviderId;
@@ -148,7 +204,11 @@ export interface CreateThreadParams {
   prBaseBranch?: string | null;
 }
 
-export interface UpdateThreadParams {
+export interface CreateThreadParams extends CreateThreadRequest {
+  userId?: string;
+}
+
+export interface UpdateThreadRequest {
   title?: string;
   model?: string;
   runtimeMode?: RuntimeMode;
@@ -161,6 +221,19 @@ export interface UpdateThreadParams {
   prTitle?: string | null;
   prBaseBranch?: string | null;
   prState?: "creating" | "open" | "closed" | "merged" | null;
+}
+
+export interface UpdateThreadParams extends Omit<UpdateThreadRequest, "workingDirectory" | "branch"> {
+  providerId?: ProviderId;
+  workingDirectory?: string | null;
+  branch?: string | null;
+  status?: ThreadStatus;
+  providerSessionId?: string | null;
+  error?: string | null;
+  completedAt?: string | null;
+  executionNodeId?: string | null;
+  executionNodeName?: string | null;
+  routingPlan?: RoutingPlan | null;
   changeFiles?: number | null;
   changeInsertions?: number | null;
   changeDeletions?: number | null;

@@ -24,6 +24,14 @@ describe("ToolRegistry audit and validation behavior", () => {
     expect(registry.get("workspace.assign_repository")).toBeUndefined();
   });
 
+  it("registers session.search when session search deps are provided", () => {
+    const registry = createToolRegistry(new SurfaceRegistry(), {
+      sessionSearchService: { search: () => [] },
+    } as any);
+
+    expect(registry.get("session.search")?.description).toContain("prior chat messages");
+  });
+
   it("normalizes builtin tools with builtin source metadata", () => {
     const registry = new ToolRegistry();
     registry.register({

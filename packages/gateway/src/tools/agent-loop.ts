@@ -16,7 +16,7 @@ import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
 import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js";
-import { computeContextUsage, estimateTokens } from "./token-estimator.js";
+import { computeContextUsage, estimateMessageTokens, estimateTokens } from "./token-estimator.js";
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -374,6 +374,7 @@ const PARALLEL_SAFE_TOOLS = new Set([
   "file.stat",
   "os.query",
   "memory.search",
+  "session.search",
   "web.fetch",
   "web.search",
   "gateway.status",
@@ -817,8 +818,10 @@ function isTransientFailure(message: string): boolean {
 }
 
 export const __testUtils = {
+  buildStructuredConversationSummary,
   executeOneToolCall,
   isTransientFailure,
+  pruneHistory,
   repairToolCallHistory,
 };
 
@@ -973,6 +976,117 @@ function buildSwarmCreateManyArgs(objective: string): Record<string, unknown> {
 
 /** Target ratio after pruning — leave headroom for the next LLM response */
 const PRUNE_TARGET_RATIO = 0.65;
+const SUMMARY_ITEM_LIMIT = 5;
+const SUMMARY_TEXT_LIMIT = 220;
+
+function compactSummaryText(value: string, max = SUMMARY_TEXT_LIMIT): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
+}
+
+function pushSummaryItem(items: string[], value: string, limit = SUMMARY_ITEM_LIMIT): void {
+  const item = compactSummaryText(value);
+  if (!item || items.includes(item) || items.length >= limit) return;
+  items.push(item);
+}
+
+function addFileReferences(value: unknown, files: string[]): void {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (!text) return;
+  const filePathPattern = /(?:^|[\s([{'"`])((?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_.-]+)?)/g;
+  for (const match of text.matchAll(filePathPattern)) {
+    pushSummaryItem(files, match[1] ?? "", 10);
+  }
+}
+
+function summarizeToolMessage(message: AgentMessage): string {
+  const toolName = fromOpenAIName(message.name ?? "tool");
+  let detail = message.content;
+  try {
+    const parsed = JSON.parse(message.content) as { ok?: boolean; message?: string; data?: unknown };
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      detail = parsed.message;
+    } else if (typeof parsed.ok === "boolean") {
+      detail = parsed.ok ? "completed successfully" : "failed";
+    }
+  } catch {
+    // Keep raw tool content.
+  }
+  return `Tool ${toolName}: ${detail}`;
+}
+
+function formatSummarySection(title: string, items: string[]): string[] {
+  const values = items.length > 0 ? items : ["Not captured in pruned turns."];
+  return [title, ...values.map((item) => `- ${item}`)];
+}
+
+function buildStructuredConversationSummary(removedMessages: AgentMessage[]): string {
+  const goals: string[] = [];
+  const constraints: string[] = [];
+  const decisions: string[] = [];
+  const files: string[] = [];
+  const progress: string[] = [];
+  const nextSteps: string[] = [];
+
+  const constraintPattern = /\b(must|never|always|prefer|avoid|require|required|constraint|do not|don't|keep|only)\b/i;
+  const decisionPattern = /\b(decision|decided|chose|choose|selected|approach|instead|use|using|will|should)\b/i;
+  const nextStepPattern = /\b(next|todo|follow up|remaining|continue|verify|test|run|implement|fix|later)\b/i;
+
+  for (const message of removedMessages) {
+    addFileReferences(message.content, files);
+    if (message.tool_calls) addFileReferences(message.tool_calls, files);
+
+    const content = compactSummaryText(message.content);
+    if (!content && !message.tool_calls?.length) continue;
+
+    if (message.role === "user") {
+      pushSummaryItem(goals, content, 3);
+      if (constraintPattern.test(content)) pushSummaryItem(constraints, content);
+      if (decisionPattern.test(content)) pushSummaryItem(decisions, content);
+      if (nextStepPattern.test(content)) pushSummaryItem(nextSteps, content);
+      continue;
+    }
+
+    if (message.role === "system") {
+      if (constraintPattern.test(content)) pushSummaryItem(constraints, content);
+      continue;
+    }
+
+    if (message.role === "assistant") {
+      if (content) {
+        if (decisionPattern.test(content)) pushSummaryItem(decisions, content);
+        pushSummaryItem(progress, `Assistant: ${content}`);
+        if (nextStepPattern.test(content)) pushSummaryItem(nextSteps, content);
+      }
+      if (message.tool_calls?.length) {
+        const tools = message.tool_calls.map((call) => fromOpenAIName(call.function.name)).join(", ");
+        pushSummaryItem(progress, `Assistant requested tools: ${tools}`);
+      }
+      continue;
+    }
+
+    if (message.role === "tool") {
+      pushSummaryItem(progress, summarizeToolMessage(message));
+    }
+  }
+
+  if (nextSteps.length === 0) {
+    nextSteps.push("Continue from the remaining messages below; the latest user turn is preserved verbatim.");
+  }
+
+  return [
+    "[conversation-summary]",
+    `Earlier messages pruned: ${removedMessages.length}.`,
+    ...formatSummarySection("Goal:", goals),
+    ...formatSummarySection("Constraints:", constraints),
+    ...formatSummarySection("Decisions:", decisions),
+    ...formatSummarySection("Files:", files),
+    ...formatSummarySection("Progress:", progress),
+    ...formatSummarySection("Next steps:", nextSteps),
+    "[/conversation-summary]",
+  ].join("\n");
+}
 
 /**
  * Prune oldest conversation turns to bring context usage below the target.
@@ -980,8 +1094,8 @@ const PRUNE_TARGET_RATIO = 0.65;
  * Strategy (similar to Copilot):
  *  1. Never remove the system prompt (index 0) or the last user message.
  *  2. Remove oldest user/assistant/tool turn groups first.
- *  3. Insert a `[conversation-summary]` placeholder so the model knows
- *     context was trimmed.
+ *  3. Insert a structured `[conversation-summary]` so the model keeps the
+ *     pruned goal, constraints, decisions, files, progress, and next steps.
  *
  * Mutates `history` in place. Returns true if anything was pruned.
  */
@@ -1014,15 +1128,13 @@ function pruneHistory(
 
   // Remove messages from firstRemovable forward until we've freed enough
   const removedIndices: number[] = [];
+  const removedMessages: AgentMessage[] = [];
   for (let i = firstRemovable; i < safeEnd && tokensToFree > 0; i++) {
     const msg = history[i]!;
-    const cost = estimateTokens(msg.content) + 4; // rough per-message estimate
-    if (msg.role === "tool" && msg.tool_calls) {
-      // tool_calls are heavier
-      try { tokensToFree -= estimateTokens(JSON.stringify(msg.tool_calls)); } catch { /* */ }
-    }
+    const cost = estimateMessageTokens(msg);
     tokensToFree -= cost;
     removedIndices.push(i);
+    removedMessages.push(msg);
     pruned = true;
   }
 
@@ -1031,11 +1143,11 @@ function pruneHistory(
     for (let i = removedIndices.length - 1; i >= 0; i--) {
       history.splice(removedIndices[i]!, 1);
     }
-    // Insert a summary placeholder after the system messages
+    // Insert a structured summary after the system messages.
     const insertAt = firstRemovable;
     history.splice(insertAt, 0, {
       role: "system",
-      content: `[conversation-summary] ${removedIndices.length} earlier messages were removed to fit the context window. The conversation continues from the remaining messages below.`,
+      content: buildStructuredConversationSummary(removedMessages),
     });
   }
 

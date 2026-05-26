@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Bot, ChevronDown, Check, Loader2, Clock, Search } from 'lucide-react'
+import { ChevronDown, Check, Loader2, Clock, Search, Network } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId } from '@/lib/agents-api'
@@ -156,7 +156,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
           {loading
             ? <Loader2 className="h-3 w-3 animate-spin" />
             : compact
-              ? <Bot className="h-3.5 w-3.5" />
+              ? <Network className="h-3.5 w-3.5" />
               : <span className="font-mono text-xs truncate max-w-[140px]">{displayLabel}</span>
           }
           <ChevronDown className="h-3 w-3 opacity-60" />

@@ -8,7 +8,7 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolOutputStreamMetadata } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
-import type { MemoryService } from "../memory/contracts.js";
+import type { MemoryEntry, MemoryScope, MemoryService } from "../memory/contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
@@ -70,6 +70,26 @@ interface LlmContextFlow {
   model?: string;
   rounds: LlmContextFlowRound[];
   note?: string;
+  memory?: LlmContextFlowMemory;
+}
+
+interface LlmContextFlowMemoryEntry {
+  id: string;
+  scope: MemoryScope;
+  source: string;
+  sourceType: string;
+  sourceId: string;
+  sourceSurface: string;
+  updatedAt: string;
+  content: string;
+}
+
+interface LlmContextFlowMemory {
+  query: string;
+  retrieved: LlmContextFlowMemoryEntry[];
+  injectedIds: string[];
+  ignoredIds: string[];
+  savedIds: string[];
 }
 
 function formatExternalProviderFirstTurn(systemPrompt: string, userContent: string): string {
@@ -110,6 +130,7 @@ function buildExternalProviderContextFlow(
   userContent: string,
   sentAt: string,
   note: string,
+  memory?: LlmContextFlowMemory,
 ): LlmContextFlow {
   const messages: Array<{ role: "system" | "user"; content: string }> = [
     { role: "system", content: setupMessage },
@@ -123,6 +144,7 @@ function buildExternalProviderContextFlow(
     provider: requestProvider,
     ...(model ? { model } : {}),
     note,
+    ...(memory ? { memory } : {}),
     rounds: [{
       round: 1,
       createdAt: sentAt,
@@ -130,6 +152,88 @@ function buildExternalProviderContextFlow(
       messages,
     }],
   } satisfies LlmContextFlow;
+}
+
+function truncateForMemoryBlock(value: string, max = 220): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, max - 1)}…`;
+}
+
+function shouldIncludeContactMemories(content: string): boolean {
+  return /\b(based on what you know|remember|preference|preferences|prefer|my usual|about me|what do you know)\b/i.test(content);
+}
+
+function memorySourceLabel(entry: MemoryEntry): string {
+  return `${entry.source.type}:${entry.source.id}@${entry.source.surface}`;
+}
+
+function toContextFlowMemoryEntry(entry: MemoryEntry): LlmContextFlowMemoryEntry {
+  return {
+    id: entry.id,
+    scope: entry.scope,
+    source: memorySourceLabel(entry),
+    sourceType: entry.source.type,
+    sourceId: entry.source.id,
+    sourceSurface: entry.source.surface,
+    updatedAt: entry.updatedAt,
+    content: truncateForMemoryBlock(entry.content),
+  };
+}
+
+function buildRelevantMemoryPromptBlock(entries: MemoryEntry[]): string {
+  const lines = entries.slice(0, 5).map((entry) => {
+    const content = truncateForMemoryBlock(entry.content);
+    return `- [id=${entry.id} scope=${entry.scope} source=${memorySourceLabel(entry)} updated=${entry.updatedAt}] ${content}`;
+  });
+  return [
+    "<relevant_memory>",
+    "Use these memories only when they are directly relevant. Do not mention memory IDs unless the user asks for provenance.",
+    ...lines,
+    "</relevant_memory>",
+  ].join("\n");
+}
+
+async function retrieveRelevantMemoryContext(
+  memoryService: MemoryService | undefined,
+  content: string,
+): Promise<{ block: string; flow: LlmContextFlowMemory } | null> {
+  const query = content.trim();
+  if (!memoryService || !query) return null;
+
+  const projectMemories = await memoryService.search(query, 5, "project");
+  const byId = new Map<string, MemoryEntry>();
+  for (const entry of projectMemories) byId.set(entry.id, entry);
+
+  if (shouldIncludeContactMemories(query)) {
+    const contactMemories = await memoryService.search(query, Math.max(0, 5 - byId.size), "contact");
+    for (const entry of contactMemories) byId.set(entry.id, entry);
+  }
+
+  const entries = [...byId.values()].slice(0, 5);
+  if (entries.length === 0) {
+    return {
+      block: "",
+      flow: {
+        query,
+        retrieved: [],
+        injectedIds: [],
+        ignoredIds: [],
+        savedIds: [],
+      },
+    };
+  }
+
+  return {
+    block: buildRelevantMemoryPromptBlock(entries),
+    flow: {
+      query,
+      retrieved: entries.map(toContextFlowMemoryEntry),
+      injectedIds: entries.map((entry) => entry.id),
+      ignoredIds: [],
+      savedIds: [],
+    },
+  };
 }
 
 /** Serialized tool call info for DB persistence */
@@ -1085,6 +1189,26 @@ export function registerChatRoutes(
     }
   }
 
+  function updateLatestAssistantContextFlow(sessionId: string, contextFlow: string): void {
+    if (!db) return;
+    try {
+      const rows = db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.sessionId, sessionId))
+        .orderBy(messagesTable.createdAt)
+        .all();
+      const lastAssistant = [...rows].reverse().find((row) => row.role === "assistant");
+      if (!lastAssistant) return;
+      db.update(messagesTable)
+        .set({ contextFlow })
+        .where(eq(messagesTable.id, lastAssistant.id))
+        .run();
+    } catch (err) {
+      app.log.error(err, "Failed to update assistant context flow");
+    }
+  }
+
   // ── Tool execution helper ──────────────────────────────────────────
 
   async function executeTool(
@@ -1341,6 +1465,9 @@ export function registerChatRoutes(
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
+    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
+    const memoryFlow = relevantMemory?.flow;
+    const memoryBlock = relevantMemory?.block;
 
     const providerLabel = requestProvider === "codex"
       ? "Codex"
@@ -1673,9 +1800,10 @@ export function registerChatRoutes(
           chatMode,
           promptCtx,
         );
-        let cliContent = content;
+        const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${content}` : content;
+        let cliContent = cliUserContent;
         if (isNewCliSession) {
-          cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, content);
+          cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent);
         } else if (responseStyleBlock) {
           cliContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${cliContent}`;
         }
@@ -1721,9 +1849,10 @@ export function registerChatRoutes(
             typeof body["model"] === "string" ? body["model"] : undefined,
             setupContent,
             cliSystemPrompt,
-            content,
+            cliUserContent,
             sentAt,
             "CLI providers keep their own session context. This captures the Jait setup metadata, the external-provider system prompt, and the user turn content. On reused CLI sessions, the system prompt is shown for inspection even though it was only sent when Jait initialized or recovered the provider session.",
+            memoryFlow,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
@@ -1766,7 +1895,7 @@ export function registerChatRoutes(
             promptCtx,
           );
           let recoveryContent = content;
-          recoveryContent = formatExternalProviderFirstTurn(refreshedSystemPrompt, content);
+          recoveryContent = formatExternalProviderFirstTurn(refreshedSystemPrompt, cliUserContent);
           const sentAt = new Date().toISOString();
           const setupContent = [
             "CLI provider recovery session setup captured by Jait.",
@@ -1784,9 +1913,10 @@ export function registerChatRoutes(
             typeof body["model"] === "string" ? body["model"] : undefined,
             setupContent,
             refreshedSystemPrompt,
-            content,
+            cliUserContent,
             sentAt,
             "CLI providers keep their own session context. This captures the Jait recovery setup metadata, the current Jait session system prompt, and the user turn content.",
+            memoryFlow,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
@@ -1936,51 +2066,65 @@ export function registerChatRoutes(
           }
         };
         const contextRounds: LlmContextFlowRound[] = [];
-        const result = await runAgentLoop(
-          {
-            llm: llmRuntime,
-            history,
-            toolSchemas,
-            hasTools,
-            sessionId,
-            auth: {
-              userId: authUser.id,
-              apiKeys: userApiKeys,
-              providerId: swarmWorkerProvider ?? requestProvider,
-              model: requestBodyModel || undefined,
-              jaitBackend,
-              runtimeMode: requestRuntimeMode ?? undefined,
+        const injectedMemoryMessage: ChatMessage | null = memoryBlock
+          ? { role: "system", content: memoryBlock }
+          : null;
+        if (injectedMemoryMessage) history.push(injectedMemoryMessage);
+        let result: Awaited<ReturnType<typeof runAgentLoop>>;
+        try {
+          result = await runAgentLoop(
+            {
+              llm: llmRuntime,
+              history,
+              toolSchemas,
+              hasTools,
+              sessionId,
+              auth: {
+                userId: authUser.id,
+                apiKeys: userApiKeys,
+                providerId: swarmWorkerProvider ?? requestProvider,
+                model: requestBodyModel || undefined,
+                jaitBackend,
+                runtimeMode: requestRuntimeMode ?? undefined,
+              },
+              abort: streamAbort,
+              maxRounds: MAX_TOOL_ROUNDS,
+              parallel: true,
+              toolRegistry,
+              disabledTools,
+              mode: chatMode,
+              onEvent,
+              onContext: (round) => {
+                contextRounds.push(round);
+                contextFlowJson = JSON.stringify({
+                  provider: "jait",
+                  model: llmRuntime.openaiModel,
+                  rounds: contextRounds,
+                  ...(memoryFlow ? { memory: memoryFlow } : {}),
+                } satisfies LlmContextFlow);
+                const event = {
+                  type: "context_flow",
+                  provider: "jait",
+                  model: llmRuntime.openaiModel,
+                  rounds: contextRounds,
+                  ...(memoryFlow ? { memory: memoryFlow } : {}),
+                };
+                emitToSubscribers(sessionId, event as unknown as StreamEvent);
+                safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+              },
+              onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
+              priorFingerprints: sessionFingerprints.get(sessionId),
+              log: app.log,
             },
-            abort: streamAbort,
-            maxRounds: MAX_TOOL_ROUNDS,
-            parallel: true,
-            toolRegistry,
-            disabledTools,
-            mode: chatMode,
-            onEvent,
-            onContext: (round) => {
-              contextRounds.push(round);
-              contextFlowJson = JSON.stringify({
-                provider: "jait",
-                model: llmRuntime.openaiModel,
-                rounds: contextRounds,
-              } satisfies LlmContextFlow);
-              const event = {
-                type: "context_flow",
-                provider: "jait",
-                model: llmRuntime.openaiModel,
-                rounds: contextRounds,
-              };
-              emitToSubscribers(sessionId, event as unknown as StreamEvent);
-              safeWrite(`data: ${JSON.stringify(event)}\n\n`);
-            },
-            onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
-            priorFingerprints: sessionFingerprints.get(sessionId),
-            log: app.log,
-          },
-          executeTool,
-          steering,
-        );
+            executeTool,
+            steering,
+          );
+        } finally {
+          if (injectedMemoryMessage) {
+            const index = history.indexOf(injectedMemoryMessage);
+            if (index >= 0) history.splice(index, 1);
+          }
+        }
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
         if (turnSkillToolCall) {
@@ -2001,22 +2145,25 @@ export function registerChatRoutes(
             provider: "jait",
             model: llmRuntime.openaiModel,
             rounds: contextRounds,
+            ...(memoryFlow ? { memory: memoryFlow } : {}),
           } satisfies LlmContextFlow);
           const finalEvent = {
             type: "context_flow",
             provider: "jait",
             model: llmRuntime.openaiModel,
             rounds: contextRounds,
+            ...(memoryFlow ? { memory: memoryFlow } : {}),
           };
           emitToSubscribers(sessionId, finalEvent as unknown as StreamEvent);
           safeWrite(`data: ${JSON.stringify(finalEvent)}\n\n`);
         }
 
         if (contextFlowJson) {
-          const lastAssistant = [...history].reverse().find((msg) => msg.role === "assistant" && !msg.contextFlow);
+          const lastAssistant = [...history].reverse().find((msg) => msg.role === "assistant");
           if (lastAssistant) {
             lastAssistant.contextFlow = JSON.parse(contextFlowJson) as LlmContextFlow;
           }
+          updateLatestAssistantContextFlow(sessionId, contextFlowJson);
         }
         // Track executed tool calls for retry API
         sessionExecutedToolCalls.set(sessionId, result.executedToolCalls);

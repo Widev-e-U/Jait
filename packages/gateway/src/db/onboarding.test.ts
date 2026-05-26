@@ -13,6 +13,7 @@ import * as schema from "./schema.js";
 import type { SqliteDatabase } from "./sqlite-shim.js";
 import type { JaitDB } from "./connection.js";
 import { eq, desc } from "drizzle-orm";
+import { SessionSearchService } from "../services/session-search.js";
 
 let sqlite: SqliteDatabase;
 let db: JaitDB;
@@ -26,6 +27,24 @@ beforeEach(async () => {
 afterEach(() => {
   sqlite.close();
 });
+
+function applyMigrationsThrough(maxId: number): void {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    )
+  `);
+
+  for (const migration of migrations) {
+    if (migration.id > maxId) continue;
+    migration.run(sqlite);
+    sqlite.prepare(
+      "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)"
+    ).run(migration.id, migration.name, new Date().toISOString());
+  }
+}
 
 describe("fresh onboarding", () => {
   it("runs all migrations on a fresh database without errors", () => {
@@ -170,6 +189,149 @@ describe("fresh onboarding", () => {
   it("migrations are idempotent (running twice does not fail)", () => {
     migrateDatabase(sqlite);
     expect(() => migrateDatabase(sqlite)).not.toThrow();
+  });
+});
+
+describe("migration runner reliability", () => {
+  it("preserves existing local data across workspace-to-project and FTS upgrades", () => {
+    applyMigrationsThrough(36);
+
+    const now = "2026-05-25T18:00:00.000Z";
+    sqlite.prepare(`
+      INSERT INTO workspaces (id, user_id, title, root_path, node_id, created_at, last_active_at, status, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "workspace-upgrade",
+      "user-upgrade",
+      "Upgrade Workspace",
+      "/home/jakob/jait",
+      "gateway",
+      now,
+      now,
+      "active",
+      JSON.stringify({ pinned: true }),
+    );
+    sqlite.prepare(`
+      INSERT INTO sessions (id, user_id, name, workspace_path, workspace_id, created_at, last_active_at, status, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "session-upgrade",
+      "user-upgrade",
+      "Upgrade Session",
+      "/home/jakob/jait",
+      "workspace-upgrade",
+      now,
+      now,
+      "active",
+      JSON.stringify({ source: "upgrade-test" }),
+    );
+    sqlite.prepare(`
+      INSERT INTO messages (id, session_id, role, content, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      "message-upgrade",
+      "session-upgrade",
+      "user",
+      "The local upgrade retained this searchable migration context.",
+      now,
+    );
+    sqlite.prepare(`
+      INSERT INTO reminders (
+        id,
+        user_id,
+        workspace_id,
+        session_id,
+        content,
+        source_type,
+        source_id,
+        source_surface,
+        status,
+        tags,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "reminder-upgrade",
+      "user-upgrade",
+      "workspace-upgrade",
+      "session-upgrade",
+      "Remember that upgrade tests must preserve local data.",
+      "agent",
+      "source-upgrade",
+      "chat",
+      "active",
+      JSON.stringify(["database", "upgrade"]),
+      now,
+      now,
+    );
+
+    migrateDatabase(sqlite);
+
+    const session = sqlite.prepare(`
+      SELECT project_id AS projectId, project_path AS projectPath, metadata
+      FROM sessions
+      WHERE id = ?
+    `).get("session-upgrade") as { projectId: string; projectPath: string; metadata: string };
+    expect(session).toEqual({
+      projectId: "workspace-upgrade",
+      projectPath: "/home/jakob/jait",
+      metadata: JSON.stringify({ source: "upgrade-test" }),
+    });
+
+    const project = sqlite.prepare(`
+      SELECT id, root_path AS rootPath, metadata
+      FROM projects
+      WHERE id = ?
+    `).get("workspace-upgrade") as { id: string; rootPath: string; metadata: string };
+    expect(project).toEqual({
+      id: "workspace-upgrade",
+      rootPath: "/home/jakob/jait",
+      metadata: JSON.stringify({ pinned: true }),
+    });
+
+    const reminder = sqlite.prepare(`
+      SELECT project_id AS projectId, session_id AS sessionId, content
+      FROM reminders
+      WHERE id = ?
+    `).get("reminder-upgrade") as { projectId: string; sessionId: string; content: string };
+    expect(reminder).toEqual({
+      projectId: "workspace-upgrade",
+      sessionId: "session-upgrade",
+      content: "Remember that upgrade tests must preserve local data.",
+    });
+
+    const searchResults = new SessionSearchService(sqlite).search({
+      query: "searchable migration context",
+      userId: "user-upgrade",
+      includeThreadActivities: false,
+    });
+    expect(searchResults).toEqual([
+      expect.objectContaining({
+        source: "message",
+        id: "message-upgrade",
+        sessionId: "session-upgrade",
+      }),
+    ]);
+  });
+
+  it("reports failed migrations with the migration id, name, and original error", () => {
+    const failingMigration = {
+      id: 10_000,
+      name: "intentional_bad_ddl",
+      run(db: SqliteDatabase) {
+        db.exec("CREATE TABLE messages (id TEXT)");
+      },
+    };
+    migrations.push(failingMigration);
+    try {
+      expect(() => migrateDatabase(sqlite)).toThrow(
+        /Database migration 10000 \(intentional_bad_ddl\) failed:.*messages/,
+      );
+      expect(sqlite.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(failingMigration.id)).toBeUndefined();
+    } finally {
+      migrations.pop();
+    }
   });
 });
 

@@ -74,14 +74,23 @@ export function migrateDatabase(sqlite: SqliteDatabase) {
   for (const migration of migrations) {
     if (applied.has(migration.id)) continue;
 
-    console.log(`  Running migration ${migration.id}: ${migration.name}`);
-    migration.run(sqlite);
+    try {
+      console.log(`  Running migration ${migration.id}: ${migration.name}`);
+      migration.run(sqlite);
 
-    // Record that this migration has been applied
-    sqlite.prepare(
-      "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)"
-    ).run(migration.id, migration.name, new Date().toISOString());
-    ran++;
+      // Record that this migration has been applied
+      sqlite.prepare(
+        "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)"
+      ).run(migration.id, migration.name, new Date().toISOString());
+      ran++;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Database migration ${migration.id} (${migration.name}) failed: ${detail}. ` +
+        "The migration was not recorded as applied; fix the migration or restore from backup before retrying.",
+        { cause: err },
+      );
+    }
   }
 
   if (ran > 0) {

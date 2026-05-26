@@ -78,6 +78,28 @@ export function registerReminderRoutes(
     };
   });
 
+  app.get("/api/reminders/export.md", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const query = request.query as Record<string, unknown>;
+    const statusValue = typeof query["status"] === "string" ? query["status"] : "all";
+    const status = statusValue === "all" || validStatuses.has(statusValue as ReminderStatus)
+      ? statusValue as ReminderStatus | "all"
+      : "all";
+    const projectId = typeof query["projectId"] === "string" && query["projectId"].trim()
+      ? query["projectId"].trim()
+      : undefined;
+    const markdown = reminderService.exportMarkdown({
+      userId: user.id,
+      status,
+      projectId,
+      limit: parseLimit(query["limit"], 500),
+    });
+    reply.header("content-type", "text/markdown; charset=utf-8");
+    reply.header("content-disposition", "inline; filename=\"jait-memory.md\"");
+    return markdown;
+  });
+
   app.post("/api/reminders", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;

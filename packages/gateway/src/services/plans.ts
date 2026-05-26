@@ -9,23 +9,11 @@ import { eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { automationPlans } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { PlanStatus, PlanTask } from "@jait/shared/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type PlanStatus = "draft" | "active" | "completed" | "archived";
-export type PlanTaskStatus = "proposed" | "approved" | "running" | "completed" | "skipped";
-
-export interface PlanTask {
-  id: string;
-  title: string;
-  description: string;
-  status: PlanTaskStatus;
-  skillCandidate?: boolean;
-  skillTitle?: string;
-  skillRationale?: string;
-  threadId?: string;
-  dependsOn?: string[];
-}
+export type { PlanStatus, PlanTask, PlanTaskStatus } from "@jait/shared/types";
 
 export interface CreatePlanParams {
   repoId: string;

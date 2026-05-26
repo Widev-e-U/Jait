@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MemoryEntry, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
 import type { ReminderRow, ReminderService } from "../services/reminders.js";
 import type { ToolContext } from "./contracts.js";
-import { createMemoryForgetTool, createMemoryListTool, createMemorySaveTool, createMemorySearchTool, createMemoryUpdateTool } from "./memory-tools.js";
+import { createMemoryForgetTool, createMemoryHygieneTool, createMemoryListTool, createMemoryReviewChatsTool, createMemorySaveTool, createMemorySearchTool, createMemoryUpdateTool } from "./memory-tools.js";
 
 const context: ToolContext = {
   sessionId: "session-1",
@@ -133,5 +133,37 @@ describe("memory tools with reminders", () => {
     const result = await tool.execute({ id: "reminder-1" }, context);
 
     expect(result).toMatchObject({ ok: true, message: "Forgot reminder reminder-1" });
+  });
+
+  it("runs memory hygiene for the calling user only", async () => {
+    let receivedUserId: string | undefined;
+    const reminders = {
+      runHygiene: (userId?: string) => {
+        receivedUserId = userId;
+        return { archived: 1, flagged: 2 };
+      },
+    } as unknown as ReminderService;
+    const tool = createMemoryHygieneTool(reminders);
+
+    const result = await tool.execute({ userId: "other-user" } as never, context);
+
+    expect(result.ok).toBe(true);
+    expect(receivedUserId).toBe("user-1");
+  });
+
+  it("scans old chats for the calling user only", async () => {
+    let received: { userId?: string; limit?: number } = {};
+    const reminders = {
+      scanOldChatsForMemory: (userId?: string, limit?: number) => {
+        received = { userId, limit };
+        return { scanned: 3, created: 1 };
+      },
+    } as unknown as ReminderService;
+    const tool = createMemoryReviewChatsTool(reminders);
+
+    const result = await tool.execute({ userId: "other-user", limit: 25 } as { limit?: number }, context);
+
+    expect(result.ok).toBe(true);
+    expect(received).toEqual({ userId: "user-1", limit: 25 });
   });
 });

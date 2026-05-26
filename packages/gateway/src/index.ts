@@ -58,6 +58,7 @@ import { autoAssignProjectRepositories } from "./services/project-repositories.j
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
+import { SessionSearchService } from "./services/session-search.js";
 
 function parsePositiveIntegerEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -87,6 +88,7 @@ async function main() {
 
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
+  const sessionSearchService = new SessionSearchService(sqlite);
 
   // ── Recover threads stuck in "running" from a previous crash/restart ──
   const staleThreads = threadService.listRunning();
@@ -340,6 +342,7 @@ async function main() {
     repoService,
     repoProposalService,
     reminderService,
+    sessionSearchService,
     gitService,
     userSecretService,
     maintenanceService,
@@ -499,6 +502,7 @@ async function main() {
     repoService,
     repoProposalService,
     reminderService,
+    sessionSearchService,
     gitService,
     maintenanceService,
     notifications,
@@ -582,6 +586,51 @@ async function main() {
         enabled: false, // disabled by default — user enables when ready
       });
       console.log("Seeded built-in job: Self-Test (daily, disabled — enable to activate)");
+    }
+  }
+
+  // Seed built-in memory background jobs if they don't already exist.
+  {
+    const existingJobs = scheduler.list();
+    const hasMemoryReview = existingJobs.some(
+      (j) => j.toolName === "memory.review_chats" && j.name === "Memory Review",
+    );
+    if (!hasMemoryReview) {
+      scheduler.create({
+        name: "Memory Review",
+        cron: "10 2 * * *", // daily at 02:10 UTC
+        toolName: "memory.review_chats",
+        input: {
+          limit: 300,
+          __jaitJobMeta: {
+            jobType: "system_job",
+            description:
+              "Scans older chat messages for durable preferences and project facts that should become editable Memory entries.",
+          },
+        },
+        enabled: true,
+      });
+      console.log("Seeded built-in job: Memory Review (daily)");
+    }
+
+    const hasMemoryHygiene = existingJobs.some(
+      (j) => j.toolName === "memory.hygiene" && j.name === "Memory Hygiene",
+    );
+    if (!hasMemoryHygiene) {
+      scheduler.create({
+        name: "Memory Hygiene",
+        cron: "40 2 * * 0", // weekly Sunday at 02:40 UTC
+        toolName: "memory.hygiene",
+        input: {
+          __jaitJobMeta: {
+            jobType: "system_job",
+            description:
+              "Archives stale low-value Memory entries and tags likely conflicts for user review.",
+          },
+        },
+        enabled: true,
+      });
+      console.log("Seeded built-in job: Memory Hygiene (weekly)");
     }
   }
 

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, type ComponentType } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, LogIn, LogOut, Copy, ExternalLink } from 'lucide-react'
+import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, LogIn, LogOut, Copy, ExternalLink, Network } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 
@@ -83,7 +83,7 @@ function providerDefFromInfo(info: ProviderInfo): ProviderDef {
   return known ?? {
     value: info.id,
     label: info.name || info.id,
-    icon: Bot,
+    icon: Network,
     description: info.description,
   }
 }

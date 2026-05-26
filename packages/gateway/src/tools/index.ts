@@ -46,9 +46,12 @@ export {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
+  createMemoryHygieneTool,
   createMemoryListTool,
+  createMemoryReviewChatsTool,
   createMemoryUpdateTool,
 } from "./memory-tools.js";
+export { createSessionSearchTool } from "./session-search-tools.js";
 export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
@@ -165,9 +168,12 @@ import {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
+  createMemoryHygieneTool,
   createMemoryListTool,
+  createMemoryReviewChatsTool,
   createMemoryUpdateTool,
 } from "./memory-tools.js";
+import { createSessionSearchTool } from "./session-search-tools.js";
 import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
@@ -204,6 +210,7 @@ import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
 import type { RepoProposalService } from "../services/repo-proposals.js";
 import type { ReminderService } from "../services/reminders.js";
+import type { SessionSearchService } from "../services/session-search.js";
 import { resolveJaitLlmConfig } from "../services/jait-llm.js";
 import type { JaitBackend } from "../services/users.js";
 
@@ -238,6 +245,7 @@ export interface ToolRegistryDeps {
   repoService?: RepositoryService;
   repoProposalService?: RepoProposalService;
   reminderService?: ReminderService;
+  sessionSearchService?: SessionSearchService;
   gitService?: GitService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
@@ -369,6 +377,11 @@ export function createToolRegistry(
   if (deps.reminderService) {
     tools.register(createMemoryListTool(deps.reminderService));
     tools.register(createMemoryUpdateTool(deps.reminderService));
+    tools.register(createMemoryHygieneTool(deps.reminderService));
+    tools.register(createMemoryReviewChatsTool(deps.reminderService));
+  }
+  if (deps.sessionSearchService) {
+    tools.register(createSessionSearchTool(deps.sessionSearchService));
   }
 
   if (deps.voiceService) {

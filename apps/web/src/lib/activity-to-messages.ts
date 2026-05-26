@@ -14,6 +14,7 @@
 
 import type { ThreadActivity } from '@/lib/agents-api'
 import type { ChatMessage, LlmContextFlow, MessageSegment } from '@/hooks/useChat'
+import { parseContextFlowEvent } from '@/lib/context-flow'
 import { parseUserMessageSegments, userMessageTextFromSegments } from '@/lib/user-message-segments'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import { normalizeToolArgs } from '@/lib/tool-call-body'
@@ -310,11 +311,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
       // ── Context flow (trace data) ─────────────────────────────
       case 'context_flow': {
         // Attach the context flow to the current or most recent assistant message
-        const flow: LlmContextFlow = {
-          provider: typeof payload.provider === 'string' ? payload.provider : 'jait',
-          model: typeof payload.model === 'string' ? payload.model : undefined,
-          rounds: Array.isArray(payload.rounds) ? payload.rounds as LlmContextFlow['rounds'] : [],
-        }
+        const flow: LlmContextFlow = parseContextFlowEvent(payload)
         const cur = current as ChatMessage | null
         if (cur && cur.role === 'assistant') {
           cur.contextFlow = flow

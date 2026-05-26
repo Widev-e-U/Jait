@@ -78,6 +78,7 @@ export const ToolName = {
   MemoryList: "memory.list",
   MemoryUpdate: "memory.update",
   MemoryForget: "memory.forget",
+  SessionSearch: "session.search",
 
   // ── Voice ──
   VoiceSpeak: "voice.speak",

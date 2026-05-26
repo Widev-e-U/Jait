@@ -10,6 +10,13 @@ import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { assertOwnership } from "../security/ownership.js";
+import type {
+  CreateJaitTodoRequest,
+  GenerateJaitTodosRequest,
+  JaitTodoPriority,
+  JaitTodoStatus,
+  UpdateJaitTodoRequest,
+} from "@jait/shared/types";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -27,9 +34,17 @@ export function registerRepoProposalRoutes(
   deps: RepoProposalRouteDeps,
 ): void {
   const { repoService, repoProposalService, userService, providerRegistry, ws } = deps;
-  const validStatuses = new Set(["open", "in_progress", "done"]);
-  const validPriorities = new Set(["low", "normal", "high"]);
+  const validStatuses = new Set<JaitTodoStatus>(["open", "in_progress", "done"]);
+  const validPriorities = new Set<JaitTodoPriority>(["low", "normal", "high"]);
   const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  function isTodoStatus(value: unknown): value is JaitTodoStatus {
+    return typeof value === "string" && validStatuses.has(value as JaitTodoStatus);
+  }
+
+  function isTodoPriority(value: unknown): value is JaitTodoPriority {
+    return typeof value === "string" && validPriorities.has(value as JaitTodoPriority);
+  }
 
   function findRemoteNodeForCwd(cwd: string, providerId: ProviderId): string | null {
     if (!ws) return null;
@@ -153,15 +168,7 @@ export function registerRepoProposalRoutes(
     const repo = getOwnedRepo(request.params.repoId, user.id);
     if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
-    const body = request.body as {
-      message?: string;
-      status?: string;
-      priority?: string;
-      dueDate?: string | null;
-      tags?: string[];
-      sourceThreadId?: string | null;
-      sourceThreadTitle?: string | null;
-    };
+    const body = request.body as CreateJaitTodoRequest;
     const message = body.message?.trim() ?? "";
     if (!message) {
       return reply.status(400).send({ error: "message is required" });
@@ -171,8 +178,8 @@ export function registerRepoProposalRoutes(
       repoId: repo.id,
       userId: user.id,
       message,
-      status: validStatuses.has(body.status ?? "") ? body.status : undefined,
-      priority: validPriorities.has(body.priority ?? "") ? body.priority : undefined,
+      status: isTodoStatus(body.status) ? body.status : undefined,
+      priority: isTodoPriority(body.priority) ? body.priority : undefined,
       dueDate: normalizeDueDate(body.dueDate),
       tags: normalizeTags(body.tags),
       sourceThreadId: body.sourceThreadId,
@@ -187,15 +194,7 @@ export function registerRepoProposalRoutes(
     const repo = getOwnedRepo(request.params.repoId, user.id);
     if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
-    const body = request.body as {
-      message?: string;
-      status?: string;
-      priority?: string;
-      dueDate?: string | null;
-      tags?: string[];
-      sourceThreadId?: string | null;
-      sourceThreadTitle?: string | null;
-    };
+    const body = request.body as CreateJaitTodoRequest;
     const message = body.message?.trim() ?? "";
     if (!message) {
       return reply.status(400).send({ error: "message is required" });
@@ -205,8 +204,8 @@ export function registerRepoProposalRoutes(
       repoId: repo.id,
       userId: user.id,
       message,
-      status: validStatuses.has(body.status ?? "") ? body.status : undefined,
-      priority: validPriorities.has(body.priority ?? "") ? body.priority : undefined,
+      status: isTodoStatus(body.status) ? body.status : undefined,
+      priority: isTodoPriority(body.priority) ? body.priority : undefined,
       dueDate: normalizeDueDate(body.dueDate),
       tags: normalizeTags(body.tags),
       sourceThreadId: body.sourceThreadId,
@@ -221,7 +220,7 @@ export function registerRepoProposalRoutes(
     const repo = getOwnedRepo(request.params.repoId, user.id);
     if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
-    const body = request.body as { prompt?: string; provider?: ProviderId; model?: string | null; runtimeMode?: RuntimeMode } | undefined;
+    const body = request.body as GenerateJaitTodosRequest | undefined;
     const userPromptHint = body?.prompt?.trim() ?? "";
     const requestProvider = body?.provider ?? "jait";
     const requestModel = body?.model?.trim() || undefined;
@@ -303,7 +302,7 @@ export function registerRepoProposalRoutes(
           repoId: repo.id,
           userId: user.id,
           message: item.message.trim(),
-          priority: validPriorities.has(item.priority ?? "") ? item.priority : undefined,
+          priority: isTodoPriority(item.priority) ? item.priority : undefined,
           dueDate: normalizeDueDate(item.dueDate),
           tags: normalizeTags(item.tags),
         }));
@@ -321,15 +320,15 @@ export function registerRepoProposalRoutes(
     const existing = getOwnedProposal(request.params.id, user.id);
     if (!assertOwnership(reply, existing, user.id, "Todo not found")) return;
 
-    const body = request.body as { message?: string; status?: string; priority?: string; dueDate?: string | null; tags?: string[] };
+    const body = request.body as UpdateJaitTodoRequest;
     const message = body.message?.trim();
     if (message !== undefined && !message) {
       return reply.status(400).send({ error: "message must not be empty" });
     }
-    if (body.status !== undefined && !validStatuses.has(body.status)) {
+    if (body.status !== undefined && !isTodoStatus(body.status)) {
       return reply.status(400).send({ error: "invalid status" });
     }
-    if (body.priority !== undefined && !validPriorities.has(body.priority)) {
+    if (body.priority !== undefined && !isTodoPriority(body.priority)) {
       return reply.status(400).send({ error: "invalid priority" });
     }
 
@@ -349,15 +348,15 @@ export function registerRepoProposalRoutes(
     const existing = getOwnedProposal(request.params.id, user.id);
     if (!assertOwnership(reply, existing, user.id, "Todo not found")) return;
 
-    const body = request.body as { message?: string; status?: string; priority?: string; dueDate?: string | null; tags?: string[] };
+    const body = request.body as UpdateJaitTodoRequest;
     const message = body.message?.trim();
     if (message !== undefined && !message) {
       return reply.status(400).send({ error: "message must not be empty" });
     }
-    if (body.status !== undefined && !validStatuses.has(body.status)) {
+    if (body.status !== undefined && !isTodoStatus(body.status)) {
       return reply.status(400).send({ error: "invalid status" });
     }
-    if (body.priority !== undefined && !validPriorities.has(body.priority)) {
+    if (body.priority !== undefined && !isTodoPriority(body.priority)) {
       return reply.status(400).send({ error: "invalid priority" });
     }
 

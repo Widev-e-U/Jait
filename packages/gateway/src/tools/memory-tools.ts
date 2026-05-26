@@ -98,6 +98,9 @@ export function createMemorySearchTool(memory: MemoryService, reminders?: Remind
           status: "active",
           limit: input.limit ?? 5,
         }) ?? [];
+      if (reminderResults.length > 0 && typeof reminders?.markRetrieved === "function") {
+        reminders.markRetrieved(reminderResults.map((reminder) => reminder.id), context.userId);
+      }
       return {
         ok: true,
         message: `Found ${results.length} memories and ${reminderResults.length} reminders`,
@@ -136,6 +139,52 @@ export function createMemoryForgetTool(memory: MemoryService, reminders?: Remind
       }
       const removed = await memory.forget(input.id);
       return { ok: removed, message: removed ? `Forgot memory ${input.id}` : `Memory ${input.id} not found` };
+    },
+  };
+}
+
+export function createMemoryHygieneTool(reminders: ReminderService): ToolDefinition<Record<string, never>> {
+  return {
+    name: "memory.hygiene",
+    description: "Archive stale low-value Memory page entries and flag likely conflicting memories for review.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+    async execute(_input, context: ToolContext) {
+      const result = reminders.runHygiene(context.userId);
+      return {
+        ok: true,
+        message: `Archived ${result.archived} stale memories and flagged ${result.flagged} possible conflicts`,
+        data: result,
+      };
+    },
+  };
+}
+
+export function createMemoryReviewChatsTool(reminders: ReminderService): ToolDefinition<{ limit?: number }> {
+  return {
+    name: "memory.review_chats",
+    description: "Background memory job that scans old chat messages for durable facts or preferences worth saving.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "number" },
+      },
+    },
+    async execute(input, context: ToolContext) {
+      const result = reminders.scanOldChatsForMemory(context.userId, input.limit ?? 200);
+      return {
+        ok: true,
+        message: `Scanned ${result.scanned} chat messages and created ${result.created} memories`,
+        data: result,
+      };
     },
   };
 }

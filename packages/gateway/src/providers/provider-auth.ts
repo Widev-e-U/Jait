@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { isAbsolute } from "node:path";
+import { homedir } from "node:os";
+import { delimiter, isAbsolute, join } from "node:path";
 import type {
   ProviderAuthCapabilities,
   ProviderId,
@@ -94,6 +95,24 @@ export function parseCommandLine(commandLine: string): { command: string; args: 
 export function stripAnsi(value: string): string {
   const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`, "g");
   return value.replace(ansiEscapePattern, "");
+}
+
+export function buildProviderAuthEnv(overrides?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...overrides };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+  const currentPath = env[pathKey] ?? "";
+  const npmPrefix = env.NPM_CONFIG_PREFIX ?? env.npm_config_prefix;
+  const candidates = [
+    npmPrefix ? join(npmPrefix, "bin") : undefined,
+    join(homedir(), ".npm-global", "bin"),
+    join(homedir(), ".local", "bin"),
+  ].filter((entry): entry is string => Boolean(entry));
+  const entries = currentPath.split(delimiter).filter(Boolean);
+  for (const candidate of candidates) {
+    if (!entries.includes(candidate)) entries.push(candidate);
+  }
+  env[pathKey] = entries.join(delimiter);
+  return env;
 }
 
 export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string } {
@@ -207,6 +226,7 @@ export function runAuthCommand(
       stdio: "pipe",
       windowsHide: true,
       shell: needsShell(spawnSpec.command),
+      env: buildProviderAuthEnv(),
     });
     let output = "";
     const append = (chunk: Buffer) => {
@@ -276,7 +296,7 @@ export function startDeviceLoginCommand(options: {
       stdio: "pipe",
       windowsHide: true,
       shell: needsShell(spawnSpec.command),
-      env: options.env ? { ...process.env, ...options.env } : process.env,
+      env: buildProviderAuthEnv(options.env),
     });
 
     let output = "";

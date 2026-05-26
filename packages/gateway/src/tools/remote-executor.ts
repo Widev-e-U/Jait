@@ -17,6 +17,7 @@
 
 import type { ToolResult, ToolContext } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
+import { existsSync } from "node:fs";
 
 /** Tools that always run on the gateway regardless of project location */
 const GATEWAY_LOCAL_TOOLS = new Set([
@@ -35,6 +36,7 @@ const GATEWAY_LOCAL_TOOLS = new Set([
   "memory.list",
   "memory.update",
   "memory.search",
+  "session.search",
   "voice.say",
   "voice.listen",
   "screen.share",
@@ -68,12 +70,7 @@ export function resolveRemoteNodeForSession(
   // Check if the project path exists on the gateway
   // We use a lightweight sync check — existsSync is fine here since this
   // is called once per chat request, not in a hot loop.
-  try {
-    const { existsSync } = require("node:fs");
-    if (existsSync(projectPath)) return null;
-  } catch {
-    return null;
-  }
+  if (existsSync(projectPath)) return null;
 
   // Path doesn't exist locally — find a matching remote node
   const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(projectPath);

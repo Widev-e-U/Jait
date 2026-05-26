@@ -307,6 +307,44 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return resolveRegisteredProvider(selectedProvider, "The selected user provider");
   };
 
+  const preflightScheduledProvider = async (providerId: ProviderId): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const provider = deps.providerRegistry.get(providerId);
+    if (!provider) {
+      return { ok: false, message: `Provider '${providerId}' is not registered on this gateway.` };
+    }
+
+    const available = await provider.checkAvailability();
+    if (!available) {
+      return {
+        ok: false,
+        message: `Provider '${providerId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}`,
+      };
+    }
+
+    if (!provider.listModels) {
+      return { ok: true };
+    }
+
+    try {
+      await provider.listModels();
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        message: `Provider '${providerId}' did not pass scheduled job preflight before thread creation: ${message}`,
+      };
+    }
+  };
+
+  const preflightScheduledProviders = async (providerIds: ProviderId[]): Promise<{ ok: true } | { ok: false; message: string }> => {
+    for (const providerId of [...new Set(providerIds)]) {
+      const result = await preflightScheduledProvider(providerId);
+      if (!result.ok) return result;
+    }
+    return { ok: true };
+  };
+
   const resolveStoredThreadProvider = (
     threadProviderId: unknown,
     context: ToolContext,
@@ -799,6 +837,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
             const selectedProviderId = resolvedProvider.providerId;
             const selectedDefaults = resolveSelectedThreadDefaults(context);
+            if (context.requestedBy === "scheduler") {
+              const preflight = await preflightScheduledProvider(selectedProviderId);
+              if (!preflight.ok) return preflight;
+            }
             let thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
@@ -881,6 +923,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 ok: false,
                 message: firstResolutionError.resolvedProvider.error ?? `Unable to resolve a provider for thread '${firstResolutionError.spec.title}'.`,
               };
+            }
+            if (context.requestedBy === "scheduler") {
+              const preflight = await preflightScheduledProviders(
+                validatedSpecs.flatMap(({ resolvedProvider }) => resolvedProvider.providerId ? [resolvedProvider.providerId] : []),
+              );
+              if (!preflight.ok) return preflight;
             }
 
             const created = await Promise.all(validatedSpecs.map(async ({ spec, resolvedProvider }) => {

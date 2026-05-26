@@ -27,6 +27,7 @@ class MockThreadProvider implements CliProviderAdapter {
   readonly sendTurn = vi.fn(async (): Promise<void> => {
     return;
   });
+  readonly listModels = vi.fn(async () => []);
 
   constructor(readonly id: "jait" | "codex" | "claude-code" = "jait") {
     this.info = {
@@ -312,6 +313,45 @@ describe("thread.control tool", () => {
       const data = result.data as { thread: { status: string; providerSessionId: string | null } };
       expect(data.thread.status).toBe("running");
       expect(data.thread.providerSessionId).toBe("mock-session-1");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("checks scheduled job provider limits before creating a thread", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.listModels.mockRejectedValueOnce(new Error("usage limit reached"));
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron task",
+          kind: "delivery",
+          start: true,
+          prompt: "run scheduled quality task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("did not pass scheduled job preflight before thread creation");
+      expect(result.message).toContain("usage limit reached");
+      expect(threadService.list(context.userId)).toHaveLength(0);
+      expect(provider.sendTurn).not.toHaveBeenCalled();
     } finally {
       sqlite.close();
     }
