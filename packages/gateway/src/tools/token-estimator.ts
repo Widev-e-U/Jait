@@ -9,33 +9,6 @@
 const TEXT_CHARS_PER_TOKEN = 3.7;
 const JSON_CHARS_PER_TOKEN = 4.0;
 
-function fallbackString(value: unknown): string {
-  try {
-    return String(value);
-  } catch {
-    return Object.prototype.toString.call(value);
-  }
-}
-
-function stringifyForEstimate(value: unknown): string {
-  if (typeof value === "string") return value;
-
-  const seen = new WeakSet<object>();
-  try {
-    const json = JSON.stringify(value, (_key, current) => {
-      if (typeof current === "bigint") return current.toString();
-      if (typeof current === "object" && current !== null) {
-        if (seen.has(current)) return "[Circular]";
-        seen.add(current);
-      }
-      return current;
-    });
-    return json ?? fallbackString(value);
-  } catch {
-    return fallbackString(value);
-  }
-}
-
 /** Estimate tokens for a plain-text string. */
 export function estimateTokens(text: string): number {
   if (!text) return 0;
