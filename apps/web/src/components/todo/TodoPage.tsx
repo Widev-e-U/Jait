@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Play, Plus, RefreshCw, Save, Search, Sparkles, Tags, Trash2, X } from 'lucide-react'
+import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Play, Plus, RefreshCw, Save, Search, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -730,7 +730,6 @@ export function TodoPage({
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isBulkSaving, setIsBulkSaving] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [runningTodoIds, setRunningTodoIds] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
@@ -1023,33 +1022,6 @@ export function TodoPage({
     }
   }
 
-  const generateTodos = async () => {
-    if (!repoId) return
-    setIsGenerating(true)
-    setError(null)
-    try {
-      const result = await agentsApi.generateJaitTodos(repoId, {
-        provider,
-        model,
-        runtimeMode,
-      })
-      if (result.todos.length === 0) {
-        setError('No new todo suggestions were generated.')
-        return
-      }
-      setTodos((current) => {
-        const generatedIds = new Set(result.todos.map((todo) => todo.id))
-        const next = [...result.todos, ...current.filter((todo) => !generatedIds.has(todo.id))]
-        persistTodoOrder(repoId, next)
-        return next
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate todos')
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
   const runTodoAsThread = async (todo: JaitTodo) => {
     if (!selectedRepo || runningTodoIds.has(todo.id)) return
     setRunningTodoIds((current) => new Set(current).add(todo.id))
@@ -1248,9 +1220,10 @@ export function TodoPage({
             <RefreshCw className={cn('mr-2 h-4 w-4', isLoading && 'animate-spin')} />
             Refresh
           </Button>
-          <Button variant="outline" onClick={() => void generateTodos()} disabled={isGenerating || isLoading || !repoId}>
-            {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            Generate
+          <Button variant="outline" onClick={() => setIsHistoryOpen(true)} disabled={completionEvents.length === 0}>
+            <History className="mr-2 h-4 w-4" />
+            History
+            {completionEvents.length > 0 && <Badge variant="secondary" className="ml-1 px-1.5">{completionEvents.length}</Badge>}
           </Button>
         </div>
       </div>
@@ -1443,20 +1416,6 @@ export function TodoPage({
         </div>
       )}
 
-      {completionEvents.length > 0 && (
-        <div className="rounded-lg border px-3 py-2">
-          <Button
-            variant="ghost"
-            className="h-8 w-full justify-start gap-2 px-0 text-sm font-medium hover:bg-transparent"
-            onClick={() => setIsHistoryOpen(true)}
-          >
-            <History className="h-4 w-4 text-muted-foreground" />
-            Completion history
-            <Badge variant="secondary" className="ml-auto">{completionEvents.length}</Badge>
-          </Button>
-        </div>
-      )}
-
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
           <DialogHeader className="border-b px-4 py-3">
@@ -1585,35 +1544,31 @@ export function TodoPage({
               <div
                 data-todo-id={todo.id}
                 className={cn(
-                  'group rounded-lg border p-3 transition-all duration-150 ease-out',
+                  'group rounded-lg border p-2 transition-all duration-150 ease-out sm:p-3',
                   statusMeta.itemClassName,
                   dragSourceId && 'touch-none',
                   dragSourceId === todo.id && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
                 )}
-                onPointerDown={(event) => {
-                  const target = event.target as HTMLElement
-                  if (target.closest('button, textarea, input, a, [data-no-drag="true"]')) return
-                  handleDragStart(todo.id, event)
-                }}
               >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                  <div className="flex items-start gap-1.5">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2">
+                  <div className="flex flex-col items-center gap-1">
                     <input
                       data-no-drag="true"
                       type="checkbox"
-                      className="mt-1.5 h-4 w-4 rounded border-input"
+                      className="h-4 w-4 rounded border-input"
                       checked={selectedTodoIds.has(todo.id)}
                       onChange={(event) => toggleTodoSelection(todo.id, event.target.checked)}
                       aria-label="Select todo"
                     />
                     <div
-                      className="mt-1 shrink-0 cursor-grab rounded p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
+                      className="shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
                       title="Drag to reorder"
                       aria-label="Drag to reorder"
+                      onPointerDown={(event) => handleDragStart(todo.id, event)}
                     >
                       <GripVertical className="h-4 w-4" />
                     </div>
-                    <button className="mt-0.5 h-6 w-6 shrink-0 rounded text-muted-foreground hover:text-foreground" onClick={() => void updateTodoStatus(todo, todo.status === 'done' ? 'open' : 'done')} aria-label="Toggle todo status">
+                    <button className="h-6 w-6 shrink-0 rounded text-muted-foreground hover:text-foreground" onClick={() => void updateTodoStatus(todo, todo.status === 'done' ? 'open' : 'done')} aria-label="Toggle todo status">
                       <TodoStatusIcon status={todo.status} />
                     </button>
                   </div>
@@ -1636,7 +1591,7 @@ export function TodoPage({
                       inputClassName="text-xs"
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground lg:max-w-40 lg:justify-end">
+                  <div className="grid w-[4.25rem] grid-cols-2 gap-0.5 text-xs text-muted-foreground">
                     <ControlTooltip label={`Status: ${statusMeta.label}`}>
                       <OptionSelect
                         value={todo.status}
