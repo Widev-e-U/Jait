@@ -12,7 +12,7 @@ describe('buildMemoryFeedbackReminder', () => {
     })
 
     expect(request).toEqual({
-      content: 'Memory feedback: Should have remembered this. The user expected prior context to be applied to this answer.\nAssistant answer excerpt: The answer ignored a saved project preference.',
+      content: 'Memory feedback: Memorize this. The user wants this assistant answer reviewed as durable memory.\nAssistant answer excerpt: The answer ignored a saved project preference.',
       projectId: 'project-1',
       sessionId: 'session-1',
       sourceType: 'memory_feedback',
@@ -48,6 +48,6 @@ describe('buildMemoryFeedbackReminder', () => {
   })
 
   it('labels saved feedback for toast messages', () => {
-    expect(getMemoryFeedbackSuccessMessage('should_have_remembered')).toBe('Should have remembered this feedback saved')
+    expect(getMemoryFeedbackSuccessMessage('should_have_remembered')).toBe('Memorize this feedback saved')
   })
 })

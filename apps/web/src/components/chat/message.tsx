@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
@@ -453,6 +454,7 @@ function MessageInner({
   onMemoryFeedback,
 }: MessageProps) {
   const isUser = role === 'user'
+  const confirm = useConfirmDialog()
 
   const { userDisplayText, userDisplaySegments } = useMemo(() => {
     if (!isUser) {
@@ -710,6 +712,15 @@ function MessageInner({
 
   const handleMemoryFeedback = async (kind: MemoryFeedbackKind) => {
     if (!canSendMemoryFeedback || !messageId || memoryFeedbackSaving) return
+    if (kind === 'should_have_remembered') {
+      const accepted = await confirm({
+        title: 'Memorize this?',
+        description: 'This saves a memory feedback item with this assistant message as context. Future agents can use it when reviewing or updating memory for this chat and project.',
+        confirmLabel: 'Memorize',
+        cancelLabel: 'Cancel',
+      })
+      if (!accepted) return
+    }
     setMemoryFeedbackState({ kind, status: 'saving' })
     try {
       await onMemoryFeedback?.({ messageId, kind, content })
@@ -780,34 +791,19 @@ function MessageInner({
             </MessageAction>
           ) : null}
           {canSendMemoryFeedback ? (
-            <>
-              <MessageAction
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  void handleMemoryFeedback('should_have_remembered')
-                }}
-                disabled={memoryFeedbackSaving}
-                aria-label={getMemoryFeedbackLabel('should_have_remembered')}
-                tooltip={getMemoryFeedbackLabel('should_have_remembered')}
-                className="h-6 w-6"
-              >
-                {renderMemoryFeedbackIcon('should_have_remembered', <Brain className="h-3.5 w-3.5" />)}
-              </MessageAction>
-              <MessageAction
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  void handleMemoryFeedback('wrong_memory_used')
-                }}
-                disabled={memoryFeedbackSaving}
-                aria-label={getMemoryFeedbackLabel('wrong_memory_used')}
-                tooltip={getMemoryFeedbackLabel('wrong_memory_used')}
-                className="h-6 w-6"
-              >
-                {renderMemoryFeedbackIcon('wrong_memory_used', <AlertTriangle className="h-3.5 w-3.5" />)}
-              </MessageAction>
-            </>
+            <MessageAction
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void handleMemoryFeedback('should_have_remembered')
+              }}
+              disabled={memoryFeedbackSaving}
+              aria-label={getMemoryFeedbackLabel('should_have_remembered')}
+              tooltip={getMemoryFeedbackLabel('should_have_remembered')}
+              className="h-6 w-6"
+            >
+              {renderMemoryFeedbackIcon('should_have_remembered', <Brain className="h-3.5 w-3.5" />)}
+            </MessageAction>
           ) : null}
           <MessageAction
             onClick={copyToClipboard}

@@ -10,6 +10,7 @@ export function shouldUseRecordedBranchDiff(
 ): boolean {
   if (!threadBranch) return false
   if (prState === 'creating' || prState === 'open' || prState === 'merged' || prState === 'closed') return true
+  if (gitStatus?.branch && gitStatus.branch !== threadBranch) return true
   if (threadStatus === 'completed') {
     return !(gitStatus?.branch === threadBranch && gitStatus.hasWorkingTreeChanges)
   }

@@ -60,6 +60,7 @@ export function MessageAction({
       variant="ghost"
       size="icon"
       className={cn('h-7 w-7 rounded-full', className)}
+      title={tooltip ?? label}
       {...props}
     >
       {children}

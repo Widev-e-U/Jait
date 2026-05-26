@@ -7,8 +7,8 @@ const MAX_ANSWER_EXCERPT_LENGTH = 500
 
 const feedbackConfig: Record<MemoryFeedbackKind, { label: string; description: string; tag: string }> = {
   should_have_remembered: {
-    label: 'Should have remembered this',
-    description: 'The user expected prior context to be applied to this answer.',
+    label: 'Memorize this',
+    description: 'The user wants this assistant answer reviewed as durable memory.',
     tag: 'should-have-remembered',
   },
   wrong_memory_used: {

@@ -165,7 +165,14 @@ function shouldIncludeContactMemories(content: string): boolean {
 }
 
 function memorySourceLabel(entry: MemoryEntry): string {
+  if (entry.source.type === "pre_compaction") {
+    return "memory compact"
+  }
   return `${entry.source.type}:${entry.source.id}@${entry.source.surface}`;
+}
+
+export function isSourceVisible(entry: MemoryEntry): boolean {
+  return entry.source.type !== "pre_compaction";
 }
 
 function toContextFlowMemoryEntry(entry: MemoryEntry): LlmContextFlowMemoryEntry {

@@ -55,6 +55,10 @@ describe('shouldUseRecordedBranchDiff', () => {
     expect(shouldUseRecordedBranchDiff('jait/feature', null)).toBe(false)
   })
 
+  it('uses the recorded branch before PR creation when the active checkout differs', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', null, 'running', gitStatus({ branch: 'main' }))).toBe(true)
+  })
+
   it('uses the recorded branch diff while the PR is being created', () => {
     expect(shouldUseRecordedBranchDiff('jait/feature', 'creating')).toBe(true)
   })
@@ -87,6 +91,13 @@ describe('shouldUseRecordedBranchDiff', () => {
 describe('getThreadDiffRequest', () => {
   it('uses the current branch diff before PR creation', () => {
     expect(getThreadDiffRequest('main', 'jait/feature', null)).toEqual({ baseBranch: 'main' })
+  })
+
+  it('pins diff stats to the recorded branch before PR creation when the active checkout differs', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', null, 'running', gitStatus({ branch: 'main' }))).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
   })
 
   it('pins diff stats to the recorded branch while the PR is being created', () => {
