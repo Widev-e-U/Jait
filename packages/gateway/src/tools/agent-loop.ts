@@ -1672,6 +1672,9 @@ export async function runAgentLoop(
           const bailMsg = "\n\n[Stopped: multiple consecutive rounds produced no successful results. The current approach isn't working — please try a different strategy.]";
           onEvent?.({ type: "token", content: bailMsg });
           fullContent += bailMsg;
+          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
           return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
         }
       }
@@ -1683,9 +1686,11 @@ export async function runAgentLoop(
     // ── Normal text response — done ──
     if (contentText) {
       history.push({ role: "assistant", content: contentText });
+    }
+    if (fullContent || thinkingText || segments.length > 0 || executedToolCalls.length > 0) {
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
       const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
-      onPersist?.(sessionId, "assistant", contentText, tcJson, segJson, thinkingText || undefined);
+      onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, thinkingText || undefined);
     }
 
     // ── Emit plan completion in plan mode ──
@@ -1709,6 +1714,12 @@ export async function runAgentLoop(
   const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
   onEvent?.({ type: "token", content: msg });
   fullContent += msg;
+
+  {
+    const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+    const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+    onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
+  }
 
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }

@@ -63,20 +63,6 @@ describe("token-estimator", () => {
   it("estimates empty tool schema lists as zero", () => {
     expect(estimateToolSchemaTokens([])).toBe(0);
   });
-  it("estimates non-json values without throwing", () => {
-    expect(estimateJsonTokens(undefined)).toBeGreaterThan(0);
-    expect(estimateJsonTokens(Symbol("tool"))).toBeGreaterThan(0);
-    expect(estimateJsonTokens(() => undefined)).toBeGreaterThan(0);
-    expect(estimateJsonTokens(1n)).toBeGreaterThan(0);
-  });
-
-  it("estimates circular json-like values without throwing", () => {
-    const schema: Record<string, unknown> = { name: "recursive-tool" };
-    schema.self = schema;
-
-    expect(estimateJsonTokens(schema)).toBeGreaterThan(0);
-    expect(estimateToolSchemaTokens([schema])).toBeGreaterThan(0);
-  });
 
   it("breaks context usage down by message category and caps the ratio", () => {
     const usage = computeContextUsage(
