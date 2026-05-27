@@ -208,13 +208,19 @@ async function retrieveRelevantMemoryContext(
   const query = content.trim();
   if (!memoryService || !query) return null;
 
-  const projectMemories = await memoryService.search(query, 5, "project");
+  const projectMemories = await memoryService.search(query, 25, "project");
   const byId = new Map<string, MemoryEntry>();
-  for (const entry of projectMemories) byId.set(entry.id, entry);
+  for (const entry of projectMemories) {
+    if (!isSourceVisible(entry)) continue;
+    byId.set(entry.id, entry);
+  }
 
   if (shouldIncludeContactMemories(query)) {
-    const contactMemories = await memoryService.search(query, Math.max(0, 5 - byId.size), "contact");
-    for (const entry of contactMemories) byId.set(entry.id, entry);
+    const contactMemories = await memoryService.search(query, Math.max(0, 25 - byId.size), "contact");
+    for (const entry of contactMemories) {
+      if (!isSourceVisible(entry)) continue;
+      byId.set(entry.id, entry);
+    }
   }
 
   const entries = [...byId.values()].slice(0, 5);

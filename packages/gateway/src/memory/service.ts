@@ -50,13 +50,26 @@ function normalizePreCompactionSnippet(snippet: string): string {
 }
 
 function isDurablePreCompactionFact(content: string): boolean {
-  if (content.length < 12) return false;
-  const durablePattern = /\b(prefers?|preferred|likes?|wants?|always|never|avoid|keep|source of truth|lives? in|stored in|belongs? in|uses?|runs?|requires?|configured|workflow|release|version|env(?:ironment)?|api key|command|should|must|do not|don't|instead|remember)\b/i;
-  if (!durablePattern.test(content)) return false;
+  if (content.length < 24) return false;
+  if (/[?]/.test(content)) return false;
 
-  const transientPattern = /\b(thanks|thank you|ok|okay|please continue|can you|could you|what is|how do|run the tests|fix this|help me)\b/i;
-  const strongFactPattern = /\b(prefers?|always|never|source of truth|lives? in|stored in|belongs? in|uses?|requires?|should|must|instead|remember|version)\b/i;
-  return !transientPattern.test(content) || strongFactPattern.test(content);
+  if (/^(let me\b|i was\b|i'?m\b|i think\b|i don'?t\b|i need\b|i see\b|now let me\b|did you\b|do you\b|can you\b|could you\b|would you\b|will you\b|please\b|pls\b|ok\b|okay\b|sure\b|thanks\b|thank you\b|what\b|how\b|why\b|when\b|where\b|which\b|who\b)/i.test(content)) {
+    return false;
+  }
+
+  if (/^(commit\b|push\b|pull\b|fix\b|make\b|add\b|run\b|start\b|stop\b|restart\b|delete\b|remove\b|create\b|update\b|check\b|verify\b|build\b|deploy\b|install\b|uninstall\b|kill\b|test\b|trace\b|show\b|tell\b|give\b|find\b|open\b|close\b|merge\b|rebase\b|undo\b|redo\b)/i.test(content)) {
+    return false;
+  }
+
+  const strongFactPattern = /\b(prefers?|preferred|always|never|avoid|source of truth|lives? in|stored in|belongs? in|configured|workflow|api key|do not\b|don'?t\b|instead\b|remember that)\b/i;
+  if (strongFactPattern.test(content)) return true;
+
+  const declarativeRule = /\b(should|must)\b/i;
+  if (declarativeRule.test(content) && !/\b(this|that|here|it)\b/i.test(content.slice(0, 40))) {
+    return true;
+  }
+
+  return false;
 }
 
 function extractPreCompactionFacts(snippets: string[]): string[] {
