@@ -203,6 +203,55 @@ describe("job routes", () => {
     sqlite.close();
   });
 
+  it("allows toggling enabled on an agent_task without re-validating the prompt", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret" };
+    registerJobRoutes(app, config, scheduler);
+
+    const headers = await authHeader(config.jwtSecret, "agent-user");
+
+    const created = scheduler.create({
+      userId: "agent-user",
+      name: "legacy agent automation",
+      cron: "0 9 * * *",
+      toolName: "thread.control",
+      input: {
+        __jaitJobMeta: { jobType: "agent_task" },
+      },
+      sessionId: "default",
+      projectRoot: process.cwd(),
+    });
+
+    const disableResponse = await app.inject({
+      method: "PATCH",
+      url: `/jobs/${created.id}`,
+      headers,
+      payload: { enabled: false },
+    });
+
+    expect(disableResponse.statusCode).toBe(200);
+    expect(disableResponse.json()).toMatchObject({ enabled: false });
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: `/jobs/${created.id}`,
+      headers,
+      payload: { enabled: true },
+    });
+
+    expect(enableResponse.statusCode).toBe(200);
+    expect(enableResponse.json()).toMatchObject({ enabled: true });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("does not allow one user to trigger another user's job", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

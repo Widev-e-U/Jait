@@ -274,56 +274,65 @@ export function registerJobRoutes(
     const existingInput = asRecord(existing.input) ?? {};
     const existingMeta = getJobMeta(existingInput);
     const { __jaitJobMeta: _ignored, ...existingPayload } = existingInput;
-    const requestedJobType = body["job_type"] === "agent_task" || body["job_type"] === "system_job"
-      ? body["job_type"] as JobType
-      : (existingMeta.jobType ?? "system_job");
-    const nextMeta: JobMeta = {
-      jobType: requestedJobType,
-      description: typeof body["description"] === "string" ? body["description"] : existingMeta.description,
-      prompt: parsePrompt(body["prompt"]) ?? existingMeta.prompt,
-      provider: typeof body["provider"] === "string" ? body["provider"] : existingMeta.provider,
-      model: typeof body["model"] === "string" ? body["model"] : existingMeta.model,
-    };
 
-    let nextToolName = existing.toolName;
-    let nextPayload: Record<string, unknown> = existingPayload;
+    const semanticKeys = ["job_type", "tool_name", "payload", "prompt", "description", "provider", "model"] as const;
+    const hasSemanticChange = semanticKeys.some((key) => body[key] !== undefined);
 
-    if (requestedJobType === "system_job") {
-      const payload = asRecord(body["payload"]);
-      const payloadCommand = typeof payload?.["command"] === "string" ? payload["command"] : undefined;
-      const payloadArgs = asRecord(payload?.["args"]);
-      if (payloadCommand) {
-        nextToolName = normalizeToolName(payloadCommand);
-      } else if (typeof body["tool_name"] === "string") {
-        nextToolName = normalizeToolName(String(body["tool_name"]));
+    let nextToolName: string | undefined;
+    let updatedInput: Record<string, unknown> | undefined;
+
+    if (hasSemanticChange) {
+      const requestedJobType = body["job_type"] === "agent_task" || body["job_type"] === "system_job"
+        ? body["job_type"] as JobType
+        : (existingMeta.jobType ?? "system_job");
+      const nextMeta: JobMeta = {
+        jobType: requestedJobType,
+        description: typeof body["description"] === "string" ? body["description"] : existingMeta.description,
+        prompt: parsePrompt(body["prompt"]) ?? existingMeta.prompt,
+        provider: typeof body["provider"] === "string" ? body["provider"] : existingMeta.provider,
+        model: typeof body["model"] === "string" ? body["model"] : existingMeta.model,
+      };
+
+      nextToolName = existing.toolName;
+      let nextPayload: Record<string, unknown> = existingPayload;
+
+      if (requestedJobType === "system_job") {
+        const payload = asRecord(body["payload"]);
+        const payloadCommand = typeof payload?.["command"] === "string" ? payload["command"] : undefined;
+        const payloadArgs = asRecord(payload?.["args"]);
+        if (payloadCommand) {
+          nextToolName = normalizeToolName(payloadCommand);
+        } else if (typeof body["tool_name"] === "string") {
+          nextToolName = normalizeToolName(String(body["tool_name"]));
+        }
+        if (payload) {
+          nextPayload = payloadArgs ?? {};
+        }
+      } else {
+        const payload = asRecord(body["payload"]);
+        const nextPrompt = parsePrompt(body["prompt"]) ?? existingMeta.prompt;
+        if (!nextPrompt) {
+          return reply.status(400).send({ detail: "prompt is required for agent_task" });
+        }
+        nextToolName = "thread.control";
+        nextPayload = {
+          ...withoutThreadTitle(payload ?? existingPayload),
+          action: "create",
+          kind: "delivery",
+          prompt: nextPrompt,
+          providerId: nextMeta.provider,
+          model: nextMeta.model,
+          workingDirectory: existing.projectRoot,
+          start: true,
+          detach: true,
+        };
       }
-      if (payload) {
-        nextPayload = payloadArgs ?? {};
-      }
-    } else {
-      const payload = asRecord(body["payload"]);
-      const nextPrompt = parsePrompt(body["prompt"]) ?? existingMeta.prompt;
-      if (!nextPrompt) {
-        return reply.status(400).send({ detail: "prompt is required for agent_task" });
-      }
-      nextToolName = "thread.control";
-      nextPayload = {
-        ...withoutThreadTitle(payload ?? existingPayload),
-        action: "create",
-        kind: "delivery",
-        prompt: nextPrompt,
-        providerId: nextMeta.provider,
-        model: nextMeta.model,
-        workingDirectory: existing.projectRoot,
-        start: true,
-        detach: true,
+
+      updatedInput = {
+        ...nextPayload,
+        __jaitJobMeta: nextMeta,
       };
     }
-
-    const updatedInput = {
-      ...nextPayload,
-      __jaitJobMeta: nextMeta,
-    };
 
     const updated = scheduler.update(id, {
       name: typeof body["name"] === "string" ? body["name"] : undefined,
