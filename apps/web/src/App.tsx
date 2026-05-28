@@ -289,6 +289,19 @@ function readStoredViewMode(): ViewMode {
   return value === 'manager' ? 'manager' : 'developer'
 }
 
+function InlineSecretMounted({ requestId, onMount, children }: {
+  requestId: string
+  onMount: (requestId: string) => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    onMount(requestId)
+  }, [requestId, onMount])
+  return <>{children}</>
+}
+
+const INLINE_SECRET_GRACE_MS = 500
+
 function useSecretInputPrompt({
   token,
   sessionId,
@@ -301,8 +314,23 @@ function useSecretInputPrompt({
   const [remember, setRemember] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [inlineMountedRequestId, setInlineMountedRequestId] = useState<string | null>(null)
+  const [gracePeriodExpired, setGracePeriodExpired] = useState(false)
   const activeRequest = requests[0] ?? null
   const renderInline = shouldRenderSecretRequestInline(activeRequest)
+
+  useEffect(() => {
+    setInlineMountedRequestId(null)
+    setGracePeriodExpired(false)
+    if (!activeRequest) return
+    if (!shouldRenderSecretRequestInline(activeRequest)) return
+    const timer = setTimeout(() => setGracePeriodExpired(true), INLINE_SECRET_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [activeRequest?.id])
+
+  const markInlineMounted = useCallback((requestId: string) => {
+    setInlineMountedRequestId(requestId)
+  }, [])
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -408,7 +436,13 @@ function useSecretInputPrompt({
     />
   ) : null
 
-  const dialog = shouldRenderSecretRequestDialog(activeRequest) ? (
+  const inlineMounted = activeRequest ? inlineMountedRequestId === activeRequest.id : false
+  const showDialog = Boolean(activeRequest) && (
+    shouldRenderSecretRequestDialog(activeRequest)
+    || (renderInline && gracePeriodExpired && !inlineMounted)
+  )
+
+  const dialog = showDialog && activeRequest ? (
     <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
       <DialogContent>
         <DialogHeader>
@@ -427,6 +461,7 @@ function useSecretInputPrompt({
     renderInline,
     form,
     dialog,
+    markInlineMounted,
   }
 }
 
@@ -2322,8 +2357,12 @@ function App() {
     if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
     if (!secretRequestMatchesTool(secretInput.activeRequest, call.tool, call.args)) return null
-    return secretInput.form
-  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline])
+    return (
+      <InlineSecretMounted requestId={secretInput.activeRequest.id} onMount={secretInput.markInlineMounted}>
+        {secretInput.form}
+      </InlineSecretMounted>
+    )
+  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline, secretInput.markInlineMounted])
 
   const activeProjectRecord = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
