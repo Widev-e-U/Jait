@@ -98,7 +98,7 @@ export class JobsApi {
       include_disabled: includeDisabled.toString(),
     })
 
-    const response = await fetch(`${API_URL}/jobs?${params}`, {
+    const response = await fetch(`${API_URL}/api/jobs?${params}`, {
       headers: this.getHeaders(),
     })
 
@@ -137,7 +137,7 @@ export class JobsApi {
   }
 
   async getJob(jobId: string): Promise<ScheduledJob> {
-    const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+    const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
       headers: this.getHeaders(),
     })
 
@@ -149,7 +149,7 @@ export class JobsApi {
   }
 
   async createJob(data: CreateJobRequest): Promise<ScheduledJob> {
-    const response = await fetch(`${API_URL}/jobs`, {
+    const response = await fetch(`${API_URL}/api/jobs`, {
       method: 'POST',
       headers: this.getHeaders(true),
       body: JSON.stringify(data),
@@ -164,7 +164,7 @@ export class JobsApi {
   }
 
   async updateJob(jobId: string, data: UpdateJobRequest): Promise<ScheduledJob> {
-    const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+    const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
       method: 'PATCH',
       headers: this.getHeaders(true),
       body: JSON.stringify(data),
@@ -179,7 +179,7 @@ export class JobsApi {
   }
 
   async deleteJob(jobId: string): Promise<void> {
-    const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+    const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     })
@@ -190,7 +190,7 @@ export class JobsApi {
   }
 
   async triggerJob(jobId: string): Promise<JobRun> {
-    const response = await fetch(`${API_URL}/jobs/${jobId}/trigger`, {
+    const response = await fetch(`${API_URL}/api/jobs/${jobId}/trigger`, {
       method: 'POST',
       headers: this.getHeaders(true),
       body: JSON.stringify({}),
@@ -210,7 +210,7 @@ export class JobsApi {
       size: size.toString(),
     })
 
-    const response = await fetch(`${API_URL}/jobs/${jobId}/runs?${params}`, {
+    const response = await fetch(`${API_URL}/api/jobs/${jobId}/runs?${params}`, {
       headers: this.getHeaders(),
     })
 
@@ -223,7 +223,7 @@ export class JobsApi {
   }
 
   async getAvailableProviders(): Promise<Record<string, ProviderInfo>> {
-    const response = await fetch(`${API_URL}/jobs/providers/available`, {
+    const response = await fetch(`${API_URL}/api/jobs/providers/available`, {
       headers: this.getHeaders(),
     })
 

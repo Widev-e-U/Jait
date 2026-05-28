@@ -27,7 +27,7 @@ describe("job routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/jobs",
+      url: "/api/jobs",
       headers,
       payload: {
         name: "daily codex automation",
@@ -49,7 +49,7 @@ describe("job routes", () => {
 
     const triggerResponse = await app.inject({
       method: "POST",
-      url: `/jobs/${created.id}/trigger`,
+      url: `/api/jobs/${created.id}/trigger`,
       headers,
     });
 
@@ -87,7 +87,7 @@ describe("job routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/jobs",
+      url: "/api/jobs",
       headers,
       payload: {
         name: "broken agent task",
@@ -118,7 +118,7 @@ describe("job routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/jobs",
+      url: "/api/jobs",
       headers,
       payload: {
         name: "status automation",
@@ -137,7 +137,7 @@ describe("job routes", () => {
 
     const triggerResponse = await app.inject({
       method: "POST",
-      url: `/jobs/${created.id}/trigger`,
+      url: `/api/jobs/${created.id}/trigger`,
       headers,
     });
     expect(triggerResponse.statusCode).toBe(200);
@@ -145,7 +145,7 @@ describe("job routes", () => {
 
     const runsResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${created.id}/runs`,
+      url: `/api/jobs/${created.id}/runs`,
       headers,
     });
     expect(runsResponse.statusCode).toBe(200);
@@ -183,7 +183,7 @@ describe("job routes", () => {
 
     const runsResponse = await app.inject({
       method: "GET",
-      url: `/jobs/${job.id}/runs`,
+      url: `/api/jobs/${job.id}/runs`,
       headers,
     });
 
@@ -230,7 +230,7 @@ describe("job routes", () => {
 
     const disableResponse = await app.inject({
       method: "PATCH",
-      url: `/jobs/${created.id}`,
+      url: `/api/jobs/${created.id}`,
       headers,
       payload: { enabled: false },
     });
@@ -240,7 +240,7 @@ describe("job routes", () => {
 
     const enableResponse = await app.inject({
       method: "PATCH",
-      url: `/jobs/${created.id}`,
+      url: `/api/jobs/${created.id}`,
       headers,
       payload: { enabled: true },
     });
@@ -268,7 +268,7 @@ describe("job routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/jobs",
+      url: "/api/jobs",
       headers: userOneHeaders,
       payload: {
         name: "private automation",
@@ -282,7 +282,7 @@ describe("job routes", () => {
 
     const triggerAsOtherUser = await app.inject({
       method: "POST",
-      url: `/jobs/${created.id}/trigger`,
+      url: `/api/jobs/${created.id}/trigger`,
       headers: userTwoHeaders,
     });
 

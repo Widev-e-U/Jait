@@ -136,7 +136,7 @@ export function registerJobRoutes(
   config: AppConfig,
   scheduler: SchedulerService,
 ) {
-  app.get("/jobs/providers/available", async (request, reply) => {
+  app.get("/api/jobs/providers/available", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     return {
@@ -153,7 +153,7 @@ export function registerJobRoutes(
     };
   });
 
-  app.get("/jobs", async (request, reply) => {
+  app.get("/api/jobs", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const query = (request.query as Record<string, unknown>) ?? {};
@@ -176,7 +176,7 @@ export function registerJobRoutes(
     };
   });
 
-  app.get("/jobs/:id", async (request, reply) => {
+  app.get("/api/jobs/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
@@ -187,7 +187,7 @@ export function registerJobRoutes(
     return mapJob(job);
   });
 
-  app.post("/jobs", async (request, reply) => {
+  app.post("/api/jobs", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
@@ -261,7 +261,7 @@ export function registerJobRoutes(
     return reply.status(201).send(mapJob(created));
   });
 
-  app.patch("/jobs/:id", async (request, reply) => {
+  app.patch("/api/jobs/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
@@ -348,7 +348,7 @@ export function registerJobRoutes(
     return mapJob(updated);
   });
 
-  app.delete("/jobs/:id", async (request, reply) => {
+  app.delete("/api/jobs/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
@@ -359,7 +359,7 @@ export function registerJobRoutes(
     return reply.status(204).send();
   });
 
-  app.post("/jobs/:id/trigger", async (request, reply) => {
+  app.post("/api/jobs/:id/trigger", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
@@ -377,7 +377,7 @@ export function registerJobRoutes(
     }
   });
 
-  app.get("/jobs/:id/runs", async (request, reply) => {
+  app.get("/api/jobs/:id/runs", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
