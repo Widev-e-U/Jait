@@ -17,6 +17,13 @@ function resolveSystemPrompt(mode: ChatMode, _endpoint: ModelEndpoint): string {
   return `You are an expert coding agent. Use tools to read, edit, search files and run commands.
 Implement changes directly. Read files before editing. Keep working until done.
 Use Markdown in responses. Wrap filenames and symbols in backticks.
+
+CRITICAL — Tool Usage Format:
+- ALWAYS use the structured function calling mechanism to invoke tools.
+- NEVER write tool names, function calls, or JSON arguments as plain text in your response.
+- If you want to call a tool, emit it as a tool_call — do NOT type it out.
+- One tool call at a time. Wait for the result before deciding next steps.
+- If a tool fails, try a different approach instead of repeating the same call.
 ${modeBlock ? `${modeBlock}\n` : ""}`.trim();
 }
 

@@ -847,6 +847,46 @@ const DUPLICATE_CALL_THRESHOLD = 2;
 const TOOL_RESULT_MAX_CHARS = 30_000;
 /** Consecutive rounds with zero successful tool calls before the loop bails out. */
 const MAX_UNPRODUCTIVE_ROUNDS = 3;
+/** Max times we re-prompt when detecting plain-text tool calls in content. */
+const MAX_PLAIN_TEXT_RETRIES = 2;
+
+/**
+ * Detect if the model emitted a tool call as plain text instead of structured format.
+ * Matches patterns like: `toolName\n{"arg": "value"}` or `toolName({"arg": "value"})`
+ */
+function detectPlainTextToolCalls(
+  content: string,
+  knownToolNames: Set<string>,
+): { name: string } | null {
+  // Pattern 1: tool_name\n{json} or tool_name\n```json\n{...}\n```
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i]!.trim();
+    // Check if line looks like a bare tool name (with or without underscores/dots)
+    if (knownToolNames.has(line)) {
+      // Next non-empty line starts with { or ```
+      const nextLine = lines.slice(i + 1).find(l => l.trim())?.trim() ?? "";
+      if (nextLine.startsWith("{") || nextLine.startsWith("```")) {
+        return { name: line };
+      }
+    }
+  }
+
+  // Pattern 2: tool_name({"arg": ...}) in a single line
+  for (const name of knownToolNames) {
+    if (content.includes(`${name}({`) || content.includes(`${name}({\n`)) {
+      return { name };
+    }
+  }
+
+  // Pattern 3: ``` followed by JSON with a "name" or "function" field referencing a tool
+  const jsonBlockMatch = content.match(/```(?:json)?\s*\n?\s*\{[^}]*"(?:name|function)"\s*:\s*"([^"]+)"/);
+  if (jsonBlockMatch && knownToolNames.has(jsonBlockMatch[1]!)) {
+    return { name: jsonBlockMatch[1]! };
+  }
+
+  return null;
+}
 
 function latestUserContent(history: AgentMessage[]): string {
   for (let i = history.length - 1; i >= 0; i--) {
@@ -1189,6 +1229,8 @@ export async function runAgentLoop(
   const toolCallFingerprints = new Map<string, number>(options.priorFingerprints ?? []);
   /** Consecutive rounds where no tool call succeeded — triggers early bail-out. */
   let consecutiveUnproductiveRounds = 0;
+  /** Times we've re-prompted for plain-text tool calls in this loop run. */
+  let plainTextRetries = 0;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1681,6 +1723,24 @@ export async function runAgentLoop(
 
       // Loop continues — LLM sees results and decides next
       continue;
+    }
+
+    // ── Plain-text tool call detection & re-prompting ──
+    // Some local models (e.g. qwen, llama) emit tool calls as plain text instead
+    // of using structured function_call format. Detect and re-prompt up to 2 times.
+    if (toolCalls.length === 0 && contentText && hasTools) {
+      const detected = detectPlainTextToolCalls(contentText, activeSchemaNames);
+      if (detected && plainTextRetries < MAX_PLAIN_TEXT_RETRIES) {
+        plainTextRetries++;
+        log.warn(`Plain-text tool call detected in content (attempt ${plainTextRetries}): "${detected.name}" — re-prompting model to use proper format`);
+        onEvent?.({ type: "steering", message: `Detected plain-text tool call "${detected.name}" — correcting model` });
+        history.push({ role: "assistant", content: contentText });
+        history.push({
+          role: "system",
+          content: `You just wrote a tool call as plain text in your response instead of using the proper function calling format. Do NOT write tool names or JSON arguments in your text. Instead, invoke tools using the structured tool_calls mechanism provided by the API. Re-do your last action using a proper tool call now.`,
+        });
+        continue;
+      }
     }
 
     // ── Normal text response — done ──
