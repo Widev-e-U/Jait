@@ -610,7 +610,10 @@ function useUserQuestionPrompt({
       })
       if (!res.ok) return
       const data = await res.json() as { requests: UserQuestionRequest[] }
-      setRequests(data.requests.filter((request) => !sessionId || request.sessionId === sessionId))
+      // Surface every pending question for the authenticated user (the API already
+      // scopes by user). Gating on the active session silently swallowed prompts
+      // raised from a different session — leaving the agent blocked with no form.
+      setRequests(data.requests)
     } catch {
       // gateway down or reconnecting
     }
@@ -625,9 +628,8 @@ function useUserQuestionPrompt({
         const msg = JSON.parse(event.data) as { type: string; payload?: unknown }
         if (msg.type === 'user-question.requested') {
           const request = msg.payload as UserQuestionRequest
-          if (!sessionId || request.sessionId === sessionId) {
-            setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
-          }
+          // Always surface — see refresh() above for why session gating is unsafe here.
+          setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
         }
         if (msg.type === 'user-question.resolved') {
           const resolved = msg.payload as { id?: string }

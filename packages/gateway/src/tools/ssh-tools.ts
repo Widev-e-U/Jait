@@ -14,6 +14,8 @@ interface SshRunInput {
   timeoutMs?: number;
   authMethod?: "password" | "key";
   strictHostKeyChecking?: boolean;
+  sudo?: boolean;
+  sudoUser?: string;
 }
 
 interface SshSessionStartInput {
@@ -75,6 +77,22 @@ interface SshSession {
 
 const sshSessions = new Map<string, SshSession>();
 const SSH_PASSWORD_SECRET_TYPE = "ssh-password";
+const SSH_SUDO_PASSWORD_SECRET_TYPE = "ssh-sudo-password";
+
+function shellSingleQuote(value: string): string {
+  // Wrap a value as a single POSIX sh token, escaping embedded single quotes.
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function buildSudoCommand(command: string, marker: string, sudoUser?: string): string {
+  const target = sudoUser?.trim() ? `-u ${shellSingleQuote(sudoUser.trim())} ` : "";
+  // -S makes sudo read the password from stdin (which we feed over the PTY) and
+  // write its prompt to stderr, so no remote pseudo-terminal is required. -k
+  // forces a fresh prompt, and -p sets a unique marker we can detect to know
+  // exactly when to send the password. The marker deliberately avoids the word
+  // "password" so it can't be mistaken for the SSH login prompt detector.
+  return `sudo -S -k -p ${shellSingleQuote(marker)} ${target}-- sh -lc ${shellSingleQuote(command)}`;
+}
 
 function loadNodePty(): SshPtyFactory {
   return (require("node-pty") as { spawn: SshPtyFactory }).spawn;
@@ -85,8 +103,9 @@ function stripAnsi(value: string): string {
   return value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
 }
 
-function cleanOutput(value: string, command: string): string {
+function cleanOutput(value: string, command: string, stripMarker?: string): string {
   let output = stripAnsi(value).replace(/\r/g, "");
+  if (stripMarker) output = output.split(stripMarker).join("");
   output = output
     .split("\n")
     .filter((line) => line.trim() !== command.trim())
@@ -340,6 +359,8 @@ function runSshInPty(input: {
   password: string | null;
   timeoutMs: number;
   strictHostKeyChecking: boolean;
+  sudoPassword?: string | null;
+  sudoMarker?: string;
 }, context: ToolContext, ptyFactory?: SshPtyFactory): Promise<{ output: string; exitCode: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     const args = buildSshArgs({
@@ -356,13 +377,14 @@ function runSshInPty(input: {
     let exitCode: number | null = null;
     let timedOut = false;
     let passwordSent = false;
+    let sudoPasswordSent = false;
     let settled = false;
 
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ output: cleanOutput(raw, input.command), exitCode, timedOut });
+      resolve({ output: cleanOutput(raw, input.command, input.sudoMarker), exitCode, timedOut });
     };
 
     const timer = setTimeout(() => {
@@ -378,7 +400,13 @@ function runSshInPty(input: {
         passwordSent = true;
         pty.write(`${input.password}\r`);
       }
-      const clean = stripAnsi(data).replace(/\r/g, "");
+      if (input.sudoPassword && input.sudoMarker && !sudoPasswordSent && visible.includes(input.sudoMarker)) {
+        sudoPasswordSent = true;
+        // sudo -S reads the password as a line from stdin, terminated by \n.
+        pty.write(`${input.sudoPassword}\n`);
+      }
+      let clean = stripAnsi(data).replace(/\r/g, "");
+      if (input.sudoMarker) clean = clean.split(input.sudoMarker).join("");
       if (clean && !/password.*:\s*$/im.test(clean)) context.onOutputChunk?.(clean);
     });
 
@@ -398,7 +426,7 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
   return {
     name: "ssh.run",
     description:
-      "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password.",
+      "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password. Set sudo:true to run the command with elevated privileges — the sudo password is collected through a secure user-only prompt (never sent to the model) and can be remembered per host, mirroring elevated.run.",
     tier: "standard",
     category: "network",
     source: "builtin",
@@ -414,6 +442,8 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
         timeoutMs: { type: "number", description: "Execution timeout in milliseconds, default 30000" },
         authMethod: { type: "string", enum: ["password", "key"], description: "Authentication method. Defaults to key. Password uses a user-only secret prompt." },
         strictHostKeyChecking: { type: "boolean", description: "Whether OpenSSH should enforce known_hosts checking, default true" },
+        sudo: { type: "boolean", description: "Run the command with sudo on the remote host. The sudo password is requested through a secure user-only prompt (never sent to the model) and is remembered per host for the session." },
+        sudoUser: { type: "string", description: "Optional target user for sudo (sudo -u). Defaults to root." },
       },
       required: ["host", "username", "command"],
     },
@@ -447,14 +477,44 @@ export function createSshRunTool(secretInput?: SecretInputService, ptyFactory?: 
         if (!password) return { ok: false, message: "SSH password was not provided" };
       }
 
+      let sudoPassword: string | null = null;
+      let sudoMarker: string | undefined;
+      let remoteCommand = input.command;
+      if (input.sudo) {
+        const sudoKey = sshPasswordSecretKey({ ...input, port: input.port ?? 22 });
+        const savedSudo = userSecrets?.getValue(context.userId, SSH_SUDO_PASSWORD_SECRET_TYPE, sudoKey);
+        if (savedSudo) {
+          sudoPassword = savedSudo;
+        } else {
+          if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
+          sudoPassword = await secretInput.requestSecret({
+            sessionId: context.sessionId,
+            userId: context.userId,
+            title: "sudo password",
+            prompt: `sudo password for ${input.username}@${input.host}`,
+            requestedBy: "ssh.run",
+            rememberable: true,
+            rememberLabel: `sudo password for ${input.username}@${input.host}`,
+            secretType: SSH_SUDO_PASSWORD_SECRET_TYPE,
+            secretKey: sudoKey,
+            timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
+          });
+        }
+        if (!sudoPassword) return { ok: false, message: "sudo password was not provided" };
+        sudoMarker = `__JAIT_SUDO_${uuidv7().replace(/-/g, "_")}__:`;
+        remoteCommand = buildSudoCommand(input.command, sudoMarker, input.sudoUser);
+      }
+
       const result = await runSshInPty({
         host: input.host,
         username: input.username,
-        command: input.command,
+        command: remoteCommand,
         port: input.port ?? 22,
         password,
         timeoutMs: input.timeoutMs ?? 30_000,
         strictHostKeyChecking: input.strictHostKeyChecking ?? true,
+        sudoPassword,
+        sudoMarker,
       }, context, ptyFactory);
 
       return {

@@ -179,6 +179,137 @@ describe("ssh tools for external providers", () => {
   });
 });
 
+class FakeSudoPty {
+  readonly writes: string[] = [];
+  private dataListeners: Array<(data: string) => void> = [];
+  private exitListeners: Array<(event: { exitCode: number; signal?: number }) => void> = [];
+  private readonly marker: string | null;
+
+  constructor(args: string[]) {
+    const remoteCommand = args[args.length - 1] ?? "";
+    this.marker = remoteCommand.match(/-p '([^']+)'/)?.[1] ?? null;
+    queueMicrotask(() => { if (this.marker) this.emitData(this.marker); });
+  }
+
+  onData(cb: (data: string) => void): void {
+    this.dataListeners.push(cb);
+  }
+
+  onExit(cb: (event: { exitCode: number; signal?: number }) => void): void {
+    this.exitListeners.push(cb);
+  }
+
+  write(data: string): void {
+    this.writes.push(data);
+    // The marker is the sudo prompt; the only line we expect back is the password.
+    if (this.marker && data.trim() && this.marker !== data.trim()) {
+      this.emitData(`\n${this.marker}apt-sudo-ok\n`);
+      this.emitExit(0);
+    }
+  }
+
+  kill(): void {
+    this.emitExit(143);
+  }
+
+  private emitData(data: string): void {
+    for (const listener of this.dataListeners) listener(data);
+  }
+
+  private emitExit(exitCode: number): void {
+    for (const listener of this.exitListeners) listener({ exitCode });
+  }
+}
+
+function fakeSudoPtyFactory() {
+  const ptys: FakeSudoPty[] = [];
+  const factory: SshPtyFactory = (_command, args) => {
+    const pty = new FakeSudoPty(args);
+    ptys.push(pty);
+    return pty;
+  };
+  return { factory, ptys };
+}
+
+describe("ssh.run sudo elevation", () => {
+  it("collects the sudo password via the secure prompt, feeds it to the PTY, and strips the marker from output", async () => {
+    const { service, requests, secret } = autoSubmitSecret("super-secret-sudo");
+    const { factory, ptys } = fakeSudoPtyFactory();
+    const registry = new ToolRegistry();
+    registry.register(createSshRunTool(service, factory));
+    const auditEntries: unknown[] = [];
+    const audit = {
+      write: vi.fn((entry: unknown) => {
+        auditEntries.push(entry);
+        return "audit-id";
+      }),
+    } as unknown as AuditWriter;
+
+    const result = await registry.execute(
+      "ssh.run",
+      {
+        host: "linux-box.local",
+        username: "jakob",
+        command: "apt-get install -y cups",
+        sudo: true,
+        strictHostKeyChecking: false,
+      },
+      context({ providerId: "codex", requestedBy: "agent" }),
+      audit,
+    );
+
+    expect(result.ok).toBe(true);
+    const output = (result.data as { output: string }).output;
+    expect(output).toContain("apt-sudo-ok");
+    expect(output).not.toMatch(/__JAIT_SUDO_/);
+    expect(requests).toEqual([{
+      title: "sudo password",
+      prompt: "sudo password for jakob@linux-box.local",
+      requestedBy: "ssh.run",
+    }]);
+    // The password was fed to the remote sudo prompt over the PTY...
+    expect(ptys[0]?.writes.some((write) => write.includes(secret))).toBe(true);
+    // ...but never appears in tool inputs or audit output.
+    expect(JSON.stringify(auditEntries)).not.toContain(secret);
+    expect(auditEntries[0]).toMatchObject({
+      toolName: "ssh.run",
+      inputs: expect.not.objectContaining({ password: expect.anything() }),
+    });
+  });
+
+  it("reuses a remembered sudo password without prompting again", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userSecrets = new UserSecretService(db, "test-secret");
+    userSecrets.save({
+      userId: "user-1",
+      type: "ssh-sudo-password",
+      key: "jakob@linux-box.local:22",
+      label: "sudo password for jakob@linux-box.local",
+      value: "remembered-sudo-pw",
+    });
+    const secretInput = new SecretInputService({
+      onRequest: () => {
+        throw new Error("should not request a sudo password when a saved secret exists");
+      },
+    });
+    const { factory, ptys } = fakeSudoPtyFactory();
+    const tool = createSshRunTool(secretInput, factory, userSecrets);
+
+    const result = await tool.execute({
+      host: "linux-box.local",
+      username: "jakob",
+      command: "systemctl enable --now cups",
+      sudo: true,
+      strictHostKeyChecking: false,
+    }, context());
+
+    expect(result.ok).toBe(true);
+    expect(ptys[0]?.writes.some((write) => write.includes("remembered-sudo-pw"))).toBe(true);
+    sqlite.close();
+  });
+});
+
 describe("ssh tools for Jait provider tool discovery", () => {
   it("exposes only ssh.run through the schema path without password parameters", () => {
     const tools = createToolRegistry(new SurfaceRegistry(), {
