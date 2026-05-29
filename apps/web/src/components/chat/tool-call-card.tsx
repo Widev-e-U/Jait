@@ -263,6 +263,16 @@ function getToolInvocationLabels(
     const ed = verb === 'add' ? 'Added' : verb === 'update' ? 'Updated' : verb === 'remove' ? 'Removed' : 'Listed'
     return { running: `${ing} cron job`, done: `${ed} cron job` }
   }
+  if (normalized.startsWith('ssh.') || normalized === 'run.ssh') {
+    const cmd = displayStr(normalizedArgs.command ?? args.command)
+    const host = displayStr(normalizedArgs.host ?? args.host)
+    const label = cmd && host ? `${host}: ${truncate(cmd, 60)}` : cmd ? truncate(cmd, 80) : host || 'SSH'
+    return { running: label, done: label }
+  }
+  if (normalized === 'elevated.run') {
+    const label = displayStr(normalizedArgs.command ?? args.command) || 'elevated'
+    return { running: label, done: label }
+  }
   if (normalized.startsWith('surfaces.')) {
     const verb = normalized.split('.')[1] ?? 'manage'
     if (verb === 'start') return { running: 'Starting surface', done: 'Started surface' }
@@ -769,7 +779,9 @@ export function getCallSummary(
   if (normalized === 'surfaces.list') return 'List surfaces'
   const genericSummary = summarizeToolArguments(normalizedArgs)
   if (genericSummary) return genericSummary
-  return `${Object.keys(args ?? {}).length} argument(s)`
+  const argCount = Object.keys(args ?? {}).length
+  if (argCount === 0) return ''
+  return `${argCount} argument(s)`
 }
 
 /** Pretty formatter for os.query info results */

@@ -496,23 +496,34 @@ export async function handleMcpRequest(
         jsonrpc: "2.0",
         id: request.id ?? null,
         result: {
-          tools: listToolsForMcp(toolRegistry).map((tool) => ({
-              name: tool.name,
-              description: tool.description,
-              inputSchema: {
-                ...tool.parameters,
-                type: "object",
-              },
-            })),
+          tools: listToolsForMcp(toolRegistry).map((tool) => {
+              const hasProperties = Object.keys(tool.parameters.properties ?? {}).length > 0;
+              const isReadOnly = tool.risk === "low" || tool.category === "gateway" || tool.name === "gateway.status";
+              return {
+                name: tool.name.replace(/\./g, "_"),
+                description: tool.description,
+                inputSchema: hasProperties
+                  ? { ...tool.parameters, type: "object" }
+                  : { type: "object", properties: {} },
+                annotations: {
+                  ...(isReadOnly ? { readOnlyHint: true, idempotentHint: true } : {}),
+                  ...(tool.risk === "high" ? { destructiveHint: true } : {}),
+                },
+              };
+            }),
         },
       };
 
     case "tools/call": {
       const params = request.params ?? {};
-      const toolName = String(params["name"] ?? "");
+      const rawToolName = String(params["name"] ?? "");
+      // MCP clients receive underscore-based names; map back to dotted internal names
+      const toolName = rawToolName.replace(/_/g, ".");
       const args = params["arguments"] ?? {};
 
-      const tool = toolRegistry.get(toolName);
+      let tool = toolRegistry.get(toolName);
+      // Fallback: try the raw name as-is (in case a tool actually uses underscores)
+      if (!tool && toolName !== rawToolName) tool = toolRegistry.get(rawToolName);
       if (!tool) {
         return {
           jsonrpc: "2.0",

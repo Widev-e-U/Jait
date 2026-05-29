@@ -118,6 +118,8 @@ function toRunOutputText(data: unknown): string | null {
 function normalizeToolName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return trimmed;
+  // If the name already contains dots, it's already in canonical form — don't touch it
+  if (trimmed.includes(".")) return trimmed;
   const firstUnderscore = trimmed.indexOf("_");
   if (firstUnderscore === -1) return trimmed;
   return `${trimmed.slice(0, firstUnderscore)}.${trimmed.slice(firstUnderscore + 1)}`;
