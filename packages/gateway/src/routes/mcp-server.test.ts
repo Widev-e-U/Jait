@@ -96,7 +96,7 @@ describe("mcp-server", () => {
       result: {
         tools: [
           {
-            name: "jait.todos",
+            name: "jait_todos",
             description: "Manage global Jait todo items",
             inputSchema: {
               type: "object",
@@ -106,9 +106,14 @@ describe("mcp-server", () => {
               },
               required: ["action"],
             },
+            annotations: {
+              destructiveHint: true,
+              readOnlyHint: true,
+              idempotentHint: true,
+            },
           },
           {
-            name: "cron.add",
+            name: "cron_add",
             description: "Create a cron job",
             inputSchema: {
               type: "object",
@@ -116,6 +121,9 @@ describe("mcp-server", () => {
                 name: { type: "string" },
               },
               required: ["name"],
+            },
+            annotations: {
+              destructiveHint: true,
             },
           },
         ],

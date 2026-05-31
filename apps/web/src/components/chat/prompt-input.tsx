@@ -450,6 +450,35 @@ function insertSegmentsAtCursor(
   selection.addRange(nextRange)
 }
 
+function insertTextAtCursor(el: HTMLElement, text: string) {
+  if (!text) return
+
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) {
+    el.appendChild(document.createTextNode(text))
+    moveCursorToEnd(el)
+    return
+  }
+
+  const range = selection.getRangeAt(0)
+  const ancestor = range.commonAncestorContainer
+  if (ancestor !== el && !el.contains(ancestor)) {
+    el.appendChild(document.createTextNode(text))
+    moveCursorToEnd(el)
+    return
+  }
+
+  range.deleteContents()
+  const textNode = document.createTextNode(text)
+  range.insertNode(textNode)
+
+  const nextRange = document.createRange()
+  nextRange.setStart(textNode, textNode.length)
+  nextRange.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(nextRange)
+}
+
 /** Move cursor to the end of a contentEditable element. */
 function moveCursorToEnd(el: HTMLElement) {
   const sel = window.getSelection()
@@ -1344,8 +1373,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     e.preventDefault()
     const text = e.clipboardData.getData('text/plain')
-    document.execCommand('insertText', false, text)
-  }, [addFilesAsAttachments, handleRemoveChip, onChange])
+    if (!text) return
+    pushUndoSnapshot(true)
+    insertTextAtCursor(el, text)
+    draftSegmentsRef.current = getComposerSegments(el)
+    const nextValue = getTextFromEditable(el)
+    isSyncing.current = true
+    onChange(nextValue)
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(nextValue) && !hasChipRefs(el))
+  }, [addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {
