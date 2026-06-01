@@ -248,10 +248,39 @@ async function requestDeployPassword(input: {
   });
 }
 
+/**
+ * Shell lines that idempotently upsert the primary-gateway link vars into
+ * ~/.jait/.env so the deployed node connects back to this gateway as a
+ * browseable filesystem node. Returns [] when no primary URL is given.
+ */
+function buildPrimaryEnvLines(primaryUrl?: string, primaryToken?: string): string[] {
+  if (!primaryUrl) return [];
+  return [
+    `PRIMARY_URL=${shellQuote(primaryUrl)}`,
+    `PRIMARY_TOKEN=${shellQuote(primaryToken ?? "")}`,
+    'ENVF="$HOME/.jait/.env"',
+    'touch "$ENVF"; chmod 600 "$ENVF"',
+    'if grep -q "^JAIT_PRIMARY_GATEWAY=" "$ENVF"; then',
+    '  sed -i "s#^JAIT_PRIMARY_GATEWAY=.*#JAIT_PRIMARY_GATEWAY=$PRIMARY_URL#" "$ENVF"',
+    'else',
+    '  printf "JAIT_PRIMARY_GATEWAY=%s\\n" "$PRIMARY_URL" >> "$ENVF"',
+    'fi',
+    'if [ -n "$PRIMARY_TOKEN" ]; then',
+    '  if grep -q "^JAIT_PRIMARY_TOKEN=" "$ENVF"; then',
+    '    sed -i "s#^JAIT_PRIMARY_TOKEN=.*#JAIT_PRIMARY_TOKEN=$PRIMARY_TOKEN#" "$ENVF"',
+    '  else',
+    '    printf "JAIT_PRIMARY_TOKEN=%s\\n" "$PRIMARY_TOKEN" >> "$ENVF"',
+    '  fi',
+    'fi',
+  ];
+}
+
 function buildRemoteSetupScript(input: {
   username: string;
   sudoMode: "root" | "nopass" | "password";
   sudoPassword: string | null;
+  primaryUrl?: string;
+  primaryToken?: string;
 }): string {
   return [
     "set -e",
@@ -273,6 +302,7 @@ function buildRemoteSetupScript(input: {
     "LOG_LEVEL=info",
     "CORS_ORIGIN=*",
     "ENVEOF",
+    ...buildPrimaryEnvLines(input.primaryUrl, input.primaryToken),
     "service_file=\"${TMPDIR:-/tmp}/jait-gateway.service.$$\"",
     "cat > \"$service_file\" <<'SVCEOF'",
     "[Unit]",
@@ -291,13 +321,14 @@ function buildRemoteSetupScript(input: {
     "run_priv \"install -m 0644 '$service_file' /etc/systemd/system/jait-gateway.service\"",
     "rm -f \"$service_file\"",
     "run_priv \"systemctl daemon-reload\"",
-    "run_priv \"systemctl enable --now jait-gateway\"",
+    "run_priv \"systemctl enable jait-gateway\"",
+    "run_priv \"systemctl restart jait-gateway\"",
     "echo 'Jait Gateway deployed successfully'",
     "",
   ].join("\n");
 }
 
-function buildInteractiveDeployCommand(input: { ip: string; username: string }): string {
+function buildInteractiveDeployCommand(input: { ip: string; username: string; primaryUrl?: string; primaryToken?: string }): string {
   const cacheDir = `${process.env.TMPDIR ?? "/tmp"}/jait-deploy`;
   const tsEntry = resolve(__dirname, "../index.ts");
   const jsEntry = resolve(__dirname, "../index.js");
@@ -318,6 +349,7 @@ function buildInteractiveDeployCommand(input: { ip: string; username: string }):
     "LOG_LEVEL=info",
     "CORS_ORIGIN=*",
     "ENVEOF",
+    ...buildPrimaryEnvLines(input.primaryUrl, input.primaryToken),
     "service_file=\"${TMPDIR:-/tmp}/jait-gateway.service.$$\"",
     "cat > \"$service_file\" <<'SVCEOF'",
     "[Unit]",
@@ -336,7 +368,8 @@ function buildInteractiveDeployCommand(input: { ip: string; username: string }):
     "run_priv \"install -m 0644 '$service_file' /etc/systemd/system/jait-gateway.service\"",
     "rm -f \"$service_file\"",
     "run_priv \"systemctl daemon-reload\"",
-    "run_priv \"systemctl enable --now jait-gateway\"",
+    "run_priv \"systemctl enable jait-gateway\"",
+    "run_priv \"systemctl restart jait-gateway\"",
     "echo 'Jait Gateway deployed successfully'",
   ].join("\n");
 
@@ -384,6 +417,8 @@ async function runGuidedDeploy(input: {
   authMethod: DeployAuthMethod;
   sessionId: string;
   secretInput?: SecretInputService;
+  primaryUrl?: string;
+  primaryToken?: string;
 }): Promise<{ ok: true; logs: string[]; url: string } | { ok: false; logs: string[]; error: string }> {
   const logs: string[] = [];
   const addLog = (line: string) => {
@@ -554,6 +589,8 @@ async function runGuidedDeploy(input: {
       username: input.username,
       sudoMode: sudoMode as "root" | "nopass" | "password",
       sudoPassword,
+      primaryUrl: input.primaryUrl,
+      primaryToken: input.primaryToken,
     })}\x04`,
     timeoutMs: 60_000,
     onOutput: addLog,
@@ -889,6 +926,15 @@ export function registerNetworkRoutes(
       ? authMethodValue
       : "auto";
 
+    // Primary-link: tell the deployed node to register back to this gateway as a
+    // filesystem node. Prefer an explicit primaryUrl from the client (it knows
+    // its own origin/scheme); otherwise derive from the host the client used to
+    // reach us (the target is on the same network). Empty disables the link.
+    const primaryUrlRaw = typeof body["primaryUrl"] === "string" ? body["primaryUrl"].trim() : "";
+    const primaryToken = typeof body["primaryToken"] === "string" ? body["primaryToken"].trim() : "";
+    const hostHeader = typeof request.headers.host === "string" ? request.headers.host : "";
+    const primaryUrl = primaryUrlRaw || (hostHeader ? `http://${hostHeader}` : "");
+
     if (!ip) {
       return reply.status(400).send({ error: "IP address is required" });
     }
@@ -904,7 +950,7 @@ export function registerNetworkRoutes(
         if (!surface || surface.type !== "terminal" || typeof surface.write !== "function") {
           return reply.status(404).send({ error: "Deploy terminal not found" });
         }
-        surface.write(`${buildInteractiveDeployCommand({ ip, username })}\r`);
+        surface.write(`${buildInteractiveDeployCommand({ ip, username, primaryUrl, primaryToken })}\r`);
         return {
           ok: true,
           terminalId,
@@ -922,6 +968,8 @@ export function registerNetworkRoutes(
         authMethod,
         sessionId,
         secretInput,
+        primaryUrl,
+        primaryToken,
       });
       if (!result.ok) {
         return reply.status(500).send(result);

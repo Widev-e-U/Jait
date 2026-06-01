@@ -4,6 +4,7 @@ import "./crypto-polyfill.js";
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
 import { WsControlPlane } from "./ws.js";
+import { PrimaryLink } from "./services/primary-link.js";
 import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
@@ -965,6 +966,18 @@ async function main() {
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
 
+  // ── Primary-link — register this gateway as a filesystem node on an upstream
+  //    gateway so it shows up (browseable/openable) in the primary's picker. ──
+  let primaryLink: PrimaryLink | null = null;
+  if (config.primaryGateway) {
+    primaryLink = new PrimaryLink({
+      primaryGateway: config.primaryGateway,
+      primaryToken: config.primaryToken || undefined,
+      nodeName: config.nodeName || undefined,
+    });
+    primaryLink.start();
+  }
+
   // ── Terminal idle reaper — stop PTY terminals idle for 30+ minutes ──
   const TERMINAL_IDLE_MS = 30 * 60 * 1000; // 30 minutes
   const terminalReaperInterval = setInterval(() => {
@@ -1054,6 +1067,7 @@ async function main() {
       clearInterval(terminalReaperInterval);
       scheduler.stop();
       threadReviewSync.stop();
+      primaryLink?.stop();
       ws.stop();
       await server.close();
       sqlite.close();

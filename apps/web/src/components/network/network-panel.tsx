@@ -222,9 +222,34 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
 
   const color = getNodeColor(node)
 
+  // For a running deployed node, fetch its live gateway version from /health
+  // (CORS is open on deployed gateways) so it shows in the details panel.
+  const runningIp = node && 'agentStatus' in node && node.agentStatus === 'running' && 'ip' in node
+    ? (node as TopologyHost).ip
+    : null
+  const [liveVersion, setLiveVersion] = useState<string | null>(null)
+  useEffect(() => {
+    setLiveVersion(null)
+    if (!runningIp) return
+    let cancelled = false
+    fetch(`http://${runningIp}:8000/health`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d && typeof d.version === 'string') setLiveVersion(d.version) })
+      .catch(() => { /* unreachable / cross-origin blocked — leave unset */ })
+    return () => { cancelled = true }
+  }, [runningIp])
+
   const showDeploy = node && 'sshReachable' in node && node.sshReachable
     && 'agentStatus' in node && node.agentStatus !== 'running'
     && 'ip' in node
+
+  // Already-running node that we can reach over SSH → offer an in-place update
+  // (re-runs the same deploy, which reinstalls the latest binary + env).
+  const showUpdate = node && 'sshReachable' in node && node.sshReachable
+    && 'agentStatus' in node && node.agentStatus === 'running'
+    && 'ip' in node
+
+  const nodeVersion = node && 'version' in node && node.version ? node.version : liveVersion
 
   return (
     <div
@@ -282,10 +307,10 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             )}
 
             {/* Version */}
-            {'version' in node && node.version && (
+            {nodeVersion && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Version</span>
-                <Badge variant="secondary" className="font-mono text-2xs">v{node.version}</Badge>
+                <Badge variant="secondary" className="font-mono text-2xs">v{nodeVersion}</Badge>
               </div>
             )}
 
@@ -378,6 +403,15 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
                 Deploy Node
               </Button>
             )}
+
+            {/* Update Node button — re-deploys the latest binary in place */}
+            {showUpdate && onDeploy && (
+              <Button size="sm" variant="default" className="w-full mt-2"
+                onClick={() => { onDeploy((node as TopologyHost).ip); onClose(); }}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Update Node
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -432,6 +466,8 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
             username: username || 'root',
             terminalId: terminal.id,
             sessionId,
+            // Link the deployed node back to this gateway as a filesystem node.
+            primaryUrl: API_URL || window.location.origin,
           }),
           signal: controller.signal,
         })

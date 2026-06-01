@@ -50,6 +50,18 @@ export interface AppConfig {
   realtimeModel: string;
   /** Voice used by the real-time assistant (alloy, echo, shimmer, etc.). */
   realtimeVoice: string;
+  /**
+   * URL of an upstream/primary gateway to link to as a filesystem node.
+   * When set, this gateway opens an outbound WS to the primary, registers
+   * itself as a browseable fs-node, and serves browse/roots/op requests from
+   * its local disk — making it selectable in the primary's Open Project modal.
+   * Empty string disables the link (default).
+   */
+  primaryGateway: string;
+  /** Bearer token used to authenticate the primary-link WS (optional; not needed if the primary runs in development mode). */
+  primaryToken: string;
+  /** Display name advertised to the primary for this node (defaults to the hostname). */
+  nodeName: string;
 }
 
 /** Infer context window size from model name. Conservative defaults. */
@@ -102,5 +114,8 @@ export function loadConfig(): AppConfig {
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
     realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
+    primaryGateway: process.env["JAIT_PRIMARY_GATEWAY"]?.trim() ?? "",
+    primaryToken: process.env["JAIT_PRIMARY_TOKEN"]?.trim() ?? "",
+    nodeName: process.env["JAIT_NODE_NAME"]?.trim() ?? "",
   };
 }
