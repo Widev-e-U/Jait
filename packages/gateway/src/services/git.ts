@@ -1882,7 +1882,8 @@ export class GitService {
       const diffBase = await this.resolveBranchDiffBase(cwd, baseBranch, branch);
       await collectNumstat(`diff --numstat ${JSON.stringify(diffBase)} ${JSON.stringify(branch)}`);
     } else if (baseBranch) {
-      await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)}`);
+      const diffBase = await this.resolveWorkingTreeDiffBase(cwd, baseBranch);
+      await collectNumstat(`diff --numstat ${JSON.stringify(diffBase)}`);
     } else {
       await collectNumstat("diff --cached --numstat");
       await collectNumstat("diff --numstat");
@@ -1978,8 +1979,10 @@ export class GitService {
    * Diff working tree against a base branch (shows all committed + uncommitted changes).
    */
   private async fileDiffsBranch(cwd: string, baseBranch: string): Promise<FileDiffEntry[]> {
-    // Get list of files that differ between baseBranch and working tree
-    const nameStatus = await gitExec(cwd, `diff --name-status ${baseBranch}`).catch(() => "");
+    // Diff the working tree against the point it diverged from baseBranch, so
+    // commits the base gained after this branch was created aren't reported.
+    const diffBase = await this.resolveWorkingTreeDiffBase(cwd, baseBranch);
+    const nameStatus = await gitExec(cwd, `diff --name-status ${JSON.stringify(diffBase)}`).catch(() => "");
     const lines = nameStatus.split("\n").filter(Boolean);
     const entries: FileDiffEntry[] = [];
     const seen = new Set<string>();
@@ -2003,7 +2006,7 @@ export class GitService {
       let original = "";
       if (status !== "A") {
         try {
-          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(gitRevisionPath(filePath))}`);
+          original = await gitExec(cwd, `show ${JSON.stringify(`${diffBase}:${gitRevisionPath(filePath)}`)}`);
         } catch { original = ""; }
       }
 
@@ -2077,6 +2080,22 @@ export class GitService {
     }
 
     return entries;
+  }
+
+  /**
+   * Resolve a base branch to the commit where the working tree's HEAD
+   * diverged from it. Diffing the working tree against this merge-base
+   * (instead of the base branch tip) shows only the changes made on this
+   * side, even when the base branch has advanced past where this branch was
+   * created. Without this, a branch that is behind the base branch reports
+   * the base's newer commits — inverted — as if this thread authored them.
+   */
+  private async resolveWorkingTreeDiffBase(cwd: string, baseBranch: string): Promise<string> {
+    const mergeBase = await gitExec(
+      cwd,
+      `merge-base ${JSON.stringify(baseBranch)} HEAD`,
+    ).catch(() => "");
+    return mergeBase.trim() || baseBranch;
   }
 
   private async resolveBranchDiffBase(cwd: string, baseBranch: string, branch: string): Promise<string> {
