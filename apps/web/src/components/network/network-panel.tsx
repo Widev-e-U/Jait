@@ -3,7 +3,6 @@ import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { TerminalView } from '@/components/terminal'
 import { siLinux, siApple, siAndroid } from 'simple-icons'
 import {
   Search,
@@ -425,10 +424,10 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
 
 function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; token?: string | null; sessionId: string; onClose: () => void }) {
   const [logs, setLogs] = useState<string[]>([])
-  const [status, setStatus] = useState<'ready' | 'starting' | 'running' | 'error'>('ready')
+  const [status, setStatus] = useState<'ready' | 'deploying' | 'done' | 'error'>('ready')
   const [username, setUsername] = useState('')
   const [started, setStarted] = useState(false)
-  const [terminalId, setTerminalId] = useState<string | null>(null)
+  const [dashboardUrl, setDashboardUrl] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -438,47 +437,39 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
   useEffect(() => {
     if (!ip || !started) return
     setLogs([])
-    setStatus('starting')
+    setStatus('deploying')
+    setDashboardUrl(null)
 
     const controller = new AbortController()
     const run = async () => {
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
-        const terminalRes = await fetch(`${API_URL}/api/terminals`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ sessionId }),
-          signal: controller.signal,
-        })
-        if (!terminalRes.ok) {
-          setLogs([`Error: ${terminalRes.statusText}`])
-          setStatus('error')
-          return
-        }
-        const terminal = await terminalRes.json() as { id: string }
-        setTerminalId(terminal.id)
+        // Guided deploy: when key auth fails, the gateway requests the SSH/sudo
+        // password via the secure secret-input form (rendered as a dialog) — no
+        // typing into an embedded terminal.
         const res = await fetch(`${API_URL}/api/network/deploy`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
             ip,
             username: username || 'root',
-            terminalId: terminal.id,
             sessionId,
+            authMethod: 'auto',
             // Link the deployed node back to this gateway as a filesystem node.
             primaryUrl: API_URL || window.location.origin,
           }),
           signal: controller.signal,
         })
         const body = await res.json().catch(() => null) as { ok?: boolean; logs?: string[]; error?: string; url?: string } | null
-        if (!res.ok) {
+        if (!res.ok || body?.ok === false) {
           setLogs([...(body?.logs ?? []), `Error: ${body?.error ?? res.statusText}`])
           setStatus('error')
           return
         }
-        setLogs(body?.logs?.length ? body.logs : [`Deploy started for ${username || 'root'}@${ip}.`])
-        setStatus('running')
+        setLogs(body?.logs?.length ? body.logs : [`Gateway deployed to ${username || 'root'}@${ip}.`])
+        setDashboardUrl(body?.url ?? `http://${ip}:8000`)
+        setStatus('done')
       } catch (err) {
         if (!controller.signal.aborted) {
           setLogs(prev => [...prev, `Error: ${err instanceof Error ? err.message : 'Connection failed'}`])
@@ -501,8 +492,8 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
           <div className="text-sm font-medium truncate">Deploy to {ip}</div>
           <div className="text-2xs text-muted-foreground">
             {status === 'ready' && 'Ready'}
-            {status === 'starting' && 'Deploying...'}
-            {status === 'running' && 'Interactive session ready'}
+            {status === 'deploying' && 'Deploying...'}
+            {status === 'done' && 'Deployed'}
             {status === 'error' && 'Failed'}
           </div>
         </div>
@@ -525,7 +516,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
             />
           </div>
           <div className="text-2xs text-muted-foreground">
-            Jait will deploy in an embedded terminal. If SSH or sudo needs a password, enter it there.
+            If the host needs an SSH or sudo password, Jait pops up a secure password form — you don't have to type it into a terminal.
           </div>
           <Button className="w-full" onClick={() => setStarted(true)}>
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
@@ -533,41 +524,46 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
           </Button>
         </div>
       ) : (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* Log output */}
-          <div ref={logRef} className="shrink-0 overflow-y-auto border-b p-3 font-mono text-xs leading-5 space-y-0.5 max-h-32">
+          <div ref={logRef} className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-5 space-y-0.5">
             {logs.map((line, i) => (
               <div key={i} className={cn(
                 line.startsWith('✓') ? 'text-green-500' :
-                line.startsWith('✗') ? 'text-red-500' :
+                line.startsWith('Error') || line.startsWith('✗') ? 'text-red-500' :
                 line.startsWith('[') ? 'text-blue-400' :
                 'text-muted-foreground'
               )}>
                 {line}
               </div>
             ))}
-            {status === 'starting' && <div className="text-muted-foreground animate-pulse">Preparing terminal...</div>}
+            {status === 'deploying' && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Deploying… enter the password in the popup if prompted.</span>
+              </div>
+            )}
           </div>
 
-          {terminalId && status === 'running' && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex items-center justify-between border-b px-3 py-2 text-2xs text-muted-foreground">
-                <span>Interactive deploy session</span>
-                <span className="truncate">Terminal: {terminalId}</span>
-              </div>
-              <TerminalView terminalId={terminalId} className="flex-1 min-h-0" token={token} />
+          {/* Footer */}
+          {status === 'done' && (
+            <div className="p-3 border-t shrink-0 space-y-2">
+              {dashboardUrl && (
+                <a href={dashboardUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                  <Globe className="h-3.5 w-3.5" /> {dashboardUrl}
+                </a>
+              )}
+              <Button size="sm" variant="outline" className="w-full" onClick={onClose}>Done</Button>
             </div>
           )}
-
-          {/* Footer */}
           {status === 'error' && (
             <div className="p-3 border-t shrink-0">
-              <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('ready'); setTerminalId(null) }}>
+              <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('ready') }}>
                 Try Again
               </Button>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
