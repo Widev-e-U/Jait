@@ -1262,7 +1262,7 @@ export function TodoPage({
               inputClassName="text-xs"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground lg:max-w-44 lg:justify-end">
+          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground lg:w-auto lg:flex-nowrap">
             <ControlTooltip label={`Status: ${getStatusMeta(newStatus).label}`}>
               <OptionSelect
                 value={newStatus}
