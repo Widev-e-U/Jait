@@ -51,6 +51,7 @@ import { registerUserQuestionRoutes } from "./routes/user-questions.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
 import { registerSkillRoutes } from "./routes/skills.js";
 import { registerStoreRoutes } from "./routes/store.js";
+import { registerChannelRoutes } from "./routes/channels.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -136,6 +137,7 @@ export interface ServerDeps {
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
+  channelManager?: import("./channels/manager.js").ChannelManager;
   voiceAssistantService?: import("./voice-assistant/service.js").VoiceAssistantService;
 }
 
@@ -176,6 +178,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     projectService: deps.projectService,
     providerRegistry: deps.providerRegistry,
     skillRegistry: deps.skillRegistry,
+    architectureDiagrams: deps.architectureDiagramService,
   });
 
   if (deps.sessionService && deps.audit) {
@@ -350,7 +353,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   // Plugin / extension management routes
   if (deps.pluginManager) {
-    registerPluginRoutes(app, deps.pluginManager);
+    registerPluginRoutes(app, config, deps.pluginManager);
   }
 
   // Skill management routes
@@ -364,6 +367,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       clawhub: deps.clawhubClient,
       skillRegistry: deps.skillRegistry,
     });
+  }
+
+  // External messaging channel routes (WhatsApp, etc.)
+  if (deps.channelManager) {
+    registerChannelRoutes(app, config, deps.channelManager);
   }
 
   // MCP SSE server for external CLI agents

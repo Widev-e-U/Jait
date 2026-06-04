@@ -47,6 +47,7 @@ import {
 import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
 import { getResponseStyleInstructions, isResponseStyle, type ResponseStyle } from "../tools/prompts/shared-sections.js";
 import type { Skill, SkillRegistry } from "../skills/index.js";
+import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -92,16 +93,75 @@ interface LlmContextFlowMemory {
   savedIds: string[];
 }
 
-function formatExternalProviderFirstTurn(systemPrompt: string, userContent: string): string {
-  return [
+function formatExternalProviderFirstTurn(systemPrompt: string, userContent: string, recentContextBlock?: string | null): string {
+  const parts = [
     "Jait session instructions:",
     "<system>",
     systemPrompt,
     "</system>",
     "",
-    "User request:",
-    userContent,
+  ];
+  if (recentContextBlock) {
+    parts.push(recentContextBlock, "");
+  }
+  parts.push("User request:", userContent);
+  return parts.join("\n");
+}
+
+function normalizeExternalContextContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (content === null || content === undefined) return "";
+  try {
+    return JSON.stringify(content);
+  } catch {
+    return String(content);
+  }
+}
+
+function truncateExternalContextContent(content: string, max = 1200): string {
+  const compact = content.replace(/\s+/g, " ").trim();
+  if (compact.length <= max) return compact;
+  return `${compact.slice(0, max - 3)}...`;
+}
+
+function buildExternalProviderRecentContext(history: ChatMessage[], limit = 4): string | null {
+  const visibleMessages = history
+    .slice(0, -1)
+    .filter((message): message is ChatMessage & { role: "user" | "assistant" } => (
+      (message.role === "user" || message.role === "assistant")
+      && normalizeExternalContextContent(message.content).trim().length > 0
+    ))
+    .slice(-limit);
+  if (visibleMessages.length === 0) return null;
+
+  return [
+    `Recent active chat context (last ${limit} messages before this turn):`,
+    ...visibleMessages.map((message) => {
+      const roleLabel = message.role === "user" ? "User" : "Assistant";
+      return `${roleLabel}: ${truncateExternalContextContent(normalizeExternalContextContent(message.content))}`;
+    }),
   ].join("\n");
+}
+
+export function normalizeProviderSessionError(message: string): string {
+  const compact = message.trim() || "Session error";
+  const lower = compact.toLowerCase();
+  const isAuthOrLimitError = [
+    "authentication required",
+    "auth required",
+    "not authenticated",
+    "not logged in",
+    "login required",
+    "please log in",
+    "credentials",
+    "api key",
+    "usage limit",
+    "rate limit",
+    "quota",
+    "limit reached",
+    "limit exceeded",
+  ].some((needle) => lower.includes(needle));
+  return isAuthOrLimitError ? "Authentication required" : compact;
 }
 
 function buildCliProviderSystemPrompt(
@@ -131,12 +191,16 @@ function buildExternalProviderContextFlow(
   sentAt: string,
   note: string,
   memory?: LlmContextFlowMemory,
+  recentContextBlock?: string | null,
 ): LlmContextFlow {
   const messages: Array<{ role: "system" | "user"; content: string }> = [
     { role: "system", content: setupMessage },
   ];
   if (systemPrompt) {
     messages.push({ role: "system", content: systemPrompt });
+  }
+  if (recentContextBlock) {
+    messages.push({ role: "system", content: recentContextBlock });
   }
   messages.push({ role: "user", content: userContent });
 
@@ -957,6 +1021,7 @@ export interface ChatRouteDeps {
   projectService?: ProjectService;
   providerRegistry?: ProviderRegistry;
   skillRegistry?: SkillRegistry;
+  architectureDiagrams?: ArchitectureDiagramService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -985,6 +1050,7 @@ export function registerChatRoutes(
   let projectService: ProjectService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
   let skillRegistry: SkillRegistry | undefined;
+  let architectureDiagrams: ArchitectureDiagramService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -1001,6 +1067,7 @@ export function registerChatRoutes(
     projectService = deps.projectService;
     providerRegistry = deps.providerRegistry;
     skillRegistry = deps.skillRegistry;
+    architectureDiagrams = deps.architectureDiagrams;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -1400,9 +1467,21 @@ export function registerChatRoutes(
     const wsRoot = surfaceRegistry
       ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
       : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
+    // Graphify: surface the saved project architecture graph so the agent
+    // understands the codebase layout up front (generated via architecture.generate).
+    let architectureGraph: string | undefined;
+    if (architectureDiagrams && wsRoot) {
+      try {
+        architectureGraph = architectureDiagrams.getByProject(wsRoot, authUser.id)?.diagram
+          ?? architectureDiagrams.getByProject(wsRoot)?.diagram;
+      } catch {
+        architectureGraph = undefined;
+      }
+    }
     const promptCtx: PromptContext = {
       projectRoot: wsRoot,
       skills: skillRegistry?.listEnabled(),
+      architectureGraph,
       responseStyle,
       backend: llmRuntime.backend,
     };
@@ -1799,9 +1878,9 @@ export function registerChatRoutes(
               }
               break;
             case "session.error":
-              sessionError = event.error;
-              safeWrite(`data: ${JSON.stringify({ type: "error", message: event.error })}\n\n`);
-              emitToSubscribers(sessionId, { type: "error", message: event.error });
+              sessionError = normalizeProviderSessionError(event.error);
+              safeWrite(`data: ${JSON.stringify({ type: "error", message: sessionError })}\n\n`);
+              emitToSubscribers(sessionId, { type: "error", message: sessionError });
               break;
           }
         });
@@ -1814,9 +1893,10 @@ export function registerChatRoutes(
           promptCtx,
         );
         const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${content}` : content;
+        const recentContextBlock = isNewCliSession ? buildExternalProviderRecentContext(history) : null;
         let cliContent = cliUserContent;
         if (isNewCliSession) {
-          cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent);
+          cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent, recentContextBlock);
         } else if (responseStyleBlock) {
           cliContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${cliContent}`;
         }
@@ -1866,6 +1946,7 @@ export function registerChatRoutes(
             sentAt,
             "CLI providers keep their own session context. This captures the Jait setup metadata, the external-provider system prompt, and the user turn content. On reused CLI sessions, the system prompt is shown for inspection even though it was only sent when Jait initialized or recovered the provider session.",
             memoryFlow,
+            recentContextBlock,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
@@ -1907,8 +1988,8 @@ export function registerChatRoutes(
             chatMode,
             promptCtx,
           );
-          let recoveryContent = content;
-          recoveryContent = formatExternalProviderFirstTurn(refreshedSystemPrompt, cliUserContent);
+          const recoveryContextBlock = buildExternalProviderRecentContext(history);
+          const recoveryContent = formatExternalProviderFirstTurn(refreshedSystemPrompt, cliUserContent, recoveryContextBlock);
           const sentAt = new Date().toISOString();
           const setupContent = [
             "CLI provider recovery session setup captured by Jait.",
@@ -1930,6 +2011,7 @@ export function registerChatRoutes(
             sentAt,
             "CLI providers keep their own session context. This captures the Jait recovery setup metadata, the current Jait session system prompt, and the user turn content.",
             memoryFlow,
+            recoveryContextBlock,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
@@ -1957,7 +2039,13 @@ export function registerChatRoutes(
             if (event.sessionId !== providerSessionId) return;
             if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
               if (event.type === "session.error") {
-                sessionError = typeof (event as any).message === "string" ? (event as any).message : "Session error";
+                sessionError = normalizeProviderSessionError(
+                  typeof (event as any).error === "string"
+                    ? (event as any).error
+                    : typeof (event as any).message === "string"
+                      ? (event as any).message
+                      : "Session error",
+                );
                 activeCliSessions.delete(sessionId);
               }
               unsubSteerDone();

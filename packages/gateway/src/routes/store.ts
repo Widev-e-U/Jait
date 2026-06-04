@@ -14,10 +14,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ClawHubClient } from "../clawhub/client.js";
 import type { SkillRegistry } from "../skills/index.js";
-import { extractZip, writeOrigin } from "../clawhub/client.js";
-import { join } from "node:path";
-import { rm, readFile } from "node:fs/promises";
-import { userSkillsDir } from "../skills/index.js";
+import { installClawHubSkill, uninstallClawHubSkill } from "../skills/install.js";
 
 export interface StoreDeps {
   clawhub: ClawHubClient;
@@ -107,48 +104,13 @@ export function registerStoreRoutes(
     const body = (req.body as { version?: string } | null) ?? {};
 
     try {
-      // 1. Resolve version
-      const detail = await clawhub.getSkill(slug);
-      const version = body.version ?? detail.latestVersion?.version;
-      if (!version) {
-        return reply
-          .status(404)
-          .send({ error: "No version found for skill" });
-      }
-
-      // 2. Download zip
-      const zipBuffer = await clawhub.downloadSkill(slug, version);
-
-      // 3. Extract to user skills directory
-      const skillDir = join(userSkillsDir(), slug);
-      await extractZip(zipBuffer, skillDir);
-
-      // 4. Write origin metadata (matches ClawHub CLI convention)
-      await writeOrigin(skillDir, {
+      const skill = await installClawHubSkill({
+        clawhub,
+        skillRegistry,
         slug,
-        version,
-        registry: "https://clawhub.ai",
-        installedAt: Date.now(),
+        version: body.version,
       });
-
-      // 5. Re-discover skills so the new one appears
-      await skillRegistry.discover([
-        { path: userSkillsDir(), source: "user" },
-      ]);
-
-      const installed = skillRegistry.get(slug);
-      return {
-        ok: true,
-        skill: installed
-          ? {
-              id: installed.id,
-              name: installed.name,
-              description: installed.description,
-              source: installed.source,
-              enabled: installed.enabled,
-            }
-          : { id: slug, name: detail.skill?.displayName ?? slug },
-      };
+      return { ok: true, skill };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       return reply.status(500).send({ error: msg });
@@ -161,30 +123,13 @@ export function registerStoreRoutes(
     "/api/store/skills/:slug",
     async (req, reply) => {
       const { slug } = req.params;
-      const skillDir = join(userSkillsDir(), slug);
-
       try {
-        // Verify this is a ClawHub-installed skill
-        const originPath = join(skillDir, ".clawhub", "origin.json");
-        try {
-          await readFile(originPath, "utf-8");
-        } catch {
-          return reply.status(400).send({
-            error:
-              "Skill is not a ClawHub-installed skill (no origin metadata)",
-          });
-        }
-
-        // Remove the skill directory
-        await rm(skillDir, { recursive: true, force: true });
-
-        // Remove from registry
-        skillRegistry.remove(slug);
-
+        await uninstallClawHubSkill({ skillRegistry, slug });
         return { ok: true };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        return reply.status(500).send({ error: msg });
+        const status = /not a ClawHub-installed skill/.test(msg) ? 400 : 500;
+        return reply.status(status).send({ error: msg });
       }
     },
   );

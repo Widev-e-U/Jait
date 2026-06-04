@@ -8,6 +8,7 @@ import type {
   ToolTier,
 } from "../tools/contracts.js";
 import type { ToolPermission } from "../security/tool-permissions.js";
+import type { ChannelConnector } from "../channels/types.js";
 import type { PluginManifest } from "./manifest.js";
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +72,8 @@ export function toPluginToolDefinition<TInput = unknown>(
 
 export interface PluginContribution {
   tools?: PluginToolDeclaration[];
+  /** Messaging channels exposed by this extension. Registered only while enabled. */
+  channels?: ChannelConnector[];
   settingsSchema?: ToolParametersSchema;
   permissions?: ToolPermission[];
 }

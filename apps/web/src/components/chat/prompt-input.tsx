@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
 import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
@@ -37,12 +37,21 @@ const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/i
 
 /** Stable empty array so the default prop doesn't create a new reference each render. */
 const EMPTY_FILES: ReferencedFile[] = []
+/** Stable empty array for the default skills prop. */
+const EMPTY_SKILLS: PromptSkill[] = []
 
 export interface ReferencedFile {
   path: string
   name: string
   kind?: 'file' | 'dir'
   lineRange?: { startLine: number; endLine: number }
+}
+
+/** A skill available for `/` slash-command invocation in the composer. */
+export interface PromptSkill {
+  id: string
+  name: string
+  description: string
 }
 
 type PromptChipReference =
@@ -109,6 +118,8 @@ interface PromptInputProps {
   onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   /** Whether a project directory is currently open — @ mentions only work when true */
   projectOpen?: boolean
+  /** Installed/enabled skills offered by the `/` slash-command menu. */
+  availableSkills?: PromptSkill[]
   /** Stable key for preserving local attachment draft state across remounts. */
   draftStateKey?: string
   /** Bumped when the parent externally changes `value` (e.g. clear on submit). */
@@ -129,6 +140,11 @@ function getChipRefKey(ref: PromptChipReference): string {
     return `terminal:${ref.terminalId}${rangeKey}${selectionKey}`
   }
   return `file:${ref.path}${rangeKey}`
+}
+
+/** Normalize a skill id/name to a `/slash-token` (kebab-case, matches gateway). */
+function skillSlug(value: string): string {
+  return value.toLowerCase().trim().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '')
 }
 
 function hashString(value: string): string {
@@ -491,6 +507,34 @@ function moveCursorToEnd(el: HTMLElement) {
   }
 }
 
+function scrollCaretIntoView(el: HTMLElement) {
+  window.requestAnimationFrame(() => {
+    if (!el.isConnected) return
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) {
+      el.scrollTop = el.scrollHeight
+      return
+    }
+    const range = selection.getRangeAt(0)
+    const ancestor = range.commonAncestorContainer
+    if (ancestor !== el && !el.contains(ancestor)) return
+
+    const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      el.scrollTop = el.scrollHeight
+      return
+    }
+
+    const containerRect = el.getBoundingClientRect()
+    const padding = 8
+    if (rect.bottom > containerRect.bottom - padding) {
+      el.scrollTop += rect.bottom - containerRect.bottom + padding
+    } else if (rect.top < containerRect.top + padding) {
+      el.scrollTop -= containerRect.top + padding - rect.top
+    }
+  })
+}
+
 /** Remove empty text nodes and stale <br> tags so chips aren't offset. */
 function cleanEmptyNodes(el: HTMLElement) {
   for (let i = el.childNodes.length - 1; i >= 0; i--) {
@@ -631,6 +675,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   segments,
   onSearchFiles,
   projectOpen = false,
+  availableSkills = EMPTY_SKILLS,
   draftStateKey,
   syncKey,
 }: PromptInputProps, ref) {
@@ -663,9 +708,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionIndex, setMentionIndex] = useState(0)
 
+  // `/` slash-command (skills) state
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashQuery, setSlashQuery] = useState('')
+  const [slashIndex, setSlashIndex] = useState(0)
+  const slashMenuRef = useRef<HTMLDivElement>(null)
+
   // Keep a ref in sync so the onInput handler always reads the latest value
   const mentionOpenRef = useRef(false)
   useEffect(() => { mentionOpenRef.current = mentionOpen }, [mentionOpen])
+  const slashOpenRef = useRef(false)
+  useEffect(() => { slashOpenRef.current = slashOpen }, [slashOpen])
+  const availableSkillsRef = useRef(availableSkills)
+  useEffect(() => { availableSkillsRef.current = availableSkills }, [availableSkills])
   const availableFilesRef = useRef(availableFiles)
   useEffect(() => { availableFilesRef.current = availableFiles }, [availableFiles])
   const onChangeRef = useRef(onChange)
@@ -675,6 +730,18 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const projectOpenRef = useRef(projectOpen)
   useEffect(() => { projectOpenRef.current = projectOpen }, [projectOpen])
   const pushUndoRef = useRef<(immediate?: boolean) => void>(() => {})
+
+  // Filtered skill list for the `/` slash menu (local, no async needed)
+  const slashResults = useMemo(() => {
+    const q = slashQuery.toLowerCase()
+    const list = q
+      ? availableSkills.filter((s) =>
+          s.id.toLowerCase().includes(q) ||
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q))
+      : availableSkills
+    return list.slice(0, 20)
+  }, [availableSkills, slashQuery])
 
   // Async search results for @ mention
   const [searchResults, setSearchResults] = useState<ReferencedFile[]>([])
@@ -972,6 +1039,22 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setMentionIndex(0)
   }, [mentionQuery])
 
+  useEffect(() => {
+    setSlashIndex(0)
+  }, [slashQuery])
+
+  // Close slash menu on outside click
+  useEffect(() => {
+    if (!slashOpen) return
+    const handler = (e: MouseEvent) => {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
+        setSlashOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [slashOpen])
+
   /** Insert a file chip at the current cursor position and close the menu. */
   const insertMention = useCallback((file: ReferencedFile) => {
     const el = editableRef.current
@@ -1037,6 +1120,43 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = true
     onChange(getTextFromEditable(el))
     isSyncing.current = false
+  }, [onChange, pushUndoSnapshot])
+
+  /** Replace the typed `/query` with a `/skill-id ` invocation token. */
+  const insertSkill = useCallback((skill: PromptSkill) => {
+    const el = editableRef.current
+    if (!el) return
+    pushUndoSnapshot(true)
+
+    const token = `/${skillSlug(skill.id)} `
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0)
+      const textNode = range.startContainer
+      if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent != null) {
+        const text = textNode.textContent
+        const cursor = range.startOffset
+        const slashIdx = text.lastIndexOf('/', cursor - 1)
+        if (slashIdx >= 0) {
+          textNode.textContent = text.slice(0, slashIdx) + token + text.slice(cursor)
+          const caret = slashIdx + token.length
+          const newRange = document.createRange()
+          newRange.setStart(textNode, Math.min(caret, textNode.textContent.length))
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+        }
+      }
+    }
+
+    setSlashOpen(false)
+    setSlashQuery('')
+
+    draftSegmentsRef.current = getComposerSegments(el)
+    isSyncing.current = true
+    onChange(getTextFromEditable(el))
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
   }, [onChange, pushUndoSnapshot])
 
   /** Handle input events on the contentEditable — uses a native listener
@@ -1110,6 +1230,31 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           }
         }
       }
+
+      // `/` slash-command (skills) trigger \u2014 mirrors the `@` handling above
+      const slashIsOpen = slashOpenRef.current
+      if (slashIsOpen) {
+        const slashIdx = textContent.lastIndexOf('/', cursor - 1)
+        if (slashIdx < 0 || cursor <= slashIdx) {
+          setSlashOpen(false)
+        } else {
+          const query = textContent.slice(slashIdx + 1, cursor)
+          if (query.includes(' ') || query.includes('\n') || query.includes('/')) {
+            setSlashOpen(false)
+          } else {
+            setSlashQuery(query)
+          }
+        }
+      } else if (cursor > 0 && textContent[cursor - 1] === '/') {
+        const charBefore = cursor > 1 ? textContent[cursor - 2] : ' '
+        if (charBefore === ' ' || charBefore === '\n' || charBefore === '\u00a0' || cursor === 1) {
+          if (availableSkillsRef.current.length > 0) {
+            setMentionOpen(false)
+            setSlashQuery('')
+            setSlashOpen(true)
+          }
+        }
+      }
     }
 
     el.addEventListener('input', handleNativeInput)
@@ -1139,6 +1284,28 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       }
     }
 
+    if (slashOpen && slashResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSlashIndex((i) => Math.min(i + 1, slashResults.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        if (slashResults[slashIndex]) insertSkill(slashResults[slashIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashOpen(false)
+        return
+      }
+    }
     if (mentionOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -1234,7 +1401,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         resetComposer()
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, sendTarget, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -1369,6 +1536,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onChange(getTextFromEditable(el))
       isSyncing.current = false
       setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
+      scrollCaretIntoView(el)
       return
     }
     e.preventDefault()
@@ -1382,6 +1550,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     onChange(nextValue)
     isSyncing.current = false
     setIsEmpty(isTextEmpty(nextValue) && !hasChipRefs(el))
+    scrollCaretIntoView(el)
   }, [addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot])
 
   // Drag-and-drop handlers
@@ -1610,6 +1779,44 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           )}
           {!searchLoading && searchResults.length === 0 && (
             <div className="text-xs text-muted-foreground px-2 py-1.5">No matching files or folders</div>
+          )}
+        </div>
+      )}
+
+      {/* `/` slash-command (skills) popup */}
+      {slashOpen && (
+        <div
+          ref={slashMenuRef}
+          className="absolute left-3 bottom-full mb-1 w-80 max-h-60 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg z-50"
+        >
+          <div className="px-2 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
+            Skills
+          </div>
+          {slashResults.map((skill, i) => (
+            <button
+              key={skill.id}
+              type="button"
+              className={cn(
+                'flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors',
+                i === slashIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',
+              )}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                insertSkill(skill)
+              }}
+              onMouseEnter={() => setSlashIndex(i)}
+            >
+              <span className="flex w-full items-center gap-1.5 text-xs font-medium">
+                <span className="text-muted-foreground">/</span>
+                <span className="truncate">{skill.name}</span>
+              </span>
+              {skill.description && (
+                <span className="line-clamp-1 text-2xs text-muted-foreground">{skill.description}</span>
+              )}
+            </button>
+          ))}
+          {slashResults.length === 0 && (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">No matching skills</div>
           )}
         </div>
       )}

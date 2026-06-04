@@ -75,6 +75,7 @@ export {
   createPreviewInspectTool,
 } from "./preview-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
+export { createSkillsManageTool, createExtensionsManageTool } from "./skill-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
 export { ToolName, type ToolNameValue } from "./tool-names.js";
 export { validateToolInput, type ValidationResult } from "./validate.js";

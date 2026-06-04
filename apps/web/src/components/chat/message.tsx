@@ -822,7 +822,7 @@ function MessageInner({
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
   const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(contextFlow) : []
   const memoryProvenance = memoryProvenanceEntries.length > 0 ? (
-    <div className="not-prose flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="not-prose mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
       <button
         type="button"
         className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-amber-200"
@@ -831,7 +831,7 @@ function MessageInner({
           event.stopPropagation()
           setContextOpen(true)
         }}
-        title="Open retrieved memory context"
+        title="View memories retrieved and injected for this answer"
       >
         <Brain className="h-3.5 w-3.5 shrink-0" />
         <span>Memory</span>
@@ -856,7 +856,9 @@ function MessageInner({
               if (canOpenSource) onOpenMemorySource?.(source)
               else setContextOpen(true)
             }}
-            title={entry.source || entry.id}
+            title={canOpenSource
+              ? `Open source chat for injected memory: ${entry.source || entry.id}`
+              : `View injected memory source: ${entry.source || entry.id}`}
           >
             {canOpenSource ? <MessageSquare className="h-3.5 w-3.5 shrink-0" /> : <Brain className="h-3.5 w-3.5 shrink-0" />}
             <span className="truncate">{entry.source || entry.id}</span>

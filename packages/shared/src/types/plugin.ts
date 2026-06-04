@@ -17,6 +17,21 @@ export interface PluginInfo {
 
 /** Shared skill types used by both gateway and frontend. */
 
+/** A CLI tool / dependency a skill can install. */
+export interface SkillInstallSpec {
+  id?: string;
+  kind?: string;
+  package?: string;
+  bins?: string[];
+  label?: string;
+}
+
+/** Tools a skill requires to be present on the host. */
+export interface SkillRequirements {
+  bins?: string[];
+  anyBins?: string[];
+}
+
 export interface SkillInfo {
   id: string;
   name: string;
@@ -24,6 +39,14 @@ export interface SkillInfo {
   filePath: string;
   source: "bundled" | "user" | "project" | "plugin";
   enabled: boolean;
+  /** Tools this skill requires (from frontmatter metadata). */
+  requires?: SkillRequirements;
+  /** Installable tool options declared by the skill. */
+  install?: SkillInstallSpec[];
+  /** Whether all required tools are present on the host. */
+  toolsSatisfied?: boolean;
+  /** Required tools that are missing from the host. */
+  missingTools?: string[];
 }
 
 /** ClawHub marketplace — skill listing returned by browse/search. */

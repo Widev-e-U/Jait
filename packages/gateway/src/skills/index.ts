@@ -10,12 +10,36 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { join, basename, delimiter } from "node:path";
 import { homedir } from "node:os";
+import { accessSync, constants } from "node:fs";
+import { parse as parseYaml } from "yaml";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
+
+/** A CLI tool / dependency a skill needs in order to run. */
+export interface SkillInstallSpec {
+  /** Stable id for the install option. */
+  id?: string;
+  /** Install mechanism, e.g. "node" (npm), "brew", "pip". */
+  kind?: string;
+  /** Package name to install. */
+  package?: string;
+  /** Executables this install provides. */
+  bins?: string[];
+  /** Human-readable label for the install action. */
+  label?: string;
+}
+
+/** Tools a skill requires to be present on the host. */
+export interface SkillRequirements {
+  /** All of these binaries must be present. */
+  bins?: string[];
+  /** At least one of these binaries must be present. */
+  anyBins?: string[];
+}
 
 export interface Skill {
   /** Skill identifier (directory name). */
@@ -30,6 +54,10 @@ export interface Skill {
   source: "bundled" | "user" | "project" | "plugin";
   /** Whether the skill is enabled. */
   enabled: boolean;
+  /** Tools this skill requires (from frontmatter metadata). */
+  requires?: SkillRequirements;
+  /** Installable tool options declared by the skill. */
+  install?: SkillInstallSpec[];
 }
 
 export interface SkillFrontmatter {
@@ -37,25 +65,92 @@ export interface SkillFrontmatter {
   description?: string;
   homepage?: string;
   metadata?: Record<string, unknown>;
+  requires?: SkillRequirements;
+  install?: SkillInstallSpec[];
 }
 
 /* ------------------------------------------------------------------ */
 /*  Frontmatter parser (minimal YAML subset)                           */
 /* ------------------------------------------------------------------ */
 
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
+  return out.length > 0 ? out : undefined;
+}
+
+/** Recursively locate `requires`/`install` blocks (may be nested under `openclaw`/`jait`). */
+function findToolMetadata(node: unknown, depth = 0): { requires?: SkillRequirements; install?: SkillInstallSpec[] } {
+  if (!node || typeof node !== "object" || depth > 4) return {};
+  const obj = node as Record<string, unknown>;
+  const result: { requires?: SkillRequirements; install?: SkillInstallSpec[] } = {};
+
+  const req = obj.requires as Record<string, unknown> | undefined;
+  if (req && typeof req === "object") {
+    const bins = asStringArray(req.bins);
+    const anyBins = asStringArray(req.anyBins);
+    if (bins || anyBins) result.requires = { ...(bins ? { bins } : {}), ...(anyBins ? { anyBins } : {}) };
+  }
+
+  if (Array.isArray(obj.install)) {
+    const specs = obj.install
+      .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === "object")
+      .map((s) => ({
+        ...(typeof s.id === "string" ? { id: s.id } : {}),
+        ...(typeof s.kind === "string" ? { kind: s.kind } : {}),
+        ...(typeof s.package === "string" ? { package: s.package } : {}),
+        ...(asStringArray(s.bins) ? { bins: asStringArray(s.bins) } : {}),
+        ...(typeof s.label === "string" ? { label: s.label } : {}),
+      }));
+    if (specs.length > 0) result.install = specs;
+  }
+
+  // Recurse into common wrapper keys (openclaw/jait namespaces) if not yet found.
+  if (!result.requires || !result.install) {
+    for (const key of Object.keys(obj)) {
+      const nested = findToolMetadata(obj[key], depth + 1);
+      if (!result.requires && nested.requires) result.requires = nested.requires;
+      if (!result.install && nested.install) result.install = nested.install;
+    }
+  }
+  return result;
+}
+
 /**
  * Parse YAML frontmatter from a markdown file.
- * Handles the `---` delimited block at the start of the file.
- * Only extracts top-level string fields — enough for name + description.
+ * Handles the `---` delimited block at the start of the file and extracts
+ * name/description/homepage plus any tool `requires`/`install` metadata.
  */
 export function parseFrontmatter(content: string): SkillFrontmatter {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match || !match[1]) return {};
 
   const block = match[1];
-  const result: SkillFrontmatter = {};
 
-  // Simple line-by-line YAML extraction for top-level scalar fields
+  // Prefer a real YAML parse (handles nested metadata, flow + block styles).
+  try {
+    const parsed = parseYaml(block) as Record<string, unknown> | null;
+    if (parsed && typeof parsed === "object") {
+      const result: SkillFrontmatter = {};
+      if (typeof parsed.name === "string") result.name = parsed.name;
+      if (typeof parsed.description === "string") result.description = parsed.description;
+      if (typeof parsed.homepage === "string") result.homepage = parsed.homepage;
+      if (parsed.metadata && typeof parsed.metadata === "object") {
+        result.metadata = parsed.metadata as Record<string, unknown>;
+      }
+      const tools = findToolMetadata(parsed);
+      if (tools.requires) result.requires = tools.requires;
+      if (tools.install) result.install = tools.install;
+      if (result.name && result.description) return result;
+    }
+  } catch {
+    // Malformed YAML — fall back to the line-based extractor below.
+  }
+
+  // Fallback: line-by-line extraction for top-level scalar fields.
+  const result: SkillFrontmatter = {};
   for (const line of block.split(/\r?\n/)) {
     const kv = line.match(/^(\w+):\s*"?(.+?)"?\s*$/);
     if (!kv) continue;
@@ -64,7 +159,6 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
     else if (key === "description") result.description = value;
     else if (key === "homepage") result.homepage = value;
   }
-
   return result;
 }
 
@@ -104,6 +198,8 @@ async function scanSkillDir(
         filePath: skillPath,
         source,
         enabled: true,
+        ...(fm.requires ? { requires: fm.requires } : {}),
+        ...(fm.install ? { install: fm.install } : {}),
       });
     } catch {
       // No SKILL.md — skip
@@ -119,6 +215,66 @@ async function scanSkillDir(
 /** User-level skills directory: ~/.jait/skills/ */
 export function userSkillsDir(): string {
   return join(homedir(), ".jait", "skills");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tool/bin availability                                              */
+/* ------------------------------------------------------------------ */
+
+const binCache = new Map<string, boolean>();
+
+/** Drop cached availability for a bin (or all bins) — call after installing tools. */
+export function invalidateBinCache(bin?: string): void {
+  if (bin) binCache.delete(bin.trim());
+  else binCache.clear();
+}
+
+/** Whether an executable named `bin` is resolvable on the host PATH. */
+export function binExists(bin: string): boolean {
+  const name = bin.trim();
+  if (!name) return false;
+  const cached = binCache.get(name);
+  if (cached !== undefined) return cached;
+
+  const isWin = process.platform === "win32";
+  const exts = isWin ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
+  const dirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  let found = false;
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      try {
+        accessSync(join(dir, name + ext), constants.X_OK);
+        found = true;
+        break;
+      } catch {
+        // not here — keep looking
+      }
+    }
+    if (found) break;
+  }
+  binCache.set(name, found);
+  return found;
+}
+
+export interface SkillToolStatus {
+  /** True when all required tools are present (or none are required). */
+  satisfied: boolean;
+  /** Required bins that are missing from the host. */
+  missing: string[];
+}
+
+/** Resolve which of a skill's required tools are missing on the host. */
+export function checkSkillTools(skill: Skill): SkillToolStatus {
+  const missing: string[] = [];
+  const bins = skill.requires?.bins ?? [];
+  for (const bin of bins) {
+    if (!binExists(bin)) missing.push(bin);
+  }
+  const anyBins = skill.requires?.anyBins ?? [];
+  if (anyBins.length > 0 && !anyBins.some((b) => binExists(b))) {
+    missing.push(...anyBins.filter((b) => !missing.includes(b)));
+  }
+  return { satisfied: missing.length === 0, missing };
 }
 
 /* ------------------------------------------------------------------ */
@@ -215,6 +371,7 @@ export function formatSkillsForPrompt(skills: Skill[], options: SkillPromptForma
     "",
     "The following skills provide specialized instructions for specific tasks.",
     readToolInstruction,
+    "If the user explicitly invokes a skill by typing a slash command like `/skill-id`, treat that as a request to load and follow that skill's instructions for the turn.",
     "When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md) and use that absolute path in tool commands.",
     "",
     "<available_skills>",

@@ -85,6 +85,8 @@ export interface PromptContext {
   projectRoot?: string;
   /** Enabled skills to inject into the system prompt */
   skills?: Skill[];
+  /** Saved project architecture graph (Mermaid) to help the agent understand the codebase */
+  architectureGraph?: string;
   /** Optional response style override for this session */
   responseStyle?: ResponseStyle;
   /** Backend provider label — used to select lighter prompts for local models */
@@ -118,6 +120,17 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
     // Inject available skills
     if (ctx?.skills && ctx.skills.length > 0) {
       prompt += formatSkillsForPrompt(ctx.skills);
+    }
+
+    // Inject the saved project architecture graph (token-bounded) so the agent
+    // has an up-front map of the project's structure and data flow.
+    const graph = ctx?.architectureGraph?.trim();
+    if (graph) {
+      const MAX_GRAPH_CHARS = 4000;
+      const clipped = graph.length > MAX_GRAPH_CHARS
+        ? `${graph.slice(0, MAX_GRAPH_CHARS)}\n%% …truncated`
+        : graph;
+      prompt += `\n\n<projectArchitecture>\nA Mermaid diagram of this project's architecture (modules, dependencies, and data flow). Use it to orient yourself before exploring files.\n\n${clipped}\n</projectArchitecture>`;
     }
 
     const responseStyleInstructions = getResponseStyleInstructions(ctx?.responseStyle);

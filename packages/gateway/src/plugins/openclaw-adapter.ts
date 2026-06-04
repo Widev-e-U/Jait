@@ -19,6 +19,10 @@ import { join, resolve } from "node:path";
 import type { PluginManifest as JaitManifest } from "./manifest.js";
 import type { PluginModule, PluginContext, PluginContribution, PluginToolDeclaration } from "./contracts.js";
 import type { ToolCategory, ToolConsentLevel, ToolRisk, ToolTier, ToolResult } from "../tools/contracts.js";
+import type { ChannelConnector } from "../channels/types.js";
+import { WhatsAppConnector } from "../channels/whatsapp/connector.js";
+import { TelegramConnector } from "../channels/telegram/connector.js";
+import { MSTeamsConnector } from "../channels/msteams/connector.js";
 
 /* ------------------------------------------------------------------ */
 /*  OpenClaw manifest shape (subset we actually need)                  */
@@ -62,11 +66,12 @@ interface OpenClawTool {
 
 interface StubApi {
   tools: OpenClawTool[];
+  channels: ChannelConnector[];
   unsupported: { method: string; args: unknown[] }[];
 }
 
 function createStubApi(manifest: OpenClawManifest, pluginConfig: Record<string, unknown>, log: PluginContext["log"]): StubApi & Record<string, unknown> {
-  const collected: StubApi = { tools: [], unsupported: [] };
+  const collected: StubApi = { tools: [], channels: [], unsupported: [] };
 
   const noop = (method: string) => (...args: unknown[]) => {
     collected.unsupported.push({ method, args });
@@ -86,6 +91,9 @@ function createStubApi(manifest: OpenClawManifest, pluginConfig: Record<string, 
     pluginConfig,
     runtime: {},       // Empty runtime object
     logger: log,
+    tools: collected.tools,
+    channels: collected.channels,
+    unsupported: collected.unsupported,
 
     // ── Supported: tool registration ──────────────────────────────
     registerTool: (tool: OpenClawTool | ((...args: unknown[]) => OpenClawTool)) => {
@@ -105,7 +113,14 @@ function createStubApi(manifest: OpenClawManifest, pluginConfig: Record<string, 
     // ── Unsupported — captured but not wired ──────────────────────
     registerHook: noop("registerHook"),
     registerHttpRoute: noop("registerHttpRoute"),
-    registerChannel: noop("registerChannel"),
+    registerChannel: (channel: unknown) => {
+      if (isChannelConnector(channel)) {
+        collected.channels.push(channel);
+      } else {
+        collected.unsupported.push({ method: "registerChannel", args: [channel] });
+        log.info(`[openclaw-compat] ${manifest.id}: skipped registerChannel (unsupported channel shape)`);
+      }
+    },
     registerGatewayMethod: noop("registerGatewayMethod"),
     registerCli: noop("registerCli"),
     registerService: noop("registerService"),
@@ -133,6 +148,49 @@ function createStubApi(manifest: OpenClawManifest, pluginConfig: Record<string, 
   };
 
   return api as StubApi & Record<string, unknown>;
+}
+
+function isChannelConnector(value: unknown): value is ChannelConnector {
+  const candidate = value as Partial<ChannelConnector> | null;
+  return !!candidate
+    && typeof candidate === "object"
+    && typeof candidate.id === "string"
+    && typeof candidate.label === "string"
+    && typeof candidate.start === "function"
+    && typeof candidate.stop === "function"
+    && typeof candidate.send === "function"
+    && typeof candidate.status === "function"
+    && typeof candidate.currentQr === "function";
+}
+
+function createOpenClawChannelBridges(manifest: OpenClawManifest, log: PluginContext["log"]): ChannelConnector[] {
+  const channels: ChannelConnector[] = [];
+  for (const channelId of manifest.channels ?? []) {
+    switch (channelId) {
+      case "whatsapp":
+        channels.push(new WhatsAppConnector({ log: (msg, ...args) => log.info(msg, ...args) }));
+        break;
+      case "telegram":
+        channels.push(new TelegramConnector({ log: (msg, ...args) => log.info(msg, ...args) }));
+        break;
+      case "msteams":
+      case "teams":
+        channels.push(new MSTeamsConnector({ log: (msg, ...args) => log.info(msg, ...args) }));
+        break;
+      default:
+        log.warn(
+          `[openclaw-compat] ${manifest.id}: channel '${channelId}' is discovered but not runnable yet in Jait`,
+        );
+        break;
+    }
+  }
+  return channels;
+}
+
+function dedupeChannels(channels: ChannelConnector[]): ChannelConnector[] {
+  const byId = new Map<string, ChannelConnector>();
+  for (const channel of channels) byId.set(channel.id, channel);
+  return [...byId.values()];
 }
 
 /* ------------------------------------------------------------------ */
@@ -212,6 +270,7 @@ export function openclawToJaitManifest(oc: OpenClawManifest, _dir: string): Jait
     configSchema: oc.configSchema as JaitManifest["configSchema"],
     contributes: {
       tools: oc.contracts?.tools?.map((name) => ({ name, description: name })),
+      channels: oc.channels?.map((id) => ({ id, displayName: oc.name ?? id, description: oc.description })),
     },
   };
 }
@@ -264,6 +323,9 @@ export function createOpenClawPluginModule(
               await definition.activate(api);
               loaded = true;
               break;
+            } else if ("loadChannelPlugin" in definition || "setChannelRuntime" in definition) {
+              loaded = true;
+              break;
             }
           }
         } catch (err) {
@@ -279,19 +341,23 @@ export function createOpenClawPluginModule(
       const tools: PluginToolDeclaration[] = (api as unknown as StubApi).tools.map(
         (t) => convertTool(jaitId, t),
       );
+      const channels = dedupeChannels([
+        ...(api as unknown as StubApi).channels,
+        ...createOpenClawChannelBridges(manifest, ctx.log),
+      ]);
 
       const unsupported = (api as unknown as StubApi).unsupported;
       if (unsupported.length > 0) {
         const methods = [...new Set(unsupported.map((u) => u.method))];
         ctx.log.info(
-          `OpenClaw plugin ${manifest.id}: ${tools.length} tool(s) bridged, ` +
+          `OpenClaw plugin ${manifest.id}: ${tools.length} tool(s), ${channels.length} channel(s) bridged, ` +
           `${unsupported.length} unsupported registration(s) skipped (${methods.join(", ")})`,
         );
-      } else if (tools.length > 0) {
-        ctx.log.info(`OpenClaw plugin ${manifest.id}: ${tools.length} tool(s) bridged`);
+      } else if (tools.length > 0 || channels.length > 0) {
+        ctx.log.info(`OpenClaw plugin ${manifest.id}: ${tools.length} tool(s), ${channels.length} channel(s) bridged`);
       }
 
-      return { tools };
+      return { tools, channels };
     },
 
     async dispose(): Promise<void> {

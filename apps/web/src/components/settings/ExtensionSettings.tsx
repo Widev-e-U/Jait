@@ -28,9 +28,15 @@ const STATUS_BADGE: Record<PluginStatus, { variant: 'default' | 'secondary' | 'o
   error: { variant: 'destructive', label: 'error' },
 }
 
+/**
+ * Auth-only headers. We deliberately do NOT set `Content-Type: application/json`
+ * here: the plugin enable/disable/scan/uninstall calls send no request body, and
+ * Fastify rejects an empty body when the JSON content-type is present (400
+ * "Body cannot be empty…"). Callers that send a JSON body must add the header.
+ */
 function useHeaders(token: string | null) {
   return useCallback((): Record<string, string> => {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' }
+    const h: Record<string, string> = {}
     if (token) h.Authorization = `Bearer ${token}`
     return h
   }, [token])

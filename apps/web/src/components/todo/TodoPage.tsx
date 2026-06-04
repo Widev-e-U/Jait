@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Play, Plus, RefreshCw, Save, Search, Tags, Trash2, X } from 'lucide-react'
+import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Save, Search, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -12,6 +12,7 @@ import { agentsApi, type AutomationRepo, type JaitTodo, type ProviderId, type Ru
 import { gitApi } from '@/lib/git-api'
 import { persistTodoRepoSelection, resolveTodoRepoSelection } from '@/lib/todo-repo-selection-storage'
 import { buildTodoThreadRequest, buildTodoThreadStartOptions } from '@/lib/todo-thread'
+import { appendTranscript } from '@/lib/transcript-merge'
 import { cn } from '@/lib/utils'
 
 type TodoMode = 'list' | 'calendar'
@@ -66,6 +67,20 @@ interface CompletionEvent extends CompletionHistoryEntry {
   todoId: string
   message: string
   tags: string[]
+}
+
+interface TodoVoiceInputOptions {
+  onTranscript?: (text: string) => void
+}
+
+interface TodoPageProps {
+  provider?: ProviderId
+  model?: string | null
+  runtimeMode?: RuntimeMode
+  onVoiceInput?: (options?: TodoVoiceInputOptions) => void
+  voiceRecording?: boolean
+  voiceTranscribing?: boolean
+  onVoiceStop?: () => void
 }
 
 function getStatusMeta(status: TodoStatus): { label: string; iconClassName: string; itemClassName: string } {
@@ -703,11 +718,11 @@ export function TodoPage({
   provider = 'jait',
   model = null,
   runtimeMode = 'full-access',
-}: {
-  provider?: ProviderId
-  model?: string | null
-  runtimeMode?: RuntimeMode
-}) {
+  onVoiceInput,
+  voiceRecording = false,
+  voiceTranscribing = false,
+  onVoiceStop,
+}: TodoPageProps) {
   const [repos, setRepos] = useState<AutomationRepo[]>([])
   const [repoId, setRepoId] = useState('')
   const [todos, setTodos] = useState<JaitTodo[]>([])
@@ -897,6 +912,30 @@ export function TodoPage({
       void handleAdd()
     }
   }, [handleAdd])
+
+  const handleTodoVoiceInput = useCallback(() => {
+    onVoiceInput?.({
+      onTranscript: (transcript) => {
+        setNewMessage((current) => appendTranscript(current, transcript))
+        window.requestAnimationFrame(() => {
+          const input = newMessageRef.current
+          if (!input) return
+          input.focus()
+          input.selectionStart = input.value.length
+          input.selectionEnd = input.value.length
+          input.scrollTop = input.scrollHeight
+        })
+      },
+    })
+  }, [onVoiceInput])
+
+  const handleTodoVoiceButton = useCallback(() => {
+    if (voiceRecording) {
+      onVoiceStop?.()
+      return
+    }
+    handleTodoVoiceInput()
+  }, [handleTodoVoiceInput, onVoiceStop, voiceRecording])
 
   const updateTodo = async (todo: JaitTodo, patch: Partial<Pick<JaitTodo, 'message' | 'status' | 'priority' | 'dueDate'>> & { tags?: string[] }) => {
     setTodos((current) => current.map((item) => item.id === todo.id ? { ...item, ...patch, tags: patch.tags ? JSON.stringify(patch.tags) : item.tags } : item))
@@ -1291,6 +1330,27 @@ export function TodoPage({
                 className="rounded-md border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
               />
             </ControlTooltip>
+            {onVoiceInput && (
+              <ControlTooltip label={voiceRecording ? 'Stop dictation' : voiceTranscribing ? 'Transcribing...' : 'Dictate todo'}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={handleTodoVoiceButton}
+                  disabled={voiceTranscribing && !voiceRecording}
+                  aria-label={voiceRecording ? 'Stop todo dictation' : 'Dictate todo'}
+                >
+                  {voiceTranscribing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : voiceRecording ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              </ControlTooltip>
+            )}
             <Button onClick={() => void handleAdd()} disabled={isSaving || !repoId || !newMessage.trim()} size="sm">
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
               Add

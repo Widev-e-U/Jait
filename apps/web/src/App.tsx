@@ -103,6 +103,7 @@ import { ModelIcon, formatModelDisplayLabel, getModelDisplayName, JaitIcon } fro
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
+import { useSkills } from '@/hooks/useSkills'
 import { useProjects } from '@/hooks/useProjects'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
@@ -189,6 +190,9 @@ const VOICE_LEVEL_FLOOR = 0.05
 
 type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
 type ActiveProjectState = { surfaceId: string; projectRoot: string; nodeId?: string } | null
+type VoiceInputOptions = {
+  onTranscript?: (text: string) => void
+}
 const VIEW_MODE_STORAGE_KEY = 'jait.viewMode'
 
 function normalizeProjectPath(path: string): string {
@@ -2372,6 +2376,7 @@ function App() {
   )
   const tokenRef = useRef(token)
   tokenRef.current = token
+  const { skills: availableSkills } = useSkills(token)
   const authLoadingRef = useRef(authLoading)
   authLoadingRef.current = authLoading
   const projectsLoadingRef = useRef(projectsLoading)
@@ -5878,73 +5883,6 @@ function App() {
     }
   }, [activeSessionId])
 
-  const submitVoiceTranscript = useCallback(async (transcript: string) => {
-    const normalizedTranscript = normalizeTranscript(transcript)
-    if (!normalizedTranscript) return
-
-    if (viewMode === 'manager' || sendTarget === 'thread') {
-      const thread = automation.selectedThread
-      const selectedThreadQueueLength = thread ? managerMessageQueues[thread.id]?.length ?? 0 : 0
-      if (thread && (thread.status === 'running' || selectedThreadQueueLength > 0)) {
-        enqueueManagerMessage(thread.id, {
-          id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          content: normalizedTranscript,
-          displayContent: normalizedTranscript,
-          fullContent: normalizedTranscript,
-          referencedFiles: undefined,
-          attachments: undefined,
-          providerId: chatProvider,
-          runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-          model: cliModel ?? undefined,
-          queuedAt: Date.now(),
-        })
-        return
-      }
-      await automation.handleSend(
-        normalizedTranscript,
-        chatProvider,
-        chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        cliModel ?? undefined,
-        undefined,
-        threadTargetRepo?.id ?? undefined,
-      )
-      return
-    }
-
-    const generatedTitle = deriveSessionTitle(normalizedTranscript)
-
-    let sid = activeSessionId
-    if (!sid) {
-      const session = await createSession(undefined, generatedTitle)
-      sid = session?.id ?? null
-    }
-    if (!sid || !token) return
-    await ensureSessionTitle(sid, normalizedTranscript)
-    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
-
-    if (isLoading || messageQueue.length > 0) {
-      enqueueMessage({
-        content: normalizedTranscript,
-        displayContent: normalizedTranscript,
-        mode: outboundMode,
-        provider: chatProvider,
-        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        model: cliModel ?? undefined,
-      })
-      return
-    }
-
-    sendMessage(normalizedTranscript, {
-      token,
-      sessionId: sid,
-      mode: outboundMode,
-      provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: cliModel ?? undefined,
-      onLoginRequired: () => setShowLoginDialog(true),
-    })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, sendMessage, sendTarget, threadTargetRepo?.id, token, viewMode])
-
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
   const [voiceTranscribing, setVoiceTranscribing] = useState(false)
@@ -5958,6 +5896,20 @@ function App() {
   const voiceAnalyserRef = useRef<AnalyserNode | null>(null)
   const voiceLevelDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const voiceLevelFrameRef = useRef<number | null>(null)
+  const voiceTranscriptTargetRef = useRef<((text: string) => void) | null>(null)
+
+  const applyVoiceTranscript = useCallback((transcript: string) => {
+    const normalizedTranscript = normalizeTranscript(transcript)
+    if (!normalizedTranscript) return
+
+    const target = voiceTranscriptTargetRef.current
+    if (target) {
+      target(normalizedTranscript)
+      return
+    }
+
+    setInputValue((prev) => appendTranscript(prev, normalizedTranscript))
+  }, [setInputValue])
 
   const resetVoiceLevels = useCallback(() => {
     const silent = createSilentVoiceLevels()
@@ -6078,6 +6030,7 @@ function App() {
       audioStreamRef.current?.getTracks().forEach((t) => t.stop())
       audioStreamRef.current = null
       mediaRecorderRef.current = null
+      voiceTranscriptTargetRef.current = null
       return
     }
 
@@ -6112,7 +6065,10 @@ function App() {
     audioStreamRef.current = null
     mediaRecorderRef.current = null
 
-    if (audioBlob.size === 0) return
+    if (audioBlob.size === 0) {
+      voiceTranscriptTargetRef.current = null
+      return
+    }
 
     if (settings.stt_provider === 'wyoming' || settings.stt_provider === 'whisper' || settings.stt_provider === 'gpt' || settings.stt_provider === 'elevenlabs') {
       // Convert to WAV and send to backend
@@ -6146,7 +6102,7 @@ function App() {
         })
         const data = (await res.json()) as { text?: string; error?: string; details?: string }
         if (data.text) {
-          setInputValue((prev) => appendTranscript(prev, data.text ?? ''))
+          applyVoiceTranscript(data.text)
         } else {
           console.warn('Transcription failed:', data.details ?? data.error)
         }
@@ -6154,12 +6110,17 @@ function App() {
         console.error('Transcription error:', err)
       } finally {
         setVoiceTranscribing(false)
+        voiceTranscriptTargetRef.current = null
       }
+    } else {
+      voiceTranscriptTargetRef.current = null
     }
-  }, [activeSessionId, buildWavBlob, settings.stt_provider, stopVoiceVisualizer, token])
+  }, [activeSessionId, applyVoiceTranscript, buildWavBlob, settings.stt_provider, stopVoiceVisualizer, token])
 
-  const handleVoiceInput = useCallback(async () => {
+  const handleVoiceInput = useCallback(async (options?: VoiceInputOptions) => {
+    voiceTranscriptTargetRef.current = options?.onTranscript ?? null
     if (!token) {
+      voiceTranscriptTargetRef.current = null
       setShowLoginDialog(true)
       return
     }
@@ -6183,11 +6144,12 @@ function App() {
       recorder.start()
       setVoiceRecording(true)
     } catch (err) {
+      voiceTranscriptTargetRef.current = null
       stopVoiceVisualizer()
       console.error('Microphone access denied:', err)
       window.alert('Microphone access is required for push-to-talk.')
     }
-  }, [activeSessionId, settings.stt_provider, startVoiceVisualizer, stopVoiceVisualizer, submitVoiceTranscript, token])
+  }, [startVoiceVisualizer, stopVoiceVisualizer, token])
 
   // ── Always-on wake word listener ──────────────────────────────
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
@@ -7465,6 +7427,10 @@ function App() {
                 provider={chatProvider}
                 model={cliModel}
                 runtimeMode={chatProvider !== 'jait' ? chatProviderRuntimeMode : 'full-access'}
+                onVoiceInput={handleVoiceInput}
+                voiceRecording={voiceRecording}
+                voiceTranscribing={voiceTranscribing}
+                onVoiceStop={handleVoiceStop}
               />
             </ErrorBoundary>
           </div>
@@ -7946,6 +7912,7 @@ function App() {
                           <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
                             <PromptInput
                               ref={promptInputRef}
+                              availableSkills={availableSkills}
                               draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
                               value={inputValueRef.current}
                               syncKey={inputVersion}
@@ -8023,6 +7990,7 @@ function App() {
                           <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedRepo?.id, inputVersion]}>
                             <PromptInput
                               ref={promptInputRef}
+                              availableSkills={availableSkills}
                               draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
                               value={inputValueRef.current}
                               syncKey={inputVersion}
@@ -8168,6 +8136,7 @@ function App() {
                   <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                     <PromptInput
                       ref={promptInputRef}
+                      availableSkills={availableSkills}
                       draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
                       value={inputValueRef.current}
                       syncKey={inputVersion}
@@ -8330,6 +8299,7 @@ function App() {
                     <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                       <PromptInput
                         ref={promptInputRef}
+                        availableSkills={availableSkills}
                         draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
                         value={inputValueRef.current}
                         syncKey={inputVersion}

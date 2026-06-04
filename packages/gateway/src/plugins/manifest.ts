@@ -37,6 +37,13 @@ export interface ManifestProviderDeclaration {
   description?: string;
 }
 
+/** Manifest channel declaration. Runtime connector is returned from plugin setup(). */
+export interface ManifestChannelDeclaration {
+  id: string;
+  displayName: string;
+  description?: string;
+}
+
 /** The jait.plugin.json file schema. */
 export interface PluginManifest {
   /** Unique plugin identifier (npm-style scope ok: `@org/name`). */
@@ -61,6 +68,7 @@ export interface PluginManifest {
   contributes?: {
     tools?: ManifestToolDeclaration[];
     providers?: ManifestProviderDeclaration[];
+    channels?: ManifestChannelDeclaration[];
   };
   /** JSON-schema for user-facing configuration. */
   configSchema?: ToolParametersSchema;

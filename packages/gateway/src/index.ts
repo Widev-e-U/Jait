@@ -58,6 +58,7 @@ import { ProjectService } from "./services/projects.js";
 import { autoAssignProjectRepositories } from "./services/project-repositories.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
+import { resolveJaitLlmConfig } from "./services/jait-llm.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
 
@@ -637,6 +638,31 @@ async function main() {
 
   console.log(`Consent manager initialized (profile: ${activeToolProfileName}, timeout: 120s, ${permissions.size} tool permissions)`);
 
+  // External messaging channels are populated by enabled extensions.
+  const { ChannelManager } = await import("./channels/manager.js");
+  const channelManager = new ChannelManager({
+    sqlite,
+    toolRegistry,
+    audit,
+    projectRoot: process.cwd(),
+    resolveLLM: () => {
+      // Use the owner user's stored API keys when available, else env/config.
+      let apiKeys: Record<string, string> | undefined;
+      let jaitBackend: string | undefined;
+      try {
+        const owner = sqlite
+          .prepare("SELECT id FROM users ORDER BY created_at ASC LIMIT 1")
+          .get() as { id?: string } | undefined;
+        if (owner?.id) {
+          const s = userService.getSettings(owner.id);
+          apiKeys = s.apiKeys;
+          jaitBackend = s.jaitBackend;
+        }
+      } catch { /* fall back to config defaults */ }
+      return resolveJaitLlmConfig({ config, apiKeys, jaitBackend: jaitBackend as never });
+    },
+  });
+
   // Plugin manager — discover and load enabled extensions
   // Also scan for OpenClaw-format plugins in common locations
   const openclawDirs: string[] = [];
@@ -649,6 +675,7 @@ async function main() {
   const pluginManager = new PluginManager({
     sqlite,
     toolRegistry,
+    channelManager,
     gatewayVersion: GATEWAY_VERSION,
     projectRoot: process.cwd(),
     openclawExtensionsDirs: openclawDirs,
@@ -676,6 +703,13 @@ async function main() {
   // ClawHub marketplace client
   const { ClawHubClient } = await import("./clawhub/client.js");
   const clawhubClient = new ClawHubClient(process.env.CLAWHUB_REGISTRY);
+
+  // Agent-callable management tools — registered now that the skill registry,
+  // plugin manager, and ClawHub client exist (they post-date the tool registry
+  // because the plugin manager itself depends on the tool registry).
+  const { createSkillsManageTool, createExtensionsManageTool } = await import("./tools/index.js");
+  toolRegistry.register(createSkillsManageTool({ skillRegistry, clawhub: clawhubClient }));
+  toolRegistry.register(createExtensionsManageTool({ pluginManager, clawhub: clawhubClient }));
 
   // Voice assistant (OpenAI Realtime — global session, not project-scoped)
   const voiceAssistantService = new VoiceAssistantService({
@@ -740,6 +774,7 @@ async function main() {
     pluginManager,
     skillRegistry,
     clawhubClient,
+    channelManager,
     voiceAssistantService,
     shutdown: shutdownRef,
   });
@@ -966,6 +1001,9 @@ async function main() {
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
 
+  // Auto-start channels (e.g. WhatsApp) that were previously enabled.
+  void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));
+
   // ── Primary-link — register this gateway as a filesystem node on an upstream
   //    gateway so it shows up (browseable/openable) in the primary's picker. ──
   let primaryLink: PrimaryLink | null = null;
@@ -1061,6 +1099,7 @@ async function main() {
     try {
       consentManager.cancelAll("shutdown");
       await pluginManager.disposeAll();
+      await channelManager.dispose();
       await previewService.stopAll();
       await surfaceRegistry.stopAll("shutdown");
       clearInterval(browserReaperInterval);

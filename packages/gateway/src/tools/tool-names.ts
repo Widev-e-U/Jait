@@ -44,6 +44,10 @@ export const ToolName = {
   JaitTodos: "jait.todos",
   UserAsk: "user.ask",
 
+  // ── Skills & extensions management ──
+  SkillsManage: "skills.manage",
+  ExtensionsManage: "extensions.manage",
+
   // ── Screen share ──
   ScreenShare: "screen.share",
   ScreenCapture: "screen.capture",

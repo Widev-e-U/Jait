@@ -12,17 +12,26 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../config.js";
 import type { PluginManager } from "../plugins/manager.js";
+import { requireAuth } from "../security/http-auth.js";
 
-export function registerPluginRoutes(app: FastifyInstance, pluginManager: PluginManager) {
+export function registerPluginRoutes(app: FastifyInstance, config: AppConfig, pluginManager: PluginManager) {
+  async function requirePluginAuth(req: Parameters<typeof requireAuth>[0], reply: Parameters<typeof requireAuth>[1]) {
+    return requireAuth(req, reply, config.jwtSecret);
+  }
 
   /** List all installed plugins. */
-  app.get("/api/plugins", async () => {
+  app.get("/api/plugins", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     return pluginManager.listInstalled();
   });
 
   /** Get a single plugin. */
   app.get<{ Params: { id: string } }>("/api/plugins/:id", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     const plugin = pluginManager.getPlugin(req.params.id);
     if (!plugin) return reply.status(404).send({ error: "Plugin not found" });
     return plugin;
@@ -30,6 +39,8 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
 
   /** Enable a plugin. */
   app.post<{ Params: { id: string } }>("/api/plugins/:id/enable", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     try {
       const result = await pluginManager.enable(req.params.id);
       return result;
@@ -41,6 +52,8 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
 
   /** Disable a plugin. */
   app.post<{ Params: { id: string } }>("/api/plugins/:id/disable", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     try {
       const result = await pluginManager.disable(req.params.id);
       return result;
@@ -52,6 +65,8 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
 
   /** Uninstall a plugin (does not delete files, only removes from DB). */
   app.delete<{ Params: { id: string } }>("/api/plugins/:id", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     try {
       await pluginManager.uninstall(req.params.id);
       return { ok: true };
@@ -63,6 +78,8 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
 
   /** Get plugin config. */
   app.get<{ Params: { id: string } }>("/api/plugins/:id/config", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     const plugin = pluginManager.getPlugin(req.params.id);
     if (!plugin) return reply.status(404).send({ error: "Plugin not found" });
     return plugin.config;
@@ -72,6 +89,8 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
   app.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
     "/api/plugins/:id/config",
     async (req, reply) => {
+      const authUser = await requirePluginAuth(req, reply);
+      if (!authUser) return;
       try {
         const current = pluginManager.getPluginConfig(req.params.id);
         const merged = { ...current, ...(req.body as Record<string, unknown>) };
@@ -85,7 +104,9 @@ export function registerPluginRoutes(app: FastifyInstance, pluginManager: Plugin
   );
 
   /** Trigger a re-scan of the extensions directory. */
-  app.post("/api/plugins/scan", async () => {
+  app.post("/api/plugins/scan", async (req, reply) => {
+    const authUser = await requirePluginAuth(req, reply);
+    if (!authUser) return;
     await pluginManager.syncAndLoad();
     return pluginManager.listInstalled();
   });

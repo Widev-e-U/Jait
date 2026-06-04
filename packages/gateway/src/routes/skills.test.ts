@@ -32,6 +32,8 @@ describe("skill routes", () => {
         filePath: "C:/skills/word-docx/SKILL.md",
         source: "user",
         enabled: true,
+        toolsSatisfied: true,
+        missingTools: [],
       },
     ]);
 
@@ -49,6 +51,8 @@ describe("skill routes", () => {
       filePath: "C:/skills/word-docx/SKILL.md",
       source: "user",
       enabled: false,
+      toolsSatisfied: true,
+      missingTools: [],
     });
     expect(skillRegistry.get("word-docx")?.enabled).toBe(false);
 

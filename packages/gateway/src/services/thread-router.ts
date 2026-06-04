@@ -108,13 +108,51 @@ function classifyIntent(message: string): { intent: ThreadIntent; confidence: nu
 
 // ── Skill matching ───────────────────────────────────────────────────
 
+/** Normalize a skill name/id to a slash-command token (kebab-case). */
+function skillSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+}
+
+/**
+ * Extract explicit `/skill-id` invocations from a message.
+ * The slash-command picker in the composer inserts these tokens, so a user
+ * can deterministically request a skill by typing `/`. Tokens must appear at
+ * the start of the message or after whitespace to avoid matching paths/URLs.
+ */
+export function matchExplicitSkillInvocations(message: string, skills: Skill[]): string[] {
+  if (skills.length === 0) return [];
+  const tokens = new Set<string>();
+  const re = /(?:^|\s)\/([a-z0-9][a-z0-9-]*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(message)) !== null) {
+    if (m[1]) tokens.add(m[1].toLowerCase());
+  }
+  if (tokens.size === 0) return [];
+
+  const matched: string[] = [];
+  for (const skill of skills) {
+    if (tokens.has(skill.id.toLowerCase()) || tokens.has(skillSlug(skill.id)) || tokens.has(skillSlug(skill.name))) {
+      matched.push(skill.id);
+    }
+  }
+  return matched;
+}
+
 export function matchSkills(message: string, skills: Skill[]): string[] {
   if (skills.length === 0) return [];
+
+  // Explicit `/skill-id` invocations always win and come first.
+  const explicit = matchExplicitSkillInvocations(message, skills);
 
   const messageLower = message.toLowerCase();
   const matched: { id: string; score: number }[] = [];
 
   for (const skill of skills) {
+    if (explicit.includes(skill.id)) continue; // already forced in
     // Score based on keyword overlap between task and skill description
     const descWords = skill.description.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
     const nameWords = skill.name.toLowerCase().split(/[\s\-_]+/).filter((w) => w.length > 2);
@@ -132,11 +170,12 @@ export function matchSkills(message: string, skills: Skill[]): string[] {
     }
   }
 
-  // Return top matches, sorted by score
-  return matched
+  // Return top matches, sorted by score — explicit invocations always lead.
+  const keywordMatches = matched
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((m) => m.id);
+  return [...explicit, ...keywordMatches];
 }
 
 // ── Topology detection ───────────────────────────────────────────────

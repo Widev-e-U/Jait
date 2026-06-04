@@ -1022,4 +1022,20 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 040: External messaging channels (WhatsApp, etc.) ─────────────
+  {
+    id: 40,
+    name: "channels_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS channels (
+          id TEXT PRIMARY KEY,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          config TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
 ];

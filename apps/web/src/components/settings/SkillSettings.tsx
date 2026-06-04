@@ -54,6 +54,7 @@ function InstalledSkills({ token }: { token: string | null }) {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [installingTool, setInstallingTool] = useState<string | null>(null)
   const headers = useHeaders(token)
 
   const fetchSkills = useCallback(async () => {
@@ -92,6 +93,34 @@ function InstalledSkills({ token }: { token: string | null }) {
       }
     },
     [headers],
+  )
+
+  const installTool = useCallback(
+    async (id: string) => {
+      setInstallingTool(id)
+      setError(null)
+      try {
+        const res = await fetch(
+          `${API_URL}/api/skills/${encodeURIComponent(id)}/install-tool`,
+          { method: 'POST', headers: headers(), body: JSON.stringify({}) },
+        )
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error((body as { error?: string }).error ?? `Install failed (HTTP ${res.status})`)
+        }
+        const updated = (body as { skill?: SkillInfo }).skill
+        if (updated) {
+          setSkills((prev) => prev.map((s) => (s.id === id ? updated : s)))
+        } else {
+          await fetchSkills()
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Install failed')
+      } finally {
+        setInstallingTool(null)
+      }
+    },
+    [headers, fetchSkills],
   )
 
   const lowerFilter = filter.toLowerCase()
@@ -164,6 +193,30 @@ function InstalledSkills({ token }: { token: string | null }) {
               <p className="mt-0.5 text-2xs text-muted-foreground/60 font-mono truncate">
                 {skill.filePath}
               </p>
+              {skill.missingTools && skill.missingTools.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1 text-2xs text-amber-600 dark:text-amber-500">
+                    <AlertCircle className="h-3 w-3" />
+                    Needs: {skill.missingTools.join(', ')}
+                  </span>
+                  {skill.install && skill.install.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={installingTool === skill.id}
+                      onClick={() => void installTool(skill.id)}
+                      className="h-6 text-2xs"
+                    >
+                      {installingTool === skill.id ? (
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      ) : (
+                        <Download className="mr-1 h-3 w-3" />
+                      )}
+                      {skill.install[0]?.label ?? 'Install tool'}
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             <Switch
               checked={skill.enabled}

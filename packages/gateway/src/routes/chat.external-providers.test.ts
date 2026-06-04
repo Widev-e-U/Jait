@@ -9,7 +9,7 @@ import { signAuthToken } from "../security/http-auth.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
-import { getExternalFileMutationPath } from "./chat.js";
+import { getExternalFileMutationPath, normalizeProviderSessionError } from "./chat.js";
 
 describe("getExternalFileMutationPath", () => {
   it("recognizes edit-style tool names used by external providers", () => {
@@ -27,6 +27,14 @@ describe("getExternalFileMutationPath", () => {
     expect(getExternalFileMutationPath("read", { path: "/tmp/a.ts" })).toBeNull();
     expect(getExternalFileMutationPath("web", { path: "/tmp/a.ts" })).toBeNull();
     expect(getExternalFileMutationPath("execute", { command: "echo hi" })).toBeNull();
+  });
+});
+
+describe("normalizeProviderSessionError", () => {
+  it("keeps auth and provider limit errors stable as authentication required", () => {
+    expect(normalizeProviderSessionError("Usage limit reached for this provider")).toBe("Authentication required");
+    expect(normalizeProviderSessionError("Please log in before continuing")).toBe("Authentication required");
+    expect(normalizeProviderSessionError("Temporary provider outage")).toBe("Temporary provider outage");
   });
 });
 
@@ -66,7 +74,7 @@ class MockChatProvider implements CliProviderAdapter {
     };
   });
 
-  readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
     setTimeout(() => {
       this.emit({ type: "token", sessionId, content: "ok" });
       this.emit({ type: "turn.completed", sessionId });
@@ -104,7 +112,7 @@ class MockChatProvider implements CliProviderAdapter {
 }
 
 class MockTodoChatProvider extends MockChatProvider {
-  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
     setTimeout(() => {
       this.emitForTest({
         type: "tool.start",
@@ -138,7 +146,7 @@ class MockTodoChatProvider extends MockChatProvider {
 }
 
 class MockInterleavedToolChatProvider extends MockChatProvider {
-  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
     setTimeout(() => {
       this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
       this.emitForTest({
@@ -323,6 +331,58 @@ describe("chat external provider runtime mode selection", () => {
     expect(response.body).toContain("Jait did not paste its internal system prompt into this provider turn.");
     expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
     expect(response.body).toContain("shown for inspection even though it was only sent");
+
+    await app.close();
+  });
+
+  it("sends the last four active chat messages when starting a new provider session mid-chat", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-provider-switch-context-session";
+
+    for (const content of ["first turn", "second turn", "third turn"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/chat",
+        headers,
+        payload: {
+          content,
+          sessionId,
+          provider: "codex",
+          runtimeMode: "full-access",
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "fourth turn",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "supervised",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(provider.startSession).toHaveBeenCalledTimes(2);
+    expect(provider.stopSession).toHaveBeenCalledTimes(1);
+
+    const handoffMessage = provider.sendTurn.mock.calls[3]?.[1];
+    expect(typeof handoffMessage).toBe("string");
+    expect(handoffMessage).toContain("Recent active chat context (last 4 messages before this turn):");
+    expect(handoffMessage).not.toContain("User: first turn");
+    expect(handoffMessage).toContain("User: second turn");
+    expect(handoffMessage).toContain("Assistant: ok");
+    expect(handoffMessage).toContain("User: third turn");
+    expect(handoffMessage).toContain("User request:\nfourth turn");
+    expect(response.body).toContain("Recent active chat context (last 4 messages before this turn):");
 
     await app.close();
   });

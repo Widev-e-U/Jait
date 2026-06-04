@@ -21,6 +21,7 @@ import type {
 } from "./contracts.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
+import type { ChannelManager } from "../channels/manager.js";
 import { discoverOpenClawPlugins, openclawToJaitManifest, createOpenClawPluginModule } from "./openclaw-adapter.js";
 
 /* ------------------------------------------------------------------ */
@@ -39,6 +40,7 @@ export function defaultExtensionsDir(): string {
 export interface PluginManagerDeps {
   sqlite: SqliteDatabase;
   toolRegistry: ToolRegistry;
+  channelManager?: ChannelManager;
   gatewayVersion: string;
   projectRoot: string;
   extensionsDir?: string;
@@ -49,6 +51,7 @@ export interface PluginManagerDeps {
 export class PluginManager {
   private readonly sqlite: SqliteDatabase;
   private readonly toolRegistry: ToolRegistry;
+  private readonly channelManager?: ChannelManager;
   private readonly gatewayVersion: string;
   private readonly projectRoot: string;
   private readonly extensionsDir: string;
@@ -62,6 +65,7 @@ export class PluginManager {
   constructor(deps: PluginManagerDeps) {
     this.sqlite = deps.sqlite;
     this.toolRegistry = deps.toolRegistry;
+    this.channelManager = deps.channelManager;
     this.gatewayVersion = deps.gatewayVersion;
     this.projectRoot = deps.projectRoot;
     this.extensionsDir = deps.extensionsDir ?? defaultExtensionsDir();
@@ -307,6 +311,15 @@ export class PluginManager {
         );
       }
 
+      if (contribution?.channels?.length) {
+        if (!this.channelManager) {
+          throw new Error("Plugin contributed channels, but no ChannelManager is available");
+        }
+        for (const channel of contribution.channels) {
+          this.channelManager.register(channel);
+        }
+      }
+
       this.loaded.set(manifest.id, {
         manifest,
         installed,
@@ -343,6 +356,15 @@ export class PluginManager {
         );
       }
 
+      if (contribution?.channels?.length) {
+        if (!this.channelManager) {
+          throw new Error("Plugin contributed channels, but no ChannelManager is available");
+        }
+        for (const channel of contribution.channels) {
+          this.channelManager.register(channel);
+        }
+      }
+
       this.loaded.set(installed.id, {
         manifest,
         installed,
@@ -369,6 +391,9 @@ export class PluginManager {
     const loaded = this.loaded.get(id);
     if (!loaded) return;
     try {
+      for (const channel of loaded.contribution?.channels ?? []) {
+        await this.channelManager?.unregister(channel.id);
+      }
       await loaded.module?.dispose();
     } catch (err) {
       console.error(`Error disposing plugin ${id}:`, err);

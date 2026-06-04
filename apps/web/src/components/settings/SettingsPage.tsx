@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { ToolSettings } from './ToolSettings'
 import { ExtensionSettings } from './ExtensionSettings'
 import { SkillSettings } from './SkillSettings'
+import { ChannelSettings } from './ChannelSettings'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -99,7 +100,7 @@ export interface UpdateInfo {
   hasUpdate: boolean
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'activity'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'channels' | 'activity'
 
 interface SettingsPageProps {
   username: string
@@ -415,6 +416,9 @@ export function SettingsPage({
   const showSkillsSection = matchesSearch(
     'skills instructions prompts specialized workflows SKILL.md',
   )
+  const showChannelsSection = matchesSearch(
+    'channels whatsapp messaging connect link qr inbound outbound',
+  )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
   const emptyState = (
@@ -452,6 +456,7 @@ export function SettingsPage({
           <TabsTrigger value="tools" className="flex-1 sm:flex-none">Tools</TabsTrigger>
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
+          <TabsTrigger value="channels" className="flex-1 sm:flex-none">Channels</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
         </TabsList>
 
@@ -925,6 +930,10 @@ export function SettingsPage({
 
         <TabsContent value="skills" className="space-y-6">
           {showSkillsSection ? <SkillSettings token={token} /> : emptyState}
+        </TabsContent>
+
+        <TabsContent value="channels" className="space-y-6">
+          {showChannelsSection ? <ChannelSettings token={token} /> : emptyState}
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">
