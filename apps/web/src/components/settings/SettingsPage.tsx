@@ -231,7 +231,7 @@ export function SettingsPage({
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${API_URL}/auth/settings/env-status`, {
+        const res = await fetch(`${API_URL}/api/auth/settings/env-status`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.ok && !cancelled) {

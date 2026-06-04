@@ -442,6 +442,20 @@ export class PluginManager {
           installed.path,
         );
         await this.loadPluginWithModule(jaitManifest, installed, ocModule);
+      } else {
+        // The plugin is recorded in the DB but its module was never discovered
+        // on this gateway run (e.g. its extensions directory isn't on the scan
+        // path). Surface that instead of silently reporting "enabled" while
+        // contributing nothing (no tools, no channels).
+        const message = id.startsWith("openclaw:")
+          ? `OpenClaw extension '${id}' is not on this gateway's scan path, so it can't be loaded. ` +
+            `Set OPENCLAW_EXTENSIONS_DIR to the directory containing it (currently scanning: ${[this.extensionsDir, ...this.openclawExtensionsDirs].join(", ") || "<none>"}) and restart.`
+          : `Plugin '${id}' could not be loaded (manifest not found at ${installed.path}).`;
+        installed.status = "error";
+        installed.error = message;
+        installed.updatedAt = new Date().toISOString();
+        this.upsertInstalled(installed);
+        throw new Error(message);
       }
     }
 

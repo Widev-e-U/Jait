@@ -64,7 +64,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${API_URL}/auth/settings/tools`, {
+        const res = await fetch(`${API_URL}/api/auth/settings/tools`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (!cancelled) {
@@ -102,7 +102,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
           .filter((t) => !t.enabled && !t.locked)
           .map((t) => t.name)
 
-        const res = await fetch(`${API_URL}/auth/settings/tools`, {
+        const res = await fetch(`${API_URL}/api/auth/settings/tools`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${token}`,
