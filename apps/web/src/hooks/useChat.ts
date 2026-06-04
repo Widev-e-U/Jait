@@ -1065,7 +1065,10 @@ export function useChat(
     const isStale = () =>
       prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
     let pendingMessageUpdates: Partial<ChatMessage> | null = null
-    let pendingMessageFrame: number | null = null
+      let pendingMessageFrame: number | null = null
+      let pendingMessageTimeout: ReturnType<typeof setTimeout> | null = null
+      let lastMessageFlushAt = 0
+      const STREAM_UPDATE_MIN_INTERVAL_MS = 50
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -1155,9 +1158,14 @@ export function useChat(
           window.cancelAnimationFrame(pendingMessageFrame)
           pendingMessageFrame = null
         }
+        if (pendingMessageTimeout !== null) {
+          clearTimeout(pendingMessageTimeout)
+          pendingMessageTimeout = null
+        }
         if (isStale() || !pendingMessageUpdates) return
         const updates = pendingMessageUpdates
         pendingMessageUpdates = null
+        lastMessageFlushAt = Date.now()
         setState(prev => ({
           ...prev,
           messages: prev.messages.map(m =>
@@ -1169,11 +1177,21 @@ export function useChat(
       const updateMessage = (updates: Partial<ChatMessage>, options?: { immediate?: boolean }) => {
         if (isStale()) return
         pendingMessageUpdates = {
-          ...(pendingMessageUpdates ?? {}),
+          ...pendingMessageUpdates,
           ...updates,
         }
         if (options?.immediate) {
           flushPendingMessageUpdates()
+          return
+        }
+        const now = Date.now()
+        const delay = Math.max(0, STREAM_UPDATE_MIN_INTERVAL_MS - (now - lastMessageFlushAt))
+        if (delay > 0) {
+          if (pendingMessageTimeout !== null) return
+          pendingMessageTimeout = setTimeout(() => {
+            pendingMessageTimeout = null
+            flushPendingMessageUpdates()
+          }, delay)
           return
         }
         if (pendingMessageFrame !== null) return
@@ -1270,7 +1288,7 @@ export function useChat(
                   ...toolCalls[idx],
                   streamingOutput: (toolCalls[idx].streamingOutput ?? '') + (data.content as string),
                 }
-                updateMessage({ toolCalls: [...toolCalls] }, { immediate: true })
+                updateMessage({ toolCalls: [...toolCalls] })
               }
             } else if (data.type === 'tool_result') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
@@ -1444,6 +1462,10 @@ export function useChat(
       if (pendingMessageFrame !== null) {
         window.cancelAnimationFrame(pendingMessageFrame)
         pendingMessageFrame = null
+      }
+      if (pendingMessageTimeout !== null) {
+        clearTimeout(pendingMessageTimeout)
+        pendingMessageTimeout = null
       }
       pendingMessageUpdates = null
       if (error instanceof Error && error.name === 'AbortError') {

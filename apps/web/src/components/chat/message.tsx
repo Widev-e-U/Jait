@@ -57,6 +57,8 @@ import {
 } from '@/lib/user-message-segments'
 
 const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
+const CODE_HIGHLIGHT_CACHE_LIMIT = 120
+const codeHighlightCache = new Map<string, string | null>()
 
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
   return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
@@ -154,6 +156,18 @@ function normalizeCodeLanguage(language: string): string {
   return normalized
 }
 
+function getCodeHighlightCacheKey(code: string, language: string, theme: string): string {
+  return `${theme}\0${normalizeCodeLanguage(language)}\0${code}`
+}
+
+function rememberHighlightedCode(key: string, value: string | null) {
+  if (codeHighlightCache.size >= CODE_HIGHLIGHT_CACHE_LIMIT) {
+    const oldestKey = codeHighlightCache.keys().next().value
+    if (oldestKey) codeHighlightCache.delete(oldestKey)
+  }
+  codeHighlightCache.set(key, value)
+}
+
 function HighlightedCode({
   code,
   language,
@@ -173,6 +187,11 @@ function HighlightedCode({
       const highlight = async () => {
         const theme = document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
         const normalizedLanguage = normalizeCodeLanguage(language)
+        const cacheKey = getCodeHighlightCacheKey(code, language, theme)
+        if (codeHighlightCache.has(cacheKey)) {
+          setHighlightedHtml(codeHighlightCache.get(cacheKey) ?? null)
+          return
+        }
 
         try {
           const html = await codeToHtml(code, {
@@ -180,7 +199,9 @@ function HighlightedCode({
             theme,
           })
           if (cancelled) return
-          setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
+          const highlighted = html.match(CODE_HTML_MATCHER)?.[1] ?? null
+          rememberHighlightedCode(cacheKey, highlighted)
+          setHighlightedHtml(highlighted)
         } catch {
           try {
             const html = await codeToHtml(code, {
@@ -188,9 +209,14 @@ function HighlightedCode({
               theme,
             })
             if (cancelled) return
-            setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
+            const highlighted = html.match(CODE_HTML_MATCHER)?.[1] ?? null
+            rememberHighlightedCode(cacheKey, highlighted)
+            setHighlightedHtml(highlighted)
           } catch {
-            if (!cancelled) setHighlightedHtml(null)
+            if (!cancelled) {
+              rememberHighlightedCode(cacheKey, null)
+              setHighlightedHtml(null)
+            }
           }
         }
       }

@@ -21,6 +21,8 @@ interface ConversationProps {
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
 const DEFAULT_ITEM_HEIGHT = 120
+const BOTTOM_SYNC_INTERVAL_MS = 500
+const BOTTOM_SYNC_DELTA_PX = 8
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
@@ -229,8 +231,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     }
   }, [childItems.length, loading, scrollToBottom])
 
-  // Continuous poll: while stickToBottom is active, keep us pinned so
-  // tool-card expansions/collapses and streaming updates stay anchored.
+  // Lightweight safety net: ResizeObserver handles normal height changes.
+  // This slower poll catches browser/layout misses without doing scroll math
+  // several times per second during long streams.
   useEffect(() => {
     if (!stickToBottom || loading) return
     const el = scrollRef.current
@@ -238,8 +241,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const id = setInterval(() => {
       if (!stickToBottomRef.current) return
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-      if (dist > 1) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
-    }, 150)
+      if (dist > BOTTOM_SYNC_DELTA_PX) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
+    }, BOTTOM_SYNC_INTERVAL_MS)
     return () => clearInterval(id)
   }, [stickToBottom, loading])
 

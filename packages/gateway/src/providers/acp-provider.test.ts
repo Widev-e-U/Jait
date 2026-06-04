@@ -68,6 +68,42 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpNoModelsScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-no-models"
+        }
+      }) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+
 const fakeAcpTerminalAuthScript = `
 if (process.argv.includes("--login")) {
   process.stdout.write([
@@ -435,6 +471,24 @@ describe("AcpProvider auth", () => {
     } finally {
       rmSync(codexHome, { recursive: true, force: true });
     }
+  });
+
+  it("returns Claude Code alias models when ACP model metadata is unavailable", async () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpNoModelsScript],
+    });
+
+    await expect(provider.listModels()).resolves.toEqual([
+      expect.objectContaining({ id: "default", isDefault: true }),
+      expect.objectContaining({ id: "sonnet" }),
+      expect.objectContaining({ id: "opus" }),
+      expect.objectContaining({ id: "haiku" }),
+      expect.objectContaining({ id: "opusplan" }),
+    ]);
   });
 
   it("does not describe Codex ACP model discovery auth errors as logged out when credentials exist", async () => {

@@ -44,8 +44,16 @@ import {
 type AcpProviderAuthKind = "acp";
 
 const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 20_000 : 5_000;
+const ACP_PROBE_CLOSE_TIMEOUT_MS = 1_000;
 const REPLAYABLE_EVENT_TTL_MS = 30_000;
 const REPLAYABLE_EVENT_LIMIT = 20;
+const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
+  { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
+  { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
+  { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
+  { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
+  { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
+];
 
 export interface AcpProviderConfig {
   id: ProviderId;
@@ -190,9 +198,16 @@ export class AcpProvider implements CliProviderAdapter {
         }
       }
 
-      await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
-      this.cachedModels = models;
-      return models;
+      if (probe.connection.closeSession) {
+        await withTimeout(
+          probe.connection.closeSession({ sessionId: newSession.sessionId }),
+          ACP_PROBE_CLOSE_TIMEOUT_MS,
+        ).catch(() => {});
+      }
+      this.cachedModels = models.length > 0 || this.id !== "claude-code"
+        ? models
+        : CLAUDE_CODE_FALLBACK_MODELS;
+      return this.cachedModels;
     } catch (error) {
       const message = extractErrorMessage(error, "ACP model discovery failed");
       if (isAuthenticationRequiredMessage(message) && this.hasLocalProviderCredential()) {
