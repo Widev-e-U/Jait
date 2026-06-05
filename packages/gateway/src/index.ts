@@ -72,6 +72,28 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
 async function main() {
   const config = loadConfig();
 
+  if (config.nodeOnly) {
+    if (!config.primaryGateway) {
+      throw new Error("JAIT_NODE_ONLY requires JAIT_PRIMARY_GATEWAY");
+    }
+    const primaryLink = new PrimaryLink({
+      primaryGateway: config.primaryGateway,
+      primaryToken: config.primaryToken || undefined,
+      nodeName: config.nodeName || undefined,
+    });
+    primaryLink.start();
+    console.log("Jait node listening only through outbound primary link; HTTP dashboard/API disabled.");
+
+    const shutdownNode = () => {
+      console.log("Shutting down node link...");
+      primaryLink.stop();
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdownNode);
+    process.on("SIGTERM", shutdownNode);
+    return;
+  }
+
   // Initialize SQLite database
   const { db, sqlite } = await openDatabase();
   migrateDatabase(sqlite);

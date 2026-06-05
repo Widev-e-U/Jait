@@ -599,7 +599,7 @@ export interface PromptInputHandle {
 const attachmentDraftStore = new Map<string, ChatAttachment[]>()
 const COMPACT_FOOTER_CONTROLS_WIDTH = 560
 
-function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
+export function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
   const visibleBars = compact ? bars.slice(-16) : bars
   const meterHeight = compact ? 24 : 30

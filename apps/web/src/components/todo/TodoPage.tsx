@@ -13,6 +13,7 @@ import { gitApi } from '@/lib/git-api'
 import { persistTodoRepoSelection, resolveTodoRepoSelection } from '@/lib/todo-repo-selection-storage'
 import { buildTodoThreadRequest, buildTodoThreadStartOptions } from '@/lib/todo-thread'
 import { appendTranscript } from '@/lib/transcript-merge'
+import { VoiceLevelMeter } from '@/components/chat/prompt-input'
 import { cn } from '@/lib/utils'
 
 type TodoMode = 'list' | 'calendar'
@@ -80,6 +81,7 @@ interface TodoPageProps {
   onVoiceInput?: (options?: TodoVoiceInputOptions) => void
   voiceRecording?: boolean
   voiceTranscribing?: boolean
+  voiceLevels?: number[]
   onVoiceStop?: () => void
 }
 
@@ -721,6 +723,7 @@ export function TodoPage({
   onVoiceInput,
   voiceRecording = false,
   voiceTranscribing = false,
+  voiceLevels,
   onVoiceStop,
 }: TodoPageProps) {
   const [repos, setRepos] = useState<AutomationRepo[]>([])
@@ -1331,25 +1334,44 @@ export function TodoPage({
               />
             </ControlTooltip>
             {onVoiceInput && (
-              <ControlTooltip label={voiceRecording ? 'Stop dictation' : voiceTranscribing ? 'Transcribing...' : 'Dictate todo'}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={handleTodoVoiceButton}
-                  disabled={voiceTranscribing && !voiceRecording}
-                  aria-label={voiceRecording ? 'Stop todo dictation' : 'Dictate todo'}
-                >
-                  {voiceTranscribing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : voiceRecording ? (
-                    <MicOff className="h-4 w-4" />
-                  ) : (
+              voiceRecording ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
+                    <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
+                    Listening...
+                  </span>
+                  <VoiceLevelMeter levels={voiceLevels} compact />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 rounded-lg px-2.5 text-xs"
+                    onClick={handleTodoVoiceButton}
+                    aria-label="Stop todo dictation"
+                  >
+                    <MicOff className="mr-1 h-3.5 w-3.5" />
+                    Done
+                  </Button>
+                </div>
+              ) : voiceTranscribing ? (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Transcribing...
+                </div>
+              ) : (
+                <ControlTooltip label="Dictate todo">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={handleTodoVoiceButton}
+                    aria-label="Dictate todo"
+                  >
                     <Mic className="h-4 w-4" />
-                  )}
-                </Button>
-              </ControlTooltip>
+                  </Button>
+                </ControlTooltip>
+              )
             )}
             <Button onClick={() => void handleAdd()} disabled={isSaving || !repoId || !newMessage.trim()} size="sm">
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}

@@ -22,6 +22,7 @@ import { homedir, hostname, platform } from "node:os";
 import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { NODE_PROTOCOL_VERSION } from "@jait/shared";
 
 const execAsync = promisify(exec);
 
@@ -45,6 +46,18 @@ export interface PrimaryLinkOptions {
   /** Optional provider list to advertise (e.g. detected CLIs). */
   providers?: string[];
 }
+
+const NODE_TOOLS = [
+  "terminal.run",
+  "jait.terminal",
+  "execute",
+  "file.read",
+  "file.write",
+  "file.patch",
+  "file.list",
+  "file.stat",
+  "file.search",
+] as const;
 
 function detectPlatform(): FsPlatform {
   const p = platform();
@@ -123,13 +136,34 @@ export class PrimaryLink {
     ws.on("open", () => {
       this.reconnectDelay = 1000;
       console.log(`[primary-link] connected — registering fs node`);
+      const nodeName = this.opts.nodeName?.trim() || hostname();
+      const platform = detectPlatform();
+      const providers = this.opts.providers ?? [];
+      this.send({
+        type: "node.hello",
+        payload: {
+          id: this.nodeId,
+          name: nodeName,
+          platform,
+          role: "remote",
+          protocolVersion: NODE_PROTOCOL_VERSION,
+          capabilities: {
+            providers,
+            surfaces: ["filesystem", "terminal"],
+            tools: [...NODE_TOOLS],
+            screenShare: false,
+            voice: false,
+            preview: false,
+          },
+        },
+      });
       this.send({
         type: "fs.register-node",
         payload: {
           id: this.nodeId,
-          name: this.opts.nodeName?.trim() || `Gateway (${hostname()})`,
-          platform: detectPlatform(),
-          providers: this.opts.providers ?? [],
+          name: nodeName,
+          platform,
+          providers,
         },
       });
     });
@@ -204,10 +238,24 @@ export class PrimaryLink {
         }
         break;
       }
+      case "tool.op-request": {
+        const requestId = String(payload["requestId"] ?? "");
+        const tool = String(payload["tool"] ?? "");
+        const args = (payload["args"] ?? {}) as Record<string, unknown>;
+        const projectRoot = typeof payload["projectRoot"] === "string"
+          ? payload["projectRoot"]
+          : undefined;
+        try {
+          const result = await this.toolOp(tool, args, projectRoot);
+          this.send({ type: "tool.op-response", payload: { requestId, result } });
+        } catch (err) {
+          this.send({ type: "tool.op-response", payload: { requestId, error: errMsg(err) } });
+        }
+        break;
+      }
       default:
-        // Other request types (tool.op-request, provider.op-request) are not
-        // served yet — those would let the primary run terminals/agents on
-        // this node (a future phase).
+        // Provider requests are not served here; the headless node exposes
+        // filesystem and terminal/tool execution to the primary gateway.
         break;
     }
   }
@@ -266,6 +314,18 @@ export class PrimaryLink {
         await writeFile(filePath, content, "utf-8");
         return { ok: true, size: content.length };
       }
+      case "patch": {
+        const filePath = resolve(params["path"] as string);
+        const search = String(params["search"] ?? "");
+        const replace = String(params["replace"] ?? "");
+        if (!search) throw new Error("Missing search text");
+        const content = await readFile(filePath, "utf-8");
+        const index = content.indexOf(search);
+        if (index === -1) return { matched: false };
+        const next = content.slice(0, index) + replace + content.slice(index + search.length);
+        await writeFile(filePath, next, "utf-8");
+        return { matched: true };
+      }
       case "list": {
         const entries = await readdir(resolve(params["path"] as string), { withFileTypes: true });
         return entries.map((e) => (e.isDirectory() ? e.name + "/" : e.name));
@@ -313,6 +373,85 @@ export class PrimaryLink {
       }
       default:
         throw new Error(`Unsupported fs op: ${op}`);
+    }
+  }
+
+  private async toolOp(tool: string, args: Record<string, unknown>, projectRoot?: string): Promise<unknown> {
+    switch (tool) {
+      case "terminal.run":
+      case "jait.terminal":
+      case "execute":
+        return this.runCommand(args, projectRoot);
+      case "file.read":
+        return { ok: true, message: "File read", data: await this.fsOp("read", args) };
+      case "file.write":
+        return { ok: true, message: "File written", data: await this.fsOp("write", args) };
+      case "file.patch": {
+        const result = await this.fsOp("patch", args) as { matched?: boolean };
+        return result.matched
+          ? { ok: true, message: "File patched", data: result }
+          : { ok: false, message: `Search string not found in ${String(args["path"] ?? "file")}` };
+      }
+      case "file.list":
+        return { ok: true, message: "Directory listed", data: await this.fsOp("readdir", args) };
+      case "file.stat":
+        return { ok: true, message: "File stat", data: await this.fsOp("stat", args) };
+      case "file.search":
+        return {
+          ok: true,
+          message: "Search completed",
+          data: await this.searchProject(
+            resolve(String(args["path"] ?? projectRoot ?? homedir())),
+            String(args["query"] ?? ""),
+            args["mode"] === "content" ? "content" : "files",
+            Math.min(Math.max(Number(args["limit"]) || 50, 1), 200),
+          ),
+        };
+      default:
+        throw new Error(`Unsupported tool on node: ${tool}`);
+    }
+  }
+
+  private async runCommand(args: Record<string, unknown>, projectRoot?: string): Promise<unknown> {
+    const command = String(args["command"] ?? "");
+    if (!command.trim()) throw new Error("Missing command");
+    const timeout = Math.max(Number(args["timeout"]) || 30_000, 0);
+    const cwd = resolve(String(args["cwd"] ?? args["projectRoot"] ?? projectRoot ?? process.cwd()));
+    if (args["isBackground"] === true) {
+      exec(command, {
+        cwd,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+      return {
+        ok: true,
+        message: "Background command started on node",
+        data: { output: "(background — not waiting for output)", exitCode: null, timedOut: false },
+      };
+    }
+
+    try {
+      const { stdout, stderr } = await execAsync(command, {
+        cwd,
+        timeout: timeout || undefined,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+      const output = [stdout, stderr].filter(Boolean).join(stderr ? "\n" : "").trim() || "(no output)";
+      return {
+        ok: true,
+        message: "Command completed (exit code 0)",
+        data: { output, exitCode: 0, timedOut: false },
+      };
+    } catch (err: unknown) {
+      const failure = err as { stdout?: string; stderr?: string; code?: number | null; killed?: boolean };
+      const output = [failure.stdout, failure.stderr].filter(Boolean).join(failure.stderr ? "\n" : "").trim() || errMsg(err);
+      return {
+        ok: false,
+        message: failure.killed
+          ? `Command timed out after ${timeout}ms`
+          : `Command failed (exit code ${failure.code ?? "unknown"})`,
+        data: { output, exitCode: failure.code ?? null, timedOut: Boolean(failure.killed) },
+      };
     }
   }
 

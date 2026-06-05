@@ -7430,6 +7430,7 @@ function App() {
                 onVoiceInput={handleVoiceInput}
                 voiceRecording={voiceRecording}
                 voiceTranscribing={voiceTranscribing}
+                voiceLevels={voiceLevels}
                 onVoiceStop={handleVoiceStop}
               />
             </ErrorBoundary>

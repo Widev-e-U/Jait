@@ -62,6 +62,12 @@ export interface AppConfig {
   primaryToken: string;
   /** Display name advertised to the primary for this node (defaults to the hostname). */
   nodeName: string;
+  /**
+   * Run as a headless remote node only. In this mode the process does not
+   * expose the gateway HTTP dashboard/API and only opens the outbound primary
+   * link used for remote filesystem and terminal access.
+   */
+  nodeOnly: boolean;
 }
 
 /** Infer context window size from model name. Conservative defaults. */
@@ -88,6 +94,11 @@ export function loadConfig(): AppConfig {
 
   const jwtSecret = process.env["JWT_SECRET"]?.trim() || randomBytes(32).toString("hex");
   const hookSecret = process.env["HOOK_SECRET"]?.trim() || randomBytes(32).toString("hex");
+  const primaryGateway = process.env["JAIT_PRIMARY_GATEWAY"]?.trim() ?? "";
+  const nodeOnlyRaw = process.env["JAIT_NODE_ONLY"]?.trim().toLowerCase();
+  const nodeOnly = nodeOnlyRaw
+    ? ["1", "true", "yes", "on"].includes(nodeOnlyRaw)
+    : Boolean(primaryGateway);
 
   return {
     port: parseInt(process.env["PORT"] ?? "8000", 10),
@@ -114,8 +125,9 @@ export function loadConfig(): AppConfig {
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
     realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
-    primaryGateway: process.env["JAIT_PRIMARY_GATEWAY"]?.trim() ?? "",
+    primaryGateway,
     primaryToken: process.env["JAIT_PRIMARY_TOKEN"]?.trim() ?? "",
     nodeName: process.env["JAIT_NODE_NAME"]?.trim() ?? "",
+    nodeOnly,
   };
 }
