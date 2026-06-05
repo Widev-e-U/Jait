@@ -74,6 +74,13 @@ describe("shouldRespond", () => {
     expect(shouldRespond({ fromMe: false, isSelfChat: false, senderId: "999@s.whatsapp.net" } as InboundMessage, cfg)).toBe(false);
   });
 
+  it("always answers the self-chat even when an allowlist excludes its sender", () => {
+    // Regression: LID-addressed self-chat carries an empty/aliased senderId, so
+    // it never matches the allowlist — but the self-chat must still be answered.
+    const cfg = { allowedSenders: ["+436645336765"], respondToAll: false };
+    expect(shouldRespond({ fromMe: true, isSelfChat: true, senderId: "" } as InboundMessage, cfg)).toBe(true);
+  });
+
   it("respondToAll answers anyone (but not our outgoing)", () => {
     const cfg = { respondToAll: true };
     expect(shouldRespond({ fromMe: false, isSelfChat: false, senderId: "x" } as InboundMessage, cfg)).toBe(true);

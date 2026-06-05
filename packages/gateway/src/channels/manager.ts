@@ -75,14 +75,19 @@ export function normalizeSenderId(id: string): string {
 export function shouldRespond(msg: InboundMessage, config: ChannelConfig): boolean {
   // Never reply to our own outgoing messages to other people.
   if (msg.fromMe && !msg.isSelfChat) return false;
-  if (config.respondToAll) return !msg.fromMe || msg.isSelfChat;
+  // The self-chat is the user talking to themselves — always answer it, even
+  // when an allowlist is configured. The allowlist gates *other* people, and a
+  // self-chat message (especially LID-addressed) carries no usable sender id to
+  // match against anyway, so it must short-circuit before the allowlist check.
+  if (msg.isSelfChat) return true;
+  if (config.respondToAll) return !msg.fromMe;
 
   const allow = (config.allowedSenders ?? []).map(normalizeSenderId).filter(Boolean);
   if (allow.length > 0) {
     return allow.includes(normalizeSenderId(msg.senderId));
   }
-  // No allowlist configured → only respond in the self-chat (safe default).
-  return msg.isSelfChat;
+  // No allowlist configured and not the self-chat → stay silent (safe default).
+  return false;
 }
 
 export class ChannelManager {
