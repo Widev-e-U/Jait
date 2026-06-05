@@ -11,12 +11,17 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { AuditWriter } from "../services/audit.js";
 import {
   runAgentLoop,
-  buildToolSchemas,
+  buildTieredToolSchemas,
+  toOpenAIName,
   SteeringController,
   type LLMConfig,
   type AgentMessage,
   type ToolExecutor,
 } from "../tools/agent-loop.js";
+import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
+import { MUTATING_TOOLS } from "../tools/chat-modes.js";
+import type { Skill } from "../skills/index.js";
+import type { ConsentManager, ConsentRequest, ConsentDecision } from "../security/consent-manager.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type {
   ChannelConfig,
@@ -25,6 +30,16 @@ import type {
   ChannelStatusDetail,
   InboundMessage,
 } from "./types.js";
+
+/** Owner user context for channel agent turns — keys, backend, picked model, disabled tools. */
+export interface ChannelAuthContext {
+  userId?: string;
+  apiKeys?: Record<string, string>;
+  jaitBackend?: string;
+  model?: string;
+  /** Tools the owner has disabled in settings — never sent to the LLM, never executed. */
+  disabledTools?: Set<string>;
+}
 
 /** Produces an assistant reply for a conversation. Injectable for testing. */
 export interface ReplyGenerator {
@@ -42,7 +57,27 @@ export interface ChannelManagerDeps {
   audit?: AuditWriter;
   projectRoot?: string;
   /** Auth context for tool execution (per-user keys, backend, model). */
-  auth?: { userId?: string; apiKeys?: Record<string, string>; jaitBackend?: string; model?: string };
+  auth?: ChannelAuthContext;
+  /**
+   * Resolves the owner user context (keys, backend, picked model, disabled
+   * tools) for each turn. Preferred over the static `auth` — channels run
+   * without request context, so this reads the owner's persisted settings live
+   * so replies use the same provider/model/tool surface as the web chat.
+   */
+  resolveAuth?: () => ChannelAuthContext | undefined;
+  /**
+   * Resolves the enabled skills to inject into the channel agent's system
+   * prompt — gives WhatsApp et al. the same skill catalogue as the web chat.
+   */
+  resolveSkills?: () => Skill[];
+  /**
+   * Consent manager — when present, mutating tools require an in-band yes/no
+   * approval from the user before they run (the channel sends a prompt and waits
+   * for the reply). Without it, channel tools auto-execute.
+   */
+  consentManager?: ConsentManager;
+  /** Approval timeout (ms) before a consent prompt auto-denies. Default 5 min. */
+  consentTimeoutMs?: number;
   /** System prompt for the channel agent. */
   systemPrompt?: string;
   /** Max conversation messages to retain (excluding the system prompt). */
@@ -63,7 +98,24 @@ const DEFAULT_SYSTEM_PROMPT =
   "Keep replies concise and conversational — they are read on a phone. " +
   "Do not use markdown headings or code fences unless explicitly asked.";
 
+/**
+ * Channel-style guidance appended to the full agent system prompt. The base
+ * prompt grants the same tools/skills as the web chat; this note just adapts
+ * tone/format for a messaging surface.
+ */
+const CHANNEL_STYLE_NOTE =
+  "You are replying over a messaging channel (e.g. WhatsApp), read on a phone, so keep replies " +
+  "concise and conversational and avoid markdown headings or code fences unless explicitly asked. " +
+  "You have the same tools and skills as the desktop app — use them to actually perform tasks " +
+  "(run commands, search, read/edit files, manage skills, etc.) instead of only describing them.";
+
 const DEFAULT_MAX_HISTORY = 20;
+
+/** Max tool-calling rounds for a channel reply — matches the web chat budget. */
+const CHANNEL_MAX_TOOL_ROUNDS = 15;
+
+/** Default approval window for an in-band consent prompt before auto-deny. */
+const DEFAULT_CONSENT_TIMEOUT_MS = 5 * 60_000;
 
 /** Normalize a WhatsApp-style id to its bare number for allowlist comparison. */
 export function normalizeSenderId(id: string): string {
@@ -97,6 +149,12 @@ export class ChannelManager {
   private readonly histories = new Map<string, AgentMessage[]>();
   /** Per-conversation serialization so messages are answered in order. */
   private readonly locks = new Map<string, Promise<void>>();
+  /** sessionId → conversation target, so consent prompts reach the right chat. */
+  private readonly sessionTargets = new Map<string, { channelId: string; conversationId: string; key: string }>();
+  /** conversationKey → pending consent requestId (one outstanding approval per chat). */
+  private readonly consentByConversation = new Map<string, string>();
+  /** requestId → conversation, to clear mappings once a decision lands. */
+  private readonly consentTargets = new Map<string, { channelId: string; conversationId: string; key: string }>();
 
   private readonly replyGenerator: ReplyGenerator;
 
@@ -246,6 +304,13 @@ export class ChannelManager {
     if (!shouldRespond(msg, config)) return;
 
     const key = `${msg.channelId}:${msg.conversationId}`;
+
+    // If we're awaiting a yes/no approval in this conversation, this message is
+    // the answer to it. Handle it OUTSIDE the per-conversation lock — the reply
+    // turn that requested consent is holding the lock while it blocks on this
+    // very message, so queuing behind the lock would deadlock.
+    if (await this.tryResolveConsent(managed, msg, key)) return;
+
     // Serialize replies per conversation.
     const prev = this.locks.get(key) ?? Promise.resolve();
     const next = prev
@@ -271,10 +336,14 @@ export class ChannelManager {
       (config.tools ?? []).filter((t) => this.deps.toolRegistry?.has(t)),
     );
 
+    // Record where this session lives so consent prompts reach the right chat.
+    const sessionId = `channel:${key}`;
+    this.sessionTargets.set(sessionId, { channelId: msg.channelId, conversationId: msg.conversationId, key });
+
     try {
       const reply = (await this.replyGenerator.generate(history, {
         channelId: msg.channelId,
-        sessionId: `channel:${key}`,
+        sessionId,
         allowedTools,
       })).trim();
 
@@ -295,8 +364,96 @@ export class ChannelManager {
           text: "⚠️ Sorry — I hit an error generating a reply.",
         });
       } catch { /* connector may be down */ }
+    } finally {
+      this.sessionTargets.delete(sessionId);
     }
   }
+
+  /* ── In-band tool approval (consent over the chat) ──────────────── */
+
+  /**
+   * Called (via the ConsentManager `onRequest` bridge) when a tool in a channel
+   * session needs approval. Sends an in-band yes/no prompt to the originating
+   * chat and records the pending request so a reply can resolve it.
+   */
+  handleConsentRequest(request: ConsentRequest): void {
+    const target = this.sessionTargets.get(request.sessionId);
+    if (!target) return; // not a channel session (e.g. web chat) — ignore.
+    const managed = this.channels.get(target.channelId);
+    if (!managed) return;
+    this.consentByConversation.set(target.key, request.id);
+    this.consentTargets.set(request.id, target);
+    const text = buildConsentPrompt(request);
+    void managed.connector.send({ conversationId: target.conversationId, text }).catch((err) => {
+      this.log(`failed to send consent prompt for ${target.key}:`, err);
+    });
+  }
+
+  /**
+   * Called (via the ConsentManager `onDecision` bridge) when any consent
+   * request resolves. Clears channel-side mappings and, on timeout, lets the
+   * user know the action was skipped.
+   */
+  handleConsentDecision(decision: ConsentDecision): void {
+    const target = this.consentTargets.get(decision.requestId);
+    if (!target) return; // not a channel consent.
+    this.consentTargets.delete(decision.requestId);
+    if (this.consentByConversation.get(target.key) === decision.requestId) {
+      this.consentByConversation.delete(target.key);
+    }
+    if (decision.decidedVia === "timeout") {
+      const managed = this.channels.get(target.channelId);
+      void managed?.connector
+        .send({ conversationId: target.conversationId, text: "⌛ No reply — skipped that action." })
+        .catch(() => { /* connector may be down */ });
+    }
+  }
+
+  /**
+   * If the conversation has an outstanding approval, interpret this inbound
+   * message as the yes/no answer and resolve the consent request. Returns true
+   * when the message was consumed as a consent reply (and must NOT start a turn).
+   */
+  private async tryResolveConsent(managed: ManagedChannel, msg: InboundMessage, key: string): Promise<boolean> {
+    const requestId = this.consentByConversation.get(key);
+    if (!requestId || !this.deps.consentManager) return false;
+
+    const verdict = parseYesNo(msg.text);
+    if (verdict === "yes") {
+      this.deps.consentManager.approve(requestId, "click", "Approved over channel");
+      return true;
+    }
+    if (verdict === "no") {
+      this.deps.consentManager.reject(requestId, "click", "Declined over channel");
+      return true;
+    }
+    // Ambiguous — keep the request pending and re-prompt.
+    try {
+      await managed.connector.send({
+        conversationId: msg.conversationId,
+        text: "Please reply *yes* to proceed or *no* to skip.",
+      });
+    } catch { /* connector may be down */ }
+    return true;
+  }
+}
+
+/** Classify a free-text reply as a yes/no/unknown approval verdict. */
+function parseYesNo(text: string): "yes" | "no" | "unknown" {
+  const t = text.trim().toLowerCase().replace(/[!.,]+$/, "");
+  if (/^(y|yes|yeah|yep|yup|ok|okay|sure|go|do it|proceed|approve|approved|ja|👍|✅)$/.test(t)) return "yes";
+  if (/^(n|no|nope|nah|stop|cancel|skip|deny|denied|don'?t|nein|👎|🚫|❌)$/.test(t)) return "no";
+  return "unknown";
+}
+
+/** Render an in-band approval prompt for a pending tool execution. */
+function buildConsentPrompt(request: ConsentRequest): string {
+  const preview = request.preview ?? {};
+  let detail = "";
+  if (typeof preview.command === "string") detail = `\n\`${preview.command}\``;
+  else if (typeof preview.path === "string") detail = `\n${preview.path}`;
+  else if (typeof preview.package === "string") detail = `\n${preview.package}`;
+  return `⚠️ I'd like to run *${request.toolName}*${detail}\nReply *yes* to proceed or *no* to skip. (auto-skips in 5 min)`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -310,25 +467,97 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     history: AgentMessage[],
     ctx: { channelId: string; sessionId: string; allowedTools: Set<string> },
   ): Promise<string> {
-    const { toolRegistry, audit, auth } = this.deps;
-    const allowedTools = ctx.allowedTools;
-    const toolSchemas = toolRegistry && allowedTools.size > 0
-      ? buildToolSchemas(toolRegistry, allowedTools)
+    const { toolRegistry, audit } = this.deps;
+    const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
+    const llm = this.deps.resolveLLM();
+    const disabledTools = auth?.disabledTools;
+
+    // Tools: the channel agent gets the same tiered registry as the web chat
+    // (respecting the owner's disabled tools). The per-channel `tools` allowlist,
+    // when non-empty, narrows further; empty/undefined → full access.
+    const restrictTo = ctx.allowedTools.size > 0 ? ctx.allowedTools : undefined;
+    const isOllama = (auth?.jaitBackend ?? "") === "ollama";
+    let toolSchemas = toolRegistry
+      ? buildTieredToolSchemas(toolRegistry, disabledTools, { ollamaEssentials: isOllama })
       : [];
+    if (restrictTo) {
+      const allowedOpenAiNames = new Set([...restrictTo].map(toOpenAIName));
+      toolSchemas = toolSchemas.filter((s) => allowedOpenAiNames.has(s.function.name));
+    }
     const hasTools = toolSchemas.length > 0;
     const abort = new AbortController();
     const steering = new SteeringController();
 
+    // Refresh the system prompt each turn with the full agent capabilities +
+    // skill catalogue, so the channel agent knows about (and can use) the same
+    // tools and skills as the desktop chat.
+    if (hasTools) {
+      const modelEndpoint: ModelEndpoint = {
+        model: llm.openaiModel,
+        baseUrl: llm.openaiBaseUrl,
+        backend: auth?.jaitBackend,
+      };
+      const promptCtx: PromptContext = {
+        projectRoot: this.deps.projectRoot ?? process.cwd(),
+        skills: this.deps.resolveSkills?.(),
+        backend: auth?.jaitBackend,
+      };
+      const channelNote = this.deps.systemPrompt ?? CHANNEL_STYLE_NOTE;
+      const systemPrompt = `${buildSystemPrompt("agent", modelEndpoint, promptCtx)}\n\n${channelNote}`;
+      if (history[0]?.role === "system") history[0] = { role: "system", content: systemPrompt };
+      else history.unshift({ role: "system", content: systemPrompt });
+    }
+
     const executor: ToolExecutor = async (name, args, sid, _auth, onChunk, signal) => {
-      if (!allowedTools.has(name) || !toolRegistry) {
+      if (!toolRegistry || !toolRegistry.has(name)) {
+        return { ok: false, message: `Tool '${name}' is not available` };
+      }
+      if (restrictTo && !restrictTo.has(name)) {
         return { ok: false, message: `Tool '${name}' is not available to this channel` };
       }
+      if (disabledTools?.has(name)) {
+        return { ok: false, message: `Tool '${name}' is disabled` };
+      }
+
+      const actionId = uuidv7();
+
+      // In-band approval: mutating tools require a yes/no reply from the user
+      // before running. The ConsentManager `onRequest` bridge sends the prompt
+      // to the chat; this awaits the decision (or the timeout).
+      const consent = this.deps.consentManager;
+      if (consent && MUTATING_TOOLS.has(name)) {
+        const decision = await consent.requestConsent({
+          actionId,
+          toolName: name,
+          summary: `Run ${name}`,
+          preview: (args as Record<string, unknown>) ?? {},
+          risk: "high",
+          policy: {
+            consentLevel: "always",
+            description: "Mutating tool invoked over a messaging channel",
+            knownTool: true,
+            source: "profile",
+          },
+          sessionId: sid,
+          timeoutMs: this.deps.consentTimeoutMs ?? DEFAULT_CONSENT_TIMEOUT_MS,
+        });
+        if (!decision.approved) {
+          return {
+            ok: false,
+            message: decision.decidedVia === "timeout"
+              ? `Approval for ${name} timed out — skipped.`
+              : `User declined to run ${name}.`,
+            data: { consentRejected: true, decidedVia: decision.decidedVia },
+          };
+        }
+      }
+
       return toolRegistry.execute(
         name,
         args,
         {
           sessionId: sid,
-          actionId: uuidv7(),
+          actionId,
           projectRoot: this.deps.projectRoot ?? process.cwd(),
           requestedBy: `channel:${ctx.channelId}`,
           userId: auth?.userId,
@@ -344,7 +573,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
 
     const result = await runAgentLoop(
       {
-        llm: this.deps.resolveLLM(),
+        llm,
         history,
         toolSchemas,
         hasTools,
@@ -353,11 +582,15 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
           ? { userId: auth.userId, apiKeys: auth.apiKeys, jaitBackend: auth.jaitBackend, model: auth.model }
           : undefined,
         abort,
-        maxRounds: hasTools ? 6 : 1,
+        maxRounds: hasTools ? CHANNEL_MAX_TOOL_ROUNDS : 1,
         maxRetries: 1,
-        parallel: true,
+        // Sequential so at most one approval prompt is outstanding per chat —
+        // a messaging surface can only field one yes/no at a time.
+        parallel: false,
         toolRegistry,
-        allowedTools: hasTools ? allowedTools : undefined,
+        disabledTools,
+        mode: "agent",
+        allowedTools: restrictTo,
       },
       executor,
       steering,

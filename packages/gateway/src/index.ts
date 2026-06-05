@@ -407,6 +407,10 @@ async function main() {
     },
   });
   const activeToolProfileName = "coding" as const;
+  // Bridges to the channel manager (constructed later) so messaging-channel
+  // consent prompts can be sent/cleared in-band. Assigned after the manager exists.
+  let channelConsentRequestBridge: ((request: import("./security/consent-manager.js").ConsentRequest) => void) | undefined;
+  let channelConsentDecisionBridge: ((decision: import("./security/consent-manager.js").ConsentDecision) => void) | undefined;
   const consentManager = new ConsentManager({
     defaultTimeoutMs: 120_000,
     db,
@@ -417,6 +421,8 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: request,
       });
+      // Mirror to the originating messaging channel (no-op for web sessions).
+      channelConsentRequestBridge?.(request);
       console.log(`Consent required: ${request.toolName} (${request.id})`);
     },
     onDecision: (decision) => {
@@ -426,6 +432,7 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: decision,
       });
+      channelConsentDecisionBridge?.(decision);
       console.log(`Consent ${decision.approved ? "approved" : "rejected"}: ${decision.requestId}`);
     },
   });
@@ -640,34 +647,56 @@ async function main() {
 
   // External messaging channels are populated by enabled extensions.
   const { ChannelManager } = await import("./channels/manager.js");
+  // Resolve the owner user's stored context (API keys, backend, picked model,
+  // disabled tools) for channel agent turns. Channels run without request
+  // context, so this reads the owner's persisted settings live — replies use
+  // the same provider/model/tool surface as the web chat.
+  const resolveChannelAuth = () => {
+    try {
+      const owner = sqlite
+        .prepare("SELECT id FROM users ORDER BY created_at ASC LIMIT 1")
+        .get() as { id?: string } | undefined;
+      if (!owner?.id) return undefined;
+      const s = userService.getSettings(owner.id);
+      return {
+        userId: owner.id,
+        apiKeys: s.apiKeys,
+        jaitBackend: s.jaitBackend,
+        model: s.selectedModel ?? undefined,
+        disabledTools: s.disabledTools?.length ? new Set(s.disabledTools) : undefined,
+      };
+    } catch {
+      return undefined;
+    }
+  };
   const channelManager = new ChannelManager({
     sqlite,
     toolRegistry,
     audit,
+    consentManager,
     projectRoot: process.cwd(),
+    resolveAuth: resolveChannelAuth,
+    // Skill catalogue for the channel agent's system prompt — gives WhatsApp the
+    // same skills as the web chat. `skillRegistry` is declared below; the
+    // closure runs at reply time (after startup), so it is always initialized.
+    resolveSkills: () => skillRegistry.listEnabled(),
     resolveLLM: () => {
-      // Use the owner user's stored API keys / backend / picked model when
-      // available, else env/config. The channel runs without request context,
-      // so the model the user last selected in the UI is read from persisted
-      // settings (`selectedModel`) — otherwise replies fall back to the default
-      // model and ignore the chosen provider.
-      let apiKeys: Record<string, string> | undefined;
-      let jaitBackend: string | undefined;
-      let requestedModel: string | undefined;
-      try {
-        const owner = sqlite
-          .prepare("SELECT id FROM users ORDER BY created_at ASC LIMIT 1")
-          .get() as { id?: string } | undefined;
-        if (owner?.id) {
-          const s = userService.getSettings(owner.id);
-          apiKeys = s.apiKeys;
-          jaitBackend = s.jaitBackend;
-          requestedModel = s.selectedModel ?? undefined;
-        }
-      } catch { /* fall back to config defaults */ }
-      return resolveJaitLlmConfig({ config, apiKeys, jaitBackend: jaitBackend as never, requestedModel });
+      // Read the owner's selected provider/model from persisted settings —
+      // otherwise replies fall back to the default model and ignore the
+      // chosen provider.
+      const a = resolveChannelAuth();
+      return resolveJaitLlmConfig({
+        config,
+        apiKeys: a?.apiKeys,
+        jaitBackend: a?.jaitBackend as never,
+        requestedModel: a?.model,
+      });
     },
   });
+  // Now that the channel manager exists, route channel-session consent prompts
+  // to it (sends the in-band yes/no message; clears mappings on decision).
+  channelConsentRequestBridge = (request) => channelManager.handleConsentRequest(request);
+  channelConsentDecisionBridge = (decision) => channelManager.handleConsentDecision(decision);
 
   // Plugin manager — discover and load enabled extensions
   // Also scan for OpenClaw-format plugins in common locations

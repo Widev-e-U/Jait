@@ -10,6 +10,7 @@ import type {
   OutboundMessage,
 } from "./types.js";
 import type { LLMConfig } from "../tools/agent-loop.js";
+import { ConsentManager } from "../security/consent-manager.js";
 
 /* A fake connector that lets the test drive inbound messages and capture sends. */
 class FakeConnector implements ChannelConnector {
@@ -128,5 +129,89 @@ describe("ChannelManager pipeline", () => {
     await mgr.start("fake");
     const list = mgr.list();
     expect(list[0]).toMatchObject({ id: "fake", status: "connected", enabled: true });
+  });
+});
+
+describe("ChannelManager in-band consent", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  /** Wire a real ConsentManager bridged to the channel manager, plus a generator
+   *  that simulates an agent turn requesting approval for a mutating tool. */
+  function makeConsentManager(timeoutMs = 1000) {
+    let mgr: ChannelManager;
+    const consent = new ConsentManager({
+      defaultTimeoutMs: timeoutMs,
+      onRequest: (r) => mgr.handleConsentRequest(r),
+      onDecision: (d) => mgr.handleConsentDecision(d),
+    });
+    const generator: ReplyGenerator = {
+      async generate(_history, ctx) {
+        const decision = await consent.requestConsent({
+          actionId: "a1",
+          toolName: "execute",
+          summary: "Run execute",
+          preview: { command: "rm -rf build" },
+          risk: "high",
+          policy: { consentLevel: "always", description: "x", knownTool: true, source: "profile" },
+          sessionId: ctx.sessionId,
+          timeoutMs,
+        });
+        return decision.approved ? "done: ran it" : "skipped: not run";
+      },
+    };
+    mgr = new ChannelManager({ sqlite, consentManager: consent, resolveLLM: () => fakeLLM, replyGenerator: generator });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, consent };
+  }
+
+  it("prompts for approval and runs the tool after a 'yes' reply", async () => {
+    const { mgr, connector } = makeConsentManager();
+    await mgr.start("fake");
+    connector.emit({ text: "delete the build dir", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    // First outbound is the approval prompt; the turn is now blocked awaiting it.
+    expect(connector.sent).toHaveLength(1);
+    expect(connector.sent[0]?.text).toContain("execute");
+    expect(connector.sent[0]?.text.toLowerCase()).toContain("yes");
+
+    connector.emit({ text: "yes", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    // The "yes" resolved consent; the turn finished and sent its result.
+    expect(connector.sent.map((m) => m.text)).toContain("done: ran it");
+  });
+
+  it("skips the tool after a 'no' reply", async () => {
+    const { connector, mgr } = makeConsentManager();
+    await mgr.start("fake");
+    connector.emit({ text: "delete the build dir", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    connector.emit({ text: "no", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(connector.sent.map((m) => m.text)).toContain("skipped: not run");
+  });
+
+  it("re-prompts on an ambiguous reply without resolving", async () => {
+    const { connector, mgr } = makeConsentManager();
+    await mgr.start("fake");
+    connector.emit({ text: "delete the build dir", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    connector.emit({ text: "maybe later, what do you think?", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    // Still only the original prompt + the re-prompt; no result yet.
+    expect(connector.sent.some((m) => m.text.includes("yes") && m.text.includes("no"))).toBe(true);
+    expect(connector.sent.map((m) => m.text)).not.toContain("done: ran it");
+    expect(connector.sent.map((m) => m.text)).not.toContain("skipped: not run");
+  });
+
+  it("auto-denies and notifies on timeout", async () => {
+    const { connector, mgr } = makeConsentManager(60);
+    await mgr.start("fake");
+    connector.emit({ text: "delete the build dir", isSelfChat: true });
+    // Wait past the 60ms approval window without replying.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(connector.sent.map((m) => m.text)).toContain("⌛ No reply — skipped that action.");
+    expect(connector.sent.map((m) => m.text)).toContain("skipped: not run");
   });
 });
