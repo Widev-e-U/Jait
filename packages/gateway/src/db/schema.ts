@@ -64,6 +64,7 @@ export const userSettings = sqliteTable("user_settings", {
   chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
   jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids
+  selectedModel: text("selected_model"), // last model id picked in the UI; used by background channels (e.g. WhatsApp)
   projectPickerPath: text("project_picker_path"),
   projectPickerNodeId: text("project_picker_node_id"),
   updatedAt: text("updated_at").notNull(),

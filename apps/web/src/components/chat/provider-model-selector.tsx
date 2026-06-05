@@ -480,6 +480,11 @@ export function ProviderModelSelector({
         }).catch(() => {})
       }
     }
+    // Persist the picked model so background channels (e.g. WhatsApp) reply
+    // with the same model instead of falling back to the server default.
+    if (provider === 'jait') {
+      updateSettings({ selected_model: modelId }).catch(() => {})
+    }
     onModelChange(modelId)
     saveRecentModel(modelId)
     setRecentIds(loadRecentModels())

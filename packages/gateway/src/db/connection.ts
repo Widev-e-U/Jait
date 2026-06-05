@@ -132,6 +132,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
       disabled_tools: "TEXT",
       stt_provider: "TEXT NOT NULL DEFAULT 'simulated'",
       chat_provider: "TEXT NOT NULL DEFAULT 'jait'",
+      selected_model: "TEXT",
       project_picker_path: "TEXT",
       project_picker_node_id: "TEXT",
     },

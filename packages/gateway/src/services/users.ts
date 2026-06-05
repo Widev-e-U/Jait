@@ -31,6 +31,7 @@ export interface UserSettingsRecord {
   chatProvider: ChatProvider;
   jaitBackend: JaitBackend;
   recentModels: string[];
+  selectedModel: string | null;
   projectPickerPath: string | null;
   projectPickerNodeId: string | null;
   updatedAt: string;
@@ -163,6 +164,7 @@ export class UserService {
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: JSON.stringify([]),
+        selectedModel: null,
         projectPickerPath: null,
         projectPickerNodeId: null,
         updatedAt: now,
@@ -176,6 +178,7 @@ export class UserService {
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: [],
+        selectedModel: null,
         projectPickerPath: null,
         projectPickerNodeId: null,
         updatedAt: now,
@@ -190,6 +193,7 @@ export class UserService {
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
       jaitBackend: ((row as any).jaitBackend as JaitBackend) || "openai",
       recentModels: parseStringArray((row as any).recentModels ?? null),
+      selectedModel: typeof (row as any).selectedModel === "string" ? (row as any).selectedModel : null,
       projectPickerPath: typeof (row as any).projectPickerPath === "string" ? (row as any).projectPickerPath : null,
       projectPickerNodeId: typeof (row as any).projectPickerNodeId === "string" ? (row as any).projectPickerNodeId : null,
       updatedAt: row.updatedAt,
@@ -206,6 +210,7 @@ export class UserService {
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
+      selectedModel?: string | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
     },
@@ -218,6 +223,9 @@ export class UserService {
     const chatProvider = patch.chatProvider ?? existing.chatProvider;
     const jaitBackend = patch.jaitBackend ?? existing.jaitBackend;
     const recentModels = patch.recentModels ?? existing.recentModels;
+    const selectedModel = patch.selectedModel !== undefined
+      ? patch.selectedModel
+      : existing.selectedModel;
     const projectPickerPath = patch.projectPickerPath !== undefined
       ? patch.projectPickerPath
       : existing.projectPickerPath;
@@ -235,6 +243,7 @@ export class UserService {
         chatProvider,
         jaitBackend,
         recentModels: JSON.stringify(recentModels),
+        selectedModel,
         projectPickerPath,
         projectPickerNodeId,
         updatedAt: now,

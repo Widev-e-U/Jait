@@ -147,6 +147,7 @@ export function registerAuthRoutes(
       chat_provider: settings.chatProvider,
       jait_backend: settings.jaitBackend,
       recent_models: settings.recentModels,
+      selected_model: settings.selectedModel,
       project_picker_path: settings.projectPickerPath,
       project_picker_node_id: settings.projectPickerNodeId,
       updated_at: settings.updatedAt,
@@ -165,6 +166,7 @@ export function registerAuthRoutes(
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
+      selectedModel?: string | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
     } = {};
@@ -198,6 +200,12 @@ export function registerAuthRoutes(
       patch.recentModels = body.recent_models.filter((v: unknown) => typeof v === "string").slice(0, 20) as string[];
     }
 
+    if (typeof body.selected_model === "string" || body.selected_model === null) {
+      patch.selectedModel = typeof body.selected_model === "string"
+        ? body.selected_model.trim() || null
+        : null;
+    }
+
     if (typeof body.project_picker_path === "string" || body.project_picker_path === null) {
       patch.projectPickerPath = typeof body.project_picker_path === "string"
         ? body.project_picker_path.trim() || null
@@ -219,6 +227,7 @@ export function registerAuthRoutes(
       chat_provider: updated.chatProvider,
       jait_backend: updated.jaitBackend,
       recent_models: updated.recentModels,
+      selected_model: updated.selectedModel,
       project_picker_path: updated.projectPickerPath,
       project_picker_node_id: updated.projectPickerNodeId,
       updated_at: updated.updatedAt,

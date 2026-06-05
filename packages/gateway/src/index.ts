@@ -646,9 +646,14 @@ async function main() {
     audit,
     projectRoot: process.cwd(),
     resolveLLM: () => {
-      // Use the owner user's stored API keys when available, else env/config.
+      // Use the owner user's stored API keys / backend / picked model when
+      // available, else env/config. The channel runs without request context,
+      // so the model the user last selected in the UI is read from persisted
+      // settings (`selectedModel`) — otherwise replies fall back to the default
+      // model and ignore the chosen provider.
       let apiKeys: Record<string, string> | undefined;
       let jaitBackend: string | undefined;
+      let requestedModel: string | undefined;
       try {
         const owner = sqlite
           .prepare("SELECT id FROM users ORDER BY created_at ASC LIMIT 1")
@@ -657,9 +662,10 @@ async function main() {
           const s = userService.getSettings(owner.id);
           apiKeys = s.apiKeys;
           jaitBackend = s.jaitBackend;
+          requestedModel = s.selectedModel ?? undefined;
         }
       } catch { /* fall back to config defaults */ }
-      return resolveJaitLlmConfig({ config, apiKeys, jaitBackend: jaitBackend as never });
+      return resolveJaitLlmConfig({ config, apiKeys, jaitBackend: jaitBackend as never, requestedModel });
     },
   });
 

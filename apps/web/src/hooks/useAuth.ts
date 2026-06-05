@@ -21,6 +21,7 @@ interface UserSettings {
   chat_provider: ChatProvider
   jait_backend: JaitBackend
   recent_models: string[]
+  selected_model: string | null
   project_picker_path: string | null
   project_picker_node_id: string | null
   updated_at: string
@@ -45,6 +46,7 @@ const EMPTY_SETTINGS: UserSettings = {
   chat_provider: 'jait',
   jait_backend: 'openai',
   recent_models: [],
+  selected_model: null,
   project_picker_path: null,
   project_picker_node_id: null,
   updated_at: new Date(0).toISOString(),
@@ -185,6 +187,7 @@ export function useAuth() {
     chat_provider?: ChatProvider
     jait_backend?: JaitBackend
     recent_models?: string[]
+    selected_model?: string | null
     project_picker_path?: string | null
     project_picker_node_id?: string | null
   }) => {
