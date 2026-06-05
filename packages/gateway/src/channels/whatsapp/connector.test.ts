@@ -28,7 +28,7 @@ function makeFakeSocket() {
   const sock: WASocketLike = {
     ev: { on: (event, listener) => { ev.on(event, listener); } },
     sendMessage: async (jid, content) => { sent.push({ jid, text: content.text }); return {}; },
-    user: { id: "491701234567:5@s.whatsapp.net" },
+    user: { id: "491701234567:5@s.whatsapp.net", lid: "103092234248215:5@lid" },
     end: () => {},
   };
   return { ev, sock, sent };
@@ -99,6 +99,30 @@ describe("WhatsAppConnector", () => {
       type: "notify",
       messages: [{
         key: { remoteJid: "491701234567@s.whatsapp.net", fromMe: true },
+        message: { conversation: "note to self" },
+        messageTimestamp: 1700000000,
+      }],
+    });
+
+    expect(inbound[0]?.isSelfChat).toBe(true);
+  });
+
+  it("flags self-chat when the conversation is addressed by LID", async () => {
+    const { ev, sock } = makeFakeSocket();
+    const inbound: InboundMessage[] = [];
+    const connector = new WhatsAppConnector({
+      makeSocket: () => sock,
+      loadAuthState: async () => ({ state: {}, saveCreds: async () => {} }),
+      encodeQr: async () => "x",
+    });
+    await connector.start({ onInbound: (m) => inbound.push(m), onStatus: () => {} });
+    ev.emit("connection.update", { connection: "open" }); // self bares: phone JID + LID
+
+    // WhatsApp's LID migration: self-chat arrives addressed by @lid, not the phone JID.
+    ev.emit("messages.upsert", {
+      type: "notify",
+      messages: [{
+        key: { remoteJid: "103092234248215@lid", fromMe: true },
         message: { conversation: "note to self" },
         messageTimestamp: 1700000000,
       }],

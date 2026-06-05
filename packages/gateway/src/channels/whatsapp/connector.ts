@@ -39,7 +39,7 @@ interface Long { toNumber(): number; low: number; }
 export interface WASocketLike {
   ev: { on(event: string, listener: (arg: unknown) => void): void };
   sendMessage(jid: string, content: { text: string }): Promise<unknown>;
-  user?: { id?: string } | null;
+  user?: { id?: string; lid?: string } | null;
   end?(error?: Error): void;
   ws?: { close(): void };
   logout?(): Promise<void>;
@@ -109,7 +109,8 @@ export class WhatsAppConnector implements ChannelConnector {
   private sock: WASocketLike | null = null;
   private _status: ChannelStatus = "stopped";
   private _qr: string | null = null;
-  private selfBare = "";
+  /** Bare ids that identify this account (phone-number JID and LID alias). */
+  private selfBares = new Set<string>();
   private events: ChannelConnectorEvents | null = null;
   private stopping = false;
 
@@ -159,7 +160,7 @@ export class WhatsAppConnector implements ChannelConnector {
   private async encodeQr(text: string): Promise<string> {
     if (this.deps.encodeQr) return this.deps.encodeQr(text);
     const qrcode = await import("qrcode");
-    return qrcode.toDataURL(text, { margin: 1, width: 320 });
+    return qrcode.toDataURL(text, { margin: 2, width: 512 });
   }
 
   private async connect(): Promise<void> {
@@ -184,9 +185,11 @@ export class WhatsAppConnector implements ChannelConnector {
       }
 
       if (u.connection === "open") {
-        this.selfBare = bareJid(sock.user?.id);
+        this.selfBares = new Set(
+          [sock.user?.id, sock.user?.lid].map(bareJid).filter(Boolean),
+        );
         this.setStatus("connected");
-        this.log(`connected as ${this.selfBare}`);
+        this.log(`connected as ${[...this.selfBares].join(", ") || "?"}`);
       } else if (u.connection === "close") {
         const code = u.lastDisconnect?.error?.output?.statusCode;
         const loggedOut = code === (this.deps.loggedOutStatusCode ?? 401);
@@ -222,7 +225,7 @@ export class WhatsAppConnector implements ChannelConnector {
     const conversationId = m.key.remoteJid ?? "";
     if (!conversationId || conversationId === "status@broadcast") return null;
     const senderId = m.key.participant ?? conversationId;
-    const isSelfChat = bareJid(conversationId) === this.selfBare && this.selfBare !== "";
+    const isSelfChat = this.selfBares.has(bareJid(conversationId));
     return {
       channelId: this.id,
       conversationId,

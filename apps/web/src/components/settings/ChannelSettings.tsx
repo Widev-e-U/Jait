@@ -166,9 +166,13 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
       {linking && (
         <div className="flex flex-col items-center gap-3 rounded-lg border bg-muted/30 p-5">
           {qr ? (
-            <img src={qr} alt={`${channel.label} link QR code`} className="h-56 w-56 rounded bg-white p-2" />
+            <img
+              src={qr}
+              alt={`${channel.label} link QR code`}
+              className="h-72 w-72 rounded bg-white p-2 [image-rendering:pixelated]"
+            />
           ) : (
-            <div className="flex h-56 w-56 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <div className="flex h-72 w-72 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           )}
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3" /> QR refreshes automatically — scan it with your phone.
