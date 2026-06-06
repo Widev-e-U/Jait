@@ -36,22 +36,41 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
     snapshotUserCounts.set(signature, (snapshotUserCounts.get(signature) ?? 0) + 1)
   }
 
-  const unmatchedOptimisticUsers: T[] = []
+  const unmatchedOptimisticMessages: T[] = []
+  let preserveNextOptimisticAssistant = false
   for (const message of currentMessages) {
-    if (!message.optimistic || message.role !== 'user') continue
+    if (!message.optimistic) {
+      preserveNextOptimisticAssistant = false
+      continue
+    }
+    if (message.role === 'assistant') {
+      if (preserveNextOptimisticAssistant) {
+        unmatchedOptimisticMessages.push(message)
+      }
+      preserveNextOptimisticAssistant = false
+      continue
+    }
+    if (message.role !== 'user') {
+      preserveNextOptimisticAssistant = false
+      continue
+    }
+
     const signature = getUserRenderSignature(message)
     if (!signature) {
-      unmatchedOptimisticUsers.push(message)
+      unmatchedOptimisticMessages.push(message)
+      preserveNextOptimisticAssistant = true
       continue
     }
     const matchedCount = snapshotUserCounts.get(signature) ?? 0
     if (matchedCount > 0) {
       snapshotUserCounts.set(signature, matchedCount - 1)
+      preserveNextOptimisticAssistant = false
       continue
     }
-    unmatchedOptimisticUsers.push(message)
+    unmatchedOptimisticMessages.push(message)
+    preserveNextOptimisticAssistant = true
   }
 
-  if (unmatchedOptimisticUsers.length === 0) return snapshotMessages
-  return [...snapshotMessages, ...unmatchedOptimisticUsers]
+  if (unmatchedOptimisticMessages.length === 0) return snapshotMessages
+  return [...snapshotMessages, ...unmatchedOptimisticMessages]
 }

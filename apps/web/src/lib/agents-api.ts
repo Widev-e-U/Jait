@@ -154,15 +154,16 @@ export class AgentsApi {
   private _providersInflight: Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> | null = null
   private _providersCachedAt = 0
 
-  async listProviders(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
-    // Deduplicate: reuse in-flight request or recent cache (5s TTL)
+  async listProviders(force = false): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
+    // Deduplicate: reuse in-flight request or recent cache (30s TTL). The server
+    // now serves this from a cache, so a longer client TTL is safe.
     const now = Date.now()
-    if (this._providersInflight && now - this._providersCachedAt < 5_000) {
+    if (!force && this._providersInflight && now - this._providersCachedAt < 30_000) {
       return this._providersInflight
     }
     this._providersCachedAt = now
     this._providersInflight = (async () => {
-      const res = await fetch(`${API_URL}/api/providers`, {
+      const res = await fetch(`${API_URL}/api/providers${force ? '?fresh=1' : ''}`, {
         headers: this.getHeaders(),
       })
       if (!res.ok) throw new Error(`Failed to list providers: ${res.statusText}`)
@@ -177,11 +178,11 @@ export class AgentsApi {
     return this._providersInflight
   }
 
-  /** Force-refresh providers (bypasses the dedup cache). */
+  /** Force-refresh providers (bypasses the dedup cache and re-probes server-side). */
   async listProvidersFresh(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
     this._providersInflight = null
     this._providersCachedAt = 0
-    return this.listProviders()
+    return this.listProviders(true)
   }
 
   async getProviderAuthStatus(providerId: ProviderId): Promise<ProviderAuthStatus> {
@@ -247,7 +248,7 @@ export class AgentsApi {
     const now = Date.now()
     const cachedAt = this._modelsCachedAt.get(providerId) ?? 0
     const existing = this._modelsInflight.get(providerId)
-    if (existing && now - cachedAt < 5_000) return existing
+    if (existing && now - cachedAt < 15_000) return existing
 
     this._modelsCachedAt.set(providerId, now)
     const promise = (async () => {

@@ -23,6 +23,7 @@ import {
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
+import { ProviderSnapshotCache } from "../providers/provider-snapshot.js";
 
 // ── Route registration ───────────────────────────────────────────
 
@@ -39,23 +40,23 @@ export function registerProviderRoutes(
 ): void {
   const { providerRegistry, ws } = deps;
 
+  // Availability + auth probing is expensive (spawns provider CLIs / ACP agents).
+  // Compute it once, serve from cache, and refresh in the background so page
+  // loads are instant. Warm it now so the first request never pays the cost.
+  const snapshotCache = new ProviderSnapshotCache(providerRegistry);
+  snapshotCache.warm();
+
   /** List available providers (local + remote) */
   app.get("/api/providers", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 
-    const providers = providerRegistry.list();
-    const providerSnapshots = await Promise.all(
-      providers.map(async (p) => {
-        await p.checkAvailability().catch(() => false);
-        const auth = await p.getAuthStatus?.().catch(() => p.info.auth
-          ? { ...p.info.auth, authenticated: null, detail: "Failed to check provider auth status." }
-          : undefined);
-        return { provider: p, auth };
-      }),
-    );
+    // `?fresh=1` forces a synchronous re-probe (used by explicit UI refresh).
+    const fresh = (request.query as { fresh?: string } | undefined)?.fresh;
+    const force = fresh === "1" || fresh === "true";
+    const providerSnapshots = await snapshotCache.get(force);
 
-    // Collect remote provider info from connected filesystem nodes
+    // Collect remote provider info from connected filesystem nodes (cheap, live).
     const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
     if (ws) {
       for (const node of ws.getFsNodes()) {
@@ -70,15 +71,7 @@ export function registerProviderRoutes(
     }
 
     return {
-      providers: providerSnapshots.map(({ provider: p, auth }) => ({
-        id: p.id,
-        name: p.info.name,
-        description: p.info.description,
-        available: p.info.available,
-        unavailableReason: p.info.unavailableReason,
-        modes: p.info.modes,
-        auth: auth ?? p.info.auth,
-      })),
+      providers: providerSnapshots,
       remoteProviders,
     };
   });
@@ -184,57 +177,58 @@ export function registerProviderRoutes(
         const userApiKeys = settings.apiKeys ?? {};
         const jaitBackend = settings.jaitBackend || "openai";
 
-        const allModels: ProviderModelInfo[] = [];
+        // Fetch each backend's catalogue concurrently — these are independent
+        // network calls, so running them in parallel caps the worst case at a
+        // single timeout instead of the sum of all three.
 
         // ── OpenAI models (dynamic when API key available) ────────
         const openaiKey = userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey;
         const openaiBaseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl || "https://api.openai.com/v1";
-        if (openaiKey && openaiBaseUrl.includes("openai.com")) {
+        const openaiModelsP: Promise<ProviderModelInfo[]> = (async () => {
+          const fallback = models.map((m) => ({ ...m, group: "OpenAI" }));
+          if (!(openaiKey && openaiBaseUrl.includes("openai.com"))) return fallback;
           try {
             const apiModels = await fetchOpenAIModels(openaiKey, openaiBaseUrl);
-            if (apiModels.length > 0) {
-              allModels.push(...apiModels.map((m) => ({ ...m, group: "OpenAI" })));
-            } else {
-              allModels.push(...models.map((m) => ({ ...m, group: "OpenAI" })));
-            }
+            return apiModels.length > 0 ? apiModels.map((m) => ({ ...m, group: "OpenAI" })) : fallback;
           } catch {
-            allModels.push(...models.map((m) => ({ ...m, group: "OpenAI" })));
+            return fallback;
           }
-        } else {
-          allModels.push(...models.map((m) => ({ ...m, group: "OpenAI" })));
-        }
+        })();
 
         // ── OpenRouter models ─────────────────────────────────────
         const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
-        if (openRouterKey) {
+        const openRouterModelsP: Promise<ProviderModelInfo[]> = (async () => {
+          if (!openRouterKey) return [];
           try {
             const orModels = await fetchOpenRouterModels(openRouterKey);
-            if (orModels.length > 0) {
-              allModels.push(...orModels.map((m) => ({ ...m, group: "OpenRouter" })));
-            } else {
-              const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-              allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
-            }
+            if (orModels.length > 0) return orModels.map((m) => ({ ...m, group: "OpenRouter" }));
           } catch {
-            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-            allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
+            // fall through to static list
           }
-        }
+          const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+          return OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" }));
+        })();
 
         // ── Ollama models ─────────────────────────────────────────
         const ollamaUrl = userApiKeys["OLLAMA_URL"]?.trim() || config.ollamaUrl;
-        if (ollamaUrl) {
+        const ollamaModelsP: Promise<ProviderModelInfo[]> = (async () => {
+          if (!ollamaUrl) return [];
           try {
             const ollamaModels = await fetchOllamaModels(ollamaUrl);
-            if (ollamaModels.length > 0) {
-              allModels.push(...ollamaModels.map((m) => ({ ...m, group: "Ollama" })));
-            }
+            return ollamaModels.map((m) => ({ ...m, group: "Ollama" }));
           } catch {
             // Ollama unreachable — skip
+            return [];
           }
-        }
+        })();
 
-        models = allModels;
+        const [openaiGroup, openRouterGroup, ollamaGroup] = await Promise.all([
+          openaiModelsP,
+          openRouterModelsP,
+          ollamaModelsP,
+        ]);
+
+        models = [...openaiGroup, ...openRouterGroup, ...ollamaGroup];
 
         // Prepend recent models (if they exist in the full list)
         const recentIds = settings.recentModels ?? [];

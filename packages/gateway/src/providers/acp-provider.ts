@@ -1,5 +1,6 @@
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { promisify } from "node:util";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -43,8 +44,14 @@ import {
 
 type AcpProviderAuthKind = "acp";
 
+const execFileAsync = promisify(execFile);
+
 const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 20_000 : 5_000;
 const ACP_PROBE_CLOSE_TIMEOUT_MS = 1_000;
+/** Timeout for the `<command> --version` availability probe. */
+const AVAILABILITY_PROBE_TIMEOUT_MS = 5_000;
+/** How long a computed auth status stays fresh before re-probing. */
+const AUTH_STATUS_TTL_MS = 5 * 60_000;
 const REPLAYABLE_EVENT_TTL_MS = 30_000;
 const REPLAYABLE_EVENT_LIMIT = 20;
 const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
@@ -80,6 +87,14 @@ interface AcpSessionState {
   acpSessionId: string;
   approvals: Map<string, PendingApproval>;
   initialized: InitializeResponse;
+  /**
+   * Accumulated raw tool-call objects keyed by toolCallId. ACP lets agents send
+   * a skeleton `tool_call` and progressively enrich it via `tool_call_update`
+   * (rawInput, locations, content, title). We merge those frames here so the
+   * tool card reflects the full picture regardless of an agent's streaming
+   * cadence (Codex front-loads everything; Claude Code streams it in updates).
+   */
+  toolCalls: Map<string, Record<string, unknown>>;
 }
 
 class JaitAcpClient implements Client {
@@ -155,16 +170,22 @@ export class AcpProvider implements CliProviderAdapter {
 
   async checkAvailability(): Promise<boolean> {
     const command = this.config.command;
-    const probe = spawnSync(command, ["--version"], {
-      stdio: "ignore",
-      shell: false,
-      env: { ...process.env, ...this.config.env },
-    });
-
-    if (probe.error && command !== "npx") {
-      this.info.available = false;
-      this.info.unavailableReason = `ACP provider command not found: ${command}`;
-      return false;
+    // Async probe so we never block the event loop (this runs for every
+    // provider on each /api/providers refresh). A non-zero exit still counts
+    // as "available" — only a failure to spawn the binary (ENOENT) means it's
+    // missing. npx is always treated as available (it resolves on demand).
+    try {
+      await execFileAsync(command, ["--version"], {
+        timeout: AVAILABILITY_PROBE_TIMEOUT_MS,
+        env: { ...process.env, ...this.config.env },
+      });
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" && command !== "npx") {
+        this.info.available = false;
+        this.info.unavailableReason = `ACP provider command not found: ${command}`;
+        return false;
+      }
     }
 
     this.info.available = true;
@@ -255,7 +276,7 @@ export class AcpProvider implements CliProviderAdapter {
           ? "Authenticated via ANTHROPIC_API_KEY environment variable and local Claude Code credentials. Logout clears the local Claude Code credentials."
           : "Authenticated via ANTHROPIC_API_KEY environment variable. Manage the key directly to change access.",
       };
-      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
+      this.cachedAuthStatus = { status, expiresAt: Date.now() + AUTH_STATUS_TTL_MS };
       return status;
     }
 
@@ -278,7 +299,7 @@ export class AcpProvider implements CliProviderAdapter {
         ? formatAcpAuthDetail(this.info.name, authenticated)
         : formatCliAuthDetail(this.info.name, authenticated, logout),
     };
-    this.cachedAuthStatus = { status: result, expiresAt: Date.now() + 30_000 };
+    this.cachedAuthStatus = { status: result, expiresAt: Date.now() + AUTH_STATUS_TTL_MS };
     return result;
   }
 
@@ -584,6 +605,7 @@ export class AcpProvider implements CliProviderAdapter {
       acpSessionId: newSession.sessionId,
       approvals,
       initialized,
+      toolCalls: new Map(),
     };
     this.sessions.set(sessionId, state);
     this.emitEvent({ type: "session.started", sessionId });
@@ -683,26 +705,42 @@ export class AcpProvider implements CliProviderAdapter {
           this.emitEvent({ type: "token", sessionId, content: update.content.text });
         }
         break;
-      case "tool_call":
+      case "tool_call": {
+        const merged = this.mergeToolCall(sessionId, update);
         this.emitEvent({
           type: "tool.start",
           sessionId,
-          tool: getAcpToolName(update),
-          args: getAcpToolArgs(update),
+          tool: getAcpToolName(merged),
+          args: getAcpToolArgs(merged),
           callId: update.toolCallId,
         });
         if (readUpdateStatus(update) === "failed") {
           this.emitEvent({
             type: "tool.result",
             sessionId,
-            tool: getAcpToolName(update),
+            tool: getAcpToolName(merged),
             ok: false,
             message: readUpdateMessage(update) ?? "Tool call failed",
             callId: update.toolCallId,
           });
         }
         break;
+      }
       case "tool_call_update": {
+        const merged = this.mergeToolCall(sessionId, update);
+        // Re-emit an enriched tool.start whenever an update streams in new
+        // identity/argument metadata. The web merges by callId (upgrading the
+        // existing card), so this fills in the file path / diff for agents that
+        // defer that data to updates instead of the initial tool_call.
+        if (hasToolCallMetadata(update)) {
+          this.emitEvent({
+            type: "tool.start",
+            sessionId,
+            tool: getAcpToolName(merged),
+            args: getAcpToolArgs(merged),
+            callId: update.toolCallId,
+          });
+        }
         if (update.content) {
           this.emitEvent({
             type: "tool.output",
@@ -715,7 +753,7 @@ export class AcpProvider implements CliProviderAdapter {
           this.emitEvent({
             type: "tool.result",
             sessionId,
-            tool: getAcpToolName(update),
+            tool: getAcpToolName(merged),
             ok: update.status === "completed",
             message: stringifyToolContent(update.rawOutput ?? update.status),
             callId: update.toolCallId,
@@ -755,6 +793,26 @@ export class AcpProvider implements CliProviderAdapter {
     const state = this.sessions.get(sessionId);
     if (!state) throw new Error(`Unknown ACP session: ${sessionId}`);
     return state;
+  }
+
+  /**
+   * Merge a `tool_call` / `tool_call_update` frame into the accumulated raw
+   * object for that toolCallId and return the merged view. Per the ACP spec,
+   * `content`/`locations` replace their collection while scalar fields update,
+   * so we overwrite any field the frame actually carries (skipping null/absent).
+   * Returns the raw update itself if the session state isn't tracked yet.
+   */
+  private mergeToolCall(sessionId: string, update: Record<string, unknown>): Record<string, unknown> {
+    const store = this.sessions.get(sessionId)?.toolCalls;
+    const toolCallId = typeof update["toolCallId"] === "string" ? update["toolCallId"] : null;
+    if (!store || !toolCallId) return update;
+
+    const merged = store.get(toolCallId) ?? {};
+    for (const [key, value] of Object.entries(update)) {
+      if (value !== undefined && value !== null) merged[key] = value;
+    }
+    store.set(toolCallId, merged);
+    return merged;
   }
 
   private async probeAcpAuth(): Promise<{
@@ -944,6 +1002,23 @@ function readUpdateStatus(update: unknown): string | null {
   if (!update || typeof update !== "object") return null;
   const status = (update as Record<string, unknown>)["status"];
   return typeof status === "string" ? status : null;
+}
+
+/**
+ * Whether a `tool_call_update` carries identity/argument metadata worth
+ * re-deriving the tool card from (vs. a bare status/output-only update).
+ */
+function hasToolCallMetadata(update: unknown): boolean {
+  if (!update || typeof update !== "object") return false;
+  const record = update as Record<string, unknown>;
+  const rawInput = record["rawInput"];
+  if (rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) && Object.keys(rawInput).length > 0) {
+    return true;
+  }
+  if (Array.isArray(record["locations"]) && record["locations"].length > 0) return true;
+  if (Array.isArray(record["content"]) && record["content"].length > 0) return true;
+  if (typeof record["title"] === "string" && record["title"].trim()) return true;
+  return false;
 }
 
 function getAcpToolName(update: unknown): string {

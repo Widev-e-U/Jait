@@ -41,6 +41,34 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
     expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot)
   })
 
+  it('preserves an optimistic assistant placeholder for an unmatched optimistic user', () => {
+    // A follow-up/queued send inserts an optimistic user + an optimistic
+    // assistant the reply streams into. When a resume snapshot (taken before
+    // the exchange was persisted) replaces messages, only the optimistic USER
+    // survives — the assistant placeholder is dropped, so the streaming reply
+    // is orphaned and not visible until a reload reads it from the DB.
+    const snapshot = [user('server-1', 'older message')]
+    const current = [
+      ...snapshot,
+      user('local-user-1', 'follow up', { optimistic: true }),
+      { id: 'local-assistant-1', role: 'assistant' as const, content: '', optimistic: true },
+    ]
+
+    const merged = mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)
+    expect(merged.map((m) => m.id)).toEqual(['server-1', 'local-user-1', 'local-assistant-1'])
+  })
+
+  it('drops an optimistic assistant placeholder once its optimistic user is matched', () => {
+    const snapshot = [user('server-1', 'follow up')]
+    const current = [
+      user('local-user-1', 'follow up', { optimistic: true }),
+      { id: 'local-assistant-1', role: 'assistant' as const, content: '', optimistic: true },
+    ]
+
+    const merged = mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)
+    expect(merged.map((m) => m.id)).toEqual(['server-1'])
+  })
+
   it('matches repeated identical messages by count instead of removing them all', () => {
     const snapshot = [
       user('server-1', 'repeat'),

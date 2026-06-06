@@ -233,6 +233,20 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('omits redundant MCP wrapper identity fields from top-level details', () => {
+    expect(
+      getMcpToolLabel({
+        recipient_name: 'mcp.jait.terminal.run',
+        server: 'jait',
+        tool: 'terminal_run',
+        title: 'mcp.jait.terminal.run',
+      }),
+    ).toEqual({
+      title: 'mcp.jait.terminal.run',
+      details: null,
+    })
+  })
+
   it('extracts edited file paths from result messages when args omit the path', () => {
     expect(
       getToolFilePath('edit', {}, undefined, 'Edited apps/web/src/components/chat/tool-call-card.tsx successfully'),

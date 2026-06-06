@@ -208,8 +208,12 @@ export function getMcpToolLabel(
   ) ?? null
 
   const detailsSource = nested ?? args
+  const excludes = ['recipient_name', 'recipientName', 'tool', 'toolName', 'name']
+  if (detailsSource === args) {
+    excludes.push('server', 'serverId', 'server_id', 'title')
+  }
   const details = summarizeToolArguments(detailsSource, {
-    excludeKeys: ['recipient_name', 'recipientName', 'tool', 'toolName', 'name'],
+    excludeKeys: excludes,
     maxEntries: 4,
   })
 

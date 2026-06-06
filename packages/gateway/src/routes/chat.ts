@@ -645,6 +645,15 @@ function accumulateThinking(sessionId: string, content: string): void {
 /** Record a tool call start in the streaming accumulator */
 function accumulateToolStart(sessionId: string, callId: string, tool: string, args: unknown, parentCallId?: string): void {
   const acc = getOrCreateAccumulator(sessionId);
+  // ACP agents can re-emit an enriched tool.start for the same callId
+  // (progressive tool_call_update). Upgrade in place rather than duplicating.
+  const existing = acc.toolCalls.find(t => t.callId === callId);
+  if (existing) {
+    existing.tool = tool;
+    existing.args = args;
+    if (parentCallId !== undefined) existing.parentCallId = parentCallId;
+    return;
+  }
   acc.toolCalls.push({ callId, parentCallId, tool, args, ok: true, message: "", startedAt: Date.now() });
   const last = acc.segments[acc.segments.length - 1];
   if (last?.type === "toolGroup") {
@@ -1764,17 +1773,26 @@ export function registerChatRoutes(
               // tokens were streamed for it.
               tokenBytesThisBlock = 0;
               const callId = event.callId ?? `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-              // Accumulate for persistence
-              cliToolCalls.push({
-                callId,
-                parentCallId: event.parentCallId,
-                tool: event.tool,
-                args: event.args ?? {},
-                ok: true,
-                message: "",
-                startedAt: Date.now(),
-              });
-              pendingToolGroup.push(callId);
+              // Accumulate for persistence. ACP agents may re-emit an enriched
+              // tool.start for the same callId (progressive tool_call_update),
+              // so upgrade the existing entry in place instead of duplicating.
+              const existingCliCall = cliToolCalls.find(t => t.callId === callId);
+              if (existingCliCall) {
+                existingCliCall.tool = event.tool;
+                existingCliCall.args = event.args ?? {};
+                if (event.parentCallId !== undefined) existingCliCall.parentCallId = event.parentCallId;
+              } else {
+                cliToolCalls.push({
+                  callId,
+                  parentCallId: event.parentCallId,
+                  tool: event.tool,
+                  args: event.args ?? {},
+                  ok: true,
+                  message: "",
+                  startedAt: Date.now(),
+                });
+                pendingToolGroup.push(callId);
+              }
 
               // Save backup of the original file before external providers mutate it.
               const mutationPath = getExternalFileMutationPath(event.tool, event.args);

@@ -355,6 +355,95 @@ describe("AcpProvider Codex ACP tool payloads", () => {
   });
 });
 
+describe("AcpProvider Claude Code progressive tool updates", () => {
+  function makeProvider() {
+    return new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+  }
+
+  it("re-emits an enriched tool.start when a tool_call_update carries the file path and diff", () => {
+    const provider = makeProvider();
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    // Claude sends an empty skeleton tool_call first…
+    provider.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "toolu_1",
+        title: "Edit",
+        kind: "edit",
+        status: "pending",
+        rawInput: {},
+        locations: [],
+        content: [],
+      },
+    } as any);
+
+    // …then fills in rawInput / locations / diff via an update.
+    provider.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_1",
+        title: "Edit notes.txt",
+        kind: "edit",
+        rawInput: { file_path: "/x/notes.txt", old_string: "hello world", new_string: "goodbye world" },
+        locations: [{ path: "/x/notes.txt" }],
+        content: [{ type: "diff", path: "/x/notes.txt", oldText: "hello world", newText: "goodbye world" }],
+      },
+    } as any);
+    unsubscribe();
+
+    const starts = events.filter((e) => e.type === "tool.start") as Array<Extract<ProviderEvent, { type: "tool.start" }>>;
+    expect(starts).toHaveLength(2);
+    const enriched = starts[1]!;
+    expect(enriched.tool).toBe("edit");
+    const args = enriched.args as Record<string, unknown>;
+    expect(args.path).toBe("/x/notes.txt");
+    expect(args.search).toBe("hello world");
+    expect(args.replace).toBe("goodbye world");
+  });
+
+  it("merges metadata across frames so a later update without kind still resolves the edit", () => {
+    const provider = makeProvider();
+    // Inject a tracked session so mergeToolCall accumulates across frames.
+    (provider as unknown as { sessions: Map<string, { toolCalls: Map<string, Record<string, unknown>> }> })
+      .sessions.set("s2", { toolCalls: new Map() });
+
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("s2", {
+      update: { sessionUpdate: "tool_call", toolCallId: "toolu_2", title: "Edit", kind: "edit", status: "pending", rawInput: {}, locations: [], content: [] },
+    } as any);
+
+    // This update omits kind/rawInput/title — only locations + diff content.
+    provider.handleSessionUpdate("s2", {
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_2",
+        locations: [{ line: 1, path: "/x/notes.txt" }],
+        content: [{ type: "diff", path: "/x/notes.txt", oldText: "hello world", newText: "goodbye world" }],
+      },
+    } as any);
+    unsubscribe();
+
+    const starts = events.filter((e) => e.type === "tool.start") as Array<Extract<ProviderEvent, { type: "tool.start" }>>;
+    const enriched = starts.at(-1)!;
+    // kind was carried over from the first frame via the merge accumulator.
+    expect(enriched.tool).toBe("edit");
+    const args = enriched.args as Record<string, unknown>;
+    expect(args.path).toBe("/x/notes.txt");
+    expect(args.search).toBe("hello world");
+    expect(args.replace).toBe("goodbye world");
+  });
+});
+
 describe("AcpProvider auth", () => {
   it("exposes ACP-managed login for default ACP providers", () => {
     const providers = loadAcpProviderConfigs().map((config) => new AcpProvider(config));

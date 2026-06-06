@@ -9,6 +9,7 @@ import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
+import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds } from '@/lib/stream-segments'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -444,43 +445,6 @@ export function useChat(
         let lineBuffer = ''
         let assistantId: string | null = null
 
-        /** Immutably append a text chunk to a message's segments array */
-        const withTextSegment = (segs: MessageSegment[] | undefined, text: string): MessageSegment[] => {
-          const arr = segs ? [...segs] : []
-          const last = arr[arr.length - 1]
-          if (last?.type === 'text') {
-            arr[arr.length - 1] = { type: 'text', content: last.content + text }
-          } else {
-            arr.push({ type: 'text', content: text })
-          }
-          return arr
-        }
-
-        const withThinkingSegment = (segs: MessageSegment[] | undefined, text: string): MessageSegment[] => {
-          const arr = segs ? [...segs] : []
-          const last = arr[arr.length - 1]
-          if (last?.type === 'thinking') {
-            arr[arr.length - 1] = { type: 'thinking', content: last.content + text }
-          } else {
-            arr.push({ type: 'thinking', content: text })
-          }
-          return arr
-        }
-
-        /** Immutably append a tool callId to a message's segments array */
-        const withToolSegment = (segs: MessageSegment[] | undefined, callId: string): MessageSegment[] => {
-          const arr = segs ? [...segs] : []
-          const last = arr[arr.length - 1]
-          if (last?.type === 'toolGroup') {
-            if (!last.callIds.includes(callId)) {
-              arr[arr.length - 1] = { type: 'toolGroup', callIds: [...last.callIds, callId] }
-            }
-          } else {
-            arr.push({ type: 'toolGroup', callIds: [callId] })
-          }
-          return arr
-        }
-
         // ── rAF-batched message updater for high-frequency stream events ──
         let pendingSubscribeUpdates: Partial<ChatMessage> | null = null
         let pendingSubscribeFrame: number | null = null
@@ -514,10 +478,14 @@ export function useChat(
           })
         }
 
-        // Accumulate content/segments between flushes so each batch is a single setState
+        // Accumulate content/segments between flushes so each batch is a single setState.
+        // `accumulatedSegments` is the single source of truth for ALL segment kinds
+        // (text, thinking, toolGroup) in this consumer — tool handlers must mutate it
+        // too, otherwise a later batched token flush overwrites their tool groups.
         let accumulatedContent = ''
         let accumulatedSegments: MessageSegment[] | undefined
         let accumulatedThinking = ''
+        const seenToolCallIds = new Set<string>()
 
         while (true) {
           const { done, value } = await reader.read()
@@ -631,6 +599,10 @@ export function useChat(
                   accumulatedContent = lastMsg.content
                   accumulatedSegments = lastMsg.segments as MessageSegment[] | undefined
                   accumulatedThinking = (lastMsg as any).thinking ?? ''
+                  // Seed seen tool calls from the snapshot's segments so existing
+                  // tool groups aren't re-appended by later tool events.
+                  seenToolCallIds.clear()
+                  for (const id of seedSeenToolCallIds(accumulatedSegments)) seenToolCallIds.add(id)
                 }
                 setState(prev => ({
                   ...prev,
@@ -659,85 +631,79 @@ export function useChat(
                 const callId = data.call_id as string
                 const nameDelta = (data.name_delta as string) || ''
                 const argsDelta = (data.args_delta as string) || ''
-                setState(prev => {
-                  const msg = prev.messages.find(m => m.id === assistantId)
-                  const existing = msg?.toolCalls?.find(tc => tc.callId === callId)
-                  if (existing) {
-                    return {
-                      ...prev,
-                      messages: prev.messages.map(m =>
-                        m.id === assistantId
-                          ? {
-                              ...m,
-                              toolCalls: m.toolCalls?.map(tc =>
-                                tc.callId === callId
-                                  ? { ...tc, tool: tc.tool + nameDelta, streamingArgs: (tc.streamingArgs ?? '') + argsDelta }
-                                  : tc
-                              ),
-                            }
-                          : m
-                      ),
+                // Mutate the authoritative segment list (not m.segments) so a
+                // subsequent token flush can't clobber this tool group.
+                const isNewCall = !seenToolCallIds.has(callId)
+                if (isNewCall) {
+                  seenToolCallIds.add(callId)
+                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
+                }
+                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
+                setState(prev => ({
+                  ...prev,
+                  messages: prev.messages.map(m => {
+                    if (m.id !== assistantId) return m
+                    const existing = m.toolCalls?.find(tc => tc.callId === callId)
+                    if (existing) {
+                      return {
+                        ...m,
+                        toolCalls: m.toolCalls?.map(tc =>
+                          tc.callId === callId
+                            ? { ...tc, tool: tc.tool + nameDelta, streamingArgs: (tc.streamingArgs ?? '') + argsDelta }
+                            : tc
+                        ),
+                      }
                     }
-                  }
-                  const callInfo: ToolCallInfo = {
-                    callId,
-                    parentCallId: data.parent_call_id as string | undefined,
-                    tool: nameDelta,
-                    args: {},
-                    status: 'pending',
-                    streamingArgs: argsDelta,
-                    startedAt: Date.now(),
-                  }
-                  return {
-                    ...prev,
-                    messages: prev.messages.map(m =>
-                      m.id === assistantId
-                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
-                        : m
-                    ),
-                  }
-                })
+                    const callInfo: ToolCallInfo = {
+                      callId,
+                      parentCallId: data.parent_call_id as string | undefined,
+                      tool: nameDelta,
+                      args: {},
+                      status: 'pending',
+                      streamingArgs: argsDelta,
+                      startedAt: Date.now(),
+                    }
+                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
+                  }),
+                }))
               } else if (data.type === 'tool_start' && assistantId) {
                 flushSubscribeUpdates()
                 const callId = data.call_id as string
-                setState(prev => {
-                  const msg = prev.messages.find(m => m.id === assistantId)
-                  const existing = msg?.toolCalls?.find(tc => tc.callId === callId)
-                  if (existing) {
-                    // Upgrade pending → running, fill in final args
-                    return {
-                      ...prev,
-                      messages: prev.messages.map(m =>
-                        m.id === assistantId
-                          ? {
-                              ...m,
-                              toolCalls: m.toolCalls?.map(tc =>
-                                tc.callId === callId
-                                  ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, parentCallId: data.parent_call_id as string | undefined, status: 'running' as const, streamingArgs: undefined }
-                                  : tc
-                              ),
-                            }
-                          : m
-                      ),
+                // Mutate the authoritative segment list (not m.segments) so a
+                // subsequent token flush can't clobber this tool group.
+                const isNewCall = !seenToolCallIds.has(callId)
+                if (isNewCall) {
+                  seenToolCallIds.add(callId)
+                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
+                }
+                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
+                setState(prev => ({
+                  ...prev,
+                  messages: prev.messages.map(m => {
+                    if (m.id !== assistantId) return m
+                    const existing = m.toolCalls?.find(tc => tc.callId === callId)
+                    if (existing) {
+                      // Upgrade pending → running, fill in final args
+                      return {
+                        ...m,
+                        toolCalls: m.toolCalls?.map(tc =>
+                          tc.callId === callId
+                            ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, parentCallId: data.parent_call_id as string | undefined, status: 'running' as const, streamingArgs: undefined }
+                            : tc
+                        ),
+                      }
                     }
-                  }
-                  const callInfo: ToolCallInfo = {
-                    callId,
-                    parentCallId: data.parent_call_id as string | undefined,
-                    tool: data.tool as string,
-                    args: (data.args as Record<string, unknown>) ?? {},
-                    status: 'running',
-                    startedAt: Date.now(),
-                  }
-                  return {
-                    ...prev,
-                    messages: prev.messages.map(m =>
-                      m.id === assistantId
-                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
-                        : m
-                    ),
-                  }
-                })
+                    const callInfo: ToolCallInfo = {
+                      callId,
+                      parentCallId: data.parent_call_id as string | undefined,
+                      tool: data.tool as string,
+                      args: (data.args as Record<string, unknown>) ?? {},
+                      status: 'running',
+                      startedAt: Date.now(),
+                    }
+                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
+                  }),
+                }))
               } else if (data.type === 'tool_output' && assistantId) {
                 setState(prev => ({
                   ...prev,
