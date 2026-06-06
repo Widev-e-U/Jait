@@ -303,6 +303,16 @@ function getToolInvocationLabels(
   return { running: meta.label, done: meta.label }
 }
 
+export function formatMcpHeaderText(
+  invocationLabel: string,
+  mcpLabel: { title: string | null; details: string | null },
+): string {
+  if (mcpLabel.title && mcpLabel.details) return `${mcpLabel.title} • ${mcpLabel.details}`
+  if (mcpLabel.title) return mcpLabel.title
+  if (mcpLabel.details) return `${invocationLabel}: ${mcpLabel.details}`
+  return invocationLabel
+}
+
 /**
  * Derive a friendly display label from an MCP inner tool name.
  * Falls back to a cleaned-up version of the raw name.
@@ -2218,12 +2228,15 @@ function ToolCallCardInner({
           </span>
         ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{invocationLabel}:</span>
-            <span className="min-w-0 truncate">
-              {mcpLabel.title ? <code className="text-[11px] font-mono">{mcpLabel.title}</code> : null}
-              {mcpLabel.title && mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
-              {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
-            </span>
+            {mcpLabel.title ? (
+              <span className="min-w-0 truncate">
+                <code className="text-[11px] font-mono">{mcpLabel.title}</code>
+                {mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
+                {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
+              </span>
+            ) : (
+              <span>{invocationLabel}: <span className="text-xs text-muted-foreground">{mcpLabel.details}</span></span>
+            )}
           </span>
         ) : (
           <span>{invocationLabel}: <code className="text-[11px] font-mono">{summary}</code></span>

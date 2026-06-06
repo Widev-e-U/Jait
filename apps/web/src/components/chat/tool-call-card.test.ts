@@ -13,6 +13,7 @@ let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineS
 let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
 let getCallSummary: typeof import('./tool-call-card')['getCallSummary']
 let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
+let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -37,6 +38,7 @@ beforeAll(async () => {
     getRunningHint,
     getCallSummary,
     getEditDiffCounts,
+    formatMcpHeaderText,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -65,6 +67,22 @@ describe('getRunningHint', () => {
       recipient_name: 'functions.mcp__jait__jait_terminal',
       arguments: JSON.stringify({ command: 'bun run test' }),
     })).toBe('Executing bun run test...')
+  })
+})
+
+describe('formatMcpHeaderText', () => {
+  it('does not duplicate the MCP title when the invocation label already includes it', () => {
+    expect(formatMcpHeaderText('Ran mcp.jait.terminal.run', {
+      title: 'mcp.jait.terminal.run',
+      details: null,
+    })).toBe('mcp.jait.terminal.run')
+  })
+
+  it('keeps details behind the MCP title without wrapper metadata', () => {
+    expect(formatMcpHeaderText('Ran mcp.jait.thread.control', {
+      title: 'mcp.jait.thread.control',
+      details: 'action: create',
+    })).toBe('mcp.jait.thread.control • action: create')
   })
 })
 
