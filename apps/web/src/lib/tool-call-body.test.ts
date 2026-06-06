@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('normalizes multi-segment tool names used by tool cards', () => {
@@ -243,6 +243,20 @@ describe('tool call body helpers', () => {
       }),
     ).toEqual({
       title: 'mcp.jait.terminal.run',
+      details: null,
+    })
+  })
+
+  it('treats direct MCP tool names as MCP cards without wrapper field summaries', () => {
+    expect(isMcpToolName('mcp.jait.file.read')).toBe(true)
+    expect(
+      getMcpToolLabel({
+        title: 'mcp.jait.file_read',
+        server: 'jait',
+        tool: 'file_read',
+      }),
+    ).toEqual({
+      title: 'mcp.jait.file_read',
       details: null,
     })
   })

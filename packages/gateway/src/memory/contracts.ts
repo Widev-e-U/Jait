@@ -41,6 +41,7 @@ export interface MemoryBackend {
 
 export interface MemoryService {
   save(entry: SaveMemoryInput): Promise<MemoryEntry>;
+  list(scope?: MemoryScope): Promise<MemoryEntry[]>;
   search(query: string, limit?: number, scope?: MemoryScope): Promise<MemoryEntry[]>;
   forget(id: string): Promise<boolean>;
   forgetExpired(now?: Date): Promise<number>;

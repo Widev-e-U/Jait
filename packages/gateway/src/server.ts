@@ -336,6 +336,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.reminderService) {
     registerReminderRoutes(app, config, {
       reminderService: deps.reminderService,
+      memoryService: deps.memoryService,
       projectService: deps.projectService,
       sessionService: deps.sessionService,
       threadService: deps.threadService,

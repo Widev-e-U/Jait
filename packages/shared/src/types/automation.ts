@@ -160,6 +160,7 @@ export interface ReminderProject {
 
 export interface ReminderRecord {
   id: string;
+  kind?: "page" | "engine";
   userId: string | null;
   projectId: string | null;
   sessionId: string | null;

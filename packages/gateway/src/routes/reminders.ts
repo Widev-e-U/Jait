@@ -5,9 +5,11 @@ import type { ReminderService, ReminderStatus } from "../services/reminders.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ThreadService } from "../services/threads.js";
 import type { ProjectService } from "../services/projects.js";
+import type { MemoryEntry, MemoryService } from "../memory/contracts.js";
 
 export interface ReminderRouteDeps {
   reminderService: ReminderService;
+  memoryService?: MemoryService;
   projectService?: ProjectService;
   sessionService?: SessionService;
   threadService?: ThreadService;
@@ -32,12 +34,32 @@ function normalizeTags(value: unknown): string[] | undefined {
     .slice(0, 20);
 }
 
+function toEngineMemoryRecord(entry: MemoryEntry) {
+  return {
+    id: entry.id,
+    kind: "engine" as const,
+    userId: null,
+    projectId: null,
+    sessionId: entry.source.surface === "chat" ? entry.source.id : null,
+    content: entry.content,
+    sourceType: entry.source.type,
+    sourceId: entry.source.id,
+    sourceSurface: entry.source.surface,
+    status: "active" as const,
+    tags: JSON.stringify(["engine-memory", `scope:${entry.scope}`]),
+    usageCount: 0,
+    lastRetrievedAt: null,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
 export function registerReminderRoutes(
   app: FastifyInstance,
   config: AppConfig,
   deps: ReminderRouteDeps,
 ): void {
-  const { reminderService, projectService, sessionService, threadService } = deps;
+  const { reminderService, memoryService, projectService, sessionService, threadService } = deps;
 
   app.get("/api/reminders", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
@@ -62,6 +84,9 @@ export function registerReminderRoutes(
       sessionId,
       limit,
     });
+    const engineMemories = status === "archived" || projectId || sessionId
+      ? []
+      : (await (memoryService?.list() ?? Promise.resolve([]))).map(toEngineMemoryRecord);
     const projectsPayload = projectService?.listWithSessions(user.id, "active", 200);
     const reminderCountsByProject = reminderService.countByProject(user.id);
     const projects = (projectsPayload?.projects ?? []).map((project) => ({
@@ -71,7 +96,7 @@ export function registerReminderRoutes(
     const threads = threadService?.list(user.id, 100) ?? [];
 
     return {
-      reminders,
+      reminders: [...engineMemories, ...reminders],
       projects,
       hasMoreProjects: projectsPayload?.hasMore ?? false,
       threads,
@@ -168,7 +193,9 @@ export function registerReminderRoutes(
   app.delete<{ Params: { id: string } }>("/api/reminders/:id", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
-    const removed = reminderService.delete(request.params.id, user.id);
+    const removed = reminderService.delete(request.params.id, user.id)
+      || await memoryService?.forget(request.params.id)
+      || false;
     if (!removed) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Reminder not found" });
     }

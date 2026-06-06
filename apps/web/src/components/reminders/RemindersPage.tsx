@@ -333,6 +333,7 @@ export function MemoryPage() {
             </Card>
           ) : (
             reminders.map((reminder) => {
+              const isEngineMemory = reminder.kind === 'engine'
               const project = reminder.projectId ? projectById.get(reminder.projectId) : null
               const session = reminder.sessionId ? sessionsById.get(reminder.sessionId) : null
               const tags = parseTags(reminder.tags)
@@ -343,7 +344,9 @@ export function MemoryPage() {
                     <Textarea
                       className="min-h-20"
                       defaultValue={reminder.content}
+                      readOnly={isEngineMemory}
                       onBlur={(event) => {
+                        if (isEngineMemory) return
                         const content = event.target.value.trim()
                         if (content && content !== reminder.content) void updateReminder(reminder, { content })
                       }}
@@ -351,7 +354,7 @@ export function MemoryPage() {
                     <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center">
                       <span className="inline-flex items-center gap-1">
                         <Workflow className="h-3.5 w-3.5" />
-                        {project ? (project.title || project.rootPath || 'Project') : 'Global memory'}
+                        {isEngineMemory ? 'Engine memory' : project ? (project.title || project.rootPath || 'Project') : 'Global memory'}
                       </span>
                       {session && (
                         <span className="inline-flex items-center gap-1">
@@ -383,10 +386,12 @@ export function MemoryPage() {
                     )}
                     <Separator className="my-3" />
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => void updateReminder(reminder, { status: reminder.status === 'active' ? 'archived' : 'active' })}>
-                        {reminder.status === 'active' ? <Archive className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                        {reminder.status === 'active' ? 'Archive' : 'Restore'}
-                      </Button>
+                      {isEngineMemory ? null : (
+                        <Button variant="outline" size="sm" onClick={() => void updateReminder(reminder, { status: reminder.status === 'active' ? 'archived' : 'active' })}>
+                          {reminder.status === 'active' ? <Archive className="mr-2 h-4 w-4" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                          {reminder.status === 'active' ? 'Archive' : 'Restore'}
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => void removeReminder(reminder.id)}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete

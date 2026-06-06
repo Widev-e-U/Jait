@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isAgentToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
@@ -292,7 +292,7 @@ function getToolInvocationLabels(
     const action = displayStr(args.action)
     return { running: `Jait: ${action || 'working'}`, done: `Jait: ${action || 'done'}` }
   }
-  if (normalized === 'mcp-tool') {
+  if (isMcpToolName(normalized)) {
     const mcp = getMcpToolLabel(normalizedArgs, resultRecord)
     const label = mcp.title || 'MCP Tool'
     return { running: `Running ${label}`, done: `Ran ${label}` }
@@ -615,7 +615,7 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized === 'thread.control') return 'thread'
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
-  if (normalized === 'mcp-tool') return 'mcp tool'
+  if (isMcpToolName(normalized)) return 'mcp tool'
   if (normalized.startsWith('ssh.') || normalized === 'run.ssh') return 'ssh'
 
   return normalized.replace(/[._-]+/g, ' ').trim() || 'tool'
@@ -642,7 +642,7 @@ export function getToolCallWrapperIconKind(calls: ToolCallInfo[]): 'terminal' | 
   for (const call of calls) {
     const normalized = normalizeTool(call.tool)
     if (normalized === 'execute' || normalized.startsWith('terminal.')) return 'terminal'
-    if (normalized === 'mcp-tool') hasMcp = true
+    if (isMcpToolName(normalized)) hasMcp = true
     if (
       normalized === 'web'
       || normalized.startsWith('web.')
@@ -735,7 +735,7 @@ export function getCallSummary(
     if (action.startsWith('cron.')) return `${action}: ${truncate(displayStr(args.name ?? args.id), 40)}`
     return action || 'jait'
   }
-  if (normalized === 'mcp-tool') {
+  if (isMcpToolName(normalized)) {
     const mcp = getMcpToolLabel(normalizedArgs)
     if (mcp.title && mcp.details) return `${mcp.title} • ${mcp.details}`
     if (mcp.title) return mcp.title
@@ -1331,7 +1331,7 @@ function getJsonOutputMeta(tool: string): { label: string; accent: string } {
   if (normalized.startsWith('memory.')) return { label: 'Memory result', accent: 'bg-amber-500' }
   if (normalized.startsWith('cron.')) return { label: 'Schedule result', accent: 'bg-violet-500' }
   if (normalized.startsWith('surfaces.')) return { label: 'Surface result', accent: 'bg-purple-500' }
-  if (normalized === 'mcp-tool') return { label: 'Tool result', accent: 'bg-purple-500' }
+  if (isMcpToolName(normalized)) return { label: 'Tool result', accent: 'bg-purple-500' }
   return { label: `${getToolMeta(normalized).label} result`, accent: 'bg-primary' }
 }
 
@@ -2046,7 +2046,10 @@ function ToolCallCardInner({
     ? call.result.data as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
-  const mcpLabel = normalizedTool === 'mcp-tool' ? getMcpToolLabel(normalizedArgs, resultData) : null
+  const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
+    ...(normalizedTool.startsWith('mcp.') && !normalizedArgs.title ? { title: normalizedTool } : {}),
+    ...normalizedArgs,
+  }, resultData) : null
   const mcpMeta = mcpLabel ? getMcpDisplayLabel(mcpLabel.title) : null
   const meta = getToolMeta(normalizedTool)
   const Icon = mcpMeta?.icon ?? meta.icon

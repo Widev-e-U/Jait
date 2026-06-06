@@ -52,6 +52,7 @@ function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
 function createMockMemoryService(entries: MemoryEntry[]): MemoryService {
   return {
     save: async (input: SaveMemoryInput) => memoryEntry({ content: input.content, scope: input.scope, source: input.source }),
+    list: async (scope?: MemoryScope) => entries.filter((entry) => !scope || entry.scope === scope),
     search: async (_query: string, limit = 5, scope?: MemoryScope) => entries.filter((entry) => !scope || entry.scope === scope).slice(0, limit),
     forget: async () => false,
     forgetExpired: async () => 0,

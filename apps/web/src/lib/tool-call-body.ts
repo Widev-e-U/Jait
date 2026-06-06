@@ -197,6 +197,7 @@ export function getMcpToolLabel(
   const title = firstNonEmptyString(
     args.recipient_name,
     args.recipientName,
+    args.title,
     args.tool,
     args.toolName,
     args.name,
@@ -218,6 +219,10 @@ export function getMcpToolLabel(
   })
 
   return { title, details }
+}
+
+export function isMcpToolName(tool: string): boolean {
+  return tool === 'mcp-tool' || tool.startsWith('mcp.')
 }
 
 export function getToolFilePath(

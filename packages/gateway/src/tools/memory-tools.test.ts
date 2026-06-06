@@ -54,7 +54,10 @@ describe("memory tools with reminders", () => {
         sessionId: params.sessionId ?? null,
       }),
     } as unknown as ReminderService;
-    const memory = { save: async (input: SaveMemoryInput) => memoryEntry({ content: input.content }) } as MemoryService;
+    const memory = {
+      save: async (input: SaveMemoryInput) => memoryEntry({ content: input.content }),
+      list: async () => [],
+    } as unknown as MemoryService;
     const tool = createMemorySaveTool(memory, reminders);
 
     const result = await tool.execute({
@@ -73,8 +76,9 @@ describe("memory tools with reminders", () => {
 
   it("returns memories and reminders from memory.search", async () => {
     const memory = {
+      list: async () => [memoryEntry()],
       search: async () => [memoryEntry()],
-    } as MemoryService;
+    } as unknown as MemoryService;
     const reminders = {
       list: () => [reminder()],
     } as unknown as ReminderService;
@@ -123,8 +127,9 @@ describe("memory tools with reminders", () => {
 
   it("deletes reminders before falling back to semantic memory", async () => {
     const memory = {
+      list: async () => [],
       forget: async () => false,
-    } as MemoryService;
+    } as unknown as MemoryService;
     const reminders = {
       delete: () => true,
     } as unknown as ReminderService;

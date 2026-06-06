@@ -148,6 +148,11 @@ export class MemoryEngine implements MemoryService {
       .map((item) => item.entry);
   }
 
+  async list(scope?: MemoryScope): Promise<MemoryEntry[]> {
+    await this.backend.forgetExpired();
+    return this.backend.list(scope);
+  }
+
   async forget(id: string): Promise<boolean> {
     return this.backend.forget(id);
   }
