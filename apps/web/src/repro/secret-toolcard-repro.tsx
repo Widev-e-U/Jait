@@ -4,7 +4,7 @@ import { Message } from '@/components/chat/message'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import { secretRequestMatchesTool, type SecretInputRequest } from '@/lib/secret-input'
 import type { MessageSegment } from '@/hooks/useChat'
-import './index.css'
+import '@/index.css'
 
 function SecretToolcardRepro() {
   const [value, setValue] = useState('')

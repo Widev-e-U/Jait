@@ -1,0 +1,528 @@
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import {
+  shouldRenderSecretRequestDialog,
+  shouldRenderSecretRequestInline,
+  type SecretInputRequest,
+} from '@/lib/secret-input'
+
+const API_URL = getApiUrl()
+const WS_URL = getWsUrl()
+
+export function InlineSecretMounted({ requestId, onMount, children }: {
+  requestId: string
+  onMount: (requestId: string) => void
+  children: ReactNode
+}) {
+  useEffect(() => {
+    onMount(requestId)
+  }, [requestId, onMount])
+  return <>{children}</>
+}
+
+const INLINE_SECRET_GRACE_MS = 500
+
+export function useSecretInputPrompt({
+  token,
+  sessionId,
+}: {
+  token: string | null
+  sessionId: string | null
+}) {
+  const [requests, setRequests] = useState<SecretInputRequest[]>([])
+  const [value, setValue] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [inlineMountedRequestId, setInlineMountedRequestId] = useState<string | null>(null)
+  const [gracePeriodExpired, setGracePeriodExpired] = useState(false)
+  const activeRequest = requests[0] ?? null
+  const renderInline = shouldRenderSecretRequestInline(activeRequest)
+
+  useEffect(() => {
+    setInlineMountedRequestId(null)
+    setGracePeriodExpired(false)
+    if (!activeRequest) return
+    if (!shouldRenderSecretRequestInline(activeRequest)) return
+    const timer = setTimeout(() => setGracePeriodExpired(true), INLINE_SECRET_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [activeRequest?.id])
+
+  const markInlineMounted = useCallback((requestId: string) => {
+    setInlineMountedRequestId(requestId)
+  }, [])
+
+  const authHeaders = useCallback((contentType = false) => {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (contentType) headers['Content-Type'] = 'application/json'
+    return headers
+  }, [token])
+
+  const refresh = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/api/secrets/requests`, {
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      if (!res.ok) return
+      const data = await res.json() as { requests: SecretInputRequest[] }
+      setRequests(data.requests.filter((request) => !sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)))
+    } catch {
+      // gateway down or reconnecting
+    }
+  }, [authHeaders, sessionId, token])
+
+  useEffect(() => {
+    if (!token) return
+    void refresh()
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as { type: string; sessionId?: string; payload?: unknown }
+        if (msg.type === 'secret.requested') {
+          const request = msg.payload as SecretInputRequest
+          if (!sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)) {
+            setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          }
+        }
+        if (msg.type === 'secret.resolved') {
+          const resolved = msg.payload as { id?: string }
+          if (resolved.id) {
+            setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
+            setValue('')
+            setRemember(false)
+          }
+        }
+      } catch {
+        // ignore malformed events
+      }
+    }
+    return () => ws.close()
+  }, [refresh, sessionId, token])
+
+  const submitSecret = useCallback(async () => {
+    if (!activeRequest || !value) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/submit`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({ value, remember: activeRequest.rememberable ? remember : false }),
+      })
+      if (!res.ok) throw new Error('Failed to submit secret')
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setValue('')
+      setRemember(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit secret')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders, remember, value])
+
+  const cancelSecret = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setValue('')
+      setRemember(false)
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders])
+
+  const form = activeRequest ? (
+    <SecretInputForm
+      request={activeRequest}
+      value={value}
+      onValueChange={setValue}
+      submitting={submitting}
+      showPassword={showPassword}
+      onShowPasswordChange={setShowPassword}
+      remember={remember}
+      onRememberChange={setRemember}
+      onSubmit={submitSecret}
+      onCancel={cancelSecret}
+      showTitle={renderInline}
+    />
+  ) : null
+
+  const inlineMounted = activeRequest ? inlineMountedRequestId === activeRequest.id : false
+  const showDialog = Boolean(activeRequest) && (
+    shouldRenderSecretRequestDialog(activeRequest)
+    || (renderInline && gracePeriodExpired && !inlineMounted)
+  )
+
+  const dialog = showDialog && activeRequest ? (
+    <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{activeRequest.title}</DialogTitle>
+          <DialogDescription>
+            Enter the secret to continue.
+          </DialogDescription>
+        </DialogHeader>
+        {form}
+      </DialogContent>
+    </Dialog>
+  ) : null
+
+  return {
+    activeRequest,
+    renderInline,
+    form,
+    dialog,
+    markInlineMounted,
+  }
+}
+
+function SecretInputForm({
+  request,
+  value,
+  onValueChange,
+  submitting,
+  showPassword,
+  onShowPasswordChange,
+  remember,
+  onRememberChange,
+  onSubmit,
+  onCancel,
+  showTitle = false,
+}: {
+  request: SecretInputRequest
+  value: string
+  onValueChange: (value: string) => void
+  submitting: boolean
+  showPassword: boolean
+  onShowPasswordChange: (value: boolean | ((prev: boolean) => boolean)) => void
+  remember: boolean
+  onRememberChange: (value: boolean) => void
+  onSubmit: () => Promise<void>
+  onCancel: () => Promise<void>
+  showTitle?: boolean
+}) {
+  return (
+    <div className="space-y-2.5">
+      {showTitle && (
+        <div className="space-y-0.5">
+          <p className="text-[13px] font-medium leading-4 text-foreground">{request.title}</p>
+          <p className="text-[11px] leading-4 text-muted-foreground">This prompt is attached to the running tool call.</p>
+        </div>
+      )}
+      <div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {request.prompt ?? 'Enter the secret to continue.'} <span className="hidden sm:inline">The value goes directly to the local gateway and is not sent to the model.</span>
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs" htmlFor={`secret-input-${request.id}`}>Secret</Label>
+        <div className="relative">
+          <Input
+            id={`secret-input-${request.id}`}
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            placeholder="Password"
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void onSubmit()
+            }}
+            className="h-9 pr-10 text-sm"
+            autoFocus
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onShowPasswordChange((prev) => !prev)}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+      {request.rememberable && (
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={remember}
+            onChange={(event) => onRememberChange(event.target.checked)}
+          />
+          <span className="min-w-0 flex-1">
+            Remember for {request.rememberLabel || request.prompt || request.title}
+          </span>
+        </label>
+      )}
+      <div className="flex justify-end gap-1.5">
+        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
+      </div>
+    </div>
+  )
+}
+
+interface UserQuestionOption {
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+interface UserQuestionItem {
+  id: string
+  header: string
+  question: string
+  multiSelect?: boolean
+  options?: UserQuestionOption[]
+  allowFreeformInput?: boolean
+}
+
+interface UserQuestionRequest {
+  id: string
+  sessionId: string
+  requestedBy: string | null
+  title: string
+  questions: UserQuestionItem[]
+  expiresAt: string
+  status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
+}
+
+interface UserQuestionAnswer {
+  selected: string[]
+  freeText: string | null
+  skipped: boolean
+}
+
+export function useUserQuestionPrompt({
+  token,
+  sessionId,
+}: {
+  token: string | null
+  sessionId: string | null
+}) {
+  const [requests, setRequests] = useState<UserQuestionRequest[]>([])
+  const [answers, setAnswers] = useState<Record<string, UserQuestionAnswer>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const activeRequest = requests[0] ?? null
+
+  const authHeaders = useCallback((contentType = false) => {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (contentType) headers['Content-Type'] = 'application/json'
+    return headers
+  }, [token])
+
+  const refresh = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/api/user-questions/requests`, {
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      if (!res.ok) return
+      const data = await res.json() as { requests: UserQuestionRequest[] }
+      // Surface every pending question for the authenticated user (the API already
+      // scopes by user). Gating on the active session silently swallowed prompts
+      // raised from a different session — leaving the agent blocked with no form.
+      setRequests(data.requests)
+    } catch {
+      // gateway down or reconnecting
+    }
+  }, [authHeaders, sessionId, token])
+
+  useEffect(() => {
+    if (!token) return
+    void refresh()
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as { type: string; payload?: unknown }
+        if (msg.type === 'user-question.requested') {
+          const request = msg.payload as UserQuestionRequest
+          // Always surface — see refresh() above for why session gating is unsafe here.
+          setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+        }
+        if (msg.type === 'user-question.resolved') {
+          const resolved = msg.payload as { id?: string }
+          if (resolved.id) {
+            setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
+            setAnswers({})
+          }
+        }
+      } catch {
+        // ignore malformed events
+      }
+    }
+    return () => ws.close()
+  }, [refresh, sessionId, token])
+
+  useEffect(() => {
+    if (!activeRequest) {
+      setAnswers({})
+      return
+    }
+    setAnswers(Object.fromEntries(activeRequest.questions.map((question) => [
+      question.id,
+      { selected: [], freeText: null, skipped: false },
+    ])))
+  }, [activeRequest])
+
+  const submitAnswers = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/user-questions/requests/${activeRequest.id}/submit`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({ answers }),
+      })
+      if (!res.ok) throw new Error('Failed to submit answers')
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setAnswers({})
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit answers')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, answers, authHeaders])
+
+  const cancelRequest = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      await fetch(`${API_URL}/api/user-questions/requests/${activeRequest.id}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setAnswers({})
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders])
+
+  const setAnswer = useCallback((questionId: string, update: Partial<UserQuestionAnswer>) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] ?? { selected: [], freeText: null, skipped: false }), ...update },
+    }))
+  }, [])
+
+  const dialog = activeRequest ? (
+    <Dialog open onOpenChange={(open) => { if (!open) void cancelRequest() }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{activeRequest.title}</DialogTitle>
+          <DialogDescription>Jait needs your input to continue.</DialogDescription>
+        </DialogHeader>
+        <UserQuestionForm
+          request={activeRequest}
+          answers={answers}
+          submitting={submitting}
+          onAnswerChange={setAnswer}
+          onSubmit={submitAnswers}
+          onCancel={cancelRequest}
+        />
+      </DialogContent>
+    </Dialog>
+  ) : null
+
+  return { activeRequest, dialog }
+}
+
+function UserQuestionForm({
+  request,
+  answers,
+  submitting,
+  onAnswerChange,
+  onSubmit,
+  onCancel,
+}: {
+  request: UserQuestionRequest
+  answers: Record<string, UserQuestionAnswer>
+  submitting: boolean
+  onAnswerChange: (questionId: string, update: Partial<UserQuestionAnswer>) => void
+  onSubmit: () => Promise<void>
+  onCancel: () => Promise<void>
+}) {
+  const canSubmit = request.questions.some((question) => {
+    const answer = answers[question.id]
+    return answer?.skipped || Boolean(answer?.freeText?.trim()) || (answer?.selected.length ?? 0) > 0
+  })
+
+  return (
+    <div className="space-y-4">
+      {request.questions.map((question) => {
+        const answer = answers[question.id] ?? { selected: [], freeText: null, skipped: false }
+        return (
+          <div key={question.id} className="space-y-2">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium leading-5 text-foreground">{question.header}</p>
+              <p className="text-xs leading-5 text-muted-foreground">{question.question}</p>
+            </div>
+            {question.options?.length ? (
+              <div className="space-y-1">
+                {question.options.map((option) => {
+                  const checked = answer.selected.includes(option.label)
+                  return (
+                    <label key={option.label} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs">
+                      <input
+                        type={question.multiSelect ? 'checkbox' : 'radio'}
+                        name={`user-question-${request.id}-${question.id}`}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                        checked={checked}
+                        onChange={(event) => {
+                          const selected = question.multiSelect
+                            ? event.target.checked
+                              ? [...answer.selected, option.label]
+                              : answer.selected.filter((item) => item !== option.label)
+                            : [option.label]
+                          onAnswerChange(question.id, { selected, skipped: false })
+                        }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium text-foreground">{option.label}</span>
+                        {option.recommended && <span className="ml-1 text-primary">Recommended</span>}
+                        {option.description && <span className="block text-muted-foreground">{option.description}</span>}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            ) : null}
+            {question.allowFreeformInput !== false && (
+              <Textarea
+                value={answer.freeText ?? ''}
+                placeholder="Type an answer..."
+                className="min-h-20 text-sm"
+                onChange={(event) => onAnswerChange(question.id, { freeText: event.target.value, skipped: false })}
+              />
+            )}
+          </div>
+        )
+      })}
+      <div className="flex justify-end gap-1.5">
+        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !canSubmit}>Submit</Button>
+      </div>
+    </div>
+  )
+}

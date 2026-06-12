@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useChat } from '@/hooks/useChat'
-import './index.css'
+import '@/index.css'
 
 const encoder = new TextEncoder()
 
