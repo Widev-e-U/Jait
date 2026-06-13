@@ -59,6 +59,18 @@ describe('message edit mobile layout', () => {
     expect(classes).toContain('w-[min(42rem,calc(100vw-1rem))]')
   })
 
+  it('renders the floating mobile composer as an opaque card so messages do not bleed through', () => {
+    const classes = getUserMessageEditComposerShellClassName()
+
+    expect(classes).toContain('bg-background')
+    expect(classes).toContain('border')
+    expect(classes).toContain('shadow-2xl')
+    // ...and removes that card styling for the inline desktop layout
+    expect(classes).toContain('md:bg-transparent')
+    expect(classes).toContain('md:border-0')
+    expect(classes).toContain('md:shadow-none')
+  })
+
   it('does not animate vertical position while typing in the edit composer', () => {
     const classes = getUserMessageEditComposerTransitionClassName(true)
 

@@ -51,7 +51,6 @@ interface TraceExpandableCardProps {
   children: ReactNode
   tone?: 'default' | 'assistant'
   defaultOpen?: boolean
-  onOpenChange?: () => void
 }
 
 function roleClassName(role: string): string {
@@ -131,18 +130,11 @@ function TraceExpandableCard({
   children,
   tone = 'default',
   defaultOpen = false,
-  onOpenChange,
 }: TraceExpandableCardProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen)
-        onOpenChange?.()
-      }}
-    >
+    <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className={cn(
           'rounded-md border p-3',
@@ -338,7 +330,7 @@ function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): Trac
   return rows
 }
 
-function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?: () => void }) {
+function TraceRowView({ row }: { row: TraceRow }) {
   if (row.kind === 'summary') {
     return <SummaryMetrics flow={row.flow} />
   }
@@ -426,7 +418,6 @@ function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?:
         <TraceExpandableCard
           tone="assistant"
           defaultOpen={false}
-          onOpenChange={onExpandChange}
           badge={(
             <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName('assistant'))}>
               assistant response
@@ -452,7 +443,6 @@ function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?:
       <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-border bg-background" />
       <TraceExpandableCard
         defaultOpen={false}
-        onOpenChange={onExpandChange}
         badge={(
           <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName(row.role))}>
             {row.role}
@@ -525,12 +515,6 @@ function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[
     return () => window.cancelAnimationFrame(frame)
   }, [open, rows.length, virtualizer])
 
-  const handleExpandChange = () => {
-    window.requestAnimationFrame(() => {
-      virtualizer.measure()
-    })
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-2">
       {contextFlow?.note ? (
@@ -555,7 +539,7 @@ function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[
                   className="absolute left-0 top-0 w-full pb-3"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <TraceRowView row={row} onExpandChange={handleExpandChange} />
+                  <TraceRowView row={row} />
                 </div>
               )
             })}

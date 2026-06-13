@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Save, Search, Tags, Trash2, X } from 'lucide-react'
+import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Search, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -47,16 +47,8 @@ interface DragPreviewState {
   height: number
 }
 
-interface SavedTagFilter {
-  id: string
-  name: string
-  tags: string[]
-}
-
 interface TodoFilterState {
   search: string
-  tags: string[]
-  savedTagFilters: SavedTagFilter[]
 }
 
 interface CompletionHistoryEntry {
@@ -184,20 +176,7 @@ function applyStoredTodoOrder(repoId: string, items: JaitTodo[]): JaitTodo[] {
 }
 
 function emptyTodoFilterState(): TodoFilterState {
-  return { search: '', tags: [], savedTagFilters: [] }
-}
-
-function normalizeSavedTagFilters(value: unknown): SavedTagFilter[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item): SavedTagFilter[] => {
-    if (!item || typeof item !== 'object') return []
-    const record = item as Record<string, unknown>
-    const tags = normalizeTags(Array.isArray(record.tags) ? record.tags.filter((tag): tag is string => typeof tag === 'string') : [])
-    if (tags.length === 0) return []
-    const name = typeof record.name === 'string' && record.name.trim() ? record.name.trim() : tags.join(' + ')
-    const id = typeof record.id === 'string' && record.id.trim() ? record.id.trim() : tags.join('|')
-    return [{ id, name, tags }]
-  }).slice(0, 24)
+  return { search: '' }
 }
 
 function readTodoFilterMap(): Record<string, TodoFilterState> {
@@ -210,8 +189,6 @@ function readTodoFilterMap(): Record<string, TodoFilterState> {
       const record = value as Record<string, unknown>
       return [[repoId, {
         search: typeof record.search === 'string' ? record.search : '',
-        tags: normalizeTags(Array.isArray(record.tags) ? record.tags.filter((tag): tag is string => typeof tag === 'string') : []),
-        savedTagFilters: normalizeSavedTagFilters(record.savedTagFilters),
       }]]
     })
     return Object.fromEntries(entries)
@@ -230,8 +207,6 @@ function persistTodoFilterState(repoId: string, state: TodoFilterState): void {
     const filterMap = readTodoFilterMap()
     filterMap[repoId] = {
       search: state.search,
-      tags: normalizeTags(state.tags),
-      savedTagFilters: normalizeSavedTagFilters(state.savedTagFilters),
     }
     window.localStorage.setItem(TODO_FILTER_STORAGE_KEY, JSON.stringify(filterMap))
   } catch {
@@ -359,12 +334,6 @@ function dateTimeLabel(value: string | null | undefined): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date)
-}
-
-function areTagsEqual(a: string[], b: string[]): boolean {
-  const left = normalizeTags(a).sort()
-  const right = normalizeTags(b).sort()
-  return left.length === right.length && left.every((tag, index) => tag === right[index])
 }
 
 function parseCompletionHistory(value: string | null | undefined): CompletionHistoryEntry[] {
@@ -732,8 +701,6 @@ export function TodoPage({
   const [mode, setMode] = useState<TodoMode>('list')
   const [statusFilter, setStatusFilter] = useState<TodoStatus | 'all'>('all')
   const [metadataSearch, setMetadataSearch] = useState('')
-  const [tagFilters, setTagFilters] = useState<string[]>([])
-  const [savedTagFilters, setSavedTagFilters] = useState<SavedTagFilter[]>([])
   const [hydratedFilterRepoId, setHydratedFilterRepoId] = useState<string | null>(null)
   const [month, setMonth] = useState(() => new Date())
   const [newMessage, setNewMessage] = useState('')
@@ -801,16 +768,12 @@ export function TodoPage({
   useEffect(() => {
     if (!repoId) {
       setMetadataSearch('')
-      setTagFilters([])
-      setSavedTagFilters([])
       setHydratedFilterRepoId(null)
       setSelectedTodoIds(new Set())
       return
     }
     const filterState = readTodoFilterState(repoId)
     setMetadataSearch(filterState.search)
-    setTagFilters(filterState.tags)
-    setSavedTagFilters(filterState.savedTagFilters)
     setHydratedFilterRepoId(repoId)
     setSelectedTodoIds(new Set())
   }, [repoId])
@@ -819,18 +782,14 @@ export function TodoPage({
     if (!repoId || hydratedFilterRepoId !== repoId) return
     persistTodoFilterState(repoId, {
       search: metadataSearch,
-      tags: tagFilters,
-      savedTagFilters,
     })
-  }, [hydratedFilterRepoId, metadataSearch, repoId, savedTagFilters, tagFilters])
+  }, [hydratedFilterRepoId, metadataSearch, repoId])
 
   const filteredTodos = useMemo(() => sortPendingTodosFirst(todos.filter((todo) => {
     if (statusFilter !== 'all' && todo.status !== statusFilter) return false
-    const todoTags = parseTags(todo.tags)
-    if (tagFilters.length > 0 && !tagFilters.every((tag) => todoTags.includes(tag))) return false
     if (!matchesMetadataSearch(todo, metadataSearch)) return false
     return true
-  })), [metadataSearch, statusFilter, tagFilters, todos])
+  })), [metadataSearch, statusFilter, todos])
 
   const counts = useMemo(() => ({
     open: todos.filter((todo) => todo.status === 'open').length,
@@ -843,7 +802,6 @@ export function TodoPage({
   const selectedTodos = useMemo(() => todos.filter((todo) => selectedTodoIds.has(todo.id)), [selectedTodoIds, todos])
   const selectedVisibleCount = useMemo(() => filteredTodos.filter((todo) => selectedTodoIds.has(todo.id)).length, [filteredTodos, selectedTodoIds])
   const allVisibleSelected = filteredTodos.length > 0 && selectedVisibleCount === filteredTodos.length
-  const activeSavedTagFilter = savedTagFilters.find((filter) => areTagsEqual(filter.tags, tagFilters)) ?? null
   const completionEvents = useMemo(() => buildCompletionEvents(todos), [todos])
   const historyPageCount = Math.max(1, Math.ceil(completionEvents.length / COMPLETION_HISTORY_PAGE_SIZE))
   const pagedCompletionEvents = completionEvents.slice(
@@ -991,21 +949,6 @@ export function TodoPage({
       return next
     })
   }, [filteredTodos])
-
-  const saveCurrentTagFilter = useCallback(() => {
-    const tags = normalizeTags(tagFilters)
-    if (tags.length === 0) return
-    const id = tags.join('|')
-    setSavedTagFilters((current) => {
-      if (current.some((filter) => filter.id === id || areTagsEqual(filter.tags, tags))) return current
-      return [...current, { id, name: tags.join(' + '), tags }]
-    })
-  }, [tagFilters])
-
-  const deleteActiveTagFilter = useCallback(() => {
-    if (!activeSavedTagFilter) return
-    setSavedTagFilters((current) => current.filter((filter) => filter.id !== activeSavedTagFilter.id))
-  }, [activeSavedTagFilter])
 
   const applyBulkUpdate = async (
     buildPatch: (todo: JaitTodo) => Partial<Pick<JaitTodo, 'status' | 'priority' | 'dueDate'>> & { tags?: string[] },
@@ -1245,9 +1188,9 @@ export function TodoPage({
             Global repo follow-up work, saved from agents or added directly here.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-row items-center gap-2">
           <Select value={repoId || undefined} onValueChange={handleRepoChange} disabled={repos.length === 0}>
-            <SelectTrigger className="h-10 min-w-56">
+            <SelectTrigger className="h-10 min-w-0 flex-1 sm:flex-initial sm:min-w-56">
               <SelectValue placeholder="Select repository" />
             </SelectTrigger>
             <SelectContent>
@@ -1258,23 +1201,44 @@ export function TodoPage({
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => void loadTodos(repoId)} disabled={isLoading || !repoId}>
-            <RefreshCw className={cn('mr-2 h-4 w-4', isLoading && 'animate-spin')} />
-            Refresh
+          <Button
+            variant="outline"
+            onClick={() => void loadTodos(repoId)}
+            disabled={isLoading || !repoId}
+            title="Refresh"
+            aria-label="Refresh"
+            className="h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4"
+          >
+            <RefreshCw className={cn('h-4 w-4 sm:mr-2', isLoading && 'animate-spin')} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button variant="outline" onClick={() => setIsHistoryOpen(true)} disabled={completionEvents.length === 0}>
-            <History className="mr-2 h-4 w-4" />
-            History
-            {completionEvents.length > 0 && <Badge variant="secondary" className="ml-1 px-1.5">{completionEvents.length}</Badge>}
+          <Button
+            variant="outline"
+            onClick={() => setIsHistoryOpen(true)}
+            disabled={completionEvents.length === 0}
+            title="History"
+            aria-label="History"
+            className="relative h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4"
+          >
+            <History className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">History</span>
+            {completionEvents.length > 0 && (
+              <Badge variant="secondary" className="ml-1 hidden px-1.5 sm:inline-flex">{completionEvents.length}</Badge>
+            )}
+            {completionEvents.length > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground sm:hidden">
+                {completionEvents.length}
+              </span>
+            )}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <Badge variant="outline" className="justify-center gap-1.5 px-3 py-1"><ListChecks className="h-3.5 w-3.5 text-primary/70" />{todos.length} total</Badge>
-        <Badge variant="secondary" className="justify-center gap-1.5 px-3 py-1"><Circle className="h-3.5 w-3.5 text-muted-foreground" />{counts.open} open</Badge>
-        <Badge variant="secondary" className="justify-center gap-1.5 px-3 py-1"><CircleDashed className="h-3.5 w-3.5 text-sky-500" />{counts.inProgress} active</Badge>
-        <Badge variant="secondary" className="justify-center gap-1.5 px-3 py-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />{counts.done} done</Badge>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1"><ListChecks className="h-3.5 w-3.5 text-primary/70" />{todos.length} total</span>
+        <span className="inline-flex items-center gap-1"><Circle className="h-3.5 w-3.5 text-muted-foreground" />{counts.open} open</span>
+        <span className="inline-flex items-center gap-1"><CircleDashed className="h-3.5 w-3.5 text-sky-500" />{counts.inProgress} active</span>
+        <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />{counts.done} done</span>
       </div>
 
       {error && (
@@ -1382,13 +1346,13 @@ export function TodoPage({
       </div>
 
       <div className="grid gap-3 rounded-lg border p-3">
-        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_11rem_minmax(14rem,1fr)_13rem_auto]">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[12rem] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={metadataSearch}
               onChange={(event) => setMetadataSearch(event.target.value)}
-              placeholder="Search todo metadata..."
+              placeholder="Search todos by text, tag, status, date..."
               className="h-10 pl-9"
             />
           </div>
@@ -1396,57 +1360,15 @@ export function TodoPage({
             value={statusFilter}
             onChange={setStatusFilter}
             options={[{ value: 'all', label: 'All statuses' }, ...statusOptions]}
-            className="h-10"
+            className="h-10 w-full sm:w-40"
           />
-          <TagChipEditor
-            value={tagFilters}
-            onChange={(tags) => setTagFilters(normalizeTags(tags))}
-            placeholder="Filter tags..."
-            className="min-h-10"
-          />
-          <Select
-            value={activeSavedTagFilter?.id ?? 'custom'}
-            onValueChange={(value) => {
-              if (value === 'custom') {
-                setTagFilters([])
-                return
-              }
-              const saved = savedTagFilters.find((filter) => filter.id === value)
-              if (saved) setTagFilters(saved.tags)
-            }}
-          >
-            <SelectTrigger className="h-10">
-              <SelectValue placeholder="Saved filters" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="custom">Unsaved filter</SelectItem>
-              {savedTagFilters.map((filter) => (
-                <SelectItem key={filter.id} value={filter.id}>
-                  {filter.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="h-10 w-10" onClick={saveCurrentTagFilter} disabled={tagFilters.length === 0 || Boolean(activeSavedTagFilter)} aria-label="Save tag filter">
-              <Save className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="h-10 w-10" onClick={deleteActiveTagFilter} disabled={!activeSavedTagFilter} aria-label="Delete saved tag filter">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline" className="gap-1.5">
-              <Bookmark className="h-3.5 w-3.5" />
-              {savedTagFilters.length} saved
-            </Badge>
             <span>{filteredTodos.length} shown</span>
-            {(metadataSearch || tagFilters.length > 0 || statusFilter !== 'all') && (
+            {(metadataSearch || statusFilter !== 'all') && (
               <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => {
                 setMetadataSearch('')
-                setTagFilters([])
                 setStatusFilter('all')
               }}>
                 <X className="mr-1 h-3.5 w-3.5" />
