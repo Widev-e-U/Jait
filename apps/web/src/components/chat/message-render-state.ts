@@ -4,12 +4,12 @@ export function hasRenderableUserMessageContent(params: {
   content: string
   userDisplayText: string
   userDisplaySegments: UserMessageSegment[]
-  imageAttachmentCount: number
+  attachmentCount: number
 }): boolean {
   return (
     params.content.length > 0 ||
     params.userDisplayText.length > 0 ||
     params.userDisplaySegments.length > 0 ||
-    params.imageAttachmentCount > 0
+    params.attachmentCount > 0
   )
 }

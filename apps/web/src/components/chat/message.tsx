@@ -528,26 +528,34 @@ function MessageInner({
   const [editSegments, setEditSegments] = useState<UserMessageSegment[]>([])
   const [optimisticUserDisplayText, setOptimisticUserDisplayText] = useState<string | null>(null)
   const [optimisticUserDisplaySegments, setOptimisticUserDisplaySegments] = useState<UserMessageSegment[] | null>(null)
-  const userImageAttachments = useMemo(() => {
+  const userAttachments = useMemo(() => {
     if (!isUser) return []
     const fromSegments = normalizeUserMessageSegments(optimisticUserDisplaySegments ?? userDisplaySegments)
       .flatMap((segment) => (
-        segment.type === 'image'
+        segment.type === 'image' || segment.type === 'attachment'
           ? [{
               name: segment.name,
               mimeType: segment.mimeType,
               data: segment.data,
-              preview: `data:${segment.mimeType};base64,${segment.data}`,
+              ...(segment.type === 'image' ? { preview: `data:${segment.mimeType};base64,${segment.data}` } : {}),
             }]
           : []
       ))
     return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
   }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
+  const userImageAttachments = useMemo(
+    () => userAttachments.filter((attachment) => attachment.mimeType.startsWith('image/')),
+    [userAttachments],
+  )
+  const userFileAttachments = useMemo(
+    () => userAttachments.filter((attachment) => !attachment.mimeType.startsWith('image/')),
+    [userAttachments],
+  )
   const hasUserRenderableContent = isUser && hasRenderableUserMessageContent({
     content,
     userDisplayText: optimisticUserDisplayText ?? userDisplayText,
     userDisplaySegments: optimisticUserDisplaySegments ?? userDisplaySegments,
-    imageAttachmentCount: userImageAttachments.length,
+    attachmentCount: userAttachments.length,
   })
   const copyTimerRef = useRef<number | null>(null)
   const memoryFeedbackTimerRef = useRef<number | null>(null)
@@ -1207,6 +1215,20 @@ function MessageInner({
                                 </Dialog>
                               )
                             })}
+                          </div>
+                        )}
+                        {userFileAttachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {userFileAttachments.map((attachment, index) => (
+                              <span
+                                key={`${attachment.name}-${index}`}
+                                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
+                                title={attachment.mimeType}
+                              >
+                                <FileIcon filename={attachment.name} className="h-3.5 w-3.5 shrink-0" />
+                                <span className="max-w-[180px] truncate">{attachment.name}</span>
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>

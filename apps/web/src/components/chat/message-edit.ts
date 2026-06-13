@@ -19,13 +19,17 @@ export function createUserMessageEditSubmission(
   if (!trimmed) return null
 
   const sourceSegments = preservedSegments ?? editedSegments
-  const preservedImages = (sourceSegments ?? []).filter(
-    (segment): segment is Extract<UserMessageSegment, { type: 'image' }> => segment.type === 'image',
+  const preservedAttachments = (sourceSegments ?? []).filter(
+    (segment): segment is Extract<UserMessageSegment, { type: 'image' | 'attachment' }> => (
+      segment.type === 'image' || segment.type === 'attachment'
+    ),
   )
   const displaySegments = [
     ...buildEditedUserMessageSegments(trimmed, editedSegments),
-    ...preservedImages.filter((image) => !editedSegments?.some((segment) => (
-      segment.type === 'image' && segment.name === image.name && segment.data === image.data
+    ...preservedAttachments.filter((attachment) => !editedSegments?.some((segment) => (
+      (segment.type === 'image' || segment.type === 'attachment')
+      && segment.name === attachment.name
+      && segment.data === attachment.data
     ))),
   ]
   return {

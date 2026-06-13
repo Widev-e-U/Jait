@@ -46,6 +46,21 @@ describe('message edit submission', () => {
       ],
     })
   })
+
+  it('preserves non-image attachment segments that are not represented in the editable text', () => {
+    const editedSegments: UserMessageSegment[] = [
+      { type: 'text', text: 'Updated prompt' },
+    ]
+    const preservedSegments: UserMessageSegment[] = [
+      { type: 'text', text: 'Original prompt' },
+      { type: 'attachment', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
+    ]
+
+    expect(createUserMessageEditSubmission('Updated prompt', editedSegments, preservedSegments)?.displaySegments).toEqual([
+      { type: 'text', text: 'Updated prompt' },
+      { type: 'attachment', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
+    ])
+  })
 })
 
 describe('message edit mobile layout', () => {

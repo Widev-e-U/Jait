@@ -396,6 +396,7 @@ interface QueuedChatMessage {
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
+    | { type: "attachment"; name: string; mimeType: string; data: string }
   >;
 }
 
@@ -410,6 +411,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
   | { type: "project"; path: string; name: string }
   | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
   | { type: "image"; name: string; mimeType: string; data: string }
+  | { type: "attachment"; name: string; mimeType: string; data: string }
 > | undefined {
   if (!Array.isArray(raw)) return undefined;
   const segments: Array<
@@ -418,6 +420,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
+    | { type: "attachment"; name: string; mimeType: string; data: string }
   > = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
@@ -466,9 +469,51 @@ function parseUserDisplaySegments(raw: unknown): Array<
         mimeType: record.mimeType,
         name: typeof record.name === "string" ? record.name : "Image",
       });
+      continue;
+    }
+    if (
+      record.type === "attachment"
+      && typeof record.data === "string"
+      && typeof record.mimeType === "string"
+      && !record.mimeType.startsWith("image/")
+    ) {
+      segments.push({
+        type: "attachment",
+        data: record.data,
+        mimeType: record.mimeType,
+        name: typeof record.name === "string" ? record.name : "Attachment",
+      });
     }
   }
   return segments.length > 0 ? segments : undefined;
+}
+
+function decodeUploadedAttachmentData(data: string): string {
+  const payload = data.startsWith("data:") ? data.split(",")[1] ?? "" : data;
+  return Buffer.from(payload, "base64").toString("utf-8");
+}
+
+function buildUploadedAttachmentPromptBlock(
+  attachments: Array<{ name: string; mimeType: string; data: string }>,
+): string | null {
+  const sections = attachments.flatMap((attachment) => {
+    if (attachment.mimeType.startsWith("image/")) return [];
+    const decoded = decodeUploadedAttachmentData(attachment.data);
+    const truncated = decoded.length > 20_000;
+    return [
+      `[File: ${attachment.name} (${attachment.mimeType})]\n${decoded.slice(0, 20_000)}${truncated ? "\n[truncated]" : ""}`,
+    ];
+  });
+  return sections.length > 0 ? `Uploaded file attachments:\n\n${sections.join("\n\n")}` : null;
+}
+
+function appendUploadedAttachmentPromptBlock(
+  content: string,
+  attachments: Array<{ name: string; mimeType: string; data: string }>,
+): string {
+  const block = buildUploadedAttachmentPromptBlock(attachments);
+  if (!block) return content;
+  return content.trim() ? `${content}\n\n${block}` : block;
 }
 
 function parseDisplayLineRange(record: Record<string, unknown>): UserDisplayLineRange | null {
@@ -1910,7 +1955,8 @@ export function registerChatRoutes(
           chatMode,
           promptCtx,
         );
-        const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${content}` : content;
+        const cliContentWithAttachments = appendUploadedAttachmentPromptBlock(content, attachments);
+        const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${cliContentWithAttachments}` : cliContentWithAttachments;
         const recentContextBlock = isNewCliSession ? buildExternalProviderRecentContext(history) : null;
         let cliContent = cliUserContent;
         if (isNewCliSession) {

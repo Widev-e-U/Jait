@@ -81,7 +81,7 @@ import { triggerSystemNotification } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import { deriveSessionTitle, shouldAutoTitleSession } from '@/lib/session-title'
 import {
-  mergeImageAttachmentsIntoSegments,
+  mergeAttachmentsIntoSegments,
 } from '@/lib/message-segment-builders'
 import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
@@ -125,6 +125,41 @@ import {
 } from '@/components/prompts/input-prompts'
 
 const API_URL = getApiUrl()
+const UPLOADED_ATTACHMENT_CONTEXT_LIMIT = 20_000
+
+function decodeAttachmentText(attachment: ChatAttachment): string | null {
+  try {
+    const binary = window.atob(attachment.data)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function buildUploadedAttachmentPromptBlock(attachments: ChatAttachment[] | undefined): string | null {
+  const sections = (attachments ?? []).flatMap((attachment) => {
+    if (attachment.mimeType.startsWith('image/')) return []
+    const decoded = decodeAttachmentText(attachment)
+    if (decoded == null) return []
+    const truncated = decoded.length > UPLOADED_ATTACHMENT_CONTEXT_LIMIT
+    return [`[File: ${attachment.name} (${attachment.mimeType})]\n${decoded.slice(0, UPLOADED_ATTACHMENT_CONTEXT_LIMIT)}${truncated ? '\n[truncated]' : ''}`]
+  })
+  return sections.length > 0 ? `Uploaded file attachments:\n\n${sections.join('\n\n')}` : null
+}
+
+function appendUploadedAttachmentPromptBlock(content: string, attachments: ChatAttachment[] | undefined): string {
+  const block = buildUploadedAttachmentPromptBlock(attachments)
+  if (!block) return content
+  return content.trim() ? `${content}\n\n${block}` : block
+}
+
+function getUploadedAttachmentDisplayLabel(attachments: ChatAttachment[] | undefined): string {
+  const names = (attachments ?? []).map((attachment) => attachment.name).filter(Boolean)
+  if (names.length === 0) return ''
+  if (names.length === 1) return `Uploaded ${names[0]}`
+  return `Uploaded ${names.length} files`
+}
 
 type CliProviderId = ProviderId
 
@@ -2671,18 +2706,20 @@ function App() {
     displaySegments?: UserMessageSegment[],
   ) => {
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
-    if (!prepared) return
-    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
+    if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
+    const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
+    const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptText
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
     enqueueMessage({
-      content: prepared.promptWithReferences,
-      displayContent: prepared.displayContent || prepared.promptWithReferences,
+      content: promptText,
+      displayContent,
       mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
-      referencedFiles: prepared.referencedFiles,
+      referencedFiles: prepared?.referencedFiles,
       displaySegments: nextDisplaySegments,
       attachments: fileAttachments,
     })
@@ -2714,7 +2751,7 @@ function App() {
     }
 
     const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
-    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const generatedTitle = deriveSessionTitle(prepared?.displayContent || promptText)
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
@@ -2769,20 +2806,22 @@ function App() {
     displaySegments?: UserMessageSegment[],
   ) => {
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
-    if (!prepared || threadComposerDisabled) return
-    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
+    const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
+    if ((!prepared && !promptWithUploads) || threadComposerDisabled) return
+    const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const selectedThreadQueueLength = automation.selectedThread
       ? managerMessageQueues[automation.selectedThread.id]?.length ?? 0
       : 0
     if (automation.selectedThread && (automation.selectedThread.status === 'running' || selectedThreadQueueLength > 0)) {
       enqueueManagerMessage(automation.selectedThread.id, {
         id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        content: prepared.displayContent || prepared.promptWithReferences,
-        displayContent: prepared.displayContent || prepared.promptWithReferences,
-        fullContent: prepared.promptWithReferences,
-        referencedFiles: prepared.referencedFiles,
+        content: displayContent,
+        displayContent,
+        fullContent: promptWithUploads,
+        referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
-        attachments: prepared.attachments,
+        attachments: prepared?.attachments,
         providerId: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         model: cliModel ?? undefined,
@@ -2795,15 +2834,15 @@ function App() {
     setInputValue('')
     setInputSegments(undefined)
     await automation.handleSend(
-      prepared.promptWithReferences,
+      promptWithUploads,
       chatProvider,
       chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       cliModel ?? undefined,
       {
-        displayContent: prepared.displayContent || prepared.promptWithReferences,
-        referencedFiles: prepared.referencedFiles,
+        displayContent,
+        referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
-        attachments: prepared.attachments,
+        attachments: prepared?.attachments,
       },
       threadTargetRepo?.id ?? undefined,
     )
@@ -3029,16 +3068,18 @@ function App() {
     const thread = automation.selectedThread
     if (!thread) return
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
-    if (!prepared) return
-    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
+    const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
+    if (!prepared && !promptWithUploads) return
+    const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     enqueueManagerMessage(thread.id, {
       id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      content: prepared.displayContent || prepared.promptWithReferences,
-      displayContent: prepared.displayContent || prepared.promptWithReferences,
-      fullContent: prepared.promptWithReferences,
-      referencedFiles: prepared.referencedFiles,
+      content: displayContent,
+      displayContent,
+      fullContent: promptWithUploads,
+      referencedFiles: prepared?.referencedFiles,
       displaySegments: nextDisplaySegments,
-      attachments: prepared.attachments,
+      attachments: prepared?.attachments,
       providerId: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: cliModel ?? undefined,

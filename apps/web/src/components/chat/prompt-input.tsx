@@ -576,7 +576,7 @@ function appendSegmentNodes(
       if (segment.text) el.appendChild(document.createTextNode(segment.text))
       continue
     }
-    if (segment.type === 'image') continue
+    if (segment.type === 'image' || segment.type === 'attachment') continue
     if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(segment))}"]`)) continue
     el.appendChild(createChipNode(segment, onRemoveChip))
     el.appendChild(document.createTextNode(' '))

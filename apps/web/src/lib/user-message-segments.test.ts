@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
+
 import {
   buildEditedUserMessageSegments,
   buildFallbackUserMessageSegments,
@@ -59,6 +61,26 @@ describe('user message segment serialization', () => {
     expect(buildEditedUserMessageSegments('please review this instead', previous)).toEqual([
       { type: 'text', text: 'please review this instead' },
       { type: 'file', path: 'apps/web/src/App.tsx', name: 'App.tsx' },
+    ])
+  })
+
+  it('round-trips non-image uploaded attachments through display segments', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'text', text: 'review this ' },
+      { type: 'attachment', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
+    ]
+
+    const payload = serializeUserMessageSegmentsForClipboard(segments)
+
+    expect(serializeUserMessageSegmentsToMarkdown(segments)).toContain('[attachment:notes.txt]')
+    expect(parseUserMessageClipboardPayload(payload!)).toEqual(segments)
+  })
+
+  it('merges non-image uploads into display segments', () => {
+    expect(mergeAttachmentsIntoSegments(undefined, [
+      { name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
+    ])).toEqual([
+      { type: 'attachment', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
     ])
   })
 })

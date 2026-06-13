@@ -1113,7 +1113,7 @@ export function registerThreadRoutes(
         : undefined;
       const displaySegments = Array.isArray(body["displaySegments"])
         ? (() => {
-            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
             for (const entry of body["displaySegments"] as unknown[]) {
               if (!entry || typeof entry !== "object") continue;
               const record = entry as Record<string, unknown>;
@@ -1126,6 +1126,36 @@ export function registerThreadRoutes(
                   type: "file",
                   path: record.path,
                   name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+                });
+                continue;
+              }
+              if (
+                record.type === "image"
+                && typeof record.name === "string"
+                && typeof record.mimeType === "string"
+                && typeof record.data === "string"
+                && record.mimeType.startsWith("image/")
+              ) {
+                parsed.push({
+                  type: "image",
+                  name: record.name,
+                  mimeType: record.mimeType,
+                  data: record.data,
+                });
+                continue;
+              }
+              if (
+                record.type === "attachment"
+                && typeof record.name === "string"
+                && typeof record.mimeType === "string"
+                && typeof record.data === "string"
+                && !record.mimeType.startsWith("image/")
+              ) {
+                parsed.push({
+                  type: "attachment",
+                  name: record.name,
+                  mimeType: record.mimeType,
+                  data: record.data,
                 });
               }
             }
@@ -1335,7 +1365,7 @@ export function registerThreadRoutes(
       : undefined;
     const displaySegments = Array.isArray(body["displaySegments"])
       ? (() => {
-          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
           for (const entry of body["displaySegments"] as unknown[]) {
             if (!entry || typeof entry !== "object") continue;
             const record = entry as Record<string, unknown>;
@@ -1348,6 +1378,36 @@ export function registerThreadRoutes(
                 type: "file",
                 path: record.path,
                 name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+              });
+              continue;
+            }
+            if (
+              record.type === "image"
+              && typeof record.name === "string"
+              && typeof record.mimeType === "string"
+              && typeof record.data === "string"
+              && record.mimeType.startsWith("image/")
+            ) {
+              parsed.push({
+                type: "image",
+                name: record.name,
+                mimeType: record.mimeType,
+                data: record.data,
+              });
+              continue;
+            }
+            if (
+              record.type === "attachment"
+              && typeof record.name === "string"
+              && typeof record.mimeType === "string"
+              && typeof record.data === "string"
+              && !record.mimeType.startsWith("image/")
+            ) {
+              parsed.push({
+                type: "attachment",
+                name: record.name,
+                mimeType: record.mimeType,
+                data: record.data,
               });
             }
           }

@@ -29,6 +29,12 @@ export interface UserImageAttachment {
   data: string
 }
 
+export interface UserFileAttachment {
+  name: string
+  mimeType: string
+  data: string
+}
+
 const JAIT_REF_MIME = 'application/x-jait-user-message+json'
 
 export type UserMessageSegment =
@@ -37,6 +43,7 @@ export type UserMessageSegment =
   | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
   | ({ type: 'image' } & UserImageAttachment)
+  | ({ type: 'attachment' } & UserFileAttachment)
 
 export function normalizeUserMessageSegments(segments: UserMessageSegment[] | null | undefined): UserMessageSegment[] {
   if (!segments?.length) return []
@@ -89,11 +96,22 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       continue
     }
 
-    if (!segment.data.trim() || !segment.mimeType.startsWith('image/')) continue
+    if (segment.type === 'image') {
+      if (!segment.data.trim() || !segment.mimeType.startsWith('image/')) continue
+      normalized.push({
+        type: 'image',
+        name: segment.name || 'Image',
+        mimeType: segment.mimeType,
+        data: segment.data,
+      })
+      continue
+    }
+
+    if (!segment.data.trim() || segment.mimeType.startsWith('image/')) continue
     normalized.push({
-      type: 'image',
-      name: segment.name || 'Image',
-      mimeType: segment.mimeType,
+      type: 'attachment',
+      name: segment.name || 'Attachment',
+      mimeType: segment.mimeType || 'application/octet-stream',
       data: segment.data,
     })
   }
@@ -173,7 +191,7 @@ export function buildEditedUserMessageSegments(
 ): UserMessageSegment[] {
   const next = buildFallbackUserMessageSegments(text, userReferencedFilesFromSegments(previousSegments))
   for (const segment of normalizeUserMessageSegments(previousSegments)) {
-    if (segment.type === 'image') next.push(segment)
+    if (segment.type === 'image' || segment.type === 'attachment') next.push(segment)
   }
   return next
 }
@@ -217,6 +235,7 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
     if (segment.type === 'file') return `@${segment.path}${formatLineRangeSuffix(segment.lineRange)}`
     if (segment.type === 'project') return `[project:${segment.path}]`
     if (segment.type === 'terminal') return `[terminal:${segment.terminalId}${formatLineRangeSuffix(segment.lineRange)}]`
+    if (segment.type === 'attachment') return `[attachment:${segment.name}]`
     return `[image:${segment.name}]`
   }).join('')
 }
@@ -334,6 +353,20 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         data: record.data,
         mimeType: record.mimeType,
         name: typeof record.name === 'string' ? record.name : 'Image',
+      })
+      continue
+    }
+    if (
+      record.type === 'attachment'
+      && typeof record.data === 'string'
+      && typeof record.mimeType === 'string'
+      && !record.mimeType.startsWith('image/')
+    ) {
+      parsed.push({
+        type: 'attachment',
+        data: record.data,
+        mimeType: record.mimeType,
+        name: typeof record.name === 'string' ? record.name : 'Attachment',
       })
     }
   }

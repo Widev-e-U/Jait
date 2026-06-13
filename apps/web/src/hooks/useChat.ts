@@ -97,16 +97,31 @@ export function shouldOpenResumeStream(params: {
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
-    segment.type === 'image'
+    segment.type === 'image' || segment.type === 'attachment'
       ? [{
           name: segment.name,
           mimeType: segment.mimeType,
           data: segment.data,
-          preview: `data:${segment.mimeType};base64,${segment.data}`,
+          ...(segment.type === 'image' ? { preview: `data:${segment.mimeType};base64,${segment.data}` } : {}),
         }]
       : []
   ))
   return attachments.length > 0 ? attachments : undefined
+}
+
+function mergeChatAttachments(
+  explicitAttachments: ChatAttachment[] | undefined,
+  segmentAttachments: ChatAttachment[] | undefined,
+): ChatAttachment[] | undefined {
+  const merged: ChatAttachment[] = []
+  const seen = new Set<string>()
+  for (const attachment of [...(explicitAttachments ?? []), ...(segmentAttachments ?? [])]) {
+    const key = `${attachment.name}:${attachment.mimeType}:${attachment.data}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(attachment)
+  }
+  return merged.length > 0 ? merged : undefined
 }
 
 function finiteTimestamp(value: unknown): number | undefined {
@@ -989,6 +1004,7 @@ export function useChat(
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
+    const outboundAttachments = mergeChatAttachments(options.attachments, attachmentsFromSegments(options.displaySegments))
     const assistantId = createOptimisticMessageId('assistant')
 
     if (requestSessionId && prevSessionIdRef.current !== requestSessionId) {
@@ -1003,7 +1019,7 @@ export function useChat(
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
       ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
-      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+      ...(outboundAttachments?.length ? { attachments: outboundAttachments } : {}),
     }
 
     setState(prev => ({
@@ -1049,7 +1065,7 @@ export function useChat(
         ...(options.responseStyle && options.responseStyle !== 'normal' ? { responseStyle: options.responseStyle } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
-        ...(options.attachments?.length ? { attachments: options.attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
+        ...(outboundAttachments?.length ? { attachments: outboundAttachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
       }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
@@ -1081,7 +1097,7 @@ export function useChat(
       if (!response.ok) {
         throw new Error(formatChatHttpError(response.status, {
           provider: options.provider,
-          attachments: options.attachments,
+          attachments: outboundAttachments,
           displaySegments: options.displaySegments,
         }))
       }

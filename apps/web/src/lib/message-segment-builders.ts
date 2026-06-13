@@ -3,19 +3,35 @@ import type { ChatAttachment } from '@/hooks/useChat'
 import type { PreviewInspectInteractiveElement } from '@/components/project/project-preview-inspect-panel'
 import type { UserMessageSegment, UserTerminalReference } from '@/lib/user-message-segments'
 
-export function mergeImageAttachmentsIntoSegments(
+export function mergeAttachmentsIntoSegments(
   segments: UserMessageSegment[] | undefined,
   attachments: ChatAttachment[] | undefined,
 ) {
   const nextSegments = [...(segments ?? [])]
+  const seen = new Set(nextSegments.flatMap((segment) => (
+    segment.type === 'image' || segment.type === 'attachment'
+      ? [`${segment.name}:${segment.mimeType}:${segment.data}`]
+      : []
+  )))
   for (const attachment of attachments ?? []) {
-    if (!attachment.mimeType.startsWith('image/')) continue
-    nextSegments.push({
-      type: 'image',
-      name: attachment.name,
-      mimeType: attachment.mimeType,
-      data: attachment.data,
-    })
+    const key = `${attachment.name}:${attachment.mimeType}:${attachment.data}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (attachment.mimeType.startsWith('image/')) {
+      nextSegments.push({
+        type: 'image',
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        data: attachment.data,
+      })
+    } else {
+      nextSegments.push({
+        type: 'attachment',
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        data: attachment.data,
+      })
+    }
   }
   return nextSegments.length > 0 ? nextSegments : undefined
 }

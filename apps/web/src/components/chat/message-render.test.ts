@@ -9,7 +9,7 @@ describe('Message rendering', () => {
       userDisplaySegments: [
         { type: 'file', path: '/tmp/example.ts', name: 'example.ts' },
       ],
-      imageAttachmentCount: 0,
+      attachmentCount: 0,
     })).toBe(true)
   })
 
@@ -18,7 +18,7 @@ describe('Message rendering', () => {
       content: '',
       userDisplayText: '',
       userDisplaySegments: [],
-      imageAttachmentCount: 1,
+      attachmentCount: 1,
     })).toBe(true)
   })
 
@@ -27,7 +27,7 @@ describe('Message rendering', () => {
       content: '',
       userDisplayText: '',
       userDisplaySegments: [],
-      imageAttachmentCount: 0,
+      attachmentCount: 0,
     })).toBe(false)
   })
 })
