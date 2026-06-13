@@ -130,31 +130,31 @@ export function JobsPage() {
             Manage your automated tasks and agent schedules
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
-          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="w-full sm:w-auto">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="shrink-0 px-3 sm:px-4" title="Refresh" aria-label="Refresh">
+            <RefreshCw className={`h-4 w-4 sm:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button onClick={() => setIsCreateOpen(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            New Job
+          <Button onClick={() => setIsCreateOpen(true)} className="shrink-0 px-3 sm:px-4" title="New Job" aria-label="New Job">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">New Job</span>
           </Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
-        <Badge variant="outline" className="justify-center px-3 py-1 text-xs sm:text-sm">
+      <div className="mb-6 flex flex-wrap items-center gap-1.5 text-xs sm:gap-2">
+        <Badge variant="outline" className="px-2 py-0.5">
           {totalJobs} total
         </Badge>
-        <Badge variant="default" className="justify-center px-3 py-1 text-xs sm:text-sm">
-          {enabledCount} enabled on page
+        <Badge variant="default" className="px-2 py-0.5">
+          {enabledCount} enabled
         </Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1 text-xs sm:text-sm">
-          {agentTaskCount} agent tasks on page
+        <Badge variant="secondary" className="px-2 py-0.5">
+          {agentTaskCount} agent tasks
         </Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1 text-xs sm:text-sm">
-          {systemJobCount} system jobs on page
+        <Badge variant="secondary" className="px-2 py-0.5">
+          {systemJobCount} system jobs
         </Badge>
       </div>
 

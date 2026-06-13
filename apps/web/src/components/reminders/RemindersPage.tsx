@@ -216,9 +216,9 @@ export function MemoryPage() {
             Agent-readable memory with project chat history and completed thread context.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-2">
           <Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as ReminderStatusFilter)}>
-            <SelectTrigger className="h-10 w-full sm:w-40">
+            <SelectTrigger className="h-10 min-w-0 flex-1 sm:w-40 sm:flex-none">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -227,23 +227,23 @@ export function MemoryPage() {
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => void loadSnapshot()} disabled={isLoading}>
-            <RefreshCw className={cn('mr-2 h-4 w-4', isLoading && 'animate-spin')} />
-            Refresh
+          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void loadSnapshot()} disabled={isLoading} title="Refresh" aria-label="Refresh">
+            <RefreshCw className={cn('h-4 w-4 sm:mr-2', isLoading && 'animate-spin')} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button variant="outline" onClick={() => void copyMarkdownExport()}>
-            <Copy className="mr-2 h-4 w-4" />
-            {exportCopied ? 'Copied' : 'Copy Markdown'}
+          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void copyMarkdownExport()} title="Copy Markdown" aria-label="Copy Markdown">
+            <Copy className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">{exportCopied ? 'Copied' : 'Copy Markdown'}</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <Badge variant="outline" className="justify-center px-3 py-1">{counts.reminders} memories</Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1">{counts.projects} projects</Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1">{counts.sessions} chats</Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1">{counts.threads} threads</Badge>
-        <Badge variant="secondary" className="justify-center px-3 py-1">{secrets.length} secrets</Badge>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <Badge variant="outline" className="px-2 py-0.5">{counts.reminders} memories</Badge>
+        <Badge variant="secondary" className="px-2 py-0.5">{counts.projects} projects</Badge>
+        <Badge variant="secondary" className="px-2 py-0.5">{counts.sessions} chats</Badge>
+        <Badge variant="secondary" className="px-2 py-0.5">{counts.threads} threads</Badge>
+        <Badge variant="secondary" className="px-2 py-0.5">{secrets.length} secrets</Badge>
       </div>
 
       {error && (

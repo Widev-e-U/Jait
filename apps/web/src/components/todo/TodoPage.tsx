@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Search, Tags, Trash2, X } from 'lucide-react'
+import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Filter, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Search, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -1345,48 +1345,44 @@ export function TodoPage({
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[12rem] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={metadataSearch}
-              onChange={(event) => setMetadataSearch(event.target.value)}
-              placeholder="Search todos by text, tag, status, date..."
-              className="h-10 pl-9"
-            />
-          </div>
-          <OptionSelect
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={[{ value: 'all', label: 'All statuses' }, ...statusOptions]}
-            className="h-10 w-full sm:w-40"
+      <div className="flex items-center gap-2 rounded-lg border p-3">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={metadataSearch}
+            onChange={(event) => setMetadataSearch(event.target.value)}
+            placeholder="Search todos by text, tag, status, date..."
+            className="h-10 pl-9"
           />
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{filteredTodos.length} shown</span>
-            {(metadataSearch || statusFilter !== 'all') && (
-              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => {
-                setMetadataSearch('')
-                setStatusFilter('all')
-              }}>
-                <X className="mr-1 h-3.5 w-3.5" />
-                Clear
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Button variant={mode === 'list' ? 'secondary' : 'outline'} onClick={() => setMode('list')}>
-              <ListChecks className="mr-2 h-4 w-4" />
-              List
-            </Button>
-            <Button variant={mode === 'calendar' ? 'secondary' : 'outline'} onClick={() => setMode('calendar')}>
-              <CalendarDays className="mr-2 h-4 w-4" />
-              Calendar
-            </Button>
-          </div>
-        </div>
+        <Button
+          variant={mode === 'list' ? 'secondary' : 'outline'}
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          onClick={() => setMode('list')}
+          title="List view"
+          aria-label="List view"
+        >
+          <ListChecks className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={mode === 'calendar' ? 'secondary' : 'outline'}
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          onClick={() => setMode('calendar')}
+          title="Calendar view"
+          aria-label="Calendar view"
+        >
+          <CalendarDays className="h-4 w-4" />
+        </Button>
+        <OptionSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[{ value: 'all', label: 'All statuses' }, ...statusOptions]}
+          triggerLabel="Status"
+          triggerIcon={<Filter className="h-4 w-4" />}
+          className={cn('h-10 w-auto shrink-0 gap-1 px-2.5', statusFilter !== 'all' && 'border-primary text-primary')}
+        />
       </div>
 
       {selectedTodos.length > 0 && (
