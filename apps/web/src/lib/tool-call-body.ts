@@ -209,9 +209,18 @@ export function getMcpToolLabel(
   ) ?? null
 
   const detailsSource = nested ?? args
-  const excludes = ['recipient_name', 'recipientName', 'tool', 'toolName', 'name']
-  if (detailsSource === args) {
-    excludes.push('server', 'serverId', 'server_id', 'title')
+  // Identity/wrapper fields are already conveyed by the card header + icon, so
+  // never repeat them inside the details line (no "tool:" / "server:" noise).
+  const excludes = ['recipient_name', 'recipientName', 'tool', 'toolName', 'name', 'server', 'serverId', 'server_id']
+  // Drop a redundant `title` that just echoes the tool identity (e.g. an MCP
+  // wrapper name like "mcp.jait.file_patch"), but keep titles that carry real
+  // content (e.g. a thread title the agent is creating).
+  const titleValue = detailsSource.title
+  if (
+    detailsSource === args
+    || (typeof titleValue === 'string' && (titleValue === title || isMcpToolName(titleValue)))
+  ) {
+    excludes.push('title')
   }
   const details = summarizeToolArguments(detailsSource, {
     excludeKeys: excludes,

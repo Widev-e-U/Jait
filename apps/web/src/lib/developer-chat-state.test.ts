@@ -53,6 +53,18 @@ describe('getDeveloperChatSubmitLoading', () => {
     })).toBe(true)
   })
 
+  it('does not block submit while only per-session preferences are still loading', () => {
+    // Regression: after a response streamed, a slow provider-runtime-mode / CLI
+    // model fetch must not leave the send button stuck as a disabled spinner.
+    expect(getDeveloperChatSubmitLoading({
+      ...readyInput,
+      loadingChatMode: true,
+      loadingProviderRuntimeMode: true,
+      loadingCliModels: true,
+      loadingChatView: true,
+    })).toBe(false)
+  })
+
   it('does not block submit for unrelated views', () => {
     expect(getDeveloperChatSubmitLoading({
       ...readyInput,

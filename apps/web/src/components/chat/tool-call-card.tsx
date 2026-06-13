@@ -2386,7 +2386,7 @@ function ToolCallCardInner({
           />
         )}
         <div className={cn(
-          'absolute left-[3px] top-[7px] z-10 flex h-5 w-5 items-center justify-center rounded-md shadow-sm ring-2 ring-background',
+          'absolute left-[3px] top-[6px] z-10 flex h-5 w-5 items-center justify-center rounded-md shadow-sm ring-2 ring-background',
           stateClasses.icon,
         )}>
           <Icon className={cn('h-3.5 w-3.5 shrink-0', effectiveColor)} />
@@ -2394,7 +2394,7 @@ function ToolCallCardInner({
 
         <div className="group pb-1">
           <div className={cn(
-            'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 transition-colors',
+            'flex min-h-8 items-center gap-2 rounded-md px-2 py-1 transition-colors',
             stateClasses.row,
           )}>
             {hasExpandableContent ? (

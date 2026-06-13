@@ -38,11 +38,9 @@ export function getDeveloperChatSubmitLoading(input: DeveloperChatSubmitLoadingI
   if (input.authLoading || input.projectsLoading) return true
   if (!input.activeSessionId) return false
 
-  return (
-    input.isLoadingHistory
-    || input.loadingChatMode
-    || input.loadingProviderRuntimeMode
-    || input.loadingCliModels
-    || input.loadingChatView
-  )
+  // Only genuine conversation hydration should disable the composer. Per-session
+  // UI preference fetches (mode / provider runtime mode / CLI models / view) all
+  // have safe defaults, and a slow or stalled one of those must never leave the
+  // send button stuck as a disabled spinner after a response has fully streamed.
+  return input.isLoadingHistory
 }

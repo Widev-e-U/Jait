@@ -247,6 +247,23 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('omits redundant identity fields (tool/server/wrapper title) from nested details', () => {
+    expect(
+      getMcpToolLabel({
+        recipient_name: 'mcp.jait.file_patch',
+        arguments: JSON.stringify({
+          server: 'jait',
+          tool: 'file_patch',
+          title: 'mcp.jait.file_patch',
+          path: 'apps/web/src/App.tsx',
+        }),
+      }),
+    ).toEqual({
+      title: 'mcp.jait.file_patch',
+      details: 'path: apps/web/src/App.tsx',
+    })
+  })
+
   it('treats direct MCP tool names as MCP cards without wrapper field summaries', () => {
     expect(isMcpToolName('mcp.jait.file.read')).toBe(true)
     expect(

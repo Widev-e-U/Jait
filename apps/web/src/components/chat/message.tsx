@@ -1,10 +1,10 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { AlertTriangle, Brain, Check, Copy, Eye, Loader2, MessageSquare, Pencil, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -23,6 +23,13 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
@@ -654,6 +661,7 @@ function MessageInner({
     copyTimerRef.current = window.setTimeout(() => setCopied(false), 1200)
   }
 
+  const isMobile = useIsMobile()
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
@@ -758,87 +766,123 @@ function MessageInner({
     }
   }
 
-  const renderMemoryFeedbackIcon = (kind: MemoryFeedbackKind, fallback: ReactNode) => {
+  const renderMemoryFeedbackIcon = (kind: MemoryFeedbackKind, fallback: ReactElement): ReactElement => {
     if (memoryFeedbackState?.kind !== kind) return fallback
     if (memoryFeedbackState.status === 'saving') return <Loader2 className="h-3.5 w-3.5 animate-spin" />
     return <Check className="h-3.5 w-3.5" />
   }
 
+  const messageActionItems: {
+    key: string
+    label: string
+    icon: ReactElement
+    onClick: () => void
+    disabled?: boolean
+  }[] = [
+    ...(canEdit ? [{
+      key: 'edit',
+      label: 'Edit message',
+      icon: <Pencil className="h-3.5 w-3.5" />,
+      onClick: () => startEditing(),
+    }] : []),
+    ...(canRetry ? [{
+      key: 'retry',
+      label: 'Retry from this message',
+      icon: <RotateCcw className={cn('h-3.5 w-3.5', isRetrying && 'animate-spin')} />,
+      onClick: () => { void handleRetryFromHere() },
+      disabled: isRetrying,
+    }] : []),
+    ...(!isUser && contextFlow ? [{
+      key: 'context',
+      label: 'View LLM context',
+      icon: <Eye className="h-3.5 w-3.5" />,
+      onClick: () => setContextOpen(true),
+    }] : []),
+    ...(canSendMemoryFeedback ? [{
+      key: 'memory',
+      label: getMemoryFeedbackLabel('should_have_remembered'),
+      icon: renderMemoryFeedbackIcon('should_have_remembered', <Brain className="h-3.5 w-3.5" />),
+      onClick: () => { void handleMemoryFeedback('should_have_remembered') },
+      disabled: memoryFeedbackSaving,
+    }] : []),
+    {
+      key: 'copy',
+      label: copied ? 'Copied' : 'Copy message',
+      icon: copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />,
+      onClick: () => { void copyToClipboard() },
+    },
+  ]
+
   const renderActions = (outsideBubble?: boolean) => {
-    if (isEditing || !canCopyMessage || !content) return null
+    if (isEditing || !canCopyMessage || !content || messageActionItems.length === 0) return null
+
+    // On touch devices, collapse the always-visible action row into a single
+    // 3-dot menu anchored bottom-right (accessibility / avoids clutter).
+    if (isMobile) {
+      return (
+        <div
+          className={cn(
+            'absolute z-10',
+            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
+          )}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Message actions"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">
+              {messageActionItems.map((item) => (
+                <DropdownMenuItem
+                  key={item.key}
+                  disabled={item.disabled}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    item.onClick()
+                  }}
+                  className="gap-2"
+                >
+                  {item.icon as ComponentProps<typeof DropdownMenuItem>['children']}
+                  <span>{item.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )
+    }
+
     return (
       <div
         className={cn(
           'absolute z-10 rounded-full border border-border/70 bg-background p-1',
           outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
-          'touch-device:opacity-80',
           copied && 'opacity-100',
         )}
       >
         <MessageActions>
-          {canEdit ? (
+          {messageActionItems.map((item) => (
             <MessageAction
-              onClick={startEditing}
-              aria-label="Edit message"
-              tooltip="Edit message"
-              className="h-6 w-6"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </MessageAction>
-          ) : null}
-          {canRetry ? (
-            <MessageAction
+              key={item.key}
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                void handleRetryFromHere()
+                item.onClick()
               }}
-              disabled={isRetrying}
-              aria-label="Retry from this message"
-              tooltip="Retry from this message"
+              disabled={item.disabled}
+              aria-label={item.label}
+              tooltip={item.label}
               className="h-6 w-6"
             >
-              <RotateCcw className={cn('h-3.5 w-3.5', isRetrying && 'animate-spin')} />
+              {item.icon}
             </MessageAction>
-          ) : null}
-          {!isUser && contextFlow ? (
-            <MessageAction
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setContextOpen(true)
-              }}
-              aria-label="View LLM context"
-              tooltip="View LLM context"
-              className="h-6 w-6"
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </MessageAction>
-          ) : null}
-          {canSendMemoryFeedback ? (
-            <MessageAction
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                void handleMemoryFeedback('should_have_remembered')
-              }}
-              disabled={memoryFeedbackSaving}
-              aria-label={getMemoryFeedbackLabel('should_have_remembered')}
-              tooltip={getMemoryFeedbackLabel('should_have_remembered')}
-              className="h-6 w-6"
-            >
-              {renderMemoryFeedbackIcon('should_have_remembered', <Brain className="h-3.5 w-3.5" />)}
-            </MessageAction>
-          ) : null}
-          <MessageAction
-            onClick={copyToClipboard}
-            aria-label={copied ? 'Copied' : 'Copy message'}
-            tooltip={copied ? 'Copied' : 'Copy message'}
-            className="h-6 w-6"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          </MessageAction>
+          ))}
         </MessageActions>
       </div>
     )
