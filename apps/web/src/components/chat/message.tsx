@@ -869,7 +869,7 @@ function MessageInner({
     return (
       <div
         className={cn(
-          'absolute z-10 rounded-full border border-border/70 bg-background p-1',
+          'absolute z-10 rounded-md border border-border/60 bg-background/95 p-0.5 shadow-sm',
           outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
@@ -887,7 +887,7 @@ function MessageInner({
               disabled={item.disabled}
               aria-label={item.label}
               tooltip={item.label}
-              className="h-6 w-6"
+              className="h-5 w-5 rounded-md p-0 [&_svg]:h-3 [&_svg]:w-3"
             >
               {item.icon}
             </MessageAction>

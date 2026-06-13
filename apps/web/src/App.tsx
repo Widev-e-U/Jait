@@ -1355,7 +1355,9 @@ function App() {
         }
         break
       case 'chat.mode':
-        if (value === 'ask' || value === 'agent' || value === 'swarm' || value === 'plan') {
+        if (value === 'swarm') {
+          setChatMode('agent')
+        } else if (value === 'ask' || value === 'agent' || value === 'plan') {
           setChatMode(value)
         }
         break
@@ -1450,7 +1452,9 @@ function App() {
     }
 
     const cm = state['chat.mode']
-    if (cm === 'ask' || cm === 'agent' || cm === 'swarm' || cm === 'plan') {
+    if (cm === 'swarm') {
+      setChatMode('agent')
+    } else if (cm === 'ask' || cm === 'agent' || cm === 'plan') {
       setChatMode(cm)
     }
 

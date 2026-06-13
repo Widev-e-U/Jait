@@ -370,6 +370,10 @@ export function useChat(
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
 
+  const clearUnfinishedTodoList = useCallback(() => {
+    setTodoList((items) => items.some((item) => item.status !== 'completed') ? [] : items)
+  }, [])
+
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
@@ -826,7 +830,10 @@ export function useChat(
                 setState(prev => {
                   // Only signal completion if this was an active chat response,
                   // not just the end of a history-only stream.
-                  if (prev.isLoading) setCompletionCount(c => c + 1)
+                  if (prev.isLoading) {
+                    setCompletionCount(c => c + 1)
+                    clearUnfinishedTodoList()
+                  }
                   return {
                     ...prev,
                     isLoading: false,
@@ -899,7 +906,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, onLoginRequired, sessionId, refreshTrigger])
+  }, [authToken, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback(() => {
@@ -1382,6 +1389,7 @@ export function useChat(
                           : m
                       ),
                         }))
+                clearUnfinishedTodoList()
               } else {
                 // Stream is stale (session/provider changed), but still clean up
                 // the empty assistant placeholder so it doesn't linger.
@@ -1430,6 +1438,7 @@ export function useChat(
               ),
         }))
         setCompletionCount((prev) => prev + 1)
+        clearUnfinishedTodoList()
       } else if (!completed && isStale()) {
         // Stream ended without done event and session/provider changed —
         // clean up empty assistant placeholder to prevent ghost messages.
@@ -1542,7 +1551,7 @@ export function useChat(
     if (abortControllerRef.current === controller) abortControllerRef.current = null
     if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
     return 'sent'
-  }, [authToken, onLoginRequired, sessionId])
+  }, [authToken, clearUnfinishedTodoList, onLoginRequired, sessionId])
 
   // --- Message queue (queueing & steering) ---
   const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {

@@ -1,4 +1,4 @@
-import { MessageSquare, Infinity, ClipboardList, ChevronDown, Check, Network } from 'lucide-react'
+import { MessageSquare, Infinity, ClipboardList, ChevronDown, Check } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,12 +34,6 @@ const MODES: Array<{
     label: 'Agent',
     icon: Infinity,
     description: 'Full agentic — reads, writes, runs commands',
-  },
-  {
-    value: 'swarm',
-    label: 'Swarm',
-    icon: Network,
-    description: 'Multi-agent — routes work to specialists',
   },
   {
     value: 'plan',

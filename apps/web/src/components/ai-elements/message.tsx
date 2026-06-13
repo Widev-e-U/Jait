@@ -59,7 +59,7 @@ export function MessageAction({
       type="button"
       variant="ghost"
       size="icon"
-      className={cn('h-7 w-7 rounded-full', className)}
+      className={cn('h-7 w-7 rounded-full [&_svg]:h-3.5 [&_svg]:w-3.5', className)}
       title={tooltip ?? label}
       {...props}
     >

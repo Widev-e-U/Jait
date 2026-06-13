@@ -1,8 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import type { ProjectRecord, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
@@ -248,63 +254,55 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      <div className="flex shrink-0 self-start gap-0.5">
-                        {onAssignRepository && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={repository ? `Repository: ${repository.name}` : 'Assign repository'}
+                      <div className="flex shrink-0 self-start">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Project actions"
+                              className="h-5.5 w-5.5 shrink-0 text-muted-foreground transition-opacity hover:text-foreground data-[state=open]:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">
+                            {onAssignRepository && (
+                              <DropdownMenuItem
                                 disabled={!project.rootPath}
-                                className={`h-5.5 w-5.5 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${
-                                  repository ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation()
+                                className={`gap-2 ${repository ? 'text-primary focus:text-primary' : ''}`}
+                                onSelect={(e) => {
+                                  e.preventDefault()
                                   onAssignRepository(project.id)
                                 }}
                               >
-                                <GitBranch className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">{repository ? `Repository: ${repository.name}` : 'Assign repository'}</TooltipContent>
-                          </Tooltip>
-                        )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Change directory"
-                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation()
+                                <GitBranch className="h-3.5 w-3.5" />
+                                <span>{repository ? `Repository: ${repository.name}` : 'Assign repository'}</span>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              className="gap-2"
+                              onSelect={(e) => {
+                                e.preventDefault()
                                 onChangeDirectory(project.id)
                               }}
                             >
-                              <FolderInput className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">Change directory</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Archive project"
-                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation()
+                              <FolderInput className="h-3.5 w-3.5" />
+                              <span>Change directory</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="gap-2 text-destructive focus:text-destructive"
+                              onSelect={(e) => {
+                                e.preventDefault()
                                 onRemoveProject(project.id)
                               }}
                             >
-                              <Archive className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">Archive project</TooltipContent>
-                        </Tooltip>
+                              <Archive className="h-3.5 w-3.5" />
+                              <span>Archive project</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   )
