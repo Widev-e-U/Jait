@@ -1477,26 +1477,36 @@ export function useChat(
         const errorMessage = transientConnectionError
           ? TRANSIENT_CONNECTION_MESSAGE
           : error instanceof Error ? error.message : 'An error occurred'
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage,
-          messages: transientConnectionError || options.queued
-            ? prev.messages.filter(m =>
-                options.queued
-                  ? m.id !== assistantId && m.id !== userMessage.id
-                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-              )
-            : prev.messages.map(m =>
-                m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
-                  ? {
-                      ...m,
-                      content: errorMessage,
-                      segments: [{ type: 'error' as const, content: errorMessage }],
-                    }
-                  : m
-              ),
-        }))
+        setState(prev => {
+          // When the error is rendered inline as a chat message we must not also
+          // surface it via the `error` banner above the composer (avoids dupes).
+          const renderedInline =
+            !transientConnectionError &&
+            !options.queued &&
+            prev.messages.some(m =>
+              m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
+            )
+          return {
+            ...prev,
+            isLoading: false,
+            error: renderedInline ? null : errorMessage,
+            messages: transientConnectionError || options.queued
+              ? prev.messages.filter(m =>
+                  options.queued
+                    ? m.id !== assistantId && m.id !== userMessage.id
+                    : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+                )
+              : prev.messages.map(m =>
+                  m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
+                    ? {
+                        ...m,
+                        content: errorMessage,
+                        segments: [{ type: 'error' as const, content: errorMessage }],
+                      }
+                    : m
+                ),
+          }
+        })
         if (transientConnectionError && requestSessionId) {
           window.setTimeout(() => {
             if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()

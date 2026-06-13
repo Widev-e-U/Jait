@@ -10,6 +10,11 @@ export interface SystemNotificationInput {
 
 type BrowserNotificationCtor = typeof Notification
 
+// Without an explicit icon, Chrome (and other browsers) show their own logo on
+// web notifications. Point at the Jait app icons so notifications are branded.
+const NOTIFICATION_ICON = '/apple-touch-icon.png'
+const NOTIFICATION_BADGE = '/favicon-32x32.png'
+
 function hashCode(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
@@ -42,8 +47,15 @@ async function notifyWithBrowserApi(
 ): Promise<void> {
   if (!NotificationCtor) return
 
+  const options: NotificationOptions = {
+    body: notif.body,
+    tag: notif.id,
+    icon: NOTIFICATION_ICON,
+    badge: NOTIFICATION_BADGE,
+  }
+
   if (NotificationCtor.permission === 'granted') {
-    new NotificationCtor(notif.title, { body: notif.body, tag: notif.id })
+    new NotificationCtor(notif.title, options)
     return
   }
 
@@ -51,7 +63,7 @@ async function notifyWithBrowserApi(
 
   const permission = await NotificationCtor.requestPermission()
   if (permission === 'granted') {
-    new NotificationCtor(notif.title, { body: notif.body, tag: notif.id })
+    new NotificationCtor(notif.title, options)
   }
 }
 

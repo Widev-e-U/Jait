@@ -519,6 +519,7 @@ function MessageInner({
   const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [contextOpen, setContextOpen] = useState(false)
+  const [memoryExpanded, setMemoryExpanded] = useState(false)
   const [memoryFeedbackState, setMemoryFeedbackState] = useState<{
     kind: MemoryFeedbackKind
     status: 'saving' | 'saved'
@@ -823,7 +824,7 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
+            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-0 bottom-0',
           )}
         >
           <DropdownMenu>
@@ -831,7 +832,7 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
               >
                 <MoreVertical className="h-4 w-4" />
               </button>
@@ -899,15 +900,16 @@ function MessageInner({
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
-          setContextOpen(true)
+          setMemoryExpanded((open) => !open)
         }}
-        title="View memories retrieved and injected for this answer"
+        aria-expanded={memoryExpanded}
+        title={memoryExpanded ? 'Hide injected memories' : 'Show memories injected for this answer'}
       >
         <Brain className="h-3.5 w-3.5 shrink-0" />
         <span>Memory</span>
         <span className="rounded bg-background/75 px-1 text-2xs">{memoryProvenanceEntries.length}</span>
       </button>
-      {memoryProvenanceEntries.slice(0, 3).map((entry) => {
+      {memoryExpanded && memoryProvenanceEntries.slice(0, 3).map((entry) => {
         const source: MemoryProvenanceSource = {
           memoryId: entry.id,
           sourceType: entry.sourceType,

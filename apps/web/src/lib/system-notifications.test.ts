@@ -111,7 +111,7 @@ describe('normalizeSystemNotification', () => {
     expect(NotificationMock.instances).toEqual([
       {
         title: 'Build failed',
-        options: { body: 'Retry the preview', tag: 'notif-4' },
+        options: { body: 'Retry the preview', tag: 'notif-4', icon: '/apple-touch-icon.png', badge: '/favicon-32x32.png' },
       },
     ])
     expect(toastInfo).toHaveBeenCalledWith('Build failed', { description: 'Retry the preview' })
@@ -131,7 +131,7 @@ describe('normalizeSystemNotification', () => {
     expect(NotificationMock.instances).toEqual([
       {
         title: 'Agent finished',
-        options: { body: 'All checks passed', tag: 'notif-5' },
+        options: { body: 'All checks passed', tag: 'notif-5', icon: '/apple-touch-icon.png', badge: '/favicon-32x32.png' },
       },
     ])
     expect(toastSuccess).toHaveBeenCalledWith('Agent finished', { description: 'All checks passed' })

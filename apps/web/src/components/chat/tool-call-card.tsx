@@ -1916,14 +1916,14 @@ function FileSummaryButton({
   const content = (
     <>
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[220px] truncate">{fileName}</span>
+      <span className="whitespace-nowrap">{fileName}</span>
     </>
   )
 
   if (!interactive) {
     return (
       <span
-        className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
         title={path}
       >
         {content}
@@ -1935,7 +1935,7 @@ function FileSummaryButton({
     <span
       role="button"
       tabIndex={0}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
       title={`Open diff for ${path}`}
       onClick={(event) => {
         event.preventDefault()
@@ -2214,19 +2214,17 @@ function ToolCallCardInner({
             <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
           </span>
         ) : showFileSummary ? (
-          <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{fileSummaryActionLabel}:</span>
-            <span className="inline-flex min-w-0 items-center gap-1">
-              <FileSummaryButton
-                path={filePath}
-                onOpenDiff={isEditLikeTool(normalizedTool) ? onOpenDiff : undefined}
-                disabled={call.status !== 'success'}
-              />
-              {filePaths.length > 1 && (
-                <span className="rounded border border-border/60 bg-muted/35 px-1.5 py-0.5 text-2xs text-muted-foreground">
-                  +{filePaths.length - 1}
-                </span>
-              )}
+          <span className="flex min-w-0 max-w-full items-center gap-2">
+            <span className="shrink-0">{fileSummaryActionLabel}:</span>
+            <span className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:thin]">
+              {(filePaths.length > 0 ? filePaths : [filePath]).filter(Boolean).map((p, i) => (
+                <FileSummaryButton
+                  key={`${p}-${i}`}
+                  path={p}
+                  onOpenDiff={isEditLikeTool(normalizedTool) ? onOpenDiff : undefined}
+                  disabled={call.status !== 'success'}
+                />
+              ))}
             </span>
           </span>
         ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
