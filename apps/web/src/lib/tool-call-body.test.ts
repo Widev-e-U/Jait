@@ -17,6 +17,7 @@ describe('tool call body helpers', () => {
     expect(normalizeToolName('functions.spawn_agent')).toBe('agent.spawn')
     expect(normalizeToolName('wait_agent')).toBe('agent.wait')
     expect(normalizeToolName('browser_sandbox_start')).toBe('browser.sandbox.start')
+    expect(normalizeToolName('project_create')).toBe('project.create')
     expect(normalizeToolName('project_assign_repository')).toBe('project.assign_repository')
   })
 

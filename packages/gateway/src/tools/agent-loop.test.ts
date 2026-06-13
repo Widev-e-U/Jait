@@ -45,6 +45,7 @@ describe("OpenAI tool name conversion", () => {
     expect(fromOpenAIName("ssh_session_run")).toBe("ssh.session.run");
     expect(fromOpenAIName("ssh_session_close")).toBe("ssh.session.close");
     expect(fromOpenAIName("browser_sandbox_start")).toBe("browser.sandbox.start");
+    expect(fromOpenAIName("project_create")).toBe("project.create");
     expect(fromOpenAIName("project_assign_repository")).toBe("project.assign_repository");
   });
 });

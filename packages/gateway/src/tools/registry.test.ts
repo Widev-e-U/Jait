@@ -14,13 +14,15 @@ function context() {
 }
 
 describe("ToolRegistry audit and validation behavior", () => {
-  it("registers project.assign_repository and does not expose any workspace.* alias", () => {
+  it("registers project tools and does not expose any workspace.* alias", () => {
     const registry = createToolRegistry(new SurfaceRegistry(), {
       projectService: {},
       repoService: {},
     } as any);
 
+    expect(registry.get("project.create")?.description).toContain("Create a Jait project");
     expect(registry.get("project.assign_repository")?.description).toContain("project");
+    expect(registry.get("workspace.create")).toBeUndefined();
     expect(registry.get("workspace.assign_repository")).toBeUndefined();
   });
 

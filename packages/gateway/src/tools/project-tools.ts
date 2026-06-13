@@ -13,6 +13,99 @@ function readString(record: Record<string, unknown>, key: string): string | unde
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+export function createProjectCreateTool(deps: {
+  projectService: ProjectService;
+  repoService: RepositoryService;
+  gitService?: GitService;
+  ws?: WsControlPlane;
+}): ToolDefinition {
+  const gitService = deps.gitService ?? new GitService();
+  return {
+    name: "project.create",
+    description:
+      "Create a Jait project, or return the existing one for the same folder. When projectRoot points at a git working tree, a repository is detected/created and assigned to the project.",
+    tier: "standard",
+    category: "gateway",
+    source: "builtin",
+    risk: "low",
+    defaultConsentLevel: "none",
+    parameters: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Display name for the project. Defaults to the project folder name.",
+        },
+        projectRoot: {
+          type: "string",
+          description:
+            "Absolute path to the project folder. If it contains a .git repo it is detected/created and assigned.",
+        },
+        assignRepository: {
+          type: "boolean",
+          description: "Assign a repository detected at projectRoot. Defaults to true.",
+        },
+      },
+    },
+    execute: async (input: unknown, context: ToolContext): Promise<ToolResult> => {
+      const body = input && typeof input === "object" && !Array.isArray(input)
+        ? input as Record<string, unknown>
+        : {};
+      const title = readString(body, "title");
+      const projectRoot = readString(body, "projectRoot") ?? context.projectRoot?.trim();
+      const assignRequested = typeof body["assignRepository"] === "boolean"
+        ? (body["assignRepository"] as boolean)
+        : true;
+
+      const project = deps.projectService.getOrCreateForRoot({
+        userId: context.userId,
+        title,
+        rootPath: projectRoot ?? null,
+        nodeId: "gateway",
+      });
+
+      // Honour an explicit title even when the project already existed.
+      if (title && project.title !== title) {
+        deps.projectService.update(project.id, { title }, context.userId);
+      }
+
+      let repository: unknown;
+      let repoNote: string | undefined;
+      if (assignRequested && projectRoot) {
+        try {
+          const assignment = await assignRepositoryToProject({
+            projectService: deps.projectService,
+            repoService: deps.repoService,
+            gitService,
+            projectId: project.id,
+            userId: context.userId,
+            ws: deps.ws,
+          });
+          repository = assignment.repo;
+        } catch (err) {
+          // A missing git repo is not fatal — the project is still created.
+          repoNote = err instanceof ProjectRepositoryAssignmentError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Failed to assign repository.";
+        }
+      }
+
+      const fresh = deps.projectService.getById(project.id, context.userId) ?? project;
+      const repoName = repository && typeof repository === "object" && "name" in repository
+        ? String((repository as { name: unknown }).name)
+        : undefined;
+      return {
+        ok: true,
+        message: `Created project "${fresh.title}" (${fresh.id})`
+          + (repoName ? ` with repository ${repoName}.` : repoNote ? ` (no repository attached: ${repoNote}).` : "."),
+        data: { project: fresh, repository, repoNote },
+      };
+    },
+  };
+}
+
 export function createProjectAssignRepositoryTool(deps: {
   projectService: ProjectService;
   repoService: RepositoryService;

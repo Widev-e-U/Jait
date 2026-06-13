@@ -40,6 +40,7 @@ export const ToolName = {
 
   // ── Gateway ──
   GatewayStatus: "gateway.status",
+  ProjectCreate: "project.create",
   ProjectAssignRepository: "project.assign_repository",
   JaitTodos: "jait.todos",
   UserAsk: "user.ask",

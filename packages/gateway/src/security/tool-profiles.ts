@@ -42,6 +42,7 @@ const MINIMAL: ToolPermission[] = [
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
   perm("thread.control", "dangerous", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
@@ -67,6 +68,7 @@ const CODING: ToolPermission[] = [
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
@@ -92,6 +94,7 @@ const FULL: ToolPermission[] = [
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
 ];
 
