@@ -26,6 +26,7 @@ export type WsEventType =
   | "node.updated"
   | "node.disconnected"
   | "message.delta"
+  | "message.started"
   | "message.complete"
   | "tool.call"
   | "tool.result"
@@ -77,7 +78,8 @@ export type UICommandType =
   | "dev-preview.open"
   | "screen-share.open"
   | "screen-share.close"
-  | "architecture.update";
+  | "architecture.update"
+  | "email.control";
 
 /** Payload sent inside a `ui.command` WsEvent */
 export interface UICommandPayload<T = Record<string, unknown>> {
@@ -125,6 +127,26 @@ export interface ArchitectureUpdateData {
   projectRoot?: string;
   /** Absolute path to the persisted Mermaid file, when available */
   filePath?: string;
+}
+
+/**
+ * Agent-driven control of the Email page UI. Lets agents navigate folders,
+ * open a message, prefill a compose/reply draft, or refresh the live page the
+ * user is looking at.
+ */
+export interface EmailControlData {
+  action: "navigate" | "open" | "compose" | "refresh";
+  /** Connected account to act on (defaults to the page's active account). */
+  accountId?: string;
+  /** For `navigate`: folder/label name or id (e.g. "inbox", "sent"). */
+  folder?: string;
+  /** For `open`: the message id to open in the reading pane. */
+  messageId?: string;
+  /** For `compose`: prefilled draft fields. */
+  to?: string;
+  subject?: string;
+  body?: string;
+  replyToMessageId?: string;
 }
 
 // ── Filesystem change events (server → client) ──────────────────────

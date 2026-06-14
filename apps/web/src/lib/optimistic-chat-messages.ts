@@ -13,9 +13,10 @@ function getUserRenderSignature(message: OptimisticUserMessageLike): string | nu
   if (message.role !== 'user') return null
   const hasDisplaySegments = Array.isArray(message.displaySegments) && message.displaySegments.length > 0
   const normalizedContent = (typeof message.content === 'string' ? message.content : '').trim()
-  const normalizedDisplay = typeof message.displayContent === 'string'
+  const displayContent = typeof message.displayContent === 'string'
     ? message.displayContent.trim()
     : ''
+  const normalizedDisplay = displayContent === normalizedContent ? '' : displayContent
   return JSON.stringify({
     role: 'user',
     content: normalizedContent,

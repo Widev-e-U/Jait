@@ -56,6 +56,7 @@ export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
+export { createEmailTools } from "./email-tools.js";
 export {
   createSshRunTool,
   createSshSessionStartTool,
@@ -179,6 +180,7 @@ import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
+import { createEmailTools } from "./email-tools.js";
 import {
   createSshRunTool,
 } from "./ssh-tools.js";
@@ -257,6 +259,7 @@ export interface ToolRegistryDeps {
   secretInputService?: SecretInputService;
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
+  emailService?: import("../services/email/index.js").EmailService;
   skillRegistry?: import("../skills/index.js").SkillRegistry;
 }
 
@@ -440,6 +443,13 @@ export function createToolRegistry(
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
+
+  // Email tools (Gmail / Outlook) — only when an EmailService is wired
+  if (deps.emailService) {
+    for (const tool of createEmailTools(deps.emailService, deps.ws)) {
+      tools.register(tool);
+    }
+  }
 
   // Network tools
   tools.register(createNetworkScanTool());

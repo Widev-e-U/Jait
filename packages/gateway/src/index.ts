@@ -32,6 +32,7 @@ import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { SecretInputService } from "./services/secret-input.js";
 import { UserQuestionService } from "./services/user-questions.js";
 import { UserSecretService } from "./services/user-secrets.js";
+import { EmailService } from "./services/email/index.js";
 import { UserService } from "./services/users.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
@@ -134,6 +135,7 @@ async function main() {
   const repoProposalService = new RepoProposalService(db);
   const reminderService = new ReminderService(db);
   const userSecretService = new UserSecretService(db, config.jwtSecret);
+  const emailService = new EmailService(db, userSecretService);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
@@ -369,6 +371,7 @@ async function main() {
     sessionSearchService,
     gitService,
     userSecretService,
+    emailService,
     maintenanceService,
     notifications,
     previewService,
@@ -544,6 +547,7 @@ async function main() {
     secretInputService,
     userQuestionService,
     userSecretService,
+    emailService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -828,6 +832,7 @@ async function main() {
     secretInputService,
     userQuestionService,
     userSecretService,
+    emailService,
     pluginManager,
     skillRegistry,
     clawhubClient,

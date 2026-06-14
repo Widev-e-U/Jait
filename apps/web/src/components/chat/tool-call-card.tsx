@@ -2416,7 +2416,7 @@ function ToolCallCardInner({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 shrink-0"
+                    className="h-6 w-6 sm:h-6 sm:w-6 shrink-0"
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
@@ -2436,7 +2436,7 @@ function ToolCallCardInner({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 shrink-0"
+                    className="h-6 w-6 sm:h-6 sm:w-6 shrink-0"
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()

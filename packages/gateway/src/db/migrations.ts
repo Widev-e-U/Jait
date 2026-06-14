@@ -1038,4 +1038,27 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 041: Connected email accounts (Gmail / Outlook) ───────────────
+  {
+    id: 41,
+    name: "email_accounts_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS email_accounts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          provider TEXT NOT NULL,
+          email TEXT NOT NULL,
+          display_name TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'connected',
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_email_accounts_unique ON email_accounts(user_id, provider, email)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_email_accounts_user ON email_accounts(user_id, updated_at DESC)`);
+    },
+  },
+
 ];

@@ -26,6 +26,7 @@ export type {
   DevPreviewOpenData,
   ScreenShareOpenData,
   ArchitectureUpdateData,
+  EmailControlData,
   FsChangeType,
   FsChangeEvent,
   FsChangesPayload,

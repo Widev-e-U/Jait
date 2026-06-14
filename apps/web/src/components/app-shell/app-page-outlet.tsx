@@ -1,4 +1,5 @@
 import { ErrorBoundary } from '@/components/error-boundary'
+import { EmailPage } from '@/components/email'
 import { JobsPage } from '@/components/jobs'
 import { MemoryPage } from '@/components/reminders'
 import { NetworkPanel } from '@/components/network'
@@ -92,6 +93,16 @@ export function AppPageOutlet({
             voiceLevels={voiceLevels}
             onVoiceStop={onVoiceStop}
           />
+        </ErrorBoundary>
+      </PageFrame>
+    )
+  }
+
+  if (currentView === 'email') {
+    return (
+      <PageFrame isMobile={isMobile}>
+        <ErrorBoundary name="Email" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
+          <EmailPage isMobile={isMobile} />
         </ErrorBoundary>
       </PageFrame>
     )

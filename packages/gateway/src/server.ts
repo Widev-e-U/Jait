@@ -47,6 +47,7 @@ import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerArchitectureRoutes } from "./routes/architecture.js";
 import { registerSecretRoutes } from "./routes/secrets.js";
+import { registerEmailRoutes } from "./routes/email.js";
 import { registerUserQuestionRoutes } from "./routes/user-questions.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
 import { registerSkillRoutes } from "./routes/skills.js";
@@ -134,6 +135,7 @@ export interface ServerDeps {
   secretInputService?: SecretInputService;
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
+  emailService?: import("./services/email/index.js").EmailService;
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
@@ -215,6 +217,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   if (deps.secretInputService) {
     registerSecretRoutes(app, config, deps.secretInputService, deps.userSecretService);
+  }
+  if (deps.emailService) {
+    registerEmailRoutes(app, config, deps.emailService);
   }
   if (deps.userQuestionService) {
     registerUserQuestionRoutes(app, config, deps.userQuestionService);

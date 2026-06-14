@@ -199,6 +199,26 @@ export const userSecrets = sqliteTable(
   ],
 );
 
+// ─── Email Accounts (connected mailboxes; OAuth tokens live in user_secrets) ──
+export const emailAccounts = sqliteTable(
+  "email_accounts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    provider: text("provider").notNull(), // 'gmail' | 'outlook'
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    status: text("status").notNull().default("connected"), // 'connected' | 'error'
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_email_accounts_unique").on(table.userId, table.provider, table.email),
+    index("idx_email_accounts_user").on(table.userId, table.updatedAt),
+  ],
+);
+
 // ─── Reminders ─────────────────────────────────────────────────────
 export const reminders = sqliteTable(
   "reminders",

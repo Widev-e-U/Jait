@@ -7,6 +7,7 @@ import {
   EllipsisVertical,
   ListChecks,
   LogOut,
+  Mail,
   MessageSquare,
   Monitor,
   Moon,
@@ -187,6 +188,21 @@ export function AppHeader(props: AppHeaderProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Todo</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'email' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
+                  onClick={() => setCurrentView('email')}
+                  aria-label="Email"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>Email</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Email</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -398,6 +414,10 @@ export function AppHeader(props: AppHeaderProps) {
                       <ListChecks className="h-4 w-4 mr-2" />
                       Todo
                     </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setCurrentView('email')}>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Email
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
                       <Brain className="h-4 w-4 mr-2" />
                       Memory
@@ -494,6 +514,10 @@ export function AppHeader(props: AppHeaderProps) {
                   <DropdownMenuItem onSelect={() => setCurrentView('todo')}>
                     <ListChecks className="h-4 w-4 mr-2" />
                     Todo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('email')}>
+                    <Mail className="h-4 w-4 mr-2" />
+                    Email
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
                     <Brain className="h-4 w-4 mr-2" />

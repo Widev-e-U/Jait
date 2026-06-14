@@ -383,6 +383,66 @@ function emitSyntheticSkillToolCall(
   accumulateToolResult(sessionId, toolCall.callId, true, toolCall.message, toolCall.data);
 }
 
+function buildSyntheticMemoryToolCall(content: string, memoryService: MemoryService | undefined): PersistedToolCall | null {
+  const query = content.trim();
+  if (!memoryService || !query) return null;
+  return {
+    callId: `memory-${randomUUID()}`,
+    tool: "memory.search",
+    args: { query, limit: 25 },
+    ok: true,
+    message: "Searching memory",
+    startedAt: Date.now(),
+  };
+}
+
+function emitSyntheticToolStart(
+  sessionId: string,
+  toolCall: PersistedToolCall | null,
+  safeWrite: (data: string) => void,
+  emitToSubscribers: (sessionId: string, event: StreamEvent) => void,
+): void {
+  if (!toolCall) return;
+  const toolStartEvent = {
+    type: "tool_start" as const,
+    call_id: toolCall.callId,
+    parent_call_id: toolCall.parentCallId,
+    tool: toolCall.tool,
+    args: toolCall.args,
+  };
+  safeWrite(`data: ${JSON.stringify(toolStartEvent)}\n\n`);
+  emitToSubscribers(sessionId, toolStartEvent as StreamEvent);
+  accumulateToolStart(sessionId, toolCall.callId, toolCall.tool, toolCall.args, toolCall.parentCallId);
+}
+
+function emitSyntheticToolResult(
+  sessionId: string,
+  toolCall: PersistedToolCall | null,
+  ok: boolean,
+  message: string,
+  data: unknown,
+  safeWrite: (data: string) => void,
+  emitToSubscribers: (sessionId: string, event: StreamEvent) => void,
+): void {
+  if (!toolCall) return;
+  toolCall.ok = ok;
+  toolCall.message = message;
+  toolCall.data = data;
+  toolCall.completedAt = Date.now();
+  const toolResultEvent = {
+    type: "tool_result" as const,
+    call_id: toolCall.callId,
+    parent_call_id: toolCall.parentCallId,
+    tool: toolCall.tool,
+    ok,
+    message,
+    data,
+  };
+  safeWrite(`data: ${JSON.stringify(toolResultEvent)}\n\n`);
+  emitToSubscribers(sessionId, toolResultEvent as StreamEvent);
+  accumulateToolResult(sessionId, toolCall.callId, ok, message, data);
+}
+
 interface QueuedChatMessage {
   id?: string;
   content: string;
@@ -1195,6 +1255,7 @@ export function registerChatRoutes(
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.model ? { model: nextMessage.model } : {}),
             ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
+            _queuedDrain: true,
           },
         });
 
@@ -1436,6 +1497,7 @@ export function registerChatRoutes(
     const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
     const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
     const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
+    const isQueuedDrainRequest = body["_queuedDrain"] === true;
 
     // Parse file attachments (images / files sent as base64 from the client)
     const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
@@ -1597,6 +1659,14 @@ export function registerChatRoutes(
     // Reset streaming accumulator for this turn so reload snapshots start fresh
     sessionStreamingState.delete(sessionId);
     sessionStreamSeq.set(sessionId, 0);
+    if (isQueuedDrainRequest && ws) {
+      ws.broadcast(sessionId, {
+        type: "message.started" as const,
+        sessionId,
+        timestamp: new Date().toISOString(),
+        payload: { source: "queued_messages" },
+      });
+    }
 
     let clientDisconnected = false;
     reply.raw.on("close", () => { clientDisconnected = true; });
@@ -1611,9 +1681,37 @@ export function registerChatRoutes(
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
-    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
+    const memoryToolCall = buildSyntheticMemoryToolCall(content, memoryService);
+    emitSyntheticToolStart(sessionId, memoryToolCall, safeWrite, emitToSubscribers);
+    let relevantMemory: Awaited<ReturnType<typeof retrieveRelevantMemoryContext>>;
+    try {
+      relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
+    } catch (err) {
+      emitSyntheticToolResult(
+        sessionId,
+        memoryToolCall,
+        false,
+        err instanceof Error ? err.message : "Memory search failed",
+        undefined,
+        safeWrite,
+        emitToSubscribers,
+      );
+      throw err;
+    }
+    emitSyntheticToolResult(
+      sessionId,
+      memoryToolCall,
+      true,
+      relevantMemory?.flow.retrieved.length
+        ? `Loaded ${relevantMemory.flow.retrieved.length} relevant memories`
+        : "No relevant memories found",
+      relevantMemory?.flow ?? null,
+      safeWrite,
+      emitToSubscribers,
+    );
     const memoryFlow = relevantMemory?.flow;
     const memoryBlock = relevantMemory?.block;
+    const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
 
     const providerLabel = requestProvider === "codex"
       ? "Codex"
@@ -1761,12 +1859,12 @@ export function registerChatRoutes(
         let tokenBytesThisBlock = 0;
 
         // ── Accumulate tool calls + segments for persistence ──
-        const cliToolCalls: PersistedToolCall[] = turnSkillToolCall ? [{ ...turnSkillToolCall }] : [];
+        const cliToolCalls: PersistedToolCall[] = syntheticToolCalls.map((call) => ({ ...call }));
         const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] } | { type: "error"; content: string }> = [];
         /** Error message from a session.error event — persisted instead of normal content. */
         let sessionError: string | null = null;
         /** Track the current pending tool-group callIds (batched between text tokens) */
-        let pendingToolGroup: string[] = turnSkillToolCall ? [turnSkillToolCall.callId] : [];
+        let pendingToolGroup: string[] = syntheticToolCalls.map((call) => call.callId);
         let lastSegmentWasText = false;
 
         /** Flush any buffered text into a text segment */
@@ -2292,12 +2390,12 @@ export function registerChatRoutes(
         }
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
-        if (turnSkillToolCall) {
-          partialToolCalls = [{ ...turnSkillToolCall }, ...partialToolCalls];
+        if (syntheticToolCalls.length > 0) {
+          partialToolCalls = [...syntheticToolCalls.map((call) => ({ ...call })), ...partialToolCalls];
         }
         const resultSegments = result.segments.length > 0 ? [...result.segments] : [];
-        if (turnSkillToolCall) {
-          resultSegments.unshift({ type: "toolGroup", callIds: [turnSkillToolCall.callId] });
+        if (syntheticToolCalls.length > 0) {
+          resultSegments.unshift({ type: "toolGroup", callIds: syntheticToolCalls.map((call) => call.callId) });
         }
         resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;

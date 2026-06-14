@@ -119,6 +119,8 @@ interface UseUICommandsOptions {
   onStateSync?: StateSyncHandler
   /** Called when the gateway pushes the full session state on subscribe/reconnect. */
   onFullState?: FullStateHandler
+  /** Called when the gateway broadcasts that an assistant message started outside this client's direct request. */
+  onMessageStarted?: () => void
   /** Called when the gateway broadcasts that an assistant message has completed. */
   onMessageComplete?: () => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
@@ -152,6 +154,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     token,
     onStateSync,
     onFullState,
+    onMessageStarted,
     onMessageComplete,
     onThreadEvent,
     onFsChanges,
@@ -164,6 +167,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onStateSyncRef.current = onStateSync
   const onFullStateRef = useRef(onFullState)
   onFullStateRef.current = onFullState
+  const onMessageStartedRef = useRef(onMessageStarted)
+  onMessageStartedRef.current = onMessageStarted
   const onMessageCompleteRef = useRef(onMessageComplete)
   onMessageCompleteRef.current = onMessageComplete
   const onThreadEventRef = useRef(onThreadEvent)
@@ -227,6 +232,11 @@ export function useUICommands(opts: UseUICommandsOptions) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ;(handler as (data: any) => void)(payload.data)
         }
+        // Agent-driven Email page control — decoupled from the central listener
+        // map so the Email page can react wherever it is mounted.
+        if (payload.command === 'email.control' && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('jait:email-control', { detail: payload.data }))
+        }
       } else if (msg.type === 'ui.state-sync') {
         // Cross-client state sync from another client or the gateway
         const payload = msg.payload as { key?: string; value?: unknown }
@@ -239,6 +249,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
         if (state && onFullStateRef.current) {
           onFullStateRef.current(state)
         }
+      } else if (msg.type === 'message.started') {
+        // Assistant message started outside this client's direct request — attach to the live stream.
+        onMessageStartedRef.current?.()
       } else if (msg.type === 'message.complete') {
         // Assistant message finished on another device — refresh chat
         onMessageCompleteRef.current?.()

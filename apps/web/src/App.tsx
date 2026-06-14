@@ -679,6 +679,10 @@ function App() {
     previousChangedFilesCountRef.current = null
   }, [activeSessionId])
 
+  const handleMessageStarted = useCallback(() => {
+    refreshMessages()
+  }, [refreshMessages])
+
   const handleMessageComplete = useCallback(() => {
     refreshMessages()
     setRemoteMessageCompleteCount((prev) => prev + 1)
@@ -1550,6 +1554,7 @@ function App() {
     token,
     onStateSync: handleStateSync,
     onFullState: handleFullState,
+    onMessageStarted: handleMessageStarted,
     onMessageComplete: handleMessageComplete,
     onThreadEvent: automation.handleThreadEvent,
     onConnectionStateChange: handleUiConnectionStateChange,

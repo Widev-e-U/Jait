@@ -41,6 +41,22 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
     expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot)
   })
 
+  it('matches plain optimistic users whose display content only mirrors content', () => {
+    const snapshot = [
+      user('server-user-1', 'same plain message'),
+      { id: 'server-assistant-1', role: 'assistant' as const, content: 'streamed reply' },
+    ]
+    const current = [
+      user('local-user-1', 'same plain message', {
+        optimistic: true,
+        displayContent: 'same plain message',
+      }),
+      { id: 'local-assistant-1', role: 'assistant' as const, content: '' },
+    ]
+
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot)
+  })
+
   it('preserves an optimistic assistant placeholder for an unmatched optimistic user', () => {
     // A follow-up/queued send inserts an optimistic user + an optimistic
     // assistant the reply streams into. When a resume snapshot (taken before
