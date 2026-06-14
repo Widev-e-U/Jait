@@ -12,6 +12,10 @@ describe('parseAppView', () => {
     expect(parseAppView('reminders')).toBe('memory')
   })
 
+  it('maps the plural "emails" alias to "email"', () => {
+    expect(parseAppView('emails')).toBe('email')
+  })
+
   it('returns null for unknown segments', () => {
     expect(parseAppView('')).toBeNull()
     expect(parseAppView('bogus')).toBeNull()
@@ -22,6 +26,10 @@ describe('parseAppView', () => {
 describe('appViewToPath', () => {
   it('roots the chat view', () => {
     expect(appViewToPath('chat')).toBe('/')
+  })
+
+  it('uses the public email route', () => {
+    expect(appViewToPath('email')).toBe('/emails')
   })
 
   it('prefixes other views with a slash', () => {

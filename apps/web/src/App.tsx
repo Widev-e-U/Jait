@@ -65,7 +65,7 @@ import { useVoiceRecording } from '@/hooks/useVoiceRecording'
 import { useVoiceSession } from '@/hooks/useVoiceSession'
 import { useGatewayReachable } from '@/hooks/useGatewayReachable'
 import { useViewRouting } from '@/hooks/useViewRouting'
-import { type AppView } from '@/lib/app-view'
+import { parseAppView, type AppView } from '@/lib/app-view'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 import {
   normalizePersistedSelectedRepo,
@@ -199,10 +199,8 @@ function App() {
   }
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>(() => {
-    const validViews: AppView[] = ['chat', 'todo', 'memory', 'jobs', 'network', 'settings']
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
-    const view = path === 'reminders' ? 'memory' : path as AppView
-    return validViews.includes(view) ? view : 'chat'
+    return parseAppView(path) ?? 'chat'
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
