@@ -368,29 +368,163 @@ async function cmdStart(cliFlags) {
   console.log("");
 }
 
-function cmdStop() {
+async function cmdStop() {
   printBanner();
+
+  const port = process.env.PORT || flags.port || "8000";
+
+  // Case 1: Process tracked via PID file
   const tracked = getTrackedProcess();
-  if (!tracked) {
+  if (tracked) {
+    const { pid, pidPath } = tracked;
+    try {
+      if (platform() === "win32") {
+        execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+      } else {
+        process.kill(Number(pid), "SIGTERM");
+      }
+      console.log(`  Sent stop signal to PID ${pid}.`);
+    } catch (err) {
+      console.error(`  Failed to stop process ${pid}: ${err.message}`);
+    }
+    cleanupPidFile(pidPath);
+    console.log("");
+    return;
+  }
+
+  // Case 2: systemd unit is active
+  if (platform() === "linux") {
+    let unitActive = false;
+    try {
+      const status = runSilent(`systemctl --user is-active ${SERVICE_NAME} 2>/dev/null`);
+      if (status.trim() === "active") {
+        console.log(`  No PID file found. Stopping via systemd...`);
+        try {
+          run(`systemctl --user stop ${SERVICE_NAME}`, { silent: true });
+          console.log(`  ${SERVICE_NAME} stopped.`);
+          console.log("");
+          return;
+        } catch (err) {
+          console.error(`  Failed to stop via systemd: ${err.message}`);
+        }
+        unitActive = true;
+      }
+    } catch {}
+
+    if (!unitActive) {
+      // Case 3: check if port is actually answering /health — kill that process
+      const health = await healthCheck(port);
+      if (health) {
+        console.log(`  No PID file found, but gateway is healthy on port ${port}.`);
+
+        // Find the PID listening on the port
+        let targetPids = [];
+        try {
+          const lsofOut = runSilent(
+            `lsof -ti:${port} 2>/dev/null`
+          );
+          targetPids = lsofOut
+            ? lsofOut.split("\n").filter(Boolean).map(Number)
+            : [];
+        } catch {}
+
+        // Also try ss/fuser as fallback
+        if (targetPids.length === 0) {
+          try {
+            const fuserOut = runSilent(
+              `fuser ${port}/tcp 2>/dev/null`
+            );
+            targetPids = fuserOut
+              ? fuserOut.split(/\s+/).map(Number)
+              : [];
+          } catch {}
+        }
+
+        let stopped = false;
+        for (const pid of targetPids) {
+          const exePath = "/proc/" + pid + "/exe";
+          try {
+            if (!existsSync(exePath)) continue;
+            const exeTarget = readFileSync(exePath, "utf8");
+            if (exeTarget.includes("node") || exeTarget.includes("jait")) {
+              try {
+                process.kill(pid, "SIGTERM");
+                console.log(`  Sent stop signal to PID ${pid}.`);
+                stopped = true;
+              } catch (err) {
+                // already dead
+              }
+            }
+          } catch {}
+        }
+
+        if (!stopped) {
+          // Last resort: kill all processes on the port that are owned by this user
+          for (const pid of targetPids) {
+            try {
+              process.kill(pid, "SIGTERM");
+              console.log(`  Sent stop signal to PID ${pid}.`);
+              stopped = true;
+            } catch {}
+          }
+        }
+
+        if (!stopped) {
+          console.log(`  Could not find process to stop. Try 'sudo lsof -i :${port}' and kill manually.`);
+        } else {
+          // Clean up stale PID file if one exists (from a prior crash)
+          for (const p of [PID_PATH, LEGACY_PID_PATH]) {
+            if (existsSync(p)) cleanupPidFile(p);
+          }
+        }
+
+        console.log("");
+        return;
+      }
+
+      // Nothing found: no PID file, no systemd unit, port not in use
+      const reachable = await isPortReachable(port);
+      if (reachable) {
+        console.log(`  Port ${port} is in use, but health check timed out.`);
+        console.log(`  Another process may be listening. Run 'lsof -i :${port}' to inspect.`);
+      } else {
+        console.log("  Jait is not running (no PID file found).");
+      }
+      console.log("");
+      return;
+    }
+    return;
+  }
+
+  // Non-Linux: port check fallback
+  const reachable = await isPortReachable(port);
+  if (reachable) {
+    const health = await healthCheck(port);
+    if (health) {
+      console.log(`  No PID file found, but gateway is healthy on port ${port}.`);
+      let targetPids = [];
+      try {
+        targetPids = runSilent(
+          platform() === "darwin"
+            ? `lsof -ti:${port} 2>/dev/null`
+            : `netstat -tlnp | grep :${port} | awk '{print $NF}' | cut -d/ -f1 | uniq'`
+        ).split("\n").filter(Boolean).map(Number);
+      } catch {}
+
+      for (const pid of targetPids) {
+        try {
+          process.kill(pid, "SIGTERM");
+          console.log(`  Sent stop signal to PID ${pid}.`);
+        } catch {}
+      }
+    } else {
+      console.log(`  Port ${port} is in use but not a Jait health endpoint.`);
+    }
+  } else {
     console.log("  Jait is not running (no PID file found).");
     console.log("");
     process.exit(1);
   }
-
-  const { pid, pidPath } = tracked;
-
-  try {
-    if (platform() === "win32") {
-      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
-    } else {
-      process.kill(Number(pid), "SIGTERM");
-    }
-    console.log(`  Sent stop signal to PID ${pid}.`);
-  } catch (err) {
-    console.error(`  Failed to stop process ${pid}: ${err.message}`);
-  }
-
-  cleanupPidFile(pidPath);
   console.log("");
 }
 
