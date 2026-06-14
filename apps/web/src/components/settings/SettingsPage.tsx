@@ -9,6 +9,7 @@ import { ToolSettings } from './ToolSettings'
 import { ExtensionSettings } from './ExtensionSettings'
 import { SkillSettings } from './SkillSettings'
 import { ChannelSettings } from './ChannelSettings'
+import { EmailSettings } from './EmailSettings'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -456,8 +457,8 @@ export function SettingsPage({
           <TabsTrigger value="tools" className="flex-1 sm:flex-none">Tools</TabsTrigger>
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
-          <TabsTrigger value="channels" className="flex-1 sm:flex-none">Channels</TabsTrigger>
-          <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
+          <TabsTrigger value="email" className="flex-1 sm:flex-none">Email</TabsTrigger>
+        <TabsTrigge          <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
