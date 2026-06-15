@@ -101,6 +101,7 @@ export {
 export {
   runAgentLoop,
   retryToolCall,
+  pruneHistory,
   buildToolSchemas,
   buildTieredToolSchemas,
   toolDefsToSchemas,
@@ -122,6 +123,7 @@ export {
   type ExecutedToolCall,
   type ToolExecutor,
 } from "./agent-loop.js";
+export { computeContextUsage, type ContextUsage } from "./token-estimator.js";
 
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import type { SchedulerService } from "../scheduler/service.js";

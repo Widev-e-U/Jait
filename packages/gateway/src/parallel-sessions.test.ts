@@ -31,7 +31,9 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 function startMockOllama(delayMs = TOKEN_DELAY_MS): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
+      const isNative = req.url?.endsWith("/api/chat");
+      const isOpenAI = req.url?.endsWith("/chat/completions");
+      if (req.method !== "POST" || (!isNative && !isOpenAI)) {
         res.writeHead(404);
         res.end();
         return;
@@ -49,6 +51,19 @@ function startMockOllama(delayMs = TOKEN_DELAY_MS): Promise<Server> {
 
       const reply = `Echo: ${lastUserMsg}`;
       const words = reply.split(" ");
+
+      if (isNative) {
+        // Ollama native /api/chat: newline-delimited JSON.
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        for (let i = 0; i < words.length; i++) {
+          const token = words[i] + (i < words.length - 1 ? " " : "");
+          res.write(JSON.stringify({ message: { role: "assistant", content: token }, done: false }) + "\n");
+          await sleep(delayMs);
+        }
+        res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: words.length }) + "\n");
+        res.end();
+        return;
+      }
 
       res.writeHead(200, { "Content-Type": "text/event-stream" });
 

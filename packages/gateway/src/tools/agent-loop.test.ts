@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
   parseOpenAIStream,
+  parseOllamaStream,
+  serializeMessagesForOllama,
   fromOpenAIName,
   runAgentLoop,
   retryToolCall,
@@ -39,6 +41,66 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
     },
   }).getReader();
 }
+describe("serializeMessagesForOllama", () => {
+  it("converts OpenAI tool history to ollama-native format", () => {
+    const history: AgentMessage[] = [
+      { role: "user", content: "weather?" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", type: "function", function: { name: "get_weather", arguments: '{"city":"Vienna"}' } }],
+      },
+      { role: "tool", content: '{"temp_c":24}', tool_call_id: "c1", name: "get_weather" },
+    ];
+    const out = serializeMessagesForOllama(history) as any[];
+    // assistant tool_calls: no id/type, arguments parsed to object
+    expect(out[1].tool_calls).toEqual([{ function: { name: "get_weather", arguments: { city: "Vienna" } } }]);
+    expect(out[1].tool_calls[0].id).toBeUndefined();
+    // tool result: uses tool_name, no tool_call_id
+    expect(out[2]).toMatchObject({ role: "tool", content: '{"temp_c":24}', tool_name: "get_weather" });
+    expect(out[2].tool_call_id).toBeUndefined();
+  });
+
+  it("defaults unparseable arguments to an empty object", () => {
+    const out = serializeMessagesForOllama([
+      { role: "assistant", content: "", tool_calls: [{ id: "x", type: "function", function: { name: "f", arguments: "not json" } }] },
+    ]) as any[];
+    expect(out[0].tool_calls[0].function.arguments).toEqual({});
+  });
+});
+
+describe("parseOllamaStream", () => {
+  it("parses native NDJSON: thinking, content, tool calls, usage", async () => {
+    const reader = streamReader([
+      JSON.stringify({ message: { role: "assistant", thinking: "let me think" } }) + "\n",
+      JSON.stringify({ message: { role: "assistant", content: "Hello " } }) + "\n",
+      JSON.stringify({ message: { role: "assistant", content: "world" } }) + "\n",
+      JSON.stringify({ message: { role: "assistant", tool_calls: [{ id: "t1", function: { name: "get_weather", arguments: { city: "Vienna" } } }] } }) + "\n",
+      JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 100, eval_count: 20 }) + "\n",
+    ]);
+    const parsed = await parseOllamaStream(reader);
+    expect(parsed.thinkingText).toBe("let me think");
+    expect(parsed.contentText).toBe("Hello world");
+    // tool calls normalized to internal OpenAI shape (arguments stringified)
+    expect(parsed.toolCalls).toEqual([
+      { id: "t1", type: "function", function: { name: "get_weather", arguments: '{"city":"Vienna"}' } },
+    ]);
+    // done_reason normalized to tool_calls when calls present
+    expect(parsed.finishReason).toBe("tool_calls");
+    expect(parsed.usage).toEqual({ prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 });
+  });
+
+  it("preserves a length finish_reason for truncation recovery", async () => {
+    const reader = streamReader([
+      JSON.stringify({ message: { content: "partial" } }) + "\n",
+      JSON.stringify({ done: true, done_reason: "length", prompt_eval_count: 5, eval_count: 5 }) + "\n",
+    ]);
+    const parsed = await parseOllamaStream(reader);
+    expect(parsed.contentText).toBe("partial");
+    expect(parsed.finishReason).toBe("length");
+  });
+});
+
 describe("OpenAI tool name conversion", () => {
   it("maps multi-segment tool names while preserving leaf underscores", () => {
     expect(fromOpenAIName("ssh_session_start")).toBe("ssh.session.start");
@@ -311,6 +373,72 @@ describe("runAgentLoop swarm mode", () => {
       type: "toolGroup",
       callIds: [result.executedToolCalls[0]!.callId],
     });
+  });
+});
+
+describe("runAgentLoop truncation recovery", () => {
+  function sseResponse(chunks: string[]): Response {
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }),
+      { status: 200 },
+    );
+  }
+
+  it("auto-continues when a text response is cut off by finish_reason=length", async () => {
+    const truncated = [
+      'data: {"choices":[{"delta":{"content":"Part one"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const completed = [
+      'data: {"choices":[{"delta":{"content":" and part two."}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(sseResponse(truncated))
+      .mockResolvedValueOnce(sseResponse(completed));
+
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "gpt-5",
+          contextWindow: 400_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Write something long." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-1",
+        abort: new AbortController(),
+        maxRounds: 5,
+        onEvent: (event) => events.push(event),
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    // Two calls: the truncated one, then the continuation.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // Final content is the seamless concatenation of both rounds.
+    expect(result.content).toBe("Part one and part two.");
+    // A steering event signals the continuation to the user/UI.
+    expect(
+      events.some(
+        (e) => e.type === "steering" && /output token limit/i.test(e.message),
+      ),
+    ).toBe(true);
   });
 });
 

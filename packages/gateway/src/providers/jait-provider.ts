@@ -15,6 +15,8 @@ import type { UserService } from "../services/users.js";
 import {
   buildSystemPrompt,
   buildTieredToolSchemas,
+  computeContextUsage,
+  pruneHistory,
   runAgentLoop,
   type AgentLoopEvent,
   type LlmContextFlowRound,
@@ -221,7 +223,7 @@ export class JaitProvider implements CliProviderAdapter {
               runtimeMode: state.session.runtimeMode,
             },
             abort,
-            maxRounds: 15,
+            maxRounds: this.resolveMaxRounds(userSettings?.apiKeys),
             parallel: true,
             toolRegistry: this.deps.toolRegistry,
             disabledTools,
@@ -239,6 +241,22 @@ export class JaitProvider implements CliProviderAdapter {
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
         );
+
+        // ── Post-turn history compaction ───────────────────────────────
+        // After runAgentLoop mutates the shared history, compact it so the next turn
+        // starts with a bounded context window. Without this, messages from all previous
+        // turns accumulate in state.history forever (user + assistant + tool results).
+        if (llm.contextWindow > 0) {
+          const postUsage = computeContextUsage(
+            state.history,
+            toolSchemas,
+            llm.contextWindow,
+          );
+          if (postUsage.ratio >= 0.45) {
+            pruneHistory(state.history, llm.contextWindow, toolSchemas);
+            console.info(`Post-turn history compacted: ${state.history.length} messages → ratio was ${(postUsage.ratio * 100).toFixed(0)}%`);
+          }
+        }
 
         const remainingContent = result.content.startsWith(persistedAssistantContent)
           ? result.content.slice(persistedAssistantContent.length)
@@ -321,6 +339,20 @@ export class JaitProvider implements CliProviderAdapter {
       requestedModel,
       jaitBackend: userSettings?.jaitBackend,
     });
+  }
+
+  /**
+   * Resolve the max autonomous tool-calling rounds for a turn.
+   * Per-user `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway
+   * config default. Clamped to a sane ceiling to avoid runaway loops.
+   */
+  private resolveMaxRounds(apiKeys?: Record<string, string>): number {
+    const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();
+    const parsed = raw ? parseInt(raw, 10) : NaN;
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.min(parsed, 200);
+    }
+    return this.deps.config.agentMaxRounds;
   }
 
   private async executeTool(

@@ -148,6 +148,10 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
   const [saving, setSaving] = useState(false)
+  const [maxRoundsDraft, setMaxRoundsDraft] = useState<string>(apiKeys['JAIT_MAX_ROUNDS'] ?? '')
+  const [savingMaxRounds, setSavingMaxRounds] = useState(false)
+  const [numCtxDraft, setNumCtxDraft] = useState<string>(apiKeys['OLLAMA_NUM_CTX'] ?? '')
+  const [savingNumCtx, setSavingNumCtx] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearingProjects, setClearingProjects] = useState(false)
   const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
@@ -183,7 +187,37 @@ export function SettingsPage({
 
   useEffect(() => {
     setDraft(apiKeys)
+    setMaxRoundsDraft(apiKeys['JAIT_MAX_ROUNDS'] ?? '')
+    setNumCtxDraft(apiKeys['OLLAMA_NUM_CTX'] ?? '')
   }, [apiKeys])
+
+  const maxRoundsDirty = (maxRoundsDraft.trim()) !== (apiKeys['JAIT_MAX_ROUNDS'] ?? '')
+  const handleSaveMaxRounds = async () => {
+    setSavingMaxRounds(true)
+    try {
+      const next = { ...apiKeys }
+      const trimmed = maxRoundsDraft.trim()
+      if (trimmed) next['JAIT_MAX_ROUNDS'] = trimmed
+      else delete next['JAIT_MAX_ROUNDS']
+      await onSaveApiKeys(next)
+    } finally {
+      setSavingMaxRounds(false)
+    }
+  }
+
+  const numCtxDirty = (numCtxDraft.trim()) !== (apiKeys['OLLAMA_NUM_CTX'] ?? '')
+  const handleSaveNumCtx = async () => {
+    setSavingNumCtx(true)
+    try {
+      const next = { ...apiKeys }
+      const trimmed = numCtxDraft.trim()
+      if (trimmed) next['OLLAMA_NUM_CTX'] = trimmed
+      else delete next['OLLAMA_NUM_CTX']
+      await onSaveApiKeys(next)
+    } finally {
+      setSavingNumCtx(false)
+    }
+  }
 
   const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? ''))
 
@@ -380,7 +414,7 @@ export function SettingsPage({
     'project archive archived clear delete projects remove',
   )
   const showJaitBackendSection = matchesSearch(
-    'jait backend provider openai openrouter model api llm',
+    'jait backend provider openai openrouter model api llm max rounds agent tool calls loop iterations',
     jaitBackend,
   )
   const showProviderAccountsSection = matchesSearch(
@@ -458,7 +492,8 @@ export function SettingsPage({
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Email</TabsTrigger>
-        <TabsTrigge          <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
+        <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
@@ -726,6 +761,62 @@ export function SettingsPage({
                       : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
                 </p>
               </div>
+              <div className="max-w-sm">
+                <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Max agent rounds per turn</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="jait-max-rounds"
+                    type="number"
+                    min={1}
+                    max={200}
+                    inputMode="numeric"
+                    placeholder="40"
+                    value={maxRoundsDraft}
+                    onChange={(e) => setMaxRoundsDraft(e.target.value)}
+                    className="w-28"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { void handleSaveMaxRounds() }}
+                    disabled={savingMaxRounds || !maxRoundsDirty}
+                  >
+                    {savingMaxRounds ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  How many autonomous tool-calling rounds the agent may run before stopping. Local models often need more (default 40). Leave blank to use the gateway default. Max 200.
+                </p>
+              </div>
+              {jaitBackend === 'ollama' && (
+                <div className="max-w-sm">
+                  <Label htmlFor="ollama-num-ctx" className="mb-1.5 block">Ollama context window (num_ctx)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="ollama-num-ctx"
+                      type="number"
+                      min={2048}
+                      step={1024}
+                      inputMode="numeric"
+                      placeholder="32768"
+                      value={numCtxDraft}
+                      onChange={(e) => setNumCtxDraft(e.target.value)}
+                      className="w-32"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { void handleSaveNumCtx() }}
+                      disabled={savingNumCtx || !numCtxDirty}
+                    >
+                      {savingNumCtx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                    </Button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Token context Jait requests from ollama. The OpenAI-compatible endpoint ignores this, so Jait now calls ollama natively to set it. Higher = more usable context but more VRAM. Set it to what your GPU can load (e.g. 65536 or 131072). Leave blank for the gateway default (32768).
+                  </p>
+                </div>
+              )}
             </Card>
           )}
 

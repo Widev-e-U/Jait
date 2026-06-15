@@ -158,8 +158,7 @@ export function EmailSettings({ token }: { token: string | null }) {
                   ? 'Credentials are configured.'
                   : provider === 'gmail'
                     ? 'See the Gmail OAuth quickstart to create a Web OAuth client and get your Client ID + Secret.'
-                    : 'See the Microsoft Entra portal to register an app, add redirect URI ' + `"http://localhost:8000/api/email/oauth/callback"`,
-                }
+                    : 'See the Microsoft Entra portal to register an app, add redirect URI ' + `"http://localhost:8000/api/email/oauth/callback"`}
               </p>
             )}
 

@@ -80,12 +80,22 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
       || apiKeys["OLLAMA_MODEL"]?.trim()
       || options.config.ollamaModel
       || "llama3";
+    // Ollama context length is the server-loaded num_ctx, not the model's
+    // trained max. Jait sets it explicitly via the native endpoint, so prune
+    // against the same number. Per-user OLLAMA_NUM_CTX overrides the default.
+    const ollamaNumCtx = parseInt(
+      apiKeys["OLLAMA_NUM_CTX"]?.trim()
+        || apiKeys["OLLAMA_CONTEXT_LENGTH"]?.trim()
+        || "",
+      10,
+    ) || options.config.ollamaContextWindow;
     return {
       backend: "ollama",
       openaiApiKey: "ollama", // Ollama's OpenAI-compat endpoint ignores the key but requires a non-empty value
       openaiBaseUrl: `${ollamaUrl.replace(/\/+$/, "")}/v1`,
       openaiModel: ollamaModel,
-      contextWindow: inferContextWindow(ollamaModel),
+      contextWindow: ollamaNumCtx,
+      numCtx: ollamaNumCtx,
     };
   }
 

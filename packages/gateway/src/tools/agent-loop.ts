@@ -91,6 +91,15 @@ export interface LLMConfig {
   openaiModel: string;
   /** Max context window in tokens */
   contextWindow: number;
+  /**
+   * Backend kind. When "ollama", the loop talks to ollama's native
+   * /api/chat endpoint so it can pass `num_ctx` — the OpenAI-compatible
+   * /v1 endpoint silently ignores it and pins the model to the server's
+   * default context, which truncates long conversations.
+   */
+  backend?: string;
+  /** Requested context length (ollama num_ctx). Defaults to contextWindow. */
+  numCtx?: number;
 }
 
 /** Persisted record of a tool call execution */
@@ -448,6 +457,116 @@ export function serializeMessages(messages: AgentMessage[]) {
     if (m.name) msg.name = m.name;
     return msg;
   });
+}
+
+/**
+ * Serialize messages for ollama's native /api/chat endpoint.
+ *
+ * Ollama's native format differs from OpenAI in two ways that the /v1
+ * compat layer hides (and that the live endpoint rejects with HTTP 400):
+ *  - assistant tool_calls carry NO `id`/`type`, and `arguments` must be a
+ *    parsed object, not a JSON string.
+ *  - tool result messages use `tool_name` (not `tool_call_id` + `name`).
+ */
+export function serializeMessagesForOllama(messages: AgentMessage[]) {
+  return messages.map((m) => {
+    const msg: Record<string, unknown> = { role: m.role, content: m.content };
+    if (m.tool_calls) {
+      msg.tool_calls = m.tool_calls.map((tc) => {
+        let args: unknown = tc.function.arguments;
+        if (typeof args === "string") {
+          try { args = JSON.parse(args); } catch { args = {}; }
+        }
+        return { function: { name: tc.function.name, arguments: args } };
+      });
+    }
+    if (m.role === "tool" && m.name) {
+      msg.tool_name = m.name;
+    }
+    return msg;
+  });
+}
+
+/**
+ * Parse ollama's native /api/chat NDJSON stream into the same shape as
+ * {@link parseOpenAIStream}, so the agent loop is endpoint-agnostic.
+ */
+export async function parseOllamaStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onEvent?: (event: AgentLoopEvent) => void,
+): Promise<ParsedStream> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let contentText = "";
+  let thinkingText = "";
+  let finishReason: string | null = null;
+  let usage: ParsedStream["usage"] | undefined;
+  const toolCalls: OpenAIToolCall[] = [];
+
+  const processLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let chunk: any;
+    try { chunk = JSON.parse(trimmed); } catch { return; }
+
+    const message = chunk.message;
+    if (message) {
+      const thinking = message.thinking;
+      if (thinking) {
+        thinkingText += thinking;
+        onEvent?.({ type: "thinking", content: thinking });
+      }
+      if (message.content) {
+        contentText += message.content;
+        onEvent?.({ type: "token", content: message.content });
+      }
+      if (Array.isArray(message.tool_calls)) {
+        for (const tc of message.tool_calls) {
+          const name: string = tc.function?.name ?? "";
+          const rawArgs = tc.function?.arguments;
+          const argStr = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs ?? {});
+          const id = tc.id || `ollama-${toolCalls.length}-${Date.now()}`;
+          const idx = toolCalls.length;
+          toolCalls.push({ id, type: "function", function: { name, arguments: argStr } });
+          onEvent?.({ type: "tool_call_delta", call_id: id, index: idx, name_delta: name, args_delta: argStr });
+        }
+      }
+    }
+
+    if (chunk.done) {
+      finishReason = chunk.done_reason ?? "stop";
+      const pe = chunk.prompt_eval_count;
+      const ec = chunk.eval_count;
+      if (typeof pe === "number" && typeof ec === "number") {
+        usage = { prompt_tokens: pe, completion_tokens: ec, total_tokens: pe + ec };
+      }
+    }
+  };
+
+  while (true) {
+    let readResult: { done: boolean; value?: Uint8Array };
+    try {
+      readResult = await reader.read();
+    } catch {
+      break;
+    }
+    const { done, value } = readResult;
+    if (done) {
+      buffer += decoder.decode();
+      if (buffer.trim()) processLine(buffer);
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) processLine(line);
+  }
+
+  // Ollama reports done_reason "stop" even when emitting tool calls; normalize
+  // to the OpenAI convention the loop expects.
+  if (toolCalls.length > 0 && finishReason === "stop") finishReason = "tool_calls";
+
+  return { contentText, thinkingText, toolCalls, finishReason, usage };
 }
 
 // ── Build OpenAI tool schemas ────────────────────────────────────────
@@ -838,7 +957,7 @@ export type ToolExecutor = (
 
 // ── Main agent loop ──────────────────────────────────────────────────
 
-const DEFAULT_MAX_ROUNDS = 15;
+const DEFAULT_MAX_ROUNDS = 40;
 const DEFAULT_MAX_RETRIES = 2;
 
 /** Max times the same tool+args signature can be called before being rejected as a duplicate. */
@@ -849,6 +968,13 @@ const TOOL_RESULT_MAX_CHARS = 30_000;
 const MAX_UNPRODUCTIVE_ROUNDS = 3;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
+/**
+ * Max times we auto-continue a response that was cut off by the output token
+ * limit (finish_reason="length"). Reasoning models (e.g. gpt-5) can exhaust
+ * the completion budget mid-thinking; continuing lets the user receive the
+ * full answer instead of a truncated fragment.
+ */
+const MAX_LENGTH_CONTINUATIONS = 3;
 
 /**
  * Detect if the model emitted a tool call as plain text instead of structured format.
@@ -1015,7 +1141,8 @@ function buildSwarmCreateManyArgs(objective: string): Record<string, unknown> {
 // ── Context pruning ──────────────────────────────────────────────────
 
 /** Target ratio after pruning — leave headroom for the next LLM response */
-const PRUNE_TARGET_RATIO = 0.65;
+/** Target ratio after pruning — lower value leaves more headroom for the next LLM response, compensating for the imprecise char/token estimator. */
+const PRUNE_TARGET_RATIO = 0.45;
 const SUMMARY_ITEM_LIMIT = 5;
 const SUMMARY_TEXT_LIMIT = 220;
 
@@ -1139,7 +1266,7 @@ function buildStructuredConversationSummary(removedMessages: AgentMessage[]): st
  *
  * Mutates `history` in place. Returns true if anything was pruned.
  */
-function pruneHistory(
+export function pruneHistory(
   history: AgentMessage[],
   contextWindow: number,
   toolSchemas: unknown[],
@@ -1231,6 +1358,8 @@ export async function runAgentLoop(
   let consecutiveUnproductiveRounds = 0;
   /** Times we've re-prompted for plain-text tool calls in this loop run. */
   let plainTextRetries = 0;
+  /** Times we've auto-continued after a length-truncated response in this loop run. */
+  let lengthContinuations = 0;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1319,8 +1448,9 @@ export async function runAgentLoop(
       let usage = computeContextUsage(history, activeSchemas, contextWindow);
       onEvent?.({ type: "context_usage", ...usage });
 
-      // If context usage ≥ 85%, prune oldest conversation turns
-      if (usage.ratio >= 0.85) {
+      // If context usage ≥ 60%, proactively prune oldest conversation turns
+      // Lower threshold because the estimator is imprecise (char/token ratio doesn't match real tokenization).
+      if (usage.ratio >= 0.60) {
         const pruned = pruneHistory(history, contextWindow, activeSchemas);
         if (pruned) {
           usage = computeContextUsage(history, activeSchemas, contextWindow);
@@ -1332,15 +1462,26 @@ export async function runAgentLoop(
     repairToolCallHistory(history);
 
     // ── LLM request ──
-    const reqBody: Record<string, unknown> = {
-      model: llm.openaiModel,
-      messages: serializeMessages(history),
-      stream: true,
-      stream_options: { include_usage: true },
-    };
+    // Ollama: use the native /api/chat endpoint so we can pass num_ctx. The
+    // OpenAI-compatible /v1 endpoint silently ignores it and pins the model to
+    // the server's default context, truncating long conversations mid-answer.
+    const isOllama = llm.backend === "ollama";
+    const reqBody: Record<string, unknown> = isOllama
+      ? {
+          model: llm.openaiModel,
+          messages: serializeMessagesForOllama(history),
+          stream: true,
+          options: { num_ctx: llm.numCtx ?? contextWindow },
+        }
+      : {
+          model: llm.openaiModel,
+          messages: serializeMessages(history),
+          stream: true,
+          stream_options: { include_usage: true },
+        };
     if (hasTools) {
       reqBody.tools = activeSchemas;
-      reqBody.tool_choice = "auto";
+      if (!isOllama) reqBody.tool_choice = "auto";
     }
     // Snapshot context_usage for inclusion in round metrics
     let roundContextUsage: RoundMetrics["contextUsage"] | undefined;
@@ -1381,7 +1522,10 @@ export async function runAgentLoop(
         abort.signal,
         AbortSignal.timeout(10 * 60 * 1000),
       ]);
-      const response = await fetch(`${llm.openaiBaseUrl}/chat/completions`, {
+      const requestUrl = isOllama
+        ? `${llm.openaiBaseUrl.replace(/\/v1\/?$/, "")}/api/chat`
+        : `${llm.openaiBaseUrl}/chat/completions`;
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1405,7 +1549,9 @@ export async function runAgentLoop(
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
       }
 
-      const parsed = await parseOpenAIStream(reader as any, onEvent);
+      const parsed = isOllama
+        ? await parseOllamaStream(reader as any, onEvent)
+        : await parseOpenAIStream(reader as any, onEvent);
       contentText = parsed.contentText;
       thinkingText = parsed.thinkingText;
       toolCalls = parsed.toolCalls;
@@ -1741,6 +1887,37 @@ export async function runAgentLoop(
         });
         continue;
       }
+    }
+
+    // ── Truncation recovery ──
+    // Reasoning models (e.g. gpt-5) count hidden reasoning toward the output
+    // budget and frequently hit the completion limit, returning
+    // finish_reason="length" with the visible answer cut off mid-sentence or
+    // mid-thinking. Rather than presenting the fragment as a finished reply,
+    // transparently continue the generation so the user gets the whole answer.
+    if (
+      finishReason === "length" &&
+      toolCalls.length === 0 &&
+      lengthContinuations < MAX_LENGTH_CONTINUATIONS
+    ) {
+      lengthContinuations++;
+      log.warn(
+        `Response truncated (finish_reason="length") — auto-continuing ${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS} for session ${sessionId}`,
+      );
+      onEvent?.({
+        type: "steering",
+        message: `Response hit the output token limit — continuing (${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS})`,
+      });
+      // Preserve whatever visible text arrived so the model can resume after it.
+      if (contentText) {
+        history.push({ role: "assistant", content: contentText });
+      }
+      history.push({
+        role: "system",
+        content:
+          "Your previous response was cut off because it reached the output token limit. Resume exactly where you left off — do not repeat any text you already produced, do not restart, and do not re-summarize. Continue seamlessly from the final character of your previous output.",
+      });
+      continue;
     }
 
     // ── Normal text response — done ──

@@ -23,7 +23,9 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
+      const isNative = req.url?.endsWith("/api/chat");
+      const isOpenAI = req.url?.endsWith("/chat/completions");
+      if (req.method !== "POST" || (!isNative && !isOpenAI)) {
         res.writeHead(404);
         res.end();
         return;
@@ -34,6 +36,14 @@ function startMockOllama(): Promise<Server> {
         messages: { role: string; content: string }[];
       };
       const lastUserMessage = messages.filter((message) => message.role === "user").pop()?.content ?? "";
+
+      if (isNative) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: `Echo: ${lastUserMessage}` }, done: false }) + "\n");
+        res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+        res.end();
+        return;
+      }
 
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       const chunk = {

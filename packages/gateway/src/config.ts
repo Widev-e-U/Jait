@@ -42,6 +42,20 @@ export interface AppConfig {
   openaiBaseUrl: string;
   /** Max context window tokens (auto-detected from model name if not set) */
   contextWindow: number;
+  /**
+   * Max autonomous tool-calling rounds per turn for the Jait provider.
+   * Local models in particular make many small tool calls and need a higher
+   * ceiling than cloud models. Override with env JAIT_MAX_ROUNDS; per-user
+   * overrides come from the JAIT_MAX_ROUNDS settings key.
+   */
+  agentMaxRounds: number;
+  /**
+   * Context length (num_ctx) requested from ollama via its native /api/chat
+   * endpoint. The OpenAI-compat /v1 endpoint ignores num_ctx and pins models
+   * to the server default, so Jait sets this explicitly. Override per-user with
+   * the OLLAMA_NUM_CTX setting, or globally with env OLLAMA_CONTEXT_LENGTH.
+   */
+  ollamaContextWindow: number;
   hookSecret: string;
   heartbeatCron: string;
   /** URL of the local Faster Whisper server (default http://localhost:8178) */
@@ -73,6 +87,7 @@ export interface AppConfig {
 /** Infer context window size from model name. Conservative defaults. */
 export function inferContextWindow(model: string): number {
   const m = model.toLowerCase();
+  if (m.includes("gpt-5")) return 400_000;
   if (m.includes("gpt-4o") || m.includes("gpt-4.1")) return 128_000;
   if (m.includes("gpt-4-turbo")) return 128_000;
   if (m.includes("gpt-4")) return 8_192;
@@ -120,6 +135,8 @@ export function loadConfig(): AppConfig {
       process.env["CONTEXT_WINDOW"] ?? "0",
       10,
     ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
+    agentMaxRounds: parseInt(process.env["JAIT_MAX_ROUNDS"] ?? "0", 10) || 40,
+    ollamaContextWindow: parseInt(process.env["OLLAMA_CONTEXT_LENGTH"] ?? "0", 10) || 32768,
     hookSecret,
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
