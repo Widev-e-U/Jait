@@ -88,7 +88,6 @@ export function EmailSettings({ token }: { token: string | null }) {
       </p>
       {(['gmail', 'outlook'] as EmailProvider[]).map((provider) => {
         const d = drafts[provider]
-        const configured = providers[provider] || (d.clientId && !d.configured)
         return (
           <Card key={provider} className="space-y-4 p-5">
             <div>

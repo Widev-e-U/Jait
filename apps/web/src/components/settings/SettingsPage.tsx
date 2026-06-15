@@ -101,7 +101,7 @@ export interface UpdateInfo {
   hasUpdate: boolean
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'channels' | 'activity'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'activity'
 
 interface SettingsPageProps {
   username: string
@@ -1022,6 +1022,10 @@ export function SettingsPage({
 
         <TabsContent value="skills" className="space-y-6">
           {showSkillsSection ? <SkillSettings token={token} /> : emptyState}
+        </TabsContent>
+
+        <TabsContent value="email" className="space-y-6">
+          <EmailSettings token={token} />
         </TabsContent>
 
         <TabsContent value="channels" className="space-y-6">
