@@ -112,7 +112,7 @@ export const emailApi = {
   async getMessage(id: string, accountId?: string): Promise<EmailMessageFull> {
     const params = new URLSearchParams()
     if (accountId) params.set('accountId', accountId)
-    const res = await apiFetch(`${API_URL}/api/email/messages/${id}?${params.toString()}`)
+    const res = await apiFetch(`${API_URL}/api/email/messages/${encodeURIComponent(id)}?${params.toString()}`)
     const data = await asJson<{ message: EmailMessageFull }>(res)
     return data.message
   },
@@ -127,7 +127,7 @@ export const emailApi = {
   },
 
   async tag(id: string, opts: { accountId?: string; add?: string[]; remove?: string[] }): Promise<void> {
-    const res = await apiFetch(`${API_URL}/api/email/messages/${id}/tag`, {
+    const res = await apiFetch(`${API_URL}/api/email/messages/${encodeURIComponent(id)}/tag`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(opts),
@@ -136,7 +136,7 @@ export const emailApi = {
   },
 
   async remove(id: string, accountId?: string): Promise<void> {
-    const res = await apiFetch(`${API_URL}/api/email/messages/${id}/delete`, {
+    const res = await apiFetch(`${API_URL}/api/email/messages/${encodeURIComponent(id)}/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountId }),

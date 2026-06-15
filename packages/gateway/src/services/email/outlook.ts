@@ -104,7 +104,7 @@ export class OutlookClient implements MailboxClient {
   }
 
   async getMessage(accessToken: string, id: string): Promise<EmailMessageFull> {
-    const m = (await this.gfetch(accessToken, `/me/messages/${id}`)) as GraphMessage;
+    const m = (await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(id)}`)) as GraphMessage;
     const summary = this.summarize(m);
     const isHtml = (m.body?.contentType ?? "").toLowerCase() === "html";
     return {
@@ -117,7 +117,7 @@ export class OutlookClient implements MailboxClient {
 
   async sendMessage(accessToken: string, input: SendMessageInput): Promise<{ id: string }> {
     if (input.replyToMessageId) {
-      await this.gfetch(accessToken, `/me/messages/${input.replyToMessageId}/reply`, {
+      await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(input.replyToMessageId)}/reply`, {
         method: "POST",
         body: JSON.stringify({
           message: {
@@ -146,11 +146,12 @@ export class OutlookClient implements MailboxClient {
   }
 
   async tagMessage(accessToken: string, id: string, add: string[], remove: string[]): Promise<void> {
-    const m = (await this.gfetch(accessToken, `/me/messages/${id}?$select=categories`)) as GraphMessage;
+    const eid = encodeURIComponent(id);
+    const m = (await this.gfetch(accessToken, `/me/messages/${eid}?$select=categories`)) as GraphMessage;
     const current = new Set(m.categories ?? []);
     for (const c of add) current.add(c);
     for (const c of remove) current.delete(c);
-    await this.gfetch(accessToken, `/me/messages/${id}`, {
+    await this.gfetch(accessToken, `/me/messages/${eid}`, {
       method: "PATCH",
       body: JSON.stringify({ categories: [...current] }),
     });
@@ -158,7 +159,7 @@ export class OutlookClient implements MailboxClient {
 
   async deleteMessage(accessToken: string, id: string): Promise<void> {
     // DELETE moves the message to Deleted Items.
-    await this.gfetch(accessToken, `/me/messages/${id}`, { method: "DELETE" });
+    await this.gfetch(accessToken, `/me/messages/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   async listFolders(accessToken: string): Promise<EmailFolder[]> {
