@@ -303,6 +303,54 @@ describe("executeOneToolCall retry accounting", () => {
   });
 });
 
+describe("runAgentLoop persistence", () => {
+  it("calls onPersist exactly once and reports persisted=true on normal completion", async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"content":"Hello world"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 }),
+    );
+
+    const persistCalls: Array<{ role: string; content: string }> = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Say hello." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-persist-1",
+        abort: new AbortController(),
+        maxRounds: 1,
+        mode: "agent",
+        onPersist: (_sid, role, content) => persistCalls.push({ role, content }),
+      },
+      async () => ({ ok: true, message: "" }),
+    );
+
+    expect(result.content).toBe("Hello world");
+    expect(result.persisted).toBe(true);
+    expect(persistCalls).toHaveLength(1);
+    expect(persistCalls[0]).toMatchObject({ role: "assistant", content: "Hello world" });
+  });
+});
+
 describe("runAgentLoop swarm mode", () => {
   it("forces a visible thread.control create_many swarm before model synthesis", async () => {
     const chunks = [

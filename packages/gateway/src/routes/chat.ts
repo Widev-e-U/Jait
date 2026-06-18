@@ -1670,6 +1670,11 @@ export function registerChatRoutes(
     let resultSegmentsJson: string | undefined;
     let contextFlowJson: string | undefined;
     let hitMaxRounds = false;
+    // Whether the agentic loop already persisted the assistant message via its
+    // onPersist callback. The post-loop fallback persists must be skipped when
+    // this is true to avoid writing a duplicate DB row (which scrambled message
+    // order on reload because the rows share createdAt down to the millisecond).
+    let loopPersisted = false;
     activeStreams.add(sessionId);
     // Reset streaming accumulator for this turn so reload snapshots start fresh
     sessionStreamingState.delete(sessionId);
@@ -2414,6 +2419,7 @@ export function registerChatRoutes(
         }
         resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
+        loopPersisted = result.persisted === true;
         // Persist fingerprints so a Continue turn reuses them
         sessionFingerprints.set(sessionId, result.fingerprints);
 
@@ -2457,11 +2463,12 @@ export function registerChatRoutes(
       const wasCancelled = err instanceof Error && err.name === "AbortError";
       if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
 
-      // Save partial content for real (non-cancel) errors
-      if (!wasCancelled && (fullContent || partialToolCalls.length > 0)) {
+      // Save partial content for real (non-cancel) errors — but only if the
+      // agentic loop didn't already persist this turn's assistant message.
+      if (!wasCancelled && !loopPersisted && (fullContent || partialToolCalls.length > 0)) {
         const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
         persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
-      } else if (!wasCancelled) {
+      } else if (!wasCancelled && !loopPersisted) {
         // No partial content — persist the error message itself so it's visible on reload.
         const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
         persistMessage(sessionId, "assistant", errMsg2, undefined, JSON.stringify([{ type: "error", content: errMsg2 }]), contextFlowJson);
@@ -2480,7 +2487,9 @@ export function registerChatRoutes(
 
     // Persist partial results BEFORE clearing stream state so that a reload
     // between these two steps loads the cancelled tool calls from the DB.
-    if (streamAbort.signal.aborted && (fullContent || partialToolCalls.length > 0)) {
+    // Skip when the agentic loop already persisted via onPersist (avoids a
+    // duplicate row that scrambled message order on reload).
+    if (streamAbort.signal.aborted && !loopPersisted && (fullContent || partialToolCalls.length > 0)) {
       const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
       persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
     }

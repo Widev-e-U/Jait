@@ -233,6 +233,12 @@ export interface AgentLoopResult {
   aborted: boolean;
   /** Whether the loop was stopped because it hit the max rounds limit */
   hitMaxRounds: boolean;
+  /**
+   * Whether the assistant message for this turn was already persisted via the
+   * `onPersist` callback. Callers that have their own fallback persistence
+   * should check this to avoid writing a duplicate row.
+   */
+  persisted: boolean;
   /** Tool-call fingerprints accumulated during this run (for persistence across Continue) */
   fingerprints: Map<string, number>;
   /** Plan data — only populated in plan mode */
@@ -1350,6 +1356,8 @@ export async function runAgentLoop(
   const executedToolCalls: ExecutedToolCall[] = [];
   const segments: MessageSegment[] = [];
   const queue = new ToolCallQueue();
+  /** Tracks whether the turn's assistant message was already persisted via onPersist. */
+  let persisted = false;
 
   // ── Loop health tracking ──
   /** Fingerprint → call count. Detects the model calling the same tool with identical args. */
@@ -1420,7 +1428,7 @@ export async function runAgentLoop(
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
     }
 
     // ── Apply steering messages ──
@@ -1540,13 +1548,13 @@ export async function runAgentLoop(
         log.error(`LLM error ${response.status}: ${errText}`);
         const friendlyMessage = formatLLMError(response.status, errText);
         onEvent?.({ type: "error", message: friendlyMessage });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
       }
 
       const parsed = isOllama
@@ -1580,7 +1588,7 @@ export async function runAgentLoop(
     } catch (fetchErr) {
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
       }
       throw fetchErr;
     }
@@ -1772,7 +1780,7 @@ export async function runAgentLoop(
               });
             }
           }
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
         }
 
         const batch = queue.dequeueBatch(parallel);
@@ -1863,7 +1871,8 @@ export async function runAgentLoop(
           const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
           const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
           onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
+          persisted = true;
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
         }
       }
 
@@ -1928,6 +1937,7 @@ export async function runAgentLoop(
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
       const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
       onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, thinkingText || undefined);
+      persisted = true;
     }
 
     // ── Emit plan completion in plan mode ──
@@ -1943,7 +1953,7 @@ export async function runAgentLoop(
     const planResult = mode === "plan" && plannedActions.length > 0
       ? { id: planId, summary: contentText || "Plan ready for review.", actions: plannedActions }
       : undefined;
-    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints, plan: planResult };
+    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints, plan: planResult };
   }
 
   // Hit max rounds
@@ -1956,12 +1966,13 @@ export async function runAgentLoop(
     const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
     const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
     onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
+    persisted = true;
   }
 
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, persisted, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────
