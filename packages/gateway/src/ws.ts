@@ -36,6 +36,8 @@ export class WsControlPlane {
   private wss: WebSocketServer | null = null;
   private clients = new Map<string, ConnectedClient>();
   private jwtSecret: Uint8Array;
+  /** Server-side keepalive: pings clients and terminates dead sockets. */
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Filesystem nodes registered by clients (keyed by node ID) */
   private fsNodes = new Map<string, FsNode>();
@@ -109,7 +111,24 @@ export class WsControlPlane {
       console.log(`WebSocket control plane listening on port ${this.config.wsPort}`);
     }
 
+    // Server-side keepalive: every 30s ping every client. Clients that fail
+    // to pong within the interval are dead (NAT timeout, crashed, etc.) and
+    // get terminated so they unregister instead of ghosting as "online".
+    this.heartbeatTimer = setInterval(() => {
+      for (const client of this.clients.values()) {
+        const ws = client.ws as WebSocket & { isAlive?: boolean };
+        if (ws.isAlive === false) {
+          ws.terminate();
+          continue;
+        }
+        ws.isAlive = false;
+        try { ws.ping(); } catch { /* socket already closing */ }
+      }
+    }, 30000);
+
     this.wss.on("connection", async (ws, req) => {
+      (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
+      ws.on("pong", () => { (ws as WebSocket & { isAlive?: boolean }).isAlive = true; });
       const clientId = nanoid();
       const client: ConnectedClient = {
         id: clientId,
@@ -1222,6 +1241,10 @@ export class WsControlPlane {
   }
 
   stop() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     this.wss?.close();
   }
 }

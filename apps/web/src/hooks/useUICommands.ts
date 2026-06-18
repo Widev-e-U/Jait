@@ -546,9 +546,16 @@ export function useUICommands(opts: UseUICommandsOptions) {
       currentSessionRef.current = null
     }
 
+    // Electron desktops act as always-on nodes and must keep their gateway
+    // WebSocket alive even when the window is hidden to the tray. Only
+    // browsers/capacitor pause (and later reconnect) on visibility.
+    const isAlwaysOnNode = detectPlatform() === 'electron'
+
     const connect = () => {
       if (!mountedRef.current) return
-      if (typeof document !== 'undefined' && document.hidden) return
+      // Always-on (Electron) nodes stay connected in the background; only
+      // browsers/capacitor skip connecting while the tab/window is hidden.
+      if (!isAlwaysOnNode && typeof document !== 'undefined' && document.hidden) return
       const ws = new WebSocket(`${WS_URL}?token=${tokenRef.current ?? 'dev'}`)
       wsRef.current = ws
 
@@ -636,18 +643,13 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }
     }
 
-    // Electron desktops act as always-on nodes (filesystem/provider/terminal)
-    // for remote clients. When the window is hidden to the tray the document
-    // becomes "hidden", but we must NOT tear down the gateway WebSocket —
-    // otherwise the node unregisters and becomes unreachable from other devices
-    // (e.g. the phone). Only browsers/capacitor should pause on visibility.
-    const isAlwaysOnNode = detectPlatform() === 'electron'
-
+    // Electron always-on nodes keep their connection live while hidden to the
+    // tray; browsers/capacitor pause and reconnect on visibility changes.
     const handleVisibilityChange = () => {
       const hidden = typeof document !== 'undefined' && document.hidden
       if (isAlwaysOnNode) {
         // Electron: keep the connection live while hidden to tray.
-        // If the socket somehow dropped while hidden, reconnect now.
+        // If the socket dropped while hidden, reconnect on visibility.
         if (!hidden && !wsRef.current && mountedRef.current) connect()
         return
       }
