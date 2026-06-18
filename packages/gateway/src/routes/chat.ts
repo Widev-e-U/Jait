@@ -1091,8 +1091,23 @@ Guidelines:
 - For recurring or scheduled automation requests, prefer cron tools and Jait jobs instead of OS-native schedulers.
 - Do not create Windows Task Scheduler jobs unless the user explicitly asks for OS-native scheduling.`;
 
-/** Max agentic loop iterations to prevent infinite loops */
-const MAX_TOOL_ROUNDS = 15;
+/**
+ * Resolve the max agentic loop iterations for a turn.
+ * Per-user `JAIT_MAX_ROUNDS` setting takes precedence (clamped to a sane
+ * ceiling to avoid runaway loops), then the gateway config default.
+ */
+const MAX_TOOL_ROUNDS_CEILING = 200;
+function resolveMaxToolRounds(
+  apiKeys?: Record<string, string>,
+  fallback = 40,
+): number {
+  const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(parsed, MAX_TOOL_ROUNDS_CEILING);
+  }
+  return fallback;
+}
 
 // ── Module-level DB ref for persistence from extracted functions ──────
 let _dbRef: JaitDB | undefined;
@@ -2351,7 +2366,7 @@ export function registerChatRoutes(
                 runtimeMode: requestRuntimeMode ?? undefined,
               },
               abort: streamAbort,
-              maxRounds: MAX_TOOL_ROUNDS,
+              maxRounds: resolveMaxToolRounds(userSettings?.apiKeys, config.agentMaxRounds),
               parallel: true,
               toolRegistry,
               disabledTools,

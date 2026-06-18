@@ -111,8 +111,20 @@ const CHANNEL_STYLE_NOTE =
 
 const DEFAULT_MAX_HISTORY = 20;
 
-/** Max tool-calling rounds for a channel reply — matches the web chat budget. */
-const CHANNEL_MAX_TOOL_ROUNDS = 15;
+/** Default max tool-calling rounds for a channel reply. */
+const CHANNEL_DEFAULT_MAX_ROUNDS = 15;
+/** Hard ceiling on per-user max rounds to avoid runaway loops. */
+const CHANNEL_MAX_ROUNDS_CEILING = 200;
+
+/** Resolve per-user JAIT_MAX_ROUNDS (clamped), else the channel default. */
+function resolveChannelMaxRounds(apiKeys?: Record<string, string>): number {
+  const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(parsed, CHANNEL_MAX_ROUNDS_CEILING);
+  }
+  return CHANNEL_DEFAULT_MAX_ROUNDS;
+}
 
 /** Default approval window for an in-band consent prompt before auto-deny. */
 const DEFAULT_CONSENT_TIMEOUT_MS = 5 * 60_000;
@@ -582,7 +594,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
           ? { userId: auth.userId, apiKeys: auth.apiKeys, jaitBackend: auth.jaitBackend, model: auth.model }
           : undefined,
         abort,
-        maxRounds: hasTools ? CHANNEL_MAX_TOOL_ROUNDS : 1,
+        maxRounds: hasTools ? resolveChannelMaxRounds(auth?.apiKeys) : 1,
         maxRetries: 1,
         // Sequential so at most one approval prompt is outstanding per chat —
         // a messaging surface can only field one yes/no at a time.

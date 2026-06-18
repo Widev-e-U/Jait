@@ -444,6 +444,13 @@ function App() {
   refreshFsNodesRef.current = refreshFsNodes
   useEffect(() => { refreshFsNodes() }, [refreshFsNodes])
 
+  // Re-fetch the project list whenever nodes come/go so the sidebar's
+  // online/offline tags (derived from each project's nodeId vs. registered
+  // nodes) stay in sync — including after the gateway self-heals a stale
+  // throwaway nodeId onto the now-registered desktop node. The ref is assigned
+  // after useProjects() is destructured below.
+  const fetchProjectsRef = useRef<() => void>(() => {})
+
   const {
     projects,
     personalSessions,
@@ -472,6 +479,7 @@ function App() {
     token,
     onLoginRequired,
   )
+  fetchProjectsRef.current = fetchProjects
   useEffect(() => {
     suppressProjectAutoOpenRef.current = false
   }, [activeSessionId])
@@ -1568,6 +1576,7 @@ function App() {
       // Keep the project sidebar's node tags in sync when nodes come/go online.
       if (type === 'fs.node-registered' || type === 'fs.node-disconnected' || type === 'node.disconnected' || type === 'node.updated' || type === 'node.registry') {
         refreshFsNodesRef.current()
+        fetchProjectsRef.current()
       }
     }, [automation]),
     onConnectionStateChange: handleUiConnectionStateChange,

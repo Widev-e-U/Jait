@@ -51,6 +51,17 @@ export async function initDeviceId(): Promise<string> {
 
   if (platform === 'electron' && (window as any).jaitDesktop?.getSetting) {
     const desktop = (window as any).jaitDesktop
+    // The main process resolves the persistent ID synchronously and exposes it
+    // via the preload bridge. Prefer it so init never disagrees with the sync
+    // generateDeviceId() getter (which already used the same value).
+    const bridgeId = desktop.deviceId as string | undefined
+    if (bridgeId) {
+      _cachedDeviceId = bridgeId
+      persistDeviceId(storageKey, bridgeId)
+      // Ensure the persistent settings file agrees (idempotent).
+      try { await desktop.setSetting(settingsKey, bridgeId) } catch { /* ignore */ }
+      return bridgeId
+    }
     // Try persistent Electron settings first
     const persisted = await desktop.getSetting(settingsKey, null) as string | null
     if (persisted) {
@@ -98,6 +109,21 @@ export function generateDeviceId(): string {
 
   const platform = detectPlatform()
   const storageKey = `jait-device-id-${platform}`
+
+  // Electron: the main process resolves the persistent device ID from
+  // desktop-settings.json at startup and exposes it synchronously via the
+  // preload bridge. Use it first so that code running before initDeviceId()
+  // completes (e.g. project creation on first render) stamps the *real*
+  // nodeId onto projects instead of a throwaway random one.
+  if (platform === 'electron') {
+    const bridgeId = typeof window !== 'undefined' ? (window as any).jaitDesktop?.deviceId as string | undefined : undefined
+    if (bridgeId) {
+      _cachedDeviceId = bridgeId
+      persistDeviceId(storageKey, bridgeId)
+      return bridgeId
+    }
+  }
+
   const stored = readStoredDeviceId(storageKey)
   if (stored) {
     _cachedDeviceId = stored

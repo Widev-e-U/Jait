@@ -1048,6 +1048,35 @@ async function main() {
         }
       }
     }
+
+    // ── Self-heal stale project nodeIds ───────────────────────────────
+    // Projects created during the old device-id race got stamped with a
+    // throwaway random nodeId that never matched any registered node, so they
+    // permanently showed "Node offline". When a node (re)registers, rebind any
+    // active project whose nodeId is stale (not "gateway" and not currently a
+    // registered fs node) and whose rootPath platform matches this node, so the
+    // project points at the live node and comes back online.
+    try {
+      const registeredIds = new Set(ws.getFsNodes().map((n) => n.id));
+      for (const project of projectService.list("active")) {
+        const pid = project.nodeId;
+        if (!pid || pid === "gateway" || registeredIds.has(pid)) continue;
+        const rootPath = project.rootPath ?? "";
+        const pathIsWindows = /^[A-Za-z]:[\\/]/.test(rootPath);
+        const nodeIsWindows = node.platform === "windows";
+        if (pathIsWindows !== nodeIsWindows) continue;
+        projectService.update(project.id, { nodeId: node.id });
+        console.log(`[ws] self-healed project "${project.title}" nodeId ${pid} -> ${node.id} (node ${node.name})`);
+        ws.broadcastAll({
+          type: "project.updated" as any,
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: { project: { ...project, nodeId: node.id } },
+        });
+      }
+    } catch (err) {
+      console.error("[ws] project nodeId self-heal failed:", err);
+    }
   };
 
   // Start Fastify first, then attach WS to its HTTP server (shared port)

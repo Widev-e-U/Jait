@@ -50,8 +50,29 @@ function getOpenedFolderPath(): string | undefined {
   return undefined;
 }
 
+/**
+ * Resolve a stable device ID synchronously and persist it.
+ *
+ * The renderer previously generated a throwaway random device ID on first render
+ * (before the async IPC read from desktop-settings.json completed), which got
+ * stamped onto newly-created projects as their `nodeId`. That throwaway ID never
+ * matched the node the desktop later registered as, so those projects showed
+ * "Node offline" forever. Resolving the ID here in the main process and passing
+ * it to the renderer via a CLI arg eliminates that race entirely.
+ */
+function resolvePersistentDeviceId(): string {
+  const existing = getSetting<string | null>("deviceId", null);
+  if (existing && typeof existing === "string" && existing.trim()) return existing.trim();
+  const id = `electron-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  setSetting("deviceId", id);
+  return id;
+}
+
+let persistentDeviceId = "";
+
 let openedFolder = getOpenedFolderPath();
 const startHidden = process.argv.includes("--hidden");
+persistentDeviceId = resolvePersistentDeviceId();
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -354,6 +375,7 @@ function createMainWindow(): BrowserWindow {
       backgroundThrottling: false,
       additionalArguments: [
         `--gateway-url=${GATEWAY_URL}`,
+        ...(persistentDeviceId ? [`--device-id=${persistentDeviceId}`] : []),
         ...(openedFolder ? [`--open-folder=${openedFolder}`] : []),
       ],
     },

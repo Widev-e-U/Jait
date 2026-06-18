@@ -18,6 +18,8 @@ const gatewayUrlArg = process.argv.find((a: string) => a.startsWith("--gateway-u
 const syncGatewayUrl = gatewayUrlArg ? gatewayUrlArg.split("=").slice(1).join("=") : undefined;
 const openFolderArg = process.argv.find((a: string) => a.startsWith("--open-folder="));
 const syncOpenFolder = openFolderArg ? openFolderArg.split("=").slice(1).join("=") : undefined;
+const deviceIdArg = process.argv.find((a: string) => a.startsWith("--device-id="));
+const syncDeviceId = deviceIdArg ? deviceIdArg.split("=").slice(1).join("=") : undefined;
 
 // Stored IPC listener ref — contextBridge wraps callbacks so we must track the
 // real reference ourselves to make removeListener work.
@@ -30,6 +32,13 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
 
   /** Folder path passed via CLI / "Open with Jait" context menu — available immediately */
   openFolder: syncOpenFolder,
+
+  /**
+   * Stable persistent device ID resolved by the main process from
+   * desktop-settings.json — available synchronously so that projects created
+   * on first render get a nodeId that matches the registered node (no race).
+   */
+  deviceId: syncDeviceId,
 
   /** Listen for folder open events from second instances */
   onOpenFolder: (callback: (_event: unknown, folderPath: string) => void) => {
