@@ -133,6 +133,14 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   setSetting: (key: string, value: unknown) =>
     ipcRenderer.invoke("desktop:set-setting", key, value) as Promise<{ ok: boolean }>,
 
+  /** Get whether Jait is set to launch on PC startup (OS login item) */
+  getLoginItem: () =>
+    ipcRenderer.invoke("desktop:get-login-item") as Promise<{ enabled: boolean; supported: boolean }>,
+
+  /** Enable/disable launching Jait on PC startup */
+  setLoginItem: (enabled: boolean) =>
+    ipcRenderer.invoke("desktop:set-login-item", enabled) as Promise<{ ok: boolean; enabled: boolean; error?: string }>,
+
   /** Store a credential in the OS keychain (encrypted via safeStorage) */
   credentialStore: (key: string, value: string) =>
     ipcRenderer.invoke("credential:store", key, value) as Promise<{ ok: boolean; error?: string }>,

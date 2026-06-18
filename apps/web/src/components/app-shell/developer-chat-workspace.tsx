@@ -1,5 +1,5 @@
 import { AlertTriangle, FolderOpen } from 'lucide-react'
-import type { CSSProperties, ReactNode, RefObject } from 'react'
+import { useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import { PlanReview } from '@/components/chat/plan-review'
@@ -273,6 +273,140 @@ export function DeveloperChatWorkspace({
     )
   }
 
+  // ── Memoized message elements ─────────────────────────────────────────
+  // During streaming the chat hook produces a brand-new `messages` array on
+  // every token flush. A plain `messages.map(...)` would allocate a fresh
+  // <Message> element for *every* message each frame, and React must reconcile
+  // all of them. In long conversations this per-token O(N) work grows
+  // linearly and is the main source of lag as the flow goes on.
+  //
+  // We cache one element per message id, keyed on the render-relevant inputs
+  // for that message plus the shared props that affect every message. When
+  // only the streaming message changes, every other message reuses its
+  // cached element object, so React skips it entirely — no allocation, no
+  // memo comparison, no reconciliation. The cache is cleared whenever the
+  // active session changes (so we never serve stale elements for a new chat).
+  const sharedPropsKey = [
+    chatProvider,
+    showProject || showScreenShare || previewOpen,
+    managerThreads,
+    onOpenTerminalFromToolCall,
+    renderInlineSecretPrompt,
+    onEditPreviousMessage,
+    editComposerBag,
+    onOpenMessagePath,
+    onChangedFileClick,
+    onMemorySourceOpen,
+    onHandleMemoryFeedback,
+  ]
+  const elementCacheRef = useRef<Map<string, {
+    key: string
+    element: ReactNode
+    msg: unknown
+    contextFlow: unknown
+    displayContent: unknown
+    referencedFiles: unknown
+    displaySegments: unknown
+    attachments: unknown
+    thinking: unknown
+    thinkingDuration: unknown
+    toolCalls: unknown
+    segments: unknown
+    isStreaming: boolean
+  }>>(new Map())
+  const cacheSessionRef = useRef<string | null>(null)
+  if (cacheSessionRef.current !== activeSessionId) {
+    elementCacheRef.current.clear()
+    cacheSessionRef.current = activeSessionId
+  }
+  const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : null
+  const sharedKey = JSON.stringify(sharedPropsKey)
+  const messageElements: ReactNode[] = []
+  {
+    const cache = elementCacheRef.current
+    for (let idx = 0; idx < messages.length; idx++) {
+      const msg = messages[idx]
+      const isStreaming = isLoading && msg.id === lastMsgId
+      // Build a cheap identity-based key. The chat hook keeps a stable object
+      // reference for unchanged messages across token flushes
+      // (`m.id === targetId ? { ...m, ...updates } : m`), so reference equality
+      // of the message object and its prop arrays is a precise change signal —
+      // no need to deep-stringify potentially-huge content/segments each token.
+      const cached = cache.get(msg.id)
+      const key =
+        sharedKey
+        + '|' + (msg === cached?.msg ? 's' : 'd')
+        + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
+        + '|' + (msg.displayContent === cached?.displayContent ? 's' : 'd')
+        + '|' + (msg.referencedFiles === cached?.referencedFiles ? 's' : 'd')
+        + '|' + (msg.displaySegments === cached?.displaySegments ? 's' : 'd')
+        + '|' + (msg.attachments === cached?.attachments ? 's' : 'd')
+        + '|' + (msg.thinking === cached?.thinking ? 's' : 'd')
+        + '|' + (msg.thinkingDuration === cached?.thinkingDuration ? 's' : 'd')
+        + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
+        + '|' + (msg.segments === cached?.segments ? 's' : 'd')
+        + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
+        + '|' + msg.role
+      if (cached && cached.key === key) {
+        messageElements.push(cached.element)
+        continue
+      }
+      const element = (
+        <Message
+          key={msg.id}
+          messageId={msg.id}
+          messageIndex={idx}
+          messageFromEnd={messages.length - 1 - idx}
+          role={msg.role}
+          content={msg.content}
+          contextFlow={msg.contextFlow}
+          displayContent={msg.displayContent}
+          referencedFiles={msg.referencedFiles}
+          displaySegments={msg.displaySegments}
+          attachments={msg.attachments}
+          thinking={msg.thinking}
+          thinkingDuration={msg.thinkingDuration}
+          toolCalls={msg.toolCalls}
+          segments={msg.segments}
+          isStreaming={isStreaming}
+          compact={showProject || showScreenShare || previewOpen}
+          preferLlmUi
+          provider={chatProvider}
+          threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
+          onOpenTerminal={onOpenTerminalFromToolCall}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onEditMessage={onEditPreviousMessage}
+          editComposer={editComposerBag}
+          onOpenPath={onOpenMessagePath}
+          onOpenDiff={onChangedFileClick}
+          onOpenMemorySource={onMemorySourceOpen}
+          onMemoryFeedback={onHandleMemoryFeedback}
+        />
+      )
+      cache.set(msg.id, {
+        key,
+        element,
+        msg,
+        contextFlow: msg.contextFlow,
+        displayContent: msg.displayContent,
+        referencedFiles: msg.referencedFiles,
+        displaySegments: msg.displaySegments,
+        attachments: msg.attachments,
+        thinking: msg.thinking,
+        thinkingDuration: msg.thinkingDuration,
+        toolCalls: msg.toolCalls,
+        segments: msg.segments,
+        isStreaming,
+      })
+      messageElements.push(element)
+    }
+    // Drop cache entries for messages that no longer exist (e.g. after clear/reload)
+    if (cache.size > messages.length) {
+      const live = new Set(messages.map((m) => m.id))
+      for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
+    }
+  }
+
   return (
     <div
       ref={setChatPanelElement}
@@ -292,38 +426,7 @@ export function DeveloperChatWorkspace({
               hasMore={hasMoreMessages}
               onLoadMore={loadOlderMessages}
             >
-              {messages.map((msg, idx) => (
-                <Message
-                  key={msg.id}
-                  messageId={msg.id}
-                  messageIndex={idx}
-                  messageFromEnd={messages.length - 1 - idx}
-                  role={msg.role}
-                  content={msg.content}
-                  contextFlow={msg.contextFlow}
-                  displayContent={msg.displayContent}
-                  referencedFiles={msg.referencedFiles}
-                  displaySegments={msg.displaySegments}
-                  attachments={msg.attachments}
-                  thinking={msg.thinking}
-                  thinkingDuration={msg.thinkingDuration}
-                  toolCalls={msg.toolCalls}
-                  segments={msg.segments}
-                  isStreaming={isLoading && msg === messages[messages.length - 1]}
-                  compact={showProject || showScreenShare || previewOpen}
-                  preferLlmUi
-                  provider={chatProvider}
-                  threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
-                  onOpenTerminal={onOpenTerminalFromToolCall}
-                  renderInlineSecretPrompt={renderInlineSecretPrompt}
-                  onEditMessage={onEditPreviousMessage}
-                  editComposer={editComposerBag}
-                  onOpenPath={onOpenMessagePath}
-                  onOpenDiff={onChangedFileClick}
-                  onOpenMemorySource={onMemorySourceOpen}
-                  onMemoryFeedback={onHandleMemoryFeedback}
-                />
-              ))}
+              {messageElements}
               {messageQueue.length > 0 && (
                 <MessageQueue
                   items={messageQueue}

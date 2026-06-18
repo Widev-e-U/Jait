@@ -1,5 +1,5 @@
 import { AlertTriangle, RefreshCw, Loader2 as SpinnerIcon } from 'lucide-react'
-import type { RefObject } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, TodoList, MessageQueue } from '@/components/chat'
 import type { PromptInputHandle, ToolCallInfo } from '@/components/chat'
@@ -132,6 +132,97 @@ export function ManagerWorkspace({
   onVoiceInput,
   renderInlineSecretPrompt,
 }: ManagerWorkspaceProps) {
+  // ── Memoized message elements ─────────────────────────────────────────
+  // Same rationale as DeveloperChatWorkspace: streaming thread activity
+  // rebuilds the messages array per token; caching per-message elements by
+  // their own render-relevant inputs means only the streaming message gets a
+  // new element, so React skips reconciling the rest.
+  const activeThreadId = automation.selectedThread?.id ?? null
+  const threadRunning = automation.selectedThread?.status === 'running'
+  const threadProvider = automation.selectedThread?.providerId as ProviderId | undefined
+  const sharedPropsKey = [
+    threadProvider,
+    managerThreads,
+    renderInlineSecretPrompt,
+    onOpenMessagePath,
+    onChangedFileClick,
+    onMemorySourceOpen,
+  ]
+  const elementCacheRef = useRef<Map<string, {
+    key: string
+    element: ReactNode
+    msg: unknown
+    contextFlow: unknown
+    toolCalls: unknown
+    segments: unknown
+    isStreaming: boolean
+  }>>(new Map())
+  const cacheThreadRef = useRef<string | null>(null)
+  if (cacheThreadRef.current !== activeThreadId) {
+    elementCacheRef.current.clear()
+    cacheThreadRef.current = activeThreadId
+  }
+  const lastMsgId = automationMessages.length > 0 ? automationMessages[automationMessages.length - 1].id : null
+  const sharedKey = JSON.stringify(sharedPropsKey)
+  const messageElements: ReactNode[] = []
+  {
+    const cache = elementCacheRef.current
+    for (let idx = 0; idx < automationMessages.length; idx++) {
+      const msg = automationMessages[idx]
+      const isStreaming = threadRunning && msg.id === lastMsgId
+      // Reference-equality key (see DeveloperChatWorkspace for the rationale).
+      const cached = cache.get(msg.id)
+      const key =
+        sharedKey
+        + '|' + (msg === cached?.msg ? 's' : 'd')
+        + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
+        + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
+        + '|' + (msg.segments === cached?.segments ? 's' : 'd')
+        + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
+        + '|' + msg.role
+      if (cached && cached.key === key) {
+        messageElements.push(cached.element)
+        continue
+      }
+      const element = (
+        <Message
+          key={msg.id}
+          messageId={msg.id}
+          messageIndex={idx}
+          messageFromEnd={automationMessages.length - 1 - idx}
+          role={msg.role}
+          content={msg.content}
+          contextFlow={msg.contextFlow}
+          toolCalls={msg.toolCalls}
+          segments={msg.segments}
+          isStreaming={isStreaming}
+          compact
+          preferLlmUi={false}
+          provider={threadProvider}
+          threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onOpenPath={onOpenMessagePath}
+          onOpenDiff={onChangedFileClick}
+          onOpenMemorySource={onMemorySourceOpen}
+        />
+      )
+      cache.set(msg.id, {
+        key,
+        element,
+        msg,
+        contextFlow: msg.contextFlow,
+        toolCalls: msg.toolCalls,
+        segments: msg.segments,
+        isStreaming,
+      })
+      messageElements.push(element)
+    }
+    if (cache.size > automationMessages.length) {
+      const live = new Set(automationMessages.map((m) => m.id))
+      for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
+    }
+  }
+
   return (
     <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${isMobile && !automation.selectedThread ? 'pt-12' : ''}`}>
       {automation.selectedThread ? (
@@ -148,28 +239,7 @@ export function ManagerWorkspace({
                 {automationMessages.length === 0 && !automation.loadingActivities && (
                   <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
                 )}
-                {automationMessages.map((msg, idx) => (
-                  <Message
-                    key={msg.id}
-                    messageId={msg.id}
-                    messageIndex={idx}
-                    messageFromEnd={automationMessages.length - 1 - idx}
-                    role={msg.role}
-                    content={msg.content}
-                    contextFlow={msg.contextFlow}
-                    toolCalls={msg.toolCalls}
-                    segments={msg.segments}
-                    isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
-                    compact
-                    preferLlmUi={false}
-                    provider={automation.selectedThread?.providerId as ProviderId | undefined}
-                    threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
-                    renderInlineSecretPrompt={renderInlineSecretPrompt}
-                    onOpenPath={onOpenMessagePath}
-                    onOpenDiff={onChangedFileClick}
-                    onOpenMemorySource={onMemorySourceOpen}
-                  />
-                ))}
+                {messageElements}
               </Conversation>
             </ErrorBoundary>
             <div className="shrink-0 py-3 px-4">

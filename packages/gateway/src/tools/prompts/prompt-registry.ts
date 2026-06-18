@@ -31,6 +31,17 @@ export interface IAgentPrompt {
   resolveReminderInstructions?(mode: ChatMode, endpoint: ModelEndpoint): string | null;
   resolveIdentityRules?(endpoint: ModelEndpoint): string | null;
   resolveSafetyRules?(endpoint: ModelEndpoint): string | null;
+  /**
+   * Marks this resolver as backing Jait's *internal* provider — i.e. the model
+   * runs natively inside Jait's agent loop with Jait tools registered directly,
+   * so there is no provider-native shell-command fallback to steer away from.
+   *
+   * When true, `buildSystemPrompt` omits the `<jaitExternalProvider>` wrapper
+   * block (which is only relevant for external CLI providers like codex /
+   * claude-code). The resolver's own system prompt is expected to carry the
+   * tool-use / search-discovery instructions the model needs.
+   */
+  isInternalJaitProvider?: boolean;
 }
 
 // ── Default fragments ────────────────────────────────────────────────
@@ -96,6 +107,12 @@ export interface PromptContext {
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
   const resolver = promptRegistry.resolve(endpoint);
   const isLocalModel = ctx?.backend === "ollama" || endpoint.backend === "ollama";
+  // Internal Jait providers (e.g. GLM via OpenRouter / BigModel OpenAI-compatible
+  // API) run natively inside Jait's agent loop with Jait tools registered directly.
+  // They have no provider-native shell-command fallback, so the
+  // `<jaitExternalProvider>` wrapper block (which steers external CLI providers
+  // toward Jait tools) is irrelevant and would just waste tokens / mislead.
+  const isInternalJait = resolver.isInternalJaitProvider === true;
 
   let prompt: string;
   if (isLocalModel) {
@@ -109,8 +126,14 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
     const safety = resolver.resolveSafetyRules?.(endpoint) ?? DEFAULT_SAFETY;
     const systemPrompt = resolver.resolveSystemPrompt(mode, endpoint);
 
-    const extProviderBlock = JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS;
-    prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${extProviderBlock}\n</jaitExternalProvider>\n\n${systemPrompt}`;
+    if (isInternalJait) {
+      // Internal provider: identity + safety + the resolver's own (tool-rich)
+      // system prompt — no external-provider steering block.
+      prompt = `${identity}\n\n${safety}\n\n${systemPrompt}`;
+    } else {
+      const extProviderBlock = JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS;
+      prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${extProviderBlock}\n</jaitExternalProvider>\n\n${systemPrompt}`;
+    }
 
     // Inject project context so the agent knows its working directory
     if (ctx?.projectRoot) {

@@ -31,6 +31,8 @@ interface JaitDesktop {
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>
   setSetting: (key: string, value: unknown) => Promise<{ ok: boolean }>
   readClipboardText: () => Promise<string>
+  getLoginItem: () => Promise<{ enabled: boolean; supported: boolean }>
+  setLoginItem: (enabled: boolean) => Promise<{ ok: boolean; enabled: boolean; error?: string }>
 
   // Auto-update
   checkForUpdate: () => Promise<{ updateAvailable: boolean; version?: string; error?: string }>

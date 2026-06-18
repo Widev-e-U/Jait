@@ -172,6 +172,9 @@ export function SettingsPage({
   // ── Desktop close-to-tray setting ───────────────────────────────
   const [closeOnWindowClose, setCloseOnWindowClose] = useState(false)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  // ── Desktop launch-on-startup setting ───────────────────────────
+  const [launchAtLogin, setLaunchAtLogin] = useState(false)
+  const [launchAtLoginSupported, setLaunchAtLoginSupported] = useState(true)
   useEffect(() => {
     if (platform !== 'electron' || !window.jaitDesktop?.getInfo) return
     void window.jaitDesktop.getInfo().then((info) => {
@@ -182,6 +185,13 @@ export function SettingsPage({
     if (platform !== 'electron' || !window.jaitDesktop?.getSetting) return
     void window.jaitDesktop.getSetting('closeOnWindowClose', false).then((v) => {
       setCloseOnWindowClose(v === true)
+    })
+  }, [platform])
+  useEffect(() => {
+    if (platform !== 'electron' || !window.jaitDesktop?.getLoginItem) return
+    void window.jaitDesktop.getLoginItem().then((res) => {
+      setLaunchAtLogin(res.enabled)
+      setLaunchAtLoginSupported(res.supported)
     })
   }, [platform])
 
@@ -647,6 +657,24 @@ export function SettingsPage({
                   }}
                 />
               </div>
+              {launchAtLoginSupported && (
+                <div className="flex max-w-md items-center justify-between gap-4">
+                  <div>
+                    <Label htmlFor="launch-at-login">Start on PC startup</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically launch Jait when you log in to your computer.
+                    </p>
+                  </div>
+                  <Switch
+                    id="launch-at-login"
+                    checked={launchAtLogin}
+                    onCheckedChange={(checked) => {
+                      setLaunchAtLogin(checked)
+                      void window.jaitDesktop?.setLoginItem(checked)
+                    }}
+                  />
+                </div>
+              )}
             </Card>
           )}
 

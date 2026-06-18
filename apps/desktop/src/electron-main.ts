@@ -518,6 +518,31 @@ ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
   return { ok: true };
 });
 
+// ── Auto-launch on PC startup (OS login item) ──────────────────────────
+// Toggles whether Jait launches when the user logs into the OS.
+ipcMain.handle("desktop:get-login-item", () => {
+  try {
+    const status = app.getLoginItemSettings();
+    return { enabled: Boolean(status.openAtLogin), supported: true };
+  } catch {
+    return { enabled: false, supported: false };
+  }
+});
+ipcMain.handle("desktop:set-login-item", (_event, enabled: boolean) => {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      // On Windows, start minimized to tray so it doesn't steal focus on boot.
+      args: ["--hidden"],
+    });
+    // Persist the intent so we can reflect it even if the OS reports stale state.
+    setSetting("launchAtLogin", enabled);
+    return { ok: true, enabled };
+  } catch (err) {
+    return { ok: false, enabled: false, error: String(err) };
+  }
+});
+
 // ── Credential store IPC (OS keychain via safeStorage) ────────────────
 const credentialPath = path.join(app.getPath("userData"), "credentials.enc");
 

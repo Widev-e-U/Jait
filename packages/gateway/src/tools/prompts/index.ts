@@ -20,6 +20,7 @@ import "./gpt52-prompt.js";
 import "./gpt5-codex-prompt.js";
 import "./gpt5-prompt.js";
 import "./xai-prompt.js";
+import "./glm-prompt.js";
 import "./ollama-prompt.js";
 import "./qwen-prompt.js";
 

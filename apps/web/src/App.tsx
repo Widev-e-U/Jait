@@ -420,20 +420,29 @@ function App() {
     if (connected) {
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
+      // Re-fetch fs nodes — the desktop registers itself as a node async
+      // after the WS opens, so the initial mount fetch may have missed it.
+      refreshFsNodesRef.current()
     }
     handleConnectionRestart({ connected, reconnected })
   }, [handleConnectionRestart])
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
-  // Fetch filesystem nodes for project node tags
-  useEffect(() => {
+  // Fetch filesystem nodes for project node tags.
+  // Re-run on connect and on fs.node-* events so the desktop's own node
+  // registration (which happens async after WS opens) is reflected —
+  // otherwise projects created on this machine show "Node offline" forever.
+  const refreshFsNodesRef = useRef<() => void>(() => {})
+  const refreshFsNodes = useCallback(() => {
     if (!token) return
-    void fetch(`${API_URL}/api/filesystem/nodes`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    void fetch(`${API_URL}/api/filesystem/nodes`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => { if (data?.nodes) setFsNodes(data.nodes) })
       .catch(() => {})
   }, [token])
+  refreshFsNodesRef.current = refreshFsNodes
+  useEffect(() => { refreshFsNodes() }, [refreshFsNodes])
 
   const {
     projects,
@@ -1554,7 +1563,13 @@ function App() {
     onFullState: handleFullState,
     onMessageStarted: handleMessageStarted,
     onMessageComplete: handleMessageComplete,
-    onThreadEvent: automation.handleThreadEvent,
+    onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
+      automation.handleThreadEvent(type, payload)
+      // Keep the project sidebar's node tags in sync when nodes come/go online.
+      if (type === 'fs.node-registered' || type === 'fs.node-disconnected' || type === 'node.disconnected' || type === 'node.updated' || type === 'node.registry') {
+        refreshFsNodesRef.current()
+      }
+    }, [automation]),
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((payload: FsChangesPayload) => {
       const activeSurfaceId = activeProjectRef.current?.surfaceId ?? null

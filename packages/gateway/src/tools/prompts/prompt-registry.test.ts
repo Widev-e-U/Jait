@@ -96,4 +96,51 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("<skill-evaluation>");
     expect(prompt).not.toContain("Always evaluate whether the requested work should become a reusable skill.");
   });
+
+  it("gives GLM (internal Jait provider) the full tool-rich prompt WITHOUT the external-provider block", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "zhipu/glm-4.6",
+      baseUrl: "https://openrouter.ai/api/v1",
+    }, {
+      projectRoot: "/tmp/project",
+    });
+
+    // GLM runs natively inside Jait's agent loop (Jait tools registered
+    // directly) — it is NOT an external CLI provider, so it must NOT get the
+    // <jaitExternalProvider> steering block.
+    expect(prompt).not.toContain("<jaitExternalProvider>");
+    expect(prompt).not.toContain("You are operating inside Jait, a tool-centric coding project and gateway.");
+    expect(prompt).not.toContain("Prefer Jait tools as the primary way to act.");
+    // It still gets identity + safety (internal provider keeps the wrapper shell).
+    expect(prompt).toContain("Your name is Jait");
+    expect(prompt).toContain("Follow the user's requirements carefully");
+    // Core instructions + keep-going contract
+    expect(prompt).toContain("You are a highly sophisticated automated coding agent");
+    expect(prompt).toContain("keep going until the user's query is completely resolved");
+    // Explicit tool-call format discipline (GLM-specific block)
+    expect(prompt).toContain("<toolCallFormat>");
+    expect(prompt).toContain("NEVER write tool names, function signatures, or JSON arguments as plain text");
+    // Shared sections — including the tools.search discovery mechanism so the
+    // model can find the search tool and other Jait tools.
+    expect(prompt).toContain("<toolUseInstructions>");
+    expect(prompt).toContain("Additional tools (browser, preview, memory, prior session search, cron, SSH, screen sharing, network scanning, and more) can be discovered at any time by calling tools.search with a keyword");
+    expect(prompt).toContain("<searchInstructions>");
+    expect(prompt).toContain("<editingInstructions>");
+    expect(prompt).toContain("<taskTracking>");
+    // Project context injection
+    expect(prompt).toContain("You are working in the project: /tmp/project");
+  });
+
+  it("resolves bare glm-* model ids (BigModel OpenAI-compatible API)", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "glm-4.5",
+      baseUrl: "https://open.bigmodel.cn/api/v1",
+    });
+
+    // Same internal-provider treatment: tool-rich prompt, no external block.
+    expect(prompt).not.toContain("<jaitExternalProvider>");
+    expect(prompt).toContain("<toolCallFormat>");
+    expect(prompt).toContain("keep going until the user's query is completely resolved");
+    expect(prompt).toContain("calling tools.search with a keyword");
+  });
 });

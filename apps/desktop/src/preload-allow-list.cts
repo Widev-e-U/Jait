@@ -19,6 +19,8 @@ const allowedIpcChannels = {
     "window:set-title-bar-overlay",
     "desktop:get-setting",
     "desktop:set-setting",
+    "desktop:get-login-item",
+    "desktop:set-login-item",
     "credential:store",
     "credential:get",
     "credential:clear",
