@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X, Copy, Check } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
@@ -106,6 +106,8 @@ interface PromptInputProps {
   sessionInfo?: SessionInfo | null
   /** Node ID of the open project (scopes CLI providers to that device). */
   projectNodeId?: string
+  /** Active chat/thread id — surfaced via a subtle copy button for quick handoff. */
+  chatId?: string | null
   /** Display name for the currently selected project. */
   projectName?: string | null
   /** Full path for the currently selected project, used as hover context. */
@@ -671,6 +673,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   projectNodeId,
   projectName,
   projectPath,
+  chatId,
   availableFiles = EMPTY_FILES,
   segments,
   onSearchFiles,
@@ -687,6 +690,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
+  const [chatIdCopied, setChatIdCopied] = useState(false)
   const [isEmpty, setIsEmpty] = useState(isTextEmpty(value))
   const [attachments, setAttachments] = useState<ChatAttachment[]>(
     () => (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
@@ -1658,7 +1662,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     <div
       ref={rootRef}
       className={cn(
-        'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+        'group relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}
@@ -1669,13 +1673,33 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     >
       {projectDisplayName && (
         <div
-          className="absolute top-2 right-3 z-10 text-[10px] leading-none text-muted-foreground pointer-events-none"
+          className="absolute top-2 right-3 z-10 flex items-center gap-1 text-[10px] leading-none text-muted-foreground"
           title={projectPath?.trim() || projectDisplayName}
         >
-          <span className="block truncate max-w-[180px]">
+          <span className="block truncate max-w-[180px] pointer-events-none">
             <span className="font-semibold text-foreground/60">PROJECT</span>{' '}
             {projectDisplayName}
           </span>
+          {chatId && (
+            <button
+              type="button"
+              aria-label="Copy chat id"
+              title={`Copy chat id: ${chatId}`}
+              className="pointer-events-auto shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-all hover:text-foreground hover:bg-muted/60 focus-visible:opacity-100 focus-visible:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
+              onClick={async (e) => {
+                e.preventDefault()
+                try {
+                  await navigator.clipboard.writeText(chatId)
+                  setChatIdCopied(true)
+                  setTimeout(() => setChatIdCopied(false), 1200)
+                } catch {
+                  /* clipboard unavailable */
+                }
+              }}
+            >
+              {chatIdCopied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
+            </button>
+          )}
         </div>
       )}
       {/* Attachment previews */}

@@ -262,6 +262,7 @@ export function DeveloperChatWorkspace({
               projectOpen={showProject}
               projectName={activeProjectDisplayName ?? undefined}
               projectPath={activeProjectRoot ?? undefined}
+              chatId={activeSessionId ?? undefined}
               sessionInfo={sessionInfo}
               projectNodeId={projectNodeId ?? undefined}
             />
@@ -418,6 +419,7 @@ export function DeveloperChatWorkspace({
                   projectOpen={showProject}
                   projectName={activeProjectDisplayName ?? undefined}
                   projectPath={activeProjectRoot ?? undefined}
+                  chatId={activeSessionId ?? undefined}
                   sessionInfo={sessionInfo}
                   projectNodeId={projectNodeId ?? undefined}
                 />

@@ -226,6 +226,7 @@ export function ManagerWorkspace({
                     availableFiles={availableFiles}
                     onSearchFiles={onSearchFiles}
                     projectOpen={showProject}
+                    chatId={automation.selectedThread?.id ?? undefined}
                   />
                 </ErrorBoundary>
                 <div className="flex items-center gap-2 px-1 mt-1.5">
