@@ -881,22 +881,39 @@ export const migrations: Migration[] = [
       dropIndex("idx_reminders_workspace");
       dropIndex("idx_architecture_diagrams_user_workspace");
 
-      // New indexes
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_status ON projects(user_id, status, last_active_at)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_root ON projects(user_id, root_path, node_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_project_state_project ON project_state(project_id)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_project ON reminders(project_id, updated_at DESC)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_user_project ON architecture_diagrams(user_id, project_root)`);
-      db.exec(`UPDATE memories SET scope = 'project' WHERE scope = 'workspace'`);
-      db.exec(`UPDATE project_state SET key = 'project.ui' WHERE key = 'workspace.ui'`);
-      db.exec(`UPDATE project_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
-      db.exec(`UPDATE project_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
-      db.exec(`UPDATE project_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
-      db.exec(`UPDATE project_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
-      db.exec(`UPDATE session_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
-      db.exec(`UPDATE session_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
-      db.exec(`UPDATE session_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
-      db.exec(`UPDATE session_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
+      // New indexes (guarded — tables may not exist on fresh/partial DBs)
+      function tableExists(name: string): boolean {
+        return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
+      }
+      if (tableExists("projects")) {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_status ON projects(user_id, status, last_active_at)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_projects_user_root ON projects(user_id, root_path, node_id)`);
+      }
+      if (tableExists("project_state")) {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_project_state_project ON project_state(project_id)`);
+      }
+      if (tableExists("reminders")) {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_project ON reminders(project_id, updated_at DESC)`);
+      }
+      if (tableExists("architecture_diagrams")) {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_user_project ON architecture_diagrams(user_id, project_root)`);
+      }
+      if (tableExists("memories")) {
+        db.exec(`UPDATE memories SET scope = 'project' WHERE scope = 'workspace'`);
+      }
+      if (tableExists("project_state")) {
+        db.exec(`UPDATE project_state SET key = 'project.ui' WHERE key = 'workspace.ui'`);
+        db.exec(`UPDATE project_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
+        db.exec(`UPDATE project_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
+        db.exec(`UPDATE project_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
+        db.exec(`UPDATE project_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
+      }
+      if (tableExists("session_state")) {
+        db.exec(`UPDATE session_state SET key = 'project.panel' WHERE key = 'workspace.panel'`);
+        db.exec(`UPDATE session_state SET key = 'project.tabs' WHERE key = 'workspace.tabs'`);
+        db.exec(`UPDATE session_state SET key = 'project.layout' WHERE key = 'workspace.layout'`);
+        db.exec(`UPDATE session_state SET key = 'project.layout.mobile' WHERE key = 'workspace.layout.mobile'`);
+      }
     },
   },
 
