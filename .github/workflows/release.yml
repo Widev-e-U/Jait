@@ -168,13 +168,31 @@ jobs:
       && (
         github.event_name != 'push' ||
         github.ref != 'refs/heads/main' ||
-        needs.auto-tag.outputs.desktop_changed == 'true'
+        needs.auto-tag.outputs.changed == 'true'
       )
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Prepare release asset directory
         run: mkdir -p "$RELEASE_ASSET_DIR"
+      - name: Stamp desktop version with release version
+        run: |
+          # The desktop app bundles the web frontend, so it must ship a new
+          # build on every gateway release. Stamp its package.json with the
+          # release version so electron-builder emits a latest.yml carrying the
+          # new version — electron-updater then detects the update on already
+          # installed apps. Prefer auto-tag output, fall back to the tag name
+          # or the gateway package.json version.
+          if [ -n "${{ needs.auto-tag.outputs.version }}" ]; then
+            REL_VERSION="${{ needs.auto-tag.outputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            REL_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            REL_VERSION=$(jq -r '.version' packages/gateway/package.json)
+          fi
+          echo "Stamping desktop version -> $REL_VERSION"
+          jq --arg v "$REL_VERSION" '.version = $v' apps/desktop/package.json > tmp.json && mv tmp.json apps/desktop/package.json
+          echo "desktop_release_version=$REL_VERSION" >> $GITHUB_ENV
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Check Linux runner prerequisites

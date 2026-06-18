@@ -85,29 +85,15 @@ export function DeveloperComposerControlRow({
             />
           )}
           {approveAllInSession && (
-            compact ? (
-              <button
-                type="button"
-                onClick={onClearApproveAll}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
-                title="Auto-approved. Clear approve all"
-                aria-label="Auto-approved. Clear approve all"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-600 dark:text-green-400">
-                Auto-approved
-                <button
-                  type="button"
-                  onClick={onClearApproveAll}
-                  className="rounded-full p-0.5 hover:bg-green-500/20 transition-colors"
-                  title="Clear approve all"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </span>
-            )
+            <button
+              type="button"
+              onClick={onClearApproveAll}
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
+              title="Auto-approved. Clear approve all"
+              aria-label="Auto-approved. Clear approve all"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </button>
           )}
         </div>
         {!compact && (
