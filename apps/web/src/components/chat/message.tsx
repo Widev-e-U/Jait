@@ -832,7 +832,7 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-2 bottom-2',
+            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-0.5 bottom-0.5',
           )}
         >
           <DropdownMenu>
@@ -840,7 +840,7 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/85 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <MoreVertical className="h-4 w-4" />
               </button>
