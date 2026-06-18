@@ -832,7 +832,7 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-0 bottom-0',
+            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-1',
           )}
         >
           <DropdownMenu>

@@ -42,6 +42,8 @@ export {
   createWebSearchTool,
   createBrowserSandboxStartTool,
 } from "./browser-tools.js";
+import { createScreenshotCaptureTool } from "./screenshot-tools.js";
+export { createScreenshotCaptureTool } from "./screenshot-tools.js";
 export {
   createMemorySaveTool,
   createMemorySearchTool,
@@ -445,6 +447,7 @@ export function createToolRegistry(
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
+  tools.register(createScreenshotCaptureTool());
 
   // Email tools (Gmail / Outlook) — only when an EmailService is wired
   if (deps.emailService) {

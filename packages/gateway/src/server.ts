@@ -148,6 +148,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     logger: {
       level: config.logLevel,
     },
+    // Outlook/Microsoft Graph message ids are ~150+ chars and ride in route
+    // params (e.g. /api/email/messages/:id). Fastify defaults maxParamLength to
+    // 100, which makes those routes silently fall through to the SPA 404.
+    maxParamLength: 4000,
   });
 
   await app.register(fastifyCookie);

@@ -57,6 +57,7 @@ tests/e2e/playwright-report/
 
 # Temp
 temp-*/
+.jait/shots/
 playwright-report/
 
 # Desktop releases
