@@ -84,6 +84,7 @@ export const ToolName = {
   MemoryUpdate: "memory.update",
   MemoryForget: "memory.forget",
   SessionSearch: "session.search",
+  ChatTraces: "chat.traces",
 
   // ── Voice ──
   VoiceSpeak: "voice.speak",

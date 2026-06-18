@@ -62,6 +62,7 @@ import { PluginManager } from "./plugins/manager.js";
 import { resolveJaitLlmConfig } from "./services/jait-llm.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
+import { ChatTracesService } from "./services/chat-traces.js";
 
 function parsePositiveIntegerEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -114,6 +115,7 @@ async function main() {
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
   const sessionSearchService = new SessionSearchService(sqlite);
+  const chatTracesService = new ChatTracesService(sqlite);
 
   // ── Recover threads stuck in "running" from a previous crash/restart ──
   const staleThreads = threadService.listRunning();
@@ -369,6 +371,7 @@ async function main() {
     repoProposalService,
     reminderService,
     sessionSearchService,
+    chatTracesService,
     gitService,
     userSecretService,
     emailService,
@@ -537,6 +540,7 @@ async function main() {
     repoProposalService,
     reminderService,
     sessionSearchService,
+    chatTracesService,
     gitService,
     maintenanceService,
     notifications,
