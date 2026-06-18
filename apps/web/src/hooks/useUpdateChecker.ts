@@ -40,10 +40,19 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           fetch(`${apiUrl}/health`).then(r => r.ok ? r.json() as Promise<{ version?: string }> : null).catch(() => null),
         ])
         const gatewayVersion = (healthRes as { version?: string } | null)?.version ?? ''
+        const latestVersion = result.version ?? info?.appVersion ?? ''
+        // The desktop app and gateway ship as a single unified release. The
+        // desktop binary's own version string (app.getVersion()) can lag behind
+        // the published release in package.json, so autoUpdater may report an
+        // "update" to a version the gateway is already running. Only offer the
+        // update when the latest published version actually differs from the
+        // running gateway version.
+        const hasUpdate = result.updateAvailable &&
+          (!gatewayVersion || latestVersion !== gatewayVersion)
         setUpdateInfo({
           currentVersion: gatewayVersion,
-          latestVersion: result.version ?? info?.appVersion ?? '',
-          hasUpdate: result.updateAvailable,
+          latestVersion,
+          hasUpdate,
         })
       } else {
         const res = await fetch(`${apiUrl}/api/update/check`, {

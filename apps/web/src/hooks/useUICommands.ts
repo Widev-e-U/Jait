@@ -636,8 +636,21 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }
     }
 
+    // Electron desktops act as always-on nodes (filesystem/provider/terminal)
+    // for remote clients. When the window is hidden to the tray the document
+    // becomes "hidden", but we must NOT tear down the gateway WebSocket —
+    // otherwise the node unregisters and becomes unreachable from other devices
+    // (e.g. the phone). Only browsers/capacitor should pause on visibility.
+    const isAlwaysOnNode = detectPlatform() === 'electron'
+
     const handleVisibilityChange = () => {
       const hidden = typeof document !== 'undefined' && document.hidden
+      if (isAlwaysOnNode) {
+        // Electron: keep the connection live while hidden to tray.
+        // If the socket somehow dropped while hidden, reconnect now.
+        if (!hidden && !wsRef.current && mountedRef.current) connect()
+        return
+      }
       pausedForHiddenDocument = hidden
       if (hidden) {
         clearReconnectTimer()

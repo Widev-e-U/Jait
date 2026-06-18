@@ -15,6 +15,16 @@ const { autoUpdater } = electronUpdater;
 // Remove the default application menu (File, Edit, View, etc.)
 Menu.setApplicationMenu(null);
 
+// On Windows, toast notifications identify the source app by its
+// AppUserModelID. Without an explicit ID Electron derives a default from the
+// package name (e.g. "electron.app.jait"), which is what shows up in the
+// notification. Set it to the real app id + name so notifications read "Jait".
+const JAIT_APP_ID = "dev.jait.desktop";
+if (process.platform === "win32") {
+  app.setAppUserModelId(JAIT_APP_ID);
+}
+app.setName("Jait");
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Configuration ─────────────────────────────────────────────────────
@@ -338,6 +348,10 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // The desktop keeps acting as a reachable node (filesystem/provider)
+      // while hidden to the tray. Prevent Chromium from throttling timers /
+      // WebSocket keepalives when the window is hidden.
+      backgroundThrottling: false,
       additionalArguments: [
         `--gateway-url=${GATEWAY_URL}`,
         ...(openedFolder ? [`--open-folder=${openedFolder}`] : []),
@@ -630,8 +644,21 @@ ipcMain.handle("desktop:get-sources", async () => {
 });
 
 // Notification passthrough
+const notificationIcon = (() => {
+  try {
+    const iconPath = path.join(__dirname, "..", "assets", "icon-1024.png");
+    if (existsSync(iconPath)) return nativeImage.createFromPath(iconPath);
+  } catch { /* ignore */ }
+  return undefined;
+})();
+
 ipcMain.handle("desktop:notify", (_event, opts: { title: string; body: string }) => {
-  new Notification({ title: opts.title, body: opts.body }).show();
+  const notification = new Notification({
+    title: opts.title,
+    body: opts.body,
+    ...(notificationIcon && !notificationIcon.isEmpty() ? { icon: notificationIcon } : {}),
+  });
+  notification.show();
   return { ok: true };
 });
 
