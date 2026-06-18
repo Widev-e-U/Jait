@@ -72,7 +72,6 @@ let persistentDeviceId = "";
 
 let openedFolder = getOpenedFolderPath();
 const startHidden = process.argv.includes("--hidden");
-persistentDeviceId = resolvePersistentDeviceId();
 
 let mainWindow: BrowserWindow | null = null;
 let splashWindow: BrowserWindow | null = null;
@@ -105,6 +104,10 @@ function setSetting(key: string, value: unknown): void {
   s[key] = value;
   saveSettings(s);
 }
+
+// Resolve the persistent device ID now that the settings helpers are available.
+// Must run after settingsPath/loadSettings/saveSettings/getSetting/setSetting are defined.
+persistentDeviceId = resolvePersistentDeviceId();
 
 /** Whether the app should quit on window close vs minimize to tray. Default: false (minimize to tray). */
 function shouldQuitOnClose(): boolean {
