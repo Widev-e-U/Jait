@@ -13,6 +13,7 @@ import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface } from "./surfaces/index.js";
 import type { SurfaceRegistrySnapshot } from "@jait/shared";
 import { createToolRegistry } from "./tools/index.js";
+import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import { MemoryEngine } from "./memory/service.js";
@@ -474,6 +475,34 @@ async function main() {
     return created;
   };
 
+  // The actual (post-consent) tool execution. When the session's project
+  // lives on a remote node (e.g. a Windows desktop while the gateway runs
+  // on Linux), we transparently delegate terminal/execute/search/file tool
+  // calls to that node via the WS control plane instead of running them on
+  // the gateway's local filesystem. Gateway-local tools (memory, cron, …)
+  // always run here regardless of the project location.
+  const resolveAndExecute = async (
+    toolName: string,
+    input: unknown,
+    context: import("./tools/contracts.js").ToolContext,
+    auditWriter?: typeof audit,
+  ): Promise<import("./tools/contracts.js").ToolResult> => {
+    const sessionRecord = sessionService.getById(context.sessionId);
+    const projectRecord = sessionRecord?.projectId
+      ? projectService.getById(sessionRecord.projectId, context.userId)
+      : undefined;
+    const projectPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
+    const remoteNodeId = resolveRemoteNodeForSession(ws, projectPath ?? undefined);
+    const executor = createRemoteToolExecutor(
+      {
+        ws,
+        localExecutor: (tName, tInput, ctx) => toolRegistry.execute(tName, tInput, ctx, auditWriter),
+      },
+      remoteNodeId,
+    );
+    return executor(toolName, input, context);
+  };
+
   const toolExecutor = async (
     toolName: string,
     input: unknown,
@@ -488,6 +517,7 @@ async function main() {
       permissions,
       sessionApprovals: getSessionApprovals(context.sessionId),
       profileName: activeToolProfileName,
+      delegate: (tName, tInput, ctx) => resolveAndExecute(tName, tInput, ctx, audit),
     });
     return executor.execute(toolName, input, context, options);
   };

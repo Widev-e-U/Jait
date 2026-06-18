@@ -1,14 +1,20 @@
 /**
- * Shared helper — resolve the FileSystemSurface for the current session.
+ * Shared helper — resolve the FileSystemSurface (local or remote) for the
+ * current session.
  *
  * Priority:
- * 1. If `targetPath` is absolute and outside the current project boundary,
- *    find or create a surface scoped to contain that path.
- * 2. Look for an existing surface with the conventional ID `fs-{sessionId}`
+ * 1. If the session has a running RemoteFileSystemSurface (project lives on
+ *    another device, e.g. a Windows desktop while the gateway runs on
+ *    Linux), route file ops to it. We never resolve a foreign-platform path
+ *    against the gateway's local filesystem — that produced broken paths
+ *    like `/home/jakob/E:\Zinsrechner/E:\Zinsrechner`.
+ * 2. If `targetPath` is absolute and outside the current project boundary,
+ *    find or create a local surface scoped to contain that path.
+ * 3. Look for an existing surface with the conventional ID `fs-{sessionId}`
  *    that is running (the auto-created surface for the session).
- * 3. Look for *any* running filesystem surface belonging to the session
+ * 4. Look for *any* running filesystem surface belonging to the session
  *    (e.g. one started via `surfaces.start` with a custom project root).
- * 4. If nothing exists, auto-start one with `context.projectRoot`.
+ * 5. If nothing exists, auto-start one with `context.projectRoot`.
  *
  * This ensures that when the user asks to read/edit files anywhere on their
  * local filesystem, the agent can access them without "escapes project
@@ -20,6 +26,26 @@ import { stat } from "node:fs/promises";
 import type { ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import { FileSystemSurface } from "../../surfaces/filesystem.js";
+import { RemoteFileSystemSurface } from "../../surfaces/remote-filesystem.js";
+
+/** Union of local + remote filesystem surfaces. */
+export type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
+
+/**
+ * Detect whether a path belongs to a *different* OS than the one the
+ * gateway is running on (e.g. a Windows drive path `E:\...` while the
+ * gateway runs on Linux). Such paths cannot be resolved locally and must
+ * always be served by a remote node surface.
+ */
+function isForeignPlatformPath(targetPath: string): boolean {
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(targetPath);
+  const gatewayIsWindows = process.platform === "win32";
+  if (gatewayIsWindows) {
+    // A POSIX-absolute path (`/home/...`) on a Windows gateway is foreign.
+    return targetPath.startsWith("/") && !isWindowsPath;
+  }
+  return isWindowsPath;
+}
 
 /**
  * Given a `targetPath`, determine the correct project root.
@@ -65,18 +91,97 @@ function pickMostSpecific(surfaces: FileSystemSurface[], targetPath: string): Fi
   return best;
 }
 
+/** Get the project root of any filesystem surface (local or remote). */
+function getSurfaceRoot(surface: AnyFsSurface): string | null {
+  const meta = surface.snapshot().metadata as Record<string, unknown>;
+  return (meta?.projectRoot as string | undefined) ?? null;
+}
+
+/** Normalize a path for cross-platform prefix comparison. */
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * Check whether a surface (local or remote) covers `targetPath`.
+ * Uses forward-slash-normalized, case-insensitive prefix matching so a
+ * Windows surface root (`E:\Zinsrechner`) matches a Windows path.
+ */
+function coversAny(surface: AnyFsSurface, targetPath: string, normTarget = normalizePath(targetPath)): boolean {
+  // Prefer the surface's own isPathAllowed when it returns true.
+  try {
+    if (surface.isPathAllowed(targetPath)) return true;
+  } catch {
+    // fall through to manual check
+  }
+  const root = getSurfaceRoot(surface);
+  if (!root) return false;
+  const normRoot = normalizePath(root);
+  if (!normRoot) return false;
+  return normTarget === normRoot || normTarget.startsWith(normRoot + "/");
+}
+
+/**
+ * Among multiple surfaces (local or remote) that cover a path, prefer the
+ * most specific one (deepest project root).
+ */
+function pickMostSpecificAny(surfaces: AnyFsSurface[], targetPath: string): AnyFsSurface | null {
+  const normTarget = normalizePath(targetPath);
+  let best: AnyFsSurface | null = null;
+  let bestLen = -1;
+  for (const s of surfaces) {
+    if (!coversAny(s, targetPath, normTarget)) continue;
+    const root = getSurfaceRoot(s);
+    const len = root?.length ?? 0;
+    if (len > bestLen) {
+      best = s;
+      bestLen = len;
+    }
+  }
+  return best;
+}
+
 export async function getFs(
   registry: SurfaceRegistry,
   context: ToolContext,
   targetPath?: string,
-): Promise<FileSystemSurface> {
+): Promise<AnyFsSurface> {
+  const fsId = `fs-${context.sessionId}`;
+
+  // ── Prefer a running remote-filesystem surface for this session ──
+  // When the project lives on a remote node (e.g. a Windows desktop while
+  // the gateway runs on Linux), the session's surface is a
+  // RemoteFileSystemSurface. Route file ops to it instead of resolving the
+  // foreign path against the gateway's local filesystem.
+  const remoteSurfaces = registry
+    .getBySession(context.sessionId)
+    .filter((s): s is RemoteFileSystemSurface => s instanceof RemoteFileSystemSurface && s.state === "running");
+  if (remoteSurfaces.length > 0) {
+    if (targetPath) {
+      const covered = pickMostSpecificAny(remoteSurfaces, targetPath);
+      if (covered) return covered;
+    }
+    const conventionalRemote = remoteSurfaces.find((s) => s.id === fsId);
+    return conventionalRemote ?? remoteSurfaces[0]!;
+  }
+
+  // ── Foreign-platform path with no remote surface ──
+  // The target path belongs to a different OS than the gateway and there is
+  // no remote node surface available. Do NOT try to resolve it locally —
+  // that would create a bogus local surface and throw ENOENT.
+  if (targetPath && isForeignPlatformPath(targetPath)) {
+    throw new Error(
+      `Path "${targetPath}" belongs to a different platform than the gateway ` +
+        `(${process.platform}) and no remote node surface is available for this session. ` +
+        `Open the project on its device first via /api/project/open.`,
+    );
+  }
+
+  // ── Local filesystem surfaces ──
   const absTarget = targetPath ? resolve(context.projectRoot, targetPath) : undefined;
 
-  // ── If target is absolute and we already have a surface that covers it, use it ──
   if (absTarget) {
-    // Collect all running FS surfaces for this session
     const candidates: FileSystemSurface[] = [];
-    const fsId = `fs-${context.sessionId}`;
     const conventional = registry.getSurface(fsId) as FileSystemSurface | undefined;
     if (conventional?.state === "running") candidates.push(conventional);
     for (const s of registry.getBySession(context.sessionId)) {
@@ -85,14 +190,12 @@ export async function getFs(
       }
     }
 
-    // Pick the most specific surface that covers this path
     const best = pickMostSpecific(candidates, absTarget);
     if (best) return best;
 
-    // No existing surface covers this path — create one scoped to the target
     if (isAbsolute(targetPath!)) {
       const newRoot = await deriveProjectRoot(absTarget);
-      const safeName = newRoot.replace(/[:\\\/]/g, "_").replace(/_+$/, "").toLowerCase();
+      const safeName = newRoot.replace(/[:\\/]/g, "_").replace(/_+$/, "").toLowerCase();
       const surfaceId = `fs-${context.sessionId}-${safeName}`;
       const existing = registry.getSurface(surfaceId) as FileSystemSurface | undefined;
       if (existing?.state === "running") return existing;
@@ -106,26 +209,16 @@ export async function getFs(
   }
 
   // ── Default: find or create the conventional session surface ──
-
-  // 1. Conventional per-session ID
-  const fsId = `fs-${context.sessionId}`;
-  const conventional = registry.getSurface(fsId) as
-    | FileSystemSurface
-    | undefined;
+  const conventional = registry.getSurface(fsId) as FileSystemSurface | undefined;
   if (conventional && conventional.state === "running") return conventional;
 
-  // 2. Any running filesystem surface for this session
   const sessionSurfaces = registry.getBySession(context.sessionId);
   for (const s of sessionSurfaces) {
-    if (
-      s instanceof FileSystemSurface &&
-      s.state === "running"
-    ) {
+    if (s instanceof FileSystemSurface && s.state === "running") {
       return s;
     }
   }
 
-  // 3. Nothing found — auto-start one
   const started = await registry.startSurface("filesystem", fsId, {
     sessionId: context.sessionId,
     projectRoot: context.projectRoot,
@@ -137,8 +230,8 @@ export async function getFs(
  * Resolve the effective project root for a session.
  *
  * Prefers the most specific (deepest) project root among all running
- * filesystem surfaces for this session — avoids returning a broad drive root
- * when a more specific project surface exists.
+ * filesystem surfaces (local AND remote) for this session — avoids returning
+ * a broad drive root when a more specific project surface exists.
  * Falls back to `process.cwd()`.
  */
 export function resolveProjectRoot(
@@ -150,7 +243,10 @@ export function resolveProjectRoot(
   let best: string | null = null;
   let bestLen = -1;
   for (const s of registry.getBySession(sessionId)) {
-    if (s instanceof FileSystemSurface && s.state === "running") {
+    if (
+      (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) &&
+      s.state === "running"
+    ) {
       const root = (s.snapshot().metadata as Record<string, unknown>)
         ?.projectRoot as string | undefined;
       if (root && root.length > bestLen) {

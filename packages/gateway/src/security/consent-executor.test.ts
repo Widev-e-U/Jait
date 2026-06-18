@@ -137,3 +137,69 @@ describe("ConsentAwareExecutor consent-sensitive tools", () => {
     },
   );
 });
+
+describe("ConsentAwareExecutor delegate routing", () => {
+  it("routes actual execution through the delegate instead of the tool registry", async () => {
+    const toolRegistry = new ToolRegistry();
+    const registryExecute = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "local-registry",
+    }));
+    toolRegistry.register(
+      createMockTool("terminal.run", registryExecute),
+    );
+
+    const delegate = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "remote-delegate",
+    }));
+
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions: getProfile("coding"),
+      sessionApprovals: new Set<string>(),
+      profileName: "coding",
+      delegate,
+    });
+
+    // terminal.run requires consent — approve it, then assert the delegate ran.
+    const promise = executor.execute("terminal.run", { command: "whoami" }, context);
+    const request = consentManager.listPending()[0]!;
+    consentManager.approve(request.id, "click", "ok");
+    const result = await promise;
+
+    expect(result.message).toBe("remote-delegate");
+    expect(delegate).toHaveBeenCalledOnce();
+    expect(delegate).toHaveBeenCalledWith("terminal.run", { command: "whoami" }, context, undefined);
+    expect(registryExecute).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the tool registry when no delegate is configured", async () => {
+    const toolRegistry = new ToolRegistry();
+    const registryExecute = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "local-registry",
+    }));
+    toolRegistry.register(createMockTool("terminal.run", registryExecute));
+
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions: getProfile("coding"),
+      sessionApprovals: new Set<string>(),
+      profileName: "coding",
+    });
+
+    const promise = executor.execute("terminal.run", { command: "whoami" }, context);
+    consentManager.approve(consentManager.listPending()[0]!.id, "click", "ok");
+    const result = await promise;
+
+    expect(result.message).toBe("local-registry");
+    expect(registryExecute).toHaveBeenCalledOnce();
+  });
+});

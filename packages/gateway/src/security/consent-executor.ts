@@ -29,6 +29,19 @@ export interface ConsentAwareExecutorOptions {
   sessionApprovals: Set<string>;
   /** Human-readable active profile name */
   profileName?: ProfileName;
+  /**
+   * Optional delegate that performs the *actual* tool execution after
+   * consent is granted. When provided, this is used instead of
+   * `toolRegistry.execute(...)` so tools can be transparently routed to a
+   * remote node (e.g. when the project lives on another device).
+   * Returns a result just like `ToolRegistry.execute`.
+   */
+  delegate?: (
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+    audit?: AuditWriter,
+  ) => Promise<ToolResult>;
 }
 
 export interface ExecuteOptions {
@@ -46,6 +59,7 @@ export class ConsentAwareExecutor {
   private readonly permissions: Map<string, ToolPermission>;
   private readonly sessionApprovals: Set<string>;
   private readonly profileName?: ProfileName;
+  private readonly delegate?: ConsentAwareExecutorOptions["delegate"];
 
   constructor(opts: ConsentAwareExecutorOptions) {
     this.toolRegistry = opts.toolRegistry;
@@ -55,6 +69,19 @@ export class ConsentAwareExecutor {
     this.permissions = opts.permissions;
     this.sessionApprovals = opts.sessionApprovals;
     this.profileName = opts.profileName;
+    this.delegate = opts.delegate;
+  }
+
+  /** Execute a tool, routing through the delegate when one is configured. */
+  private runTool(
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+  ): Promise<ToolResult> {
+    if (this.delegate) {
+      return this.delegate(toolName, input, context, this.audit);
+    }
+    return this.toolRegistry.execute(toolName, input, context, this.audit);
   }
 
   /**
@@ -120,7 +147,7 @@ export class ConsentAwareExecutor {
     const isVoiceAssistant = context.requestedBy === "voice-assistant";
 
     if (!needsConsent || approveAllEnabled || isScheduler || isVoiceAssistant) {
-      const result = await this.toolRegistry.execute(toolName, input, context, this.audit);
+      const result = await this.runTool(toolName, input, context);
 
       // Record successful approval for trust progression
       if (result.ok) {
@@ -158,7 +185,7 @@ export class ConsentAwareExecutor {
     }
 
     // ── Approved: execute the tool ──
-    const result = await this.toolRegistry.execute(toolName, input, context, this.audit);
+    const result = await this.runTool(toolName, input, context);
 
     // Record for trust progression
     if (result.ok) {
