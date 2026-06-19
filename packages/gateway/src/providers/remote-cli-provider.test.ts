@@ -3,7 +3,7 @@ import type { WsControlPlane } from "../ws.js";
 import { RemoteCliProvider } from "./remote-cli-provider.js";
 import type { ProviderEvent } from "./contracts.js";
 
-function createMockWs() {
+function createMockWs(options: { sendTurnResult?: unknown } = {}) {
   let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
 
   const ws = {
@@ -15,6 +15,9 @@ function createMockWs() {
     proxyProviderOp: vi.fn(async (_nodeId: string, op: string) => {
       if (op === "start-session") {
         return { ok: true, providerThreadId: "remote-thread-1" };
+      }
+      if (op === "send-turn") {
+        return options.sendTurnResult ?? { ok: true };
       }
       return { ok: true };
     }),
@@ -66,6 +69,55 @@ describe("RemoteCliProvider", () => {
       { type: "turn.completed", sessionId: session.id },
     ]);
 
+    unsubscribe();
+  });
+
+  it("waits for remote turn completion before resolving sendTurn", async () => {
+    const { ws, fireRemoteEvent } = createMockWs();
+    const provider = new RemoteCliProvider(ws, "node-1", "claude-code");
+    const session = await provider.startSession({
+      threadId: "thread-1",
+      workingDirectory: process.cwd(),
+      mode: "full-access",
+    });
+
+    let resolved = false;
+    const sendTurn = provider.sendTurn(session.id, "hello").then(() => { resolved = true; });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ws.proxyProviderOp).toHaveBeenCalledWith(
+      "node-1",
+      "send-turn",
+      expect.objectContaining({
+        sessionId: session.id,
+        message: "hello",
+        providerThreadId: "remote-thread-1",
+      }),
+      30 * 60 * 1000 + 30_000,
+    );
+    expect(resolved).toBe(false);
+
+    fireRemoteEvent(session.id, { type: "turn.completed", sessionId: session.id });
+    await sendTurn;
+
+    expect(resolved).toBe(true);
+  });
+
+  it("uses remote provider-op completion as a fallback", async () => {
+    const { ws } = createMockWs({ sendTurnResult: { ok: true, completed: true } });
+    const provider = new RemoteCliProvider(ws, "node-1", "claude-code");
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => { events.push(event); });
+    const session = await provider.startSession({
+      threadId: "thread-1",
+      workingDirectory: process.cwd(),
+      mode: "full-access",
+    });
+
+    await provider.sendTurn(session.id, "hello");
+
+    expect(events).toContainEqual({ type: "turn.completed", sessionId: session.id });
     unsubscribe();
   });
 });

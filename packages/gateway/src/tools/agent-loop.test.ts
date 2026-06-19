@@ -4,6 +4,7 @@ import {
   parseOpenAIStream,
   parseOllamaStream,
   serializeMessagesForOllama,
+  buildTieredToolSchemas,
   fromOpenAIName,
   runAgentLoop,
   retryToolCall,
@@ -14,6 +15,7 @@ import {
   type ExecutedToolCall,
   type OpenAIToolCall,
 } from "./agent-loop.js";
+import { ToolRegistry } from "./registry.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -109,6 +111,37 @@ describe("OpenAI tool name conversion", () => {
     expect(fromOpenAIName("browser_sandbox_start")).toBe("browser.sandbox.start");
     expect(fromOpenAIName("project_create")).toBe("project.create");
     expect(fromOpenAIName("project_assign_repository")).toBe("project.assign_repository");
+  });
+});
+
+describe("buildTieredToolSchemas", () => {
+  it("keeps core discovery tools for Ollama-backed models", () => {
+    const registry = new ToolRegistry();
+    const register = (name: string, tier: "core" | "standard") => registry.register({
+      name,
+      description: `${name} description`,
+      tier,
+      category: tier === "core" ? "meta" : "filesystem",
+      source: "builtin",
+      parameters: { type: "object", properties: {}, required: [] },
+      async execute() {
+        return { ok: true, message: "ok" };
+      },
+    });
+    register("read", "core");
+    register("edit", "core");
+    register("tools.list", "core");
+    register("tools.search", "core");
+    register("file.read", "standard");
+
+    const names = buildTieredToolSchemas(registry, undefined, { ollamaEssentials: true })
+      .map((schema) => fromOpenAIName(schema.function.name));
+
+    expect(names).toContain("read");
+    expect(names).toContain("edit");
+    expect(names).toContain("tools.list");
+    expect(names).toContain("tools.search");
+    expect(names).not.toContain("file.read");
   });
 });
 

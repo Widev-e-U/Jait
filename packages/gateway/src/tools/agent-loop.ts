@@ -598,8 +598,8 @@ export function buildToolSchemas(
 /**
  * Build schemas respecting tiers and user disabled tools.
  *
- * Only "core" and "standard" (non-disabled) tools are included in the
- * initial payload. External / MCP tools must be discovered via tools.search.
+ * Only core tools are included in the initial payload. Standard and
+ * external / MCP tools must be discovered via tools.search.
  */
 export function buildTieredToolSchemas(
   registry: ToolRegistry,
@@ -608,8 +608,10 @@ export function buildTieredToolSchemas(
 ): OpenAIToolSchema[] {
   let tools = registry.listForLLM(disabledTools);
   if (options?.ollamaEssentials) {
-    const keep = new Set(["read", "edit", "execute", "search", "web"]);
-    tools = tools.filter((t) => keep.has(t.name));
+    // `listForLLM` already returns the compact core set. Do not prune it
+    // further for Ollama: tools.search/tools.list are core discovery tools,
+    // and removing them prevents local models from loading standard/MCP tools.
+    tools = tools.filter((t) => (t.tier ?? "standard") === "core");
   }
   return tools.map((t) => ({
     type: "function" as const,

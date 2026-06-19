@@ -23,6 +23,7 @@ const STICKY_BOTTOM_THRESHOLD_PX = 24
 const DEFAULT_ITEM_HEIGHT = 120
 const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
+const ESTIMATE_TEXT_LIMIT = 12_000
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
@@ -71,7 +72,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     estimateSize: (index) => {
       const text = messageContentsRef.current?.[index]
       if (!text) return DEFAULT_ITEM_HEIGHT
-      return estimateMessageHeight(text, containerWidthRef.current)
+      const estimateText = text.length > ESTIMATE_TEXT_LIMIT ? text.slice(0, ESTIMATE_TEXT_LIMIT) : text
+      return estimateMessageHeight(estimateText, containerWidthRef.current)
     },
     overscan: 5,
     getItemKey: (index) => {

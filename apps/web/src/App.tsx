@@ -595,6 +595,7 @@ function App() {
     setOnChangedFilesSync,
     refreshMessages,
     loadOlderMessages,
+    respondToApproval,
   } = useChat(activeSessionId, token, onLoginRequired, activeProject?.surfaceId ?? null)
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
@@ -3939,6 +3940,7 @@ function App() {
                 onOpenAddProject={() => { setProjectPickerMode('project'); setFolderPickerOpen(true) }}
                 onOpenMessagePath={handleOpenMessagePath}
                 onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
+                onApprovalResponse={respondToApproval}
                 onProviderChange={handleChatProviderChange}
                 onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                 onQueue={handleQueue}

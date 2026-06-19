@@ -487,7 +487,7 @@ export function useChat(
 
         const batchSubscribeUpdate = (updates: Partial<ChatMessage>) => {
           pendingSubscribeUpdates = {
-            ...(pendingSubscribeUpdates ?? {}),
+            ...pendingSubscribeUpdates,
             ...updates,
           }
           if (pendingSubscribeFrame !== null) return
@@ -538,6 +538,8 @@ export function useChat(
                     tool: string;
                     args: Record<string, unknown>;
                     status?: 'pending' | 'running' | 'success' | 'error';
+                    approvalRequestId?: string;
+                    approvalState?: 'pending' | 'approved' | 'rejected';
                     ok?: boolean;
                     message?: string;
                     output?: string;
@@ -590,10 +592,12 @@ export function useChat(
                             : startedAt
                       return {
                         callId: tc.callId,
+                        approvalRequestId: tc.approvalRequestId,
+                        approvalState: tc.approvalState,
                         tool: tc.tool,
                         args: tc.args ?? {},
                         status,
-                        result: status === 'running'
+                        result: status === 'running' || status === 'pending'
                           ? undefined
                           : {
                               ok: !!tc.ok,
@@ -718,6 +722,34 @@ export function useChat(
                       tool: data.tool as string,
                       args: (data.args as Record<string, unknown>) ?? {},
                       status: 'running',
+                      startedAt: Date.now(),
+                    }
+                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
+                  }),
+                }))
+              } else if (data.type === 'approval_required' && assistantId) {
+                flushSubscribeUpdates()
+                const requestId = data.request_id as string
+                const callId = (data.call_id as string) || `approval-${requestId}`
+                const tool = (data.tool as string) || 'approval'
+                const isNewCall = !seenToolCallIds.has(callId)
+                if (isNewCall) {
+                  seenToolCallIds.add(callId)
+                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
+                }
+                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
+                setState(prev => ({
+                  ...prev,
+                  messages: prev.messages.map(m => {
+                    if (m.id !== assistantId) return m
+                    if (m.toolCalls?.some(tc => tc.callId === callId)) return m
+                    const callInfo: ToolCallInfo = {
+                      callId,
+                      approvalRequestId: requestId,
+                      approvalState: 'pending',
+                      tool,
+                      args: (data.args as Record<string, unknown>) ?? {},
+                      status: 'pending',
                       startedAt: Date.now(),
                     }
                     return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
@@ -945,6 +977,8 @@ export function useChat(
             tool: string;
             args: Record<string, unknown>;
             status?: 'pending' | 'running' | 'success' | 'error';
+            approvalRequestId?: string;
+            approvalState?: 'pending' | 'approved' | 'rejected';
             ok?: boolean;
             message?: string;
             output?: string;
@@ -978,6 +1012,8 @@ export function useChat(
         if (m.toolCalls && m.toolCalls.length > 0) {
           msg.toolCalls = m.toolCalls.map(tc => ({
             callId: tc.callId,
+            approvalRequestId: tc.approvalRequestId,
+            approvalState: tc.approvalState,
             tool: tc.tool,
             args: tc.args ?? {},
             status: tc.status ?? (tc.ok ? 'success' as const : 'error' as const),
@@ -1270,6 +1306,22 @@ export function useChat(
                 appendToolSegment(callId)
               }
               updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
+            } else if (data.type === 'approval_required') {
+              const requestId = data.request_id as string
+              const callId = (data.call_id as string) || `approval-${requestId}`
+              if (!toolCalls.some(tc => tc.callId === callId)) {
+                toolCalls.push({
+                  callId,
+                  approvalRequestId: requestId,
+                  approvalState: 'pending',
+                  tool: (data.tool as string) || 'approval',
+                  args: (data.args as Record<string, unknown>) ?? {},
+                  status: 'pending',
+                  startedAt: Date.now(),
+                })
+                appendToolSegment(callId)
+                updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
+              }
             } else if (data.type === 'tool_output') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
               if (idx !== -1) {
@@ -1995,6 +2047,43 @@ export function useChat(
     }
   }, [authToken, pendingPlan])
 
+  const respondToApproval = useCallback(async (requestId: string, approved: boolean) => {
+    const targetSessionId = prevSessionIdRef.current ?? sessionId
+    if (!targetSessionId || !requestId) return
+    const completedAt = Date.now()
+    const applyDecision = (ok: boolean, message: string) => {
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(m => !m.toolCalls ? m : ({
+          ...m,
+          toolCalls: m.toolCalls.map(tc => (
+            tc.approvalRequestId === requestId || tc.callId === `approval-${requestId}` || tc.callId === requestId
+              ? {
+                  ...tc,
+                  status: ok ? 'success' as const : 'error' as const,
+                  approvalState: ok ? 'approved' as const : 'rejected' as const,
+                  result: { ok, message },
+                  completedAt,
+                }
+              : tc
+          )),
+        })),
+      }))
+    }
+
+    applyDecision(approved, approved ? 'Approved' : 'Rejected')
+    const res = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(targetSessionId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(authToken) },
+      body: JSON.stringify({ requestId, approved }),
+    })
+    if (!res.ok) {
+      const message = await res.text().catch(() => '')
+      applyDecision(false, message || `Approval failed: HTTP ${res.status}`)
+      throw new Error(message || `Approval failed: HTTP ${res.status}`)
+    }
+  }, [authToken, sessionId])
+
   /** Add a changed file from an external source (e.g. cross-client WS sync). Deduplicates by path. */
   const addChangedFile = useCallback((path: string, name: string) => {
     setChangedFiles(prev => {
@@ -2043,5 +2132,6 @@ export function useChat(
     setOnChangedFilesSync,
     refreshMessages,
     loadOlderMessages,
+    respondToApproval,
   }
 }

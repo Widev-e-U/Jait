@@ -752,6 +752,7 @@ ipcMain.handle("desktop:detect-providers", () => detectCliProviders());
 interface RemoteProviderSession {
   child: ChildProcess | null;
   pendingRpc: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>;
+  pendingTurn?: { resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
   nextRpcId: number;
   sessionId: string;
   providerId: "codex" | "claude-code";
@@ -884,6 +885,44 @@ function sendProviderEvent(sessionId: string, notification: unknown) {
     type: "provider.event-from-child",
     sessionId,
     notification,
+  });
+}
+
+function remoteTurnError(notification: { method?: unknown; params?: unknown }): string | null {
+  const method = typeof notification.method === "string" ? notification.method : "";
+  const params = notification.params && typeof notification.params === "object"
+    ? notification.params as Record<string, unknown>
+    : {};
+  if (method === "error") {
+    const error = params.error && typeof params.error === "object" ? params.error as Record<string, unknown> : undefined;
+    return typeof error?.message === "string" ? error.message : "Remote provider error";
+  }
+  if (method === "turn/completed") {
+    const turn = params.turn && typeof params.turn === "object" ? params.turn as Record<string, unknown> : undefined;
+    const status = typeof turn?.status === "string" ? turn.status : "";
+    const error = turn?.error && typeof turn.error === "object" ? turn.error as Record<string, unknown> : undefined;
+    if (status === "failed") return typeof error?.message === "string" ? error.message : "Remote provider turn failed";
+  }
+  return null;
+}
+
+function settleRemoteTurn(session: RemoteProviderSession, error?: Error): void {
+  const pending = session.pendingTurn;
+  if (!pending) return;
+  session.pendingTurn = undefined;
+  clearTimeout(pending.timer);
+  if (error) pending.reject(error);
+  else pending.resolve();
+}
+
+function waitForRemoteTurn(session: RemoteProviderSession, timeoutMs = 30 * 60 * 1000): Promise<void> {
+  if (session.pendingTurn) return Promise.reject(new Error("A provider turn is already running"));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      session.pendingTurn = undefined;
+      reject(new Error("Timed out waiting for remote provider turn completion"));
+    }, timeoutMs);
+    session.pendingTurn = { resolve, reject, timer };
   });
 }
 
@@ -1259,11 +1298,18 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           // Notification (provider event) — relay to renderer for WS forwarding
           if (msg.method && !msg.id) {
             sendProviderEvent(sessionId, msg);
+            const error = remoteTurnError(msg);
+            if (error) {
+              settleRemoteTurn(sess, new Error(error));
+            } else if (msg.method === "turn/completed" || msg.method === "session/completed") {
+              settleRemoteTurn(sess);
+            }
           }
         } catch { /* non-JSON */ }
       });
 
       child.on("exit", () => {
+        settleRemoteTurn(sess);
         remoteProviderSessions.delete(sessionId);
         sendProviderEvent(sessionId, { method: "session/completed" });
       });
@@ -1303,13 +1349,20 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       if (!sess) throw new Error("Session not found");
       if (sess.kind === "claude-print") {
         await runClaudeRemoteTurn(sess, message);
-        return { ok: true };
+        return { ok: true, completed: true };
       }
-      await rpcSend(sess, "turn/start", {
-        threadId: providerThreadId,
-        input: [{ type: "text", text: message, text_elements: [] }],
-      });
-      return { ok: true };
+      const turnDone = waitForRemoteTurn(sess);
+      try {
+        await rpcSend(sess, "turn/start", {
+          threadId: providerThreadId,
+          input: [{ type: "text", text: message, text_elements: [] }],
+        });
+        await turnDone;
+        return { ok: true, completed: true };
+      } catch (err) {
+        settleRemoteTurn(sess);
+        throw err;
+      }
     }
     case "stop-session": {
       const { sessionId } = params as { sessionId: string };
@@ -1321,6 +1374,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           clearTimeout(p.timer);
           p.reject(new Error("Session stopped"));
         }
+        settleRemoteTurn(sess, new Error("Session stopped"));
         remoteProviderSessions.delete(sessionId);
       }
       return { ok: true };
@@ -2318,15 +2372,45 @@ ipcMain.handle("desktop:tool-op", async (
       }
     }
 
-    // ── File write ─────────────────────────────────────────────────
-    case "edit":
+    // ── File edit/write ────────────────────────────────────────────
+    case "edit": {
+      const filePath = resolve(String(args.path ?? ""));
+      try {
+        if (args.search != null) {
+          if (args.replace == null) {
+            return { ok: false, message: "Patch mode requires both search and replace" };
+          }
+          const search = String(args.search);
+          if (!search) return { ok: false, message: "No search string provided" };
+          const replace = String(args.replace);
+          const original = await readFile(filePath, "utf-8");
+          if (!original.includes(search)) {
+            return { ok: false, message: "Search string not found in file" };
+          }
+          const updated = original.replace(search, replace);
+          await writeFile(filePath, updated, "utf-8");
+          return { ok: true, message: `Patched ${basename(filePath)}` };
+        }
+        if (typeof args.content !== "string") {
+          return { ok: false, message: "Provide content to write, or search + replace to patch" };
+        }
+        await mkdir(dirname(filePath), { recursive: true });
+        await writeFile(filePath, args.content, "utf-8");
+        return { ok: true, message: `Wrote ${args.content.length} bytes to ${basename(filePath)}` };
+      } catch (err) {
+        return { ok: false, message: `Failed to edit: ${(err as Error).message}` };
+      }
+    }
+
     case "file.write": {
       const filePath = resolve(String(args.path ?? ""));
-      const content = String(args.content ?? "");
+      if (typeof args.content !== "string") {
+        return { ok: false, message: "File content is required" };
+      }
       try {
         await mkdir(dirname(filePath), { recursive: true });
-        await writeFile(filePath, content, "utf-8");
-        return { ok: true, message: `Wrote ${content.length} bytes to ${basename(filePath)}` };
+        await writeFile(filePath, args.content, "utf-8");
+        return { ok: true, message: `Wrote ${args.content.length} bytes to ${basename(filePath)}` };
       } catch (err) {
         return { ok: false, message: `Failed to write: ${(err as Error).message}` };
       }

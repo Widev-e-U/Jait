@@ -171,6 +171,52 @@ class MockInterleavedToolChatProvider extends MockChatProvider {
   });
 }
 
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+
 describe("chat external provider runtime mode selection", () => {
   it("passes the requested runtime mode to the provider and restarts when the mode changes", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
@@ -212,6 +258,47 @@ describe("chat external provider runtime mode selection", () => {
     expect(provider.stopSession).toHaveBeenCalledTimes(1);
     expect(provider.startSession).toHaveBeenCalledTimes(2);
     expect(provider.startSession.mock.calls[1]?.[0]).toMatchObject({ mode: "full-access" });
+
+    await app.close();
+  });
+
+  it("resolves supervised chat approval requests without leaving the stream open", { timeout: 30_000 }, async () => {
+    const provider = new MockApprovalChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-approval-session";
+
+    const responsePromise = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "edit the file",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "supervised",
+      },
+    });
+
+    await waitForAssertion(() => expect(provider.approvalEmitted).toBe(true));
+
+    const approval = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/approve`,
+      headers,
+      payload: { requestId: "approval-request-1", approved: true },
+    });
+
+    expect(approval.statusCode).toBe(200);
+    expect(provider.respondToApproval).toHaveBeenCalledWith("mock-session-1", "approval-request-1", true);
+
+    const response = await responsePromise;
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"type":"approval_required"');
+    expect(response.body).toContain('"request_id":"approval-request-1"');
+    expect(response.body).toContain('"type":"done"');
 
     await app.close();
   });

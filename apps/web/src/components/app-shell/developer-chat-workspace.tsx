@@ -83,6 +83,7 @@ interface DeveloperChatWorkspaceProps {
   onOpenAddProject: () => void
   onOpenMessagePath: (path: string) => void
   onOpenTerminalFromToolCall: (...args: any[]) => void
+  onApprovalResponse: (requestId: string, approved: boolean) => Promise<void> | void
   onProviderChange: (provider: any) => void
   onProviderRuntimeModeChange: (mode: any) => void
   onQueue: () => void
@@ -178,6 +179,7 @@ export function DeveloperChatWorkspace({
   onOpenAddProject,
   onOpenMessagePath,
   onOpenTerminalFromToolCall,
+  onApprovalResponse,
   onProviderChange,
   onProviderRuntimeModeChange,
   onQueue,
@@ -292,6 +294,7 @@ export function DeveloperChatWorkspace({
     managerThreads,
     onOpenTerminalFromToolCall,
     renderInlineSecretPrompt,
+    onApprovalResponse,
     onEditPreviousMessage,
     editComposerBag,
     onOpenMessagePath,
@@ -375,6 +378,7 @@ export function DeveloperChatWorkspace({
           threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
           onOpenTerminal={onOpenTerminalFromToolCall}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={onApprovalResponse}
           onEditMessage={onEditPreviousMessage}
           editComposer={editComposerBag}
           onOpenPath={onOpenMessagePath}
@@ -403,7 +407,7 @@ export function DeveloperChatWorkspace({
     // Drop cache entries for messages that no longer exist (e.g. after clear/reload)
     if (cache.size > messages.length) {
       const live = new Set(messages.map((m) => m.id))
-      for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
+      for (const id of cache.keys()) if (!live.has(id)) cache.delete(id)
     }
   }
 

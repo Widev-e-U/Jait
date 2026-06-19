@@ -98,6 +98,7 @@ interface MessageProps {
   threadControlThreads?: Record<string, unknown>[]
   onOpenTerminal?: (terminalId: string | null) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (requestId: string, approved: boolean) => Promise<void> | void
   onEditMessage?: (
     messageId: string,
     newContent: string,
@@ -479,6 +480,7 @@ function MessageInner({
   threadControlThreads,
   onOpenTerminal,
   renderInlineSecretPrompt,
+  onApprovalResponse,
   onEditMessage,
   editComposer,
   onOpenPath,
@@ -979,6 +981,7 @@ function MessageInner({
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
+                        onApprovalResponse={onApprovalResponse}
                       />
                     ) : (
                       <ToolCallGroup
@@ -989,6 +992,7 @@ function MessageInner({
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
+                        onApprovalResponse={onApprovalResponse}
                       />
                     )
                   ) : null
@@ -1053,6 +1057,7 @@ function MessageInner({
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
                   renderInlineSecretPrompt={renderInlineSecretPrompt}
+                  onApprovalResponse={onApprovalResponse}
                 />
               ) : (
                 <ToolCallGroup
@@ -1062,6 +1067,7 @@ function MessageInner({
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
                   renderInlineSecretPrompt={renderInlineSecretPrompt}
+                  onApprovalResponse={onApprovalResponse}
                 />
               )
             )}

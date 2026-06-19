@@ -27,6 +27,8 @@ export interface ToolCallInfo {
   tool: string
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'success' | 'error'
+  approvalRequestId?: string
+  approvalState?: 'pending' | 'approved' | 'rejected'
   result?: { ok: boolean; message: string; data?: unknown }
   streamingOutput?: string
   /** Accumulated raw JSON argument string while LLM is still streaming the tool call */
@@ -474,8 +476,8 @@ function countChangedLines(original: string, modified: string): { insertions: nu
   if (originalLines.length === 0) return { insertions: modifiedLines.length, deletions: 0 }
   if (modifiedLines.length === 0) return { insertions: 0, deletions: originalLines.length }
 
-  const previous = new Array(modifiedLines.length + 1).fill(0) as number[]
-  const current = new Array(modifiedLines.length + 1).fill(0) as number[]
+  const previous = Array.from({ length: modifiedLines.length + 1 }, () => 0) as number[]
+  const current = Array.from({ length: modifiedLines.length + 1 }, () => 0) as number[]
 
   for (let leftIndex = 1; leftIndex <= originalLines.length; leftIndex += 1) {
     for (let rightIndex = 1; rightIndex <= modifiedLines.length; rightIndex += 1) {
@@ -1876,6 +1878,7 @@ interface ToolCallCardProps {
   onOpenDiff?: (filePath: string) => void
   inlineSecretPrompt?: ReactNode
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (requestId: string, approved: boolean) => Promise<void> | void
   hideTopConnector?: boolean
   hideBottomConnector?: boolean
 }
@@ -2034,12 +2037,14 @@ function ToolCallCardInner({
   onOpenDiff,
   inlineSecretPrompt,
   renderInlineSecretPrompt,
+  onApprovalResponse,
   hideTopConnector = false,
   hideBottomConnector = false,
 }: ToolCallCardProps) {
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   const [now, setNow] = useState(() => Date.now())
+  const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
   const prevStatusRef = useRef(call.status)
   const normalizedTool = normalizeTool(call.tool)
   const resultData = call.result?.data && typeof call.result.data === 'object'
@@ -2069,6 +2074,16 @@ function ToolCallCardInner({
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
   const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
   const isPending = call.status === 'pending'
+  const isApprovalPending = !!call.approvalRequestId && call.status === 'pending'
+  const handleApprovalResponse = useCallback(async (approved: boolean) => {
+    if (!call.approvalRequestId || !onApprovalResponse || approvalSubmitting) return
+    setApprovalSubmitting(approved ? 'approve' : 'reject')
+    try {
+      await onApprovalResponse(call.approvalRequestId, approved)
+    } finally {
+      setApprovalSubmitting(null)
+    }
+  }, [approvalSubmitting, call.approvalRequestId, onApprovalResponse])
   const filePaths = getToolFilePaths(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
     .map((path) => path.trim())
     .filter(Boolean)
@@ -2306,6 +2321,7 @@ function ToolCallCardInner({
               onOpenTerminal={onOpenTerminal}
               onOpenDiff={onOpenDiff}
               renderInlineSecretPrompt={renderInlineSecretPrompt}
+              onApprovalResponse={onApprovalResponse}
             />
           ))}
         </div>
@@ -2465,6 +2481,42 @@ function ToolCallCardInner({
           {bodyContent}
         </div>
       )}
+      {isApprovalPending && (
+        <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-2.5 py-2 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background/35 px-2.5 py-2 sm:px-3">
+            <span className="text-xs text-muted-foreground">Approval required to continue.</span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={!onApprovalResponse || approvalSubmitting !== null}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void handleApprovalResponse(false)
+                }}
+              >
+                {approvalSubmitting === 'reject' ? 'Rejecting...' : 'Reject'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={!onApprovalResponse || approvalSubmitting !== null}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void handleApprovalResponse(true)
+                }}
+              >
+                {approvalSubmitting === 'approve' ? 'Approving...' : 'Approve'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {hasInlineSecretPrompt && (
         <div className="ml-6 mr-1.5 mb-2 rounded-md bg-yellow-500/[0.035] px-2.5 py-2 ring-1 ring-yellow-500/15 sm:ml-8 sm:mr-3 sm:px-3">
           <div className="rounded-md bg-background/35 px-2.5 py-2 sm:px-3">
@@ -2493,6 +2545,7 @@ interface ToolCallGroupProps {
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (requestId: string, approved: boolean) => Promise<void> | void
 }
 
 /**
@@ -2515,7 +2568,7 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
   return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
 }
 
-function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
@@ -2616,6 +2669,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={onApprovalResponse}
           hideTopConnector={index === 0}
           hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
         />
@@ -2629,6 +2683,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={onApprovalResponse}
           hideTopConnector={showAll ? false : index === 0}
           hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
         />
@@ -2642,6 +2697,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={onApprovalResponse}
           hideTopConnector={completedCalls.length === 0 && index === 0}
           hideBottomConnector={index === activeCalls.length - 1}
         />
@@ -2665,6 +2721,7 @@ export const ToolCallGroup = memo(
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
     prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
+    prevProps.onApprovalResponse === nextProps.onApprovalResponse &&
     prevProps.threadControlThreads === nextProps.threadControlThreads &&
     prevProps.collapsible === nextProps.collapsible &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
@@ -2681,6 +2738,7 @@ interface AgentToolCallWrapperProps {
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (requestId: string, approved: boolean) => Promise<void> | void
 }
 
 export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[], isStreaming?: boolean): boolean {
@@ -2688,7 +2746,7 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
-function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: AgentToolCallWrapperProps) {
+function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -2798,6 +2856,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
                 hideTopConnector={index === 0}
                 hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
               />
@@ -2811,6 +2870,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
                 hideTopConnector={showAll ? false : index === 0}
                 hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
               />
@@ -2824,6 +2884,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
                 hideTopConnector={completedCalls.length === 0 && index === 0}
                 hideBottomConnector={index === activeCalls.length - 1}
               />
@@ -2843,6 +2904,7 @@ export const AgentToolCallWrapper = memo(
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
     prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
+    prevProps.onApprovalResponse === nextProps.onApprovalResponse &&
     prevProps.threadControlThreads === nextProps.threadControlThreads &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )

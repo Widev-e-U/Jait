@@ -155,11 +155,49 @@ export class RemoteCliProvider implements CliProviderAdapter {
     const session = this.sessions.get(sessionId) as (ProviderSession & { providerThreadId?: string }) | undefined;
     if (!session) throw new Error(`Session ${sessionId} not found`);
 
-    await this.ws.proxyProviderOp(this.nodeId, "send-turn", {
-      sessionId,
-      message,
-      providerThreadId: session.providerThreadId ?? sessionId,
-    }, 120_000);
+    let cleanupCompletion = () => {};
+    const completion = new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        cleanupCompletion();
+        this.emit({
+          type: "session.error",
+          sessionId,
+          error: `Remote ${this.id} turn timed out waiting for completion`,
+        });
+        resolve();
+      }, 30 * 60 * 1000);
+      const handler = (event: ProviderEvent) => {
+        if (event.sessionId !== sessionId) return;
+        if (event.type === "turn.completed" || event.type === "session.completed" || event.type === "session.error") {
+          cleanupCompletion();
+          resolve();
+        }
+      };
+      cleanupCompletion = () => {
+        clearTimeout(timeout);
+        this.emitter.off("event", handler);
+      };
+      this.emitter.on("event", handler);
+    });
+
+    let completedFromEvent = false;
+    const eventCompletion = completion.then(() => { completedFromEvent = true; });
+    try {
+      const result = await this.ws.proxyProviderOp<{ completed?: boolean }>(this.nodeId, "send-turn", {
+        sessionId,
+        message,
+        providerThreadId: session.providerThreadId ?? sessionId,
+      }, 30 * 60 * 1000 + 30_000);
+      if (result?.completed && !completedFromEvent) {
+        cleanupCompletion();
+        this.emit({ type: "turn.completed", sessionId });
+        return;
+      }
+    } catch (err) {
+      cleanupCompletion();
+      throw err;
+    }
+    await eventCompletion;
   }
 
   async interruptTurn(sessionId: string): Promise<void> {

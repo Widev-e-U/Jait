@@ -21,7 +21,7 @@ import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { existsSync } from "node:fs";
 import { messages as messagesTable } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -321,6 +321,9 @@ interface PersistedToolCall {
   args: unknown;
   ok: boolean;
   message: string;
+  status?: "pending" | "running" | "success" | "error";
+  approvalRequestId?: string;
+  approvalState?: "pending" | "approved" | "rejected";
   /** @deprecated kept for back-compat with old rows; prefer `data` */
   output?: string;
   /** Full result.data object — round-trips all tool-specific fields */
@@ -770,6 +773,34 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
   }
 }
 
+function accumulateToolApproval(sessionId: string, requestId: string, tool: string, args: unknown): string {
+  const callId = `approval-${requestId}`;
+  const acc = getOrCreateAccumulator(sessionId);
+  const existing = acc.toolCalls.find(t => t.callId === callId);
+  if (!existing) {
+    acc.toolCalls.push({
+      callId,
+      tool,
+      args,
+      ok: true,
+      message: "Awaiting approval",
+      status: "pending",
+      approvalRequestId: requestId,
+      approvalState: "pending",
+      startedAt: Date.now(),
+    });
+  }
+  const last = acc.segments[acc.segments.length - 1];
+  if (last?.type === "toolGroup") {
+    if (!last.callIds.includes(callId)) {
+      acc.segments[acc.segments.length - 1] = { type: "toolGroup", callIds: [...last.callIds, callId] };
+    }
+  } else {
+    acc.segments.push({ type: "toolGroup", callIds: [callId] });
+  }
+  return callId;
+}
+
 /** Record streaming output for a tool call */
 function accumulateToolOutput(sessionId: string, callId: string, content: string): void {
   const acc = sessionStreamingState.get(sessionId);
@@ -822,6 +853,7 @@ type StreamEvent =
   | { type: "tool_start"; tool: string; args: unknown; call_id: string; parent_call_id?: string }
   | { type: "tool_output"; call_id: string; content: string }
   | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; parent_call_id?: string; data?: unknown }
+  | { type: "approval_required"; call_id: string; request_id: string; tool: string; args: unknown }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
@@ -881,9 +913,11 @@ function mapPersistedToolCallsForUI(toolCalls: PersistedToolCall[]): Array<Recor
     parentCallId: tc.parentCallId,
     tool: tc.tool,
     args: (typeof tc.args === "object" && tc.args !== null ? tc.args : {}),
-    status: tc.ok ? "success" : "error",
+    status: tc.status ?? (tc.ok ? "success" : "error"),
     ok: tc.ok,
     message: tc.message,
+    approvalRequestId: tc.approvalRequestId,
+    approvalState: tc.approvalState,
     output: tc.output,
     data: tc.data,
     startedAt: tc.startedAt,
@@ -972,6 +1006,65 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
   const start = Math.max(total - limit, 0);
   return {
     messages: messages.slice(start),
+    total,
+    hasMore: start > 0,
+  };
+}
+
+function rowToUIMsg(sessionId: string, row: typeof messagesTable.$inferSelect, visibleIndex: number): UIMsg {
+  const msg: UIMsg = {
+    id: `${sessionId}-${visibleIndex}`,
+    role: row.role as "user" | "assistant",
+    content: typeof row.content === "string" ? row.content : String(row.content ?? ""),
+  };
+  if (row.toolCalls) {
+    try { msg.toolCalls = JSON.parse(row.toolCalls); } catch { /* ignore */ }
+  }
+  if (row.segments) {
+    try { msg.segments = JSON.parse(row.segments); } catch { /* ignore */ }
+  }
+  if (row.thinking) {
+    msg.thinking = row.thinking;
+  }
+  if (row.contextFlow) {
+    try {
+      const parsed = JSON.parse(row.contextFlow) as unknown;
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
+        msg.contextFlow = parsed as LlmContextFlow;
+      }
+    } catch { /* ignore */ }
+  }
+  return msg;
+}
+
+function persistedMessageWindow(
+  db: JaitDB,
+  sessionId: string,
+  limit: number,
+  before?: number,
+): { messages: UIMsg[]; total: number; hasMore: boolean } {
+  const totalRow = db
+    .select({ count: sql<number>`count(*)` })
+    .from(messagesTable)
+    .where(eq(messagesTable.sessionId, sessionId))
+    .get();
+  const total = Number(totalRow?.count ?? 0);
+  const end = typeof before === "number" && Number.isFinite(before) && before >= 0 && before < total
+    ? Math.floor(before)
+    : total;
+  const start = Math.max(end - limit, 0);
+  const rows = start < end
+    ? db
+      .select()
+      .from(messagesTable)
+      .where(eq(messagesTable.sessionId, sessionId))
+      .orderBy(messagesTable.createdAt, messagesTable.id)
+      .limit(end - start)
+      .offset(start)
+      .all()
+    : [];
+  return {
+    messages: rows.map((row, index) => rowToUIMsg(sessionId, row, start + index)),
     total,
     hasMore: start > 0,
   };
@@ -1330,7 +1423,7 @@ export function registerChatRoutes(
       .select()
       .from(messagesTable)
       .where(eq(messagesTable.sessionId, sessionId))
-      .orderBy(messagesTable.createdAt)
+      .orderBy(messagesTable.createdAt, messagesTable.id)
       .all();
     if (rows.length > 0) {
       sessionHistory.set(sessionId, [
@@ -1406,7 +1499,7 @@ export function registerChatRoutes(
         .select()
         .from(messagesTable)
         .where(eq(messagesTable.sessionId, sessionId))
-        .orderBy(messagesTable.createdAt)
+        .orderBy(messagesTable.createdAt, messagesTable.id)
         .all();
       const lastAssistant = [...rows].reverse().find((row) => row.role === "assistant");
       if (!lastAssistant) return;
@@ -2040,9 +2133,13 @@ export function registerChatRoutes(
               }
               break;
             }
-            case "tool.approval-required":
-              safeWrite(`data: ${JSON.stringify({ type: "approval_required", tool: event.tool, args: event.args, requestId: event.requestId })}\n\n`);
+            case "tool.approval-required": {
+              const callId = accumulateToolApproval(sessionId, event.requestId, event.tool, event.args);
+              const approvalEvent = { type: "approval_required", call_id: callId, request_id: event.requestId, tool: event.tool, args: event.args } as const;
+              safeWrite(`data: ${JSON.stringify(approvalEvent)}\n\n`);
+              emitToSubscribers(sessionId, approvalEvent as StreamEvent);
               break;
+            }
             case "message":
               if (event.role === "assistant" && event.content) {
                 flushToolGroup();
@@ -2556,6 +2653,30 @@ export function registerChatRoutes(
     void drainQueuedChatMessages(sessionId);
   });
 
+  app.post("/api/sessions/:sessionId/approve", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    const body = request.body as Record<string, unknown>;
+    const requestId = typeof body["requestId"] === "string" ? body["requestId"] : "";
+    const approved = body["approved"] !== false;
+    if (!requestId) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "requestId is required" });
+    }
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    const activeCliSession = activeCliSessions.get(sessionId);
+    if (!activeCliSession) {
+      return reply.status(409).send({ error: "CONFLICT", details: "No active provider session for approval" });
+    }
+    await activeCliSession.provider.respondToApproval(activeCliSession.providerSessionId, requestId, approved);
+    return reply.status(200).send({ ok: true });
+  });
+
   // Cancel an active stream for a session
   app.post("/api/sessions/:sessionId/cancel", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -2659,7 +2780,7 @@ export function registerChatRoutes(
         .select()
         .from(messagesTable)
         .where(eq(messagesTable.sessionId, sessionId))
-        .orderBy(messagesTable.createdAt)
+        .orderBy(messagesTable.createdAt, messagesTable.id)
         .all();
       const rowsToDelete = rows.slice(Math.max(0, target.historyIndex - 1));
       for (const row of rowsToDelete) {
@@ -2700,13 +2821,18 @@ export function registerChatRoutes(
       : typeof query?.before === "string"
         ? Number.parseInt(query.before, 10)
         : undefined;
-    hydrateSession(sessionId);
-    const history = sessionHistory.get(sessionId) ?? [];
-    const visible = buildVisibleHistoryMessages(sessionId, history);
-    const windowed = windowMessages(visible, limit, Number.isFinite(before) ? before : undefined);
+    const streaming = activeStreams.has(sessionId);
+    const windowed = db && !streaming
+      ? persistedMessageWindow(db, sessionId, limit, Number.isFinite(before) ? before : undefined)
+      : (() => {
+          hydrateSession(sessionId);
+          const history = sessionHistory.get(sessionId) ?? [];
+          const visible = buildVisibleHistoryMessages(sessionId, history, { includePendingAssistantToolCalls: streaming });
+          return windowMessages(visible, limit, Number.isFinite(before) ? before : undefined);
+        })();
     return {
       sessionId,
-      streaming: activeStreams.has(sessionId),
+      streaming,
       total: windowed.total,
       hasMore: windowed.hasMore,
       limit,
@@ -2738,9 +2864,9 @@ export function registerChatRoutes(
       "Access-Control-Allow-Credentials": "true",
     });
 
-    hydrateSession(sessionId);
-    const history = sessionHistory.get(sessionId) ?? [];
     const isStreaming = activeStreams.has(sessionId);
+    if (isStreaming) hydrateSession(sessionId);
+    const history = isStreaming ? (sessionHistory.get(sessionId) ?? []) : [];
 
     // Build snapshot. While streaming, prefer in-memory history so partial assistant
     // content is visible immediately (DB persistence may lag until stream completion).
@@ -2748,40 +2874,7 @@ export function registerChatRoutes(
     let total = 0;
     let hasMore = false;
     if (db && !isStreaming) {
-      const rows = db
-        .select()
-        .from(messagesTable)
-        .where(eq(messagesTable.sessionId, sessionId))
-        .orderBy(messagesTable.createdAt)
-        .all();
-      const allMessages: UIMsg[] = rows
-        .filter((r) => r.role === "user" || r.role === "assistant")
-        .map((r, i) => {
-          const msg: UIMsg = {
-            id: `${sessionId}-${i}`,
-            role: r.role as "user" | "assistant",
-            content: typeof r.content === "string" ? r.content : String(r.content ?? ""),
-          };
-          if (r.toolCalls) {
-            try { msg.toolCalls = JSON.parse(r.toolCalls); } catch { /* ignore */ }
-          }
-          if (r.segments) {
-            try { msg.segments = JSON.parse(r.segments); } catch { /* ignore */ }
-          }
-          if (r.thinking) {
-            msg.thinking = r.thinking;
-          }
-          if (r.contextFlow) {
-            try {
-              const parsed = JSON.parse(r.contextFlow) as unknown;
-              if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
-                msg.contextFlow = parsed as LlmContextFlow;
-              }
-            } catch { /* ignore */ }
-          }
-          return msg;
-        });
-      const windowed = windowMessages(allMessages, limit);
+      const windowed = persistedMessageWindow(db, sessionId, limit);
       snapshotMessages = windowed.messages;
       total = windowed.total;
       hasMore = windowed.hasMore;
@@ -2911,7 +3004,7 @@ export function registerChatRoutes(
         .select()
         .from(messagesTable)
         .where(eq(messagesTable.sessionId, sessionId))
-        .orderBy(messagesTable.createdAt)
+        .orderBy(messagesTable.createdAt, messagesTable.id)
         .all();
       const lastAssistant = [...rows].reverse().find((r) => r.role === "assistant");
       if (lastAssistant) {
