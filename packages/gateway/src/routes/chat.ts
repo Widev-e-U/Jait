@@ -2865,8 +2865,14 @@ export function registerChatRoutes(
     });
 
     const isStreaming = activeStreams.has(sessionId);
-    if (isStreaming) hydrateSession(sessionId);
-    const history = isStreaming ? (sessionHistory.get(sessionId) ?? []) : [];
+    // Only the DB-windowed idle path can skip hydrating. Sessions without a DB
+    // (in-memory history) still need their completed messages loaded from the
+    // sessionHistory map, and streaming sessions need partial content too.
+    let history: ChatMessage[] = [];
+    if (!db || isStreaming) {
+      hydrateSession(sessionId);
+      history = sessionHistory.get(sessionId) ?? [];
+    }
 
     // Build snapshot. While streaming, prefer in-memory history so partial assistant
     // content is visible immediately (DB persistence may lag until stream completion).
