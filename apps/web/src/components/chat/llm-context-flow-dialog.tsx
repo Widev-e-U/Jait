@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Editor from '@monaco-editor/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Brain, Check, ChevronRight, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
+import { Brain, Check, ChevronRight, Copy, Loader2, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import {
   Dialog,
@@ -42,6 +42,8 @@ interface LlmContextFlowDialogProps {
   onOpenChange: (open: boolean) => void
   contextFlow?: LlmContextFlow
   responseContent?: string
+  /** True while the contextFlow payload is being fetched (lazy-load). */
+  loading?: boolean
 }
 
 interface TraceExpandableCardProps {
@@ -486,7 +488,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
   )
 }
 
-function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[]; contextFlow?: LlmContextFlow }) {
+function TraceList({ open, rows, contextFlow, loading }: { open: boolean; rows: TraceRow[]; contextFlow?: LlmContextFlow; loading?: boolean }) {
   const parentRef = useRef<HTMLDivElement | null>(null)
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -545,6 +547,11 @@ function TraceList({ open, rows, contextFlow }: { open: boolean; rows: TraceRow[
             })}
           </div>
         </div>
+      ) : loading ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading context trace…</span>
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
           <MessageSquare className="mr-2 h-4 w-4" />
@@ -589,11 +596,12 @@ function RawContextEditor({ rawText }: { rawText: string }) {
   )
 }
 
-export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, responseContent }: LlmContextFlowDialogProps) {
+export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, responseContent, loading }: LlmContextFlowDialogProps) {
   const [mode, setMode] = useState<'trace' | 'raw'>('trace')
   const [copied, setCopied] = useState(false)
   const rows = useMemo(() => buildRows(contextFlow, responseContent), [contextFlow, responseContent])
   const rawText = useMemo(() => contextFlow ? JSON.stringify(contextFlow, null, 2) : '', [contextFlow])
+  const isLoading = Boolean(loading && !contextFlow)
 
   const copyRaw = async () => {
     if (!rawText) return
@@ -612,6 +620,7 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
               <DialogDescription className="truncate text-xs">
                 {contextFlow
                   ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
+                  : isLoading ? 'Loading context trace…'
                   : 'No context snapshot available'}
               </DialogDescription>
             </div>
@@ -648,7 +657,7 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
         </DialogHeader>
 
         {mode === 'trace' ? (
-          <TraceList key="trace-list" open={open} rows={rows} contextFlow={contextFlow} />
+          <TraceList key="trace-list" open={open} rows={rows} contextFlow={contextFlow} loading={isLoading} />
         ) : (
           <RawContextEditor rawText={rawText} />
         )}

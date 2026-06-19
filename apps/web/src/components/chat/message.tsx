@@ -20,7 +20,6 @@ import {
   MessageContent as AIMessageContent,
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
-import { getApiUrl } from '@/lib/gateway-url'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -37,6 +36,7 @@ import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, type ToolCallInfo } from './tool-call-card'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
+import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
 import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
@@ -507,7 +507,14 @@ function MessageInner({
   // Snapshots only carry lightweight `hasContextFlow` / `hasMemoryProvenance`
   // badges. The (potentially multi-MB) full payload is fetched on demand when
   // the user opens the LLM-context dialog or the memory-provenance popover.
-  const [lazyContextFlow, setLazyContextFlow] = useState<LlmContextFlow | null>(null)
+  // Fetched payloads live in a shared, module-level cache so that reopening
+  // the trace (or scrolling a virtualized message back into view) does not
+  // re-fetch the payload every time.
+  const [lazyContextFlow, setLazyContextFlow] = useState<LlmContextFlow | null>(
+    () => (typeof messageIndex === 'number' && sessionId)
+      ? (getCachedContextFlow(sessionId, messageIndex) ?? null)
+      : null,
+  )
   const [contextFlowLoading, setContextFlowLoading] = useState(false)
   const effectiveContextFlow = contextFlow ?? lazyContextFlow ?? undefined
   const canLazyLoadContextFlow = !contextFlow && (hasContextFlow === true || hasMemoryProvenance === true)
@@ -517,15 +524,8 @@ function MessageInner({
     if (typeof messageIndex !== 'number' || !sessionId) return
     setContextFlowLoading(true)
     try {
-      const headers: Record<string, string> = {}
-      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-      const res = await fetch(
-        `${getApiUrl()}/api/sessions/${sessionId}/messages/${messageIndex}/context-flow`,
-        { headers },
-      )
-      if (!res.ok) return
-      const data = await res.json() as { contextFlow?: LlmContextFlow | null }
-      if (data.contextFlow) setLazyContextFlow(data.contextFlow)
+      const flow = await fetchContextFlow(sessionId, messageIndex, authToken ?? undefined)
+      if (flow) setLazyContextFlow(flow)
     } catch {
       /* ignore — dialog just won't show data */
     } finally {
@@ -1329,6 +1329,7 @@ function MessageInner({
       onOpenChange={setContextOpen}
       contextFlow={effectiveContextFlow}
       responseContent={content}
+      loading={contextFlowLoading}
     />
     </>
   )
