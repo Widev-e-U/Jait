@@ -1669,6 +1669,9 @@ export function registerChatRoutes(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      // Prevent reverse proxies (nginx etc.) from buffering the SSE stream,
+      // which would otherwise swallow chunks and let the connection time out.
+      "X-Accel-Buffering": "no",
       "Access-Control-Allow-Origin": reqOrigin,
       "Access-Control-Allow-Credentials": "true",
     });
@@ -1790,6 +1793,19 @@ export function registerChatRoutes(
       }
     };
 
+    // ── SSE keepalive heartbeat ──
+    // While the agentic loop runs a long tool or waits for a slow LLM response,
+    // no SSE data events are emitted and the connection can go idle for tens of
+    // seconds. Browsers and reverse proxies then close the socket, surfacing as
+    // "fetch failed" on the frontend and dropping the in-progress assistant
+    // message. Emit an SSE comment (": keepalive\n\n") every 15s — comments are
+    // ignored by the EventSource/reader parser but keep the TCP connection alive.
+    const keepalive = setInterval(() => {
+      if (clientDisconnected) { clearInterval(keepalive); return; }
+      safeWrite(`: keepalive\n\n`);
+    }, 15_000);
+    reply.raw.on("close", () => { clearInterval(keepalive); });
+
     const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
@@ -1880,6 +1896,7 @@ export function registerChatRoutes(
         }
 
         if (!cliProvider) {
+          clearInterval(keepalive);
           safeWrite(`data: ${JSON.stringify({ type: "error", message: `Unknown provider: ${requestProvider}` })}\n\n`);
           reply.raw.end();
           return;
@@ -2591,6 +2608,9 @@ export function registerChatRoutes(
       persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
     }
 
+    // Stop the SSE keepalive heartbeat now that the turn is finishing.
+    clearInterval(keepalive);
+
     activeStreams.delete(sessionId);
     sessionAbortControllers.delete(sessionId);
     sessionSteeringControllers.delete(sessionId);
@@ -2860,6 +2880,7 @@ export function registerChatRoutes(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
       "Access-Control-Allow-Origin": reqOrigin,
       "Access-Control-Allow-Credentials": "true",
     });
@@ -2921,9 +2942,11 @@ export function registerChatRoutes(
     const snapshotSeq = sessionStreamSeq.get(sessionId) ?? 0;
     let closed = false;
     let unsubscribe = () => {};
+    let keepalive: ReturnType<typeof setInterval> | null = null;
     const closeStream = () => {
       if (closed) return;
       closed = true;
+      if (keepalive) clearInterval(keepalive);
       unsubscribe();
       try { reply.raw.end(); } catch { /* already closed */ }
     };
@@ -2931,6 +2954,13 @@ export function registerChatRoutes(
     reply.raw.on("close", () => {
       closeStream();
     });
+
+    // Keep the SSE connection alive during idle periods (long tool runs / slow
+    // LLM responses) so browsers/proxies don't drop it with "fetch failed".
+    keepalive = setInterval(() => {
+      if (closed) return;
+      try { reply.raw.write(`: keepalive\n\n`); } catch { closeStream(); }
+    }, 15_000);
 
     unsubscribe = subscribe(sessionId, snapshotSeq, (event) => {
       if (closed) return;
