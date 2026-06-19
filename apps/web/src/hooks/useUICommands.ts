@@ -641,6 +641,11 @@ export function useUICommands(opts: UseUICommandsOptions) {
                   screenShare: true,
                   voice: false,
                   preview: false,
+                  // Only claim interactive-terminal RPC support when the desktop
+                  // bridge actually exposes terminalOp. Older builds register the
+                  // "terminal" surface (subscribe/output) but never answer
+                  // terminal.op-request, which would otherwise hang the gateway.
+                  interactiveTerminal: detectPlatform() === 'electron' && !!window.jaitDesktop?.terminalOp,
                 },
               },
             })

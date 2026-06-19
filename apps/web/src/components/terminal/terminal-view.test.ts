@@ -7,6 +7,8 @@ import {
   pasteClipboardTextIntoTerminal,
   shouldUseTerminalCustomContextMenu,
   shouldSuppressTerminalPasteControlData,
+  terminalBelongsToProject,
+  type TerminalInfo,
 } from './terminal-view'
 
 const originalWindow = globalThis.window
@@ -286,5 +288,57 @@ describe('getTerminalContextMenuPosition', () => {
 
   it('clamps the menu inside the viewport horizontally', () => {
     expect(getTerminalContextMenuPosition(390, 100, 400, 400)).toEqual({ left: 252, top: 100 })
+  })
+})
+
+describe('terminalBelongsToProject', () => {
+  const baseTerminal = (overrides: Partial<TerminalInfo> = {}): TerminalInfo => ({
+    id: 'term-1',
+    type: 'terminal',
+    state: 'running',
+    sessionId: 's1',
+    projectRoot: '/remote/project',
+    metadata: {},
+    ...overrides,
+  })
+
+  it('matches a gateway terminal to a gateway project by projectRoot', () => {
+    expect(terminalBelongsToProject(
+      baseTerminal({ projectRoot: '/home/me/project' }),
+      '/home/me/project',
+      'gateway',
+    )).toBe(true)
+  })
+
+  it('matches a remote-node terminal to the same node + projectRoot', () => {
+    const t = baseTerminal({ projectRoot: '/remote/project', metadata: { nodeId: 'node-A', remote: true, cwd: '/remote/project' } })
+    expect(terminalBelongsToProject(t, '/remote/project', 'node-A')).toBe(true)
+  })
+
+  it('rejects a remote-node terminal when the project is on a different node', () => {
+    const t = baseTerminal({ projectRoot: '/remote/project', metadata: { nodeId: 'node-A', remote: true, cwd: '/remote/project' } })
+    expect(terminalBelongsToProject(t, '/remote/project', 'node-B')).toBe(false)
+  })
+
+  it('rejects a gateway terminal when the project is on a remote node', () => {
+    // A gateway-owned terminal must not be reused for a remote-node project,
+    // otherwise opening the terminal would spawn it on the wrong host.
+    const t = baseTerminal({ projectRoot: '/remote/project', metadata: { cwd: '/remote/project' } })
+    expect(terminalBelongsToProject(t, '/remote/project', 'node-A')).toBe(false)
+  })
+
+  it('treats an undefined nodeId as gateway', () => {
+    const t = baseTerminal({ projectRoot: '/home/me/project', metadata: { cwd: '/home/me/project' } })
+    expect(terminalBelongsToProject(t, '/home/me/project', undefined)).toBe(true)
+    expect(terminalBelongsToProject(t, '/home/me/project', 'gateway')).toBe(true)
+  })
+
+  it('normalizes backslash paths and case-insensitively compares roots', () => {
+    const t = baseTerminal({ projectRoot: 'C:\\Projects\\App', metadata: { cwd: 'C:\\Projects\\App' } })
+    expect(terminalBelongsToProject(t, 'c:/projects/app', 'gateway')).toBe(true)
+  })
+
+  it('rejects terminals without a projectRoot', () => {
+    expect(terminalBelongsToProject(baseTerminal({ projectRoot: null as unknown as string }), '/any', 'gateway')).toBe(false)
   })
 })

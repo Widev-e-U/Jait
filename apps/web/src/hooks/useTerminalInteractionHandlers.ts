@@ -1,4 +1,5 @@
 import { useCallback, type RefObject } from 'react'
+import { toast } from 'sonner'
 
 import type { ReferencedFile, PromptInputHandle } from '@/components/chat'
 import { saveDetachedTerminal } from '@/components/terminal/detached-terminal-view'
@@ -87,20 +88,33 @@ export function useTerminalInteractionHandlers({
       return fallbackId
     }
 
-    const created = await createTerminal(
-      activeSessionId ?? 'default',
-      activeProjectRoot ?? undefined,
-      undefined,
-      activeProjectNodeId,
-    )
-    return created.id
+    try {
+      const created = await createTerminal(
+        activeSessionId ?? 'default',
+        activeProjectRoot ?? undefined,
+        undefined,
+        activeProjectNodeId,
+      )
+      return created.id
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Failed to create terminal'
+      const isRemote = activeProjectNodeId && activeProjectNodeId !== 'gateway'
+      toast.error(isRemote ? 'Terminal unavailable on this node' : 'Failed to open terminal', {
+        description: isRemote
+          ? `${reason}. Make sure the node is connected and the project path exists on it.`
+          : reason,
+        duration: 8000,
+      })
+      return null
+    }
   }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeProjectRoot, activeProjectNodeId])
 
   const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
     setCurrentView('chat')
     openTerminalPanel()
-    await ensureActiveTerminal(terminalId)
-  }, [ensureActiveTerminal, openTerminalPanel, setCurrentView])
+    const id = await ensureActiveTerminal(terminalId)
+    if (!id) closeTerminalPanel()
+  }, [ensureActiveTerminal, openTerminalPanel, closeTerminalPanel, setCurrentView])
 
   const handleMobileProjectTargetAction = useCallback(async (target: MobileProjectTarget) => {
     if (showSidebar) {
@@ -111,7 +125,8 @@ export function useTerminalInteractionHandlers({
       setCurrentView('chat')
       closeProjectPanel()
       openTerminalPanel()
-      await ensureActiveTerminal()
+      const id = await ensureActiveTerminal()
+      if (!id) closeTerminalPanel()
       return
     }
 
@@ -171,7 +186,8 @@ export function useTerminalInteractionHandlers({
     }
     setCurrentView('chat')
     openTerminalPanel()
-    await ensureActiveTerminal()
+    const id = await ensureActiveTerminal()
+    if (!id) closeTerminalPanel()
   }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel, setCurrentView])
 
   const handleKillTerminal = useCallback(async (id: string) => {

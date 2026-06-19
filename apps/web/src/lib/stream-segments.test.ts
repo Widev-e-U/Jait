@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { MessageSegment } from '@/hooks/useChat'
 import {
   accumulateResumeSegments,
+  normalizeMessageSegments,
   seedSeenToolCallIds,
   withTextSegment,
   withToolSegment,
@@ -128,5 +129,48 @@ describe('the old two-source approach (documents the fixed bug)', () => {
     expect(buggy.some((s) => s.type === 'toolGroup')).toBe(false)
     // The fixed accumulator keeps it.
     expect(accumulateResumeSegments(events).segments.some((s) => s.type === 'toolGroup')).toBe(true)
+  })
+})
+
+describe('normalizeMessageSegments (crash regression: "X.filter is not a function")', () => {
+  it('returns an empty array for non-array payloads', () => {
+    expect(normalizeMessageSegments(null)).toEqual([])
+    expect(normalizeMessageSegments(undefined)).toEqual([])
+    expect(normalizeMessageSegments({ type: 'toolGroup', callIds: ['a'] } as unknown)).toEqual([])
+    expect(normalizeMessageSegments('not-an-array' as unknown)).toEqual([])
+  })
+
+  it('coerces a malformed toolGroup with non-array callIds into a safe group', () => {
+    // A persisted/legacy toolGroup missing callIds (or with a non-array value)
+    // used to crash the renderer at `seg.callIds.includes(...)`.
+    const raw = [
+      { type: 'toolGroup' }, // missing callIds
+      { type: 'toolGroup', callIds: 'a,b' }, // non-array callIds
+      { type: 'toolGroup', callIds: ['a', 1, '', 'b'] }, // mixed/non-string ids
+    ] as unknown
+    expect(normalizeMessageSegments(raw)).toEqual([
+      { type: 'toolGroup', callIds: ['a', 'b'] },
+    ])
+  })
+
+  it('drops unknown segment types and coerces non-string content', () => {
+    const raw = [
+      { type: 'mystery', payload: 123 },
+      { type: 'text', content: { not: 'a string' } },
+      { type: 'thinking', content: 'hi' },
+    ] as unknown
+    expect(normalizeMessageSegments(raw)).toEqual([
+      { type: 'text', content: '[object Object]' },
+      { type: 'thinking', content: 'hi' },
+    ])
+  })
+
+  it('passes well-formed segments through unchanged', () => {
+    const raw: MessageSegment[] = [
+      { type: 'text', content: 'hello' },
+      { type: 'toolGroup', callIds: ['a', 'b'] },
+      { type: 'error', content: 'boom' },
+    ]
+    expect(normalizeMessageSegments(raw)).toEqual(raw)
   })
 })

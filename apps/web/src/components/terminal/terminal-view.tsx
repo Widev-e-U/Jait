@@ -175,23 +175,58 @@ export function useTerminals(token?: string | null) {
   const creatingRef = useRef(false)
   const createTerminal = useCallback(
     async (sessionId: string, projectRoot?: string, shell?: string, nodeId?: string | null) => {
-      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, projectRoot: projectRoot ?? null, metadata: {} } as TerminalInfo)
+      if (creatingRef.current) {
+        // A creation is already in flight — reuse the most recent project terminal
+        // rather than returning a placeholder with an empty id (which would render
+        // the "+ New Terminal" empty state and make the panel appear stuck).
+        const existing = terminals.find((t) => t.id)
+        if (existing) return existing
+        throw new Error('A terminal is already being created')
+      }
       creatingRef.current = true
       try {
-        const res = await fetch(`${GATEWAY}/api/terminals`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders(token),
-          },
-          body: JSON.stringify({
-            sessionId,
-            projectRoot,
-            ...(shell ? { shell } : {}),
-            ...(nodeId && nodeId !== 'gateway' ? { nodeId } : {}),
-          }),
-        })
-        const info = enrichTerminal((await res.json()) as TerminalInfo)
+        // A remote node that advertises a "terminal" surface but never answers
+        // terminal.op-request (e.g. an older desktop build) makes the gateway
+        // hang until its op timeout. Bound the client fetch so the user gets a
+        // clear error toast instead of an indefinitely stuck terminal panel.
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 20_000)
+        let res: Response
+        try {
+          res = await fetch(`${GATEWAY}/api/terminals`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeaders(token),
+            },
+            body: JSON.stringify({
+              sessionId,
+              projectRoot,
+              ...(shell ? { shell } : {}),
+              ...(nodeId && nodeId !== 'gateway' ? { nodeId } : {}),
+            }),
+            signal: controller.signal,
+          })
+        } catch (err) {
+          if (controller.signal.aborted) {
+            throw new Error(
+              'The remote node did not respond in time — it may be running an older desktop app. Update it and try again.',
+            )
+          }
+          throw new Error(err instanceof Error ? err.message : 'Failed to create terminal')
+        } finally {
+          clearTimeout(timeoutId)
+        }
+        if (!res.ok) {
+          const errBody = (await res.json().catch(() => null)) as { error?: string; details?: string } | null
+          const reason = errBody?.details ?? errBody?.error ?? `HTTP ${res.status}`
+          throw new Error(reason)
+        }
+        const raw = (await res.json()) as TerminalInfo
+        if (!raw || typeof raw.id !== 'string' || !raw.id) {
+          throw new Error('Gateway returned an invalid terminal')
+        }
+        const info = enrichTerminal(raw)
         setTerminals((prev) => [...prev, info])
         setActiveTerminalId(info.id)
         return info

@@ -26,6 +26,7 @@ function mergeCapabilities(capabilities?: Partial<NodeCapabilities>, previous?: 
     screenShare: capabilities?.screenShare ?? previous?.screenShare ?? false,
     voice: capabilities?.voice ?? previous?.voice ?? false,
     preview: capabilities?.preview ?? previous?.preview ?? false,
+    interactiveTerminal: capabilities?.interactiveTerminal ?? previous?.interactiveTerminal ?? false,
   };
 }
 

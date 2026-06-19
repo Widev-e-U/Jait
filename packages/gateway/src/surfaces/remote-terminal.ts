@@ -75,7 +75,7 @@ export class RemoteTerminalSurface implements Surface {
           rows: this._rows,
           ...(this._shell ? { shell: this._shell } : {}),
         },
-        30_000,
+        15_000,
       );
       this._pid = typeof result?.pid === "number" ? result.pid : null;
       this._shell = typeof result?.shell === "string" && result.shell ? result.shell : this._shell;

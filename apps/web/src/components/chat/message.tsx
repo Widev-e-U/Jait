@@ -967,7 +967,8 @@ function MessageInner({
             {(() => {
               return segments.map((seg, i) => {
                 if (seg.type === 'toolGroup') {
-                  const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
+                  const callIds = Array.isArray(seg.callIds) ? seg.callIds : []
+                  const calls = (toolCalls ?? []).filter((tc) => callIds.includes(tc.callId))
                   // Collapse completed tool groups that are followed by text
                   const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
                   return calls.length > 0 ? (

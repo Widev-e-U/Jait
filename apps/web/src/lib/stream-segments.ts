@@ -50,6 +50,36 @@ export function withToolSegment(segs: MessageSegment[] | undefined, callId: stri
   return arr
 }
 
+/**
+ * Validate and coerce a raw (wire/DB) segment list into well-formed
+ * `MessageSegment`s. Guards against malformed payloads (non-array input,
+ * toolGroup missing `callIds` or with non-array callIds, unknown segment
+ * types, non-string content) that would otherwise crash the renderer with
+ * "X.filter is not a function" when it tries `seg.callIds.includes(...)`.
+ * Returns an empty array for anything that isn't a usable segment list.
+ */
+export function normalizeMessageSegments(raw: unknown): MessageSegment[] {
+  if (!Array.isArray(raw)) return []
+  const out: MessageSegment[] = []
+  for (const seg of raw) {
+    if (!seg || typeof seg !== 'object') continue
+    const type = (seg as { type?: unknown }).type
+    if (type === 'text' || type === 'thinking' || type === 'error') {
+      const content = (seg as { content?: unknown }).content
+      out.push({ type, content: typeof content === 'string' ? content : String(content ?? '') })
+    } else if (type === 'toolGroup') {
+      const callIdsRaw = (seg as { callIds?: unknown }).callIds
+      const callIds = Array.isArray(callIdsRaw)
+        ? callIdsRaw.filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : []
+      if (callIds.length > 0) out.push({ type: 'toolGroup', callIds })
+    }
+    // Unknown segment types are dropped rather than rendered, which keeps a
+    // future/legacy payload from crashing the chat transcript.
+  }
+  return out
+}
+
 /** Collect every tool callId already present in a segment list's tool groups. */
 export function seedSeenToolCallIds(segs: MessageSegment[] | undefined): Set<string> {
   const seen = new Set<string>()

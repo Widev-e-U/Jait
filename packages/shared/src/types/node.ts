@@ -24,6 +24,13 @@ export interface NodeCapabilities {
   screenShare: boolean;
   voice: boolean;
   preview: boolean;
+  /**
+   * Whether the node responds to the acknowledged `terminal.op-request` RPC
+   * (interactive remote terminals). Older nodes advertise a "terminal" surface
+   * (subscribe/output only) but never answer op-requests; the gateway uses this
+   * flag to fast-fail instead of hanging on the 30s op timeout.
+   */
+  interactiveTerminal?: boolean;
 }
 
 export interface NodeHelloPayload {

@@ -636,7 +636,7 @@ describe("WsControlPlane", () => {
           name: "Remote Terminal Node",
           platform: "linux",
           role: "desktop",
-          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [] },
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [], interactiveTerminal: true },
         },
       }));
       remote.ws.send(JSON.stringify({
@@ -691,6 +691,43 @@ describe("WsControlPlane", () => {
       expect(request.type).toBe("terminal.op-request");
       expect(request.payload).toMatchObject({ op: "input", terminalId: "term-remote", data: "pwd\\r" });
       expect(request.payload.requestId).toBeUndefined();
+
+      remote.ws.close();
+    });
+
+    it("fast-fails terminal.start on nodes that do not claim interactiveTerminal support", async () => {
+      const token = await createToken("user-terminal-nocap");
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Advertise a "terminal" surface but NOT interactiveTerminal — simulates
+      // an older desktop build that ignores terminal.op-request.
+      remote.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "remote-terminal-legacy",
+          name: "Legacy Terminal Node",
+          platform: "linux",
+          role: "desktop",
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [] },
+        },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "remote-terminal-legacy", name: "Legacy Terminal Node", platform: "linux", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      await expect(
+        plane.proxyTerminalOp("remote-terminal-legacy", "start", {
+          terminalId: "term-legacy",
+          sessionId: "s",
+          projectRoot: "/tmp",
+        }),
+      ).rejects.toThrow(/does not support interactive terminals/);
 
       remote.ws.close();
     });

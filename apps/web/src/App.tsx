@@ -3779,12 +3779,24 @@ function App() {
                 onArchitectureRenderResult={handleArchitectureRenderResult}
                 onAvailableFilesChange={handleAvailableFilesForMentionChange}
                 onCloseTerminal={closeTerminalPanel}
-                onCreateTerminal={(shell) => createTerminal(
-                  activeSessionId ?? 'default',
-                  activeProjectRoot ?? undefined,
-                  shell,
-                  activeProject?.nodeId ?? 'gateway',
-                )}
+                onCreateTerminal={(shell) => {
+                  const nodeId = activeProject?.nodeId ?? 'gateway'
+                  void createTerminal(
+                    activeSessionId ?? 'default',
+                    activeProjectRoot ?? undefined,
+                    shell,
+                    nodeId,
+                  ).catch((err) => {
+                    const reason = err instanceof Error ? err.message : 'Failed to create terminal'
+                    const isRemote = nodeId && nodeId !== 'gateway'
+                    toast.error(isRemote ? 'Terminal unavailable on this node' : 'Failed to open terminal', {
+                      description: isRemote
+                        ? `${reason}. Make sure the node is connected and the project path exists on it.`
+                        : reason,
+                      duration: 8000,
+                    })
+                  })
+                }}
                 onDetachTerminal={handleDetachTerminal}
                 onFileDrop={(files) => { void handleFileDrop(files) }}
                 onGenerateArchitecture={() => {

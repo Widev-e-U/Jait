@@ -1205,6 +1205,20 @@ export class WsControlPlane {
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
+    // Fast-fail interactive terminal ops on nodes that don't claim support.
+    // Older nodes advertise a "terminal" surface (subscribe/output) but never
+    // answer terminal.op-request; without this guard the request hangs for the
+    // full timeout and the client's terminal panel appears stuck.
+    if (op === "start") {
+      const nodeState = this.nodeStates.getNode(nodeId);
+      if (nodeState && !nodeState.capabilities.interactiveTerminal) {
+        return Promise.reject(
+          new Error(
+            `Node ${node.name || nodeId} does not support interactive terminals (update the desktop app)`,
+          ),
+        );
+      }
+    }
     const requestId = nanoid();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {

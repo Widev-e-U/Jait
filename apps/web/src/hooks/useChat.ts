@@ -9,7 +9,7 @@ import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
-import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds } from '@/lib/stream-segments'
+import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds, normalizeMessageSegments } from '@/lib/stream-segments'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -557,7 +557,7 @@ export function useChat(
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
                   const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
-                  if (m.role === 'user' && m.segments && m.segments.length > 0) {
+                  if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
                     msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
@@ -570,8 +570,8 @@ export function useChat(
                       msg.displaySegments = parsed.displaySegments
                       msg.attachments = attachmentsFromSegments(msg.displaySegments)
                     }
-                  } else if (m.segments && m.segments.length > 0) {
-                    msg.segments = m.segments as MessageSegment[]
+                  } else if (Array.isArray(m.segments) && m.segments.length > 0) {
+                    msg.segments = normalizeMessageSegments(m.segments)
                   }
                   if (m.toolCalls && m.toolCalls.length > 0) {
                     msg.toolCalls = m.toolCalls.map(tc => {
@@ -993,7 +993,7 @@ export function useChat(
       const olderMsgs: ChatMessage[] = data.messages.map(m => {
         const safeContent = typeof m.content === 'string' ? m.content : String(m.content ?? '')
         const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
-        if (m.role === 'user' && m.segments && (m.segments as unknown[]).length > 0) {
+        if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
           msg.displaySegments = parseUserMessageSegments(m.segments)
           msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
           msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
@@ -1006,8 +1006,8 @@ export function useChat(
             msg.displaySegments = parsed.displaySegments
             msg.attachments = attachmentsFromSegments(msg.displaySegments)
           }
-        } else if (m.segments && (m.segments as unknown[]).length > 0) {
-          msg.segments = m.segments as MessageSegment[]
+        } else if (Array.isArray(m.segments) && m.segments.length > 0) {
+          msg.segments = normalizeMessageSegments(m.segments)
         }
         if (m.toolCalls && m.toolCalls.length > 0) {
           msg.toolCalls = m.toolCalls.map(tc => ({
