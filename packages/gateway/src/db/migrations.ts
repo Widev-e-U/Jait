@@ -1078,4 +1078,13 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 042: Reasoning effort preference ─────────────────────────────
+  {
+    id: 42,
+    name: "user_settings_reasoning_effort",
+    run(db) {
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN reasoning_effort TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

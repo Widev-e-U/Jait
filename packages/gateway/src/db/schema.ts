@@ -65,6 +65,7 @@ export const userSettings = sqliteTable("user_settings", {
   jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids
   selectedModel: text("selected_model"), // last model id picked in the UI; used by background channels (e.g. WhatsApp)
+  reasoningEffort: text("reasoning_effort"), // 'minimal' | 'low' | 'medium' | 'high' | null (only for reasoning-capable models)
   projectPickerPath: text("project_picker_path"),
   projectPickerNodeId: text("project_picker_node_id"),
   updatedAt: text("updated_at").notNull(),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network } from 'lucide-react'
+import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
 
 const JaitIcon = ({ className }: { className?: string }) => (
@@ -28,6 +28,7 @@ interface ModelDef {
   description?: string
   isDefault?: boolean
   group?: string
+  reasoningEffortSupported?: boolean
 }
 
 interface ProviderDef {
@@ -139,7 +140,8 @@ export function ProviderModelSelector({
   projectNodeId,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
-  const { updateSettings } = useAuth()
+  const { updateSettings, settings } = useAuth()
+  const reasoningEffort = settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
@@ -467,6 +469,22 @@ export function ProviderModelSelector({
     onProviderChange(nextProvider)
   }
 
+  const REASONING_EFFORTS: { value: ReasoningEffort; label: string; hint: string }[] = [
+    { value: 'minimal', label: 'Minimal', hint: 'Fastest, least thinking' },
+    { value: 'low', label: 'Low', hint: 'Brief reasoning' },
+    { value: 'medium', label: 'Medium', hint: 'Balanced' },
+    { value: 'high', label: 'High', hint: 'Deepest reasoning' },
+  ]
+
+  const handleReasoningEffortChange = (next: ReasoningEffort | null) => {
+    updateSettings({ reasoning_effort: next }).catch(() => {})
+  }
+
+  // The reasoning-effort selector is relevant only when the active model is
+  // known to accept the OpenAI `reasoning_effort` parameter.
+  const activeModelDef = model ? models.find((entry) => entry.id === model) : null
+  const modelSupportsReasoning = Boolean(activeModelDef?.reasoningEffortSupported)
+
   const GROUP_TO_BACKEND: Record<string, string> = { OpenAI: 'openai', OpenRouter: 'openrouter', Ollama: 'ollama' }
 
   const handleModelSelect = (modelId: string) => {
@@ -483,7 +501,13 @@ export function ProviderModelSelector({
     // Persist the picked model so background channels (e.g. WhatsApp) reply
     // with the same model instead of falling back to the server default.
     if (provider === 'jait') {
-      updateSettings({ selected_model: modelId }).catch(() => {})
+      // Clear a leftover reasoning-effort preference when moving to a model
+      // that doesn't accept it, so it isn't silently forwarded to the API.
+      if (reasoningEffort && !selectedModel?.reasoningEffortSupported) {
+        updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => {})
+      } else {
+        updateSettings({ selected_model: modelId }).catch(() => {})
+      }
     }
     onModelChange(modelId)
     saveRecentModel(modelId)
@@ -719,6 +743,53 @@ export function ProviderModelSelector({
           </div>
         )}
       </div>
+
+      {modelSupportsReasoning && !loadingModels && (
+        <div className="shrink-0 border-t px-3 py-2">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <Brain className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+              Reasoning effort
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => handleReasoningEffortChange(null)}
+              className={cn(
+                'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
+                'hover:bg-accent hover:text-accent-foreground',
+                reasoningEffort === null && 'bg-accent/50',
+              )}
+            >
+              <span className="text-muted-foreground">Default</span>
+              {reasoningEffort === null && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+            </button>
+            {REASONING_EFFORTS.map((effort) => {
+              const active = reasoningEffort === effort.value
+              return (
+                <button
+                  key={effort.value}
+                  type="button"
+                  title={effort.hint}
+                  onClick={() => handleReasoningEffortChange(effort.value)}
+                  className={cn(
+                    'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    active && 'bg-accent/50',
+                  )}
+                >
+                  <span>{effort.label}</span>
+                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-2xs leading-snug text-muted-foreground">
+            Controls how much the model reasons before answering. Only applies to this reasoning model.
+          </p>
+        </div>
+      )}
     </>
   )
 

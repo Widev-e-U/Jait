@@ -8,6 +8,10 @@ export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "wyoming" | "whisper" | "gpt" | "elevenlabs";
 export type ChatProvider = "jait" | "codex" | "claude-code";
 export type JaitBackend = "openai" | "openrouter" | "ollama";
+/** Reasoning effort levels for reasoning-capable models (OpenAI o-series / GPT-5, etc). */
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+
+export const REASONING_EFFORT_VALUES = new Set<ReasoningEffort>(["minimal", "low", "medium", "high"]);
 
 function normalizeSttProvider(value: string | null | undefined): SttProvider {
   if (value === "gpt") return "gpt";
@@ -32,6 +36,7 @@ export interface UserSettingsRecord {
   jaitBackend: JaitBackend;
   recentModels: string[];
   selectedModel: string | null;
+  reasoningEffort: ReasoningEffort | null;
   projectPickerPath: string | null;
   projectPickerNodeId: string | null;
   updatedAt: string;
@@ -165,6 +170,7 @@ export class UserService {
         jaitBackend: "openai",
         recentModels: JSON.stringify([]),
         selectedModel: null,
+        reasoningEffort: null,
         projectPickerPath: null,
         projectPickerNodeId: null,
         updatedAt: now,
@@ -179,6 +185,7 @@ export class UserService {
         jaitBackend: "openai",
         recentModels: [],
         selectedModel: null,
+        reasoningEffort: null,
         projectPickerPath: null,
         projectPickerNodeId: null,
         updatedAt: now,
@@ -194,6 +201,7 @@ export class UserService {
       jaitBackend: ((row as any).jaitBackend as JaitBackend) || "openai",
       recentModels: parseStringArray((row as any).recentModels ?? null),
       selectedModel: typeof (row as any).selectedModel === "string" ? (row as any).selectedModel : null,
+      reasoningEffort: REASONING_EFFORT_VALUES.has((row as any).reasoningEffort) ? (row as any).reasoningEffort : null,
       projectPickerPath: typeof (row as any).projectPickerPath === "string" ? (row as any).projectPickerPath : null,
       projectPickerNodeId: typeof (row as any).projectPickerNodeId === "string" ? (row as any).projectPickerNodeId : null,
       updatedAt: row.updatedAt,
@@ -211,6 +219,7 @@ export class UserService {
       jaitBackend?: JaitBackend;
       recentModels?: string[];
       selectedModel?: string | null;
+      reasoningEffort?: ReasoningEffort | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
     },
@@ -226,6 +235,9 @@ export class UserService {
     const selectedModel = patch.selectedModel !== undefined
       ? patch.selectedModel
       : existing.selectedModel;
+    const reasoningEffort = patch.reasoningEffort !== undefined
+      ? patch.reasoningEffort
+      : existing.reasoningEffort;
     const projectPickerPath = patch.projectPickerPath !== undefined
       ? patch.projectPickerPath
       : existing.projectPickerPath;
@@ -244,6 +256,7 @@ export class UserService {
         jaitBackend,
         recentModels: JSON.stringify(recentModels),
         selectedModel,
+        reasoningEffort,
         projectPickerPath,
         projectPickerNodeId,
         updatedAt: now,

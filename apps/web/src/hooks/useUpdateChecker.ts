@@ -40,17 +40,20 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           fetch(`${apiUrl}/health`).then(r => r.ok ? r.json() as Promise<{ version?: string }> : null).catch(() => null),
         ])
         const gatewayVersion = (healthRes as { version?: string } | null)?.version ?? ''
-        const latestVersion = result.version ?? info?.appVersion ?? ''
-        // The desktop app and gateway ship as a single unified release. The
-        // desktop binary's own version string (app.getVersion()) can lag behind
-        // the published release in package.json, so autoUpdater may report an
-        // "update" to a version the gateway is already running. Only offer the
-        // update when the latest published version actually differs from the
-        // running gateway version.
-        const hasUpdate = result.updateAvailable &&
-          (!gatewayVersion || latestVersion !== gatewayVersion)
+        const appVersion = info?.appVersion ?? ''
+        const latestVersion = result.version ?? appVersion ?? ''
+        // The desktop binary and the gateway are released together but update
+        // independently: the gateway self-updates via npm, while the desktop
+        // binary only updates through electron-updater (download + install).
+        // Whether the *desktop binary* needs an update is decided solely by
+        // electron-updater, which compares app.getVersion() (the binary's
+        // stamped release version) against the published latest.yml. Do NOT
+        // suppress the update based on the gateway version — once the gateway
+        // self-updates via npm it jumps ahead of the binary, and comparing
+        // against it would permanently hide the desktop's own update button.
+        const hasUpdate = result.updateAvailable
         setUpdateInfo({
-          currentVersion: gatewayVersion,
+          currentVersion: gatewayVersion || appVersion,
           latestVersion,
           hasUpdate,
         })

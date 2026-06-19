@@ -73,7 +73,9 @@ describe("fetchOpenAIModels", () => {
     const models = await fetchOpenAIModels("k", "https://api.openai.com/v1");
 
     expect(models.map((m) => m.id)).toEqual(["gpt-4o", "gpt-4o-mini", "o3-mini"]);
-    expect(models[0]).toEqual({ id: "gpt-4o", name: "gpt-4o", description: "by openai" });
+    expect(models[0]).toEqual({ id: "gpt-4o", name: "gpt-4o", description: "by openai", reasoningEffortSupported: false });
+    expect(models[1]).toEqual({ id: "gpt-4o-mini", name: "gpt-4o-mini", description: "by openai", reasoningEffortSupported: false });
+    expect(models[2]).toEqual({ id: "o3-mini", name: "o3-mini", description: undefined, reasoningEffortSupported: true });
     expect(models[2].description).toBeUndefined();
   });
 

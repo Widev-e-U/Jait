@@ -2483,6 +2483,7 @@ export function registerChatRoutes(
                 model: requestBodyModel || undefined,
                 jaitBackend,
                 runtimeMode: requestRuntimeMode ?? undefined,
+                reasoningEffort: userSettings?.reasoningEffort ?? undefined,
               },
               abort: streamAbort,
               maxRounds: resolveMaxToolRounds(userSettings?.apiKeys, config.agentMaxRounds),

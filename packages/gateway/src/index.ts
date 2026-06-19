@@ -723,6 +723,7 @@ async function main() {
         apiKeys: s.apiKeys,
         jaitBackend: s.jaitBackend,
         model: s.selectedModel ?? undefined,
+        reasoningEffort: s.reasoningEffort ?? undefined,
         disabledTools: s.disabledTools?.length ? new Set(s.disabledTools) : undefined,
       };
     } catch {

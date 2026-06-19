@@ -193,7 +193,7 @@ export interface AgentLoopOptions {
   /** Session identifier (for logging / events) */
   sessionId: string;
   /** Auth context for tool execution */
-  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string };
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string; reasoningEffort?: string | null };
   /** Abort controller — abort to cancel the loop */
   abort: AbortController;
   /** Max tool-calling rounds before stopping */
@@ -1489,6 +1489,12 @@ export async function runAgentLoop(
           stream: true,
           stream_options: { include_usage: true },
         };
+    // Reasoning effort (OpenAI o-series / GPT-5 reasoning models). Ollama's
+    // native /api/chat endpoint does not accept this field, so only send it to
+    // OpenAI-compatible backends when the user has explicitly chosen a level.
+    if (!isOllama && auth?.reasoningEffort) {
+      reqBody.reasoning_effort = auth.reasoningEffort;
+    }
     if (hasTools) {
       reqBody.tools = activeSchemas;
       if (!isOllama) reqBody.tool_choice = "auto";

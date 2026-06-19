@@ -8,6 +8,7 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'wyoming' | 'whisper' | 'gpt' | 'elevenlabs'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
 export type JaitBackend = 'openai' | 'openrouter' | 'ollama'
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
 interface User {
   id: string
@@ -22,6 +23,7 @@ interface UserSettings {
   jait_backend: JaitBackend
   recent_models: string[]
   selected_model: string | null
+  reasoning_effort: ReasoningEffort | null
   project_picker_path: string | null
   project_picker_node_id: string | null
   updated_at: string
@@ -47,6 +49,7 @@ const EMPTY_SETTINGS: UserSettings = {
   jait_backend: 'openai',
   recent_models: [],
   selected_model: null,
+  reasoning_effort: null,
   project_picker_path: null,
   project_picker_node_id: null,
   updated_at: new Date(0).toISOString(),
@@ -188,6 +191,7 @@ export function useAuth() {
     jait_backend?: JaitBackend
     recent_models?: string[]
     selected_model?: string | null
+    reasoning_effort?: ReasoningEffort | null
     project_picker_path?: string | null
     project_picker_node_id?: string | null
   }) => {

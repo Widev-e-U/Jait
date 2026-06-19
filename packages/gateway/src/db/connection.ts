@@ -133,6 +133,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
       stt_provider: "TEXT NOT NULL DEFAULT 'simulated'",
       chat_provider: "TEXT NOT NULL DEFAULT 'jait'",
       selected_model: "TEXT",
+      reasoning_effort: "TEXT",
       project_picker_path: "TEXT",
       project_picker_node_id: "TEXT",
     },

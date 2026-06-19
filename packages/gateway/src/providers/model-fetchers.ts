@@ -67,6 +67,26 @@ export function isChatCapableOpenAIModelId(id: string): boolean {
   return !OPENAI_NON_CHAT_SUBSTRINGS.some((s) => id.includes(s));
 }
 
+/**
+ * Whether a model id accepts the OpenAI `reasoning_effort` parameter.
+ * Covers OpenAI o-series and GPT-5 reasoning models, plus reasoning variants
+ * commonly exposed via OpenRouter (deepseek-r1, grok-3-mini, mimo, qwen3-thinking).
+ */
+export function supportsReasoningEffort(id: string): boolean {
+  if (!id) return false;
+  const lower = id.toLowerCase();
+  // OpenAI o-series & GPT-5 reasoning models
+  if (/^o\d+(?:-mini)?/i.test(lower)) return true;
+  if (/^gpt-5/.test(lower)) return true;
+  // Reasoning models reachable via OpenRouter / compatible gateways
+  if (lower.includes("deepseek-r1")) return true;
+  if (lower.includes("grok-3-mini")) return true;
+  if (lower.includes("mimo")) return true;
+  if (lower.includes("qwen3") && lower.includes("think")) return true;
+  if (lower.includes("reason")) return true;
+  return false;
+}
+
 // ── Fetchers ─────────────────────────────────────────────────────
 
 /**
@@ -109,6 +129,7 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
         id: m.id,
         name: m.name || m.id.split("/").pop() || m.id,
         description: m.description?.slice(0, 80),
+        reasoningEffortSupported: supportsReasoningEffort(m.id),
       }));
     openRouterCache = { models, fetchedAt: Date.now() };
     return models;
@@ -154,6 +175,7 @@ async function doFetchOpenAIModels(apiKey: string, url: string): Promise<Provide
         id: m.id,
         name: m.id,
         description: m.owned_by ? `by ${m.owned_by}` : undefined,
+        reasoningEffortSupported: supportsReasoningEffort(m.id),
       }));
     openaiCache = { models, fetchedAt: Date.now(), baseUrl: url };
     return models;

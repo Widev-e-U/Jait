@@ -37,6 +37,8 @@ export interface ChannelAuthContext {
   apiKeys?: Record<string, string>;
   jaitBackend?: string;
   model?: string;
+  /** Reasoning effort level for reasoning-capable models (minimal|low|medium|high). */
+  reasoningEffort?: string | null;
   /** Tools the owner has disabled in settings — never sent to the LLM, never executed. */
   disabledTools?: Set<string>;
 }
@@ -591,7 +593,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
         hasTools,
         sessionId: ctx.sessionId,
         auth: auth?.userId
-          ? { userId: auth.userId, apiKeys: auth.apiKeys, jaitBackend: auth.jaitBackend, model: auth.model }
+          ? { userId: auth.userId, apiKeys: auth.apiKeys, jaitBackend: auth.jaitBackend, model: auth.model, reasoningEffort: auth.reasoningEffort }
           : undefined,
         abort,
         maxRounds: hasTools ? resolveChannelMaxRounds(auth?.apiKeys) : 1,

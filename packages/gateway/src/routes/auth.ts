@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode, SttProvider, ChatProvider, JaitBackend } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider, ChatProvider, JaitBackend, ReasoningEffort } from "../services/users.js";
+import { REASONING_EFFORT_VALUES } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
@@ -148,6 +149,7 @@ export function registerAuthRoutes(
       jait_backend: settings.jaitBackend,
       recent_models: settings.recentModels,
       selected_model: settings.selectedModel,
+      reasoning_effort: settings.reasoningEffort,
       project_picker_path: settings.projectPickerPath,
       project_picker_node_id: settings.projectPickerNodeId,
       updated_at: settings.updatedAt,
@@ -167,6 +169,7 @@ export function registerAuthRoutes(
       jaitBackend?: JaitBackend;
       recentModels?: string[];
       selectedModel?: string | null;
+      reasoningEffort?: ReasoningEffort | null;
       projectPickerPath?: string | null;
       projectPickerNodeId?: string | null;
     } = {};
@@ -206,6 +209,13 @@ export function registerAuthRoutes(
         : null;
     }
 
+    if (typeof body.reasoning_effort === "string") {
+      const effort = body.reasoning_effort as ReasoningEffort;
+      patch.reasoningEffort = REASONING_EFFORT_VALUES.has(effort) ? effort : null;
+    } else if (body.reasoning_effort === null) {
+      patch.reasoningEffort = null;
+    }
+
     if (typeof body.project_picker_path === "string" || body.project_picker_path === null) {
       patch.projectPickerPath = typeof body.project_picker_path === "string"
         ? body.project_picker_path.trim() || null
@@ -228,6 +238,7 @@ export function registerAuthRoutes(
       jait_backend: updated.jaitBackend,
       recent_models: updated.recentModels,
       selected_model: updated.selectedModel,
+      reasoning_effort: updated.reasoningEffort,
       project_picker_path: updated.projectPickerPath,
       project_picker_node_id: updated.projectPickerNodeId,
       updated_at: updated.updatedAt,
