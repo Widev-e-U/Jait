@@ -865,7 +865,22 @@ const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 const DEFAULT_UI_MESSAGE_LIMIT = 120;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
-type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown; contextFlow?: LlmContextFlow; thinking?: string };
+type UIMsg = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  toolCalls?: unknown;
+  segments?: unknown;
+  contextFlow?: LlmContextFlow;
+  /**
+   * Lazy badges: whether the DB row has a context_flow / injected memories.
+   * The full contextFlow payload is fetched on demand (when the user opens
+   * the LLM-context dialog) to avoid loading multi-MB JSON on every page load.
+   */
+  hasContextFlow?: boolean;
+  hasMemoryProvenance?: boolean;
+  thinking?: string;
+};
 type VisibleHistoryMsg = UIMsg & { historyIndex: number };
 
 function parseToolArguments(raw: string): unknown {
@@ -1027,14 +1042,25 @@ function rowToUIMsg(sessionId: string, row: typeof messagesTable.$inferSelect, v
     msg.thinking = row.thinking;
   }
   if (row.contextFlow) {
-    try {
-      const parsed = JSON.parse(row.contextFlow) as unknown;
-      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
-        msg.contextFlow = parsed as LlmContextFlow;
-      }
-    } catch { /* ignore */ }
+    // Lightweight badges instead of parsing the (potentially multi-MB)
+    // context_flow JSON. The frontend lazy-loads the full payload on demand
+    // via GET /api/sessions/:sessionId/messages/:index/context-flow.
+    msg.hasContextFlow = true;
+    msg.hasMemoryProvenance = hasMemoryProvenanceInContextFlow(row.contextFlow);
   }
   return msg;
+}
+
+/**
+ * Quick peek at the start of a context_flow JSON string to determine whether
+ * it contains injected memories — without parsing the entire (huge) blob.
+ * The `memory` object is near the top of the serialized shape, so checking the
+ * first ~2 KB is sufficient.
+ */
+function hasMemoryProvenanceInContextFlow(json: string): boolean {
+  if (!json || json.length < 20) return false;
+  const head = json.slice(0, 2048);
+  return head.includes('"memory"') && head.includes('"injectedIds"') && head.includes('[');
 }
 
 function persistedMessageWindow(
@@ -1128,7 +1154,10 @@ function buildVisibleHistoryMessages(
     content,
     toolCalls,
     segments,
-    contextFlow,
+    // Strip the (potentially multi-MB) contextFlow from the snapshot. The
+    // frontend lazy-loads it on demand via the context-flow endpoint.
+    ...(contextFlow ? { hasContextFlow: true } : {}),
+    ...(contextFlow?.memory && contextFlow.memory.injectedIds.length > 0 ? { hasMemoryProvenance: true } : {}),
     thinking,
   }));
 
@@ -1152,7 +1181,6 @@ function buildVisibleHistoryMessages(
         content: acc.content,
         toolCalls: acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined,
         segments: acc.segments.length > 0 ? acc.segments : undefined,
-        contextFlow: undefined,
         thinking: acc.thinking || undefined,
       });
     }
@@ -2859,6 +2887,60 @@ export function registerChatRoutes(
       limit,
       messages: windowed.messages,
     };
+  });
+
+  // ── GET /api/sessions/:sessionId/messages/:index/context-flow ─────────
+  // Lazy-load the full contextFlow JSON for a single message. The snapshot /
+  // messages endpoints only return lightweight `hasContextFlow` /
+  // `hasMemoryProvenance` badges; the (potentially multi-MB) payload is
+  // fetched here only when the user opens the LLM-context dialog.
+  app.get("/api/sessions/:sessionId/messages/:messageIndex/context-flow", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId, messageIndex } = request.params as { sessionId: string; messageIndex: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    const index = Number.parseInt(messageIndex, 10);
+    if (!Number.isFinite(index) || index < 0) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "messageIndex must be a non-negative integer" });
+    }
+
+    // For active streams, the in-memory history has the live contextFlow
+    // attached (and the DB row may not be persisted yet). Otherwise read
+    // directly from the DB to avoid hydrating the full session.
+    const isStreaming = activeStreams.has(sessionId);
+    if (isStreaming || !db) {
+      hydrateSession(sessionId);
+      const history = sessionHistory.get(sessionId) ?? [];
+      const visible = buildVisibleHistoryEntries(sessionId, history, { includePendingAssistantToolCalls: isStreaming });
+      const entry = visible[index];
+      if (!entry) return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
+      return { contextFlow: entry.contextFlow ?? null };
+    }
+
+    // DB path: fetch rows in the same order the messages endpoint returns them
+    // (ordered by createdAt, id), then resolve the visible index.
+    const rows = db
+      .select({ contextFlow: messagesTable.contextFlow, role: messagesTable.role, content: messagesTable.content, toolCalls: messagesTable.toolCalls })
+      .from(messagesTable)
+      .where(eq(messagesTable.sessionId, sessionId))
+      .orderBy(messagesTable.createdAt, messagesTable.id)
+      .all();
+    const visibleRows = rows.filter((r) => !(r.role === "assistant" && !r.content && !r.toolCalls));
+    const row = visibleRows[index];
+    if (!row) return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
+    if (!row.contextFlow) return { contextFlow: null };
+    try {
+      const parsed = JSON.parse(row.contextFlow) as unknown;
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
+        return { contextFlow: parsed as LlmContextFlow };
+      }
+    } catch { /* fall through to null */ }
+    return { contextFlow: null };
   });
 
   // SSE stream-resume: join an in-progress session's token stream

@@ -210,6 +210,10 @@ export interface ChatMessage {
   toolCalls?: ToolCallInfo[]
   /** Outbound model request snapshots that produced this response. */
   contextFlow?: LlmContextFlow
+  /** Lightweight badge: message has a contextFlow payload (lazy-loaded on demand). */
+  hasContextFlow?: boolean
+  /** Lightweight badge: message has injected memory provenance (lazy-loaded). */
+  hasMemoryProvenance?: boolean
   /**
    * Ordered interleaving of text and tool-call groups.
    * Present on messages built from a live stream; absent on
@@ -531,6 +535,8 @@ export function useChat(
                   role: 'user' | 'assistant';
                   content: string;
                   contextFlow?: LlmContextFlow;
+                  hasContextFlow?: boolean;
+                  hasMemoryProvenance?: boolean;
                   thinking?: string;
                   segments?: unknown[];
                   toolCalls?: Array<{
@@ -556,7 +562,9 @@ export function useChat(
                 }
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
-                  const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
+                  const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
+                  if (m.hasContextFlow) msg.hasContextFlow = true
+                  if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
                   if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
@@ -970,6 +978,8 @@ export function useChat(
           role: 'user' | 'assistant';
           content: string;
           contextFlow?: LlmContextFlow;
+          hasContextFlow?: boolean;
+          hasMemoryProvenance?: boolean;
           thinking?: string;
           segments?: unknown[];
           toolCalls?: Array<{
@@ -992,7 +1002,9 @@ export function useChat(
       }
       const olderMsgs: ChatMessage[] = data.messages.map(m => {
         const safeContent = typeof m.content === 'string' ? m.content : String(m.content ?? '')
-        const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
+        const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
+        if (m.hasContextFlow) msg.hasContextFlow = true
+        if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
         if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
           msg.displaySegments = parseUserMessageSegments(m.segments)
           msg.displayContent = userMessageTextFromSegments(msg.displaySegments)

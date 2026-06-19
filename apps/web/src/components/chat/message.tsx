@@ -20,6 +20,7 @@ import {
   MessageContent as AIMessageContent,
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
+import { getApiUrl } from '@/lib/gateway-url'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -78,6 +79,13 @@ interface MessageProps {
   role: 'user' | 'assistant'
   content: string
   contextFlow?: LlmContextFlow
+  /** Lightweight badge: a contextFlow payload exists on the server (lazy-loaded). */
+  hasContextFlow?: boolean
+  /** Lightweight badge: injected memories exist (lazy-loaded via contextFlow). */
+  hasMemoryProvenance?: boolean
+  /** Session ID + auth token, used to lazy-load contextFlow on demand. */
+  sessionId?: string | null
+  authToken?: string | null
   /** Clean display text (without appended file contents). Falls back to parsing content. */
   displayContent?: string
   /** Files the user referenced via @ chips — rendered as inline badges. */
@@ -465,6 +473,10 @@ function MessageInner({
   role,
   content,
   contextFlow,
+  hasContextFlow,
+  hasMemoryProvenance,
+  sessionId,
+  authToken,
   displayContent: displayContentProp,
   referencedFiles: referencedFilesProp,
   displaySegments: displaySegmentsProp,
@@ -490,6 +502,36 @@ function MessageInner({
 }: MessageProps) {
   const isUser = role === 'user'
   const confirm = useConfirmDialog()
+
+  // ── Lazy-loaded contextFlow ──────────────────────────────────────────
+  // Snapshots only carry lightweight `hasContextFlow` / `hasMemoryProvenance`
+  // badges. The (potentially multi-MB) full payload is fetched on demand when
+  // the user opens the LLM-context dialog or the memory-provenance popover.
+  const [lazyContextFlow, setLazyContextFlow] = useState<LlmContextFlow | null>(null)
+  const [contextFlowLoading, setContextFlowLoading] = useState(false)
+  const effectiveContextFlow = contextFlow ?? lazyContextFlow ?? undefined
+  const canLazyLoadContextFlow = !contextFlow && (hasContextFlow === true || hasMemoryProvenance === true)
+
+  const loadContextFlow = useCallback(async () => {
+    if (lazyContextFlow || contextFlowLoading || contextFlow) return
+    if (typeof messageIndex !== 'number' || !sessionId) return
+    setContextFlowLoading(true)
+    try {
+      const headers: Record<string, string> = {}
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+      const res = await fetch(
+        `${getApiUrl()}/api/sessions/${sessionId}/messages/${messageIndex}/context-flow`,
+        { headers },
+      )
+      if (!res.ok) return
+      const data = await res.json() as { contextFlow?: LlmContextFlow | null }
+      if (data.contextFlow) setLazyContextFlow(data.contextFlow)
+    } catch {
+      /* ignore — dialog just won't show data */
+    } finally {
+      setContextFlowLoading(false)
+    }
+  }, [lazyContextFlow, contextFlowLoading, contextFlow, messageIndex, sessionId, authToken])
 
   const { userDisplayText, userDisplaySegments } = useMemo(() => {
     if (!isUser) {
@@ -803,11 +845,16 @@ function MessageInner({
       onClick: () => { void handleRetryFromHere() },
       disabled: isRetrying,
     }] : []),
-    ...(!isUser && contextFlow ? [{
+    ...(!isUser && (effectiveContextFlow || canLazyLoadContextFlow) ? [{
       key: 'context',
       label: 'View LLM context',
-      icon: <Eye className="h-3.5 w-3.5" />,
-      onClick: () => setContextOpen(true),
+      icon: contextFlowLoading
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        : <Eye className="h-3.5 w-3.5" />,
+      onClick: () => {
+        if (!effectiveContextFlow) void loadContextFlow()
+        setContextOpen(true)
+      },
     }] : []),
     ...(canSendMemoryFeedback ? [{
       key: 'memory',
@@ -901,8 +948,9 @@ function MessageInner({
 
   const assistantActions = !isUser ? renderActions() : null
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
-  const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(contextFlow) : []
-  const memoryProvenance = memoryProvenanceEntries.length > 0 ? (
+  const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(effectiveContextFlow) : []
+  const showMemoryBadge = !isUser && (memoryProvenanceEntries.length > 0 || (hasMemoryProvenance && !effectiveContextFlow))
+  const memoryProvenance = showMemoryBadge ? (
     <div className="not-prose mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
       <button
         type="button"
@@ -910,6 +958,7 @@ function MessageInner({
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
+          if (!effectiveContextFlow && hasMemoryProvenance) void loadContextFlow()
           setMemoryExpanded((open) => !open)
         }}
         aria-expanded={memoryExpanded}
@@ -917,7 +966,11 @@ function MessageInner({
       >
         <Brain className="h-3.5 w-3.5 shrink-0" />
         <span>Memory</span>
-        <span className="rounded bg-background/75 px-1 text-2xs">{memoryProvenanceEntries.length}</span>
+        {memoryProvenanceEntries.length > 0
+          ? <span className="rounded bg-background/75 px-1 text-2xs">{memoryProvenanceEntries.length}</span>
+          : (contextFlowLoading
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <span className="rounded bg-background/75 px-1 text-2xs">•</span>)}
       </button>
       {memoryExpanded && memoryProvenanceEntries.slice(0, 3).map((entry) => {
         const source: MemoryProvenanceSource = {
@@ -1274,7 +1327,7 @@ function MessageInner({
     <LlmContextFlowDialog
       open={contextOpen}
       onOpenChange={setContextOpen}
-      contextFlow={contextFlow}
+      contextFlow={effectiveContextFlow}
       responseContent={content}
     />
     </>

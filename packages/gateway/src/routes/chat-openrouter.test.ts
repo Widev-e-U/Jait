@@ -182,23 +182,36 @@ describe("chat route OpenRouter backend selection", () => {
       messages: Array<{
         role: string;
         content: string;
-        contextFlow?: {
-          provider: string;
-          model: string;
-          rounds: Array<{ model: string; messages: Array<{ role: string; content: string }> }>;
-        };
+        hasContextFlow?: boolean;
+        hasMemoryProvenance?: boolean;
       }>;
     };
     const assistantMessage = messagesBody.messages.find((msg) => msg.role === "assistant");
-    expect(assistantMessage?.contextFlow).toMatchObject({
+    expect(assistantMessage?.hasContextFlow).toBe(true);
+    // contextFlow is lazy-loaded via the context-flow endpoint
+    const assistantIndex = messagesBody.messages.findIndex((msg) => msg.role === "assistant");
+    const cfResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages/${assistantIndex}/context-flow`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(cfResponse.statusCode).toBe(200);
+    const cfBody = cfResponse.json() as {
+      contextFlow?: {
+        provider: string;
+        model: string;
+        rounds: Array<{ model: string; messages: Array<{ role: string; content: string }> }> };
+    };
+    const contextFlow = cfBody.contextFlow;
+    expect(contextFlow).toMatchObject({
       provider: "jait",
       model: "xiaomi/mimo-v2-pro",
     });
-    expect(assistantMessage?.contextFlow?.rounds[0]?.messages[0]).toMatchObject({
+    expect(contextFlow?.rounds[0]?.messages[0]).toMatchObject({
       role: "system",
     });
-    expect(String(assistantMessage?.contextFlow?.rounds[0]?.messages[0]?.content ?? "")).toContain("Your name is Jait");
-    expect(assistantMessage?.contextFlow?.rounds[0]?.messages.at(-1)).toMatchObject({
+    expect(String(contextFlow?.rounds[0]?.messages[0]?.content ?? "")).toContain("Your name is Jait");
+    expect(contextFlow?.rounds[0]?.messages.at(-1)).toMatchObject({
       role: "user",
       content: "reply ok",
     });

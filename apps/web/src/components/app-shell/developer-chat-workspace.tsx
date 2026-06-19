@@ -307,6 +307,8 @@ export function DeveloperChatWorkspace({
     element: ReactNode
     msg: unknown
     contextFlow: unknown
+    hasContextFlow: unknown
+    hasMemoryProvenance: unknown
     displayContent: unknown
     referencedFiles: unknown
     displaySegments: unknown
@@ -340,6 +342,8 @@ export function DeveloperChatWorkspace({
         sharedKey
         + '|' + (msg === cached?.msg ? 's' : 'd')
         + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
+        + '|' + (msg.hasContextFlow === cached?.hasContextFlow ? 's' : 'd')
+        + '|' + (msg.hasMemoryProvenance === cached?.hasMemoryProvenance ? 's' : 'd')
         + '|' + (msg.displayContent === cached?.displayContent ? 's' : 'd')
         + '|' + (msg.referencedFiles === cached?.referencedFiles ? 's' : 'd')
         + '|' + (msg.displaySegments === cached?.displaySegments ? 's' : 'd')
@@ -363,6 +367,10 @@ export function DeveloperChatWorkspace({
           role={msg.role}
           content={msg.content}
           contextFlow={msg.contextFlow}
+          hasContextFlow={msg.hasContextFlow}
+          hasMemoryProvenance={msg.hasMemoryProvenance}
+          sessionId={activeSessionId}
+          authToken={token}
           displayContent={msg.displayContent}
           referencedFiles={msg.referencedFiles}
           displaySegments={msg.displaySegments}
@@ -392,6 +400,8 @@ export function DeveloperChatWorkspace({
         element,
         msg,
         contextFlow: msg.contextFlow,
+        hasContextFlow: msg.hasContextFlow,
+        hasMemoryProvenance: msg.hasMemoryProvenance,
         displayContent: msg.displayContent,
         referencedFiles: msg.referencedFiles,
         displaySegments: msg.displaySegments,
