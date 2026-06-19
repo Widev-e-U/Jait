@@ -621,6 +621,80 @@ describe("WsControlPlane", () => {
       remote.ws.close();
     });
 
+    it("proxies remote interactive terminal operations and forwards output", async () => {
+      const token = await createToken("user-terminal-stream");
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      remote.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "remote-terminal-node",
+          name: "Remote Terminal Node",
+          platform: "linux",
+          role: "desktop",
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [] },
+        },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "remote-terminal-node", name: "Remote Terminal Node", platform: "linux", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      const outputEvents: Array<{ terminalId: string; data: string; nodeId?: string }> = [];
+      plane.onRemoteTerminalOutput = (terminalId, data, nodeId) => {
+        outputEvents.push({ terminalId, data, nodeId });
+      };
+
+      const resultPromise = plane.proxyTerminalOp<{ ok: boolean; pid: number; shell: string }>(
+        "remote-terminal-node",
+        "start",
+        { terminalId: "term-remote", sessionId: "terminal-session", projectRoot: "/tmp", cols: 80, rows: 24 },
+      );
+
+      let request = await remote.collector.next();
+      while (request.type !== "terminal.op-request") {
+        expect(["node.updated", "fs.node-registered"]).toContain(request.type);
+        request = await remote.collector.next();
+      }
+      expect(request.type).toBe("terminal.op-request");
+      expect(request.payload).toMatchObject({
+        op: "start",
+        terminalId: "term-remote",
+        sessionId: "terminal-session",
+        projectRoot: "/tmp",
+        cols: 80,
+        rows: 24,
+      });
+      const requestId = request.payload.requestId as string;
+
+      remote.ws.send(JSON.stringify({
+        type: "terminal.output",
+        payload: { terminalId: "term-remote", data: "ready\\n" },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "terminal.op-response",
+        payload: { requestId, result: { ok: true, pid: 42, shell: "/bin/bash" } },
+      }));
+
+      await expect(resultPromise).resolves.toEqual({ ok: true, pid: 42, shell: "/bin/bash" });
+      expect(outputEvents).toEqual([
+        { terminalId: "term-remote", data: "ready\\n", nodeId: "remote-terminal-node" },
+      ]);
+
+      plane.sendTerminalOp("remote-terminal-node", "input", { terminalId: "term-remote", data: "pwd\\r" });
+      request = await remote.collector.next();
+      expect(request.type).toBe("terminal.op-request");
+      expect(request.payload).toMatchObject({ op: "input", terminalId: "term-remote", data: "pwd\\r" });
+      expect(request.payload.requestId).toBeUndefined();
+
+      remote.ws.close();
+    });
+
     it("reconnects with same device id without creating duplicates", async () => {
       const token = await createToken("user-reconnect");
 

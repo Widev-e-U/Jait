@@ -72,6 +72,14 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
     onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   }>();
+
+  /** Pending remote interactive terminal operation requests */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingTerminalOps = new Map<string, {
+    resolve: (value: any) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   private nodeStates = new NodeStateManager();
   private terminalStreamState = new Map<string, { nextSeq: number; streamId: string }>();
   private providerStreamState = new Map<string, { nextSeq: number; streamId: string }>();
@@ -722,6 +730,42 @@ export class WsControlPlane {
         break;
       }
 
+      // ── Remote interactive terminal responses/events ──────────────
+      case "terminal.op-response": {
+        const resp = msg.payload as {
+          requestId?: string;
+          result?: unknown;
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingTerminalOps.get(resp.requestId);
+          if (pending) {
+            this.pendingTerminalOps.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve(resp.result);
+            }
+          }
+        }
+        break;
+      }
+      case "terminal.output": {
+        const out = msg.payload as { terminalId?: string; data?: string } | undefined;
+        if (out?.terminalId && out.data && this.onRemoteTerminalOutput) {
+          this.onRemoteTerminalOutput(out.terminalId, out.data, client.deviceId ?? undefined);
+        }
+        break;
+      }
+      case "terminal.exit": {
+        const out = msg.payload as { terminalId?: string; exitCode?: number | null; signal?: number | string | null } | undefined;
+        if (out?.terminalId && this.onRemoteTerminalExit) {
+          this.onRemoteTerminalExit(out.terminalId, out.exitCode ?? null, out.signal ?? null, client.deviceId ?? undefined);
+        }
+        break;
+      }
+
       // ── Generic fs operation responses (stat, read, write, list) ──
       case "fs.op-response": {
         const resp = msg.payload as {
@@ -858,6 +902,10 @@ export class WsControlPlane {
   onScreenShareStop?: (sessionId: string) => void;
   /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
   onRemoteProviderEvent?: (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void;
+  /** Callback when a remote node emits interactive terminal output. */
+  onRemoteTerminalOutput?: (terminalId: string, data: string, nodeId?: string) => void;
+  /** Callback when a remote node reports interactive terminal exit. */
+  onRemoteTerminalExit?: (terminalId: string, exitCode: number | null, signal: number | string | null, nodeId?: string) => void;
 
   /** Called when a filesystem node (desktop/mobile) registers. */
   onFsNodeRegistered?: (node: FsNode) => void;
@@ -1138,6 +1186,59 @@ export class WsControlPlane {
       if (node.id === deviceId && !node.isGateway) return node;
     }
     return undefined;
+  }
+
+  /**
+   * Send an acknowledged interactive terminal operation to a remote node.
+   * Used for terminal creation and shutdown where callers need failure details.
+   */
+  proxyTerminalOp<T = unknown>(
+    nodeId: string,
+    op: string,
+    params: Record<string, unknown>,
+    timeoutMs = 30_000,
+  ): Promise<T> {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local terminal for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingTerminalOps.delete(requestId);
+        reject(new Error(`Terminal operation '${op}' timed out on node ${nodeId}`));
+      }, timeoutMs);
+      this.pendingTerminalOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+      this.send(client.ws, {
+        type: "terminal.op-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId, op, ...params },
+      });
+    });
+  }
+
+  /**
+   * Send a fire-and-forget interactive terminal operation to a remote node.
+   * Used for high-volume input and resize events.
+   */
+  sendTerminalOp(nodeId: string, op: string, params: Record<string, unknown>): void {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) throw new Error(`Unknown node: ${nodeId}`);
+    if (node.isGateway) throw new Error("Use local terminal for gateway node");
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      throw new Error(`Node ${nodeId} is not connected`);
+    }
+    this.send(client.ws, {
+      type: "terminal.op-request" as WsEvent["type"],
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { op, ...params },
+    });
   }
 
   /**

@@ -9,15 +9,17 @@ import {
   buildTerminalSelectionReferenceSegments,
 } from '@/lib/message-segment-builders'
 import type { MobileProjectTarget } from '@/lib/mobile-project-controls'
+import { terminalBelongsToProject } from '@/components/terminal'
 
 interface UseTerminalInteractionHandlersOptions {
   activeProjectRoot: string | null
+  activeProjectNodeId: string
   activeSessionId: string | null
   activeTerminalId: string | null
   appliedThemeMode: string
   closeProjectPanel: () => void
   closeTerminalPanel: () => void
-  createTerminal: (sessionId: string, projectRoot?: string) => Promise<{ id: string }>
+  createTerminal: (sessionId: string, projectRoot?: string, shell?: string, nodeId?: string | null) => Promise<{ id: string }>
   handleToggleEditor: () => Promise<void>
   killTerminal: (id: string) => Promise<void>
   openTerminalPanel: () => void
@@ -37,6 +39,7 @@ interface UseTerminalInteractionHandlersOptions {
 
 export function useTerminalInteractionHandlers({
   activeProjectRoot,
+  activeProjectNodeId,
   activeSessionId,
   activeTerminalId,
   appliedThemeMode,
@@ -63,10 +66,7 @@ export function useTerminalInteractionHandlers({
     const refreshed = await refresh()
     const wsRoot = activeProjectRoot
     const wsTerminals = wsRoot
-      ? refreshed.filter((terminal) => {
-          const terminalRoot = (terminal.projectRoot ?? '').replace(/\\/g, '/').toLowerCase()
-          return terminalRoot === wsRoot.replace(/\\/g, '/').toLowerCase()
-        })
+      ? refreshed.filter((terminal) => terminalBelongsToProject(terminal, wsRoot, activeProjectNodeId))
       : refreshed
 
     if (preferredTerminalId) {
@@ -87,9 +87,14 @@ export function useTerminalInteractionHandlers({
       return fallbackId
     }
 
-    const created = await createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined)
+    const created = await createTerminal(
+      activeSessionId ?? 'default',
+      activeProjectRoot ?? undefined,
+      undefined,
+      activeProjectNodeId,
+    )
     return created.id
-  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeProjectRoot])
+  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeProjectRoot, activeProjectNodeId])
 
   const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
     setCurrentView('chat')

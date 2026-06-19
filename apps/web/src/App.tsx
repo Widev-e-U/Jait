@@ -19,7 +19,7 @@ import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-worksp
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 import { MobileProjectToolbarControls } from '@/components/app-shell/mobile-project-toolbar-controls'
 import { useScreenShare } from '@/hooks/useScreenShare'
-import { useTerminals, useAvailableShells } from '@/components/terminal'
+import { useTerminals, useAvailableShells, terminalBelongsToProject } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
 import { DetachedTabView } from '@/components/project/detached-tab-view'
@@ -2575,14 +2575,12 @@ function App() {
   // Filter terminals to only show those belonging to the active project
   const projectTerminals = useMemo(() => {
     if (!activeProjectRoot) return terminals
-    return terminals.filter((t) => {
-      if (!t.projectRoot) return false
-      // Normalize path separators for comparison
-      const tRoot = t.projectRoot.replace(/\\/g, '/').toLowerCase()
-      const wRoot = activeProjectRoot.replace(/\\/g, '/').toLowerCase()
-      return tRoot === wRoot
-    })
-  }, [terminals, activeProjectRoot])
+    return terminals.filter((terminal) => terminalBelongsToProject(
+      terminal,
+      activeProjectRoot,
+      activeProject?.nodeId ?? 'gateway',
+    ))
+  }, [terminals, activeProjectRoot, activeProject?.nodeId])
 
   const {
     handleDetachTerminal,
@@ -2596,6 +2594,7 @@ function App() {
     handleToggleTerminal,
   } = useTerminalInteractionHandlers({
     activeProjectRoot,
+    activeProjectNodeId: activeProject?.nodeId ?? 'gateway',
     activeSessionId,
     activeTerminalId,
     appliedThemeMode,
@@ -3780,7 +3779,12 @@ function App() {
                 onArchitectureRenderResult={handleArchitectureRenderResult}
                 onAvailableFilesChange={handleAvailableFilesForMentionChange}
                 onCloseTerminal={closeTerminalPanel}
-                onCreateTerminal={(shell) => createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined, shell)}
+                onCreateTerminal={(shell) => createTerminal(
+                  activeSessionId ?? 'default',
+                  activeProjectRoot ?? undefined,
+                  shell,
+                  activeProject?.nodeId ?? 'gateway',
+                )}
                 onDetachTerminal={handleDetachTerminal}
                 onFileDrop={(files) => { void handleFileDrop(files) }}
                 onGenerateArchitecture={() => {

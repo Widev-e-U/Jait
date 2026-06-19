@@ -8,6 +8,7 @@ export type {
 } from "./contracts.js";
 export { SurfaceRegistry } from "./registry.js";
 export { TerminalSurface, TerminalSurfaceFactory } from "./terminal.js";
+export { RemoteTerminalSurface } from "./remote-terminal.js";
 export { FileSystemSurface, FileSystemSurfaceFactory } from "./filesystem.js";
 export { RemoteFileSystemSurface, RemoteFileSystemSurfaceFactory } from "./remote-filesystem.js";
 export {

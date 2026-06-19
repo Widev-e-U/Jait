@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
+import { TerminalSurface } from "../surfaces/terminal.js";
 
 const execAsync = promisify(exec);
 
@@ -102,6 +103,7 @@ export class PrimaryLink {
   private reconnectDelay = 1000;
   private readonly maxReconnectDelay = 30_000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly terminalSessions = new Map<string, TerminalSurface>();
   private readonly nodeId = getNodeId();
 
   constructor(private readonly opts: PrimaryLinkOptions) {}
@@ -114,6 +116,10 @@ export class PrimaryLink {
   stop(): void {
     this.stopped = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    for (const terminal of this.terminalSessions.values()) {
+      terminal.stop({ reason: "primary link stopped" }).catch(() => {});
+    }
+    this.terminalSessions.clear();
     this.ws?.close();
     this.ws = null;
   }
@@ -253,10 +259,80 @@ export class PrimaryLink {
         }
         break;
       }
+      case "terminal.op-request": {
+        const requestId = typeof payload["requestId"] === "string" ? payload["requestId"] : "";
+        const op = String(payload["op"] ?? "");
+        try {
+          const result = await this.terminalOp(op, payload);
+          if (requestId) this.send({ type: "terminal.op-response", payload: { requestId, result } });
+        } catch (err) {
+          if (requestId) this.send({ type: "terminal.op-response", payload: { requestId, error: errMsg(err) } });
+        }
+        break;
+      }
       default:
         // Provider requests are not served here; the headless node exposes
         // filesystem and terminal/tool execution to the primary gateway.
         break;
+    }
+  }
+
+  private async terminalOp(op: string, params: Record<string, unknown>): Promise<unknown> {
+    const terminalId = String(params["terminalId"] ?? "");
+    if (!terminalId) throw new Error("Missing terminalId");
+
+    switch (op) {
+      case "start": {
+        const existing = this.terminalSessions.get(terminalId);
+        if (existing) {
+          const snapshot = existing.snapshot();
+          return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null };
+        }
+        const projectRoot = resolve(String(params["projectRoot"] ?? process.cwd()));
+        const sessionId = String(params["sessionId"] ?? "default");
+        const shell = typeof params["shell"] === "string" ? params["shell"] : undefined;
+        const cols = typeof params["cols"] === "number" ? params["cols"] : 120;
+        const rows = typeof params["rows"] === "number" ? params["rows"] : 30;
+        const terminal = new TerminalSurface(terminalId, { ...(shell ? { shell } : {}), cols, rows });
+        terminal.onOutput = (data) => this.send({ type: "terminal.output", payload: { terminalId, data } });
+        terminal.onExit = (exitCode, signal) => {
+          this.terminalSessions.delete(terminalId);
+          this.send({ type: "terminal.exit", payload: { terminalId, exitCode, signal: signal ?? null } });
+        };
+        this.terminalSessions.set(terminalId, terminal);
+        try {
+          await terminal.start({ sessionId, projectRoot });
+        } catch (err) {
+          this.terminalSessions.delete(terminalId);
+          throw err;
+        }
+        const snapshot = terminal.snapshot();
+        return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null };
+      }
+      case "input": {
+        const terminal = this.terminalSessions.get(terminalId);
+        if (!terminal) return { ok: false, message: "Terminal is not running" };
+        terminal.write(String(params["data"] ?? ""));
+        return { ok: true };
+      }
+      case "resize": {
+        const terminal = this.terminalSessions.get(terminalId);
+        if (!terminal) return { ok: false, message: "Terminal is not running" };
+        const cols = typeof params["cols"] === "number" ? params["cols"] : 120;
+        const rows = typeof params["rows"] === "number" ? params["rows"] : 30;
+        terminal.resize(cols, rows);
+        return { ok: true };
+      }
+      case "stop": {
+        const terminal = this.terminalSessions.get(terminalId);
+        if (terminal) {
+          this.terminalSessions.delete(terminalId);
+          await terminal.stop({ reason: "remote terminal stopped" });
+        }
+        return { ok: true };
+      }
+      default:
+        throw new Error(`Unsupported terminal op: ${op}`);
     }
   }
 

@@ -55,6 +55,20 @@ function getTerminalTheme(): {
   }
 }
 
+function getTerminalNodeId(terminal: TerminalInfo): string {
+  return typeof terminal.metadata?.nodeId === 'string' && terminal.metadata.nodeId
+    ? terminal.metadata.nodeId
+    : 'gateway'
+}
+
+export function terminalBelongsToProject(terminal: TerminalInfo, projectRoot: string, nodeId?: string | null): boolean {
+  if (!terminal.projectRoot) return false
+  const terminalRoot = terminal.projectRoot.replace(/\\/g, '/').toLowerCase()
+  const activeRoot = projectRoot.replace(/\\/g, '/').toLowerCase()
+  const activeNodeId = nodeId && nodeId !== 'gateway' ? nodeId : 'gateway'
+  return terminalRoot === activeRoot && getTerminalNodeId(terminal) === activeNodeId
+}
+
 export async function pasteClipboardTextIntoTerminal(
   clipboard: Pick<Clipboard, 'readText'> | null | undefined,
   sendInput: (text: string) => void,
@@ -160,7 +174,7 @@ export function useTerminals(token?: string | null) {
 
   const creatingRef = useRef(false)
   const createTerminal = useCallback(
-    async (sessionId: string, projectRoot?: string, shell?: string) => {
+    async (sessionId: string, projectRoot?: string, shell?: string, nodeId?: string | null) => {
       if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, projectRoot: projectRoot ?? null, metadata: {} } as TerminalInfo)
       creatingRef.current = true
       try {
@@ -170,7 +184,12 @@ export function useTerminals(token?: string | null) {
             'Content-Type': 'application/json',
             ...authHeaders(token),
           },
-          body: JSON.stringify({ sessionId, projectRoot, ...(shell ? { shell } : {}) }),
+          body: JSON.stringify({
+            sessionId,
+            projectRoot,
+            ...(shell ? { shell } : {}),
+            ...(nodeId && nodeId !== 'gateway' ? { nodeId } : {}),
+          }),
         })
         const info = enrichTerminal((await res.json()) as TerminalInfo)
         setTerminals((prev) => [...prev, info])

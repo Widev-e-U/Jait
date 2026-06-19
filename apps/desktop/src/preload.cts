@@ -94,6 +94,10 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   toolOp: (tool: string, args: Record<string, unknown>, meta: Record<string, unknown>) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[11], tool, args, meta) as Promise<unknown>,
 
+  /** Execute an interactive terminal operation on this node */
+  terminalOp: (op: string, params: Record<string, unknown>) =>
+    ipcRenderer.invoke('desktop:terminal-op', op, params) as Promise<unknown>,
+
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>
     ipcRenderer.on(allowedIpcChannels.on[0], callback),

@@ -10,7 +10,7 @@ import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
 import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface } from "./surfaces/index.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface, RemoteTerminalSurface } from "./surfaces/index.js";
 import type { SurfaceRegistrySnapshot } from "@jait/shared";
 import { createToolRegistry } from "./tools/index.js";
 import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
@@ -907,6 +907,20 @@ async function main() {
       // ignore
     }
     return null;
+  };
+  ws.onRemoteTerminalOutput = (terminalId, data, nodeId) => {
+    const surface = surfaceRegistry.getSurface(terminalId);
+    if (!(surface instanceof RemoteTerminalSurface)) return;
+    const ownerNodeId = surface.snapshot().metadata.nodeId;
+    if (nodeId && ownerNodeId !== nodeId) return;
+    surface.ingestOutput(data);
+  };
+  ws.onRemoteTerminalExit = (terminalId, exitCode, signal, nodeId) => {
+    const surface = surfaceRegistry.getSurface(terminalId);
+    if (!(surface instanceof RemoteTerminalSurface)) return;
+    const ownerNodeId = surface.snapshot().metadata.nodeId;
+    if (nodeId && ownerNodeId !== nodeId) return;
+    surface.ingestExit(exitCode, signal);
   };
 
   // Wire consent WS ↔ ConsentManager

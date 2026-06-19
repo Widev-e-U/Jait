@@ -777,6 +777,17 @@ interface DesktopClaudePendingToolCall {
 
 const remoteProviderSessions = new Map<string, RemoteProviderSession>();
 
+interface RemoteTerminalSession {
+  terminalId: string;
+  child: ChildProcess;
+  cwd: string;
+  shell: string;
+  cols: number;
+  rows: number;
+}
+
+const remoteTerminalSessions = new Map<string, RemoteTerminalSession>();
+
 interface DesktopMcpServerRef {
   name: string;
   transport: "stdio" | "http" | "sse";
@@ -886,6 +897,48 @@ function sendProviderEvent(sessionId: string, notification: unknown) {
     sessionId,
     notification,
   });
+}
+
+function sendTerminalOutputEvent(terminalId: string, data: string) {
+  mainWindow?.webContents.send("gateway:event", {
+    type: "terminal.output-from-child",
+    terminalId,
+    data,
+  });
+}
+
+function sendTerminalExitEvent(terminalId: string, exitCode: number | null, signal: NodeJS.Signals | null) {
+  mainWindow?.webContents.send("gateway:event", {
+    type: "terminal.exit-from-child",
+    terminalId,
+    exitCode,
+    signal,
+  });
+}
+
+function defaultRemoteTerminalShell(): string {
+  if (process.platform === "win32") {
+    try {
+      execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000, windowsHide: true });
+      return "pwsh.exe";
+    } catch {
+      return "powershell.exe";
+    }
+  }
+  return process.env["SHELL"] || "/bin/bash";
+}
+
+function shouldUseRequestedShell(shell: string | undefined): shell is string {
+  if (!shell?.trim()) return false;
+  if (process.platform === "win32") return !shell.startsWith("/");
+  return !/^[A-Za-z]:[\\/]/.test(shell) && !/\.exe$/i.test(shell);
+}
+
+function remoteTerminalShellArgs(shell: string): string[] {
+  const name = path.basename(shell).toLowerCase().replace(/\.exe$/, "");
+  if (name === "pwsh" || name === "powershell") return ["-NoLogo", "-NoExit"];
+  if (name === "cmd") return [];
+  return ["-i"];
 }
 
 function remoteTurnError(notification: { method?: unknown; params?: unknown }): string | null {
@@ -2319,6 +2372,75 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
   }
 });
 
+// ── Remote interactive terminal handler ───────────────────────────────
+// Starts an interactive shell on this desktop node for gateway-owned terminal
+// surfaces. Output is forwarded to the renderer, which forwards it over WS.
+ipcMain.handle("desktop:terminal-op", async (_event, op: string, params: Record<string, unknown>) => {
+  const terminalId = String(params.terminalId ?? "");
+  if (!terminalId) throw new Error("Missing terminalId");
+
+  switch (op) {
+    case "start": {
+      if (remoteTerminalSessions.has(terminalId)) {
+        const existing = remoteTerminalSessions.get(terminalId)!;
+        return { ok: true, pid: existing.child.pid ?? null, shell: existing.shell };
+      }
+      const cwd = path.resolve(String(params.projectRoot ?? process.cwd()));
+      if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
+        throw new Error(`Project path does not exist on this node: ${cwd}`);
+      }
+      const shellName = shouldUseRequestedShell(params.shell as string | undefined)
+        ? String(params.shell)
+        : defaultRemoteTerminalShell();
+      const cols = typeof params.cols === "number" ? params.cols : 120;
+      const rows = typeof params.rows === "number" ? params.rows : 30;
+      const child = spawn(shellName, remoteTerminalShellArgs(shellName), {
+        cwd,
+        env: { ...process.env, TERM: "xterm-256color" },
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: false,
+        windowsHide: true,
+      });
+      child.stdout?.on("data", (data: Buffer) => sendTerminalOutputEvent(terminalId, data.toString()));
+      child.stderr?.on("data", (data: Buffer) => sendTerminalOutputEvent(terminalId, data.toString()));
+      child.on("exit", (code, signal) => {
+        remoteTerminalSessions.delete(terminalId);
+        sendTerminalExitEvent(terminalId, code, signal);
+      });
+      child.on("error", (err) => {
+        remoteTerminalSessions.delete(terminalId);
+        sendTerminalOutputEvent(terminalId, `\r\nRemote terminal failed: ${err.message}\r\n`);
+        sendTerminalExitEvent(terminalId, null, null);
+      });
+      remoteTerminalSessions.set(terminalId, { terminalId, child, cwd, shell: shellName, cols, rows });
+      return { ok: true, pid: child.pid ?? null, shell: shellName };
+    }
+    case "input": {
+      const session = remoteTerminalSessions.get(terminalId);
+      if (!session?.child.stdin?.writable) return { ok: false, message: "Terminal is not running" };
+      session.child.stdin.write(String(params.data ?? ""));
+      return { ok: true };
+    }
+    case "resize": {
+      const session = remoteTerminalSessions.get(terminalId);
+      if (!session) return { ok: false, message: "Terminal is not running" };
+      session.cols = typeof params.cols === "number" ? params.cols : session.cols;
+      session.rows = typeof params.rows === "number" ? params.rows : session.rows;
+      return { ok: true };
+    }
+    case "stop": {
+      const session = remoteTerminalSessions.get(terminalId);
+      if (session) {
+        remoteTerminalSessions.delete(terminalId);
+        session.child.kill();
+      }
+      return { ok: true };
+    }
+    default:
+      throw new Error(`Unknown terminal operation: ${op}`);
+  }
+});
+
 // ── Remote tool execution handler ─────────────────────────────────────
 // Executes Jait tool calls on behalf of the gateway when the project
 // lives on this desktop node. Supports terminal.run (via child_process),
@@ -2644,6 +2766,10 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  for (const session of remoteTerminalSessions.values()) {
+    try { session.child.kill(); } catch { /* already exited */ }
+  }
+  remoteTerminalSessions.clear();
 });
 
 app.on("window-all-closed", () => {

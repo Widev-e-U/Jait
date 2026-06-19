@@ -274,6 +274,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'tool.op-request') {
         // Gateway is asking us to execute a Jait tool locally (terminal.run, file.write, etc.)
         void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; projectRoot?: string })
+      } else if (msg.type === 'terminal.op-request') {
+        // Gateway is asking us to run an interactive terminal operation on this node.
+        void handleTerminalOpRequest(msg.payload as { requestId?: string; op: string; [key: string]: unknown })
       } else if (msg.type === 'notification') {
         // Cross-platform notification from the gateway
         void handleGatewayNotification(msg.payload as {
@@ -518,6 +521,36 @@ export function useUICommands(opts: UseUICommandsOptions) {
     }
   }, [])
 
+  const handleTerminalOpRequest = useCallback(async (payload: { requestId?: string; op: string; [key: string]: unknown }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId, op, ...params } = payload
+    try {
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.terminalOp) {
+        const result = await window.jaitDesktop.terminalOp(op, params)
+        if (requestId && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'terminal.op-response',
+            payload: { requestId, result },
+          }))
+        }
+      } else {
+        throw new Error('Interactive terminals are not supported on this platform')
+      }
+    } catch (err) {
+      if (requestId && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'terminal.op-response',
+          payload: {
+            requestId,
+            error: err instanceof Error ? err.message : 'Terminal operation failed',
+          },
+        }))
+      }
+    }
+  }, [])
+
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.
   useEffect(() => {
@@ -679,6 +712,22 @@ export function useUICommands(opts: UseUICommandsOptions) {
               sessionId: data.sessionId,
               event: data.notification,
             },
+          }))
+        }
+      } else if (data?.type === 'terminal.output-from-child') {
+        const ws = wsRef.current
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'terminal.output',
+            payload: { terminalId: data.terminalId, data: data.data },
+          }))
+        }
+      } else if (data?.type === 'terminal.exit-from-child') {
+        const ws = wsRef.current
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'terminal.exit',
+            payload: { terminalId: data.terminalId, exitCode: data.exitCode, signal: data.signal },
           }))
         }
       }

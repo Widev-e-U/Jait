@@ -11,6 +11,7 @@ import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
+import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -81,12 +82,30 @@ export function registerTerminalRoutes(
     const cols = typeof body["cols"] === "number" ? body["cols"] : 120;
     const rows = typeof body["rows"] === "number" ? body["rows"] : 30;
     const shell = typeof body["shell"] === "string" ? body["shell"] : undefined;
+    const nodeId = typeof body["nodeId"] === "string" ? body["nodeId"].trim() : "";
+    const remoteNodeId = nodeId && nodeId !== "gateway" ? nodeId : "";
 
     const termId = `term-${uuidv7()}`;
 
     try {
-      let surface: TerminalSurface;
-      if (shell) {
+      let surface: TerminalSurface | RemoteTerminalSurface;
+      if (remoteNodeId) {
+        if (!ws) {
+          return reply.status(503).send({
+            error: "REMOTE_NODE_UNAVAILABLE",
+            details: "Remote terminals require the WebSocket control plane",
+          });
+        }
+        surface = new RemoteTerminalSurface(termId, ws, remoteNodeId, { ...(shell ? { shell } : {}), cols, rows });
+        surfaceRegistry.registerInstance(termId, surface);
+        try {
+          await surface.start({ sessionId, projectRoot, nodeId: remoteNodeId });
+          surfaceRegistry.onSurfaceStarted?.(termId, surface);
+        } catch (err) {
+          surfaceRegistry.unregister(termId);
+          throw err;
+        }
+      } else if (shell) {
         // Create terminal with a specific shell, bypassing the default factory
         surface = new TerminalSurface(termId, { shell });
         surfaceRegistry.registerInstance(termId, surface);
@@ -107,7 +126,7 @@ export function registerTerminalRoutes(
         actionId: uuidv7(),
         actionType: "terminal.create",
         toolName: "terminal.stream",
-        inputs: { termId, projectRoot },
+        inputs: { termId, projectRoot, nodeId: remoteNodeId || "gateway" },
         status: "executed",
       });
 
