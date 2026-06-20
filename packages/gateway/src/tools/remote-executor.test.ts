@@ -113,6 +113,39 @@ describe("createRemoteToolExecutor", () => {
     expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
+  it("runs new/gateway-intrinsic tools locally by default (allow-list semantics)", async () => {
+    // Every tool NOT in REMOTE_EXECUTABLE_TOOLS — including newly added ones
+    // like the `jait` meta-tool, `web`, `agent`, `todo` — must run on the
+    // gateway even when a remote node is bound. This is the core guarantee:
+    // a new tool never accidentally gets proxied (and fail) on a node.
+    const ws = createMockWs();
+    const localExecutor = vi.fn(async () => ({ ok: true, message: "local" }));
+    const context = createToolContext();
+    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+
+    for (const toolName of ["jait", "web", "agent", "todo", "voice.speak", "some.brand.new.tool"]) {
+      await execute(toolName, {}, context);
+    }
+    expect(localExecutor).toHaveBeenCalledTimes(6);
+    expect(ws.proxyToolOp).not.toHaveBeenCalled();
+  });
+
+  it("proxies file.read (canonical name) to the remote node", async () => {
+    const ws = createMockWs();
+    const localExecutor = vi.fn(async () => ({ ok: true, message: "local result" }));
+    const context = createToolContext();
+    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+
+    await execute("file.read", { path: "/remote/project/src/main.ts" }, context);
+    expect(ws.proxyToolOp).toHaveBeenCalledWith(
+      remoteNode.id,
+      "file.read",
+      { path: "/remote/project/src/main.ts" },
+      expect.objectContaining({ sessionId: context.sessionId, projectRoot: context.projectRoot }),
+    );
+    expect(localExecutor).not.toHaveBeenCalled();
+  });
+
   it("proxies non-local tools to the selected remote node", async () => {
     const onOutputChunk = vi.fn();
     const ws = createMockWs();

@@ -39,7 +39,8 @@ export class VoiceService {
   }
 
   transcribe(input: { transcript?: string; audioBase64?: string; sessionId: string }): TranscriptionResult {
-    const text = (input.transcript ?? this.decodeAudioAsText(input.audioBase64) ?? "").trim();
+    const raw = (input.transcript ?? this.decodeAudioAsText(input.audioBase64) ?? "").trim();
+    const text = VoiceService.normalizeTranscript(raw);
     const wakeWordDetected = /\bhey\s+jait\b/i.test(text);
     const state = this.getState(input.sessionId);
 
@@ -98,16 +99,28 @@ export class VoiceService {
   async transcribeViaWhisper(input: {
     audioBase64: string;
     whisperUrl: string;
+    prompt?: string;
   }): Promise<string | null> {
     const baseUrl = input.whisperUrl.replace(/\/+$/, "");
     const url = `${baseUrl}/transcribe`;
     const audioBuffer = Buffer.from(input.audioBase64, "base64");
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "audio/wav" },
-      body: audioBuffer,
-    });
+    const prompt = input.prompt?.trim();
+    const res = prompt
+      ? await fetch(url, {
+          method: "POST",
+          body: (() => {
+            const form = new FormData();
+            form.append("audio", new Blob([audioBuffer], { type: "audio/wav" }), "audio.wav");
+            form.append("prompt", prompt);
+            return form;
+          })(),
+        })
+      : await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "audio/wav" },
+          body: audioBuffer,
+        });
 
     if (!res.ok) return null;
     const data = (await res.json()) as { text?: string };
@@ -119,12 +132,14 @@ export class VoiceService {
     apiKey: string;
     baseUrl: string;
     model: string;
+    prompt?: string;
   }): Promise<string | null> {
     const url = `${input.baseUrl.replace(/\/+$/, "")}/audio/transcriptions`;
     const form = new FormData();
     const audioBuffer = Buffer.from(input.audioBase64, "base64");
     form.append("file", new Blob([audioBuffer], { type: "audio/wav" }), "audio.wav");
     form.append("model", input.model);
+    if (input.prompt?.trim()) form.append("prompt", input.prompt.trim());
 
     const res = await fetch(url, {
       method: "POST",
@@ -199,5 +214,19 @@ export class VoiceService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Correct common speech-to-text mishearings of the proper noun "Jait".
+   * Even with a transcription prompt, models sometimes emit "Jade", "Jaid",
+   * "Jate" etc. This normalises them so downstream wake-word detection and the
+   * LLM see the correct spelling.
+   */
+  static normalizeTranscript(text: string): string {
+    if (!text) return text;
+    // Whole-word, case-insensitive replacements. Preserve leading capital.
+    return text.replace(/\b(jade|jaid|jate|jayd)\b/gi, (match) =>
+      match === match.toUpperCase() ? "JAIT" : "Jait",
+    );
   }
 }

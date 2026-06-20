@@ -18,6 +18,8 @@ import type { ProfileName } from "./tool-profiles.js";
 import type { ToolPermission } from "./tool-permissions.js";
 import { requiresConsent, isCommandAllowed, resolveToolPermission } from "./tool-permissions.js";
 
+const COMMAND_TOOL_NAMES = new Set(["terminal.run", "terminal.stream", "execute", "jait.terminal"]);
+
 export interface ConsentAwareExecutorOptions {
   toolRegistry: ToolRegistry;
   consentManager: ConsentManager;
@@ -127,10 +129,13 @@ export class ConsentAwareExecutor {
     }
 
     // ── Command allow/deny check (for terminal tools) ──
-    if (toolName === "terminal.run" || toolName === "terminal.stream") {
+    if (COMMAND_TOOL_NAMES.has(toolName)) {
       const command = (input as Record<string, unknown>)?.command;
       if (typeof command === "string") {
-        const cmdCheck = isCommandAllowed(command, permission);
+        const commandPermission = toolName === "execute" || toolName === "jait.terminal"
+          ? (this.permissions.get("terminal.run") ?? permission)
+          : permission;
+        const cmdCheck = isCommandAllowed(command, commandPermission);
         if (!cmdCheck.allowed) {
           return {
             ok: false,
@@ -206,6 +211,8 @@ export class ConsentAwareExecutor {
 
     switch (toolName) {
       case "terminal.run":
+      case "execute":
+      case "jait.terminal":
         return `Run command: ${inp?.command ?? "(unknown)"}`;
       case "terminal.stream":
         return "Open a new terminal session";
@@ -233,6 +240,8 @@ export class ConsentAwareExecutor {
 
     switch (toolName) {
       case "terminal.run":
+      case "execute":
+      case "jait.terminal":
         return { command: inp?.command, timeout: inp?.timeout };
       case "file.write":
         return {

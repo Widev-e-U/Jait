@@ -14,6 +14,7 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { VoiceClientMessage, VoiceServerMessage } from "@jait/shared";
 import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps } from "./tools.js";
+import { VoiceService } from "../voice/service.js";
 
 type RuntimeVoiceClientMessage =
   | VoiceClientMessage
@@ -96,6 +97,9 @@ export class VoiceAssistantService {
 
     console.log(`[voice-assistant] ${user.username} connected (key source: ${userApiKeys.OPENAI_API_KEY ? "user" : "server"})`);
 
+    // Per-user STT prompt override (falls back to server config default).
+    const sttPrompt = userApiKeys.STT_PROMPT?.trim() || this.deps.config.sttPrompt;
+
     // ── Connect to OpenAI Realtime API ───────────────────────
     const model = this.deps.config.realtimeModel;
     const openaiUrl = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
@@ -147,7 +151,7 @@ export class VoiceAssistantService {
       openaiReady = true;
       console.log(`[voice-assistant] OpenAI Realtime connected (model: ${model})`);
 
-      openaiWs.send(JSON.stringify(this.buildSessionUpdate(user.username)));
+      openaiWs.send(JSON.stringify(this.buildSessionUpdate(user.username, sttPrompt)));
       send(clientWs, { type: "session.started" });
       send(clientWs, { type: "status", status: "listening" });
     });
@@ -200,7 +204,7 @@ export class VoiceAssistantService {
 
         // ── Transcription ────────────────────────────────────
         case "conversation.item.input_audio_transcription.completed":
-          send(clientWs, { type: "transcript", role: "user", text: event.transcript ?? "", final: true });
+          send(clientWs, { type: "transcript", role: "user", text: VoiceService.normalizeTranscript(event.transcript ?? ""), final: true });
           break;
 
         case "response.audio_transcript.delta":
@@ -433,7 +437,7 @@ export class VoiceAssistantService {
     });
   }
 
-  private buildSessionUpdate(username: string) {
+  private buildSessionUpdate(username: string, sttPrompt: string) {
     return {
       type: "session.update",
       session: {
@@ -443,6 +447,11 @@ export class VoiceAssistantService {
         turn_detection: this.buildTurnDetection(),
         tools: getVoiceToolSchemas(),
         tool_choice: "auto",
+        // Bias speech-to-text toward domain proper nouns (e.g. "Jait", not "Jade").
+        input_audio_transcription: {
+          model: "gpt-4o-transcribe",
+          prompt: sttPrompt,
+        },
       },
     };
   }

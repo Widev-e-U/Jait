@@ -49,7 +49,7 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
   { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
-  { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE'] },
+  { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE', 'STT_PROMPT'] },
 ]
 
 const API_KEY_FIELDS = API_FIELD_GROUPS.flatMap((g) => g.fields) as unknown as readonly string[]
@@ -959,6 +959,11 @@ export function SettingsPage({
                   </p>
                 </div>
               )}
+              <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                <p className="text-xs text-muted-foreground">
+                  Recognition hint: set <code className="rounded bg-muted px-1 py-0.5 text-2xs">STT_PROMPT</code> in the API keys below to bias transcription toward proper nouns. This fixes mishearings like "Jade" for "Jait". Applies to the voice assistant and GPT/Whisper transcription. Defaults to a built-in Jait hint.
+                </p>
+              </div>
             </Card>
           )}
 

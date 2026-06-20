@@ -65,6 +65,12 @@ export interface AppConfig {
   /** Voice used by the real-time assistant (alloy, echo, shimmer, etc.). */
   realtimeVoice: string;
   /**
+   * Hint string passed to the speech-to-text (STT) layer to bias recognition
+   * toward domain-specific proper nouns. This fixes common mishearings such as
+   * "Jait" being transcribed as "Jade". Override with env JAIT_STT_PROMPT.
+   */
+  sttPrompt: string;
+  /**
    * URL of an upstream/primary gateway to link to as a filesystem node.
    * When set, this gateway opens an outbound WS to the primary, registers
    * itself as a browseable fs-node, and serves browse/roots/op requests from
@@ -142,6 +148,9 @@ export function loadConfig(): AppConfig {
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
     realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
+    sttPrompt:
+      process.env["JAIT_STT_PROMPT"]?.trim() ??
+      "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
     primaryGateway,
     primaryToken: process.env["JAIT_PRIMARY_TOKEN"]?.trim() ?? "",
     nodeName: process.env["JAIT_NODE_NAME"]?.trim() ?? "",

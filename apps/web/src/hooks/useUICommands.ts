@@ -19,13 +19,23 @@ import { triggerSystemNotification } from '@/lib/system-notifications'
 
 const WS_URL = getWsUrl()
 
+// Tools this desktop node can execute remotely. MUST stay in sync with
+// REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts —
+// the gateway only proxies tools in that allow-list, and every entry there
+// must be implemented by apps/desktop/src/electron-main.ts (desktop:tool-op).
 const DESKTOP_NODE_TOOLS = [
   'terminal.run',
+  'jait.terminal',
+  'execute',
+  'read',
   'file.read',
+  'edit',
   'file.write',
   'file.patch',
   'file.list',
   'file.stat',
+  'image.view',
+  'search',
   'file.search',
   'os.query',
 ]

@@ -138,6 +138,38 @@ describe("ConsentAwareExecutor consent-sensitive tools", () => {
   );
 });
 
+describe("ConsentAwareExecutor command policy", () => {
+  it.each([
+    "terminal.run",
+    "execute",
+    "jait.terminal",
+  ])("blocks destructive git working-tree commands for %s", async (toolName) => {
+    const toolRegistry = new ToolRegistry();
+    const registryExecute = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "should-not-run",
+    }));
+    toolRegistry.register(createMockTool(toolName, registryExecute));
+
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions: getProfile("coding"),
+      sessionApprovals: new Set<string>(),
+      profileName: "coding",
+    });
+
+    const result = await executor.execute(toolName, { command: "git checkout -- src/AppLayout.tsx" }, context);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("git checkout -- *");
+    expect(consentManager.pendingCount).toBe(0);
+    expect(registryExecute).not.toHaveBeenCalled();
+  });
+});
+
 describe("ConsentAwareExecutor delegate routing", () => {
   it("routes actual execution through the delegate instead of the tool registry", async () => {
     const toolRegistry = new ToolRegistry();

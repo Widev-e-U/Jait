@@ -48,16 +48,25 @@ export interface PrimaryLinkOptions {
   providers?: string[];
 }
 
+// Every tool this headless node can execute remotely. MUST stay in sync with
+// REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts —
+// the gateway only proxies tools in that allow-list, and every entry there
+// must be implemented here (and in the desktop app's electron-main.ts).
 const NODE_TOOLS = [
   "terminal.run",
   "jait.terminal",
   "execute",
+  "read",
   "file.read",
+  "edit",
   "file.write",
   "file.patch",
   "file.list",
   "file.stat",
+  "image.view",
+  "search",
   "file.search",
+  "os.query",
 ] as const;
 
 function detectPlatform(): FsPlatform {
@@ -458,8 +467,12 @@ export class PrimaryLink {
       case "jait.terminal":
       case "execute":
         return this.runCommand(args, projectRoot);
+      // Aliases: the simplified core tool names map to the same handlers as
+      // their canonical dotted counterparts (see REMOTE_EXECUTABLE_TOOLS).
+      case "read":
       case "file.read":
         return { ok: true, message: "File read", data: await this.fsOp("read", args) };
+      case "edit":
       case "file.write":
         return { ok: true, message: "File written", data: await this.fsOp("write", args) };
       case "file.patch": {
@@ -472,17 +485,46 @@ export class PrimaryLink {
         return { ok: true, message: "Directory listed", data: await this.fsOp("readdir", args) };
       case "file.stat":
         return { ok: true, message: "File stat", data: await this.fsOp("stat", args) };
+      case "image.view": {
+        // Read a file (typically an image) and return base64 for the gateway.
+        const filePath = resolve(String(args["path"] ?? ""));
+        const content = await readFile(filePath);
+        return {
+          ok: true,
+          message: `Read ${content.length} bytes from ${filePath}`,
+          data: { path: filePath, base64: content.toString("base64"), size: content.length },
+        };
+      }
+      case "search":
       case "file.search":
         return {
           ok: true,
           message: "Search completed",
           data: await this.searchProject(
             resolve(String(args["path"] ?? projectRoot ?? homedir())),
-            String(args["query"] ?? ""),
+            String(args["query"] ?? args["pattern"] ?? ""),
             args["mode"] === "content" ? "content" : "files",
             Math.min(Math.max(Number(args["limit"]) || 50, 1), 200),
           ),
         };
+      case "os.query": {
+        const os = await import("node:os");
+        return {
+          ok: true,
+          message: "OS query",
+          data: {
+            platform: os.platform(),
+            arch: os.arch(),
+            hostname: os.hostname(),
+            cpus: os.cpus().length,
+            totalMemory: os.totalmem(),
+            freeMemory: os.freemem(),
+            uptime: os.uptime(),
+            homedir: os.homedir(),
+            tmpdir: os.tmpdir(),
+          },
+        };
+      }
       default:
         throw new Error(`Unsupported tool on node: ${tool}`);
     }

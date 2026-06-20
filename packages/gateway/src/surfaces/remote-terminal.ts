@@ -90,7 +90,7 @@ export class RemoteTerminalSurface implements Surface {
     if (this._state === "stopped") return;
     this._setState("stopping");
     try {
-      await this.ws.proxyTerminalOp(this.nodeId, "stop", { terminalId: this.id }, 5_000);
+      this.ws.sendTerminalOp(this.nodeId, "stop", { terminalId: this.id });
     } catch {
       // The owning node may already be gone. The gateway surface should still close.
     }

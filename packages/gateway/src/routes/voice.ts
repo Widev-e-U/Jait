@@ -82,7 +82,7 @@ export function registerVoiceRoutes(
       }
 
       try {
-        const text = await voice.transcribeViaWhisper({ audioBase64, whisperUrl });
+        const text = await voice.transcribeViaWhisper({ audioBase64, whisperUrl, prompt: settings.apiKeys["STT_PROMPT"]?.trim() || config.sttPrompt });
         if (!text) {
           return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: "No text returned from Faster Whisper" });
         }
@@ -108,7 +108,7 @@ export function registerVoiceRoutes(
       }
 
       try {
-        const text = await voice.transcribeViaGpt({ audioBase64, apiKey, baseUrl, model });
+        const text = await voice.transcribeViaGpt({ audioBase64, apiKey, baseUrl, model, prompt: settings.apiKeys["STT_PROMPT"]?.trim() || config.sttPrompt });
         if (!text) {
           return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: "No text returned from GPT transcription" });
         }

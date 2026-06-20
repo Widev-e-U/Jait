@@ -327,10 +327,20 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     term.loadAddon(linksAddon)
     term.open(containerRef.current)
 
+    const pendingInput: string[] = []
+    const flushPendingInput = () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      while (pendingInput.length > 0) {
+        const data = pendingInput.shift()
+        if (data != null) ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
+      }
+    }
     const sendTerminalInput = (data: string) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
+        return
       }
+      pendingInput.push(data)
     }
     let pasteShortcutAt = 0
     let pasteEventAt = 0
@@ -413,6 +423,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       ws.onopen = () => {
         reconnectDelay = 1000 // reset on successful connect
         ws!.send(JSON.stringify({ type: 'terminal.subscribe', terminalId }))
+        flushPendingInput()
       }
 
       ws.onmessage = (e) => {

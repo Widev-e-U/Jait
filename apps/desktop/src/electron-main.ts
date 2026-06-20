@@ -8,6 +8,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 const { autoUpdater } = electronUpdater;
@@ -26,6 +27,7 @@ if (process.platform === "win32") {
 app.setName("Jait");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 // ── Configuration ─────────────────────────────────────────────────────
 const GATEWAY_URL = process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000";
@@ -765,6 +767,8 @@ interface RemoteProviderSession {
   mcpConfigPath?: string;
   stopRequested: boolean;
   pendingToolCalls: DesktopClaudePendingToolCall[];
+  /** Captured stderr from the child process, for surfacing real errors on EPIPE. */
+  stderrBuffer?: string;
 }
 
 interface DesktopClaudePendingToolCall {
@@ -777,9 +781,31 @@ interface DesktopClaudePendingToolCall {
 
 const remoteProviderSessions = new Map<string, RemoteProviderSession>();
 
+interface DesktopPty {
+  pid: number;
+  onData(cb: (data: string) => void): void;
+  onExit(cb: (event: { exitCode: number; signal?: number }) => void): void;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(signal?: string): void;
+}
+
+function loadNodePty() {
+  return require("node-pty") as {
+    spawn: (shell: string, args: string[], options: {
+      name: string;
+      cols: number;
+      rows: number;
+      cwd: string;
+      env: Record<string, string | undefined>;
+      useConpty?: boolean;
+    }) => DesktopPty;
+  };
+}
+
 interface RemoteTerminalSession {
   terminalId: string;
-  child: ChildProcess;
+  pty: DesktopPty;
   cwd: string;
   shell: string;
   cols: number;
@@ -870,7 +896,11 @@ function rpcSend(session: RemoteProviderSession, method: string, params?: unknow
         if (err) {
           session.pendingRpc.delete(id);
           clearTimeout(timer);
-          reject(new Error(`Write error: ${err.message}`));
+          const stderrTail = session.stderrBuffer?.trim().slice(-800);
+          reject(new Error(
+            `Write error: ${err.message} (${method})` +
+            (stderrTail ? ` — provider stderr:\n${stderrTail}` : ""),
+          ));
         }
       });
     } catch (e) {
@@ -907,7 +937,7 @@ function sendTerminalOutputEvent(terminalId: string, data: string) {
   });
 }
 
-function sendTerminalExitEvent(terminalId: string, exitCode: number | null, signal: NodeJS.Signals | null) {
+function sendTerminalExitEvent(terminalId: string, exitCode: number | null, signal: number | string | null) {
   mainWindow?.webContents.send("gateway:event", {
     type: "terminal.exit-from-child",
     terminalId,
@@ -1333,6 +1363,16 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       // Suppress EPIPE errors when child exits before we finish writing
       child.stdin?.on("error", () => {/* ignore broken pipe */});
 
+      // Capture stderr so a child that exits early (auth failure, missing binary,
+      // bad config) surfaces a real message instead of a bare "write EPIPE".
+      sess.stderrBuffer = "";
+      child.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString();
+        sess.stderrBuffer = (sess.stderrBuffer ?? "") + text;
+        const trimmed = text.trim();
+        if (trimmed) console.error(`[codex-remote:${sessionId}] stderr: ${trimmed}`);
+      });
+
       // Parse NDJSON from stdout
       const rl = createInterface({ input: child.stdout! });
       rl.on("line", (line) => {
@@ -1465,6 +1505,14 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
 
       // Suppress EPIPE errors on temp process
       child.stdin?.on("error", () => {/* ignore broken pipe */});
+
+      tmpSess.stderrBuffer = "";
+      child.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString();
+        tmpSess.stderrBuffer = (tmpSess.stderrBuffer ?? "") + text;
+        const trimmed = text.trim();
+        if (trimmed) console.error(`[codex-remote:list-models] stderr: ${trimmed}`);
+      });
 
       const rl = createInterface({ input: child.stdout! });
       rl.on("line", (line) => {
@@ -2383,7 +2431,7 @@ ipcMain.handle("desktop:terminal-op", async (_event, op: string, params: Record<
     case "start": {
       if (remoteTerminalSessions.has(terminalId)) {
         const existing = remoteTerminalSessions.get(terminalId)!;
-        return { ok: true, pid: existing.child.pid ?? null, shell: existing.shell };
+        return { ok: true, pid: existing.pty.pid ?? null, shell: existing.shell };
       }
       const cwd = path.resolve(String(params.projectRoot ?? process.cwd()));
       if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
@@ -2394,31 +2442,27 @@ ipcMain.handle("desktop:terminal-op", async (_event, op: string, params: Record<
         : defaultRemoteTerminalShell();
       const cols = typeof params.cols === "number" ? params.cols : 120;
       const rows = typeof params.rows === "number" ? params.rows : 30;
-      const child = spawn(shellName, remoteTerminalShellArgs(shellName), {
+      const isGitBash = /Git[/\\].*bash\.exe$/i.test(shellName);
+      const pty = loadNodePty().spawn(shellName, remoteTerminalShellArgs(shellName), {
+        name: "xterm-256color",
+        cols,
+        rows,
         cwd,
         env: { ...process.env, TERM: "xterm-256color" },
-        stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
-        windowsHide: true,
+        ...(process.platform === "win32" ? { useConpty: !isGitBash } : {}),
       });
-      child.stdout?.on("data", (data: Buffer) => sendTerminalOutputEvent(terminalId, data.toString()));
-      child.stderr?.on("data", (data: Buffer) => sendTerminalOutputEvent(terminalId, data.toString()));
-      child.on("exit", (code, signal) => {
+      pty.onData((data) => sendTerminalOutputEvent(terminalId, data));
+      pty.onExit((event) => {
         remoteTerminalSessions.delete(terminalId);
-        sendTerminalExitEvent(terminalId, code, signal);
+        sendTerminalExitEvent(terminalId, event.exitCode, event.signal ?? null);
       });
-      child.on("error", (err) => {
-        remoteTerminalSessions.delete(terminalId);
-        sendTerminalOutputEvent(terminalId, `\r\nRemote terminal failed: ${err.message}\r\n`);
-        sendTerminalExitEvent(terminalId, null, null);
-      });
-      remoteTerminalSessions.set(terminalId, { terminalId, child, cwd, shell: shellName, cols, rows });
-      return { ok: true, pid: child.pid ?? null, shell: shellName };
+      remoteTerminalSessions.set(terminalId, { terminalId, pty, cwd, shell: shellName, cols, rows });
+      return { ok: true, pid: pty.pid ?? null, shell: shellName };
     }
     case "input": {
       const session = remoteTerminalSessions.get(terminalId);
-      if (!session?.child.stdin?.writable) return { ok: false, message: "Terminal is not running" };
-      session.child.stdin.write(String(params.data ?? ""));
+      if (!session) return { ok: false, message: "Terminal is not running" };
+      session.pty.write(String(params.data ?? ""));
       return { ok: true };
     }
     case "resize": {
@@ -2426,13 +2470,14 @@ ipcMain.handle("desktop:terminal-op", async (_event, op: string, params: Record<
       if (!session) return { ok: false, message: "Terminal is not running" };
       session.cols = typeof params.cols === "number" ? params.cols : session.cols;
       session.rows = typeof params.rows === "number" ? params.rows : session.rows;
+      session.pty.resize(session.cols, session.rows);
       return { ok: true };
     }
     case "stop": {
       const session = remoteTerminalSessions.get(terminalId);
       if (session) {
         remoteTerminalSessions.delete(terminalId);
-        session.child.kill();
+        session.pty.kill();
       }
       return { ok: true };
     }
@@ -2459,8 +2504,12 @@ ipcMain.handle("desktop:tool-op", async (
 
   switch (tool) {
     // ── Terminal execution ──────────────────────────────────────────
+    // Aliases: the core "execute" tool, canonical "terminal.run", and the
+    // "jait.terminal" standard tool all run a one-shot command on the node.
+    // (See REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts.)
     case "execute":
-    case "terminal.run": {
+    case "terminal.run":
+    case "jait.terminal": {
       const command = String(args.command ?? "");
       if (!command) return { ok: false, message: "No command provided" };
       const timeout = typeof args.timeout === "number" ? args.timeout : 30_000;
@@ -2644,6 +2693,21 @@ ipcMain.handle("desktop:tool-op", async (
       }
     }
 
+    // ── Image view (read a binary file as base64) ────────────────
+    case "image.view": {
+      const filePath = resolve(String(args.path ?? ""));
+      try {
+        const buffer = await readFile(filePath);
+        return {
+          ok: true,
+          message: `Read ${buffer.length} bytes from ${basename(filePath)}`,
+          data: { path: filePath, base64: buffer.toString("base64"), size: buffer.length },
+        };
+      } catch (err) {
+        return { ok: false, message: `Failed to read image: ${(err as Error).message}` };
+      }
+    }
+
     default:
       return { ok: false, message: `Tool '${tool}' is not supported for remote execution on this node` };
   }
@@ -2767,7 +2831,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   isQuitting = true;
   for (const session of remoteTerminalSessions.values()) {
-    try { session.child.kill(); } catch { /* already exited */ }
+    try { session.pty.kill(); } catch { /* already exited */ }
   }
   remoteTerminalSessions.clear();
 });

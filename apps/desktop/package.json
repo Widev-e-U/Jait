@@ -1,6 +1,6 @@
 {
   "name": "@jait/desktop",
-  "version": "0.1.71",
+  "version": "0.1.72",
   "description": "Jait AI desktop app",
   "author": "JakobWl",
   "homepage": "https://github.com/Widev-e-U/Jait",
@@ -23,7 +23,8 @@
     "@jait/api-client": "workspace:*",
     "@jait/shared": "workspace:*",
     "@jait/ui-shared": "workspace:*",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

@@ -10,38 +10,61 @@
  * and built-in tools (terminal.run, file.write, etc.) need to operate
  * on the same machine where the project lives.
  *
- * Tools that are gateway-local by nature (e.g. surfaces.list, cron.*,
- * gateway.status) are always executed locally regardless of the project
- * binding.
+ * ── Which tools run remotely? ─────────────────────────────────────────
+ * Only tools that genuinely operate on the project's filesystem are
+ * proxied to the remote node — i.e. terminal execution, file I/O, and
+ * project search. These tools *must* run on the same machine as the
+ * project, otherwise they'd touch the gateway's disk instead.
+ *
+ * Everything else (memory, cron, surfaces, web, agent, todo, jait
+ * meta-tool, gateway.status, etc.) is gateway-local by nature and is
+ * always executed on the gateway regardless of where the project lives.
+ *
+ * This is an *allow-list* (not a deny-list) so that every new tool that
+ * gets added to the registry defaults to running on the gateway — the only
+ * way a tool becomes remotely executable is to be explicitly listed here
+ * AND implemented by every remote node handler (primary-link.ts and the
+ * Electron desktop main process).
  */
 
 import type { ToolResult, ToolContext } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 
-/** Tools that always run on the gateway regardless of project location */
-const GATEWAY_LOCAL_TOOLS = new Set([
-  "surfaces.list",
-  "surfaces.start",
-  "surfaces.stop",
-  "cron.add",
-  "cron.list",
-  "cron.update",
-  "cron.remove",
-  "gateway.status",
-  "tools.search",
-  "tools.list",
-  "memory.read",
-  "memory.write",
-  "memory.list",
-  "memory.update",
-  "memory.search",
-  "session.search",
-  "voice.say",
-  "voice.listen",
-  "screen.share",
-  "screen.stop",
-  "notification.send",
+/**
+ * Tools that operate on the project's filesystem and therefore must be
+ * proxied to the remote node where the project lives.
+ *
+ * Each entry here MUST be implemented by both remote node handlers:
+ *  - `packages/gateway/src/services/primary-link.ts`  (headless node)
+ *  - `apps/desktop/src/electron-main.ts`               (desktop app)
+ *
+ * Adding a tool here without implementing it on the nodes will cause a
+ * "Tool 'X' is not supported for remote execution" error at runtime.
+ *
+ * Aliases: both the simplified core names (read/edit/execute/search) and
+ * the canonical dotted names (file.read/terminal.run/…) are listed so the
+ * same tool works regardless of which name the LLM emits.
+ */
+const REMOTE_EXECUTABLE_TOOLS = new Set<string>([
+  // ── Terminal ──
+  "execute",
+  "terminal.run",
+  "jait.terminal",
+  // ── Filesystem ──
+  "read",
+  "file.read",
+  "edit",
+  "file.write",
+  "file.patch",
+  "file.list",
+  "file.stat",
+  "image.view",
+  // ── Search ──
+  "search",
+  "file.search",
+  // ── OS (runs on the project's machine) ──
+  "os.query",
 ]);
 
 export interface RemoteToolExecutorOptions {
@@ -103,8 +126,13 @@ export function createRemoteToolExecutor(
   const { ws, localExecutor } = options;
 
   return async (toolName, input, context, execOptions) => {
-    // Always execute gateway-local tools locally
-    if (!remoteNodeId || GATEWAY_LOCAL_TOOLS.has(toolName)) {
+    // Only proxy tools that genuinely operate on the project's filesystem.
+    // Everything else (memory, cron, web, agent, todo, jait meta-tool, …)
+    // is gateway-local and runs on the gateway regardless of project location.
+    // This allow-list also means every newly added tool defaults to local
+    // execution — a tool only becomes remotely executable when explicitly
+    // listed AND implemented by every remote node handler.
+    if (!remoteNodeId || !REMOTE_EXECUTABLE_TOOLS.has(toolName)) {
       return localExecutor(toolName, input, context, execOptions);
     }
 
