@@ -4,10 +4,11 @@ export function normalizeTodoStateValue(value: unknown): TodoItem[] {
   return Array.isArray(value) ? value as TodoItem[] : []
 }
 
-export function mergeHydratedTodoState(current: TodoItem[], incoming: unknown): TodoItem[] {
-  const normalizedIncoming = normalizeTodoStateValue(incoming)
-  if (current.length > 0 && normalizedIncoming.length === 0) return current
-  return normalizedIncoming
+export function mergeHydratedTodoState(_current: TodoItem[], incoming: unknown): TodoItem[] {
+  // Todos are session-bound: the incoming persisted state is authoritative.
+  // Returning `current` when incoming is empty would leak the previous
+  // session's todos into a newly-selected chat that has none.
+  return normalizeTodoStateValue(incoming)
 }
 
 export function toPersistedTodoState(items: TodoItem[]): TodoItem[] | null {

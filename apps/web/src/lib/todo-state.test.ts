@@ -30,12 +30,13 @@ describe('toPersistedTodoState', () => {
 })
 
 describe('mergeHydratedTodoState', () => {
-  it('keeps a streamed todo list when a stale hydrate payload is empty', () => {
+  it('clears todos when the hydrate payload is empty (session-bound, no leak)', () => {
     expect(mergeHydratedTodoState([
       { id: 1, title: 'Trace bug', status: 'in-progress' },
-    ], null)).toEqual([
+    ], null)).toEqual([])
+    expect(mergeHydratedTodoState([
       { id: 1, title: 'Trace bug', status: 'in-progress' },
-    ])
+    ], undefined)).toEqual([])
   })
 
   it('applies hydrated todos when they are present', () => {
