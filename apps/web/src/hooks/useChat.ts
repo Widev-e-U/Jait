@@ -427,6 +427,10 @@ export function useChat(
       return
     }
 
+    // Todos are session-bound: clear the previous session's list immediately
+    // so it doesn't leak into the newly selected chat.
+    setTodoList([])
+
     let cancelled = false
     setState(prev => ({
       ...prev,
