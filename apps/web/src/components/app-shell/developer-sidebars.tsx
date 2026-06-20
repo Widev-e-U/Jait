@@ -116,44 +116,48 @@ export function DeveloperSidebars({
             </TooltipTrigger>
             <TooltipContent side="right">Terminal</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant={showProject ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={onToggleEditor} aria-label="Editor">
-                <Code className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Editor</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={previewOpen ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                aria-label="Preview"
-                disabled={authLoading || projectsLoading}
-                onClick={onTogglePreview}
-              >
-                <Globe className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Preview</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showArchitecture ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                disabled={authLoading || projectsLoading}
-                aria-label="Architecture"
-                onClick={onToggleArchitecture}
-              >
-                <Boxes className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Architecture</TooltipContent>
-          </Tooltip>
+          {activeProject && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant={showProject ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={onToggleEditor} aria-label="Editor">
+                    <Code className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Editor</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={previewOpen ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    aria-label="Preview"
+                    disabled={authLoading || projectsLoading}
+                    onClick={onTogglePreview}
+                  >
+                    <Globe className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Preview</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showArchitecture ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    disabled={authLoading || projectsLoading}
+                    aria-label="Architecture"
+                    onClick={onToggleArchitecture}
+                  >
+                    <Boxes className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Architecture</TooltipContent>
+              </Tooltip>
+            </>
+          )}
           <div className="flex-1" />
           <Tooltip>
             <TooltipTrigger asChild>
