@@ -7,6 +7,7 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
+import { normalizeTodoStateValue } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds, normalizeMessageSegments } from '@/lib/stream-segments'
@@ -827,8 +828,7 @@ export function useChat(
                 }
               } else if (data.type === 'todo_list') {
                 // AI updated the task list
-                const items = data.items as TodoItem[]
-                setTodoList(items)
+                setTodoList(normalizeTodoStateValue(data.items))
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
               } else if (data.type === 'context_flow' && assistantId) {
@@ -1394,8 +1394,7 @@ export function useChat(
               updateMessage({ content: assistantContent, segments: [...segments] })
             } else if (data.type === 'todo_list') {
               // AI updated the task list
-              const items = data.items as TodoItem[]
-              setTodoList(items)
+              setTodoList(normalizeTodoStateValue(data.items))
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
             } else if (data.type === 'context_flow') {

@@ -39,7 +39,8 @@ export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay
   }
 }
 
-export function TodoList({ items, className, onClear }: TodoListProps) {
+export function TodoList({ items: rawItems, className, onClear }: TodoListProps) {
+  const items = Array.isArray(rawItems) ? rawItems : []
   const [expanded, setExpanded] = useState(false)
 
   const allCompleted = useMemo(() => areAllTodoItemsCompleted(items), [items])
