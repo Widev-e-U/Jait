@@ -1383,7 +1383,7 @@ export function useChat(
               const plan: PlanData = {
                 plan_id: data.plan_id as string,
                 summary: data.summary as string,
-                actions: (data.actions as PlanAction[]) ?? [],
+                actions: Array.isArray(data.actions) ? data.actions as PlanAction[] : [],
               }
               setPendingPlan(plan)
             } else if (data.type === 'mode_notice') {

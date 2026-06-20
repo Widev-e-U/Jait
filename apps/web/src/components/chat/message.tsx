@@ -483,8 +483,8 @@ function MessageInner({
   attachments: attachmentsProp,
   thinking,
   thinkingDuration,
-  toolCalls,
-  segments,
+  toolCalls: toolCallsProp,
+  segments: segmentsProp,
   isStreaming,
   compact,
   preferLlmUi,
@@ -502,6 +502,13 @@ function MessageInner({
 }: MessageProps) {
   const isUser = role === 'user'
   const confirm = useConfirmDialog()
+
+  // ── Defensive normalization ──────────────────────────────────────────
+  // Upstream message hydration (esp. legacy/persisted sessions) can deliver
+  // these as non-array values. Several render paths call .filter/.map/.some on
+  // them, which throws "h.filter is not a function". Coerce to arrays once.
+  const segments = Array.isArray(segmentsProp) ? segmentsProp : []
+  const toolCalls = Array.isArray(toolCallsProp) ? toolCallsProp : []
 
   // ── Lazy-loaded contextFlow ──────────────────────────────────────────
   // Snapshots only carry lightweight `hasContextFlow` / `hasMemoryProvenance`

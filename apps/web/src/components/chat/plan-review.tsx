@@ -102,6 +102,7 @@ function ActionItem({ action, expanded, onToggle }: {
 
 export function PlanReview({ plan, onApprove, onReject, isExecuting, className }: PlanReviewProps) {
   const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set())
+  const actions = Array.isArray(plan?.actions) ? plan.actions : []
 
   const toggleAction = (id: string) => {
     setExpandedActions((prev) => {
@@ -112,9 +113,9 @@ export function PlanReview({ plan, onApprove, onReject, isExecuting, className }
     })
   }
 
-  const pendingCount = plan.actions.filter((a) => a.status === 'pending').length
-  const executedCount = plan.actions.filter((a) => a.status === 'executed').length
-  const failedCount = plan.actions.filter((a) => a.status === 'failed').length
+  const pendingCount = actions.filter((a) => a.status === 'pending').length
+  const executedCount = actions.filter((a) => a.status === 'executed').length
+  const failedCount = actions.filter((a) => a.status === 'failed').length
   const isComplete = pendingCount === 0
 
   return (
@@ -125,7 +126,7 @@ export function PlanReview({ plan, onApprove, onReject, isExecuting, className }
             <ClipboardList className="h-4 w-4" />
             Plan
             <Badge variant="secondary" className="text-2xs px-1.5 py-0">
-              {plan.actions.length} step{plan.actions.length !== 1 ? 's' : ''}
+              {actions.length} step{actions.length !== 1 ? 's' : ''}
             </Badge>
           </h3>
           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{plan.summary}</p>
@@ -138,7 +139,7 @@ export function PlanReview({ plan, onApprove, onReject, isExecuting, className }
       </div>
 
       <div className="space-y-1.5">
-        {plan.actions.map((action) => (
+        {actions.map((action) => (
           <ActionItem
             key={action.id}
             action={action}

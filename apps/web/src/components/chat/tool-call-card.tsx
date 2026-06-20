@@ -725,7 +725,12 @@ export function getCallSummary(
     return action || 'thread.control'
   }
   if (normalized === 'todo') {
-    const list = args.todoList as Array<{ title: string; status: string }> | undefined
+    const rawList = args.todoList
+    const list = Array.isArray(rawList)
+      ? rawList as Array<{ title: string; status: string }>
+      : Array.isArray((rawList as { items?: unknown })?.items)
+        ? (rawList as { items: Array<{ title: string; status: string }> }).items
+        : undefined
     if (!list) return 'Track tasks'
     const inProgress = list.filter(t => t.status === 'in-progress')
     if (inProgress.length) return truncate(inProgress[0].title, 60)
