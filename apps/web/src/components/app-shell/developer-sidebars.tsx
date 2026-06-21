@@ -89,9 +89,6 @@ export function DeveloperSidebars({
 }: DeveloperSidebarsProps) {
   return (
     <>
-      {showSidebar && isMobile && (
-        <div className="fixed inset-0 z-20" onClick={onToggleSidebar} />
-      )}
       {!isMobile && (
         <aside className="flex w-12 shrink-0 flex-col items-center gap-2 border-r bg-background px-1 py-2">
           <Tooltip>
@@ -177,12 +174,12 @@ export function DeveloperSidebars({
         </aside>
       )}
 
-      {showSidebar && (
+      {showSidebar && !isMobile && (
         <aside
           ref={sidebarRef}
           tabIndex={-1}
           onBlur={onBlur}
-          className={`overflow-hidden outline-none ${isMobile ? 'fixed right-[3.25rem] top-1/2 z-50 h-[min(28rem,80vh)] w-[min(20rem,calc(100vw-5rem))] -translate-y-1/2 rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}
+          className="w-64 overflow-hidden border-r outline-none shrink-0"
         >
           <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
             <SessionSelector

@@ -3,6 +3,7 @@ import { AuthOverlays } from '@/components/auth/auth-overlays'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+import { SessionSelector } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem, ToolCallInfo } from '@/components/chat'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
@@ -17,7 +18,7 @@ import { DeveloperSidebars } from '@/components/app-shell/developer-sidebars'
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
-import { MobileProjectToolbarControls } from '@/components/app-shell/mobile-project-toolbar-controls'
+
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { useTerminals, useAvailableShells, terminalBelongsToProject } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
@@ -43,7 +44,7 @@ import { useProjectFileActions } from '@/hooks/useProjectFileActions'
 import { useSessionStateSync } from '@/hooks/useSessionStateSync'
 import { useTerminalInteractionHandlers } from '@/hooks/useTerminalInteractionHandlers'
 import { FloatingScreenShareWindow } from '@/components/screen-share/floating-screen-share-window'
-import { MobileFloatingToolbar } from '@/components/mobile/mobile-floating-toolbar'
+import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSkills } from '@/hooks/useSkills'
@@ -3433,7 +3434,7 @@ function App() {
     showProjectEditor,
     treeTab: mobileTreeTab,
   }), [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree])
-  const mobileProjectMenuActive = showSidebar || activeProjectId !== null
+
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -3451,21 +3452,6 @@ function App() {
         flex: '1 1 0%',
         minWidth: 0,
       }
-  const mobileFooterToolbarControls = isMobile && currentView === 'chat' ? (
-    <MobileProjectToolbarControls
-      activeProjectId={activeProjectId}
-      changedFilesCount={changedFiles.length}
-      isManagerThread={viewMode === 'manager' && Boolean(automation.selectedThread)}
-      mobileProjectControlState={mobileProjectControlState}
-      mobileProjectMenuActive={mobileProjectMenuActive}
-      showProject={showProject}
-      showSidebar={showSidebar}
-      showTerminal={showTerminal}
-      onChatClick={() => { closeProjectPanel(); closeTerminalPanel(); setShowSidebar(false); setShowMobileToolbar(false) }}
-      onToggleSidebar={() => setShowSidebar(s => !s)}
-      onProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
-    />
-  ) : null
   const developerComposerControlRow = viewMode === 'developer' ? (
     <DeveloperComposerControlRow
       activeProjectId={activeProjectId}
@@ -3571,6 +3557,7 @@ function App() {
               isMaximized={isMaximized}
               isMobile={isMobile}
               model={model}
+              onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
               provider={provider}
               remainingPrompts={remainingPrompts}
@@ -3989,10 +3976,77 @@ function App() {
               </div>
             )}
 
-            {isMobile && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && currentView === 'chat' && (
-              <MobileFloatingToolbar open={showMobileToolbar} onOpenChange={setShowMobileToolbar}>
-                {mobileFooterToolbarControls}
-              </MobileFloatingToolbar>
+            {isMobile && currentView === 'chat' && (
+              <MobileNavDrawer
+                open={showMobileToolbar}
+                onClose={() => setShowMobileToolbar(false)}
+                currentView={currentView}
+                onNavigate={setCurrentView}
+                showSidebar={showSidebar}
+                onToggleSidebar={() => setShowSidebar((s) => !s)}
+                sessionSelector={
+                  <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
+                    <SessionSelector
+                      projects={projects}
+                      personalSessions={personalSessions}
+                      activeProjectId={activeProjectId}
+                      activeSessionId={activeSessionId}
+                      loading={projectsLoading}
+                      hasMoreProjects={hasMoreProjects}
+                      showFewerProjects={projects.length > projectListLimit}
+                      onSelectProject={handleSwitchProject}
+                      onSelectPersonalSession={(sessionId) => { setShowSidebar(false); setShowMobileToolbar(false); switchSession(null, sessionId) }}
+                      onNewPersonalSession={() => { setShowSidebar(false); setShowMobileToolbar(false); void createSession(null) }}
+                      onCreateProject={handleCreateProject}
+                      onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
+                      onChangeDirectory={handleChangeDirectory}
+                      onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
+                      onShowMore={showMoreProjects}
+                      onShowFewer={showFewerProjects}
+                      sessionInfo={sessionInfo}
+                      nodes={fsNodes}
+                      repositories={automation.repositories}
+                    />
+                  </ErrorBoundary>
+                }
+                showProjectTools={viewMode === 'developer' || (viewMode === 'manager' && Boolean(automation.selectedThread))}
+                activeProjectId={activeProjectId}
+                mobileProjectControlState={mobileProjectControlState}
+                onProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
+                changedFilesCount={changedFiles.length}
+                previewOpen={previewOpen}
+                showArchitecture={showArchitecture}
+                showDebugPanel={showDebugPanel}
+                showProject={showProject}
+                authLoading={authLoading}
+                projectsLoading={projectsLoading}
+                onToggleArchitecture={() => {
+                  if (showArchitecture) {
+                    projectRef.current?.closeArchitectureTab()
+                    setArchitectureRequest(null)
+                    setShowArchitecture(false)
+                  } else {
+                    setShowArchitecture(true)
+                    openArchitectureInProject()
+                  }
+                }}
+                onToggleDebugPanel={() => setShowDebugPanel((d) => !d)}
+                onTogglePreview={() => {
+                  if (previewOpen) {
+                    closeDevPreviewPanel()
+                  } else {
+                    const nextTarget = projectPreviewState.target
+                      ?? devPreviewTarget?.trim()
+                      ?? savedDevPreview?.target?.trim()
+                      ?? null
+                    if (routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)) {
+                      return
+                    }
+                    openDevPreviewPanel()
+                  }
+                }}
+                onOpenSettings={() => setCurrentView('settings')}
+              />
             )}
           </>
         )}

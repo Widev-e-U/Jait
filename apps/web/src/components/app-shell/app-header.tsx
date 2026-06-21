@@ -5,6 +5,7 @@ import {
   Calendar,
   Cast,
   EllipsisVertical,
+  Menu,
   ListChecks,
   LogOut,
   Mail,
@@ -55,6 +56,7 @@ interface AppHeaderProps {
   isMaximized: any
   isMobile: any
   model: any
+  onOpenMobileNav: any
   openScreenSharePanel: any
   provider: any
   remainingPrompts: any
@@ -98,6 +100,7 @@ export function AppHeader(props: AppHeaderProps) {
     isMaximized,
     isMobile,
     model,
+    onOpenMobileNav,
     openScreenSharePanel,
     provider,
     remainingPrompts,
@@ -137,6 +140,11 @@ export function AppHeader(props: AppHeaderProps) {
             >
           {/* Left: Logo + mobile mic */}
           <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            {isMobile && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
             <JaitIcon size={20} className="shrink-0" />
             <VoiceMicButtonMobile {...voiceControlProps} />
             {isMobile && currentView === 'chat' && activeManagerThreads.length > 0 && (
