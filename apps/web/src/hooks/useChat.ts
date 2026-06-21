@@ -95,6 +95,15 @@ export function shouldOpenResumeStream(params: {
   return true
 }
 
+export function shouldOwnDirectChatStream(params: {
+  sessionId: string | null
+  directStreamSessionId: string | null
+  hasActiveDirectStream: boolean
+}): boolean {
+  if (!params.sessionId) return true
+  return !(params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId)
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -1116,22 +1125,34 @@ export function useChat(
     setTodoList([])
 
     const controller = new AbortController()
-    abortControllerRef.current = controller
-    directStreamSessionRef.current = requestSessionId
-    if (streamAbortRef.current) {
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
+    const ownsDirectStream = shouldOwnDirectChatStream({
+      sessionId: requestSessionId,
+      directStreamSessionId: directStreamSessionRef.current,
+      hasActiveDirectStream: !!abortControllerRef.current,
+    })
+    if (ownsDirectStream) {
+      abortControllerRef.current = controller
+      directStreamSessionRef.current = requestSessionId
+      if (streamAbortRef.current) {
+        streamAbortRef.current.abort()
+        streamAbortRef.current = null
+      }
     }
-    const requestVersion = ++requestVersionRef.current
+    const requestVersion = ownsDirectStream ? ++requestVersionRef.current : requestVersionRef.current
+    const finishOwnedDirectStream = () => {
+      if (ownsDirectStream) finishDirectStream(requestSessionId, controller)
+    }
 
-    // Guard: only update state if we're still on the same session
+    // Guard: only update state if we are still on the same session/version.
+    // Concurrent submits that are expected to queue do not take ownership of the
+    // direct stream, so they cannot stale the in-flight answer.
     const isStale = () =>
       prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
     let pendingMessageUpdates: Partial<ChatMessage> | null = null
-      let pendingMessageFrame: number | null = null
-      let pendingMessageTimeout: ReturnType<typeof setTimeout> | null = null
-      let lastMessageFlushAt = 0
-      const STREAM_UPDATE_MIN_INTERVAL_MS = 50
+    let pendingMessageFrame: number | null = null
+    let pendingMessageTimeout: ReturnType<typeof setTimeout> | null = null
+    let lastMessageFlushAt = 0
+    const STREAM_UPDATE_MIN_INTERVAL_MS = 50
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -1162,7 +1183,7 @@ export function useChat(
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
           setState(prev => ({
             ...prev,
-            isLoading: false,
+            isLoading: ownsDirectStream ? false : prev.isLoading,
             error: data.detail,
             messages: prev.messages.filter(m =>
               options.queued
@@ -1171,6 +1192,7 @@ export function useChat(
             ),
           }))
           if (data.detail === 'login_required') notifyLoginRequired?.()
+          finishOwnedDirectStream()
           return 'retry'
         }
       }
@@ -1455,7 +1477,7 @@ export function useChat(
               if (!isStale()) {
                 setState(prev => ({
                   ...prev,
-                  isLoading: false,
+                  isLoading: ownsDirectStream ? false : prev.isLoading,
                   messages: prev.messages.filter(m => m.id !== assistantId && m.id !== userMessage.id),
                 }))
                 if (queued?.id && typeof queued.content === 'string') {
@@ -1470,7 +1492,7 @@ export function useChat(
                       } as QueuedChatMessage])
                 }
               }
-              finishDirectStream(requestSessionId, controller)
+              finishOwnedDirectStream()
               return 'queued'
             } else if (data.type === 'done') {
               completed = true
@@ -1484,7 +1506,7 @@ export function useChat(
                   ...prev,
                   promptCount: data.prompt_count,
                   remainingPrompts: data.remaining_prompts,
-                  isLoading: false,
+                  isLoading: ownsDirectStream ? false : prev.isLoading,
                   hitMaxRounds: shouldShowContinueAfterDone(data),
                   messages: isEmptyAssistant
                     ? prev.messages.filter(m => m.id !== assistantId)
@@ -1512,7 +1534,7 @@ export function useChat(
                   ),
                 }))
               }
-              finishDirectStream(requestSessionId, controller)
+              finishOwnedDirectStream()
               setCompletionCount((prev) => prev + 1)
               return 'sent'
             } else if (data.type === 'error') {
@@ -1532,7 +1554,7 @@ export function useChat(
         const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0
         setState(prev => ({
           ...prev,
-          isLoading: false,
+          isLoading: ownsDirectStream ? false : prev.isLoading,
           messages: isEmptyAssistant
             ? prev.messages.filter(m => m.id !== assistantId)
             : prev.messages.map(m =>
@@ -1571,11 +1593,11 @@ export function useChat(
       }
       pendingMessageUpdates = null
       if (error instanceof Error && error.name === 'AbortError') {
-        finishDirectStream(requestSessionId, controller)
+        finishOwnedDirectStream()
         if (!isStale()) {
           setState(prev => ({
             ...prev,
-            isLoading: false,
+            isLoading: ownsDirectStream ? false : prev.isLoading,
             messages: prev.messages
               .filter(m =>
                 options.queued
@@ -1605,7 +1627,7 @@ export function useChat(
         }
         return 'aborted'
       }
-      finishDirectStream(requestSessionId, controller)
+      finishOwnedDirectStream()
       if (!isStale()) {
         const transientConnectionError = isTransientConnectionError(error)
         const errorMessage = transientConnectionError
@@ -1622,7 +1644,7 @@ export function useChat(
             )
           return {
             ...prev,
-            isLoading: false,
+            isLoading: ownsDirectStream ? false : prev.isLoading,
             error: renderedInline ? null : errorMessage,
             messages: transientConnectionError || options.queued
               ? prev.messages.filter(m =>
@@ -1657,7 +1679,7 @@ export function useChat(
       }
       return 'retry'
     }
-    finishDirectStream(requestSessionId, controller)
+    finishOwnedDirectStream()
     return 'sent'
   }, [authToken, clearUnfinishedTodoList, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])
 

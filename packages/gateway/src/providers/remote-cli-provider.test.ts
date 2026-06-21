@@ -5,6 +5,7 @@ import type { ProviderEvent } from "./contracts.js";
 
 function createMockWs(options: { sendTurnResult?: unknown } = {}) {
   let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
+  let remoteHandlerSetCount = 0;
 
   const ws = {
     findNodeByDeviceId: vi.fn(() => ({
@@ -25,6 +26,7 @@ function createMockWs(options: { sendTurnResult?: unknown } = {}) {
       return remoteHandler;
     },
     set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined) {
+      remoteHandlerSetCount += 1;
       remoteHandler = fn;
     },
   } as unknown as WsControlPlane;
@@ -34,10 +36,34 @@ function createMockWs(options: { sendTurnResult?: unknown } = {}) {
     fireRemoteEvent(sessionId: string, event: unknown) {
       remoteHandler?.(sessionId, event);
     },
+    getRemoteHandlerSetCount() {
+      return remoteHandlerSetCount;
+    },
   };
 }
 
 describe("RemoteCliProvider", () => {
+  it("installs one shared remote event dispatcher per websocket", async () => {
+    const { ws, getRemoteHandlerSetCount } = createMockWs();
+    const first = new RemoteCliProvider(ws, "node-1", "claude-code");
+    const second = new RemoteCliProvider(ws, "node-1", "claude-code");
+
+    expect(getRemoteHandlerSetCount()).toBe(0);
+
+    await first.startSession({
+      threadId: "thread-1",
+      workingDirectory: process.cwd(),
+      mode: "full-access",
+    });
+    await second.startSession({
+      threadId: "thread-2",
+      workingDirectory: process.cwd(),
+      mode: "full-access",
+    });
+
+    expect(getRemoteHandlerSetCount()).toBe(1);
+  });
+
   it("forwards direct provider events from remote Claude sessions", async () => {
     const { ws, fireRemoteEvent } = createMockWs();
     const provider = new RemoteCliProvider(ws, "node-1", "claude-code");

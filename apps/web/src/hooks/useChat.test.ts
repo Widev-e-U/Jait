@@ -5,6 +5,7 @@ import {
   getVisibleChangedFiles,
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
+  shouldOwnDirectChatStream,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
 } from '@/hooks/useChat'
@@ -144,6 +145,29 @@ describe('shouldOpenResumeStream', () => {
       sessionId: 'session-1',
       activeResumeSessionId: 'session-2',
       hasActiveResumeStream: true,
+      directStreamSessionId: null,
+      hasActiveDirectStream: false,
+    })).toBe(true)
+  })
+})
+
+describe('shouldOwnDirectChatStream', () => {
+  it('does not let a concurrent submit for the same session take over the active stream', () => {
+    expect(shouldOwnDirectChatStream({
+      sessionId: 'session-1',
+      directStreamSessionId: 'session-1',
+      hasActiveDirectStream: true,
+    })).toBe(false)
+  })
+
+  it('allows ownership when no direct stream is active for that session', () => {
+    expect(shouldOwnDirectChatStream({
+      sessionId: 'session-1',
+      directStreamSessionId: 'session-2',
+      hasActiveDirectStream: true,
+    })).toBe(true)
+    expect(shouldOwnDirectChatStream({
+      sessionId: 'session-1',
       directStreamSessionId: null,
       hasActiveDirectStream: false,
     })).toBe(true)

@@ -27,12 +27,58 @@ import { uuidv7 } from "../db/uuidv7.js";
 import { mapCodexNotification } from "./codex-event-mapper.js";
 import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
 
+type RemoteProviderEventMetadata = { streamId: string; seq: number };
+type RemoteProviderEventHandler = (
+  sessionId: string,
+  event: unknown,
+  metadata?: RemoteProviderEventMetadata,
+) => void;
+
+interface RemoteProviderEventDispatcher {
+  previous?: RemoteProviderEventHandler;
+  listeners: Set<RemoteProviderEventHandler>;
+}
+
+const remoteProviderEventDispatchers = new WeakMap<WsControlPlane, RemoteProviderEventDispatcher>();
+
+function registerRemoteProviderEventListener(
+  ws: WsControlPlane,
+  listener: RemoteProviderEventHandler,
+): () => void {
+  let dispatcher = remoteProviderEventDispatchers.get(ws);
+  if (!dispatcher) {
+    const previous = ws.onRemoteProviderEvent;
+    dispatcher = {
+      previous,
+      listeners: new Set(),
+    };
+    ws.onRemoteProviderEvent = (sessionId, event, metadata) => {
+      previous?.(sessionId, event, metadata);
+      const currentDispatcher = remoteProviderEventDispatchers.get(ws);
+      if (!currentDispatcher) return;
+      for (const currentListener of Array.from(currentDispatcher.listeners)) {
+        currentListener(sessionId, event, metadata);
+      }
+    };
+    remoteProviderEventDispatchers.set(ws, dispatcher);
+  }
+
+  dispatcher.listeners.add(listener);
+  return () => {
+    dispatcher?.listeners.delete(listener);
+  };
+}
+
 export class RemoteCliProvider implements CliProviderAdapter {
   readonly id: ProviderId;
   readonly info: ProviderInfo;
 
   private emitter = new EventEmitter();
   private sessions = new Map<string, ProviderSession>();
+  private remoteEventUnsubscribe: (() => void) | null = null;
+  private readonly remoteEventListener: RemoteProviderEventHandler = (sessionId, event) => {
+    this.handleRemoteEvent(sessionId, event);
+  };
 
   constructor(
     private ws: WsControlPlane,
@@ -47,14 +93,6 @@ export class RemoteCliProvider implements CliProviderAdapter {
       available: true,
       modes: ["full-access", "supervised"],
       auth: NO_PROVIDER_AUTH,
-    };
-
-    // Listen for events forwarded from the remote node
-    const prevHandler = ws.onRemoteProviderEvent;
-    ws.onRemoteProviderEvent = (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => {
-      // Call previous handler if present (another RemoteCliProvider)
-      if (prevHandler) prevHandler(sessionId, event, metadata);
-      this.handleRemoteEvent(sessionId, event);
     };
   }
 
@@ -118,6 +156,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
     };
 
     this.sessions.set(sessionId, session);
+    this.ensureRemoteEventSubscription();
 
     try {
       const result = await this.ws.proxyProviderOp<{
@@ -146,6 +185,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       session.status = "error";
       session.error = err instanceof Error ? err.message : "Remote session start failed";
       this.sessions.delete(sessionId);
+      this.detachRemoteEventSubscriptionIfIdle();
       this.emit({ type: "session.error", sessionId, error: session.error });
       throw err;
     }
@@ -223,6 +263,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       session.completedAt = new Date().toISOString();
     }
     this.sessions.delete(sessionId);
+    this.detachRemoteEventSubscriptionIfIdle();
   }
 
   onEvent(handler: (event: ProviderEvent) => void): () => void {
@@ -232,6 +273,17 @@ export class RemoteCliProvider implements CliProviderAdapter {
 
   private emit(event: ProviderEvent): void {
     this.emitter.emit("event", event);
+  }
+
+  private ensureRemoteEventSubscription(): void {
+    if (this.remoteEventUnsubscribe) return;
+    this.remoteEventUnsubscribe = registerRemoteProviderEventListener(this.ws, this.remoteEventListener);
+  }
+
+  private detachRemoteEventSubscriptionIfIdle(): void {
+    if (this.sessions.size > 0 || !this.remoteEventUnsubscribe) return;
+    this.remoteEventUnsubscribe();
+    this.remoteEventUnsubscribe = null;
   }
 
   /**
@@ -246,6 +298,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       this.emit(directEvent);
       if (directEvent.type === "session.completed" || directEvent.type === "session.error") {
         this.sessions.delete(sessionId);
+        this.detachRemoteEventSubscriptionIfIdle();
       }
       return;
     }
@@ -260,6 +313,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       this.emit(evt);
       if (evt.type === "session.completed") {
         this.sessions.delete(sessionId);
+        this.detachRemoteEventSubscriptionIfIdle();
       }
     }
   }
