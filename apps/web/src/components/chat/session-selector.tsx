@@ -142,7 +142,7 @@ export function SessionSelector({
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCreateProject}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md p-1" onClick={onCreateProject}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
@@ -354,7 +354,7 @@ export function SessionSelector({
               {onNewPersonalSession && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="ml-1 h-5 w-5" onClick={onNewPersonalSession}>
+                    <Button variant="ghost" size="icon" className="ml-1 h-6 w-6 rounded-md p-1" onClick={onNewPersonalSession}>
                       <Plus className="h-3 w-3" />
                     </Button>
                   </TooltipTrigger>
