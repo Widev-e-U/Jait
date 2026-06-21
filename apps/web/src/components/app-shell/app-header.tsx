@@ -140,11 +140,6 @@ export function AppHeader(props: AppHeaderProps) {
             >
           {/* Left: Logo + mobile mic */}
           <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            {isMobile && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
-                <Menu className="h-4 w-4" />
-              </Button>
-            )}
             <JaitIcon size={20} className="shrink-0" />
             <VoiceMicButtonMobile {...voiceControlProps} />
             {isMobile && currentView === 'chat' && activeManagerThreads.length > 0 && (
@@ -399,54 +394,9 @@ export function AppHeader(props: AppHeaderProps) {
               </Tooltip>
             )}
 
-            {/* Mobile overflow menu + avatar group */}
+            {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0.5 shrink-0">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0 rounded-lg">
-                      <EllipsisVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-                    <DropdownMenuItem onSelect={() => setCurrentView('chat')}>
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Chat
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Jobs
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('todo')}>
-                      <ListChecks className="h-4 w-4 mr-2" />
-                      Todo
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('email')}>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
-                      <Brain className="h-4 w-4 mr-2" />
-                      Memory
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setCurrentView('network')}>
-                      <Wifi className="h-4 w-4 mr-2" />
-                      Network
-                    </DropdownMenuItem>
-                    {viewMode === 'developer' && (
-                      <DropdownMenuItem onSelect={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}>
-                        <Cast className="h-4 w-4 mr-2" />
-                        {showScreenShare ? 'Hide Share' : 'Screen Share'}
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
                 {isAuthenticated ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -498,6 +448,9 @@ export function AppHeader(props: AppHeaderProps) {
                     Sign in
                   </Button>
                 )}
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
+                  <Menu className="h-4 w-4" />
+                </Button>
               </div>
             ) : (
             <>

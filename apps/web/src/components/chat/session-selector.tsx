@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
+import { ChevronRight, Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -94,7 +94,11 @@ export function SessionSelector({
     [nodes],
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [projectsCollapsed, setProjectsCollapsed] = useState(true)
+  const [personalChatsCollapsed, setPersonalChatsCollapsed] = useState(true)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const showProjectsSection = normalizedSearchQuery.length > 0 || !projectsCollapsed
+  const showPersonalChatsSection = normalizedSearchQuery.length > 0 || !personalChatsCollapsed
 
   const filteredProjects = useMemo(() => {
     if (!normalizedSearchQuery) return projects
@@ -154,9 +158,16 @@ export function SessionSelector({
         <>
           {/* ── Top half: Projects ──────────────────────────── */}
           <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
-            <div className="flex h-7 shrink-0 items-center justify-between px-3">
+            <button
+              type="button"
+              className="flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30"
+              onClick={() => setProjectsCollapsed((prev) => !prev)}
+              aria-expanded={showProjectsSection}
+            >
               <span className="text-2xs font-medium text-muted-foreground">Projects</span>
-            </div>
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showProjectsSection ? 'rotate-90' : ''}`} />
+            </button>
+            {showProjectsSection && (
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
                 {projects.length === 0 && (
@@ -325,16 +336,25 @@ export function SessionSelector({
                 )}
               </div>
             </ScrollArea>
+            )}
           </div>
 
           {/* ── Bottom half: Personal chats ───────────────────── */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex h-7 shrink-0 items-center justify-between px-3">
-              <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+            <div className="flex h-8 shrink-0 items-center justify-between px-3">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center justify-between text-left transition-colors hover:text-foreground"
+                onClick={() => setPersonalChatsCollapsed((prev) => !prev)}
+                aria-expanded={showPersonalChatsSection}
+              >
+                <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${showPersonalChatsSection ? 'rotate-90' : ''}`} />
+              </button>
               {onNewPersonalSession && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onNewPersonalSession}>
+                    <Button variant="ghost" size="icon" className="ml-1 h-5 w-5" onClick={onNewPersonalSession}>
                       <Plus className="h-3 w-3" />
                     </Button>
                   </TooltipTrigger>
@@ -342,6 +362,7 @@ export function SessionSelector({
                 </Tooltip>
               )}
             </div>
+            {showPersonalChatsSection && (
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
                 {personalSessions.length === 0 && (
@@ -386,6 +407,7 @@ export function SessionSelector({
                 })}
               </div>
             </ScrollArea>
+            )}
           </div>
         </>
       )}

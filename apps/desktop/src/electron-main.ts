@@ -771,6 +771,12 @@ interface RemoteProviderSession {
   stderrBuffer?: string;
 }
 
+function appendProviderStderr(error: Error, session: Pick<RemoteProviderSession, "stderrBuffer">): Error {
+  const stderrTail = session.stderrBuffer?.trim().slice(-800);
+  if (!stderrTail || error.message.includes("provider stderr:")) return error;
+  return new Error(`${error.message} — provider stderr:\n${stderrTail}`);
+}
+
 interface DesktopClaudePendingToolCall {
   callId: string;
   rawTool: string;
@@ -896,17 +902,14 @@ function rpcSend(session: RemoteProviderSession, method: string, params?: unknow
         if (err) {
           session.pendingRpc.delete(id);
           clearTimeout(timer);
-          const stderrTail = session.stderrBuffer?.trim().slice(-800);
-          reject(new Error(
-            `Write error: ${err.message} (${method})` +
-            (stderrTail ? ` — provider stderr:\n${stderrTail}` : ""),
-          ));
+          reject(appendProviderStderr(new Error(`Write error: ${err.message} (${method})`), session));
         }
       });
     } catch (e) {
       session.pendingRpc.delete(id);
       clearTimeout(timer);
-      reject(e instanceof Error ? e : new Error(String(e)));
+      const error = e instanceof Error ? e : new Error(String(e));
+      reject(appendProviderStderr(error, session));
     }
   });
 }
@@ -1401,10 +1404,32 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         } catch { /* non-JSON */ }
       });
 
-      child.on("exit", () => {
+      child.on("exit", (code, signal) => {
+        const exitError = !sess.stopRequested
+          ? appendProviderStderr(
+              new Error(`Codex exited before session startup completed${code != null ? ` (code ${code})` : ""}${signal ? ` signal ${signal}` : ""}`),
+              sess,
+            )
+          : null;
+        for (const pending of sess.pendingRpc.values()) {
+          clearTimeout(pending.timer);
+          pending.reject(exitError ?? new Error("Session stopped"));
+        }
+        sess.pendingRpc.clear();
         settleRemoteTurn(sess);
         remoteProviderSessions.delete(sessionId);
         sendProviderEvent(sessionId, { method: "session/completed" });
+      });
+
+      child.on("error", (err) => {
+        const startupError = appendProviderStderr(err, sess);
+        for (const pending of sess.pendingRpc.values()) {
+          clearTimeout(pending.timer);
+          pending.reject(startupError);
+        }
+        sess.pendingRpc.clear();
+        settleRemoteTurn(sess, startupError);
+        remoteProviderSessions.delete(sessionId);
       });
 
       // Initialize handshake
@@ -1431,7 +1456,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       } catch (err) {
         child.kill();
         remoteProviderSessions.delete(sessionId);
-        throw err;
+        throw appendProviderStderr(err instanceof Error ? err : new Error(String(err)), sess);
       }
     }
     case "send-turn": {
