@@ -697,7 +697,7 @@ function App() {
   }, [activeSessionId])
 
   const handleMessageStarted = useCallback(() => {
-    refreshMessages()
+    refreshMessages({ force: true })
   }, [refreshMessages])
 
   const handleMessageComplete = useCallback(() => {

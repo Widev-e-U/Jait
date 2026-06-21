@@ -344,7 +344,7 @@ interface QueuedChatMessage extends QueuedMessage {
   attachments?: ChatAttachment[]
 }
 
-type SendMessageResult = 'sent' | 'retry' | 'aborted'
+type SendMessageResult = 'sent' | 'retry' | 'aborted' | 'queued'
 
 /**
  * @param sessionId - externally managed session ID (from useSessions)
@@ -390,8 +390,18 @@ export function useChat(
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const pendingResumeAfterDirectStreamRef = useRef(false)
 
-  const resumeSessionStream = useCallback(() => {
+  const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean }) => {
+    if (
+      options?.afterDirectStream
+      && sessionId
+      && abortControllerRef.current
+      && directStreamSessionRef.current === sessionId
+    ) {
+      pendingResumeAfterDirectStreamRef.current = true
+      return
+    }
     if (!shouldOpenResumeStream({
       sessionId,
       activeResumeSessionId: streamResumeSessionRef.current,
@@ -399,10 +409,21 @@ export function useChat(
       directStreamSessionId: directStreamSessionRef.current,
       hasActiveDirectStream: !!abortControllerRef.current,
     })) return
+    pendingResumeAfterDirectStreamRef.current = false
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
     setRefreshTrigger(n => n + 1)
   }, [sessionId])
+
+  const finishDirectStream = useCallback((requestSessionId: string | null, controller: AbortController) => {
+    if (abortControllerRef.current === controller) abortControllerRef.current = null
+    if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
+    if (!pendingResumeAfterDirectStreamRef.current || !requestSessionId || requestSessionId !== sessionId) return
+    pendingResumeAfterDirectStreamRef.current = false
+    window.setTimeout(() => {
+      if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
+    }, 0)
+  }, [resumeSessionStream, sessionId])
 
   // When sessionId changes, load history / resume active stream via SSE
   useEffect(() => {
@@ -953,10 +974,11 @@ export function useChat(
   }, [authToken, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
-  const refreshMessages = useCallback(() => {
-    // Skip if no active session or already loading / streaming
-    if (!sessionId || state.isLoading) return
-    resumeSessionStream()
+  const refreshMessages = useCallback((options?: { force?: boolean }) => {
+    // Skip if no active session or already loading / streaming, unless a
+    // remote turn has started and we need to attach after local stream cleanup.
+    if (!sessionId || (state.isLoading && !options?.force)) return
+    resumeSessionStream(options?.force ? { afterDirectStream: true } : undefined)
   }, [resumeSessionStream, sessionId, state.isLoading])
 
   const loadingOlderRef = useRef(false)
@@ -1427,6 +1449,29 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               }
+            } else if (data.type === 'queued') {
+              flushPendingMessageUpdates()
+              const queued = data.message as Partial<QueuedChatMessage> | undefined
+              if (!isStale()) {
+                setState(prev => ({
+                  ...prev,
+                  isLoading: false,
+                  messages: prev.messages.filter(m => m.id !== assistantId && m.id !== userMessage.id),
+                }))
+                if (queued?.id && typeof queued.content === 'string') {
+                  setMessageQueue(prev => prev.some(item => item.id === queued.id)
+                    ? prev
+                    : [...prev, {
+                        ...queued,
+                        id: queued.id,
+                        content: queued.content,
+                        displayContent: queued.displayContent ?? queued.content,
+                        queuedAt: typeof queued.queuedAt === 'number' ? queued.queuedAt : Date.now(),
+                      } as QueuedChatMessage])
+                }
+              }
+              finishDirectStream(requestSessionId, controller)
+              return 'queued'
             } else if (data.type === 'done') {
               completed = true
               flushPendingMessageUpdates()
@@ -1467,8 +1512,7 @@ export function useChat(
                   ),
                 }))
               }
-              if (abortControllerRef.current === controller) abortControllerRef.current = null
-              if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
+              finishDirectStream(requestSessionId, controller)
               setCompletionCount((prev) => prev + 1)
               return 'sent'
             } else if (data.type === 'error') {
@@ -1527,8 +1571,7 @@ export function useChat(
       }
       pendingMessageUpdates = null
       if (error instanceof Error && error.name === 'AbortError') {
-        if (abortControllerRef.current === controller) abortControllerRef.current = null
-        if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
+        finishDirectStream(requestSessionId, controller)
         if (!isStale()) {
           setState(prev => ({
             ...prev,
@@ -1562,8 +1605,7 @@ export function useChat(
         }
         return 'aborted'
       }
-      if (abortControllerRef.current === controller) abortControllerRef.current = null
-      if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
+      finishDirectStream(requestSessionId, controller)
       if (!isStale()) {
         const transientConnectionError = isTransientConnectionError(error)
         const errorMessage = transientConnectionError
@@ -1615,10 +1657,9 @@ export function useChat(
       }
       return 'retry'
     }
-    if (abortControllerRef.current === controller) abortControllerRef.current = null
-    if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
+    finishDirectStream(requestSessionId, controller)
     return 'sent'
-  }, [authToken, clearUnfinishedTodoList, onLoginRequired, sessionId])
+  }, [authToken, clearUnfinishedTodoList, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])
 
   // --- Message queue (queueing & steering) ---
   const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {

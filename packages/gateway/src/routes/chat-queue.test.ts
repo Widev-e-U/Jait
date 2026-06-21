@@ -20,6 +20,9 @@ async function collectBody(req: IncomingMessage): Promise<string> {
   return body;
 }
 
+let slowOllamaStarted: (() => void) | null = null;
+let releaseSlowOllama: (() => void) | null = null;
+
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -36,6 +39,11 @@ function startMockOllama(): Promise<Server> {
         messages: { role: string; content: string }[];
       };
       const lastUserMessage = messages.filter((message) => message.role === "user").pop()?.content ?? "";
+
+      if (lastUserMessage === "slow first") {
+        slowOllamaStarted?.();
+        await new Promise<void>((resolve) => { releaseSlowOllama = resolve; });
+      }
 
       if (isNative) {
         res.writeHead(200, { "Content-Type": "application/x-ndjson" });
@@ -70,6 +78,9 @@ describe("server-side queued chat processing", () => {
   });
 
   afterEach(async () => {
+    releaseSlowOllama?.();
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
     await app?.close();
     app = null;
   });
@@ -137,6 +148,86 @@ describe("server-side queued chat processing", () => {
     expect(body.messages.filter((message) => message.role === "assistant").map((message) => message.content)).toEqual([
       "Echo: first queued message",
       "Echo: second queued message",
+    ]);
+  });
+
+  it("queues a concurrent direct chat POST instead of replacing the active stream", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-race-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Race" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const slowStarted = new Promise<void>((resolve) => { slowOllamaStarted = resolve; });
+    const firstResponse = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "slow first" },
+    });
+
+    await slowStarted;
+
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "second while streaming" },
+    });
+
+    expect(secondResponse.statusCode).toBe(202);
+    expect(secondResponse.body).toContain('"type":"queued"');
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toEqual([
+      expect.objectContaining({ content: "second while streaming" }),
+    ]);
+
+    releaseSlowOllama?.();
+    await firstResponse;
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    let userMessages: string[] = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = messagesResponse.json() as { messages: Array<{ role: string; content: string }> };
+      userMessages = body.messages.filter((message) => message.role === "user").map((message) => message.content);
+      if (userMessages.length >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(userMessages).toEqual([
+      "slow first",
+      "second while streaming",
     ]);
   });
 });

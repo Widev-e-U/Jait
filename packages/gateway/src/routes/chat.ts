@@ -449,10 +449,13 @@ function emitSyntheticToolResult(
 interface QueuedChatMessage {
   id?: string;
   content: string;
+  queuedAt?: number;
   mode?: ChatMode;
   provider?: ProviderId;
   runtimeMode?: RuntimeMode;
   model?: string | null;
+  responseStyle?: ResponseStyle;
+  attachments?: Array<{ name: string; mimeType: string; data: string }>;
   displaySegments?: Array<
     { type: "text"; text: string }
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
@@ -600,6 +603,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
     queue.push({
       id: typeof record.id === "string" ? record.id : undefined,
       content: record.content,
+      queuedAt: typeof record.queuedAt === "number" ? record.queuedAt : undefined,
       mode: isValidChatMode(record.mode) ? record.mode : undefined,
       provider: record.provider === "jait" || record.provider === "codex" || record.provider === "claude-code"
         ? record.provider
@@ -608,6 +612,19 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
         ? record.runtimeMode
         : undefined,
       model: typeof record.model === "string" ? record.model : null,
+      responseStyle: isResponseStyle(record.responseStyle) ? record.responseStyle : undefined,
+      attachments: Array.isArray(record.attachments)
+        ? record.attachments.flatMap((attachment) => {
+            if (!attachment || typeof attachment !== "object") return [];
+            const candidate = attachment as Record<string, unknown>;
+            if (typeof candidate.name !== "string" || typeof candidate.data !== "string") return [];
+            return [{
+              name: candidate.name,
+              mimeType: typeof candidate.mimeType === "string" ? candidate.mimeType : "application/octet-stream",
+              data: candidate.data,
+            }];
+          })
+        : undefined,
       displaySegments,
     });
   }
@@ -1389,8 +1406,10 @@ export function registerChatRoutes(
             ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
             ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
+            ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
             ...(nextMessage.model ? { model: nextMessage.model } : {}),
             ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
+            ...(nextMessage.attachments?.length ? { attachments: nextMessage.attachments } : {}),
             _queuedDrain: true,
           },
         });
@@ -1621,6 +1640,7 @@ export function registerChatRoutes(
           : randomUUID();
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
+    const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
@@ -1659,9 +1679,52 @@ export function registerChatRoutes(
         sessionService.update(sessionId, { name: deriveSessionTitle(content) }, authUser.id);
       }
     }
+
+    if (!isQueuedDrainRequest && activeStreams.has(sessionId)) {
+      if (!sessionStateService) {
+        return reply.status(409).send({ error: "CONFLICT", details: "Session is already streaming" });
+      }
+      const existingState = sessionStateService.get(sessionId, ["queued_messages"]);
+      const queue = parseQueuedChatMessages(existingState["queued_messages"]);
+      const queuedMessage: QueuedChatMessage = {
+        id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        content,
+        queuedAt: Date.now(),
+        mode: chatMode,
+        ...(requestProvider ? { provider: requestProvider } : {}),
+        ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
+        ...(responseStyle !== "normal" ? { responseStyle } : {}),
+        ...(requestBodyModel ? { model: requestBodyModel } : {}),
+        ...(displaySegments ? { displaySegments } : {}),
+        ...(attachments.length ? { attachments } : {}),
+      };
+      const nextQueue = [...queue, queuedMessage];
+      sessionStateService.set(sessionId, { queued_messages: nextQueue });
+      broadcastQueuedMessagesState(sessionId, nextQueue);
+
+      const reqOrigin = request.headers.origin ?? "*";
+      reply.raw.writeHead(202, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Access-Control-Allow-Origin": reqOrigin,
+        "Access-Control-Allow-Credentials": "true",
+      });
+      const queuedEvent = {
+        type: "queued" as const,
+        session_id: sessionId,
+        message: queuedMessage,
+        queue_length: nextQueue.length,
+      };
+      reply.raw.write(`data: ${JSON.stringify(queuedEvent)}\n\n`);
+      reply.raw.write(`data: ${JSON.stringify({ type: "done", session_id: sessionId, prompt_count: null, remaining_prompts: null })}\n\n`);
+      reply.raw.end();
+      return;
+    }
+
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
-    const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     const jaitCoordinatorModel = swarmWorkerProvider ? "" : requestBodyModel;
     // Use the user's preferred backend, but fall back to the server-level config
     // when the user still has the initial default ("openai") and the server is
@@ -1904,12 +1967,21 @@ export function registerChatRoutes(
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
 
         if (!pathExistsLocally && ws) {
-          // Match path platform to connected FsNodes
+          const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
+            .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
+            .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
+            ?.nodeId as string | undefined;
+
+          // Prefer the node that owns the active remote filesystem surface. If
+          // no surface is available, fall back to matching by path platform.
           const isWindowsPath = /^[A-Za-z]:[\\/]/.test(cliWsRoot);
           const expectedPlatform = isWindowsPath ? "windows" : null;
-          for (const node of ws.getFsNodes()) {
+          const candidateNodes = remoteSurfaceNodeId
+            ? ws.getFsNodes().filter((node) => node.id === remoteSurfaceNodeId)
+            : ws.getFsNodes();
+          for (const node of candidateNodes) {
             if (node.isGateway) continue;
-            if (expectedPlatform && node.platform !== expectedPlatform) continue;
+            if (!remoteSurfaceNodeId && expectedPlatform && node.platform !== expectedPlatform) continue;
             if (!node.providers?.includes(requestProvider)) continue;
             cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
             isRemote = true;

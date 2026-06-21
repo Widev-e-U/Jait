@@ -650,6 +650,10 @@ function MessageInner({
     return () => window.cancelAnimationFrame(frameId)
   }, [isEditing])
 
+  const buildUserCopyText = (): string => (
+    serializeUserMessageSegmentsToMarkdown(userDisplaySegments) || userDisplayText
+  )
+
   const buildCopyText = (): string => {
     const parts: string[] = []
 
@@ -679,10 +683,9 @@ function MessageInner({
       }
     }
 
-    if (content) {
-      parts.push(
-        isUser ? serializeUserMessageSegmentsToMarkdown(userDisplaySegments) || userDisplayText : content,
-      )
+    const messageText = isUser ? buildUserCopyText() : content
+    if (messageText) {
+      parts.push(messageText)
     }
 
     return parts.join('\n').trim()
@@ -694,15 +697,22 @@ function MessageInner({
     const clipboardPayload = isUser ? serializeUserMessageSegmentsForClipboard(userDisplaySegments) : null
 
     try {
-      if (clipboardPayload && typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'text/plain': new Blob([text], { type: 'text/plain' }),
-            [JAIT_REF_MIME]: new Blob([clipboardPayload], { type: JAIT_REF_MIME }),
-          }),
-        ])
-      } else {
+      if (clipboardPayload && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/plain': new Blob([text], { type: 'text/plain' }),
+              [JAIT_REF_MIME]: new Blob([clipboardPayload], { type: JAIT_REF_MIME }),
+            }),
+          ])
+        } catch {
+          if (!navigator.clipboard?.writeText) throw new Error('Clipboard text API unavailable')
+          await navigator.clipboard.writeText(text)
+        }
+      } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text)
+      } else {
+        throw new Error('Clipboard API unavailable')
       }
     } catch {
       const textArea = document.createElement('textarea')
@@ -725,7 +735,8 @@ function MessageInner({
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
-  const canCopyMessage = isUser || !isStreaming
+  const hasCopyableMessage = buildCopyText().length > 0
+  const canCopyMessage = (isUser || !isStreaming) && hasCopyableMessage
   const canSendMemoryFeedback = !isUser && !!messageId && !!onMemoryFeedback && !isStreaming
   const memoryFeedbackSaving = memoryFeedbackState?.status === 'saving'
 
@@ -879,7 +890,7 @@ function MessageInner({
   ]
 
   const renderActions = (outsideBubble?: boolean) => {
-    if (isEditing || !canCopyMessage || !content || messageActionItems.length === 0) return null
+    if (isEditing || !canCopyMessage || messageActionItems.length === 0) return null
 
     // On touch devices, collapse the always-visible action row into a single
     // 3-dot menu anchored bottom-right (accessibility / avoids clutter).
