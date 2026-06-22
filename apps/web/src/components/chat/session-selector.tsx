@@ -94,11 +94,7 @@ export function SessionSelector({
     [nodes],
   )
   const [searchQuery, setSearchQuery] = useState('')
-  const [projectsCollapsed, setProjectsCollapsed] = useState(true)
-  const [personalChatsCollapsed, setPersonalChatsCollapsed] = useState(true)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
-  const showProjectsSection = normalizedSearchQuery.length > 0 || !projectsCollapsed
-  const showPersonalChatsSection = normalizedSearchQuery.length > 0 || !personalChatsCollapsed
 
   const filteredProjects = useMemo(() => {
     if (!normalizedSearchQuery) return projects
@@ -158,16 +154,10 @@ export function SessionSelector({
         <>
           {/* ── Top half: Projects ──────────────────────────── */}
           <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
-            <button
-              type="button"
-              className="flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30"
-              onClick={() => setProjectsCollapsed((prev) => !prev)}
-              aria-expanded={showProjectsSection}
-            >
+            <div className="flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30">
               <span className="text-2xs font-medium text-muted-foreground">Projects</span>
-              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showProjectsSection ? 'rotate-90' : ''}`} />
-            </button>
-            {showProjectsSection && (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform rotate-90" />
+            </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
                 {projects.length === 0 && (
@@ -336,21 +326,15 @@ export function SessionSelector({
                 )}
               </div>
             </ScrollArea>
-            )}
           </div>
 
           {/* ── Bottom half: Personal chats ───────────────────── */}
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex h-8 shrink-0 items-center justify-between px-3">
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center justify-between text-left transition-colors hover:text-foreground"
-                onClick={() => setPersonalChatsCollapsed((prev) => !prev)}
-                aria-expanded={showPersonalChatsSection}
-              >
+              <div className="flex min-w-0 flex-1 items-center justify-between text-left transition-colors hover:text-foreground">
                 <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
-                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${showPersonalChatsSection ? 'rotate-90' : ''}`} />
-              </button>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform rotate-90" />
+              </div>
               {onNewPersonalSession && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -362,7 +346,6 @@ export function SessionSelector({
                 </Tooltip>
               )}
             </div>
-            {showPersonalChatsSection && (
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
                 {personalSessions.length === 0 && (
@@ -407,7 +390,6 @@ export function SessionSelector({
                 })}
               </div>
             </ScrollArea>
-            )}
           </div>
         </>
       )}
