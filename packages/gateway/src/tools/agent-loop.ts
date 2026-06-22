@@ -1883,7 +1883,9 @@ export async function runAgentLoop(
       if (anySuccess) {
         consecutiveUnproductiveRounds = 0;
       } else {
-        consecutiveUnproductiveRounds++;
+        // Don't count the very first round — give the agent at least one
+        // chance to orient before starting the unproductive counter.
+        if (round > 0) consecutiveUnproductiveRounds++;
         if (consecutiveUnproductiveRounds === MAX_UNPRODUCTIVE_ROUNDS - 1) {
           // Warn the model before hard-stopping — give it one more chance
           const warnMsg = `[WARNING: ${consecutiveUnproductiveRounds} consecutive rounds have failed. Your current approach is not working. You MUST try a fundamentally different strategy on the next round or the loop will be terminated. Consider: using a different tool, simplifying the command, asking the user for help, or abandoning this subtask.]`;

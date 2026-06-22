@@ -102,6 +102,10 @@ export interface PromptContext {
   responseStyle?: ResponseStyle;
   /** Backend provider label — used to select lighter prompts for local models */
   backend?: string;
+  /** Runtime environment context (OS, shell, hostname) */
+  platform?: string;
+  shell?: string;
+  hostname?: string;
 }
 
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
@@ -137,7 +141,12 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
 
     // Inject project context so the agent knows its working directory
     if (ctx?.projectRoot) {
-      prompt += `\n\n<projectContext>\nYou are working in the project: ${ctx.projectRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this project.\n</projectContext>`;
+      const envParts = [`You are working in the project: ${ctx.projectRoot}`];
+      if (ctx.platform) envParts.push(`OS: ${ctx.platform}`);
+      if (ctx.shell) envParts.push(`Shell: ${ctx.shell} — write commands compatible with this shell. On PowerShell, use PowerShell syntax (e.g. $variable not bash-style). On bash/zsh, use POSIX syntax.`);
+      if (ctx.hostname) envParts.push(`Host: ${ctx.hostname}`);
+      envParts.push(`All relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this project.`);
+      prompt += `\n\n<projectContext>\n${envParts.join("\n")}\n</projectContext>`;
     }
 
     // Inject available skills

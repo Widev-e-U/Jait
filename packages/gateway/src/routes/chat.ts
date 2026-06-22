@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { type AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
@@ -1802,6 +1803,9 @@ export function registerChatRoutes(
       architectureGraph,
       responseStyle,
       backend: llmRuntime.backend,
+      platform: process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux",
+      shell: process.platform === "win32" ? "PowerShell" : process.env.SHELL?.split("/").pop() ?? "bash",
+      hostname: hostname(),
     };
 
     if (!sessionHistory.has(sessionId)) {
