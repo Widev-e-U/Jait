@@ -2898,12 +2898,23 @@ export function registerChatRoutes(
 
     if (db) {
       const rows = db
-        .select()
+        .select({ id: messagesTable.id, role: messagesTable.role, content: messagesTable.content, toolCalls: messagesTable.toolCalls })
         .from(messagesTable)
         .where(eq(messagesTable.sessionId, sessionId))
         .orderBy(messagesTable.createdAt, messagesTable.id)
         .all();
-      const rowsToDelete = rows.slice(Math.max(0, target.historyIndex - 1));
+      // The in-memory historyIndex includes the leading system message and any
+      // tool messages, which are NOT persisted to the messages table. Deleting DB
+      // rows by `historyIndex - 1` therefore misaligns with the actual rows and
+      // can leave the edited user message (and trailing turns) behind — so on the
+      // next snapshot reload the original message reappears in context.
+      // Instead, filter persisted rows the same way visible entries are built
+      // (skip tool rows and empty assistant rows) so they map 1:1 to the visible
+      // entries, then delete from the target's visible index onward.
+      const persistedVisibleRows = rows.filter(
+        (r) => r.role !== "tool" && !(r.role === "assistant" && !r.content && !r.toolCalls),
+      );
+      const rowsToDelete = persistedVisibleRows.slice(targetVisibleIndex);
       for (const row of rowsToDelete) {
         db.delete(messagesTable).where(eq(messagesTable.id, row.id)).run();
       }

@@ -71,4 +71,63 @@ describe("chat restart from message", () => {
 
     await app.close();
   });
+
+  it("deletes the edited user message and trailing turns from DB via messageFromEnd", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("restart-user2", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Restart Session 2" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const now = new Date("2026-04-25T00:00:00.000Z");
+    const at = (offset: number) => new Date(now.getTime() + offset).toISOString();
+
+    // Production layout: tool messages live only in memory (not persisted), so
+    // the DB holds only user + assistant rows.
+    db.insert(messages).values([
+      { id: "m1", sessionId: session.id, role: "user", content: "first", createdAt: at(1) },
+      { id: "m2", sessionId: session.id, role: "assistant", content: "used a tool", createdAt: at(2) },
+      { id: "m3", sessionId: session.id, role: "user", content: "second", createdAt: at(4) },
+      { id: "m4", sessionId: session.id, role: "assistant", content: "answer", createdAt: at(5) },
+    ]).run();
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+
+    // Restart from the SECOND user message ("second"), addressed by
+    // messageFromEnd (the way the frontend locates it after a completed turn).
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/restart-from`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { messageFromEnd: 1 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "used a tool" },
+      ],
+    });
+
+    // The edited user message ("second") and its answer must be gone from the DB
+    // so they don't reappear on the next snapshot reload.
+    const remaining = db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, session.id))
+      .orderBy(messages.createdAt)
+      .all();
+    expect(remaining.map((row) => row.id)).toEqual(["m1", "m2"]);
+
+    await app.close();
+  });
 });
