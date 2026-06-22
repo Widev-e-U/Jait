@@ -3976,7 +3976,7 @@ function App() {
               </div>
             )}
 
-            {isMobile && currentView === 'chat' && (
+            {isMobile && (
               <MobileNavDrawer
                 open={showMobileToolbar}
                 onClose={() => setShowMobileToolbar(false)}
