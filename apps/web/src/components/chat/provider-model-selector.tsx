@@ -71,7 +71,7 @@ function providerDefFromInfo(info: ProviderInfo): ProviderDef {
 }
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
-const MAX_RECENTS = 5
+const MAX_RECENTS = 10
 
 function summariseReason(reason: string): string {
   const lower = reason.toLowerCase()

@@ -28,7 +28,7 @@ interface ModelDef {
 }
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
-const MAX_RECENTS = 5
+const MAX_RECENTS = 10
 
 function loadRecentModels(): string[] {
   try {
