@@ -1288,9 +1288,20 @@ export function pruneHistory(
 
   // Find removable range: skip system messages at the start and keep
   // the last user message + everything after it.
+  // Also detect and remove any existing conversation-summary so we merge
+  // rather than stack duplicate summaries.
   let firstRemovable = 0;
+  let existingSummaryIdx = -1;
   while (firstRemovable < history.length && history[firstRemovable]!.role === "system") {
+    if (history[firstRemovable]!.content?.includes("[conversation-summary]")) {
+      existingSummaryIdx = firstRemovable;
+    }
     firstRemovable++;
+  }
+  // If there's a prior summary, include it in the removable set so its
+  // content feeds into the new merged summary.
+  if (existingSummaryIdx >= 0) {
+    firstRemovable = existingSummaryIdx;
   }
 
   // Find last user message index

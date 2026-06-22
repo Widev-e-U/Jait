@@ -2594,12 +2594,22 @@ export function registerChatRoutes(
               onEvent,
               onContext: (round) => {
                 contextRounds.push(round);
+                // Cap stored context_flow: if rounds accumulate too much data,
+                // keep only the first round (for system prompt reference) and the
+                // last 2 rounds (most useful for debugging). Stream still gets all.
+                const MAX_CONTEXT_FLOW_BYTES = 512_000; // 512 KB
+                let storedRounds = contextRounds;
+                const fullJson = JSON.stringify(contextRounds);
+                if (fullJson.length > MAX_CONTEXT_FLOW_BYTES && contextRounds.length > 3) {
+                  storedRounds = [contextRounds[0]!, ...contextRounds.slice(-2)];
+                }
                 contextFlowJson = JSON.stringify({
                   provider: "jait",
                   model: llmRuntime.openaiModel,
-                  rounds: contextRounds,
+                  rounds: storedRounds,
+                  ...(contextRounds.length !== storedRounds.length ? { truncatedRounds: contextRounds.length } : {}),
                   ...(memoryFlow ? { memory: memoryFlow } : {}),
-                } satisfies LlmContextFlow);
+                } satisfies LlmContextFlow & { truncatedRounds?: number });
                 const event = {
                   type: "context_flow",
                   provider: "jait",

@@ -121,9 +121,7 @@ const GlmPromptResolver: IAgentPrompt = {
   resolveSystemPrompt,
 
   resolveReminderInstructions(_mode, _endpoint) {
-    return `${KEEP_GOING}
-
-When using the edit tool, include 3-5 lines of unchanged code before and after the target to make the replacement unambiguous.
+    return `When using the edit tool, include 3-5 lines of unchanged code before and after the target to make the replacement unambiguous.
 You MUST use the structured tool calling mechanism — never write tool calls as text.
 Keep going until the task is fully resolved. If you have a todo list, update it before your next action.`;
   },

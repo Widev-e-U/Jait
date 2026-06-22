@@ -76,10 +76,9 @@ const DefaultOpenAIPromptResolver: IAgentPrompt = {
   resolveSystemPrompt,
 
   resolveReminderInstructions(_mode, _endpoint) {
-    return `${KEEP_GOING}
-
-When using the edit tool, include 3-5 lines of unchanged code before and after the target to make the replacement unambiguous.
-It is much faster to edit using the edit tool. Prefer it for making edits.`;
+    return `When using the edit tool, include 3-5 lines of unchanged code before and after the target to make the replacement unambiguous.
+It is much faster to edit using the edit tool. Prefer it for making edits.
+Keep going until the task is fully resolved.`;
   },
 };
 
