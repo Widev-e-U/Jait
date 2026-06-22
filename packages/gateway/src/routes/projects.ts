@@ -231,10 +231,6 @@ export function registerProjectEntityRoutes(
     if (!project) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
-    const sessions = sessionService.listByProject(id, "active", authUser.id);
-    if (sessions.length > 0) {
-      return reply.status(409).send({ error: "CONFLICT", details: "Project still has active sessions" });
-    }
     sessionService.archiveByProject(id, authUser.id);
     projectService.archive(id, authUser.id);
     return reply.status(204).send();

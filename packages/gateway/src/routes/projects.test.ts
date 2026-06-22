@@ -194,7 +194,7 @@ describe("project routes", () => {
     expect(lastActive.session?.id).not.toBe(firstSession.id);
   });
 
-  it("deletes an empty project and rejects deleting one that still has sessions", async () => {
+  it("archives a project (and its active sessions) even when it still has sessions", async () => {
     const user = userService.createUser("delete-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
 
@@ -228,13 +228,34 @@ describe("project routes", () => {
       payload: { name: "Existing chat" },
     });
     expect(createSessionRes.statusCode).toBe(201);
+    const session = JSON.parse(createSessionRes.body) as { id: string };
 
     const deleteSeededRes = await app.inject({
       method: "DELETE",
       url: `/api/projects/${seededProject.id}`,
       headers,
     });
-    expect(deleteSeededRes.statusCode).toBe(409);
+    expect(deleteSeededRes.statusCode).toBe(204);
+
+    // The project should now be archived (not destroyed) and restorable.
+    const archivedRes = await app.inject({
+      method: "GET",
+      url: "/api/projects/archived",
+      headers,
+    });
+    expect(archivedRes.statusCode).toBe(200);
+    const archived = JSON.parse(archivedRes.body) as { projects: Array<{ id: string }> };
+    expect(archived.projects.map((p) => p.id)).toContain(seededProject.id);
+
+    // Its session should have been archived alongside it.
+    const sessionsRes = await app.inject({
+      method: "GET",
+      url: `/api/projects/${seededProject.id}/sessions?status=archived`,
+      headers,
+    });
+    expect(sessionsRes.statusCode).toBe(200);
+    const sessions = JSON.parse(sessionsRes.body) as { sessions: Array<{ id: string }> };
+    expect(sessions.sessions.map((s) => s.id)).toContain(session.id);
   });
 
   it("auto-registers git project repositories and exposes manual assignment", async () => {
