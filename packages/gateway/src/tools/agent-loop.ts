@@ -973,7 +973,7 @@ const DUPLICATE_CALL_THRESHOLD = 2;
 /** Max characters for a single tool result message before truncation (~8k tokens). */
 const TOOL_RESULT_MAX_CHARS = 30_000;
 /** Consecutive rounds with zero successful tool calls before the loop bails out. */
-const MAX_UNPRODUCTIVE_ROUNDS = 5;
+const MAX_UNPRODUCTIVE_ROUNDS = 3;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
 /**

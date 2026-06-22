@@ -618,7 +618,14 @@ export function createTerminalRunTool(
           : await execPromise;
 
         // 3. Build response
-        const ok = !result.timedOut && result.exitCode === 0;
+        // Mark as failed if exit code != 0 or timed out.
+        // Also detect likely-failed commands that exit 0 but have short output
+        // dominated by failure indicators (e.g. "failed to connect to X").
+        const exitOk = !result.timedOut && result.exitCode === 0;
+        const outputLooksLikeFail = exitOk
+          && result.output.length < 500
+          && /^[^\n]*\b(fail(ed)?|error:|fatal:|cannot|connection refused)\b/im.test(result.output);
+        const ok = exitOk && !outputLooksLikeFail;
         const pagerDetected = result.timedOut && detectPagerPrompt(result.output);
         const needsInteraction = Boolean(result.interactionRequired)
           || (result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected));
