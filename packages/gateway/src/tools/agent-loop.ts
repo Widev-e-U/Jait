@@ -973,7 +973,7 @@ const DUPLICATE_CALL_THRESHOLD = 2;
 /** Max characters for a single tool result message before truncation (~8k tokens). */
 const TOOL_RESULT_MAX_CHARS = 30_000;
 /** Consecutive rounds with zero successful tool calls before the loop bails out. */
-const MAX_UNPRODUCTIVE_ROUNDS = 3;
+const MAX_UNPRODUCTIVE_ROUNDS = 4;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
 /**
@@ -1875,6 +1875,8 @@ export async function runAgentLoop(
 
       // ── Stuck-loop detection ──
       // If every tool call in this round failed, increment the unproductive counter.
+      // At threshold - 1, inject a warning so the model can self-correct.
+      // At threshold, hard-stop.
       const roundStart = executedToolCalls.length - toolCalls.length;
       const roundCalls = executedToolCalls.slice(roundStart < 0 ? 0 : roundStart);
       const anySuccess = roundCalls.some(c => c.ok);
@@ -1882,7 +1884,12 @@ export async function runAgentLoop(
         consecutiveUnproductiveRounds = 0;
       } else {
         consecutiveUnproductiveRounds++;
-        if (consecutiveUnproductiveRounds >= MAX_UNPRODUCTIVE_ROUNDS) {
+        if (consecutiveUnproductiveRounds === MAX_UNPRODUCTIVE_ROUNDS - 1) {
+          // Warn the model before hard-stopping — give it one more chance
+          const warnMsg = `[WARNING: ${consecutiveUnproductiveRounds} consecutive rounds have failed. Your current approach is not working. You MUST try a fundamentally different strategy on the next round or the loop will be terminated. Consider: using a different tool, simplifying the command, asking the user for help, or abandoning this subtask.]`;
+          history.push({ role: "system", content: warnMsg });
+          log.info(`Unproductive warning injected for session ${sessionId} (${consecutiveUnproductiveRounds} rounds)`);
+        } else if (consecutiveUnproductiveRounds >= MAX_UNPRODUCTIVE_ROUNDS) {
           log.warn(`${MAX_UNPRODUCTIVE_ROUNDS} consecutive unproductive rounds — stopping loop for session ${sessionId}`);
           const bailMsg = "\n\n[Stopped: multiple consecutive rounds produced no successful results. The current approach isn't working — please try a different strategy.]";
           onEvent?.({ type: "token", content: bailMsg });
