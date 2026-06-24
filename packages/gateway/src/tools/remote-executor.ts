@@ -87,7 +87,19 @@ export interface RemoteToolExecutorOptions {
 export function resolveRemoteNodeForSession(
   ws: WsControlPlane,
   projectPath: string | undefined,
+  /** Explicit node binding from the project record — takes priority over path heuristics */
+  projectNodeId?: string | null,
 ): string | null {
+  // If the project is explicitly bound to a non-gateway node, use that directly.
+  // This avoids the existsSync ambiguity when both the gateway and a remote node
+  // share the same path prefix (e.g. both have /home/jakob).
+  if (projectNodeId && projectNodeId !== "gateway") {
+    // Verify the node is still connected
+    const node = ws.findNodeByDeviceId(projectNodeId);
+    if (node) return projectNodeId;
+    // Node disconnected — fall through to heuristic
+  }
+
   if (!projectPath) return null;
 
   // Check if the project path exists on the gateway

@@ -166,6 +166,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
     getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,
     getUserCount: () => deps.userService?.countUsers() ?? 0,
+    getSessionCount: () => deps.sessionService?.list("active", undefined, undefined)?.length ?? 0,
+    getSurfaceCount: () => deps.surfaceRegistry?.listSurfaces().length ?? 0,
   });
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);

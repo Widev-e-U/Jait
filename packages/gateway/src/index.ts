@@ -492,7 +492,7 @@ async function main() {
       ? projectService.getById(sessionRecord.projectId, context.userId)
       : undefined;
     const projectPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
-    const remoteNodeId = resolveRemoteNodeForSession(ws, projectPath ?? undefined);
+    const remoteNodeId = resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId);
     const executor = createRemoteToolExecutor(
       {
         ws,

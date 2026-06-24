@@ -81,6 +81,30 @@ describe("resolveRemoteNodeForSession", () => {
 
     expect(resolveRemoteNodeForSession(ws, "C:\\Users\\test\\repo")).toBe(windowsNode.id);
   });
+
+  it("uses explicit projectNodeId even when the path exists locally", () => {
+    cleanupPath = mkdtempSync(join(tmpdir(), "jait-remote-executor-"));
+    const ws = createMockWs();
+
+    // Without projectNodeId, existsSync returns true → stays local
+    expect(resolveRemoteNodeForSession(ws, cleanupPath)).toBeNull();
+    // With explicit projectNodeId, uses the remote node even though path exists locally
+    expect(resolveRemoteNodeForSession(ws, cleanupPath, remoteNode.id)).toBe(remoteNode.id);
+  });
+
+  it("falls back to heuristic when projectNodeId node is disconnected", () => {
+    const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => undefined) });
+
+    // Node not found → falls through to existsSync heuristic
+    expect(resolveRemoteNodeForSession(ws, "/definitely/missing/jait/project", "dead-node-id")).toBe(remoteNode.id);
+  });
+
+  it("uses gateway for projectNodeId='gateway'", () => {
+    cleanupPath = mkdtempSync(join(tmpdir(), "jait-remote-executor-"));
+    const ws = createMockWs();
+
+    expect(resolveRemoteNodeForSession(ws, cleanupPath, "gateway")).toBeNull();
+  });
 });
 
 describe("createRemoteToolExecutor", () => {

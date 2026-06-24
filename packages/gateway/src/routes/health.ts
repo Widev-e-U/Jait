@@ -10,14 +10,14 @@ const startedAt = Date.now();
 export function registerHealthRoutes(
   app: FastifyInstance,
   config?: AppConfig,
-  deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number; getUserCount?: () => number },
+  deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number; getUserCount?: () => number; getSessionCount?: () => number; getSurfaceCount?: () => number },
 ) {
   app.get("/health", async () => ({
     version: PKG_VERSION,
     schemaVersion: deps?.getSchemaVersion?.() ?? 0,
     uptime: Math.floor((Date.now() - startedAt) / 1000),
-    sessions: 0,
-    surfaces: 0,
+    sessions: deps?.getSessionCount?.() ?? 0,
+    surfaces: deps?.getSurfaceCount?.() ?? 0,
     devices: deps?.getDeviceCount?.() ?? 0,
     hasUsers: (deps?.getUserCount?.() ?? 0) > 0,
     healthy: true,
