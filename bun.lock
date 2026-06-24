@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "jait",
@@ -12,12 +11,13 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.69",
+      "version": "0.1.74",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
         "@jait/ui-shared": "workspace:*",
         "electron-updater": "^6.8.3",
+        "node-pty": "^1.1.0",
       },
       "devDependencies": {
         "@types/node": "^22.10.2",
@@ -58,7 +58,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.239",
+      "version": "0.1.255",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@chenglou/pretext": "^0.0.4",
@@ -149,7 +149,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.515",
+      "version": "0.1.543",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -198,7 +198,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.52",
+      "version": "0.1.53",
       "dependencies": {
         "zod": "^3.24.0",
       },
