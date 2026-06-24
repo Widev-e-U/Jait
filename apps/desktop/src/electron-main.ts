@@ -561,10 +561,28 @@ ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
 
 // ── Auto-launch on PC startup (OS login item) ──────────────────────────
 // Toggles whether Jait launches when the user logs into the OS.
+//
+// The "Start Jait on login" choice is also offered by the NSIS installer, which
+// writes the HKCU\...\Run key directly. Electron's getLoginItemSettings() only
+// reports openAtLogin=true when the registry value's executable path AND
+// command-line args match what's passed in — so we pass { args: ["--hidden"] }
+// (the app always launches hidden on autostart). We additionally OR-in
+// `executableWillLaunchAtLogin` (true if our exe is set to launch with ANY
+// args, which catches the installer-written key) and the persisted
+// `launchAtLogin` setting, so the Settings toggle reflects the install-time
+// selection even when the native detection is stale.
+const AUTO_START_ARGS = ["--hidden"];
+
 ipcMain.handle("desktop:get-login-item", () => {
   try {
-    const status = app.getLoginItemSettings();
-    return { enabled: Boolean(status.openAtLogin), supported: true };
+    const status = app.getLoginItemSettings({ args: AUTO_START_ARGS });
+    const nativeEnabled = Boolean(status.openAtLogin);
+    // executableWillLaunchAtLogin ignores args — true if our exe is registered
+    // to launch on login with any arguments (e.g. the installer's Run key).
+    const willLaunch = Boolean((status as Electron.LoginItemSettings).executableWillLaunchAtLogin);
+    const persisted = getSetting<boolean | null>("launchAtLogin", null);
+    const enabled = nativeEnabled || willLaunch || persisted === true;
+    return { enabled, supported: true };
   } catch {
     return { enabled: false, supported: false };
   }
@@ -574,7 +592,7 @@ ipcMain.handle("desktop:set-login-item", (_event, enabled: boolean) => {
     app.setLoginItemSettings({
       openAtLogin: enabled,
       // On Windows, start minimized to tray so it doesn't steal focus on boot.
-      args: ["--hidden"],
+      args: AUTO_START_ARGS,
     });
     // Persist the intent so we can reflect it even if the OS reports stale state.
     setSetting("launchAtLogin", enabled);

@@ -28,6 +28,7 @@ Function OptionsPageCreate
 
   ${NSD_CreateCheckbox} 0 20u 100% 12u "Start Jait automatically when you log in"
   Pop $AutoStartCheckbox
+  ${NSD_Check} $AutoStartCheckbox
 
   nsDialogs::Show
 FunctionEnd
@@ -94,7 +95,26 @@ FunctionEnd
 
   ; Auto-start on login
   ${If} $DoAutoStart == ${BST_CHECKED}
+    ; Registry Run value — name is the app display name ("Jait"), exactly what
+    ; app.setLoginItemSettings uses, so app.getLoginItemSettings({ args: ["--hidden"] })
+    ; detects it as enabled. The executable path + --hidden arg must match what the
+    ; app writes via setLoginItemSettings.
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Jait" "$\"$INSTDIR\${APP_EXECUTABLE_FILENAME}$\" --hidden"
+
+    ; Windows 10/11 StartupApproved: a 12-byte binary value enables the Run entry in
+    ; Task Manager / Settings > Startup. Without it the entry is shown as "disabled"
+    ; and Windows will NOT launch it on login. Value 02 00 00 00 00 00 00 00 00 00 00 00
+    ; means "enabled" (03 = disabled).
+    WriteRegBin HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "Jait" "020000000000000000000000"
+
+    ; Persist the installer choice so the app can sync its own settings file on first
+    ; launch and reflect the selection in the Settings UI immediately.
+    WriteRegStr HKCU "Software\Jait" "LaunchAtLogin" "1"
+  ${Else}
+    ; User explicitly unchecked it — record the choice and make sure nothing is set.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Jait"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "Jait"
+    WriteRegStr HKCU "Software\Jait" "LaunchAtLogin" "0"
   ${EndIf}
 !macroend
 
@@ -117,4 +137,6 @@ FunctionEnd
 
   ; Remove auto-start
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Jait"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "Jait"
+  DeleteRegValue HKCU "Software\Jait" "LaunchAtLogin"
 !macroend
