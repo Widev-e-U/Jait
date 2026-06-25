@@ -22,8 +22,9 @@ import { GitService, detectGitRemoteProvider, parseGitRemote, type GitSyncResult
 import { getForge, getForgeForRemote } from "../services/git-forge.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
-import type { UserService } from "../services/users.js";
+import type { UserService, JaitBackend } from "../services/users.js";
 import type { ProviderRegistry } from "../providers/registry.js";
+import { resolveJaitLlmConfig, callJaitLlmCompletion } from "../services/jait-llm.js";
 import type { ProviderId, CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 
@@ -1150,21 +1151,33 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       let message = "";
 
       if (requestProvider === "jait") {
-        const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
-        const effectiveModel = model?.trim() || userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
-        const isOllama = !userApiKeys["OPENAI_API_KEY"]?.trim() && config.llmProvider === "ollama";
-        const baseUrl = isOllama ? `${config.ollamaUrl}/v1` : (userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl);
-        const apiKey = isOllama ? "ollama" : (userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey);
+        // Resolve the user's configured Jait backend (OpenAI / OpenRouter / Ollama)
+        // through the same shared config resolver the chat route uses, so model
+        // aliases (e.g. "gpt-4o" -> "openai/gpt-4o"), the OpenRouter base URL, and
+        // Ollama endpoints are all handled consistently. The previous hand-rolled
+        // logic only spoke plain OpenAI and rejected non-OpenAI model ids such as
+        // "glm-5.2:cloud" with "model does not exist".
+        const userSettings = userService?.getSettings(authUser.id);
+        const userApiKeys = userSettings?.apiKeys ?? {};
+        const userBackend = userSettings?.jaitBackend;
+        const jaitBackend: JaitBackend = (userBackend && userBackend !== "openai")
+          ? userBackend
+          : (config.llmProvider ?? userBackend ?? "openai");
 
-        const llmRes = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: effectiveModel,
-            messages: [
+        const llm = resolveJaitLlmConfig({
+          config,
+          apiKeys: userApiKeys,
+          requestedModel: model?.trim() || undefined,
+          jaitBackend,
+        });
+        if (!llm.openaiApiKey && jaitBackend !== "ollama") {
+          return reply.status(400).send({ error: `${llm.backend.toUpperCase()} API key is not configured` });
+        }
+
+        try {
+          message = await callJaitLlmCompletion(
+            llm,
+            [
               {
                 role: "system",
                 content:
@@ -1176,19 +1189,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
               },
               { role: "user", content: `Generate a git commit message for these changes:\n\n\`\`\`diff\n${diffText}\n\`\`\`` },
             ],
-            max_tokens: 256,
-            temperature: 0.3,
-          }),
-        });
-
-        if (!llmRes.ok) {
-          const errBody = await llmRes.json().catch(() => ({})) as Record<string, unknown>;
-          const msg = (errBody["error"] as Record<string, unknown> | undefined)?.["message"] as string | undefined;
-          return reply.status(502).send({ error: msg ?? "LLM request failed" });
+            { maxTokens: 256, temperature: 0.3 },
+          );
+        } catch (err) {
+          return reply.status(502).send({ error: err instanceof Error ? err.message : "LLM request failed" });
         }
-
-        const data = await llmRes.json() as { choices?: Array<{ message?: { content?: string } }> };
-        message = data.choices?.[0]?.message?.content?.trim() ?? "";
       } else {
         if (!providerRegistry) {
           return reply.status(501).send({ error: "CLI provider-backed commit generation is not configured" });

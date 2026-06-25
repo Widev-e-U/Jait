@@ -2,6 +2,60 @@ import { inferContextWindow, type AppConfig } from "../config.js";
 import type { LLMConfig } from "../tools/agent-loop.js";
 import type { JaitBackend } from "./users.js";
 
+/**
+ * Issue a one-shot (non-streaming) OpenAI-compatible /chat/completions request
+ * through the user's configured Jait backend. This is the exact same request
+ * path the agent loop uses for non-Ollama backends, so model aliases, the
+ * OpenRouter base URL, the BigModel (GLM) OpenAI-compatible API, and per-user
+ * API keys are all handled consistently. Ad-hoc callers (git commit-message
+ * generation, thread-title generation, etc.) should use this instead of
+ * hand-rolling their own fetch, so they never diverge from how chat resolves
+ * the model.
+ */
+export async function callJaitLlmCompletion(
+  llm: ResolvedJaitLlmConfig,
+  messages: Array<{ role: string; content: string }>,
+  options: { maxTokens?: number; temperature?: number; signal?: AbortSignal } = {},
+): Promise<string> {
+  // Ollama's native /api/chat endpoint is only needed for streaming num_ctx
+  // control. For a single non-streaming completion the OpenAI-compatible
+  // /v1/chat/completions endpoint works fine and keeps the URL shape uniform.
+  const url = `${llm.openaiBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${llm.openaiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: llm.openaiModel,
+      messages,
+      max_tokens: options.maxTokens ?? 256,
+      temperature: options.temperature ?? 0.3,
+    }),
+    signal: options.signal,
+  });
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const msg = (errBody["error"] as Record<string, unknown> | undefined)?.["message"] as
+      | string
+      | undefined;
+    throw new Error(msg ?? `LLM request failed (${res.status})`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (part?.type === "text" ? part.text ?? "" : ""))
+      .join("")
+      .trim();
+  }
+  throw new Error("LLM returned no content");
+}
+
 export class JaitConfigError extends Error {
   readonly code = "CONFIG_ERROR" as const;
 }

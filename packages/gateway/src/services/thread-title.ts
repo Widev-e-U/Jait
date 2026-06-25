@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import type { CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
-import { resolveJaitLlmConfig } from "./jait-llm.js";
+import { resolveJaitLlmConfig, callJaitLlmCompletion } from "./jait-llm.js";
 import type { JaitBackend } from "./users.js";
 
 const TITLE_MAX_LENGTH = 80;
@@ -121,36 +121,10 @@ async function callLlm(options: GenerateThreadTitleOptions): Promise<string> {
     });
     if (!llm.openaiApiKey) throw new Error(`${llm.backend.toUpperCase()} API key is not configured`);
 
-    const response = await fetch(`${llm.openaiBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${llm.openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: llm.openaiModel,
-        temperature: 0.2,
-        max_tokens: 24,
-        messages: promptMessages,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Jait title generation failed: ${response.status}`);
-    }
-
-    const data = await response.json() as {
-      choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
-    };
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      return content
-        .map((part) => (part?.type === "text" ? part.text ?? "" : ""))
-        .join("")
-        .trim();
-    }
-    throw new Error("Jait title generation returned no content");
+    // Reuse the shared completion helper so the model/base-url/key resolution
+    // is identical to chat and git commit-message generation (GLM via
+    // BigModel, OpenRouter aliases, Ollama, etc. all handled consistently).
+    return callJaitLlmCompletion(llm, promptMessages, { maxTokens: 24, temperature: 0.2 });
   }
 
   if (apiKeys["OPENAI_API_KEY"]?.trim() || options.config.llmProvider === "openai") {
