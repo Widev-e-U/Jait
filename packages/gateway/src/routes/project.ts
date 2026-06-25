@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { exec } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, dirname } from "node:path";
 import { promisify } from "node:util";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
@@ -744,6 +744,68 @@ export function registerProjectRoutes(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create directory";
       return reply.status(500).send({ error: "CREATE_DIR_FAILED", message });
+    }
+  });
+
+  // POST /api/project/reveal — reveal a file/folder in the OS file explorer.
+  // For local (gateway) surfaces this opens the platform file manager directly.
+  // For remote surfaces the request is proxied to the owning node (Electron app)
+  // which calls shell.showItemInFolder / shell.openPath.
+  app.post("/api/project/reveal", async (req, reply) => {
+    const body = req.body as { path?: string; surfaceId?: string } | null;
+    const targetPath = body?.path;
+    if (!targetPath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, targetPath);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_PROJECT", message: "No filesystem surface is running" });
+    }
+    const snap = fs.snapshot();
+    const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot as string | undefined;
+    if (!projectRoot) {
+      return reply.status(400).send({ error: "NO_ROOT", message: "No project root configured" });
+    }
+
+    try {
+      if (fs instanceof RemoteFileSystemSurface) {
+        const nodeId = fs.nodeId ?? ((snap.metadata as Record<string, unknown>)?.nodeId as string | undefined);
+        if (!nodeId || !ws) {
+          return reply.status(501).send({
+            error: "NOT_SUPPORTED",
+            message: "Reveal in file explorer is not available for this remote project",
+          });
+        }
+        // The surface stores project-relative paths for remote nodes, but the
+        // remote fs-op handler expects an absolute path. Reconstruct it.
+        const absPath = targetPath.startsWith(projectRoot) ? targetPath : join(projectRoot, targetPath);
+        const result = await ws.proxyFsOp<{ ok?: boolean }>(nodeId, "reveal-in-explorer", { path: absPath }, 10_000);
+        return { ok: true, revealed: true, ...(result ?? {}) };
+      }
+
+      // Local gateway surface — resolve the absolute path and open it.
+      const absPath = targetPath.startsWith(projectRoot) ? targetPath : join(projectRoot, targetPath);
+      const isWin = platform() === "win32";
+      const isMac = platform() === "darwin";
+      const escaped = absPath.replace(/"/g, '\\"');
+      if (isWin) {
+        // `explorer /select,"path"` highlights a file; for a directory it opens it.
+        await execAsync(`explorer /select,"${escaped}"`, { timeout: 5_000 });
+      } else if (isMac) {
+        // `open -R` reveals the file in Finder; for a directory it opens it.
+        await execAsync(`open -R "${escaped}"`, { timeout: 5_000 });
+      } else {
+        // Linux: open the containing directory (xdg-open doesn't support selection).
+        const { stat: fsStat } = await import("node:fs/promises");
+        const info = await fsStat(absPath);
+        const dirToOpen = info.isDirectory() ? absPath : dirname(absPath);
+        await execAsync(`xdg-open "${dirToOpen.replace(/"/g, '\\"')}"`, { timeout: 5_000 });
+      }
+      return { ok: true };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to reveal path";
+      return reply.status(500).send({ error: "REVEAL_FAILED", message });
     }
   });
 

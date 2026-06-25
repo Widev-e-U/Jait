@@ -391,6 +391,39 @@ async function remoteStatFile(filePath: string, surfaceId?: string | null): Prom
   }
 }
 
+/**
+ * Reveal a file or folder in the host OS file explorer.
+ *
+ * On Electron the renderer calls the native `fsOp("reveal-in-explorer")` IPC
+ * directly so the OS file manager opens on the user's machine. When the project
+ * lives on a remote surface (gateway-backed), the request is sent to the
+ * gateway which proxies it to the owning node.
+ *
+ * Returns true on success, false if the platform doesn't support it.
+ */
+async function revealInExplorer(nodePath: string, surfaceId?: string | null): Promise<boolean> {
+  const isElectron = typeof window !== 'undefined' && !!(window as any).jaitDesktop?.fsOp
+  if (isElectron) {
+    try {
+      await (window as any).jaitDesktop.fsOp('reveal-in-explorer', { path: nodePath })
+      return true
+    } catch {
+      return false
+    }
+  }
+  // Remote / gateway-backed project — ask the gateway to reveal it there.
+  try {
+    const res = await fetch(`${API_URL}/api/project/reveal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: nodePath, surfaceId }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Git status badge                                                   */
 /* ------------------------------------------------------------------ */
@@ -3408,6 +3441,17 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     void navigator.clipboard.writeText(rel)
   }, [remoteRoot])
 
+  /** Whether "Reveal in File Explorer" is supported for the current surface. */
+  const canRevealInExplorer = useMemo(() => {
+    // Supported whenever we have a real path to reveal: on Electron (native IPC)
+    // or when a gateway/remote surface is backing the project.
+    return typeof window !== 'undefined' && (!!(window as any).jaitDesktop?.fsOp || !!remoteRoot)
+  }, [remoteRoot])
+
+  const handleRevealInExplorer = useCallback((node: LazyNode) => {
+    void revealInExplorer(node.path, surfaceId)
+  }, [surfaceId])
+
   /* ---- Open diff from source control ---- */
   const handleScOpenDiff = useCallback(async (filePath: string) => {
     if (!remoteRoot) return
@@ -5421,6 +5465,18 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 <Copy className="h-3 w-3" />
                 Copy Relative Path
               </button>
+              {canRevealInExplorer && (
+                <button
+                  className="ui-menu-item"
+                  onClick={() => {
+                    void handleRevealInExplorer(fileContextMenu.node)
+                    setFileContextMenu(null)
+                  }}
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  Reveal in File Explorer
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -6336,6 +6392,18 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               <Copy className="h-3 w-3" />
               Copy Relative Path
             </button>
+            {canRevealInExplorer && (
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  void handleRevealInExplorer(fileContextMenu.node)
+                  setFileContextMenu(null)
+                }}
+              >
+                <FolderOpen className="h-3 w-3" />
+                Reveal in File Explorer
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -6443,6 +6511,18 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             <Copy className="h-3 w-3" />
             Copy Relative Path
           </button>
+          {canRevealInExplorer && (
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                void handleRevealInExplorer(fileContextMenu.node)
+                setFileContextMenu(null)
+              }}
+            >
+              <FolderOpen className="h-3 w-3" />
+              Reveal in File Explorer
+            </button>
+          )}
         </div>
       )
       )}

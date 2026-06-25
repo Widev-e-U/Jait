@@ -1754,6 +1754,13 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         type: d.isDirectory() ? "dir" : "file",
       }));
     }
+    case "reveal-in-explorer": {
+      // Open the OS file manager with the given file/folder selected.
+      // For directories the folder itself is opened; for files the parent
+      // folder is opened with the file highlighted (showItemInFolder).
+      const { revealInExplorer } = await import("./reveal-in-explorer.js");
+      return revealInExplorer(params.path as string, shell);
+    }
     case "search-project": {
       const projectRoot = resolve(params.path as string);
       const query = String(params.query ?? "");

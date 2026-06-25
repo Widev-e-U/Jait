@@ -1213,15 +1213,23 @@ function buildStructuredConversationSummary(removedMessages: AgentMessage[]): st
     if (message.tool_calls) addFileReferences(message.tool_calls, files);
 
     const content = compactSummaryText(message.content);
-    if (!content && !message.tool_calls?.length) continue;
 
     if (message.role === "user") {
-      pushSummaryItem(goals, content, 3);
+      // Always preserve the user's intent as a goal — even when the message
+      // was empty/whitespace-only. The first user turn is the most prune-prone
+      // (it is the oldest), so silently skipping it would lose the entire
+      // context of the conversation. Use an explicit fallback so the loss is
+      // visible rather than disappearing into "Not captured in pruned turns."
+      const goalText = content || "[user message was empty or whitespace-only]";
+      pushSummaryItem(goals, goalText, 3);
       if (constraintPattern.test(content)) pushSummaryItem(constraints, content);
       if (decisionPattern.test(content)) pushSummaryItem(decisions, content);
       if (nextStepPattern.test(content)) pushSummaryItem(nextSteps, content);
       continue;
     }
+
+    // For non-user roles, skip messages with no content and no tool calls.
+    if (!content && !message.tool_calls?.length) continue;
 
     if (message.role === "system") {
       if (constraintPattern.test(content)) pushSummaryItem(constraints, content);
