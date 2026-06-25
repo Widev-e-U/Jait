@@ -1869,6 +1869,29 @@ function App() {
     localStorage.removeItem('cliModel')
   }, [cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token, consumeSuppressedUiSync])
 
+  // ── Restore the Jait provider's selected model across new chats ──
+  // The model picked in the provider/model selector is persisted to the user
+  // `selected_model` setting (provider-model-selector.tsx handleModelSelect).
+  // Per-session model selections live in the `chat.cliModels` session state,
+  // which is empty for a brand-new chat — so without this restore the model
+  // dropdown reset to "Default" every time the user started a new chat. When
+  // the active session has finished loading its cliModels and has no jait
+  // model saved, fall back to the user-wide `selected_model` setting so the
+  // last picked model stays selected.
+  useEffect(() => {
+    if (!activeSessionId || !token || authLoading) return
+    if (loadingCliModels) return
+    const currentJaitModel = cliModelsByProvider['jait']
+    if (typeof currentJaitModel === 'string' && currentJaitModel.trim()) return
+    const savedModel = settings?.selected_model
+    if (typeof savedModel !== 'string' || !savedModel.trim()) return
+    if (currentJaitModel === savedModel) return
+    setCliModelsByProvider((prev) =>
+      prev['jait'] === savedModel ? prev : { ...prev, jait: savedModel }
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId, token, authLoading, loadingCliModels, settings?.selected_model])
+
   // Track whether the initial server sync has happened so we don't PATCH on mount
   const chatProviderInitialized = useRef(false)
 

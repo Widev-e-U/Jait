@@ -111,6 +111,15 @@ function setSetting(key: string, value: unknown): void {
 // Must run after settingsPath/loadSettings/saveSettings/getSetting/setSetting are defined.
 persistentDeviceId = resolvePersistentDeviceId();
 
+// ── Hardware acceleration recovery ─────────────────────────────────────
+// A previous renderer/GPU crash loop persists `disableHwAccel` so the next
+// launch survives. disableHardwareAcceleration() must be called BEFORE the
+// app is ready (before any window is created), so we read the flag here.
+if (getSetting<boolean>("disableHwAccel", false)) {
+  app.disableHardwareAcceleration();
+  console.warn("[electron] hardware acceleration disabled (persisted crash-recovery flag)");
+}
+
 /** Whether the app should quit on window close vs minimize to tray. Default: false (minimize to tray). */
 function shouldQuitOnClose(): boolean {
   return getSetting("closeOnWindowClose", false);
@@ -438,6 +447,55 @@ function createMainWindow(): BrowserWindow {
     event.preventDefault();
   });
 
+  // ── Gray-screen recovery ──────────────────────────────────────────────
+  // The most common cause of a "gray screen of death" in Electron is the
+  // renderer process crashing (OOM, native module fault) or the GPU process
+  // dying — the BrowserWindow keeps its solid backgroundColor (#202020, a
+  // dark gray) but paints nothing. We detect those events here and recover
+  // by reloading the page; if the renderer keeps crashing we relaunch the
+  // whole app with hardware acceleration disabled (a frequent culprit on
+  // certain GPU/driver combos).
+  let renderCrashCount = 0;
+  let renderCrashResetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error(`[electron] render-process-gone: ${details.reason} (exitCode=${details.exitCode})`);
+    if (win.isDestroyed()) return;
+
+    renderCrashCount += 1;
+    clearTimeout(renderCrashResetTimer);
+    renderCrashResetTimer = setTimeout(() => { renderCrashCount = 0; }, 60_000);
+
+    // After repeated crashes, assume a GPU/hardware-acceleration fault and
+    // relaunch the app with the GPU disabled so the next session survives.
+    if (renderCrashCount >= 3) {
+      console.error("[electron] renderer crashed repeatedly — relaunching with hardware acceleration disabled");
+      setSetting("disableHwAccel", true);
+      isQuitting = true;
+      app.relaunch();
+      app.quit();
+      return;
+    }
+
+    // Single/occasional crash: just reload the app content.
+    void loadApp(win);
+  });
+
+  // If the renderer hangs (infinite sync loop / deadlock), reload it after
+  // a short grace period so the user isn't stuck on a frozen gray window.
+  let unresponsiveTimer: ReturnType<typeof setTimeout> | undefined;
+  win.on("unresponsive", () => {
+    console.error("[electron] window unresponsive — will reload in 8s if still hung");
+    clearTimeout(unresponsiveTimer);
+    unresponsiveTimer = setTimeout(() => {
+      if (win.isDestroyed()) return;
+      if (!win.webContents.isCrashed()) return;
+      console.error("[electron] window still unresponsive — reloading");
+      void loadApp(win);
+    }, 8000);
+  });
+  win.on("responsive", () => clearTimeout(unresponsiveTimer));
+
   return win;
 }
 
@@ -558,6 +616,14 @@ ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
   setSetting(key, value);
   return { ok: true };
 });
+
+// Allow the renderer (Settings) to clear the persisted hardware-acceleration
+// disable flag so the next launch re-enables GPU rendering normally.
+ipcMain.handle("desktop:reset-hw-accel", () => {
+  setSetting("disableHwAccel", false);
+  return { ok: true, disabled: false };
+});
+ipcMain.handle("desktop:get-hw-accel", () => ({ disabled: getSetting<boolean>("disableHwAccel", false) }));
 
 // ── Auto-launch on PC startup (OS login item) ──────────────────────────
 // Toggles whether Jait launches when the user logs into the OS.
@@ -2876,6 +2942,17 @@ app.whenReady().then(async () => {
       void loadApp(mainWindow);
     }
   });
+});
+
+// ── GPU-process crash recovery ──────────────────────────────────────────
+// A dead GPU process leaves the window blank/gray with content never painted.
+// Reload the main window once so the user isn't stuck on a dead surface.
+app.on("child-process-gone", (_event, details) => {
+  if (details.type !== "GPU") return;
+  console.error(`[electron] gpu child process gone: ${details.reason} (exitCode=${details.exitCode})`);
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  void loadApp(win);
 });
 
 app.on("before-quit", () => {

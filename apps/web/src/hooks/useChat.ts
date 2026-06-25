@@ -400,6 +400,11 @@ export function useChat(
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const pendingResumeAfterDirectStreamRef = useRef(false)
+  // Backoff timer for auto-reconnecting the resume SSE stream after a
+  // transient drop (network blip, proxy idle timeout) — the main cause of
+  // chat "freezing" until the user manually reloads or switches sessions.
+  const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const resumeReconnectAttemptsRef = useRef(0)
 
   const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean }) => {
     if (
@@ -421,8 +426,53 @@ export function useChat(
     pendingResumeAfterDirectStreamRef.current = false
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
+    // Starting a fresh (re)subscribe — reset the backoff state.
+    resumeReconnectAttemptsRef.current = 0
+    if (resumeReconnectTimerRef.current !== null) {
+      clearTimeout(resumeReconnectTimerRef.current)
+      resumeReconnectTimerRef.current = null
+    }
     setRefreshTrigger(n => n + 1)
   }, [sessionId])
+
+  /**
+   * Auto-reconnect the resume SSE stream after a transient drop.
+   *
+   * This is the fix for the "chat freezes, must reload or switch projects"
+   * problem: when the SSE fetch connection dies mid-stream (network blip,
+   * proxy idle timeout, browser throttling a background tab), the previous
+   * code only surfaced an error banner and never resubscribed. The agent
+   * loop on the gateway keeps running, but the client stops receiving tokens
+   * until the user manually reloads / switches sessions (which bumps
+   * refreshTrigger and re-runs the resume effect).
+   *
+   * We schedule a reconnect with exponential backoff, preserving the messages
+   * already received (the snapshot endpoint replays the full state including
+   * any partial assistant content, deduped via `seq`). Reconnecting is a no-op
+   * if the user has navigated away from this session or a fresh stream already
+   * opened. Capped at ~30s backoff and gives up after ~5 minutes of failures.
+   */
+  const scheduleResumeReconnect = useCallback(() => {
+    // If the user navigated away from this session, don't reconnect.
+    if (prevSessionIdRef.current !== sessionId) return
+    // Don't double-schedule.
+    if (resumeReconnectTimerRef.current !== null) return
+    // A direct chat stream is owned by the sending client; its done/finish
+    // path already triggers a resume. Avoid racing it.
+    if (abortControllerRef.current && directStreamSessionRef.current === sessionId) return
+    const attempt = resumeReconnectAttemptsRef.current + 1
+    if (attempt > 20) return // ~5 min total of backoff — give up gracefully.
+    resumeReconnectAttemptsRef.current = attempt
+    const delay = Math.min(30000, 500 * Math.pow(2, attempt - 1))
+    resumeReconnectTimerRef.current = setTimeout(() => {
+      resumeReconnectTimerRef.current = null
+      // Re-check currency inside the timer — session may have changed.
+      if (prevSessionIdRef.current !== sessionId) return
+      // Avoid clobbering an active resume stream that re-opened in the meantime.
+      if (streamAbortRef.current && streamResumeSessionRef.current === sessionId) return
+      resumeSessionStream()
+    }, delay)
+  }, [resumeSessionStream, sessionId])
 
   const finishDirectStream = useCallback((requestSessionId: string | null, controller: AbortController) => {
     if (abortControllerRef.current === controller) abortControllerRef.current = null
@@ -502,6 +552,8 @@ export function useChat(
         const decoder = new TextDecoder()
         let lineBuffer = ''
         let assistantId: string | null = null
+        let receivedDone = false
+        let wasStreaming = false
 
         // ── rAF-batched message updater for high-frequency stream events ──
         let pendingSubscribeUpdates: Partial<ChatMessage> | null = null
@@ -662,6 +714,7 @@ export function useChat(
                 if (lastMsg?.role === 'assistant') {
                   assistantId = lastMsg.id
                   // Reset accumulators when we get a fresh snapshot
+                  wasStreaming = wasStreaming || snapshotStreaming
                   accumulatedContent = lastMsg.content
                   accumulatedSegments = lastMsg.segments as MessageSegment[] | undefined
                   accumulatedThinking = (lastMsg as any).thinking ?? ''
@@ -899,6 +952,7 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               } else if (data.type === 'done') {
+                receivedDone = true
                 // Flush any batched token updates before marking completion
                 flushSubscribeUpdates()
                 setState(prev => {
@@ -955,16 +1009,27 @@ export function useChat(
         }
         // Flush any remaining batched updates when stream ends
         flushSubscribeUpdates()
+        // The SSE connection ended without a `done` event while the gateway
+        // reported it was still streaming — the connection dropped silently
+        // (proxy idle timeout, background-tab throttling, network blip).
+        // Re-subscribe so live tokens keep flowing without a manual reload.
+        if (!cancelled && !receivedDone && wasStreaming && isCurrentResumeRun()) {
+          scheduleResumeReconnect()
+        }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         if (!cancelled) {
+          const transient = isTransientConnectionError(err)
           setState(prev => ({
             ...prev,
             isLoadingHistory: false,
-            error: preserveExistingMessages && isTransientConnectionError(err)
+            error: preserveExistingMessages && transient
               ? TRANSIENT_CONNECTION_MESSAGE
               : prev.error,
           }))
+          // Auto-reconnect after a transient drop so the chat keeps streaming
+          // without the user having to reload or switch sessions.
+          if (transient) scheduleResumeReconnect()
         }
       } finally {
         if (streamAbortRef.current === streamController) streamAbortRef.current = null
@@ -977,10 +1042,15 @@ export function useChat(
       streamController.abort()
       if (streamAbortRef.current === streamController) streamAbortRef.current = null
       if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
+      // Cancel any pending auto-reconnect so it can't fire into a stale session.
+      if (resumeReconnectTimerRef.current !== null) {
+        clearTimeout(resumeReconnectTimerRef.current)
+        resumeReconnectTimerRef.current = null
+      }
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger])
+  }, [authToken, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback((options?: { force?: boolean }) => {
