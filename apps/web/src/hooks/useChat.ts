@@ -597,6 +597,26 @@ export function useChat(
         let accumulatedThinking = ''
         const seenToolCallIds = new Set<string>()
 
+        // When a client (re)opens the resume stream during a run that hasn't
+        // produced any content/thinking/tools yet, the snapshot has no synthetic
+        // assistant message (the accumulator is empty), so `assistantId` is null.
+        // Without this guard, EVERY subsequent live token/thinking/tool event is
+        // dropped (each handler gates on `&& assistantId`), and the final answer
+        // only appears after a manual reload — the "chat stays loading until I
+        // refresh" bug. Synthesize an empty assistant message on the first live
+        // streaming event so tokens have a target to stream into.
+        const ensureStreamingAssistant = (): string | null => {
+          if (assistantId) return assistantId
+          if (!isCurrentResumeRun()) return null
+          const id = createOptimisticMessageId('assistant')
+          assistantId = id
+          setState(prev => ({
+            ...prev,
+            messages: [...prev.messages, { id, role: 'assistant', content: '' }],
+          }))
+          return id
+        }
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -647,7 +667,7 @@ export function useChat(
                   const lastSeq = lastResumeSeqBySessionRef.current.get(sessionId) ?? 0
                   if (data.seq > lastSeq) lastResumeSeqBySessionRef.current.set(sessionId, data.seq)
                 }
-                const msgs: ChatMessage[] = rawMsgs.map(m => {
+                let msgs: ChatMessage[] = rawMsgs.map(m => {
                   const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
                   const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
                   if (m.hasContextFlow) msg.hasContextFlow = true
@@ -709,12 +729,20 @@ export function useChat(
                   }
                   return msg
                 })
+                // Track whether the server reported an active stream for this
+                // snapshot. This MUST be set independent of whether the snapshot
+                // included a synthetic assistant message: when a client (re)opens
+                // mid-run before the agent has produced any content/thinking/tools,
+                // the accumulator is empty and the snapshot's last message is the
+                // user turn — but the stream is still live. Without setting
+                // wasStreaming here, a silent SSE drop would never trigger the
+                // auto-reconnect, so the chat freezes until a manual reload.
+                wasStreaming = wasStreaming || snapshotStreaming
                 // Track the last assistant message for token updates
                 const lastMsg = msgs[msgs.length - 1]
                 if (lastMsg?.role === 'assistant') {
                   assistantId = lastMsg.id
                   // Reset accumulators when we get a fresh snapshot
-                  wasStreaming = wasStreaming || snapshotStreaming
                   accumulatedContent = lastMsg.content
                   accumulatedSegments = lastMsg.segments as MessageSegment[] | undefined
                   accumulatedThinking = (lastMsg as any).thinking ?? ''
@@ -732,19 +760,22 @@ export function useChat(
                   hasMore: !!(data.hasMore),
                   totalMessages: typeof data.total === 'number' ? data.total : prev.totalMessages,
                 }))
-              } else if (data.type === 'token' && assistantId) {
+              } else if (data.type === 'token') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 // Batch token updates via rAF instead of per-token setState
                 const token = data.content as string
                 accumulatedContent += token
                 accumulatedSegments = withTextSegment(accumulatedSegments, token)
                 batchSubscribeUpdate({ content: accumulatedContent, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
-              } else if (data.type === 'thinking' && assistantId) {
+              } else if (data.type === 'thinking') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 // Batch thinking updates
                 const text = data.content as string
                 accumulatedThinking += text
                 accumulatedSegments = withThinkingSegment(accumulatedSegments, text)
                 batchSubscribeUpdate({ thinking: accumulatedThinking, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
-              } else if (data.type === 'tool_call_delta' && assistantId) {
+              } else if (data.type === 'tool_call_delta') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 // Flush any pending content batch before tool updates
                 flushSubscribeUpdates()
                 const callId = data.call_id as string
@@ -785,7 +816,8 @@ export function useChat(
                     return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
                   }),
                 }))
-              } else if (data.type === 'tool_start' && assistantId) {
+              } else if (data.type === 'tool_start') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 flushSubscribeUpdates()
                 const callId = data.call_id as string
                 // Mutate the authoritative segment list (not m.segments) so a
@@ -823,7 +855,8 @@ export function useChat(
                     return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
                   }),
                 }))
-              } else if (data.type === 'approval_required' && assistantId) {
+              } else if (data.type === 'approval_required') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 flushSubscribeUpdates()
                 const requestId = data.request_id as string
                 const callId = (data.call_id as string) || `approval-${requestId}`
@@ -851,7 +884,8 @@ export function useChat(
                     return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
                   }),
                 }))
-              } else if (data.type === 'tool_output' && assistantId) {
+              } else if (data.type === 'tool_output') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 setState(prev => ({
                   ...prev,
                   messages: prev.messages.map(m => {
@@ -866,7 +900,8 @@ export function useChat(
                     }
                   }),
                 }))
-              } else if (data.type === 'tool_result' && assistantId) {
+              } else if (data.type === 'tool_result') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 setState(prev => ({
                   ...prev,
                   messages: prev.messages.map(m => {
@@ -914,7 +949,8 @@ export function useChat(
                 setTodoList(normalizeTodoStateValue(data.items))
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
-              } else if (data.type === 'context_flow' && assistantId) {
+              } else if (data.type === 'context_flow') {
+                if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 const contextFlow = parseContextFlowEvent(data as Record<string, unknown>)
                 setState(prev => ({
                   ...prev,

@@ -44,6 +44,7 @@ import { useProjectFileActions } from '@/hooks/useProjectFileActions'
 import { useSessionStateSync } from '@/hooks/useSessionStateSync'
 import { useTerminalInteractionHandlers } from '@/hooks/useTerminalInteractionHandlers'
 import { FloatingScreenShareWindow } from '@/components/screen-share/floating-screen-share-window'
+import { MobileBottomNav } from '@/components/mobile/mobile-bottom-nav'
 import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
@@ -3458,6 +3459,20 @@ function App() {
     treeTab: mobileTreeTab,
   }), [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree])
 
+  // Escape hatch for mobile: collapse any fullscreen project/terminal pane so
+  // the chat workspace becomes visible again. Replaces the old floating-strip
+  // Chat button that was removed when the slide-in drawer took over.
+  const handleMobileChatClick = useCallback(() => {
+    if (showTerminal) {
+      closeTerminalPanel()
+    }
+    if (showProject) {
+      closeProjectPanel()
+    }
+    setShowSidebar(false)
+    setShowMobileToolbar(false)
+  }, [closeTerminalPanel, closeProjectPanel, showTerminal, showProject])
+
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -3989,6 +4004,19 @@ function App() {
           </div>
         )}
 
+        {isMobile && currentView === 'chat' && (
+          <MobileBottomNav
+            activeProjectId={activeProjectId}
+            changedFilesCount={changedFiles.length}
+            mobileProjectControlState={mobileProjectControlState}
+            showProject={showProject}
+            showSidebar={showSidebar}
+            showTerminal={showTerminal}
+            onChatClick={handleMobileChatClick}
+            onProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
+          />
+        )}
+
             {/* Terminal panel rendered as sidebar-adjacent column above */}
 
             {viewMode === 'developer' && showDebugPanel && (
@@ -4004,7 +4032,12 @@ function App() {
                 open={showMobileToolbar}
                 onClose={() => setShowMobileToolbar(false)}
                 currentView={currentView}
-                onNavigate={setCurrentView}
+                onNavigate={(view) => {
+                  if (view === 'chat') {
+                    handleMobileChatClick()
+                  }
+                  setCurrentView(view)
+                }}
                 showSidebar={showSidebar}
                 onToggleSidebar={() => setShowSidebar((s) => !s)}
                 sessionSelector={

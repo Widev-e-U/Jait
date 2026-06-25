@@ -1181,9 +1181,13 @@ function buildVisibleHistoryMessages(
 
   // If there is a live streaming accumulator for this session, inject a
   // synthetic assistant message so that reconnecting clients see the partial
-  // content that has been streamed so far.
+  // content that has been streamed so far. The accumulator exists from the
+  // moment the run starts (before the first token), so this also covers the
+  // pre-first-token window where content/thinking/tools are all empty — the
+  // snapshot then carries `streaming: true` + an empty assistant bubble, which
+  // the frontend renders immediately instead of freezing on the user turn.
   const acc = sessionStreamingState.get(sessionId);
-  if (acc && (acc.content || acc.toolCalls.length > 0 || acc.thinking)) {
+  if (acc) {
     const last = msgs[msgs.length - 1];
     // Merge into the last assistant message if it exists and has no content yet
     // (the snapshot builder may have emitted a stub). Otherwise append a new one.
@@ -1867,8 +1871,13 @@ export function registerChatRoutes(
     // order on reload because the rows share createdAt down to the millisecond).
     let loopPersisted = false;
     activeStreams.add(sessionId);
-    // Reset streaming accumulator for this turn so reload snapshots start fresh
-    sessionStreamingState.delete(sessionId);
+    // Reset streaming accumulator for this turn so reload snapshots start fresh.
+    // Eagerly (re)create it so the invariant "activeStreams.has => accumulator
+    // exists" holds for the entire run, including the pre-first-token window
+    // where accumulateToken/recordToolCallStart haven't run yet. Without this,
+    // a mid-run snapshot taken before the first token sees no accumulator and
+    // buildVisibleHistoryMessages emits no assistant bubble.
+    getOrCreateAccumulator(sessionId);
     sessionStreamSeq.set(sessionId, 0);
     if (isQueuedDrainRequest && ws) {
       ws.broadcast(sessionId, {
