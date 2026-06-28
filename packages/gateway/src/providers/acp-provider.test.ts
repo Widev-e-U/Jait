@@ -68,6 +68,38 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpModelTimeoutScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Operation timed out" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+
 const fakeAcpNoModelsScript = `
 process.stdin.setEncoding("utf8");
 let buffer = "";
@@ -560,6 +592,20 @@ describe("AcpProvider auth", () => {
     } finally {
       rmSync(codexHome, { recursive: true, force: true });
     }
+  });
+
+  it("returns Codex fallback models when ACP model discovery times out", async () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpModelTimeoutScript],
+    });
+
+    await expect(provider.listModels()).resolves.toEqual([
+      expect.objectContaining({ id: "gpt-5-codex", isDefault: true }),
+    ]);
   });
 
   it("returns Claude Code alias models when ACP model metadata is unavailable", async () => {

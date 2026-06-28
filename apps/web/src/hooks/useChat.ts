@@ -1258,7 +1258,7 @@ export function useChat(
     let pendingMessageFrame: number | null = null
     let pendingMessageTimeout: ReturnType<typeof setTimeout> | null = null
     let lastMessageFlushAt = 0
-    const STREAM_UPDATE_MIN_INTERVAL_MS = 50
+    const STREAM_UPDATE_MIN_INTERVAL_MS = 0
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }

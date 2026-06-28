@@ -135,7 +135,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
         this.nodeId,
         "list-models",
         { providerId: this.id },
-        30_000,
+        90_000,
       );
       return Array.isArray(result) ? result : [];
     } catch {

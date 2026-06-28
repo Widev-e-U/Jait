@@ -46,7 +46,7 @@ type AcpProviderAuthKind = "acp";
 
 const execFileAsync = promisify(execFile);
 
-const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 20_000 : 5_000;
+const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 30_000 : 20_000;
 const ACP_PROBE_CLOSE_TIMEOUT_MS = 1_000;
 /** Timeout for the `<command> --version` availability probe. */
 const AVAILABILITY_PROBE_TIMEOUT_MS = 5_000;
@@ -60,6 +60,9 @@ const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
   { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
   { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
+];
+const CODEX_FALLBACK_MODELS: ProviderModelInfo[] = [
+  { id: "gpt-5-codex", name: "GPT-5 Codex", description: "Codex default coding model", isDefault: true },
 ];
 
 export interface AcpProviderConfig {
@@ -225,9 +228,9 @@ export class AcpProvider implements CliProviderAdapter {
           ACP_PROBE_CLOSE_TIMEOUT_MS,
         ).catch(() => {});
       }
-      this.cachedModels = models.length > 0 || this.id !== "claude-code"
+      this.cachedModels = models.length > 0
         ? models
-        : CLAUDE_CODE_FALLBACK_MODELS;
+        : getAcpFallbackModels(this.id);
       return this.cachedModels;
     } catch (error) {
       const message = extractErrorMessage(error, "ACP model discovery failed");
@@ -235,6 +238,13 @@ export class AcpProvider implements CliProviderAdapter {
         throw new Error(
           `${this.info.name} is logged in, but the provider rejected model discovery: ${message}. Check provider usage limits or account access.`,
         );
+      }
+      if (isAcpModelDiscoveryTimeout(message)) {
+        const fallbackModels = getAcpFallbackModels(this.id);
+        if (fallbackModels.length > 0) {
+          this.cachedModels = fallbackModels;
+          return this.cachedModels;
+        }
       }
       throw error instanceof Error ? error : new Error(message);
     } finally {
@@ -916,6 +926,16 @@ function isAuthenticationRequiredMessage(message: string): boolean {
     || lower.includes("not logged in")
     || lower.includes("login required")
     || lower.includes("credentials are not configured");
+}
+
+function isAcpModelDiscoveryTimeout(message: string): boolean {
+  return /\btimeout\b|timed out|operation timed out/i.test(message);
+}
+
+function getAcpFallbackModels(providerId: ProviderId): ProviderModelInfo[] {
+  if (providerId === "codex") return CODEX_FALLBACK_MODELS;
+  if (providerId === "claude-code") return CLAUDE_CODE_FALLBACK_MODELS;
+  return [];
 }
 
 function getCodexAuthPaths(): string[] {

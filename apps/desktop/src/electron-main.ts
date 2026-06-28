@@ -1643,9 +1643,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         await rpcSend(tmpSess, "initialize", {
           clientInfo: { name: "jait-remote", title: "Jait Remote Provider", version: "1.0.0" },
           capabilities: { experimentalApi: true },
-        }, 15_000);
+        }, 45_000);
         rpcNotify(tmpSess, "initialized");
-        const result = await rpcSend(tmpSess, "model/list", {}, 15_000);
+        const result = await rpcSend(tmpSess, "model/list", {}, 45_000);
         return result;
       } finally {
         child.kill("SIGTERM");
