@@ -109,6 +109,27 @@ function formatExternalProviderFirstTurn(systemPrompt: string, userContent: stri
   return parts.join("\n");
 }
 
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+  "Content-Encoding": "identity",
+} as const;
+
+function writeSseHead(reply: { raw: { writeHead: (statusCode: number, headers: Record<string, string>) => void; flushHeaders?: () => void } }, headers: Record<string, string> = {}): void {
+  reply.raw.writeHead(200, {
+    ...SSE_HEADERS,
+    ...headers,
+  });
+  reply.raw.flushHeaders?.();
+}
+
+function writeSseChunk(reply: { raw: { write: (chunk: string) => unknown; flush?: () => void } }, chunk: string): void {
+  reply.raw.write(chunk);
+  reply.raw.flush?.();
+}
+
 function normalizeExternalContextContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (content === null || content === undefined) return "";
@@ -229,6 +250,27 @@ function shouldIncludeContactMemories(content: string): boolean {
   return /\b(based on what you know|remember|preference|preferences|prefer|my usual|about me|what do you know)\b/i.test(content);
 }
 
+function memoryRelevanceTokens(content: string): Set<string> {
+  return new Set(
+    content
+      .toLowerCase()
+      .split(/[^a-z0-9_äöüß]+/i)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4)
+      .filter((token) => !["this", "that", "with", "from", "have", "your", "what", "when", "where", "which", "there", "their", "about", "should", "would", "could", "please", "help"].includes(token)),
+  );
+}
+
+function hasLexicalMemoryOverlap(query: string, content: string): boolean {
+  const queryTokens = memoryRelevanceTokens(query);
+  if (queryTokens.size === 0) return false;
+  const contentTokens = memoryRelevanceTokens(content);
+  for (const token of queryTokens) {
+    if (contentTokens.has(token)) return true;
+  }
+  return false;
+}
+
 function memorySourceLabel(entry: MemoryEntry): string {
   if (entry.source.type === "pre_compaction") {
     return "memory compact"
@@ -275,12 +317,14 @@ async function retrieveRelevantMemoryContext(
 
   const projectMemories = await memoryService.search(query, 25, "project");
   const byId = new Map<string, MemoryEntry>();
+  const includeBroadMemory = shouldIncludeContactMemories(query);
   for (const entry of projectMemories) {
     if (!isSourceVisible(entry)) continue;
+    if (!includeBroadMemory && !hasLexicalMemoryOverlap(query, entry.content)) continue;
     byId.set(entry.id, entry);
   }
 
-  if (shouldIncludeContactMemories(query)) {
+  if (includeBroadMemory) {
     const contactMemories = await memoryService.search(query, Math.max(0, 25 - byId.size), "contact");
     for (const entry of contactMemories) {
       if (!isSourceVisible(entry)) continue;
@@ -1761,14 +1805,8 @@ export function registerChatRoutes(
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
     const reqOrigin = request.headers.origin ?? "*";
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      // Prevent reverse proxies (nginx etc.) from buffering the SSE stream,
-      // which would otherwise swallow chunks and let the connection time out.
-      "X-Accel-Buffering": "no",
-      "Access-Control-Allow-Origin": reqOrigin,
+    writeSseHead(reply, {
+      "Access-Control-Allow-Origin": String(reqOrigin),
       "Access-Control-Allow-Credentials": "true",
     });
 
@@ -1893,7 +1931,7 @@ export function registerChatRoutes(
 
     const safeWrite = (data: string) => {
       if (!clientDisconnected) {
-        try { reply.raw.write(data); } catch { clientDisconnected = true; }
+        try { writeSseChunk(reply, data); } catch { clientDisconnected = true; }
       }
     };
 
@@ -3065,12 +3103,8 @@ export function registerChatRoutes(
     const limit = parseMessageLimit(query?.limit);
 
     const reqOrigin = request.headers.origin ?? "*";
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-      "Access-Control-Allow-Origin": reqOrigin,
+    writeSseHead(reply, {
+      "Access-Control-Allow-Origin": String(reqOrigin),
       "Access-Control-Allow-Credentials": "true",
     });
 
@@ -3106,7 +3140,7 @@ export function registerChatRoutes(
       hasMore = windowed.hasMore;
     }
 
-    reply.raw.write(
+    writeSseChunk(reply,
       `data: ${JSON.stringify({
         type: "snapshot",
         messages: snapshotMessages,
@@ -3120,7 +3154,7 @@ export function registerChatRoutes(
 
     if (!isStreaming) {
       // Not streaming — send done immediately
-      reply.raw.write(
+      writeSseChunk(reply,
         `data: ${JSON.stringify({ type: "done", session_id: sessionId, prompt_count: history.filter(m => m.role === "user").length, remaining_prompts: null })}\n\n`,
       );
       reply.raw.end();
@@ -3148,13 +3182,13 @@ export function registerChatRoutes(
     // LLM responses) so browsers/proxies don't drop it with "fetch failed".
     keepalive = setInterval(() => {
       if (closed) return;
-      try { reply.raw.write(`: keepalive\n\n`); } catch { closeStream(); }
+      try { writeSseChunk(reply, `: keepalive\n\n`); } catch { closeStream(); }
     }, 15_000);
 
     unsubscribe = subscribe(sessionId, snapshotSeq, (event) => {
       if (closed) return;
       try {
-        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        writeSseChunk(reply, `data: ${JSON.stringify(event)}\n\n`);
         if (event.type === "done" || event.type === "error") {
           closeStream();
         }

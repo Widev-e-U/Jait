@@ -36,6 +36,31 @@ describe('matchSkills', () => {
     expect(matchExplicitSkillInvocations('/deep-research please', skills)).toEqual(['deep-research'])
   })
 
+
+  it('does not auto-activate weak one-word skill matches', () => {
+    const skills = [
+      { id: 'openhue', name: 'openhue', description: 'Control Philips Hue lights and scenes via the OpenHue CLI.' },
+      { id: 'eightctl', name: 'eightctl', description: 'Control Eight Sleep pods status, temperature, alarms, schedules.' },
+      { id: 'debugging', name: 'Debugging', description: 'Diagnose crashes, errors, and broken behavior.' },
+    ]
+
+    expect(matchSkills('implement keyboard controls for every button in my app', skills)).toEqual([])
+  })
+
+  it('caps automatic skill matches while preserving explicit invocations', () => {
+    const skills = [
+      { id: 'debugging', name: 'Debugging', description: 'Diagnose crashes, errors, broken failures, and unexpected behavior.' },
+      { id: 'review', name: 'Code Review', description: 'Review code quality, errors, bugs, and maintainability.' },
+      { id: 'security', name: 'Security Audit', description: 'Audit code for security errors, bugs, auth, and vulnerabilities.' },
+      { id: 'deep-research', name: 'Deep Research', description: 'Compare options and synthesize findings.' },
+    ]
+
+    const matched = matchSkills('/deep-research review this broken security auth error for bugs', skills)
+    expect(matched[0]).toBe('deep-research')
+    expect(matched).toHaveLength(3)
+    expect(matched.slice(1)).toEqual(['review', 'security'])
+  })
+
   it('matches the named skill when the prompt references it directly', () => {
     const skills = [
       { id: 'debugging', name: 'Debugging', description: 'Diagnose crashes, errors, and broken behavior.' },

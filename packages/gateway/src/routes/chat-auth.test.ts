@@ -61,6 +61,9 @@ describe("chat route auth guards", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/event-stream");
+    expect(res.headers["cache-control"]).toContain("no-transform");
+    expect(res.headers["x-accel-buffering"]).toBe("no");
+    expect(res.headers["content-encoding"]).toBe("identity");
     const dataLines = res.body
       .split("\n")
       .filter((line) => line.startsWith("data: "))

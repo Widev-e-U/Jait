@@ -142,6 +142,9 @@ export function matchExplicitSkillInvocations(message: string, skills: Skill[]):
   return matched;
 }
 
+const MIN_AUTO_SKILL_SCORE = 2;
+const MAX_AUTO_SKILLS = 2;
+
 export function matchSkills(message: string, skills: Skill[]): string[] {
   if (skills.length === 0) return [];
 
@@ -165,15 +168,15 @@ export function matchSkills(message: string, skills: Skill[]): string[] {
       if (messageLower.includes(word)) score += 2; // Name matches are stronger
     }
 
-    if (score > 0) {
+    if (score >= MIN_AUTO_SKILL_SCORE) {
       matched.push({ id: skill.id, score });
     }
   }
 
-  // Return top matches, sorted by score — explicit invocations always lead.
+  // Return only high-confidence top matches — explicit invocations always lead.
   const keywordMatches = matched
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, MAX_AUTO_SKILLS)
     .map((m) => m.id);
   return [...explicit, ...keywordMatches];
 }
