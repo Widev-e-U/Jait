@@ -18,6 +18,11 @@ export interface UserTerminalReference {
   selectedText?: string
 }
 
+export interface UserSkillReference {
+  id: string
+  name: string
+}
+
 export interface UserLineRange {
   startLine: number
   endLine: number
@@ -42,6 +47,7 @@ export type UserMessageSegment =
   | ({ type: 'file' } & UserReferencedFile)
   | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
+  | ({ type: 'skill' } & UserSkillReference)
   | ({ type: 'image' } & UserImageAttachment)
   | ({ type: 'attachment' } & UserFileAttachment)
 
@@ -96,6 +102,16 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       continue
     }
 
+    if (segment.type === 'skill') {
+      if (!segment.id.trim()) continue
+      normalized.push({
+        type: 'skill',
+        id: segment.id,
+        name: segment.name || segment.id,
+      })
+      continue
+    }
+
     if (segment.type === 'image') {
       if (!segment.data.trim() || !segment.mimeType.startsWith('image/')) continue
       normalized.push({
@@ -121,8 +137,8 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
 
 export function userMessageTextFromSegments(segments: UserMessageSegment[] | null | undefined): string {
   return normalizeUserMessageSegments(segments)
-    .filter((segment): segment is Extract<UserMessageSegment, { type: 'text' }> => segment.type === 'text')
-    .map((segment) => segment.text)
+    .filter((segment): segment is Extract<UserMessageSegment, { type: 'text' | 'skill' }> => segment.type === 'text' || segment.type === 'skill')
+    .map((segment) => segment.type === 'text' ? segment.text : `/${segment.id} `)
     .join('')
 }
 
@@ -235,13 +251,14 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
     if (segment.type === 'file') return `@${segment.path}${formatLineRangeSuffix(segment.lineRange)}`
     if (segment.type === 'project') return `[project:${segment.path}]`
     if (segment.type === 'terminal') return `[terminal:${segment.terminalId}${formatLineRangeSuffix(segment.lineRange)}]`
+    if (segment.type === 'skill') return `/${segment.id} `
     if (segment.type === 'attachment') return `[attachment:${segment.name}]`
     return `[image:${segment.name}]`
   }).join('')
 }
 
 export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[] {
-  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[project:')) return []
+  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[project:') && !markdown.includes('/')) return []
 
   const segments: UserMessageSegment[] = []
   const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[project:([^\]]+)\])/g

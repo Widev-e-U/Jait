@@ -4,7 +4,7 @@ import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { AlertTriangle, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -1256,6 +1256,15 @@ function MessageInner({
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
+                                  </span>
+                                ) : segment.type === 'skill' ? (
+                                  <span
+                                    key={`${segment.id}-${index}`}
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    title={'/' + segment.id}
+                                  >
+                                    <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="max-w-[180px] truncate">/{segment.name}</span>
                                   </span>
                                 ) : null,
                               )

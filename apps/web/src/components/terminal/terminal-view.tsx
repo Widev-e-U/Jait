@@ -153,6 +153,11 @@ export function shouldUseTerminalCustomContextMenu(_hasDesktopBridge: boolean): 
   return true
 }
 
+export function resolveProjectActiveTerminalId<T extends { id: string }>(activeTerminalId: string | null, projectTerminals: T[]): string | null {
+  if (!activeTerminalId) return null
+  return projectTerminals.some((terminal) => terminal.id === activeTerminalId) ? activeTerminalId : null
+}
+
 export function useTerminals(token?: string | null) {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([])
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)

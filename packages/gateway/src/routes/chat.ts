@@ -506,6 +506,7 @@ interface QueuedChatMessage {
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "skill"; id: string; name: string }
     | { type: "image"; name: string; mimeType: string; data: string }
     | { type: "attachment"; name: string; mimeType: string; data: string }
   >;
@@ -521,6 +522,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
   | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
   | { type: "project"; path: string; name: string }
   | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+  | { type: "skill"; id: string; name: string }
   | { type: "image"; name: string; mimeType: string; data: string }
   | { type: "attachment"; name: string; mimeType: string; data: string }
 > | undefined {
@@ -530,6 +532,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "skill"; id: string; name: string }
     | { type: "image"; name: string; mimeType: string; data: string }
     | { type: "attachment"; name: string; mimeType: string; data: string }
   > = [];
@@ -565,6 +568,14 @@ function parseUserDisplaySegments(raw: unknown): Array<
         ...(typeof record.projectRoot === "string" ? { projectRoot: record.projectRoot } : {}),
         ...(parseDisplayLineRange(record) ? { lineRange: parseDisplayLineRange(record)! } : {}),
         ...(typeof record.selectedText === "string" ? { selectedText: record.selectedText } : {}),
+      });
+      continue;
+    }
+    if (record.type === "skill" && typeof record.id === "string") {
+      segments.push({
+        type: "skill",
+        id: record.id,
+        name: typeof record.name === "string" ? record.name : record.id,
       });
       continue;
     }

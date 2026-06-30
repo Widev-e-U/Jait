@@ -67,7 +67,11 @@ export function shouldResumeChatSession(params: {
 }
 
 export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; has_timed_out_tools?: unknown }): boolean {
-  return event.hit_max_rounds === true
+  return event.hit_max_rounds === true || event.has_timed_out_tools === true
+}
+
+export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
+  return eventType === 'token' || eventType === 'thinking'
 }
 
 export function shouldProcessResumeStreamEvent(
@@ -581,11 +585,7 @@ export function useChat(
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          if (pendingSubscribeFrame !== null) return
-          pendingSubscribeFrame = window.requestAnimationFrame(() => {
-            pendingSubscribeFrame = null
-            flushSubscribeUpdates()
-          })
+          flushSubscribeUpdates()
         }
 
         // Accumulate content/segments between flushes so each batch is a single setState.
@@ -1415,14 +1415,14 @@ export function useChat(
               } else {
                 segments.push({ type: 'thinking', content: data.content as string })
               }
-              updateMessage({ thinking: thinkingContent, segments: [...segments] })
+              updateMessage({ thinking: thinkingContent, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'token') {
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
               }
               assistantContent += data.content
               appendTextSegment(data.content as string)
-              updateMessage({ content: assistantContent, thinkingDuration, segments: [...segments] })
+              updateMessage({ content: assistantContent, thinkingDuration, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'tool_call_delta') {
               const callId = data.call_id as string
               const nameDelta = (data.name_delta as string) || ''
@@ -1541,7 +1541,7 @@ export function useChat(
               const notice = `\n\n*${data.message as string}*`
               assistantContent += notice
               appendTextSegment(notice)
-              updateMessage({ content: assistantContent, segments: [...segments] })
+              updateMessage({ content: assistantContent, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'todo_list') {
               // AI updated the task list
               setTodoList(normalizeTodoStateValue(data.items))

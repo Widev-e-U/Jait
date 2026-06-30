@@ -11,9 +11,23 @@ import {
   parseUserMessageSegments,
   serializeUserMessageSegmentsForClipboard,
   serializeUserMessageSegmentsToMarkdown,
+  userMessageTextFromSegments,
   userReferencedFilesFromSegments,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
+
+describe('skill message segments', () => {
+  it('preserves skill chips and contributes explicit slash invocation text', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'skill', id: 'debugging', name: 'Debugging' },
+      { type: 'text', text: ' fix this' },
+    ]
+
+    expect(normalizeUserMessageSegments(segments)).toEqual(segments)
+    expect(userMessageTextFromSegments(segments)).toBe('/debugging  fix this')
+    expect(serializeUserMessageSegmentsToMarkdown(segments)).toBe('/debugging  fix this')
+  })
+})
 
 describe('user message segment serialization', () => {
   it('round-trips custom markdown references with interleaved text', () => {

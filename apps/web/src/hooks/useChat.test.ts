@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatChatHttpError,
   getVisibleChangedFiles,
+  shouldFlushStreamTextImmediately,
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
@@ -93,11 +94,19 @@ describe('getVisibleChangedFiles', () => {
 })
 
 describe('shouldShowContinueAfterDone', () => {
-  it('shows Continue only when the gateway reports max tool rounds', () => {
+  it('shows Continue when the gateway reports an interrupted exit', () => {
     expect(shouldShowContinueAfterDone({ hit_max_rounds: true })).toBe(true)
-    expect(shouldShowContinueAfterDone({ hit_max_rounds: false })).toBe(false)
-    expect(shouldShowContinueAfterDone({ has_timed_out_tools: true })).toBe(false)
+    expect(shouldShowContinueAfterDone({ has_timed_out_tools: true })).toBe(true)
+    expect(shouldShowContinueAfterDone({ hit_max_rounds: false, has_timed_out_tools: false })).toBe(false)
     expect(shouldShowContinueAfterDone({})).toBe(false)
+  })
+})
+
+describe('shouldFlushStreamTextImmediately', () => {
+  it('flushes assistant text and thinking without frame batching', () => {
+    expect(shouldFlushStreamTextImmediately('token')).toBe(true)
+    expect(shouldFlushStreamTextImmediately('thinking')).toBe(true)
+    expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)
   })
 })
 

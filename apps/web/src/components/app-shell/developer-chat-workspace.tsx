@@ -46,6 +46,7 @@ interface DeveloperChatWorkspaceProps {
   messages: any[]
   pendingPlan: any
   previewOpen: boolean
+  promptBeforeProcessingQueuedMessage: boolean
   projectNodeId?: string | null
   projectSuggestions: any[]
   projects: any[]
@@ -94,6 +95,7 @@ interface DeveloperChatWorkspaceProps {
   onResponseStyleChange: (style: any) => void
   onSearchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<any[]>
   onSendTargetChange: (target: any) => void
+  onSendQueuedAfterInterruptedExit: () => void
   onSetApproveAllInSession: (enabled: boolean) => void
   onSteerQueuedMessage?: (id: string) => void
   onStopRecording: () => void
@@ -142,6 +144,7 @@ export function DeveloperChatWorkspace({
   messages,
   pendingPlan,
   previewOpen,
+  promptBeforeProcessingQueuedMessage,
   projectNodeId,
   projectSuggestions,
   projects,
@@ -190,6 +193,7 @@ export function DeveloperChatWorkspace({
   onResponseStyleChange,
   onSearchFiles,
   onSendTargetChange,
+  onSendQueuedAfterInterruptedExit,
   onSetApproveAllInSession,
   onSteerQueuedMessage,
   onStopRecording,
@@ -466,15 +470,27 @@ export function DeveloperChatWorkspace({
                   </div>
                 )}
                 {hitMaxRounds && !isLoading && (
-                  <div className="flex items-center justify-center gap-2 py-1.5">
+                  <div className="flex flex-wrap items-center justify-center gap-2 py-1.5">
                     <button
                       onClick={() => onContinueChat({ token, sessionId: activeSessionId })}
-                      className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-accent transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                       Continue
                     </button>
-                    <span className="text-xs text-muted-foreground">Agent stopped - continue to resume</span>
+                    {promptBeforeProcessingQueuedMessage && (
+                      <button
+                        onClick={onSendQueuedAfterInterruptedExit}
+                        className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
+                      >
+                        Send queued
+                      </button>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {promptBeforeProcessingQueuedMessage
+                        ? 'Agent stopped before finishing - continue or send the queued message'
+                        : 'Agent stopped - continue to resume'}
+                    </span>
                   </div>
                 )}
                 <ConsentQueue compact sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />

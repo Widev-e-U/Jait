@@ -7,6 +7,7 @@ import {
   buildTieredToolSchemas,
   fromOpenAIName,
   runAgentLoop,
+  SteeringController,
   retryToolCall,
   ToolCallPriority,
   ToolCallQueue,
@@ -337,6 +338,67 @@ describe("executeOneToolCall retry accounting", () => {
 });
 
 describe("runAgentLoop persistence", () => {
+  it("continues with a follow-up round when steering arrives during a final text response", async () => {
+    const responses = [
+      [
+        'data: {"choices":[{"delta":{"content":"Initial answer."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":" Steered follow-up."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    const steering = new SteeringController();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Say hello." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-steer-final",
+        abort: new AbortController(),
+        maxRounds: 2,
+        mode: "agent",
+        onEvent: (event) => {
+          events.push(event);
+          if (event.type === "token" && event.content === "Initial answer.") {
+            steering.steer("Adjust the answer now");
+          }
+        },
+      },
+      async () => ({ ok: true, message: "" }),
+      steering,
+    );
+
+    expect(fetchCalls).toBe(2);
+    expect(result.content).toBe("Initial answer. Steered follow-up.");
+    expect(events).toContainEqual({ type: "steering", message: "Adjust the answer now" });
+  });
+
   it("calls onPersist exactly once and reports persisted=true on normal completion", async () => {
     const chunks = [
       'data: {"choices":[{"delta":{"content":"Hello world"}}]}\n\n',

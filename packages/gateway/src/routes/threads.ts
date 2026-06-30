@@ -1113,7 +1113,7 @@ export function registerThreadRoutes(
         : undefined;
       const displaySegments = Array.isArray(body["displaySegments"])
         ? (() => {
-            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
+            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
             for (const entry of body["displaySegments"] as unknown[]) {
               if (!entry || typeof entry !== "object") continue;
               const record = entry as Record<string, unknown>;
@@ -1126,6 +1126,14 @@ export function registerThreadRoutes(
                   type: "file",
                   path: record.path,
                   name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+                });
+                continue;
+              }
+              if (record.type === "skill" && typeof record.id === "string") {
+                parsed.push({
+                  type: "skill",
+                  id: record.id,
+                  name: typeof record.name === "string" ? record.name : record.id,
                 });
                 continue;
               }
@@ -1365,7 +1373,7 @@ export function registerThreadRoutes(
       : undefined;
     const displaySegments = Array.isArray(body["displaySegments"])
       ? (() => {
-          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
+          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
           for (const entry of body["displaySegments"] as unknown[]) {
             if (!entry || typeof entry !== "object") continue;
             const record = entry as Record<string, unknown>;
@@ -1378,6 +1386,14 @@ export function registerThreadRoutes(
                 type: "file",
                 path: record.path,
                 name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+              });
+              continue;
+            }
+            if (record.type === "skill" && typeof record.id === "string") {
+              parsed.push({
+                type: "skill",
+                id: record.id,
+                name: typeof record.name === "string" ? record.name : record.id,
               });
               continue;
             }

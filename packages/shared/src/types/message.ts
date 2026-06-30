@@ -225,7 +225,7 @@ export interface ProjectUIState {
   /** Tree/editor visibility and desktop resize state */
   layout: { tree: boolean; editor: boolean; panelSize?: number; treeSize?: number } | null;
   /** Terminal panel */
-  terminal: { open: boolean } | null;
+  terminal: { open: boolean; activeTerminalId?: string | null } | null;
   /** Dev preview / VNC browser panel */
   preview: DevPreviewPanelState | null;
 }

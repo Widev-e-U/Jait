@@ -28,6 +28,7 @@ import {
   type UserMessageSegment,
   type UserTerminalReference,
   type UserProjectReference,
+  type UserSkillReference,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
@@ -58,6 +59,7 @@ type PromptChipReference =
   | ReferencedFile
   | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
+  | ({ type: 'skill' } & UserSkillReference)
 
 interface PromptInputProps {
   value: string
@@ -141,6 +143,7 @@ function getChipRefKey(ref: PromptChipReference): string {
     const selectionKey = ref.selectedText ? `:${hashString(ref.selectedText)}` : ''
     return `terminal:${ref.terminalId}${rangeKey}${selectionKey}`
   }
+  if ('type' in ref && ref.type === 'skill') return `skill:${ref.id}`
   return `file:${ref.path}${rangeKey}`
 }
 
@@ -176,6 +179,10 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
       chip.setAttribute('data-line-end', String(file.lineRange.endLine))
     }
     if (file.selectedText) chip.setAttribute('data-selected-text', file.selectedText)
+  } else if ('type' in file && file.type === 'skill') {
+    chip.setAttribute('data-segment-type', 'skill')
+    chip.setAttribute('data-skill-id', file.id)
+    chip.setAttribute('data-chip-name', file.name)
   } else {
     chip.setAttribute('data-segment-type', 'file')
     chip.setAttribute('data-file-path', file.path)
@@ -196,6 +203,8 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
     icon.innerHTML = `<img src="${ICON_CDN}${DEFAULT_FOLDER}" alt="" class="h-3.5 w-3.5" draggable="false" />`
   } else if ('type' in file && file.type === 'terminal') {
     icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>'
+  } else if ('type' in file && file.type === 'skill') {
+    icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>'
   } else {
     const iconName = file.kind === 'dir' ? getVsFolderIconName(file.name) : getVsIconName(file.name)
     icon.innerHTML = `<img src="${ICON_CDN}${iconName}" alt="" class="h-3.5 w-3.5" draggable="false" />`
@@ -206,7 +215,9 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
   const label = document.createElement('span')
   label.className = 'truncate max-w-[180px]'
   const lineRangeLabel = 'lineRange' in file ? formatLineRange(file.lineRange) : ''
-  label.textContent = lineRangeLabel ? `${file.name}:${lineRangeLabel.replace(/^lines? /, '')}` : file.name
+  label.textContent = 'type' in file && file.type === 'skill'
+    ? `/${file.name}`
+    : lineRangeLabel ? `${file.name}:${lineRangeLabel.replace(/^lines? /, '')}` : file.name
   chip.appendChild(label)
 
   // Remove button
@@ -321,6 +332,16 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
         })
         return
       }
+      if (segmentType === 'skill') {
+        const id = node.getAttribute('data-skill-id')
+        if (!id) return
+        segments.push({
+          type: 'skill',
+          id,
+          name: node.getAttribute('data-chip-name') || id,
+        })
+        return
+      }
       if (segmentType === 'terminal') {
         const terminalId = node.getAttribute('data-terminal-id')
         if (!terminalId) return
@@ -424,7 +445,7 @@ function appendSegmentNode(
     parent.appendChild(document.createTextNode(segment.text))
     return
   }
-  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal') {
+  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'skill') {
     parent.appendChild(createChipNode(segment, onRemove))
     return
   }
@@ -1044,8 +1065,24 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, [mentionQuery])
 
   useEffect(() => {
+    if (!mentionOpen) return
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [mentionOpen, mentionIndex, searchResults.length])
+
+  useEffect(() => {
     setSlashIndex(0)
   }, [slashQuery])
+
+  useEffect(() => {
+    if (!slashOpen) return
+    const frame = requestAnimationFrame(() => {
+      slashMenuRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [slashOpen, slashIndex, slashResults.length])
 
   // Close slash menu on outside click
   useEffect(() => {
@@ -1126,13 +1163,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = false
   }, [onChange, pushUndoSnapshot])
 
-  /** Replace the typed `/query` with a `/skill-id ` invocation token. */
+  /** Replace the typed `/query` with a removable skill chip. */
   const insertSkill = useCallback((skill: PromptSkill) => {
     const el = editableRef.current
     if (!el) return
     pushUndoSnapshot(true)
 
-    const token = `/${skillSlug(skill.id)} `
+    const skillRef: UserMessageSegment = { type: 'skill', id: skillSlug(skill.id), name: skill.name || skill.id }
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0)
@@ -1142,26 +1179,36 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         const cursor = range.startOffset
         const slashIdx = text.lastIndexOf('/', cursor - 1)
         if (slashIdx >= 0) {
-          textNode.textContent = text.slice(0, slashIdx) + token + text.slice(cursor)
-          const caret = slashIdx + token.length
-          const newRange = document.createRange()
-          newRange.setStart(textNode, Math.min(caret, textNode.textContent.length))
-          newRange.collapse(true)
-          sel.removeAllRanges()
-          sel.addRange(newRange)
+          const before = text.slice(0, slashIdx)
+          const after = text.slice(cursor)
+          textNode.textContent = before
+          const afterNode = document.createTextNode(after.startsWith(' ') ? after : ` ${after}`)
+          const chip = createChipNode(skillRef, handleRemoveChip)
+          const parent = textNode.parentNode
+          if (parent) {
+            parent.insertBefore(chip, textNode.nextSibling)
+            parent.insertBefore(afterNode, chip.nextSibling)
+            const newRange = document.createRange()
+            newRange.setStart(afterNode, Math.min(1, afterNode.textContent?.length ?? 0))
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+          }
         }
       }
+    } else {
+      appendSegmentNodes(el, [skillRef, { type: 'text', text: ' ' }], handleRemoveChip)
+      moveCursorToEnd(el)
     }
-
-    setSlashOpen(false)
-    setSlashQuery('')
 
     draftSegmentsRef.current = getComposerSegments(el)
     isSyncing.current = true
     onChange(getTextFromEditable(el))
     isSyncing.current = false
     setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
-  }, [onChange, pushUndoSnapshot])
+    setSlashOpen(false)
+    setSlashQuery('')
+  }, [handleRemoveChip, onChange, pushUndoSnapshot])
 
   /** Handle input events on the contentEditable — uses a native listener
    *  because React's synthetic onInput doesn't fire reliably for contentEditable. */
@@ -1779,6 +1826,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <button
               key={file.path}
               type="button"
+              data-active={i === mentionIndex}
               className={cn(
                 'flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md transition-colors',
                 i === mentionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',
@@ -1820,6 +1868,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <button
               key={skill.id}
               type="button"
+              data-active={i === slashIndex}
               className={cn(
                 'flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors',
                 i === slashIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-muted',

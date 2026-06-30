@@ -20,7 +20,7 @@ import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-worksp
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
-import { useTerminals, useAvailableShells, terminalBelongsToProject } from '@/components/terminal'
+import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
 import { DetachedTabView } from '@/components/project/detached-tab-view'
@@ -112,6 +112,7 @@ import {
   showMobileProjectPane,
 } from '@/lib/mobile-project-layout'
 import { getMobileProjectActiveTarget } from '@/lib/mobile-project-controls'
+import { shouldProcessQueuedMessage, shouldPromptBeforeProcessingQueuedMessage } from '@/lib/chat-queue-decision'
 import {
   formatLineRange,
   type UserMessageSegment,
@@ -603,6 +604,7 @@ function App() {
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
   const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
+  const [allowQueuedMessageAfterInterruptedExit, setAllowQueuedMessageAfterInterruptedExit] = useState(false)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const terminalShells = useAvailableShells(token)
@@ -721,6 +723,13 @@ function App() {
   }, [messageQueue.length])
 
   const chatCompletionSignal = completionCount + remoteMessageCompleteCount
+  const promptBeforeProcessingQueuedMessage = shouldPromptBeforeProcessingQueuedMessage({
+    hasInterruptedExit: hitMaxRounds,
+    isLoading,
+    isLoadingHistory,
+    queuedCount: messageQueue.length,
+    allowQueuedMessageAfterInterruptedExit,
+  })
   const sourceControlCompletionCountRef = useRef(completionCount)
   const sourceControlRemoteCompletionCountRef = useRef(remoteMessageCompleteCount)
 
@@ -750,8 +759,19 @@ function App() {
   useEffect(() => {
     if (isLoading) {
       suppressNextChatNotificationRef.current = false
+      setAllowQueuedMessageAfterInterruptedExit(false)
     }
   }, [isLoading])
+
+  useEffect(() => {
+    setAllowQueuedMessageAfterInterruptedExit(false)
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (messageQueue.length === 0 || !hitMaxRounds) {
+      setAllowQueuedMessageAfterInterruptedExit(false)
+    }
+  }, [hitMaxRounds, messageQueue.length])
 
   useEffect(() => {
     if (chatCompletionSignal <= lastChatNotificationSignalRef.current) return
@@ -875,7 +895,7 @@ function App() {
     updateProjectUI('panel', v, { immediate: options?.immediate ?? true })
   }, [updateProjectUI])
 
-  const setSavedTerminal = useCallback((v: { open: boolean } | null, options?: { immediate?: boolean }) => {
+  const setSavedTerminal = useCallback((v: { open: boolean; activeTerminalId?: string | null } | null, options?: { immediate?: boolean }) => {
     updateProjectUI('terminal', v, options)
   }, [updateProjectUI])
 
@@ -1619,7 +1639,7 @@ function App() {
       'terminal.focus': useCallback((data: TerminalFocusData) => {
         setCurrentView('chat')
         setShowTerminal(true)
-        setSavedTerminal({ open: true })
+        setSavedTerminal({ open: true, activeTerminalId: data.terminalId ?? null })
         void refresh()
         if (data.terminalId) {
           setActiveTerminalId(data.terminalId)
@@ -2608,6 +2628,30 @@ function App() {
     ))
   }, [terminals, activeProjectRoot, activeProject?.nodeId])
 
+  const activeProjectTerminalId = useMemo(
+    () => resolveProjectActiveTerminalId(activeTerminalId, projectTerminals),
+    [activeTerminalId, projectTerminals],
+  )
+
+  useEffect(() => {
+    if (!activeProjectId || loadingProjectUI) return
+    const savedTerminalId = projectUI?.terminal?.activeTerminalId ?? null
+    if (savedTerminalId && projectTerminals.some((terminal) => terminal.id === savedTerminalId)) {
+      if (activeTerminalId !== savedTerminalId) setActiveTerminalId(savedTerminalId)
+      return
+    }
+    if (activeTerminalId && !projectTerminals.some((terminal) => terminal.id === activeTerminalId)) {
+      setActiveTerminalId(null)
+    }
+  }, [activeProjectId, activeTerminalId, loadingProjectUI, projectTerminals, projectUI?.terminal?.activeTerminalId, setActiveTerminalId])
+
+  useEffect(() => {
+    if (!activeProjectId || loadingProjectUI || !projectStateReady) return
+    if (projectUI?.terminal?.open !== true) return
+    if ((projectUI.terminal.activeTerminalId ?? null) === activeProjectTerminalId) return
+    setSavedTerminal({ open: true, activeTerminalId: activeProjectTerminalId })
+  }, [activeProjectId, activeProjectTerminalId, loadingProjectUI, projectStateReady, projectUI?.terminal, setSavedTerminal])
+
   const {
     handleDetachTerminal,
     handleKillTerminal,
@@ -2622,7 +2666,7 @@ function App() {
     activeProjectRoot,
     activeProjectNodeId: activeProject?.nodeId ?? 'gateway',
     activeSessionId,
-    activeTerminalId,
+    activeTerminalId: activeProjectTerminalId,
     appliedThemeMode,
     closeProjectPanel,
     closeTerminalPanel,
@@ -2910,8 +2954,14 @@ function App() {
   useEffect(() => {
     if (viewMode === 'manager' || sendTarget === 'thread') return
     if (!token || !activeSessionId) return
-    if (isLoading || isLoadingHistory) return
-    if (chatQueueProcessingRef.current) return
+    if (!shouldProcessQueuedMessage({
+      hasInterruptedExit: hitMaxRounds,
+      isLoading,
+      isLoadingHistory,
+      queuedCount: messageQueue.length,
+      allowQueuedMessageAfterInterruptedExit,
+      isProcessing: chatQueueProcessingRef.current,
+    })) return
 
     const [nextItem] = messageQueue
     if (!nextItem) return
@@ -2953,6 +3003,8 @@ function App() {
     activeSessionId,
     dequeueMessage,
     enqueueMessage,
+    allowQueuedMessageAfterInterruptedExit,
+    hitMaxRounds,
     isLoading,
     isLoadingHistory,
     messageQueue,
@@ -2961,6 +3013,15 @@ function App() {
     token,
     viewMode,
   ])
+
+  const handleContinueChat = useCallback((options: { token: string | null; sessionId: string | null }) => {
+    setAllowQueuedMessageAfterInterruptedExit(false)
+    continueChat(options)
+  }, [continueChat])
+
+  const handleSendQueuedAfterInterruptedExit = useCallback(() => {
+    setAllowQueuedMessageAfterInterruptedExit(true)
+  }, [])
 
   const steerQueuedChatMessage = useCallback((id: string) => {
     const item = messageQueue.find((queued) => queued.id === id)
@@ -3761,7 +3822,7 @@ function App() {
                 activeProjectFileId={activeProjectFileId}
                 activeProjectRoot={activeProjectRoot}
                 activeSessionId={activeSessionId}
-                activeTerminalId={activeTerminalId}
+                activeTerminalId={activeProjectTerminalId}
                 architectureDiagram={architectureDiagram}
                 architectureGenerating={architectureGenerating}
                 architectureRequest={architectureRequest}
@@ -3943,6 +4004,7 @@ function App() {
                 messageContents={messageContents}
                 messageQueue={messageQueue}
                 messages={messages}
+                promptBeforeProcessingQueuedMessage={promptBeforeProcessingQueuedMessage}
                 pendingPlan={pendingPlan}
                 previewOpen={previewOpen}
                 projectNodeId={activeProject?.nodeId}
@@ -3970,7 +4032,7 @@ function App() {
                 onChatModeChange={setChatMode}
                 onClearTodoList={() => setTodoList([])}
                 onCliModelChange={handleCliModelChange}
-                onContinueChat={continueChat}
+                onContinueChat={handleContinueChat}
                 onDequeueMessage={dequeueMessage}
                 onEditPreviousMessage={handleEditPreviousMessage}
                 onExecutePlan={executePlan}
@@ -3993,6 +4055,7 @@ function App() {
                 onResponseStyleChange={handleChatResponseStyleChange}
                 onSearchFiles={handleSearchFiles}
                 onSendTargetChange={setSendTarget}
+                onSendQueuedAfterInterruptedExit={handleSendQueuedAfterInterruptedExit}
                 onSetApproveAllInSession={setApproveAllInSession}
                 onSteerQueuedMessage={isLoading && activeSessionId ? steerQueuedChatMessage : undefined}
                 onStopRecording={() => { void stopRecordingAndTranscribe() }}

@@ -1965,6 +1965,19 @@ export async function runAgentLoop(
       continue;
     }
 
+    if (steering?.hasPending) {
+      const steered = steering.drain();
+      if (contentText) {
+        history.push({ role: "assistant", content: contentText });
+      }
+      for (const msg of steered) {
+        history.push({ role: "system", content: "[STEERING] " + msg });
+        onEvent?.({ type: "steering", message: msg });
+        log.info("Steering injected for session " + sessionId + ": " + msg.slice(0, 100));
+      }
+      continue;
+    }
+
     // ── Normal text response — done ──
     if (contentText) {
       history.push({ role: "assistant", content: contentText });
