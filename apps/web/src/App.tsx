@@ -1427,6 +1427,7 @@ function App() {
         break
       }
       case 'queued_messages': {
+        suppressNextUiSync('queued_messages')
         if (Array.isArray(value)) {
           setMessageQueueState(value as SavedQueuedMessage[])
         } else if (value === null) {

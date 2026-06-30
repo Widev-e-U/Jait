@@ -151,6 +151,62 @@ describe("server-side queued chat processing", () => {
     ]);
   });
 
+  it("drains duplicated persisted queued_messages only once per queued id", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-dedupe-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Dedupe" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    sessionState.set(session.id, {
+      queued_messages: [
+        { id: "q-dup", content: "duplicated queued message" },
+        { id: "q-dup", content: "duplicated queued message" },
+      ],
+    });
+
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { messages: Array<{ role: string; content: string }> };
+    expect(body.messages.filter((message) => message.role === "user").map((message) => message.content)).toEqual([
+      "duplicated queued message",
+    ]);
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
   it("queues a concurrent direct chat POST instead of replacing the active stream", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

@@ -640,13 +640,19 @@ function parseDisplayLineRange(record: Record<string, unknown>): UserDisplayLine
 function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
   if (!Array.isArray(raw)) return [];
   const queue: QueuedChatMessage[] = [];
+  const seenIds = new Set<string>();
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
     if (typeof record.content !== "string" || !record.content.trim()) continue;
+    const id = typeof record.id === "string" ? record.id : undefined;
+    if (id) {
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+    }
     const displaySegments = parseUserDisplaySegments(record.displaySegments);
     queue.push({
-      id: typeof record.id === "string" ? record.id : undefined,
+      id,
       content: record.content,
       queuedAt: typeof record.queuedAt === "number" ? record.queuedAt : undefined,
       mode: isValidChatMode(record.mode) ? record.mode : undefined,
