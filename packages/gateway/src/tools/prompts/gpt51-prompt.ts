@@ -8,7 +8,7 @@
 import type { ChatMode } from "../chat-modes.js";
 import type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
-import { PLANNING_EXAMPLES, getModeInstructions } from "./shared-sections.js";
+import { PLANNING_EXAMPLES, USER_QUESTION_INSTRUCTIONS, getModeInstructions } from "./shared-sections.js";
 
 // ── Model matcher ────────────────────────────────────────────────────
 
@@ -89,6 +89,10 @@ Use a plan when:
 
 ${PLANNING_EXAMPLES}
 </planning>
+
+<userQuestionInstructions>
+${USER_QUESTION_INSTRUCTIONS}
+</userQuestionInstructions>
 
 <task_execution>
 You are a coding agent. You must keep going until the query or task is completely resolved, before ending your turn and yielding back to the user. Persist until the task is fully handled end-to-end within the current turn whenever feasible and persevere even when function calls fail. Only terminate your turn when you are sure that the problem is solved. Autonomously resolve the query to the best of your ability, using the tools available to you, before coming back to the user. Do NOT guess or make up an answer.

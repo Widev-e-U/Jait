@@ -28,6 +28,7 @@ import { promptRegistry } from "./prompt-registry.js";
 import {
   CORE_INSTRUCTIONS,
   TOOL_USE_INSTRUCTIONS,
+  USER_QUESTION_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
   SEARCH_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
@@ -81,6 +82,10 @@ You MUST invoke tools using the structured function calling mechanism provided b
 <toolUseInstructions>
 ${TOOL_USE_INSTRUCTIONS}
 </toolUseInstructions>
+
+<userQuestionInstructions>
+${USER_QUESTION_INSTRUCTIONS}
+</userQuestionInstructions>
 
 <editingInstructions>
 ${EDITING_INSTRUCTIONS}

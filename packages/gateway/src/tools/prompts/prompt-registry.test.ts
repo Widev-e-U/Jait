@@ -46,6 +46,18 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Project: /tmp/project");
   });
 
+
+  it("includes structured user-question guidance", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    });
+
+    expect(prompt).toContain("<userQuestionInstructions>");
+    expect(prompt).toContain("user.ask tool");
+    expect(prompt).toContain("instead of ending your turn with a plain-text question");
+  });
+
   it("injects enabled skills into the system prompt", () => {
     const skills: Skill[] = [
       {
@@ -129,6 +141,17 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("<taskTracking>");
     // Project context injection
     expect(prompt).toContain("You are working in the project: /tmp/project");
+  });
+
+
+  it("GLM prompt includes structured user-question guidance", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "zhipu/glm-4.6",
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+
+    expect(prompt).toContain("<userQuestionInstructions>");
+    expect(prompt).toContain("Use user.ask when:");
   });
 
   it("resolves bare glm-* model ids (BigModel OpenAI-compatible API)", () => {

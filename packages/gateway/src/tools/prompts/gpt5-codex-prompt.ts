@@ -8,7 +8,7 @@
 import type { ChatMode } from "../chat-modes.js";
 import type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
-import { getModeInstructions } from "./shared-sections.js";
+import { USER_QUESTION_INSTRUCTIONS, getModeInstructions } from "./shared-sections.js";
 
 // ── Model matcher ────────────────────────────────────────────────────
 
@@ -36,6 +36,10 @@ function resolveSystemPrompt(mode: ChatMode, _endpoint: ModelEndpoint): string {
 
 ## Tool use
 - You have access to many tools. If a tool exists to perform a specific task, you MUST use that tool instead of running a terminal command.
+
+## Asking the user
+
+${USER_QUESTION_INSTRUCTIONS}
 
 ## Todo tool
 

@@ -10,6 +10,7 @@ import type { IAgentPrompt } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
 import {
   TOOL_USE_INSTRUCTIONS,
+  USER_QUESTION_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
   SEARCH_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
@@ -41,6 +42,10 @@ You don't need to read a file if it's already provided in context.
 <toolUseInstructions>
 ${TOOL_USE_INSTRUCTIONS}
 </toolUseInstructions>
+
+<userQuestionInstructions>
+${USER_QUESTION_INSTRUCTIONS}
+</userQuestionInstructions>
 
 <editFileInstructions>
 ${EDITING_INSTRUCTIONS}

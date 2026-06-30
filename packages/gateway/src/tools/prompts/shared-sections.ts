@@ -43,6 +43,16 @@ NEVER try to edit a file by running terminal commands unless the user specifical
 
 You have a core set of tools available in every request. Additional tools (browser, preview, memory, prior session search, cron, SSH, screen sharing, network scanning, and more) can be discovered at any time by calling tools.search with a keyword. For example, call tools.search with "browser" to get browser interaction tools, "memory" for memory tools, or "session" to search prior conversations. Use tools.list to see the full catalogue of available tools grouped by category.`;
 
+export const USER_QUESTION_INSTRUCTIONS = `You have access to the user.ask tool for asking the user structured questions and waiting for the answer. Use it instead of ending your turn with a plain-text question when the next step depends on the user's choice or missing information.
+
+Use user.ask when:
+- A real decision is needed and guessing could waste time, money, access, or mutate the wrong target.
+- The user explicitly asks to be asked/confirmed before continuing.
+- There are 2-3 viable paths and the best choice depends on user preference.
+- You are blocked after reasonable investigation and cannot make meaningful progress without input.
+
+Do not use user.ask for routine autonomy, obvious defaults, or questions you can answer by inspecting the project. Keep requests short: ask 1-3 precise questions, provide concrete options when possible, and continue immediately after the user answers.`;
+
 export const EDITING_INSTRUCTIONS = `Before you edit an existing file, make sure you have read it first so that you can make proper changes.
 Use the edit tool to modify files precisely. Pay attention to surrounding context to ensure your changes are correct.
 When editing files, group your changes by file.

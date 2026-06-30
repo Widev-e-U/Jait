@@ -41,7 +41,7 @@ function normalizeQuestions(input: UserAskInput): UserQuestion[] {
 export function createUserAskTool(userQuestions: UserQuestionService): ToolDefinition<UserAskInput> {
   return {
     name: ToolName.UserAsk,
-    description: "Ask the user one or more structured questions and wait for their answers.",
+    description: "Ask the user one or more structured questions and wait for their answers. Use this when progress is blocked by a real choice, missing requirement, or approval that cannot be inferred safely.",
     parameters: {
       type: "object",
       properties: {
@@ -78,7 +78,7 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
       },
       required: ["questions"],
     },
-    tier: "standard",
+    tier: "core",
     category: "gateway",
     source: "builtin",
     risk: "low",

@@ -8,7 +8,7 @@
 import type { ChatMode } from "../chat-modes.js";
 import type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
-import { PLANNING_EXAMPLES, getModeInstructions } from "./shared-sections.js";
+import { PLANNING_EXAMPLES, USER_QUESTION_INSTRUCTIONS, getModeInstructions } from "./shared-sections.js";
 import { gpt51ReminderInstructions } from "./gpt51-prompt.js";
 
 // ── Model matcher ────────────────────────────────────────────────────
@@ -80,6 +80,10 @@ It may be the case that you complete all steps in your plan after a single pass 
 
 ${PLANNING_EXAMPLES}
 </planning>
+
+<userQuestionInstructions>
+${USER_QUESTION_INSTRUCTIONS}
+</userQuestionInstructions>
 
 <task_execution>
 You are a coding agent. Please keep going until the query is completely resolved, before ending your turn and yielding back to the user. Only terminate your turn when you are sure that the problem is solved. Autonomously resolve the query to the best of your ability, using the tools available to you, before coming back to the user. Do NOT guess or make up an answer.

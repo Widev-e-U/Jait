@@ -14,6 +14,14 @@ function context(): ToolContext {
 }
 
 describe("user.ask tool", () => {
+  it("is included in the core tool payload", () => {
+    const service = new UserQuestionService();
+    const tool = createUserAskTool(service);
+
+    expect(tool.tier).toBe("core");
+    expect(tool.description).toContain("missing requirement");
+  });
+
   it("asks structured questions and returns answers keyed by question id", async () => {
     let service: UserQuestionService;
     let observedTitle = "";

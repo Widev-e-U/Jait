@@ -15,6 +15,7 @@ import type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
 import {
   TOOL_USE_INSTRUCTIONS,
+  USER_QUESTION_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
   getModeInstructions,
@@ -69,6 +70,10 @@ read
 ## Tool Use Guidelines
 
 ${TOOL_USE_INSTRUCTIONS}
+
+## Asking the User
+
+${USER_QUESTION_INSTRUCTIONS}
 
 ## File Editing
 
