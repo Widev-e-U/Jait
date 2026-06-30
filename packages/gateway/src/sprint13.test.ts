@@ -121,26 +121,32 @@ describe("Sprint 13 — Docker Sandboxing", () => {
 
   it("reaps conflicting stale browser sandboxes and retries startup", async () => {
     const commands: string[][] = [];
-    let call = 0;
+    let runAttempts = 0;
     const manager = new SandboxManager(async (cmd) => {
       commands.push(cmd);
-      call += 1;
-      if (call === 1) {
-        return { output: "[]", exitCode: 0, timedOut: false };
-      }
-      if (call === 2) {
-        return {
-          output: "docker: Error response from daemon: Bind for 0.0.0.0:6080 failed: port is already allocated",
-          exitCode: 125,
-          timedOut: false,
-        };
-      }
-      if (call === 3) {
+      const joined = cmd.join(" ");
+      if (joined.includes(" ps ") && joined.includes("{{.Ports}}")) {
         return {
           output: "jait-browser-sb-old\t0.0.0.0:6080->6080/tcp, 0.0.0.0:5900->5900/tcp",
           exitCode: 0,
           timedOut: false,
         };
+      }
+      if (joined.includes(" ps ") && joined.includes("{{.Names}}")) {
+        return { output: "", exitCode: 0, timedOut: false };
+      }
+      if (joined.includes("image inspect")) {
+        return { output: "[]", exitCode: 0, timedOut: false };
+      }
+      if (cmd.includes("run")) {
+        runAttempts += 1;
+        if (runAttempts === 1) {
+          return {
+            output: "docker: Error response from daemon: Bind for 0.0.0.0:6080 failed: port is already allocated",
+            exitCode: 125,
+            timedOut: false,
+          };
+        }
       }
       return { output: "container-id", exitCode: 0, timedOut: false };
     });
@@ -158,6 +164,39 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     });
     expect(commands.some((cmd) => cmd.includes("ps") && cmd.includes("--format"))).toBe(true);
     expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-old"))).toBe(true);
+  });
+
+  it("refuses to start sandbox browsers when the container runtime health check times out", async () => {
+    const manager = new SandboxManager(async (cmd) => {
+      if (cmd.includes("info")) {
+        return { output: "", exitCode: null, timedOut: true };
+      }
+      return { output: "unexpected", exitCode: 0, timedOut: false };
+    });
+
+    await expect(manager.startBrowserSandbox({
+      projectRoot: testProject,
+      novncPort: 6082,
+      vncPort: 5902,
+    })).rejects.toThrow("container runtime health check failed (timed out)");
+  });
+
+  it("refuses to start sandbox browsers when the active sandbox limit is reached", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return { output: "jait-browser-sb-active", exitCode: 0, timedOut: false };
+      }
+      return { output: "ok", exitCode: 0, timedOut: false };
+    });
+
+    await expect(manager.startBrowserSandbox({
+      projectRoot: testProject,
+      novncPort: 6083,
+      vncPort: 5903,
+    })).rejects.toThrow("Browser sandbox limit reached (1 active, max 1)");
+    expect(commands.some((cmd) => cmd.join(" ").includes("image inspect"))).toBe(false);
   });
 
   it("cleans stale browser sandbox containers while preserving active ones", async () => {

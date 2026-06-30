@@ -131,6 +131,7 @@ export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
   private readonly runner: PreviewRunner;
+  private readonly startingSessions = new Map<string, Promise<PreviewSession>>();
   private _onSessionChanged: ((session: PreviewSession) => void) | null = null;
 
   constructor(private readonly surfaceRegistry: SurfaceRegistry) {
@@ -147,6 +148,21 @@ export class PreviewService {
 
   async start(input: StartPreviewInput): Promise<PreviewSession> {
     if (!input.sessionId) throw new Error("sessionId is required");
+    const inFlight = this.startingSessions.get(input.sessionId);
+    if (inFlight) return inFlight;
+
+    const startPromise = this.startFresh(input);
+    this.startingSessions.set(input.sessionId, startPromise);
+    try {
+      return await startPromise;
+    } finally {
+      if (this.startingSessions.get(input.sessionId) === startPromise) {
+        this.startingSessions.delete(input.sessionId);
+      }
+    }
+  }
+
+  private async startFresh(input: StartPreviewInput): Promise<PreviewSession> {
     await this.stop(input.sessionId);
 
     const createdAt = nowIso();

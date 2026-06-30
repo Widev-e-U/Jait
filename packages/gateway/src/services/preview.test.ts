@@ -296,4 +296,59 @@ describe("PreviewService", () => {
     expect(session.lastError).toBe("Preview browser did not expose a live VNC session");
   });
 
+  it("coalesces duplicate start requests for the same chat session", async () => {
+    let resolveNavigate: (() => void) | null = null;
+    const browser = {
+      type: "browser",
+      state: "running",
+      navigate: vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        resolveNavigate = resolve;
+      })),
+      getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+      }),
+    };
+    const surfaceRegistry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockResolvedValue(browser),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(surfaceRegistry as any);
+    (service as any).runner = {
+      mode: "local",
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+
+    const first = service.start({
+      sessionId: "session-1",
+      projectRoot: "/project/app",
+      target: "4173",
+    });
+    const second = service.start({
+      sessionId: "session-1",
+      projectRoot: "/project/app",
+      target: "4173",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(browser.navigate).toHaveBeenCalled();
+    resolveNavigate?.();
+    const [firstSession, secondSession] = await Promise.all([first, second]);
+
+    expect(firstSession.status).toBe("ready");
+    expect(secondSession.status).toBe("ready");
+    expect(surfaceRegistry.startSurface).toHaveBeenCalledTimes(1);
+    expect(browser.navigate).toHaveBeenCalledTimes(1);
+  });
+
 });

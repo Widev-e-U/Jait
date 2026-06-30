@@ -91,15 +91,67 @@ function spawnPty(shell: string, shellArgs: string[], opts: SpawnPtyOptions): PT
 /** Directory containing shell integration scripts */
 const SHELL_INTEGRATION_DIR = join(__dirname, "shell-integration");
 
+/**
+ * Resolve a bare executable name to its absolute path on Windows using `where`.
+ * The PTY spawner (bun-pty / node-pty) calls CreateProcess directly, which does
+ * NOT always resolve bare names like "powershell.exe" against PATH the same way
+ * a shell does — especially when the gateway is launched as a service or via
+ * autostart with a minimal environment. Returning an absolute path eliminates
+ * the `spawn powershell.exe ENOENT` failure that otherwise breaks every command.
+ *
+ * Falls back to known System32 / PowerShell 7 install locations if `where`
+ * itself is unavailable (e.g. PATH missing System32).
+ */
+function resolveWindowsExe(bareName: string): string {
+  // 1. Try `where` to resolve against the current PATH.
+  try {
+    const out = execSync(`where ${bareName}`, {
+      timeout: 3000,
+      windowsHide: true,
+      encoding: "utf8",
+    });
+    const first = out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0);
+    if (first) return first;
+  } catch {
+    // `where` not found or exe not on PATH — try known locations below.
+  }
+
+  // 2. Known absolute locations, checked in priority order.
+  const candidates =
+    bareName.toLowerCase() === "pwsh.exe"
+      ? [
+          join(process.env["ProgramFiles"] ?? "C:\\Program Files", "PowerShell", "7", "pwsh.exe"),
+          join(process.env["ProgramFiles"] ?? "C:\\Program Files", "PowerShell", "6", "pwsh.exe"),
+        ]
+      : [
+          join(
+            process.env["SystemRoot"] ?? "C:\\Windows",
+            "System32",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+          ),
+        ];
+
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+
+  // 3. Last resort: return the bare name and let CreateProcess try.
+  return bareName;
+}
+
 function defaultShell(): string {
   if (platform() === "win32") {
-    // Prefer PowerShell 7 (pwsh) over Windows PowerShell 5.1 (powershell)
-    // pwsh supports modern escape sequences and PSReadLine features
+    // Prefer PowerShell 7 (pwsh) over Windows PowerShell 5.1 (powershell).
+    // pwsh supports modern escape sequences and PSReadLine features.
+    // Resolve to an ABSOLUTE PATH so the PTY spawner's CreateProcess doesn't
+    // fail with ENOENT when PATH lacks the shell's directory.
     try {
       execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000, windowsHide: true });
-      return "pwsh.exe";
+      return resolveWindowsExe("pwsh.exe");
     } catch {
-      return "powershell.exe";
+      return resolveWindowsExe("powershell.exe");
     }
   }
   return process.env["SHELL"] ?? "/bin/bash";

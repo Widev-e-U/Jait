@@ -3,6 +3,9 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { SandboxManager, reserveLocalPort } from "../security/sandbox-manager.js";
 
+const DEFAULT_MAX_CONTAINER_LIVE_VIEW_STARTS = 1;
+let activeContainerLiveViewStarts = 0;
+
 export interface LiveViewSession {
   kind: "host" | "container";
   display: string;
@@ -29,13 +32,31 @@ export async function startLiveView(options?: {
   const preferContainer = options?.preferContainer !== false;
   if (preferContainer) {
     try {
-      return await startContainerLiveView(options);
+      const maxStarts = readMaxContainerLiveViewStarts();
+      if (activeContainerLiveViewStarts >= maxStarts) {
+        throw new Error(
+          `Preview browser start already in progress (${activeContainerLiveViewStarts} active, max ${maxStarts})`,
+        );
+      }
+      activeContainerLiveViewStarts += 1;
+      try {
+        return await startContainerLiveView(options);
+      } finally {
+        activeContainerLiveViewStarts -= 1;
+      }
     } catch (err) {
       throw new Error(`Docker sandbox browser failed: ${(err as Error)?.message ?? err}`);
     }
   }
 
   return startHostLiveView(options);
+}
+
+function readMaxContainerLiveViewStarts(): number {
+  const raw = process.env["JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS"];
+  if (!raw) return DEFAULT_MAX_CONTAINER_LIVE_VIEW_STARTS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CONTAINER_LIVE_VIEW_STARTS;
 }
 
 async function startContainerLiveView(options?: {

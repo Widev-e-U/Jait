@@ -11,6 +11,8 @@ import { resolve } from "node:path";
 let _containerBinary: string | null = null;
 const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:app-window-v1";
 const BROWSER_SANDBOX_NAME_PREFIX = "jait-browser-sb-";
+const BROWSER_SANDBOX_HEALTH_TIMEOUT_MS = 3_000;
+const DEFAULT_MAX_BROWSER_SANDBOXES = 1;
 
 function containerBinary(): string {
   if (_containerBinary) return _containerBinary;
@@ -207,6 +209,7 @@ export class SandboxManager {
   }
 
   async startBrowserSandbox(options: SandboxBrowserOptions): Promise<SandboxBrowserResult> {
+    await this.assertBrowserSandboxStartAllowed();
     await this.ensureBrowserSandboxImage();
     const projectRoot = resolve(options.projectRoot);
     const novncPort = options.novncPort ?? await reserveLocalPort();
@@ -314,6 +317,41 @@ export class SandboxManager {
     return stopped;
   }
 
+  async assertBrowserSandboxStartAllowed(): Promise<void> {
+    const health = await this.runProcess(
+      [containerBinary(), "info", "--format", "{{.ServerVersion}}"],
+      BROWSER_SANDBOX_HEALTH_TIMEOUT_MS,
+    );
+    if (health.timedOut || health.exitCode !== 0) {
+      const reason = health.timedOut ? "timed out" : health.output;
+      throw new Error(`Browser sandbox disabled: container runtime health check failed (${reason})`);
+    }
+
+    const maxSandboxes = readMaxBrowserSandboxes();
+    const active = await this.listBrowserSandboxContainers();
+    if (active.length >= maxSandboxes) {
+      throw new Error(
+        `Browser sandbox limit reached (${active.length} active, max ${maxSandboxes}). `
+        + "Refusing to start another preview browser.",
+      );
+    }
+  }
+
+  private async listBrowserSandboxContainers(): Promise<string[]> {
+    const list = await this.runProcess(
+      [containerBinary(), "ps", "--filter", `name=${BROWSER_SANDBOX_NAME_PREFIX}`, "--format", "{{.Names}}"],
+      BROWSER_SANDBOX_HEALTH_TIMEOUT_MS,
+    );
+    if (list.timedOut || list.exitCode !== 0) {
+      const reason = list.timedOut ? "timed out" : list.output;
+      throw new Error(`container runtime sandbox listing failed (${reason})`);
+    }
+    return list.output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((name) => name.startsWith(BROWSER_SANDBOX_NAME_PREFIX));
+  }
+
   private buildMountArgs(projectRoot: string, mode: SandboxMountMode): string[] {
     mkdirSync(projectRoot, { recursive: true });
     if (mode === "none") return [];
@@ -356,6 +394,13 @@ export class SandboxManager {
       await this.runProcess([containerBinary(), "rm", "-f", candidate.name], 15_000).catch(() => {});
     }
   }
+}
+
+function readMaxBrowserSandboxes(): number {
+  const raw = process.env["JAIT_MAX_BROWSER_SANDBOXES"];
+  if (!raw) return DEFAULT_MAX_BROWSER_SANDBOXES;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BROWSER_SANDBOXES;
 }
 
 interface BrowserSandboxListing {
