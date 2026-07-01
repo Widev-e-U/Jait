@@ -2054,6 +2054,188 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       return { files: filePaths.size, insertions, deletions, hasChanges: filePaths.size > 0 };
     }
+    case "git-run-commit-flow": {
+      // Compound operation: bump package versions, commit everything, and push.
+      const cwd = resolve(params.cwd as string);
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const { readdir: readDir, readFile: readTextFile, writeFile: writeTextFile } = await import("node:fs/promises");
+      const execP = promisify(execAsync);
+
+      const gitExecLocal = async (args: string, timeout = 30_000) => {
+        const { stdout } = await execP(`git ${args}`, {
+          cwd, timeout, maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+        return stdout.trim();
+      };
+
+      const listChildPackageJsonFiles = async (dir: string) => {
+        try {
+          const entries = await readDir(dir, { withFileTypes: true });
+          return entries
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => join(dir, entry.name, "package.json"));
+        } catch {
+          return [];
+        }
+      };
+
+      const bumpPatchVersion = (version: string) => {
+        const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)([-+].+)?$/);
+        if (!match) return null;
+        return `${match[1]}.${match[2]}.${Number(match[3]) + 1}${match[4] ?? ""}`;
+      };
+
+      const bumpProjectPackageVersions = async () => {
+        const candidateFiles = [
+          join(cwd, "package.json"),
+          ...await listChildPackageJsonFiles(join(cwd, "packages")),
+          ...await listChildPackageJsonFiles(join(cwd, "apps")),
+        ];
+        const files = candidateFiles.filter((file, index) => candidateFiles.indexOf(file) === index);
+        const updatedFiles: string[] = [];
+        let previousVersion: string | null = null;
+        let nextVersion: string | null = null;
+
+        for (const file of files) {
+          if (!existsSync(file)) continue;
+          const raw = await readTextFile(file, "utf-8");
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const currentVersion = typeof parsed["version"] === "string" ? parsed["version"].trim() : "";
+          if (!currentVersion) continue;
+          const bumped = bumpPatchVersion(currentVersion);
+          if (!bumped) continue;
+          parsed["version"] = bumped;
+          await writeTextFile(file, `${JSON.stringify(parsed, null, 2)}\n`, "utf-8");
+          updatedFiles.push(file);
+          if (!previousVersion) previousVersion = currentVersion;
+          if (!nextVersion) nextVersion = bumped;
+        }
+
+        if (!previousVersion || !nextVersion || updatedFiles.length === 0) {
+          throw new Error("No bumpable package.json version fields found in this project.");
+        }
+
+        return { previousVersion, nextVersion, files: updatedFiles };
+      };
+
+      const isNonFastForwardPushError = (message: string) => {
+        const lower = message.toLowerCase();
+        return lower.includes("non-fast-forward")
+          || lower.includes("fetch first")
+          || lower.includes("rejected")
+          || lower.includes("failed to push some refs");
+      };
+
+      let currentBranch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => null);
+      let upstreamBranch: string | null = null;
+      if (currentBranch) {
+        upstreamBranch = await gitExecLocal(`rev-parse --abbrev-ref ${currentBranch}@{upstream}`).catch(() => null);
+      }
+
+      const sync: { status: string; branch: string | null; upstreamBranch: string | null } = {
+        status: "skipped_no_upstream",
+        branch: currentBranch,
+        upstreamBranch,
+      };
+
+      if (currentBranch && upstreamBranch) {
+        const behindCount = Number.parseInt(await gitExecLocal("rev-list --count HEAD..@{upstream}").catch(() => "0"), 10);
+        if (Number.isFinite(behindCount) && behindCount > 0) {
+          try {
+            await gitExecLocal("pull --rebase --autostash", 120_000);
+            sync.status = "pulled";
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(`Pull before push failed. Resolve the rebase conflict and retry. ${message}`);
+          }
+        } else {
+          sync.status = "skipped_up_to_date";
+        }
+      }
+
+      const version = await bumpProjectPackageVersions();
+      const commitMessage = `chore: bump version to v${version.nextVersion}`;
+      const git: Record<string, unknown> = {
+        commit: { status: "skipped_no_changes" },
+        push: { status: "skipped_not_requested" },
+        branch: { status: "skipped_not_requested" },
+        pr: { status: "skipped_not_requested" },
+      };
+
+      const porcelain = await gitExecLocal("status --porcelain -- .").catch(() => "");
+      if (porcelain.length > 0) {
+        await gitExecLocal("add -A -- .");
+        await gitExecLocal(`commit -m "${commitMessage.replace(/"/g, '\\"')}" -- .`);
+        const sha = await gitExecLocal("rev-parse HEAD");
+        git.commit = { status: "created", commitSha: sha, subject: commitMessage };
+      }
+
+      currentBranch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => currentBranch);
+      const pushResult: { status: string; branch?: string | null; upstreamBranch?: string | null; setUpstream?: boolean; error?: string } = {
+        status: "skipped_not_requested",
+      };
+
+      if (currentBranch) {
+        if (!upstreamBranch) {
+          upstreamBranch = await gitExecLocal(`rev-parse --abbrev-ref ${currentBranch}@{upstream}`).catch(() => null);
+        }
+
+        if (upstreamBranch) {
+          try {
+            await gitExecLocal("push --no-verify", 120_000);
+            pushResult.status = "pushed";
+            pushResult.branch = currentBranch;
+            pushResult.upstreamBranch = upstreamBranch;
+          } catch (err) {
+            pushResult.status = "failed";
+            pushResult.branch = currentBranch;
+            pushResult.upstreamBranch = upstreamBranch;
+            pushResult.error = err instanceof Error ? err.message : String(err);
+          }
+        } else {
+          const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
+          const remote = remotes.includes("origin") ? "origin" : remotes[0];
+          if (remote) {
+            await gitExecLocal(`push --no-verify --set-upstream "${remote}" "${currentBranch}"`, 120_000);
+            pushResult.status = "pushed";
+            pushResult.branch = currentBranch;
+            pushResult.upstreamBranch = `${remote}/${currentBranch}`;
+            pushResult.setUpstream = true;
+          } else {
+            pushResult.status = "skipped_no_remote";
+            pushResult.branch = currentBranch;
+          }
+        }
+      }
+
+      if (pushResult.status === "failed" && isNonFastForwardPushError(pushResult.error ?? "")) {
+        try {
+          await gitExecLocal("pull --rebase --autostash", 120_000);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(`Push was rejected and pull --rebase failed. Resolve the conflict and retry. ${message}`);
+        }
+        const branch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => null);
+        if (!branch) throw new Error("Push retry failed because the current branch could not be determined.");
+        try {
+          await gitExecLocal("push --no-verify", 120_000);
+          pushResult.status = "pushed";
+          pushResult.branch = branch;
+          pushResult.upstreamBranch = pushResult.upstreamBranch ?? upstreamBranch ?? undefined;
+          delete pushResult.error;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(`Push retry failed after pulling latest changes. ${message}`);
+        }
+      } else if (pushResult.status === "failed") {
+        throw new Error(pushResult.error ?? "Push failed");
+      }
+
+      git.push = pushResult;
+      return { version, sync, git };
+    }
     case "git-stacked-action": {
       // Compound operation: commit → push → create PR, matching GitStepResult format
       const cwd = resolve(params.cwd as string);

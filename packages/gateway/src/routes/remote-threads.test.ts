@@ -105,6 +105,18 @@ function createMockWsControlPlane() {
             branch: newBranch,
           } as T;
         }
+        case "git-run-commit-flow": {
+          return {
+            version: { previousVersion: "1.0.0", nextVersion: "1.0.1", files: [`${params.cwd}\\package.json`] },
+            sync: { status: "skipped_up_to_date", branch: "jait/test-branch", upstreamBranch: "origin/jait/test-branch" },
+            git: {
+              commit: { status: "created", commitSha: "abc123", subject: "chore: bump version to v1.0.1" },
+              push: { status: "pushed", branch: "jait/test-branch", upstreamBranch: "origin/jait/test-branch" },
+              branch: { status: "skipped_not_requested" },
+              pr: { status: "skipped_not_requested" },
+            },
+          } as T;
+        }
         default:
           throw new Error(`Unexpected fs op in test: ${op}`);
       }
@@ -294,6 +306,30 @@ describe("remote provider e2e flow", () => {
     expect(res.json()).toEqual({ ok: true });
     const gitCalls = mockWs.fsOpCalls.filter((c) => c.op === "git");
     expect(gitCalls.some((c) => (c.params.args as string).includes('checkout "feature/test"'))).toBe(true);
+  });
+
+  // ── Test: Remote version bump commit flow ───────────────────────
+
+  it("proxies version bump commit flow to the remote node for non-local paths", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/git/run-commit-flow",
+      headers,
+      payload: { cwd: REMOTE_CWD },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      version: { previousVersion: "1.0.0", nextVersion: "1.0.1" },
+      git: {
+        commit: { status: "created" },
+        push: { status: "pushed" },
+      },
+    });
+
+    const flowCalls = mockWs.fsOpCalls.filter((c) => c.op === "git-run-commit-flow");
+    expect(flowCalls.length).toBe(1);
+    expect(flowCalls[0]!.params).toMatchObject({ cwd: REMOTE_CWD });
   });
 
   // ── Test: Full thread lifecycle with remote provider ─────────────

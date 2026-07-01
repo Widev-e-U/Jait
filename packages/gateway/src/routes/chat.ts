@@ -1752,21 +1752,35 @@ export function registerChatRoutes(
       }
       const existingState = sessionStateService.get(sessionId, ["queued_messages"]);
       const queue = parseQueuedChatMessages(existingState["queued_messages"]);
-      const queuedMessage: QueuedChatMessage = {
-        id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        content,
-        queuedAt: Date.now(),
-        mode: chatMode,
-        ...(requestProvider ? { provider: requestProvider } : {}),
-        ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
-        ...(responseStyle !== "normal" ? { responseStyle } : {}),
-        ...(requestBodyModel ? { model: requestBodyModel } : {}),
-        ...(displaySegments ? { displaySegments } : {}),
-        ...(attachments.length ? { attachments } : {}),
-      };
-      const nextQueue = [...queue, queuedMessage];
-      sessionStateService.set(sessionId, { queued_messages: nextQueue });
-      broadcastQueuedMessagesState(sessionId, nextQueue);
+      // Dedupe by normalized content: if an equivalent message is already
+      // queued (the server-side drain may already be processing the same
+      // content the client just re-sent), reuse the existing entry instead
+      // of appending a duplicate. This is the server-side guard against the
+      // client/server drain race that multiplied queued messages.
+      const normalizedContent = content.trim();
+      const existing = queue.find(
+        (entry) => entry.content.trim() === normalizedContent,
+      );
+      let queuedMessage: QueuedChatMessage;
+      if (existing) {
+        queuedMessage = existing;
+      } else {
+        queuedMessage = {
+          id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          content,
+          queuedAt: Date.now(),
+          mode: chatMode,
+          ...(requestProvider ? { provider: requestProvider } : {}),
+          ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
+          ...(responseStyle !== "normal" ? { responseStyle } : {}),
+          ...(requestBodyModel ? { model: requestBodyModel } : {}),
+          ...(displaySegments ? { displaySegments } : {}),
+          ...(attachments.length ? { attachments } : {}),
+        };
+        const nextQueue = [...queue, queuedMessage];
+        sessionStateService.set(sessionId, { queued_messages: nextQueue });
+        broadcastQueuedMessagesState(sessionId, nextQueue);
+      }
 
       const reqOrigin = request.headers.origin ?? "*";
       reply.raw.writeHead(202, {
@@ -1781,7 +1795,7 @@ export function registerChatRoutes(
         type: "queued" as const,
         session_id: sessionId,
         message: queuedMessage,
-        queue_length: nextQueue.length,
+        queue_length: queue.length + (existing ? 0 : 1),
       };
       reply.raw.write(`data: ${JSON.stringify(queuedEvent)}\n\n`);
       reply.raw.write(`data: ${JSON.stringify({ type: "done", session_id: sessionId, prompt_count: null, remaining_prompts: null })}\n\n`);

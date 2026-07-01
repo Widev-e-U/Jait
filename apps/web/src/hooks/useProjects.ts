@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { AutomationRepo } from '@/lib/agents-api'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
@@ -57,6 +57,15 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const [visibleLimit, setVisibleLimit] = useState(PROJECT_LIST_LIMIT)
   const [hasMoreProjects, setHasMoreProjects] = useState(false)
   const [loading, setLoading] = useState(true)
+  const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
+  if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    const sessionId = params.get('sessionId')
+    if (sessionId) {
+      const projectId = params.get('projectId')
+      initialRouteSelectionRef.current = { projectId: projectId || null, sessionId }
+    }
+  }
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -106,12 +115,25 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
 
       if (lastActiveRes.ok) {
         const data = await lastActiveRes.json() as { project: ProjectRecord | null; session: ProjectSession | null }
+        const routeSelection = initialRouteSelectionRef.current
+        const routedPersonalSession = routeSelection?.projectId == null
+          ? nextPersonalSessions.find((session) => session.id === routeSelection?.sessionId)
+          : null
+        const routedProject = routeSelection?.projectId
+          ? nextProjects.find((project) => project.id === routeSelection.projectId)
+          : nextProjects.find((project) => project.sessions.some((session) => session.id === routeSelection?.sessionId))
+        const routedProjectSession = routedProject?.sessions.find((session) => session.id === routeSelection?.sessionId) ?? null
+
         setActiveProjectId((prevProjectId) => {
+          if (routedPersonalSession) return null
+          if (routedProjectSession) return routedProject?.id ?? null
           if (prevProjectId && nextProjects.some((project) => project.id === prevProjectId)) return prevProjectId
           if (data.session && !data.session.projectId) return null
           return data.project?.id ?? nextProjects[0]?.id ?? null
         })
         setActiveSessionId((prevSessionId) => {
+          if (routedPersonalSession) return routedPersonalSession.id
+          if (routedProjectSession) return routedProjectSession.id
           if (prevSessionId && nextProjects.some((project) => project.sessions.some((session) => session.id === prevSessionId))) {
             return prevSessionId
           }

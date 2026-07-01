@@ -57,4 +57,35 @@ describe('chat queue decision helpers', () => {
     expect(shouldProcessQueuedMessage({ ...base, isProcessing: true })).toBe(false)
     expect(shouldProcessQueuedMessage({ ...base, queuedCount: 0 })).toBe(false)
   })
+
+  it('defers to the authoritative server drain while connected', () => {
+    const base = {
+      hasInterruptedExit: false,
+      isLoading: false,
+      isLoadingHistory: false,
+      queuedCount: 1,
+      allowQueuedMessageAfterInterruptedExit: false,
+      isProcessing: false,
+    }
+
+    // Connected: the server drain owns the queue, so the client must not
+    // auto-send (would race + multiply the message).
+    expect(shouldProcessQueuedMessage({ ...base, deferToServerDrain: true })).toBe(false)
+    // Offline fallback: no server to drain, so the client sends.
+    expect(shouldProcessQueuedMessage({ ...base, deferToServerDrain: false })).toBe(true)
+  })
+
+  it('still sends after an explicit user approval even while connected', () => {
+    const params = {
+      hasInterruptedExit: true,
+      isLoading: false,
+      isLoadingHistory: false,
+      queuedCount: 1,
+      allowQueuedMessageAfterInterruptedExit: true,
+      isProcessing: false,
+      deferToServerDrain: true,
+    }
+
+    expect(shouldProcessQueuedMessage(params)).toBe(true)
+  })
 })

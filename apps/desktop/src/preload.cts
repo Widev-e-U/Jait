@@ -78,6 +78,10 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
       roots: { name: string; path: string; type: 'dir' | 'file' }[];
     }>,
 
+  /** Open a detached project/chat window. */
+  openProjectWindow: (opts: { url: string; title?: string }) =>
+    ipcRenderer.invoke('desktop:open-preview-window', opts) as Promise<{ ok: boolean }>,
+
   /** Execute a filesystem operation (stat, read, write, list, exists, mkdir, readdir) */
   fsOp: (op: string, params: Record<string, unknown>) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[8], op, params) as Promise<unknown>,

@@ -1,8 +1,10 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
 
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
 import { SessionSwitcher } from '@/components/chat/session-switcher'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { ProjectSession } from '@/hooks/useProjects'
 import type { AutomationRepository, RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 
@@ -26,6 +28,8 @@ interface DeveloperComposerControlRowProps {
   onSendTargetChange: (target: SendTarget) => void
   onSessionSwitcherOpenChange: (open: boolean) => void
   onStartNewChat: () => void
+  onStartNewChatInTab?: () => void
+  onStartNewChatInWindow?: () => void
   onSelectRepo: (repoId: string) => void
   onSelectSession: (projectId: string | null, sessionId: string) => void
 }
@@ -50,6 +54,8 @@ export function DeveloperComposerControlRow({
   onSendTargetChange,
   onSessionSwitcherOpenChange,
   onStartNewChat,
+  onStartNewChatInTab,
+  onStartNewChatInWindow,
   onSelectRepo,
   onSelectSession,
 }: DeveloperComposerControlRowProps) {
@@ -107,13 +113,33 @@ export function DeveloperComposerControlRow({
         )}
         <div className={`${compact ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
           {sendTarget !== 'thread' && (
-            <button
-              type="button"
-              onClick={onStartNewChat}
-              className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              New chat
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  New chat
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={onStartNewChat} className="gap-2 text-xs">
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  Open here
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onStartNewChatInTab} className="gap-2 text-xs" disabled={!onStartNewChatInTab}>
+                  <PanelRightOpen className="h-3.5 w-3.5" />
+                  Open in new tab
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onStartNewChatInWindow} className="gap-2 text-xs" disabled={!onStartNewChatInWindow}>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in new window
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {compact && (
             <div className="shrink-0">

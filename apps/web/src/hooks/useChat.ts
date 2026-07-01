@@ -1586,7 +1586,14 @@ export function useChat(
                   isLoading: ownsDirectStream ? false : prev.isLoading,
                   messages: prev.messages.filter(m => m.id !== assistantId && m.id !== userMessage.id),
                 }))
-                if (queued?.id && typeof queued.content === 'string') {
+                // Only mirror the server-assigned queue entry into local state
+                // for user-initiated sends. When this send itself originated
+                // from the queue (options.queued), the server is already the
+                // authoritative owner of the persisted queue and will broadcast
+                // the canonical `queued_messages` state via WS. Re-adding here
+                // with a freshly generated server id raced the server-side
+                // drain and caused every queued message to multiply.
+                if (!options.queued && queued?.id && typeof queued.content === 'string') {
                   setMessageQueue(prev => prev.some(item => item.id === queued.id)
                     ? prev
                     : [...prev, {

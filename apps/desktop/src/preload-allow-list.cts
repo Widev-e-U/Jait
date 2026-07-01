@@ -26,6 +26,7 @@ const allowedIpcChannels = {
     "credential:get",
     "credential:clear",
     "clipboard:read-text",
+    "desktop:open-preview-window",
   ],
   on: ["screen-share:start", "screen-share:stop", "gateway:event", "window:maximized-change"],
 };

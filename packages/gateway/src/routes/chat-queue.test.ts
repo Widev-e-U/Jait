@@ -286,4 +286,96 @@ describe("server-side queued chat processing", () => {
       "second while streaming",
     ]);
   });
+
+  it("does not multiply a queued message when the same content is submitted twice while streaming", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-multiply-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const slowStarted = new Promise<void>((resolve) => { slowOllamaStarted = resolve; });
+    const firstResponse = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "slow first" },
+    });
+
+    await slowStarted;
+
+    // The client/server drain race submits the same content twice while the
+    // session is still streaming. Both should be accepted as 202 "queued" but
+    // the persisted queue must contain only ONE entry (deduped by content).
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "duplicate queued message" },
+    });
+    const thirdResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "duplicate queued message" },
+    });
+
+    expect(secondResponse.statusCode).toBe(202);
+    expect(thirdResponse.statusCode).toBe(202);
+    const persisted = sessionState.get(session.id, ["queued_messages"])[
+      "queued_messages"
+    ] as Array<{ content: string }>;
+    expect(persisted).toHaveLength(1);
+    expect(persisted.map((m) => m.content)).toEqual(["duplicate queued message"]);
+
+    releaseSlowOllama?.();
+    await firstResponse;
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+
+    // Drain the queue and confirm the message is sent exactly once.
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    let userMessages: string[] = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = messagesResponse.json() as { messages: Array<{ role: string; content: string }> };
+      userMessages = body.messages.filter((message) => message.role === "user").map((message) => message.content);
+      if (userMessages.length >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(userMessages).toEqual([
+      "slow first",
+      "duplicate queued message",
+    ]);
+  });
 });

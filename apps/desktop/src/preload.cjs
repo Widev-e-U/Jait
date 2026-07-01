@@ -28,8 +28,8 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
     browsePath: (dirPath) => ipcRenderer.invoke(allowedIpcChannels.invoke[6], dirPath),
     /** Get root drives / home directory */
     getRoots: () => ipcRenderer.invoke(allowedIpcChannels.invoke[7]),
-    /** Open a detached project window. */
-    openProjectWindow: (opts) => ipcRenderer.invoke(allowedIpcChannels.invoke[8], opts),
+    /** Open a detached project/chat window. */
+    openProjectWindow: (opts) => ipcRenderer.invoke("desktop:open-preview-window", opts),
     /** Read plain text from the native desktop clipboard */
     readClipboardText: () => ipcRenderer.invoke("clipboard:read-text"),
     /** Listen for screen-share commands from main process (tray, etc.) */

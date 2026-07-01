@@ -420,6 +420,7 @@ function App() {
   } = useUpdateChecker({ token, isElectron, appPlatform, apiUrl: API_URL })
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
+    setWsConnected(connected)
     if (connected) {
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
@@ -605,6 +606,11 @@ function App() {
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
   const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
   const [allowQueuedMessageAfterInterruptedExit, setAllowQueuedMessageAfterInterruptedExit] = useState(false)
+  // Whether the gateway WebSocket is currently connected. The server-side
+  // `drainQueuedChatMessages` is the authoritative chat-queue consumer; when
+  // connected, the client must NOT also auto-drain or the two race and every
+  // queued message multiplies (client re-queues with a fresh server id).
+  const [wsConnected, setWsConnected] = useState(false)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const terminalShells = useAvailableShells(token)
@@ -2961,6 +2967,15 @@ function App() {
       queuedCount: messageQueue.length,
       allowQueuedMessageAfterInterruptedExit,
       isProcessing: chatQueueProcessingRef.current,
+      // While the gateway WS is connected the server-side
+      // `drainQueuedChatMessages` is the authoritative queue consumer
+      // (it runs on every turn's `done` and on every `queued_messages`
+      // state-sync). Letting the client auto-drain too made the two race:
+      // the losing client re-queued the message with a fresh server id and
+      // it got sent twice — the "queued messages multiply" bug. The client
+      // only takes over when the user explicitly approved after an
+      // interrupted exit, or when there is no server connection to drain.
+      deferToServerDrain: wsConnected,
     })) return
 
     const [nextItem] = messageQueue
@@ -2978,6 +2993,12 @@ function App() {
         responseStyle: nextItem.responseStyle,
         model: nextItem.model,
         onLoginRequired: () => setShowLoginDialog(true),
+      // Mark this as a queue-originated send so the `sendMessage` `queued`
+      // handler does NOT mirror the server-assigned entry back into the local
+      // queue. The server is authoritative and will broadcast the canonical
+      // `queued_messages` state via WS; re-adding locally with a new server id
+      // was the other half of the multiplication race.
+      queued: true,
       ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
       ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
       ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
@@ -3012,6 +3033,7 @@ function App() {
     sendTarget,
     token,
     viewMode,
+    wsConnected,
   ])
 
   const handleContinueChat = useCallback((options: { token: string | null; sessionId: string | null }) => {
@@ -3376,10 +3398,60 @@ function App() {
     setShowLoginDialog(true)
   }
 
+  const buildChatSessionUrl = useCallback((sessionId: string, projectId: string | null) => {
+    const url = new URL(`${window.location.origin}${window.location.pathname}`)
+    url.searchParams.set('sessionId', sessionId)
+    if (projectId) url.searchParams.set('projectId', projectId)
+    return url.toString()
+  }, [])
+
+  const openNewChatSurface = useCallback(async (target: 'tab' | 'window') => {
+    const previousProjectId = activeProjectId
+    const previousSessionId = activeSessionId
+    const session = await createSession()
+    if (!session) return
+
+    const url = buildChatSessionUrl(session.id, session.projectId ?? null)
+    const title = session.name && session.name !== 'New Chat' ? session.name : 'New chat'
+
+    let opened = false
+    if (target === 'window') {
+      try {
+        if (window.jaitDesktop?.openProjectWindow) {
+          const result = await window.jaitDesktop.openProjectWindow({ url, title })
+          opened = Boolean(result?.ok)
+        }
+      } catch {
+        opened = false
+      }
+      if (!opened) {
+        const popup = window.open(url, `jait-chat-${session.id}`, 'popup=yes,width=960,height=860,resizable=yes,scrollbars=yes')
+        opened = Boolean(popup)
+        popup?.focus?.()
+      }
+    } else {
+      const popup = window.open(url, '_blank', 'noopener,noreferrer')
+      opened = Boolean(popup)
+    }
+
+    if (previousSessionId) {
+      switchSession(previousProjectId, previousSessionId)
+    }
+    if (!opened) toast.error(target === 'window' ? 'Failed to open chat window' : 'Failed to open chat tab')
+  }, [activeProjectId, activeSessionId, buildChatSessionUrl, createSession, switchSession])
+
   const handleStartNewChat = useCallback(() => {
     clearMessages()
     void createSession()
   }, [clearMessages, createSession])
+
+  const handleStartNewChatInTab = useCallback(() => {
+    void openNewChatSurface('tab')
+  }, [openNewChatSurface])
+
+  const handleStartNewChatInWindow = useCallback(() => {
+    void openNewChatSurface('window')
+  }, [openNewChatSurface])
 
   const handleSaveApiKeys = async (next: Record<string, string>) => {
     const sanitized = Object.fromEntries(
@@ -3573,6 +3645,8 @@ function App() {
       onSendTargetChange={setSendTarget}
       onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
       onStartNewChat={handleStartNewChat}
+      onStartNewChatInTab={handleStartNewChatInTab}
+      onStartNewChatInWindow={handleStartNewChatInWindow}
       onSelectRepo={automation.setSelectedRepoId}
       onSelectSession={switchSession}
     />
