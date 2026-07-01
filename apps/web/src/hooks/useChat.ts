@@ -74,6 +74,17 @@ export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
   return eventType === 'token' || eventType === 'thinking'
 }
 
+export function shouldYieldAfterBufferedStreamEvent(eventType: unknown): boolean {
+  return eventType === 'token' || eventType === 'thinking'
+}
+
+function waitForNextPaint(): Promise<void> {
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    return Promise.resolve()
+  }
+  return new Promise(resolve => window.requestAnimationFrame(() => resolve()))
+}
+
 export function shouldProcessResumeStreamEvent(
   lastSeqBySession: Map<string, number>,
   sessionId: string,
@@ -626,7 +637,8 @@ export function useChat(
           const lines = lineBuffer.split('\n')
           lineBuffer = lines.pop() || ''
 
-          for (const line of lines) {
+          for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex]
             if (!line.startsWith('data: ')) continue
             try {
               const data = JSON.parse(line.slice(6)) as Record<string, unknown>
@@ -1037,6 +1049,9 @@ export function useChat(
                   ],
                 }))
               }
+              if (lineIndex < lines.length - 1 && shouldYieldAfterBufferedStreamEvent(data.type)) {
+                await waitForNextPaint()
+              }
             } catch (parseErr) {
               if (!(parseErr instanceof SyntaxError)) throw parseErr
               // incomplete JSON chunk — wait for next line
@@ -1400,7 +1415,8 @@ export function useChat(
         const lines = lineBuffer.split('\n')
         lineBuffer = lines.pop() || ''
 
-        for (const line of lines) {
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+          const line = lines[lineIndex]
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
@@ -1652,6 +1668,9 @@ export function useChat(
               return 'sent'
             } else if (data.type === 'error') {
               throw new Error(data.message)
+            }
+            if (lineIndex < lines.length - 1 && shouldYieldAfterBufferedStreamEvent(data.type)) {
+              await waitForNextPaint()
             }
           } catch (parseErr) {
             if (!(parseErr instanceof SyntaxError)) throw parseErr

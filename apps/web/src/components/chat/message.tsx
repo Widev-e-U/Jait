@@ -1,6 +1,4 @@
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps } from 'react'
-import { markdownLookBack } from '@llm-ui/markdown'
-import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
@@ -410,37 +408,16 @@ function StaticMarkdown({
   )
 }
 
-function StreamingMarkdown({
+function StreamingText({
   content,
   compact,
-  onOpenPath,
 }: {
   content: string
   compact?: boolean
-  onOpenPath?: MessageProps['onOpenPath']
 }) {
-  const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
-  const MarkdownBlock: LLMOutputComponent = ({ blockMatch }) => (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {blockMatch.output}
-    </ReactMarkdown>
-  )
-  const { blockMatches } = useLLMOutput({
-    llmOutput: content,
-    blocks: [],
-    fallbackBlock: {
-      component: MarkdownBlock,
-      lookBack: markdownLookBack(),
-    },
-    isStreamFinished: false,
-  })
-
   return (
     <div className={proseClassName(compact)}>
-      {blockMatches.map((blockMatch, index) => {
-        const Component = blockMatch.block.component
-        return <Component key={index} blockMatch={blockMatch} />
-      })}
+      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{content}</div>
     </div>
   )
 }
@@ -449,7 +426,6 @@ const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   compact,
   isStreaming,
-  preferLlmUi,
   onOpenPath,
 }: {
   content: string
@@ -458,8 +434,8 @@ const AssistantMarkdown = memo(function AssistantMarkdown({
   preferLlmUi?: boolean
   onOpenPath?: MessageProps['onOpenPath']
 }) {
-  if (preferLlmUi && isStreaming) {
-    return <StreamingMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
+  if (isStreaming) {
+    return <StreamingText content={content} compact={compact} />
   }
 
   return <StaticMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />

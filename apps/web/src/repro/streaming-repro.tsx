@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Message } from '@/components/chat/message'
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 
@@ -113,6 +114,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <StreamingRepro />
+    <ConfirmDialogProvider>
+      <StreamingRepro />
+    </ConfirmDialogProvider>
   </StrictMode>,
 )

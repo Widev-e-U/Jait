@@ -4,6 +4,7 @@ import {
   formatChatHttpError,
   getVisibleChangedFiles,
   shouldFlushStreamTextImmediately,
+  shouldYieldAfterBufferedStreamEvent,
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
@@ -107,6 +108,15 @@ describe('shouldFlushStreamTextImmediately', () => {
     expect(shouldFlushStreamTextImmediately('token')).toBe(true)
     expect(shouldFlushStreamTextImmediately('thinking')).toBe(true)
     expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)
+  })
+})
+
+describe('shouldYieldAfterBufferedStreamEvent', () => {
+  it('yields to the browser between buffered text events only', () => {
+    expect(shouldYieldAfterBufferedStreamEvent('token')).toBe(true)
+    expect(shouldYieldAfterBufferedStreamEvent('thinking')).toBe(true)
+    expect(shouldYieldAfterBufferedStreamEvent('tool_output')).toBe(false)
+    expect(shouldYieldAfterBufferedStreamEvent('done')).toBe(false)
   })
 })
 
