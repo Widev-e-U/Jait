@@ -303,7 +303,7 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
-  it("includes the Jait system prompt in the first external-provider turn and context trace", { timeout: 30_000 }, async () => {
+  it("includes the Jait system prompt in the first external-provider turn without streaming the context trace", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(provider);
@@ -332,9 +332,8 @@ describe("chat external provider runtime mode selection", () => {
     expect(firstTurnMessage).toContain("User request:");
     expect(firstTurnMessage).toContain("fix the bug");
 
-    expect(response.body).toContain("\"type\":\"context_flow\"");
-    expect(response.body).toContain("Jait pasted its external-provider system prompt into this new provider session turn.");
-    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(response.body).not.toContain("\"type\":\"context_flow\"");
+    expect(response.body).not.toContain("Jait pasted its external-provider system prompt into this new provider session turn.");
 
     await app.close();
   });
@@ -413,11 +412,8 @@ describe("chat external provider runtime mode selection", () => {
 
     const secondTurnMessage = provider.sendTurn.mock.calls[1]?.[1];
     expect(secondTurnMessage).toBe("second turn");
-    expect(response.body).toContain("session=reused");
-    expect(response.body).toContain("\"role\":\"system\"");
-    expect(response.body).toContain("Jait did not paste its internal system prompt into this provider turn.");
-    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
-    expect(response.body).toContain("shown for inspection even though it was only sent");
+    expect(response.body).not.toContain("\"type\":\"context_flow\"");
+    expect(response.body).not.toContain("session=reused");
 
     await app.close();
   });
@@ -469,7 +465,8 @@ describe("chat external provider runtime mode selection", () => {
     expect(handoffMessage).toContain("Assistant: ok");
     expect(handoffMessage).toContain("User: third turn");
     expect(handoffMessage).toContain("User request:\nfourth turn");
-    expect(response.body).toContain("Recent active chat context (last 4 messages before this turn):");
+    expect(response.body).not.toContain("\"type\":\"context_flow\"");
+    expect(response.body).not.toContain("Recent active chat context (last 4 messages before this turn):");
 
     await app.close();
   });

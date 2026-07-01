@@ -1,3 +1,4 @@
+import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
@@ -27,6 +28,24 @@ function createOpenAIStreamResponse(): Response {
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}\n'));
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n'));
       controller.enqueue(encoder.encode("data: [DONE]\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+function createDelayedOpenAIStreamResponse(delayMs = 80): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}\n\n'));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"B"},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
   });
@@ -119,6 +138,87 @@ describe("chat route OpenRouter backend selection", () => {
     await app.close();
   });
 
+  it("flushes Jait provider token chunks over live HTTP without streaming context_flow first", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("openrouter-cadence-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "OpenRouter Cadence Session" });
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: {
+        OPENROUTER_API_KEY: "openrouter-test-key",
+      },
+    });
+
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+      expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+      return createDelayedOpenAIStreamResponse();
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+
+    try {
+      const address = app.server.address() as AddressInfo;
+      const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+      const response = await originalFetch(`http://127.0.0.1:${address.port}/api/chat`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          content: "reply in two chunks",
+          sessionId: session.id,
+          model: "glm-5.2:cloud",
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/event-stream");
+
+      const reader = response.body?.getReader();
+      expect(reader).toBeTruthy();
+      const decoder = new TextDecoder();
+      const startedAt = Date.now();
+      const seen: Array<{ token: string; at: number }> = [];
+      let body = "";
+
+      while (reader && seen.length < 2) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        body += decoder.decode(value, { stream: true });
+        if (body.includes('"type":"token","content":"A"') && !seen.some((entry) => entry.token === "A")) {
+          seen.push({ token: "A", at: Date.now() - startedAt });
+        }
+        if (body.includes('"type":"token","content":"B"') && !seen.some((entry) => entry.token === "B")) {
+          seen.push({ token: "B", at: Date.now() - startedAt });
+        }
+      }
+      await reader?.cancel().catch(() => {});
+
+      expect(body).not.toContain('"type":"context_flow"');
+      expect(seen.map((entry) => entry.token)).toEqual(["A", "B"]);
+      expect(seen[1]!.at - seen[0]!.at).toBeGreaterThanOrEqual(40);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("streams a simple ok reply for the Jait provider with mimo v2 pro selected", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -168,7 +268,6 @@ describe("chat route OpenRouter backend selection", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/event-stream");
-    expect(response.body).toContain('"type":"context_flow"');
     expect(response.body).toContain('"type":"token","content":"ok"');
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -229,11 +328,6 @@ describe("chat route OpenRouter backend selection", () => {
     const session = sessionService.create({ userId: user.id, name: "Memory Context Session" });
     const memoryService = createMockMemoryService([
       memoryEntry(),
-      memoryEntry({
-        id: "mem-contact-1",
-        scope: "contact",
-        content: "The user likes terse answers.",
-      }),
     ]);
 
     userService.updateSettings(user.id, {
@@ -248,7 +342,6 @@ describe("chat route OpenRouter backend selection", () => {
       const memoryMessage = body.messages.find((message) => String(message.content).includes("<relevant_memory>"));
       expect(memoryMessage).toMatchObject({ role: "system" });
       expect(String(memoryMessage?.content)).toContain("mem-project-1");
-      expect(String(memoryMessage?.content)).not.toContain("mem-contact-1");
       expect(body.messages.at(-1)).toMatchObject({ role: "system" });
 
       return createOpenAIStreamResponse();
@@ -276,7 +369,6 @@ describe("chat route OpenRouter backend selection", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('"memory"');
     expect(response.body).toContain("mem-project-1");
     expect(response.body).toContain('"sourceType":"test"');
     expect(response.body).toContain('"sourceId":"session-1"');

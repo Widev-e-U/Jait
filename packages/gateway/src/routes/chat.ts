@@ -2427,8 +2427,6 @@ export function registerChatRoutes(
             recentContextBlock,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
-          safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
-          emitToSubscribers(sessionId, { type: "context_flow", ...cliContextFlow } as unknown as StreamEvent);
           await cliProvider.sendTurn(providerSessionId, cliContent);
         } catch (sendErr) {
           // Session likely died (process exited) — start a fresh one
@@ -2492,8 +2490,6 @@ export function registerChatRoutes(
             recoveryContextBlock,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
-          safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
-          emitToSubscribers(sessionId, { type: "context_flow", ...cliContextFlow } as unknown as StreamEvent);
           await cliProvider.sendTurn(providerSessionId, recoveryContent);
         }
 
@@ -2692,15 +2688,6 @@ export function registerChatRoutes(
                   ...(contextRounds.length !== storedRounds.length ? { truncatedRounds: contextRounds.length } : {}),
                   ...(memoryFlow ? { memory: memoryFlow } : {}),
                 } satisfies LlmContextFlow & { truncatedRounds?: number });
-                const event = {
-                  type: "context_flow",
-                  provider: "jait",
-                  model: llmRuntime.openaiModel,
-                  rounds: contextRounds,
-                  ...(memoryFlow ? { memory: memoryFlow } : {}),
-                };
-                emitToSubscribers(sessionId, event as unknown as StreamEvent);
-                safeWrite(`data: ${JSON.stringify(event)}\n\n`);
               },
               onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
               priorFingerprints: sessionFingerprints.get(sessionId),
@@ -2738,15 +2725,6 @@ export function registerChatRoutes(
             rounds: contextRounds,
             ...(memoryFlow ? { memory: memoryFlow } : {}),
           } satisfies LlmContextFlow);
-          const finalEvent = {
-            type: "context_flow",
-            provider: "jait",
-            model: llmRuntime.openaiModel,
-            rounds: contextRounds,
-            ...(memoryFlow ? { memory: memoryFlow } : {}),
-          };
-          emitToSubscribers(sessionId, finalEvent as unknown as StreamEvent);
-          safeWrite(`data: ${JSON.stringify(finalEvent)}\n\n`);
         }
 
         if (contextFlowJson) {
