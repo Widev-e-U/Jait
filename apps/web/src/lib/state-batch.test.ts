@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+function stubBrowserOrigin() {
+  vi.stubGlobal('window', {
+    location: {
+      origin: 'http://localhost:8000',
+    },
+  } as unknown as Window & typeof globalThis)
+}
+
 describe('fetchStateBatched', () => {
   afterEach(() => {
     vi.resetModules()
@@ -7,11 +15,7 @@ describe('fetchStateBatched', () => {
   })
 
   it('batches same-tick requests for the same entity and token', async () => {
-    vi.stubGlobal('window', {
-      location: {
-        origin: 'http://localhost:8000',
-      },
-    } as unknown as Window & typeof globalThis)
+    stubBrowserOrigin()
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -41,11 +45,7 @@ describe('fetchStateBatched', () => {
   })
 
   it('does not merge same-tick requests that use different tokens', async () => {
-    vi.stubGlobal('window', {
-      location: {
-        origin: 'http://localhost:8000',
-      },
-    } as unknown as Window & typeof globalThis)
+    stubBrowserOrigin()
 
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const auth = (init?.headers as Record<string, string> | undefined)?.Authorization
@@ -85,5 +85,60 @@ describe('fetchStateBatched', () => {
         },
       ],
     ])
+  })
+
+  it('dedupes same-key requests while the batched fetch is in flight', async () => {
+    stubBrowserOrigin()
+
+    let resolveJson!: (value: Record<string, unknown>) => void
+    const jsonPromise = new Promise<Record<string, unknown>>((resolve) => {
+      resolveJson = resolve
+    })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: () => jsonPromise,
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchStateBatched } = await import('./state-batch')
+
+    const first = fetchStateBatched('sessions', 'session-1', 'alpha', 'token-a')
+    await Promise.resolve()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const second = fetchStateBatched('sessions', 'session-1', 'alpha', 'token-a')
+    resolveJson({ alpha: 'first' })
+
+    await expect(Promise.all([first, second])).resolves.toEqual(['first', 'first'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses websocket-primed state without a REST fetch', async () => {
+    stubBrowserOrigin()
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchStateBatched, primeStateCache } = await import('./state-batch')
+    primeStateCache('sessions', 'session-1', 'token-a', { alpha: 'from-ws' })
+
+    await expect(fetchStateBatched('sessions', 'session-1', 'alpha', 'token-a')).resolves.toBe('from-ws')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('serves repeated reads from cache after the first REST fetch resolves', async () => {
+    stubBrowserOrigin()
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ alpha: 'first' }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchStateBatched } = await import('./state-batch')
+
+    await expect(fetchStateBatched('sessions', 'session-1', 'alpha', 'token-a')).resolves.toBe('first')
+    await expect(fetchStateBatched('sessions', 'session-1', 'alpha', 'token-a')).resolves.toBe('first')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

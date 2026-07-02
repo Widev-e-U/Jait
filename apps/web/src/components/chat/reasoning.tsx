@@ -13,9 +13,10 @@ export function Reasoning({ content, isStreaming, duration }: ReasoningProps) {
   const [open, setOpen] = useState(false)
   const wasStreaming = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollRafRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (isStreaming && content) {
+    if (isStreaming && content && !wasStreaming.current) {
       setOpen(true)
       wasStreaming.current = true
     }
@@ -26,8 +27,20 @@ export function Reasoning({ content, isStreaming, duration }: ReasoningProps) {
   }, [isStreaming, content])
 
   useEffect(() => {
-    if (isStreaming && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    if (!isStreaming || !scrollRef.current) return
+    if (scrollRafRef.current !== null) return
+
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      const el = scrollRef.current
+      if (el) el.scrollTop = el.scrollHeight
+    })
+
+    return () => {
+      if (scrollRafRef.current !== null) {
+        window.cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = null
+      }
     }
   }, [content, isStreaming])
 

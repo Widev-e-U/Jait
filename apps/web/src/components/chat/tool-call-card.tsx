@@ -11,12 +11,23 @@ import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
-/** Auto-scroll a container to the bottom when content changes */
+/** Auto-scroll a container to the bottom when content changes. */
 function useAutoScroll(dep: unknown) {
   const ref = useRef<HTMLPreElement>(null)
+  const rafRef = useRef<number | null>(null)
   useEffect(() => {
-    const el = ref.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (rafRef.current !== null) return
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null
+      const el = ref.current
+      if (el) el.scrollTop = el.scrollHeight
+    })
+    return () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
   }, [dep])
   return ref
 }

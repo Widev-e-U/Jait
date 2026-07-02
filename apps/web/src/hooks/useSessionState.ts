@@ -1,5 +1,5 @@
 /**
- * useSessionState — Syncs per-session key-value state with the backend.
+ * useSessionState - Syncs per-session key-value state with the backend.
  *
  * Usage:
  *   const [value, setValue] = useSessionState<MyType>(sessionId, 'project.panel')
@@ -10,7 +10,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
-import { fetchStateBatched } from '@/lib/state-batch'
+import { fetchStateBatched, primeStateValue } from '@/lib/state-batch'
 
 const API_URL = getApiUrl()
 
@@ -88,7 +88,7 @@ export function useSessionState<T>(
     const nextRequestKey = getSessionStateRequestKey(sessionId, key, token)
     setLoading(true)
 
-    fetchStateBatched('sessions', sessionId, key, token!)
+    fetchStateBatched('sessions', sessionId, key, token)
       .then((val) => {
         if (cancelled) return
         if (!shouldApplySessionStateFetchResult(fetchVersion, localWriteVersionRef.current)) return
@@ -118,6 +118,7 @@ export function useSessionState<T>(
       latestRef.current = next
 
       if (!sessionId || !token) return
+      primeStateValue('sessions', sessionId, token, key, next)
 
       // Debounce writes to avoid rapid-fire PATCHes
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -125,7 +126,7 @@ export function useSessionState<T>(
         fetch(`${API_URL}/api/sessions/${sessionId}/state`, {
           ...createSessionStatePersistRequestInit(token, key, latestRef.current),
         }).catch(() => {
-          // Silently ignore write failures — local state stays optimistic
+          // Silently ignore write failures - local state stays optimistic
         })
       }, 300)
     },

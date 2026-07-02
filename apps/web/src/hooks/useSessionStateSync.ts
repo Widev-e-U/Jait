@@ -80,50 +80,51 @@ export function useSessionStateSync({
   }, [activeSessionId, consumeSuppressedUiSync, sendUIState, showMobileToolbar, token, wsFullStateReceivedRef])
 
   useEffect(() => {
-    if (activeSessionId && token && loadingChatMode) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingChatMode)) return
     if (chatMode === prevChatModePayloadRef.current) return
     prevChatModePayloadRef.current = chatMode as string
-    setSavedChatMode(chatMode)
     if (consumeSuppressedUiSync('chat.mode')) return
+    setSavedChatMode(chatMode)
     sendUIState('chat.mode', chatMode, activeSessionId)
-  }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token, consumeSuppressedUiSync])
+  }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token, consumeSuppressedUiSync, wsFullStateReceivedRef])
 
   useEffect(() => {
-    if (activeSessionId && token && loadingChatResponseStyle) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingChatResponseStyle)) return
     if (chatResponseStyle === prevChatResponseStylePayloadRef.current) return
     prevChatResponseStylePayloadRef.current = chatResponseStyle as string
-    setSavedChatResponseStyle(chatResponseStyle)
     if (consumeSuppressedUiSync('chat.responseStyle')) return
+    setSavedChatResponseStyle(chatResponseStyle)
     sendUIState('chat.responseStyle', chatResponseStyle, activeSessionId)
-  }, [chatResponseStyle, setSavedChatResponseStyle, sendUIState, activeSessionId, loadingChatResponseStyle, token, consumeSuppressedUiSync])
+  }, [chatResponseStyle, setSavedChatResponseStyle, sendUIState, activeSessionId, loadingChatResponseStyle, token, consumeSuppressedUiSync, wsFullStateReceivedRef])
 
   useEffect(() => {
-    if (activeSessionId && token && loadingProviderRuntimeMode) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingProviderRuntimeMode)) return
     if (chatProviderRuntimeMode === prevProviderRuntimeModePayloadRef.current) return
     prevProviderRuntimeModePayloadRef.current = chatProviderRuntimeMode as string
-    setSavedProviderRuntimeMode(chatProviderRuntimeMode)
     if (consumeSuppressedUiSync('chat.providerRuntimeMode')) return
+    setSavedProviderRuntimeMode(chatProviderRuntimeMode)
     sendUIState('chat.providerRuntimeMode', chatProviderRuntimeMode, activeSessionId)
-  }, [chatProviderRuntimeMode, setSavedProviderRuntimeMode, sendUIState, activeSessionId, loadingProviderRuntimeMode, token, consumeSuppressedUiSync])
+  }, [chatProviderRuntimeMode, setSavedProviderRuntimeMode, sendUIState, activeSessionId, loadingProviderRuntimeMode, token, consumeSuppressedUiSync, wsFullStateReceivedRef])
 
   useEffect(() => {
-    if (activeSessionId && token && loadingChatView) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingChatView)) return
     if (viewMode === prevChatViewPayloadRef.current) return
     prevChatViewPayloadRef.current = viewMode as string
-    setSavedChatView(viewMode)
     if (consumeSuppressedUiSync('chat.view')) return
+    setSavedChatView(viewMode)
     sendUIState('chat.view', viewMode, activeSessionId)
-  }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token, consumeSuppressedUiSync])
+  }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token, consumeSuppressedUiSync, wsFullStateReceivedRef])
 
   useEffect(() => {
+    if (activeSessionId && token && !wsFullStateReceivedRef.current) return
     const payload = messageQueue.length > 0 ? messageQueue : null
     const serialized = JSON.stringify(payload)
     if (serialized === prevQueuePayloadRef.current) return
     prevQueuePayloadRef.current = serialized
-    setSavedQueuedMessages(payload)
     if (consumeSuppressedUiSync('queued_messages')) return
+    setSavedQueuedMessages(payload)
     sendUIState('queued_messages', payload, activeSessionId)
-  }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync, token, wsFullStateReceivedRef])
 
   useEffect(() => {
     if (activeSessionId && token && !wsFullStateReceivedRef.current) return
@@ -131,26 +132,27 @@ export function useSessionStateSync({
     const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
     if (serialized === prevTodoListPayloadRef.current) return
     prevTodoListPayloadRef.current = serialized
-    setSavedTodoList(payload)
     if (consumeSuppressedUiSync('todo_list')) return
+    setSavedTodoList(payload)
     sendUIState('todo_list', payload, activeSessionId)
   }, [todoList, setSavedTodoList, sendUIState, activeSessionId, consumeSuppressedUiSync, token, wsFullStateReceivedRef])
 
   useEffect(() => {
+    if (activeSessionId && token && !wsFullStateReceivedRef.current) return
     const payload = Object.keys(managerMessageQueues).length > 0 ? managerMessageQueues : null
     const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
     if (serialized === prevThreadQueuePayloadRef.current) return
     prevThreadQueuePayloadRef.current = serialized
-    setSavedQueuedThreadMessages(payload)
     if (consumeSuppressedUiSync('queued_thread_messages')) return
+    setSavedQueuedThreadMessages(payload)
     sendUIState('queued_thread_messages', payload, activeSessionId)
-  }, [managerMessageQueues, setSavedQueuedThreadMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [managerMessageQueues, setSavedQueuedThreadMessages, sendUIState, activeSessionId, consumeSuppressedUiSync, token, wsFullStateReceivedRef])
 
   useEffect(() => {
     setOnChangedFilesSync((files: ChangedFile[]) => {
       const payload = files.length > 0 ? files : null
-      setSavedChangedFiles(payload)
       if (consumeSuppressedUiSync('changed_files')) return
+      setSavedChangedFiles(payload)
       sendUIState('changed_files', payload, activeSessionId)
     })
     return () => setOnChangedFilesSync(null)

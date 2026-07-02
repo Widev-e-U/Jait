@@ -25,7 +25,7 @@ import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './project
 import { getDesktopProjectPanelStyle } from './project-panel-layout'
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import type { FsChangesPayload } from '@jait/shared'
-import { fsChangesIncludeFile } from './project-fs-changes'
+import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
 import {
   PreviewMetricsPanel,
   type PreviewInspectInteractiveElement,
@@ -311,33 +311,99 @@ import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/previ
 import { subscribePreviewSession } from '@/lib/preview-events'
 
 const API_URL = getApiUrl()
+const OPEN_FILE_MTIME_POLL_MS = 10_000
 
-async function remoteScanDir(dirPath: string, surfaceId?: string | null): Promise<LazyNode[]> {
+type RemoteDirEntry = { kind: 'dir' | 'file'; name: string }
+
+const remoteDirEntryCache = new Map<string, RemoteDirEntry[]>()
+const remoteDirEntryInFlight = new Map<string, Promise<RemoteDirEntry[]>>()
+const remoteDirCacheEpoch = new Map<string, number>()
+
+function remoteDirCacheKey(dirPath: string, surfaceId?: string | null): string {
+  return `${surfaceId ?? ''}:${normalizePath(dirPath)}`
+}
+
+function remoteDirEpoch(cacheKey: string): number {
+  return remoteDirCacheEpoch.get(cacheKey) ?? 0
+}
+
+function invalidateRemoteScanDirCache(dirPath: string, surfaceId?: string | null): void {
+  const cacheKey = remoteDirCacheKey(dirPath, surfaceId)
+  remoteDirEntryCache.delete(cacheKey)
+  remoteDirEntryInFlight.delete(cacheKey)
+  remoteDirCacheEpoch.set(cacheKey, remoteDirEpoch(cacheKey) + 1)
+}
+
+function toRemoteLazyNodes(dirPath: string, entries: RemoteDirEntry[]): LazyNode[] {
+  const dirs: LazyDir[] = []
+  const files: LazyFile[] = []
+
+  for (const entry of entries) {
+    const entryPath = dirPath.replace(/[\\/]$/, '') + '/' + entry.name
+    if (entry.kind === 'dir') {
+      dirs.push({ kind: 'dir', name: entry.name, path: entryPath, handle: null, children: null })
+    } else {
+      files.push({ kind: 'file', name: entry.name, path: entryPath, handle: null })
+    }
+  }
+
+  return [...dirs, ...files]
+}
+
+async function fetchRemoteDirEntries(dirPath: string, surfaceId?: string | null): Promise<RemoteDirEntry[]> {
   let url = `${API_URL}/api/project/list?path=${encodeURIComponent(dirPath)}`
   if (surfaceId) url += `&surfaceId=${encodeURIComponent(surfaceId)}`
   const res = await fetch(url)
   if (!res.ok) throw new Error(`Failed to list directory: ${res.statusText}`)
   const data = (await res.json()) as { entries: string[] }
 
-  const dirs: LazyDir[] = []
-  const files: LazyFile[] = []
+  const dirs: RemoteDirEntry[] = []
+  const files: RemoteDirEntry[] = []
 
-  for (const entry of data.entries) {
-    const isDir = entry.endsWith('/')
-    const name = isDir ? entry.slice(0, -1) : entry
+  for (const rawEntry of data.entries) {
+    const isDir = rawEntry.endsWith('/')
+    const name = isDir ? rawEntry.slice(0, -1) : rawEntry
     if (SKIP_DIRS.has(name)) continue
-    const entryPath = dirPath.replace(/[\\/]$/, '') + '/' + name
-
-    if (isDir) {
-      dirs.push({ kind: 'dir', name, path: entryPath, handle: null, children: null })
-    } else {
-      files.push({ kind: 'file', name, path: entryPath, handle: null })
-    }
+    if (isDir) dirs.push({ kind: 'dir', name })
+    else files.push({ kind: 'file', name })
   }
 
   dirs.sort((a, b) => a.name.localeCompare(b.name))
   files.sort((a, b) => a.name.localeCompare(b.name))
   return [...dirs, ...files]
+}
+
+async function remoteScanDir(
+  dirPath: string,
+  surfaceId?: string | null,
+  options?: { force?: boolean },
+): Promise<LazyNode[]> {
+  const cacheKey = remoteDirCacheKey(dirPath, surfaceId)
+  if (options?.force) invalidateRemoteScanDirCache(dirPath, surfaceId)
+
+  const cached = remoteDirEntryCache.get(cacheKey)
+  if (cached) return toRemoteLazyNodes(dirPath, cached)
+
+  const currentInFlight = remoteDirEntryInFlight.get(cacheKey)
+  if (currentInFlight) return toRemoteLazyNodes(dirPath, await currentInFlight)
+
+  const epoch = remoteDirEpoch(cacheKey)
+  const request = fetchRemoteDirEntries(dirPath, surfaceId)
+    .then((entries) => {
+      if (remoteDirEpoch(cacheKey) === epoch) {
+        remoteDirEntryCache.set(cacheKey, entries)
+      }
+      return entries
+    })
+  remoteDirEntryInFlight.set(cacheKey, request)
+
+  try {
+    return toRemoteLazyNodes(dirPath, await request)
+  } finally {
+    if (remoteDirEntryInFlight.get(cacheKey) === request) {
+      remoteDirEntryInFlight.delete(cacheKey)
+    }
+  }
 }
 
 async function remoteReadFile(filePath: string, surfaceId?: string | null): Promise<string> {
@@ -1910,55 +1976,59 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
   // Bump the tree when the server's native file watcher detects external changes
   const prevWatcherVersionRef = useRef(fsWatcherVersion ?? 0)
+  const fsWatcherRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (fsWatcherVersion == null) return
     if (fsWatcherVersion === prevWatcherVersionRef.current) return
     prevWatcherVersionRef.current = fsWatcherVersion
 
-    // Invalidate cached children for all expanded directories so the next
-    // render re-fetches their contents (revealing new/deleted files).
-    const invalidateTree = (nodes: LazyNode[]) => {
-      for (const node of nodes) {
-        if (node.kind === 'dir' && node.children) {
-          if (expandedDirs.has(node.path)) {
-            node.children = null // force re-fetch on next expand/render
-          }
-          // Don't recurse into collapsed dirs — they have no cached children anyway
-        }
-      }
+    if (fsWatcherRefreshTimerRef.current) {
+      clearTimeout(fsWatcherRefreshTimerRef.current)
     }
-    invalidateTree(lazyTree)
 
-    // Re-expand all currently expanded dirs (which now have null children)
-    // by triggering a fresh tree render.
-    bumpTree()
-
-    // Re-fetch children for currently expanded directories
-    const refetchExpanded = async () => {
-      const toRefetch = [...expandedDirs]
-      for (const dirPath of toRefetch) {
-        // Find the dir node in the lazy tree
-        const findDir = (nodes: LazyNode[]): LazyDir | null => {
-          for (const n of nodes) {
-            if (n.kind === 'dir' && n.path === dirPath) return n
-            if (n.kind === 'dir' && n.children) {
-              const found = findDir(n.children)
-              if (found) return found
-            }
-          }
-          return null
-        }
-        const dirNode = findDir(lazyTree)
-        if (dirNode && dirNode.children === null) {
-          const children = dirNode.handle
-            ? await scanDir(dirNode.handle, dirNode.path)
-            : await remoteScanDir(dirNode.path, surfaceId)
-          dirNode.children = children
-        }
+    fsWatcherRefreshTimerRef.current = setTimeout(() => {
+      fsWatcherRefreshTimerRef.current = null
+      if (!remoteRoot) {
+        bumpTree()
+        return
       }
-      bumpTree()
-    }
-    refetchExpanded().catch(() => { /* best effort */ })
+
+      const refreshDirs = getFsWatcherRefreshDirs(fsWatcherPayload, remoteRoot, expandedDirs)
+      if (refreshDirs.length === 0) return
+
+      const findDir = (nodes: LazyNode[], dirPath: string): LazyDir | null => {
+        for (const node of nodes) {
+          if (node.kind === 'dir' && node.path === dirPath) return node
+          if (node.kind === 'dir' && node.children) {
+            const found = findDir(node.children, dirPath)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      const refreshTreeDirs = async () => {
+        let changed = false
+        for (const dirPath of refreshDirs) {
+          if (normalizePath(dirPath) === normalizePath(remoteRoot)) {
+            setLazyTree(await remoteScanDir(remoteRoot, surfaceId, { force: true }))
+            changed = true
+            continue
+          }
+
+          const dirNode = findDir(lazyTree, dirPath)
+          if (!dirNode) continue
+          dirNode.childrenLoading = true
+          bumpTree()
+          dirNode.children = await remoteScanDir(dirNode.path, surfaceId, { force: true })
+          dirNode.childrenLoading = false
+          changed = true
+        }
+        if (changed) bumpTree()
+      }
+
+      refreshTreeDirs().catch(() => { /* best effort */ })
+    }, 150)
 
     // Re-fetch the currently open file only when the watcher says that file changed.
     // The mtime poll below still catches missed or payload-less changes.
@@ -1972,6 +2042,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           }))
         },
       ).catch(() => { /* keep stale content */ })
+    }
+
+    return () => {
+      if (fsWatcherRefreshTimerRef.current) {
+        clearTimeout(fsWatcherRefreshTimerRef.current)
+        fsWatcherRefreshTimerRef.current = null
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fsWatcherVersion])
@@ -2083,7 +2160,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       } else if (!lastMtimeRef.current) {
         lastMtimeRef.current = mt
       }
-    }, 2000)
+    }, OPEN_FILE_MTIME_POLL_MS)
 
     return () => { cancelled = true; clearInterval(id) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2615,10 +2692,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     try {
       let children: LazyNode[]
       try {
-        children = await remoteScanDir(rootPath, surfaceId)
+        children = await remoteScanDir(rootPath, surfaceId, { force: true })
       } catch (err) {
         if (!surfaceId) throw err
-        children = await remoteScanDir(rootPath)
+        children = await remoteScanDir(rootPath, null, { force: true })
       }
       rootDirHandle.current = null // no local handle in remote mode
       setRemoteRoot(rootPath)
@@ -3109,7 +3186,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       if (targetDir) {
         targetDir.children = null
         if (expandedDirs.has(targetDir.path)) {
-          targetDir.children = await remoteScanDir(targetDir.path, surfaceId)
+          targetDir.children = await remoteScanDir(targetDir.path, surfaceId, { force: true })
         }
       }
 
@@ -3118,12 +3195,12 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       if (srcDir) {
         srcDir.children = null
         if (expandedDirs.has(srcDir.path)) {
-          srcDir.children = await remoteScanDir(srcDir.path, surfaceId)
+          srcDir.children = await remoteScanDir(srcDir.path, surfaceId, { force: true })
         }
       }
 
       if (srcDirPath === normalizedRoot || normalizedDest === normalizedRoot) {
-        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId, { force: true }))
       }
       bumpTree()
       void fetchGitStatus()
@@ -3282,6 +3359,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       bumpTree()
       // Invalidate parent directory
       const parentPath = node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : remoteRoot
+      invalidateRemoteScanDirCache(parentPath, surfaceId)
       const invalidateParent = (nodes: LazyNode[]) => {
         for (const n of nodes) {
           if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
@@ -3291,7 +3369,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       }
       if (!invalidateParent(lazyTree)) {
         // Parent is root
-        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId, { force: true }))
       }
       bumpTree()
       void fetchGitStatus()
@@ -3314,6 +3392,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setOpenTabs(prev => prev.filter(t => t.id !== oldTabId))
       // Invalidate parent directory
       const parentPath = renameTarget.path.includes('/') ? renameTarget.path.slice(0, renameTarget.path.lastIndexOf('/')) : remoteRoot
+      invalidateRemoteScanDirCache(parentPath, surfaceId)
       const invalidateParent = (nodes: LazyNode[]) => {
         for (const n of nodes) {
           if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
@@ -3322,7 +3401,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         return false
       }
       if (!invalidateParent(lazyTree)) {
-        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId, { force: true }))
       }
       bumpTree()
       void fetchGitStatus()
@@ -3344,6 +3423,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       if (!res.ok) throw new Error('Create failed')
       // Invalidate parent directory
       const parentPath = newItemTarget.parentDir
+      invalidateRemoteScanDirCache(parentPath, surfaceId)
       const invalidateParent = (nodes: LazyNode[]) => {
         for (const n of nodes) {
           if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
@@ -3352,7 +3432,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         return false
       }
       if (!invalidateParent(lazyTree)) {
-        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId, { force: true }))
       }
       bumpTree()
       // Auto-expand the parent dir

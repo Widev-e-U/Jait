@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
-import { fetchStateBatched } from '@/lib/state-batch'
+import { fetchStateBatched, primeStateValue } from '@/lib/state-batch'
 
 const API_URL = getApiUrl()
 
@@ -52,7 +52,7 @@ export function useProjectState<T>(
     const fetchVersion = localWriteVersionRef.current
     setLoading(true)
 
-    fetchStateBatched('projects', projectId, key, token!)
+    fetchStateBatched('projects', projectId, key, token)
       .then((val) => {
         if (cancelled) return
         if (fetchVersion !== localWriteVersionRef.current) return
@@ -78,6 +78,7 @@ export function useProjectState<T>(
     latestRef.current = next
 
     if (!projectId || !token) return
+    primeStateValue('projects', projectId, token, key, next)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const persist = () => {
       fetch(`${API_URL}/api/projects/${projectId}/state`, {

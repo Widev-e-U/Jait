@@ -53,6 +53,7 @@ import { useProjects } from '@/hooks/useProjects'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useProjectState } from '@/hooks/useProjectState'
+import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
@@ -1363,6 +1364,9 @@ function App() {
 
   // ── Cross-client state sync handler ───────────────────────────────
   const handleStateSync = useCallback((key: string, value: unknown) => {
+    if (activeSessionId && token) {
+      primeStateValue('sessions', activeSessionId, token, key, value ?? null)
+    }
     suppressNextUiSync(key)
     switch (key) {
       case 'project.panel':
@@ -1470,7 +1474,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToProject, closeProjectPreview, isMobile, suppressNextUiSync, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot])
+  }, [activeSessionId, token, setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToProject, closeProjectPreview, isMobile, suppressNextUiSync, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   // This is called when the WebSocket delivers the initial full-state push.
@@ -1488,6 +1492,10 @@ function App() {
   //      are automatically included via `_project` in index.ts.
   const handleFullState = useCallback((state: Record<string, unknown>) => {
     wsFullStateReceivedRef.current = true
+    if (activeSessionId && token) {
+      const { _project, ...sessionState } = state
+      primeStateCache('sessions', activeSessionId, token, sessionState)
+    }
     for (const key of Object.keys(state)) suppressNextUiSync(key)
 
     // ── Session-scoped state ──────────────────────────────────────
@@ -1576,9 +1584,10 @@ function App() {
     // full-state packet can arrive after REST hydration and may contain an
     // older panel/layout snapshot, which would close the editor after reload.
     const wsEnvelope = state._project as { id: string; state: Record<string, unknown> } | null | undefined
-    if (wsEnvelope?.id && wsEnvelope.state) {
-          }
-  }, [activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
+    if (wsEnvelope?.id && wsEnvelope.state && token) {
+      primeStateCache('projects', wsEnvelope.id, token, wsEnvelope.state)
+    }
+  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
 
   const loadArchitectureDiagramForProject = useCallback((projectRoot: string, signal?: AbortSignal) => {
     return fetch(`${API_URL}/api/architecture?projectRoot=${encodeURIComponent(projectRoot)}`, {
