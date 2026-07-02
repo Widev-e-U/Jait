@@ -373,3 +373,21 @@
     padding-inline: 0.625rem;
   }
 }
+
+/*
+ * While a resize sash is being dragged, force the resize cursor on every
+ * element under the pointer. Setting cursor on <body> alone is not enough:
+ * descendants with their own cursor (buttons, text, links, editors) win over
+ * it, so the arrow-head resize cursor flickers as the pointer moves. The class
+ * is toggled on <html> from the sash pointer-down handler in project-panel.tsx.
+ */
+html.is-dragging-col-resize *,
+html.is-dragging-col-resize,
+html.is-dragging-row-resize *,
+html.is-dragging-row-resize {
+  cursor: col-resize !important;
+}
+html.is-dragging-row-resize *,
+html.is-dragging-row-resize {
+  cursor: row-resize !important;
+}

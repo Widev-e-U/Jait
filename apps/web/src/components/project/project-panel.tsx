@@ -972,7 +972,7 @@ function useDragResize(
         document.removeEventListener('pointercancel', onUp)
         target.removeEventListener('lostpointercapture', onLostPointerCapture)
         window.removeEventListener('blur', onWindowBlur)
-        document.body.style.cursor = ''
+        document.documentElement.classList.remove('is-dragging-col-resize', 'is-dragging-row-resize')
         document.body.style.userSelect = ''
         cleanupRef.current = null
       }
@@ -985,7 +985,8 @@ function useDragResize(
       const onWindowBlur = () => {
         cleanup()
       }
-      document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize'
+      const cursorClass = direction === 'horizontal' ? 'is-dragging-col-resize' : 'is-dragging-row-resize'
+      document.documentElement.classList.add(cursorClass)
       document.body.style.userSelect = 'none'
       cleanupRef.current = cleanup
       document.addEventListener('pointermove', onMove)

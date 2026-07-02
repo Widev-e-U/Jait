@@ -1934,11 +1934,21 @@ export function registerChatRoutes(
     let resultSegmentsJson: string | undefined;
     let contextFlowJson: string | undefined;
     let hitMaxRounds = false;
+    // Whether the turn ran through an external CLI provider (codex / claude-code)
+    // instead of the Jait-managed agentic loop. Those providers keep their own
+    // tool-call metadata opaque, so we cannot reliably detect Jait-managed tool
+    // timeouts from their persisted `message` text — and grepping it for
+    // "timed out" false-positives on any command that logs a timeout (curl, git,
+    // network calls, agent prose, …). The has_timed_out_tools heuristic is only
+    // meaningful for the Jait loop, where timed tools always emit a failed
+    // result whose message starts with "timed out after …".
+    let ranCliProvider = false;
     // Whether the agentic loop already persisted the assistant message via its
     // onPersist callback. The post-loop fallback persists must be skipped when
     // this is true to avoid writing a duplicate DB row (which scrambled message
     // order on reload because the rows share createdAt down to the millisecond).
     let loopPersisted = false;
+    let assistantTurnPersisted = false;
     activeStreams.add(sessionId);
     // Reset streaming accumulator for this turn so reload snapshots start fresh.
     // Eagerly (re)create it so the invariant "activeStreams.has => accumulator
@@ -2556,6 +2566,7 @@ export function registerChatRoutes(
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
           persistMessage(sessionId, "assistant", sessionError, undefined, errSegJson, contextFlowJson);
+          assistantTurnPersisted = true;
         } else {
           history.push({
             role: "assistant",
@@ -2565,12 +2576,14 @@ export function registerChatRoutes(
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
           persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
+          assistantTurnPersisted = true;
         }
 
         // Session stays alive for the next turn — do NOT stop it.
         // It will be cleaned up on session error, provider switch, or server shutdown.
 
         usedCliProvider = true;
+        ranCliProvider = true;
         } // end availability else
 
       }
@@ -2689,7 +2702,10 @@ export function registerChatRoutes(
                   ...(memoryFlow ? { memory: memoryFlow } : {}),
                 } satisfies LlmContextFlow & { truncatedRounds?: number });
               },
-              onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
+              onPersist: (sid, role, content, tc, seg, thinking) => {
+                persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking);
+                if (sid === sessionId && role === "assistant") assistantTurnPersisted = true;
+              },
               priorFingerprints: sessionFingerprints.get(sessionId),
               log: app.log,
             },
@@ -2753,10 +2769,12 @@ export function registerChatRoutes(
       if (!wasCancelled && !loopPersisted && (fullContent || partialToolCalls.length > 0)) {
         const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
         persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
+        assistantTurnPersisted = true;
       } else if (!wasCancelled && !loopPersisted) {
         // No partial content — persist the error message itself so it's visible on reload.
         const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
         persistMessage(sessionId, "assistant", errMsg2, undefined, JSON.stringify([{ type: "error", content: errMsg2 }]), contextFlowJson);
+        assistantTurnPersisted = true;
       }
 
       const errMsg = wasCancelled
@@ -2770,13 +2788,20 @@ export function registerChatRoutes(
       } catch { /* client gone */ }
     }
 
-    // Persist partial results BEFORE clearing stream state so that a reload
-    // between these two steps loads the cancelled tool calls from the DB.
-    // Skip when the agentic loop already persisted via onPersist (avoids a
-    // duplicate row that scrambled message order on reload).
-    if (streamAbort.signal.aborted && !loopPersisted && (fullContent || partialToolCalls.length > 0)) {
-      const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
-      persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
+    // Persist partial results BEFORE clearing stream state so a reload after
+    // cancel can still render whatever had streamed, including thinking-only
+    // output that may not have reached the provider loop finalization path.
+    if (streamAbort.signal.aborted && !assistantTurnPersisted) {
+      const acc = sessionStreamingState.get(sessionId);
+      const fallbackContent = fullContent || acc?.content || "";
+      const fallbackToolCalls = partialToolCalls.length > 0 ? partialToolCalls : (acc?.toolCalls ?? []);
+      const fallbackSegmentsJson = resultSegmentsJson ?? (acc?.segments.length ? JSON.stringify(acc.segments) : undefined);
+      const fallbackThinking = acc?.thinking || undefined;
+      if (fallbackContent || fallbackThinking || fallbackToolCalls.length > 0 || fallbackSegmentsJson) {
+        const tcJson = fallbackToolCalls.length > 0 ? JSON.stringify(fallbackToolCalls) : undefined;
+        persistMessage(sessionId, "assistant", fallbackContent, tcJson, fallbackSegmentsJson, contextFlowJson, fallbackThinking);
+        assistantTurnPersisted = true;
+      }
     }
 
     // Stop the SSE keepalive heartbeat now that the turn is finishing.
@@ -2813,9 +2838,16 @@ export function registerChatRoutes(
       }
     }
 
-    // Detect whether any tool timed out during this turn
-    const hasTimedOutTools = (partialToolCalls ?? []).some(
-      (tc) => typeof tc.message === "string" && tc.message.includes("timed out"),
+    // Detect whether any Jait-managed tool timed out during this turn. Only
+    // meaningful for the Jait agentic loop: external CLI providers (codex /
+    // claude-code) keep their tool-call output opaque, and grepping it for
+    // "timed out" matched any command that logged a timeout (curl, git, network
+    // calls, agent prose) — which made "Agent stopped — continue to resume"
+    // show on nearly every Codex turn. Jait's timed tools (terminal / ssh /
+    // elevated) always emit a *failed* result whose message starts with
+    // "timed out after …", so gate on `ok === false` to avoid false positives.
+    const hasTimedOutTools = !ranCliProvider && (partialToolCalls ?? []).some(
+      (tc) => tc.ok === false && typeof tc.message === "string" && tc.message.includes("timed out"),
     );
 
     // Final done event

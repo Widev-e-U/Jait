@@ -9,6 +9,7 @@ import { signAuthToken } from "../security/http-auth.js";
 import type { MemoryEntry, MemoryScope, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
 import { MemoryEngine } from "../memory/service.js";
 import { SqliteMemoryBackend } from "../memory/sqlite-backend.js";
+import { ToolRegistry } from "../tools/registry.js";
 
 const testConfig = {
   ...loadConfig(),
@@ -45,6 +46,22 @@ function createDelayedOpenAIStreamResponse(delayMs = 80): Response {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"B"},"finish_reason":null}]}\n\n'));
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+function createToolCallStreamResponse(): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_cancel_proof","type":"function","function":{"name":"proof_cancel","arguments":"{}"}}]},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
@@ -214,6 +231,135 @@ describe("chat route OpenRouter backend selection", () => {
       expect(body).not.toContain('"type":"context_flow"');
       expect(seen.map((entry) => entry.token)).toEqual(["A", "B"]);
       expect(seen[1]!.at - seen[0]!.at).toBeGreaterThanOrEqual(40);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("persists an interrupted assistant tool card before clearing live stream state", { timeout: 15_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("cancel-persist-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Cancel Persistence Session" });
+    const toolRegistry = new ToolRegistry();
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: {
+        OPENROUTER_API_KEY: "openrouter-test-key",
+      },
+    });
+
+    toolRegistry.register({
+      name: "proof.cancel",
+      description: "Proof tool that runs until the chat turn is cancelled.",
+      tier: "core",
+      category: "meta",
+      parameters: { type: "object", properties: {} },
+      execute: async (_input, context) => new Promise((resolve) => {
+        const finish = () => resolve({ ok: false, message: "Cancelled by test" });
+        if (context.signal?.aborted) {
+          finish();
+          return;
+        }
+        context.signal?.addEventListener("abort", finish, { once: true });
+      }),
+    });
+
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+      expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+      return createToolCallStreamResponse();
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+      toolRegistry,
+    });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+
+    try {
+      const address = app.server.address() as AddressInfo;
+      const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+      const headers = {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      };
+      const response = await originalFetch(`http://127.0.0.1:${address.port}/api/chat`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          content: "start a cancellable tool",
+          sessionId: session.id,
+          model: "gpt-4o",
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const reader = response.body?.getReader();
+      expect(reader).toBeTruthy();
+      const decoder = new TextDecoder();
+      let streamBody = "";
+      const startedAt = Date.now();
+      while (!streamBody.includes('"type":"tool_start"')) {
+        const { done, value } = await reader!.read();
+        expect(done).toBe(false);
+        const chunk = decoder.decode(value, { stream: true });
+        streamBody += chunk;
+        if (Date.now() - startedAt > 5000) throw new Error("Timed out waiting for tool_start");
+      }
+
+      const cancelResponse = await originalFetch(`http://127.0.0.1:${address.port}/api/sessions/${session.id}/cancel`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(cancelResponse.status).toBe(200);
+
+      while (!streamBody.includes('"type":"done"')) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamBody += chunk;
+        if (Date.now() - startedAt > 10000) throw new Error("Timed out waiting for done");
+      }
+      await reader?.cancel().catch(() => {});
+
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(messagesResponse.statusCode).toBe(200);
+      const messagesBody = messagesResponse.json() as {
+        messages: Array<{
+          role: string;
+          content: string;
+          toolCalls?: Array<{ callId: string; tool: string; ok?: boolean; message?: string }>;
+          segments?: Array<{ type: string; callIds?: string[] }>;
+        }>;
+      };
+      const assistantMessage = messagesBody.messages.find((message) => message.role === "assistant");
+      expect(assistantMessage?.toolCalls).toEqual([
+        expect.objectContaining({
+          callId: "call_cancel_proof",
+          tool: "proof.cancel",
+          ok: false,
+          message: "Cancelled",
+        }),
+      ]);
+      expect(assistantMessage?.segments).toEqual([
+        expect.objectContaining({ type: "toolGroup", callIds: ["call_cancel_proof"] }),
+      ]);
     } finally {
       await app.close();
     }

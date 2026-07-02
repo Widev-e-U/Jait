@@ -104,10 +104,14 @@ describe('shouldShowContinueAfterDone', () => {
 })
 
 describe('shouldFlushStreamTextImmediately', () => {
-  it('flushes assistant text and thinking without frame batching', () => {
-    expect(shouldFlushStreamTextImmediately('token')).toBe(true)
-    expect(shouldFlushStreamTextImmediately('thinking')).toBe(true)
+  it('frame-batches assistant text and thinking chunks', () => {
+    expect(shouldFlushStreamTextImmediately('token')).toBe(false)
+    expect(shouldFlushStreamTextImmediately('thinking')).toBe(false)
     expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)
+  })
+
+  it('still flushes mode notices immediately', () => {
+    expect(shouldFlushStreamTextImmediately('mode_notice')).toBe(true)
   })
 })
 

@@ -71,7 +71,10 @@ export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; h
 }
 
 export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
-  return eventType === 'token' || eventType === 'thinking'
+  // Text and thinking chunks can arrive in tight bursts. Forcing a React commit
+  // for every chunk makes the transcript appear frozen while the main thread
+  // catches up; let the stream updater coalesce them to the next animation frame.
+  return eventType === 'mode_notice'
 }
 
 export function shouldYieldAfterBufferedStreamEvent(eventType: unknown): boolean {
@@ -596,7 +599,11 @@ export function useChat(
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          flushSubscribeUpdates()
+          if (pendingSubscribeFrame !== null) return
+          pendingSubscribeFrame = window.requestAnimationFrame(() => {
+            pendingSubscribeFrame = null
+            flushSubscribeUpdates()
+          })
         }
 
         // Accumulate content/segments between flushes so each batch is a single setState.
