@@ -1140,13 +1140,6 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         diffText = diffText.slice(0, MAX_DIFF_CHARS) + "\n... (truncated)";
       }
 
-      const prompt =
-        "Generate a concise git commit message in the imperative mood. " +
-        "Subject line must be 72 characters or less. " +
-        "Optionally follow with a blank line and brief bullet points for significant details. " +
-        "Output only the commit message.\n\n" +
-        `Changes:\n\n\`\`\`diff\n${diffText}\n\`\`\``;
-
       const requestProvider = provider ?? "jait";
       let message = "";
 
@@ -1194,38 +1187,56 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         } catch (err) {
           return reply.status(502).send({ error: err instanceof Error ? err.message : "LLM request failed" });
         }
-      } else {
-        if (!providerRegistry) {
-          return reply.status(501).send({ error: "CLI provider-backed commit generation is not configured" });
+
+        if (!message) {
+          return reply.status(502).send({ error: "LLM returned an empty response" });
         }
 
-        const pathExistsLocally = existsSync(cwd);
-        let cliProvider: CliProviderAdapter | null = null;
+        return { message };
+      }
 
-        if (!pathExistsLocally && ws) {
-          const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cwd);
-          const expectedPlatform = isWindowsPath ? "windows" : null;
-          for (const node of ws.getFsNodes()) {
-            if (node.isGateway) continue;
-            if (expectedPlatform && node.platform !== expectedPlatform) continue;
-            if (!node.providers?.includes(requestProvider)) continue;
-            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
-            break;
-          }
-        }
+      // Non-Jait CLI providers use the provider adapter turn API.
+      const prompt =
+        "Generate a concise git commit message in the imperative mood. " +
+        "Subject line must be 72 characters or less. " +
+        "Optionally follow with a blank line and brief bullet points for significant details. " +
+        "Output only the commit message.\n\n" +
+        `Changes:\n\n\`\`\`diff\n${diffText}\n\`\`\``;
 
-        if (!cliProvider) {
-          cliProvider = providerRegistry.get(requestProvider) ?? null;
-        }
-        if (!cliProvider) {
-          return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });
-        }
-        const available = await cliProvider.checkAvailability();
-        if (!available) {
-          return reply.status(400).send({ error: cliProvider.info.unavailableReason ?? `Provider ${requestProvider} is not available` });
-        }
+      if (!providerRegistry) {
+        return reply.status(501).send({ error: "CLI provider-backed commit generation is not configured" });
+      }
 
+      const pathExistsLocally = existsSync(cwd);
+      let cliProvider: CliProviderAdapter | null = null;
+
+      if (!pathExistsLocally && ws) {
+        const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cwd);
+        const expectedPlatform = isWindowsPath ? "windows" : null;
+        for (const node of ws.getFsNodes()) {
+          if (node.isGateway) continue;
+          if (expectedPlatform && node.platform !== expectedPlatform) continue;
+          if (!node.providers?.includes(requestProvider)) continue;
+          cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
+          break;
+        }
+      }
+
+      if (!cliProvider) {
+        cliProvider = providerRegistry.get(requestProvider) ?? null;
+      }
+      if (!cliProvider) {
+        return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });
+      }
+      const available = await cliProvider.checkAvailability();
+      if (!available) {
+        return reply.status(400).send({ error: cliProvider.info.unavailableReason ?? `Provider ${requestProvider} is not available` });
+      }
+
+      try {
         message = await generateCommitMessageWithCliProvider(cliProvider, cwd, prompt, model?.trim() || undefined);
+      } catch (err) {
+        return reply.status(502).send({ error: err instanceof Error ? err.message : "LLM request failed" });
       }
 
       if (!message) return reply.status(502).send({ error: "LLM returned an empty response" });
