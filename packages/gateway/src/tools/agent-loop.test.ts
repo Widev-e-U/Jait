@@ -371,6 +371,69 @@ describe("context pruning summary", () => {
     expect(summary).toContain("Run the focused agent-loop tests next");
     expect(history.at(-1)).toMatchObject({ role: "user", content: "Please continue with the current implementation." });
   });
+
+  it("re-injects the latest substantive user task when the tail is a bare continuation", () => {
+    const task =
+      "generating commit messages with Jait provider selected gives me LLM returned an empty response please fix that at last then push";
+    const history: AgentMessage[] = [
+      { role: "system", content: "system prompt" },
+      { role: "user", content: task },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-1", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "Read packages/gateway/src/services/thread-title.ts (unrelated tangent)" }),
+        tool_call_id: "call-1",
+        name: "file_read",
+      },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-2", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "Read packages/gateway/src/routes/threads.ts (unrelated tangent)" }),
+        tool_call_id: "call-2",
+        name: "file_read",
+      },
+      { role: "user", content: "continue?" },
+    ];
+
+    const pruned = __testUtils.pruneHistory(history, 40, []);
+
+    expect(pruned).toBe(true);
+    // The bulk was collapsed into a summary at the top.
+    expect(history[1]?.content ?? "").toContain("[conversation-summary]");
+    // The bare continuation is still preserved verbatim as the final turn.
+    expect(history.at(-1)).toMatchObject({ role: "user", content: "continue?" });
+    // The real task survives as a live (non-tail) user turn — not only in the summary.
+    const reinjected = history
+      .slice(0, -1)
+      .find((m) => m.role === "user" && m.content.includes(task));
+    expect(reinjected).toBeDefined();
+  });
+
+  it("does not re-inject when the tail user message is already substantive", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system prompt" },
+      { role: "user", content: "First task: refactor the pruning helper and keep it minimal." },
+      { role: "assistant", content: "Working on it with a deterministic structured summary approach." },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-1", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "Read packages/gateway/src/tools/agent-loop.ts" }),
+        tool_call_id: "call-1",
+        name: "file_read",
+      },
+      { role: "user", content: "now run the focused tests and report the results please" },
+    ];
+
+    __testUtils.pruneHistory(history, 40, []);
+
+    // Only one user turn should follow the summary: the substantive tail itself.
+    const userTurns = history.filter((m) => m.role === "user");
+    expect(userTurns).toHaveLength(1);
+    expect(history.at(-1)).toMatchObject({
+      role: "user",
+      content: "now run the focused tests and report the results please",
+    });
+  });
 });
 
 describe("executeOneToolCall retry accounting", () => {

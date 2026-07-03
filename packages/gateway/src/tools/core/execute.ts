@@ -48,7 +48,7 @@ export function createExecuteTool(registry: SurfaceRegistry, secretInput?: Secre
     name: "execute",
     description:
       "Run a shell command in a persistent terminal visible to the user. " +
-      "Set isBackground: true for long-running processes (servers, watchers). " +
+      "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — you're notified automatically when they finish. " +
       "Use timeout: 0 for commands that may take a long time.",
     tier: "core",
     category: "terminal",
@@ -70,7 +70,7 @@ export function createExecuteTool(registry: SurfaceRegistry, secretInput?: Secre
         },
         isBackground: {
           type: "boolean",
-          description: "True for long-running processes (servers, watchers).",
+          description: "True to start the command without blocking. Use for long-running commands — servers, watchers, and long test/build runs. You'll be automatically notified when it finishes, so end your turn and wait instead of polling.",
         },
         cwd: {
           type: "string",

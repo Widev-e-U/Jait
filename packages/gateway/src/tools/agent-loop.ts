@@ -34,6 +34,13 @@ export interface AgentMessage {
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   name?: string;
+  /**
+   * True for messages injected into the working context by the agent loop
+   * itself (e.g. a task re-injected after pruning) rather than sent by the
+   * user. Stripped by `serializeMessages`, so it never reaches the model, is
+   * never persisted, and must be excluded from user-facing counts.
+   */
+  synthetic?: boolean;
 }
 
 /** Segment for interleaved rendering of text and tool calls */
@@ -1045,6 +1052,7 @@ export const __testUtils = {
   buildStructuredConversationSummary,
   executeOneToolCall,
   isTransientFailure,
+  isSubstantiveUserMessage,
   pruneHistory,
   repairToolCallHistory,
 };
@@ -1369,6 +1377,76 @@ function buildStructuredConversationSummary(removedMessages: AgentMessage[]): st
 }
 
 /**
+ * Bare "continue" style user turns that carry no task on their own. When one of
+ * these is the only user turn left after pruning, the model has nothing to act
+ * on, so `pruneHistory` re-injects the most recent substantive user turn.
+ */
+const TRIVIAL_USER_CONTINUATIONS = new Set([
+  "continue", "continue?", "continue.", "cont", "go", "go?", "go on", "go on?",
+  "keep going", "keep going?", "carry on", "proceed", "resume", "next",
+  "more", "and?", "?", "yes", "y", "yep", "yeah", "ok", "okay", "k",
+  "yes please", "please continue", "continue please", "keep going please",
+]);
+
+/**
+ * A user message is "substantive" when it carries an actual instruction rather
+ * than a bare continuation ("continue?", "yes", "go on"). Used so pruning never
+ * leaves the model with only a trivial continuation and no task to act on.
+ */
+function isSubstantiveUserMessage(content: string | undefined): boolean {
+  if (!content) return false;
+  const normalized = content.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!normalized) return false;
+  const stripped = normalized.replace(/[?.!,]+$/g, "");
+  if (TRIVIAL_USER_CONTINUATIONS.has(normalized) || TRIVIAL_USER_CONTINUATIONS.has(stripped)) {
+    return false;
+  }
+  const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+  return wordCount >= 2 || normalized.length >= 12;
+}
+
+/**
+ * After pruning, guarantee the model still sees the user's real task as a live
+ * `user` turn. If the surviving tail user message is a trivial continuation
+ * (e.g. "continue?"), the actual request now lives only inside the injected
+ * summary — which models tend to treat as background and ignore. Re-inject the
+ * most recent substantive user message (just pruned) verbatim, right before the
+ * tail turn so it stays the active instruction. Mutates `history` in place.
+ */
+function reinjectSubstantiveUserTask(
+  history: AgentMessage[],
+  removedMessages: AgentMessage[],
+): void {
+  let tailUserIdx = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]!.role === "user") {
+      tailUserIdx = i;
+      break;
+    }
+  }
+  if (tailUserIdx < 0) return;
+  // Tail already carries a real instruction — nothing was lost.
+  if (isSubstantiveUserMessage(history[tailUserIdx]!.content)) return;
+
+  // Most recent substantive user turn among the pruned messages.
+  let task: AgentMessage | undefined;
+  for (let i = removedMessages.length - 1; i >= 0; i--) {
+    const msg = removedMessages[i]!;
+    if (msg.role === "user" && isSubstantiveUserMessage(msg.content)) {
+      task = msg;
+      break;
+    }
+  }
+  if (!task) return;
+
+  history.splice(tailUserIdx, 0, {
+    role: "user",
+    content: `[Restored task from earlier in this conversation — this is still your active task]\n${task.content}`,
+    synthetic: true,
+  });
+}
+
+/**
  * Prune oldest conversation turns to bring context usage below the target.
  *
  * Strategy (similar to Copilot):
@@ -1440,6 +1518,11 @@ export function pruneHistory(
       role: "system",
       content: buildStructuredConversationSummary(removedMessages),
     });
+
+    // If the only surviving user turn is a trivial continuation ("continue?"),
+    // re-inject the most recent substantive user message so the task isn't lost
+    // to the summary and silently ignored on the next turn.
+    reinjectSubstantiveUserTask(history, removedMessages);
   }
 
   return pruned;

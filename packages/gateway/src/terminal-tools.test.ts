@@ -152,7 +152,9 @@ describe("terminal.run tool status reporting", () => {
     const result = await tool.execute({ command: "pwd", sandbox: true }, context);
 
     expect(result.ok).toBe(true);
-    expect(commands[0]).toEqual(["docker", "exec", "-w", "/project", "jait-agent-sb-test", "bash", "-lc", "pwd"]);
+    // Container runtime is docker or podman depending on the host (see containerBinary()).
+    expect(commands[0]![0]).toMatch(/^(docker|podman)$/);
+    expect(commands[0]!.slice(1)).toEqual(["exec", "-w", "/project", "jait-agent-sb-test", "bash", "-lc", "pwd"]);
     expect((result.data as any).threadSandbox).toBe(true);
   });
 

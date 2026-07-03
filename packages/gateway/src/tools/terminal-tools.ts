@@ -20,6 +20,7 @@ import type { TerminalSurface } from "../surfaces/terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -526,7 +527,7 @@ export function createTerminalRunTool(
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
         timeout: { type: "number", description: "Execution timeout in ms (default 30000). Use 0 for no timeout." },
-        isBackground: { type: "boolean", description: "If true, start the command and return immediately without waiting for output (for servers, watchers, etc.)" },
+        isBackground: { type: "boolean", description: "If true, start the command and return immediately without blocking. Use for long-running commands you don't need to watch inline — servers, watchers, and long test/build runs. You'll be notified automatically when the command finishes, so end your turn and wait instead of polling." },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
@@ -583,13 +584,21 @@ export function createTerminalRunTool(
         const { surface, terminalId, isNew, warning } =
           await ensureSessionTerminal(registry, context, preferredId);
 
-        // 2. Background mode: start the command and return immediately
+        // 2. Background mode: start the command and return immediately. Watch
+        //    the terminal for completion (OSC 633) so the agent can be
+        //    automatically re-triggered when the command finishes.
         if (isBackground) {
           surface.write(command + "\r");
+          backgroundCommandMonitor.track({
+            sessionId: context.sessionId,
+            terminalId,
+            command,
+            surface,
+          });
           return {
             ok: true,
-            message: `Background command started in terminal ${terminalId}`,
-            data: { output: "(background — not waiting for output)", exitCode: null, timedOut: false, terminalId, isBackground: true },
+            message: `Background command started in terminal ${terminalId}. You'll be notified automatically when it finishes — end your turn and wait rather than polling.`,
+            data: { output: "(background — running; you'll be notified on completion)", exitCode: null, timedOut: false, terminalId, isBackground: true },
           };
         }
 
