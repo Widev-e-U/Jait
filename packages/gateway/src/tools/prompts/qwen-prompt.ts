@@ -18,6 +18,7 @@ import {
   USER_QUESTION_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
+  REASONING_INSTRUCTIONS,
   getModeInstructions,
 } from "./shared-sections.js";
 
@@ -91,6 +92,10 @@ ${TODO_INSTRUCTIONS}
 - Don't dump large files — reference file paths only.
 - If there are natural next steps (tests, commits, build), suggest them briefly.
 - When suggesting options, use numbered lists so the user can respond with a number.
+
+## Private Reasoning
+
+${REASONING_INSTRUCTIONS}
 
 ## Working With Git
 

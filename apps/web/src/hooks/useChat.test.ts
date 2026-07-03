@@ -104,7 +104,7 @@ describe('shouldShowContinueAfterDone', () => {
 })
 
 describe('shouldFlushStreamTextImmediately', () => {
-  it('frame-batches assistant text and thinking chunks', () => {
+  it('time-batches assistant text and thinking chunks', () => {
     expect(shouldFlushStreamTextImmediately('token')).toBe(false)
     expect(shouldFlushStreamTextImmediately('thinking')).toBe(false)
     expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,7 +11,6 @@ import {
   shouldRenderSecretRequestInline,
   type SecretInputRequest,
 } from '@/lib/secret-input'
-
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
 
@@ -27,8 +25,6 @@ export function InlineSecretMounted({ requestId, onMount, children }: {
   return <>{children}</>
 }
 
-const INLINE_SECRET_GRACE_MS = 500
-
 export function useSecretInputPrompt({
   token,
   sessionId,
@@ -41,22 +37,13 @@ export function useSecretInputPrompt({
   const [remember, setRemember] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [inlineMountedRequestId, setInlineMountedRequestId] = useState<string | null>(null)
-  const [gracePeriodExpired, setGracePeriodExpired] = useState(false)
   const activeRequest = requests[0] ?? null
   const renderInline = shouldRenderSecretRequestInline(activeRequest)
 
-  useEffect(() => {
-    setInlineMountedRequestId(null)
-    setGracePeriodExpired(false)
-    if (!activeRequest) return
-    if (!shouldRenderSecretRequestInline(activeRequest)) return
-    const timer = setTimeout(() => setGracePeriodExpired(true), INLINE_SECRET_GRACE_MS)
-    return () => clearTimeout(timer)
-  }, [activeRequest?.id])
-
   const markInlineMounted = useCallback((requestId: string) => {
-    setInlineMountedRequestId(requestId)
+    // Inline secret prompts are now rendered in a composer-adjacent card,
+    // so the per-tool-card mount tracking is no longer required.
+    void requestId
   }, [])
 
   const authHeaders = useCallback((contentType = false) => {
@@ -163,31 +150,39 @@ export function useSecretInputPrompt({
     />
   ) : null
 
-  const inlineMounted = activeRequest ? inlineMountedRequestId === activeRequest.id : false
-  const showDialog = Boolean(activeRequest) && (
-    shouldRenderSecretRequestDialog(activeRequest)
-    || (renderInline && gracePeriodExpired && !inlineMounted)
-  )
-
-  const dialog = showDialog && activeRequest ? (
-    <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{activeRequest.title}</DialogTitle>
-          <DialogDescription>
-            Enter the secret to continue.
-          </DialogDescription>
-        </DialogHeader>
-        {form}
-      </DialogContent>
-    </Dialog>
+  const isDialogRequest = Boolean(activeRequest) && shouldRenderSecretRequestDialog(activeRequest)
+  // Fallback to an inline card for requests that would previously open a dialog.
+  // The "inline" tool-attached variant is rendered inside the matching tool card
+  // by the consumer via `renderInlineSecretPrompt`; for non-inline requests we
+  // render a composer-adjacent card instead of a blocking modal.
+  const inlinePrompt = activeRequest && isDialogRequest ? (
+    <div
+      data-testid="inline-secret-prompt"
+      className="rounded-lg border border-yellow-500/20 bg-yellow-500/[0.04] px-3.5 py-2.5 shadow-sm"
+    >
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium leading-4 text-foreground">{activeRequest.title}</p>
+          <p className="text-[11px] leading-4 text-muted-foreground">Enter the secret to continue.</p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
+          onClick={() => void cancelSecret()}
+          aria-label="Cancel secret prompt"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {form}
+    </div>
   ) : null
 
   return {
     activeRequest,
     renderInline,
     form,
-    dialog,
+    inlinePrompt,
     markInlineMounted,
   }
 }
@@ -426,26 +421,37 @@ export function useUserQuestionPrompt({
     }))
   }, [])
 
-  const dialog = activeRequest ? (
-    <Dialog open onOpenChange={(open) => { if (!open) void cancelRequest() }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{activeRequest.title}</DialogTitle>
-          <DialogDescription>Jait needs your input to continue.</DialogDescription>
-        </DialogHeader>
-        <UserQuestionForm
-          request={activeRequest}
-          answers={answers}
-          submitting={submitting}
-          onAnswerChange={setAnswer}
-          onSubmit={submitAnswers}
-          onCancel={cancelRequest}
-        />
-      </DialogContent>
-    </Dialog>
+  const inlinePrompt = activeRequest ? (
+    <div
+      data-testid="inline-user-question-prompt"
+      className="rounded-lg border border-blue-500/20 bg-blue-500/[0.04] px-3.5 py-3 shadow-sm"
+    >
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium leading-4 text-foreground">{activeRequest.title}</p>
+          <p className="text-[11px] leading-4 text-muted-foreground">Jait needs your input to continue.</p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
+          onClick={() => void cancelRequest()}
+          aria-label="Cancel question prompt"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <UserQuestionForm
+        request={activeRequest}
+        answers={answers}
+        submitting={submitting}
+        onAnswerChange={setAnswer}
+        onSubmit={submitAnswers}
+        onCancel={cancelRequest}
+      />
+    </div>
   ) : null
 
-  return { activeRequest, dialog }
+  return { activeRequest, inlinePrompt }
 }
 
 function UserQuestionForm({

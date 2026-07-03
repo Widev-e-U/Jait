@@ -3633,6 +3633,13 @@ function App() {
         flex: '1 1 0%',
         minWidth: 0,
       }
+  const inlinePrompts = (secretInput.inlinePrompt || userQuestionInput.inlinePrompt) ? (
+    <div className="space-y-1.5">
+      {secretInput.inlinePrompt}
+      {userQuestionInput.inlinePrompt}
+    </div>
+  ) : null
+
   const developerComposerControlRow = viewMode === 'developer' ? (
     <DeveloperComposerControlRow
       activeProjectId={activeProjectId}
@@ -4049,6 +4056,7 @@ function App() {
                 onUpdateManagerQueueItem={updateManagerQueueItem}
                 onVoiceInput={handleVoiceInput}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
+                inlinePrompts={inlinePrompts}
               />
             ) : <DeveloperChatWorkspace
                 activeProject={activeProject}
@@ -4078,6 +4086,7 @@ function App() {
                 inputSegments={inputSegments}
                 inputValueRef={inputValueRef}
                 inputVersion={inputVersion}
+                inlinePrompts={inlinePrompts}
                 isLoading={isLoading}
                 isLoadingHistory={isLoadingHistory}
                 isMobile={isMobile}
@@ -4277,9 +4286,6 @@ function App() {
           onAutomationOpenChange={automation.setFolderPickerOpen}
           onAutomationSelect={(path, nodeId) => { void automation.handleFolderSelected(path, nodeId) }}
         />
-
-        {secretInput.dialog}
-        {userQuestionInput.dialog}
 
         <AutomationModals
           strategyRepo={strategyRepo}

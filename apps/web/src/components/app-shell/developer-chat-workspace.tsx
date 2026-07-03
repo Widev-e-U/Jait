@@ -30,6 +30,7 @@ interface DeveloperChatWorkspaceProps {
   editComposerBag: any
   error: string | null
   hasMessages: boolean
+  inlinePrompts?: ReactNode
   hasMoreMessages: boolean
   hitMaxRounds: boolean
   inputSegments: any[] | undefined
@@ -133,6 +134,7 @@ export function DeveloperChatWorkspace({
   inputSegments,
   inputValueRef,
   inputVersion,
+  inlinePrompts,
   isLoading,
   isLoadingHistory,
   isMobile,
@@ -228,6 +230,7 @@ export function DeveloperChatWorkspace({
           {developerChatUiState.showTodoList && (
             <TodoList items={todoList} onClear={onClearTodoList} />
           )}
+          {inlinePrompts}
           <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
             <PromptInput
               ref={promptInputRef}
@@ -309,7 +312,6 @@ export function DeveloperChatWorkspace({
   const elementCacheRef = useRef<Map<string, {
     key: string
     element: ReactNode
-    msg: unknown
     contextFlow: unknown
     hasContextFlow: unknown
     hasMemoryProvenance: unknown
@@ -344,7 +346,6 @@ export function DeveloperChatWorkspace({
       const cached = cache.get(msg.id)
       const key =
         sharedKey
-        + '|' + (msg === cached?.msg ? 's' : 'd')
         + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
         + '|' + (msg.hasContextFlow === cached?.hasContextFlow ? 's' : 'd')
         + '|' + (msg.hasMemoryProvenance === cached?.hasMemoryProvenance ? 's' : 'd')
@@ -402,7 +403,6 @@ export function DeveloperChatWorkspace({
       cache.set(msg.id, {
         key,
         element,
-        msg,
         contextFlow: msg.contextFlow,
         hasContextFlow: msg.hasContextFlow,
         hasMemoryProvenance: msg.hasMemoryProvenance,
@@ -510,6 +510,7 @@ export function DeveloperChatWorkspace({
                     onFileClick={onChangedFileClick}
                   />
                 )}
+                {inlinePrompts}
               </div>
               <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                 <PromptInput

@@ -183,6 +183,11 @@ export function isResponseStyle(value: unknown): value is ResponseStyle {
   return value === "normal" || value === "simple" || value === "caveman" || value === "caveman-ultra";
 }
 
+export const REASONING_INSTRUCTIONS = `When you need to reason step by step before answering, wrap that reasoning in a single \`<thinking>...</thinking>\` block at the start of your response.
+The content inside the block is shown only in a hidden reasoning panel; only the content outside the block is shown to the user.
+Do not put final answers, code, commands, file paths, or tool calls inside the reasoning block.
+If you have no meaningful internal reasoning to share, omit the block entirely.`;
+
 export function getResponseStyleInstructions(style: ResponseStyle | null | undefined): string | null {
   switch (style) {
     case "simple":

@@ -102,6 +102,27 @@ describe("parseOllamaStream", () => {
     expect(parsed.contentText).toBe("partial");
     expect(parsed.finishReason).toBe("length");
   });
+
+  it("extracts leading <thinking> blocks from message.content", async () => {
+    const events: AgentLoopEvent[] = [];
+    const reader = streamReader([
+      JSON.stringify({ message: { role: "assistant", content: "<thinking>pondering</thinking>Hi" } }) + "\n",
+    ]);
+    const parsed = await parseOllamaStream(reader, (event) => events.push(event));
+    expect(parsed.contentText).toBe("Hi");
+    expect(parsed.thinkingText).toBe("pondering");
+    expect(events.filter((event) => event.type === "thinking").map((event) => (event as { content: string }).content)).toEqual(["pondering"]);
+    expect(events.filter((event) => event.type === "token").map((event) => (event as { content: string }).content)).toEqual(["Hi"]);
+  });
+
+  it("keeps <thinking> tags as visible content once text has started", async () => {
+    const reader = streamReader([
+      JSON.stringify({ message: { role: "assistant", content: "Use <thinking>this</thinking> tags" } }) + "\n",
+    ]);
+    const parsed = await parseOllamaStream(reader);
+    expect(parsed.contentText).toBe("Use <thinking>this</thinking> tags");
+    expect(parsed.thinkingText).toBe("");
+  });
 });
 
 describe("OpenAI tool name conversion", () => {
@@ -217,6 +238,54 @@ describe("parseOpenAIStream", () => {
         },
       },
     ]);
+  });
+
+  it("extracts leading <thinking> blocks into thinking events and strips them from content", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"<thinking>step one reasoning</thinking>Hello "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"world"}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("Hello world");
+    expect(parsed.thinkingText).toBe("step one reasoning");
+    expect(events.filter((event) => event.type === "token").map((event) => (event as { content: string }).content).join("")).toBe("Hello world");
+    expect(events.filter((event) => event.type === "thinking").map((event) => (event as { content: string }).content).join("")).toBe("step one reasoning");
+  });
+
+  it("handles fragmented leading <thinking> tags across chunks", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"<th"}}]}\n',
+      'data: {"choices":[{"delta":{"content":"inking>reasoning</thinking>answer"}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("answer");
+    expect(parsed.thinkingText).toBe("reasoning");
+    expect(events.filter((event) => event.type === "token").map((event) => (event as { content: string }).content).join("")).toBe("answer");
+    expect(events.filter((event) => event.type === "thinking").map((event) => (event as { content: string }).content).join("")).toBe("reasoning");
+  });
+
+  it("does not strip <thinking> tags that appear after visible content has started", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"Use `<thinking>` tags like "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"<thinking>this</thinking>` in HTML."}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("Use `<thinking>` tags like <thinking>this</thinking>` in HTML.");
+    expect(parsed.thinkingText).toBe("");
+    expect(events.filter((event) => event.type === "thinking")).toHaveLength(0);
+  });
+
+  it("extracts leading  utes. utes.` blocks too", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"<think>quick check</think>Done."}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("Done.");
+    expect(parsed.thinkingText).toBe("quick check");
   });
 });
 

@@ -32,6 +32,7 @@ import {
   EDITING_INSTRUCTIONS,
   SEARCH_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
+  REASONING_INSTRUCTIONS,
   getModeInstructions,
 } from "./shared-sections.js";
 
@@ -102,8 +103,12 @@ ${TODO_INSTRUCTIONS}
 <outputFormatting>
 Use proper Markdown formatting. Wrap symbol names (classes, methods, variables) in backticks: \`MyClass\`, \`handleClick()\`.
 When mentioning files, use backtick-wrapped paths.
-Use KaTeX for math: wrap inline math in $, complex blocks in $$.
+Use KaTeX for math: wrap inline math in $, complex blocks in $.
 </outputFormatting>
+
+<reasoning>
+${REASONING_INSTRUCTIONS}
+</reasoning>
 ${modeBlock ? `\n${modeBlock}` : ""}`;
 }
 

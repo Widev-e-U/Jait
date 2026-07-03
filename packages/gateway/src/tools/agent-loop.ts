@@ -508,6 +508,7 @@ export async function parseOllamaStream(
   let finishReason: string | null = null;
   let usage: ParsedStream["usage"] | undefined;
   const toolCalls: OpenAIToolCall[] = [];
+  const extractThinking = createThinkingExtractor();
 
   const processLine = (line: string) => {
     const trimmed = line.trim();
@@ -523,8 +524,15 @@ export async function parseOllamaStream(
         onEvent?.({ type: "thinking", content: thinking });
       }
       if (message.content) {
-        contentText += message.content;
-        onEvent?.({ type: "token", content: message.content });
+        const { cleanDelta, thinkingDelta } = extractThinking(message.content);
+        if (cleanDelta) {
+          contentText += cleanDelta;
+          onEvent?.({ type: "token", content: cleanDelta });
+        }
+        if (thinkingDelta) {
+          thinkingText += thinkingDelta;
+          onEvent?.({ type: "thinking", content: thinkingDelta });
+        }
       }
       if (Array.isArray(message.tool_calls)) {
         for (const tc of message.tool_calls) {
@@ -638,6 +646,87 @@ export function toolDefsToSchemas(defs: Array<{ name: string; description: strin
   }));
 }
 
+// ── Inline-thinking extraction helper ────────────────────────────────
+
+/**
+ * Extract `<thinking>...</thinking>` / `<think>...</think>` blocks from a
+ * raw content stream. Reasoning is returned in `thinking`, visible text in
+ * `clean`, and any trailing fragment that might be an incomplete tag is kept
+ * as `leftover` to be reprocessed once more data arrives.
+ *
+ * Only *leading* reasoning blocks are extracted. Once ordinary content begins,
+ * any later `<thinking>` / ` utes.` tags are treated as visible content so code
+ * discussions that mention XML/HTML tags are not accidentally stripped.
+ */
+function extractInlineThinkingBlocks(raw: string): { clean: string; thinking: string; leftover: string } {
+  const OPEN_RE = /^(<(thinking|think)>)/i;
+  let clean = "";
+  let thinking = "";
+  let leftover = raw;
+
+  const findMatchingClose = (text: string, tag: string): number => {
+    const re = new RegExp(`</${tag}>`, "i");
+    const match = text.match(re);
+    return match ? match.index! : -1;
+  };
+
+  // Extract only *leading* thinking blocks. Once we see ordinary content we
+  // stay in clean mode so mid-answer XML/HTML snippets are not stripped.
+  while (leftover.length > 0) {
+    const openMatch = leftover.match(OPEN_RE);
+    if (!openMatch) break;
+
+    const tag = openMatch[2]!;
+    const closeIdx = findMatchingClose(leftover, tag);
+    if (closeIdx === -1) break; // incomplete leading block — wait for more data
+
+    thinking += leftover.slice(openMatch[0].length, closeIdx);
+    leftover = leftover.slice(closeIdx + `</${tag}>`.length);
+  }
+
+  // Everything after the leading reasoning is clean content, but hold back a
+  // trailing '<...' fragment that may be the start of an incomplete tag.
+  if (leftover.length > 0) {
+    const lastLt = leftover.lastIndexOf("<");
+    if (lastLt !== -1 && leftover.indexOf(">", lastLt) === -1) {
+      clean += leftover.slice(0, lastLt);
+      leftover = leftover.slice(lastLt);
+    } else {
+      clean += leftover;
+      leftover = "";
+    }
+  }
+
+  return { clean, thinking, leftover };
+}
+
+/**
+ * Stateful extractor used by the stream parsers. It buffers raw content,
+ * extracts any leading reasoning envelopes, and returns only the *new*
+ * clean / thinking deltas so the parser can emit the right events.
+ */
+function createThinkingExtractor() {
+  let rawBuffer = "";
+  let cleanCommitted = "";
+  let thinkingCommitted = "";
+
+  return (chunk: string): { cleanDelta: string; thinkingDelta: string } => {
+    rawBuffer += chunk;
+    const { clean, thinking, leftover } = extractInlineThinkingBlocks(rawBuffer);
+
+    const cleanDelta = clean.slice(cleanCommitted.length);
+    const thinkingDelta = thinking.slice(thinkingCommitted.length);
+
+    cleanCommitted = clean;
+    thinkingCommitted = thinking;
+    // Keep committed clean text plus any unprocessed fragment so the next
+    // chunk can extend an incomplete tag without losing already-emitted text.
+    rawBuffer = cleanCommitted + leftover;
+
+    return { cleanDelta, thinkingDelta };
+  };
+}
+
 // ── OpenAI SSE stream parser ─────────────────────────────────────────
 
 interface ParsedStream {
@@ -659,6 +748,7 @@ export async function parseOpenAIStream(
   let thinkingText = "";
   let finishReason: string | null = null;
   let usage: ParsedStream["usage"] | undefined;
+  const extractThinking = createThinkingExtractor();
 
   const toolCallMap = new Map<
     number,
@@ -686,10 +776,17 @@ export async function parseOpenAIStream(
         onEvent?.({ type: "thinking", content: reasoningToken });
       }
 
-      // Text content
+      // Text content — strip any inline <thinking> envelope the model emitted
       if (delta.content) {
-        contentText += delta.content;
-        onEvent?.({ type: "token", content: delta.content });
+        const { cleanDelta, thinkingDelta } = extractThinking(delta.content);
+        if (cleanDelta) {
+          contentText += cleanDelta;
+          onEvent?.({ type: "token", content: cleanDelta });
+        }
+        if (thinkingDelta) {
+          thinkingText += thinkingDelta;
+          onEvent?.({ type: "thinking", content: thinkingDelta });
+        }
       }
 
       // Tool calls (streamed incrementally)

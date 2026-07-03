@@ -10,7 +10,8 @@ import { parseContextFlowEvent } from '@/lib/context-flow'
 import { normalizeTodoStateValue } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
-import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds, normalizeMessageSegments } from '@/lib/stream-segments'
+import { normalizeMessageSegments } from '@/lib/stream-segments'
+import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -71,9 +72,8 @@ export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; h
 }
 
 export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
-  // Text and thinking chunks can arrive in tight bursts. Forcing a React commit
-  // for every chunk makes the transcript appear frozen while the main thread
-  // catches up; let the stream updater coalesce them to the next animation frame.
+  // Mode notices are lightweight control messages that should be reflected
+  // immediately (e.g. mode changes), bypassing the normal buffered flush.
   return eventType === 'mode_notice'
 }
 
@@ -81,11 +81,16 @@ export function shouldYieldAfterBufferedStreamEvent(eventType: unknown): boolean
   return eventType === 'token' || eventType === 'thinking'
 }
 
+const STREAM_BUFFER_FLUSH_INTERVAL_MS = 80
+const STREAMING_FLUSH_DEADLINE_MS = 300
+
 function waitForNextPaint(): Promise<void> {
-  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
-    return Promise.resolve()
-  }
-  return new Promise(resolve => window.requestAnimationFrame(() => resolve()))
+  return new Promise(resolve => {
+    window.requestAnimationFrame(() => {
+      // Yield back to the microtask queue so React can process pending work
+      Promise.resolve().then(resolve)
+    })
+  })
 }
 
 export function shouldProcessResumeStreamEvent(
@@ -582,6 +587,10 @@ export function useChat(
             window.cancelAnimationFrame(pendingSubscribeFrame)
             pendingSubscribeFrame = null
           }
+          if (pendingSubscribeDeadline !== null) {
+            clearTimeout(pendingSubscribeDeadline)
+            pendingSubscribeDeadline = null
+          }
           if (!isCurrentResumeRun() || !pendingSubscribeUpdates || !assistantId) return
           const updates = pendingSubscribeUpdates
           const targetId = assistantId
@@ -594,35 +603,58 @@ export function useChat(
           }))
         }
 
+        let pendingSubscribeDeadline: ReturnType<typeof setTimeout> | null = null
+
+        const scheduleSubscribeFlush = () => {
+          if (pendingSubscribeFrame !== null) return
+          if (pendingSubscribeDeadline !== null) return
+          pendingSubscribeDeadline = setTimeout(() => {
+            pendingSubscribeDeadline = null
+            if (pendingSubscribeFrame !== null) {
+              window.cancelAnimationFrame(pendingSubscribeFrame)
+              pendingSubscribeFrame = null
+            }
+            flushSubscribeUpdates()
+          }, STREAMING_FLUSH_DEADLINE_MS)
+          pendingSubscribeFrame = window.requestAnimationFrame(() => {
+            pendingSubscribeFrame = null
+            if (pendingSubscribeDeadline !== null) {
+              clearTimeout(pendingSubscribeDeadline)
+              pendingSubscribeDeadline = null
+            }
+            flushSubscribeUpdates()
+          })
+        }
+
         const batchSubscribeUpdate = (updates: Partial<ChatMessage>) => {
           pendingSubscribeUpdates = {
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          if (pendingSubscribeFrame !== null) return
-          pendingSubscribeFrame = window.requestAnimationFrame(() => {
-            pendingSubscribeFrame = null
-            flushSubscribeUpdates()
-          })
+          scheduleSubscribeFlush()
         }
 
-        // Accumulate content/segments between flushes so each batch is a single setState.
-        // `accumulatedSegments` is the single source of truth for ALL segment kinds
-        // (text, thinking, toolGroup) in this consumer — tool handlers must mutate it
-        // too, otherwise a later batched token flush overwrites their tool groups.
-        let accumulatedContent = ''
-        let accumulatedSegments: MessageSegment[] | undefined
-        let accumulatedThinking = ''
-        const seenToolCallIds = new Set<string>()
+        // Imperative stream writer: all live answer components (text, thinking,
+        // tool calls/outputs/results) accumulate into one ordered segment list.
+        // The resume consumer just pushes events and applies snapshots to the
+        // current assistant message on each rAF flush.
+        const stream = createMessageStream()
+        let pendingResumeContextFlow: LlmContextFlow | undefined
+
+        const applyStreamSnapshot = () => {
+          const snapshot = stream.snapshot()
+          const updates = snapshotToChatMessageUpdates(snapshot)
+          if (pendingResumeContextFlow !== undefined) updates.contextFlow = pendingResumeContextFlow
+          batchSubscribeUpdate(updates)
+        }
 
         // When a client (re)opens the resume stream during a run that hasn't
         // produced any content/thinking/tools yet, the snapshot has no synthetic
-        // assistant message (the accumulator is empty), so `assistantId` is null.
-        // Without this guard, EVERY subsequent live token/thinking/tool event is
-        // dropped (each handler gates on `&& assistantId`), and the final answer
-        // only appears after a manual reload — the "chat stays loading until I
-        // refresh" bug. Synthesize an empty assistant message on the first live
-        // streaming event so tokens have a target to stream into.
+        // assistant message, so `assistantId` is null. Without this guard, every
+        // subsequent live token/thinking/tool event would be dropped, and the
+        // final answer only appears after a manual reload. Synthesize an empty
+        // assistant message on the first live streaming event so tokens have a
+        // target to stream into.
         const ensureStreamingAssistant = (): string | null => {
           if (assistantId) return assistantId
           if (!isCurrentResumeRun()) return null
@@ -761,14 +793,14 @@ export function useChat(
                 const lastMsg = msgs[msgs.length - 1]
                 if (lastMsg?.role === 'assistant') {
                   assistantId = lastMsg.id
-                  // Reset accumulators when we get a fresh snapshot
-                  accumulatedContent = lastMsg.content
-                  accumulatedSegments = lastMsg.segments as MessageSegment[] | undefined
-                  accumulatedThinking = (lastMsg as any).thinking ?? ''
-                  // Seed seen tool calls from the snapshot's segments so existing
-                  // tool groups aren't re-appended by later tool events.
-                  seenToolCallIds.clear()
-                  for (const id of seedSeenToolCallIds(accumulatedSegments)) seenToolCallIds.add(id)
+                  // Hydrate the imperative stream writer from the snapshot so live
+                  // events append to the same ordered segments / toolCalls.
+                  stream.hydrate({
+                    content: lastMsg.content,
+                    thinking: lastMsg.thinking ?? undefined,
+                    segments: lastMsg.segments,
+                    toolCalls: lastMsg.toolCalls,
+                  })
                 }
                 setState(prev => ({
                   ...prev,
@@ -781,171 +813,62 @@ export function useChat(
                 }))
               } else if (data.type === 'token') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                // Batch token updates via rAF instead of per-token setState
-                const token = data.content as string
-                accumulatedContent += token
-                accumulatedSegments = withTextSegment(accumulatedSegments, token)
-                batchSubscribeUpdate({ content: accumulatedContent, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
+                stream.pushText(data.content as string)
+                applyStreamSnapshot()
               } else if (data.type === 'thinking') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                // Batch thinking updates
-                const text = data.content as string
-                accumulatedThinking += text
-                accumulatedSegments = withThinkingSegment(accumulatedSegments, text)
-                batchSubscribeUpdate({ thinking: accumulatedThinking, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
+                stream.pushThinking(data.content as string)
+                applyStreamSnapshot()
               } else if (data.type === 'tool_call_delta') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                // Flush any pending content batch before tool updates
                 flushSubscribeUpdates()
-                const callId = data.call_id as string
-                const nameDelta = (data.name_delta as string) || ''
-                const argsDelta = (data.args_delta as string) || ''
-                // Mutate the authoritative segment list (not m.segments) so a
-                // subsequent token flush can't clobber this tool group.
-                const isNewCall = !seenToolCallIds.has(callId)
-                if (isNewCall) {
-                  seenToolCallIds.add(callId)
-                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
-                }
-                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m => {
-                    if (m.id !== assistantId) return m
-                    const existing = m.toolCalls?.find(tc => tc.callId === callId)
-                    if (existing) {
-                      return {
-                        ...m,
-                        toolCalls: m.toolCalls?.map(tc =>
-                          tc.callId === callId
-                            ? { ...tc, tool: tc.tool + nameDelta, streamingArgs: (tc.streamingArgs ?? '') + argsDelta }
-                            : tc
-                        ),
-                      }
-                    }
-                    const callInfo: ToolCallInfo = {
-                      callId,
-                      parentCallId: data.parent_call_id as string | undefined,
-                      tool: nameDelta,
-                      args: {},
-                      status: 'pending',
-                      streamingArgs: argsDelta,
-                      startedAt: Date.now(),
-                    }
-                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
-                  }),
-                }))
+                stream.pushToolCallDelta(
+                  data.call_id as string,
+                  (data.name_delta as string) || '',
+                  (data.args_delta as string) || '',
+                  data.parent_call_id as string | undefined,
+                )
+                applyStreamSnapshot()
               } else if (data.type === 'tool_start') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 flushSubscribeUpdates()
-                const callId = data.call_id as string
-                // Mutate the authoritative segment list (not m.segments) so a
-                // subsequent token flush can't clobber this tool group.
-                const isNewCall = !seenToolCallIds.has(callId)
-                if (isNewCall) {
-                  seenToolCallIds.add(callId)
-                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
-                }
-                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m => {
-                    if (m.id !== assistantId) return m
-                    const existing = m.toolCalls?.find(tc => tc.callId === callId)
-                    if (existing) {
-                      // Upgrade pending → running, fill in final args
-                      return {
-                        ...m,
-                        toolCalls: m.toolCalls?.map(tc =>
-                          tc.callId === callId
-                            ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, parentCallId: data.parent_call_id as string | undefined, status: 'running' as const, streamingArgs: undefined }
-                            : tc
-                        ),
-                      }
-                    }
-                    const callInfo: ToolCallInfo = {
-                      callId,
-                      parentCallId: data.parent_call_id as string | undefined,
-                      tool: data.tool as string,
-                      args: (data.args as Record<string, unknown>) ?? {},
-                      status: 'running',
-                      startedAt: Date.now(),
-                    }
-                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
-                  }),
-                }))
+                stream.pushToolStart(
+                  data.call_id as string,
+                  data.tool as string,
+                  (data.args as Record<string, unknown>) ?? {},
+                  data.parent_call_id as string | undefined,
+                )
+                applyStreamSnapshot()
               } else if (data.type === 'approval_required') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 flushSubscribeUpdates()
-                const requestId = data.request_id as string
-                const callId = (data.call_id as string) || `approval-${requestId}`
-                const tool = (data.tool as string) || 'approval'
-                const isNewCall = !seenToolCallIds.has(callId)
-                if (isNewCall) {
-                  seenToolCallIds.add(callId)
-                  accumulatedSegments = withToolSegment(accumulatedSegments, callId)
-                }
-                const segmentsSnapshot = accumulatedSegments ? [...accumulatedSegments] : undefined
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m => {
-                    if (m.id !== assistantId) return m
-                    if (m.toolCalls?.some(tc => tc.callId === callId)) return m
-                    const callInfo: ToolCallInfo = {
-                      callId,
-                      approvalRequestId: requestId,
-                      approvalState: 'pending',
-                      tool,
-                      args: (data.args as Record<string, unknown>) ?? {},
-                      status: 'pending',
-                      startedAt: Date.now(),
-                    }
-                    return { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: segmentsSnapshot ?? m.segments }
-                  }),
-                }))
+                stream.pushApprovalRequired(
+                  data.request_id as string,
+                  (data.call_id as string) || `approval-${data.request_id as string}`,
+                  (data.tool as string) || 'approval',
+                  (data.args as Record<string, unknown>) ?? {},
+                )
+                applyStreamSnapshot()
               } else if (data.type === 'tool_output') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m => {
-                    if (m.id !== assistantId) return m
-                    return {
-                      ...m,
-                      toolCalls: m.toolCalls?.map(tc =>
-                        tc.callId === (data.call_id as string)
-                          ? { ...tc, streamingOutput: (tc.streamingOutput ?? '') + (data.content as string) }
-                          : tc
-                      ),
-                    }
-                  }),
-                }))
+                stream.pushToolOutput(data.call_id as string, data.content as string)
+                applyStreamSnapshot()
               } else if (data.type === 'tool_result') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m => {
-                    if (m.id !== assistantId) return m
-                    return {
-                      ...m,
-                      toolCalls: m.toolCalls?.map(tc =>
-                        tc.callId === (data.call_id as string)
-                          ? {
-                              ...tc,
-                              parentCallId: tc.parentCallId ?? (data.parent_call_id as string | undefined),
-                              status: (data.ok as boolean) ? 'success' as const : 'error' as const,
-                              result: { ok: data.ok as boolean, message: data.message as string, data: data.data as unknown },
-                              completedAt: Date.now(),
-                            }
-                          : tc
-                      ),
-                    }
-                  }),
-                }))
+                flushSubscribeUpdates()
+                stream.pushToolResult(
+                  data.call_id as string,
+                  data.ok as boolean,
+                  data.message as string,
+                  data.data as unknown,
+                  data.parent_call_id as string | undefined,
+                )
+                applyStreamSnapshot()
 
                 // Auto-track file edits in changedFiles (stream-resume path)
                 if (data.ok) {
-                  const msg = state.messages.find(m => m.id === assistantId)
-                  const tc = msg?.toolCalls?.find(t => t.callId === (data.call_id as string))
+                  const snapshot = stream.snapshot()
+                  const tc = snapshot.toolCalls.find(t => t.callId === (data.call_id as string))
                   if (tc) {
                     const toolName = tc.tool.replace('_', '.')
                     if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
@@ -970,18 +893,8 @@ export function useChat(
                 setContextUsage(data as unknown as ContextUsage)
               } else if (data.type === 'context_flow') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                const contextFlow = parseContextFlowEvent(data as Record<string, unknown>)
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m =>
-                    m.id === assistantId
-                      ? {
-                          ...m,
-                          contextFlow,
-                        }
-                      : m
-                  ),
-                }))
+                pendingResumeContextFlow = parseContextFlowEvent(data as Record<string, unknown>)
+                applyStreamSnapshot()
               } else if (data.type === 'provider_fallback') {
                 // Provider was unavailable, gateway fell back to jait
                 setSessionInfo({
@@ -1010,6 +923,7 @@ export function useChat(
                 receivedDone = true
                 // Flush any batched token updates before marking completion
                 flushSubscribeUpdates()
+                const finalSnapshot = stream.finish()
                 setState(prev => {
                   // Only signal completion if this was an active chat response,
                   // not just the end of a history-only stream.
@@ -1023,20 +937,13 @@ export function useChat(
                     promptCount: (data.prompt_count as number) ?? prev.promptCount,
                     remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
                     hitMaxRounds: shouldShowContinueAfterDone(data),
-                    // Mark any tool calls still stuck in 'running' as cancelled
-                    // (can happen if reload snapshot races with cancel processing)
-                    messages: prev.messages.map(m =>
-                      m.toolCalls?.some(tc => tc.status === 'running')
-                        ? {
-                            ...m,
-                            toolCalls: m.toolCalls!.map(tc =>
-                              tc.status === 'running'
-                                ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
-                                : tc
-                            ),
-                          }
-                        : m
-                    ),
+                    messages: assistantId
+                      ? prev.messages.map(m =>
+                          m.id === assistantId
+                            ? { ...m, ...snapshotToChatMessageUpdates(finalSnapshot) }
+                            : m
+                        )
+                      : prev.messages,
                   }
                 })
               } else if (data.type === 'error') {
@@ -1276,12 +1183,58 @@ export function useChat(
     // direct stream, so they cannot stale the in-flight answer.
     const isStale = () =>
       prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
-    let pendingMessageUpdates: Partial<ChatMessage> | null = null
-    let pendingMessageFrame: number | null = null
-    let pendingMessageTimeout: ReturnType<typeof setTimeout> | null = null
-    let lastMessageFlushAt = 0
-    const STREAM_UPDATE_MIN_INTERVAL_MS = 0
+    // Imperative stream writer: every component of the assistant answer (text,
+    // thinking, tool calls/outputs/results) flows through one ordered
+    // MessageSegment accumulator. React only sees the snapshot when we flush.
+    const stream = createMessageStream()
+    let bufferedFlushTimer: ReturnType<typeof setInterval> | null = null
+    let bufferedFlushRunning = false
+    let pendingContextFlow: LlmContextFlow | undefined
 
+    const commitBufferedUpdates = () => {
+      if (isStale()) return
+      const snapshot = stream.snapshot()
+      const updates = snapshotToChatMessageUpdates(snapshot)
+      if (pendingContextFlow !== undefined) updates.contextFlow = pendingContextFlow
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(m =>
+          m.id === assistantId ? { ...m, ...updates } : m
+        ),
+      }))
+    }
+
+    const startBufferedFlushLoop = () => {
+      if (bufferedFlushTimer !== null) return
+      bufferedFlushRunning = true
+      bufferedFlushTimer = setInterval(() => {
+        if (!bufferedFlushRunning) return
+        commitBufferedUpdates()
+      }, STREAM_BUFFER_FLUSH_INTERVAL_MS)
+    }
+
+    const stopBufferedFlushLoop = () => {
+      bufferedFlushRunning = false
+      if (bufferedFlushTimer !== null) {
+        clearInterval(bufferedFlushTimer)
+        bufferedFlushTimer = null
+      }
+    }
+
+    const flushBufferImmediately = () => {
+      commitBufferedUpdates()
+    }
+
+    const updateMessage = (options?: { immediate?: boolean }) => {
+      if (isStale()) return
+      if (options?.immediate) {
+        flushBufferImmediately()
+        return
+      }
+      startBufferedFlushLoop()
+    }
+
+    stream.markDirty(() => startBufferedFlushLoop())
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1337,82 +1290,8 @@ export function useChat(
       if (!reader) throw new Error('No response body')
 
       const decoder = new TextDecoder()
-      let assistantContent = ''
-      let thinkingContent = ''
-      let thinkingStart: number | null = null
-      let thinkingDuration: number | undefined
-      const toolCalls: ToolCallInfo[] = []
-      const segments: MessageSegment[] = []
       let lineBuffer = ''
       let completed = false
-
-      /** Push or extend a text segment at the end of the segments list */
-      const appendTextSegment = (text: string) => {
-        const last = segments[segments.length - 1]
-        if (last?.type === 'text') {
-          last.content += text
-        } else {
-          segments.push({ type: 'text', content: text })
-        }
-      }
-
-      /** Push a tool callId into the current trailing tool-group, or start a new one */
-      const appendToolSegment = (callId: string) => {
-        const last = segments[segments.length - 1]
-        if (last?.type === 'toolGroup') {
-          if (!last.callIds.includes(callId)) last.callIds.push(callId)
-        } else {
-          segments.push({ type: 'toolGroup', callIds: [callId] })
-        }
-      }
-
-      const flushPendingMessageUpdates = () => {
-        if (pendingMessageFrame !== null) {
-          window.cancelAnimationFrame(pendingMessageFrame)
-          pendingMessageFrame = null
-        }
-        if (pendingMessageTimeout !== null) {
-          clearTimeout(pendingMessageTimeout)
-          pendingMessageTimeout = null
-        }
-        if (isStale() || !pendingMessageUpdates) return
-        const updates = pendingMessageUpdates
-        pendingMessageUpdates = null
-        lastMessageFlushAt = Date.now()
-        setState(prev => ({
-          ...prev,
-          messages: prev.messages.map(m =>
-            m.id === assistantId ? { ...m, ...updates } : m
-          ),
-        }))
-      }
-
-      const updateMessage = (updates: Partial<ChatMessage>, options?: { immediate?: boolean }) => {
-        if (isStale()) return
-        pendingMessageUpdates = {
-          ...pendingMessageUpdates,
-          ...updates,
-        }
-        if (options?.immediate) {
-          flushPendingMessageUpdates()
-          return
-        }
-        const now = Date.now()
-        const delay = Math.max(0, STREAM_UPDATE_MIN_INTERVAL_MS - (now - lastMessageFlushAt))
-        if (delay > 0) {
-          if (pendingMessageTimeout !== null) return
-          pendingMessageTimeout = setTimeout(() => {
-            pendingMessageTimeout = null
-            flushPendingMessageUpdates()
-          }, delay)
-          return
-        }
-        if (pendingMessageFrame !== null) return
-        pendingMessageFrame = window.requestAnimationFrame(() => {
-          pendingMessageFrame = null
-          flushPendingMessageUpdates()
-        })
-      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -1430,124 +1309,64 @@ export function useChat(
             pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
             if (data.type === 'thinking') {
-              if (!thinkingStart) thinkingStart = Date.now()
-              thinkingContent += data.content
-              const last = segments[segments.length - 1]
-              if (last?.type === 'thinking') {
-                last.content += data.content as string
-              } else {
-                segments.push({ type: 'thinking', content: data.content as string })
-              }
-              updateMessage({ thinking: thinkingContent, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
+              stream.pushThinking(data.content as string)
+              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'token') {
-              if (thinkingStart && !thinkingDuration) {
-                thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
-              }
-              assistantContent += data.content
-              appendTextSegment(data.content as string)
-              updateMessage({ content: assistantContent, thinkingDuration, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
+              stream.pushText(data.content as string)
+              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'tool_call_delta') {
-              const callId = data.call_id as string
-              const nameDelta = (data.name_delta as string) || ''
-              const argsDelta = (data.args_delta as string) || ''
-              const idx = toolCalls.findIndex(tc => tc.callId === callId)
-              if (idx !== -1) {
-                toolCalls[idx] = {
-                  ...toolCalls[idx],
-                  tool: toolCalls[idx].tool + nameDelta,
-                  streamingArgs: (toolCalls[idx].streamingArgs ?? '') + argsDelta,
-                }
-              } else {
-                toolCalls.push({
-                  callId,
-                  parentCallId: data.parent_call_id as string | undefined,
-                  tool: nameDelta,
-                  args: {},
-                  status: 'pending',
-                  streamingArgs: argsDelta,
-                  startedAt: Date.now(),
-                })
-                appendToolSegment(callId)
-              }
-              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
+              stream.pushToolCallDelta(
+                data.call_id as string,
+                (data.name_delta as string) || '',
+                (data.args_delta as string) || '',
+                data.parent_call_id as string | undefined,
+              )
+              updateMessage({ immediate: true })
             } else if (data.type === 'tool_start') {
-              const callId = data.call_id as string
-              const idx = toolCalls.findIndex(tc => tc.callId === callId)
-              if (idx !== -1) {
-                // Upgrade pending → running with final args
-                toolCalls[idx] = {
-                  ...toolCalls[idx],
-                  tool: data.tool as string,
-                  args: (data.args as Record<string, unknown>) ?? {},
-                  parentCallId: data.parent_call_id as string | undefined,
-                  status: 'running',
-                  streamingArgs: undefined,
-                }
-              } else {
-                toolCalls.push({
-                  callId,
-                  parentCallId: data.parent_call_id as string | undefined,
-                  tool: data.tool as string,
-                  args: (data.args as Record<string, unknown>) ?? {},
-                  status: 'running',
-                  startedAt: Date.now(),
-                })
-                appendToolSegment(callId)
-              }
-              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
+              stream.pushToolStart(
+                data.call_id as string,
+                data.tool as string,
+                (data.args as Record<string, unknown>) ?? {},
+                data.parent_call_id as string | undefined,
+              )
+              updateMessage({ immediate: true })
             } else if (data.type === 'approval_required') {
-              const requestId = data.request_id as string
-              const callId = (data.call_id as string) || `approval-${requestId}`
-              if (!toolCalls.some(tc => tc.callId === callId)) {
-                toolCalls.push({
-                  callId,
-                  approvalRequestId: requestId,
-                  approvalState: 'pending',
-                  tool: (data.tool as string) || 'approval',
-                  args: (data.args as Record<string, unknown>) ?? {},
-                  status: 'pending',
-                  startedAt: Date.now(),
-                })
-                appendToolSegment(callId)
-                updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
-              }
+              stream.pushApprovalRequired(
+                data.request_id as string,
+                (data.call_id as string) || `approval-${data.request_id as string}`,
+                (data.tool as string) || 'approval',
+                (data.args as Record<string, unknown>) ?? {},
+              )
+              updateMessage({ immediate: true })
             } else if (data.type === 'tool_output') {
-              const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
-              if (idx !== -1) {
-                toolCalls[idx] = {
-                  ...toolCalls[idx],
-                  streamingOutput: (toolCalls[idx].streamingOutput ?? '') + (data.content as string),
-                }
-                updateMessage({ toolCalls: [...toolCalls] })
-              }
+              stream.pushToolOutput(data.call_id as string, data.content as string)
+              updateMessage()
             } else if (data.type === 'tool_result') {
-              const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
-              if (idx !== -1) {
-                toolCalls[idx] = {
-                  ...toolCalls[idx],
-                  parentCallId: toolCalls[idx].parentCallId ?? (data.parent_call_id as string | undefined),
-                  status: (data.ok as boolean) ? 'success' : 'error',
-                  result: { ok: data.ok as boolean, message: data.message as string, data: data.data as unknown },
-                  completedAt: Date.now(),
-                }
-                updateMessage({ toolCalls: [...toolCalls] }, { immediate: true })
+              stream.pushToolResult(
+                data.call_id as string,
+                data.ok as boolean,
+                data.message as string,
+                data.data as unknown,
+                data.parent_call_id as string | undefined,
+              )
+              updateMessage({ immediate: true })
 
-                // Auto-track file edits in changedFiles
-                if (data.ok) {
-                  const tc = toolCalls[idx]
-                  const toolName = tc.tool.replace('_', '.')
-                  if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
-                    const resultData = data.data && typeof data.data === 'object'
-                      ? data.data as Record<string, unknown>
-                      : undefined
-                    const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
-                    if (filePath && !isStale()) {
-                      const fileName = filePath.split('/').pop() ?? filePath
-                      setChangedFiles(prev => {
-                        if (prev.some(f => f.path === filePath)) return prev
-                        return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-                      })
-                    }
+              // Auto-track file edits in changedFiles
+              if (data.ok) {
+                const snapshot = stream.snapshot()
+                const tc = snapshot.toolCalls.find(tc => tc.callId === (data.call_id as string))
+                const toolName = tc?.tool.replace('_', '.')
+                if (tc && (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit')) {
+                  const resultData = data.data && typeof data.data === 'object'
+                    ? data.data as Record<string, unknown>
+                    : undefined
+                  const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
+                  if (filePath && !isStale()) {
+                    const fileName = filePath.split('/').pop() ?? filePath
+                    setChangedFiles(prev => {
+                      if (prev.some(f => f.path === filePath)) return prev
+                      return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+                    })
                   }
                 }
               }
@@ -1561,20 +1380,16 @@ export function useChat(
               setPendingPlan(plan)
             } else if (data.type === 'mode_notice') {
               // Mode notice — append as assistant content
-              const notice = `\n\n*${data.message as string}*`
-              assistantContent += notice
-              appendTextSegment(notice)
-              updateMessage({ content: assistantContent, segments: [...segments] }, { immediate: shouldFlushStreamTextImmediately(data.type) })
+              stream.pushText(`\n\n*${data.message as string}*`)
+              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
             } else if (data.type === 'todo_list') {
               // AI updated the task list
               setTodoList(normalizeTodoStateValue(data.items))
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
             } else if (data.type === 'context_flow') {
-              const contextFlow = parseContextFlowEvent(data as Record<string, unknown>)
-              updateMessage({
-                contextFlow,
-              }, { immediate: true })
+              pendingContextFlow = parseContextFlowEvent(data as Record<string, unknown>)
+              updateMessage({ immediate: true })
             } else if (data.type === 'provider_fallback') {
               // Provider was unavailable, gateway fell back to jait
               setSessionInfo({
@@ -1601,7 +1416,7 @@ export function useChat(
                 })
               }
             } else if (data.type === 'queued') {
-              flushPendingMessageUpdates()
+              flushBufferImmediately()
               const queued = data.message as Partial<QueuedChatMessage> | undefined
               if (!isStale()) {
                 setState(prev => ({
@@ -1632,12 +1447,14 @@ export function useChat(
               return 'queued'
             } else if (data.type === 'done') {
               completed = true
-              flushPendingMessageUpdates()
-              if (thinkingStart && !thinkingDuration) {
-                thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
-              }
+              stopBufferedFlushLoop()
+              flushBufferImmediately()
+              const snapshot = stream.snapshot()
               if (!isStale()) {
-                const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0
+                const isEmptyAssistant =
+                  snapshot.content.length === 0 &&
+                  snapshot.thinking.length === 0 &&
+                  snapshot.toolCalls.length === 0
                 setState(prev => ({
                   ...prev,
                   promptCount: data.prompt_count,
@@ -1648,17 +1465,10 @@ export function useChat(
                     ? prev.messages.filter(m => m.id !== assistantId)
                     : prev.messages.map(m =>
                         m.id === assistantId
-                          ? {
-                              ...m,
-                              content: assistantContent,
-                              thinking: thinkingContent || undefined,
-                              thinkingDuration,
-                              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-                              segments: segments.length > 0 ? segments : undefined,
-                            }
+                          ? { ...m, ...snapshotToChatMessageUpdates(snapshot) }
                           : m
                       ),
-                        }))
+                }))
                 clearUnfinishedTodoList()
               } else {
                 // Stream is stale (session/provider changed), but still clean up
@@ -1685,12 +1495,14 @@ export function useChat(
           }
         }
       }
-      flushPendingMessageUpdates()
+      stopBufferedFlushLoop()
+      flushBufferImmediately()
       if (!completed && !isStale()) {
-        if (thinkingStart && !thinkingDuration) {
-          thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
-        }
-        const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0
+        const snapshot = stream.snapshot()
+        const isEmptyAssistant =
+          snapshot.content.length === 0 &&
+          snapshot.thinking.length === 0 &&
+          snapshot.toolCalls.length === 0
         setState(prev => ({
           ...prev,
           isLoading: ownsDirectStream ? false : prev.isLoading,
@@ -1698,14 +1510,7 @@ export function useChat(
             ? prev.messages.filter(m => m.id !== assistantId)
             : prev.messages.map(m =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content: assistantContent,
-                      thinking: thinkingContent || undefined,
-                      thinkingDuration,
-                      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-                      segments: segments.length > 0 ? segments : undefined,
-                    }
+                  ? { ...m, ...snapshotToChatMessageUpdates(snapshot) }
                   : m
               ),
         }))
@@ -1722,15 +1527,9 @@ export function useChat(
         }))
       }
     } catch (error) {
-      if (pendingMessageFrame !== null) {
-        window.cancelAnimationFrame(pendingMessageFrame)
-        pendingMessageFrame = null
-      }
-      if (pendingMessageTimeout !== null) {
-        clearTimeout(pendingMessageTimeout)
-        pendingMessageTimeout = null
-      }
-      pendingMessageUpdates = null
+      stopBufferedFlushLoop()
+      stream.finish()
+      flushBufferImmediately()
       if (error instanceof Error && error.name === 'AbortError') {
         finishOwnedDirectStream()
         if (!isStale()) {

@@ -73,7 +73,7 @@ export function FilesChanged({
   return (
     <div ref={rootRef} className={cn('overflow-hidden rounded-lg border bg-muted/30', className)}>
       {/* Header */}
-      <div className={cn('flex items-center justify-between gap-2 bg-muted/20 px-3 py-2', expanded && 'border-b')}>
+      <div className={cn('flex h-8 items-center justify-between gap-2 bg-muted/20 px-3', expanded && 'border-b')}>
         <button
           type="button"
           className="flex min-w-0 items-center gap-1.5 text-left"

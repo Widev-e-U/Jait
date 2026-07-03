@@ -73,6 +73,7 @@ interface ManagerWorkspaceProps {
   onUpdateManagerQueueItem: (threadId: string, itemId: string, content: string) => void
   onVoiceInput: () => void
   renderInlineSecretPrompt: (call: ToolCallInfo) => React.ReactNode
+  inlinePrompts?: ReactNode
 }
 
 export function ManagerWorkspace({
@@ -131,6 +132,7 @@ export function ManagerWorkspace({
   onUpdateManagerQueueItem,
   onVoiceInput,
   renderInlineSecretPrompt,
+  inlinePrompts,
 }: ManagerWorkspaceProps) {
   // ── Memoized message elements ─────────────────────────────────────────
   // Same rationale as DeveloperChatWorkspace: streaming thread activity
@@ -151,7 +153,6 @@ export function ManagerWorkspace({
   const elementCacheRef = useRef<Map<string, {
     key: string
     element: ReactNode
-    msg: unknown
     contextFlow: unknown
     toolCalls: unknown
     segments: unknown
@@ -174,7 +175,6 @@ export function ManagerWorkspace({
       const cached = cache.get(msg.id)
       const key =
         sharedKey
-        + '|' + (msg === cached?.msg ? 's' : 'd')
         + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
         + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
         + '|' + (msg.segments === cached?.segments ? 's' : 'd')
@@ -209,7 +209,6 @@ export function ManagerWorkspace({
       cache.set(msg.id, {
         key,
         element,
-        msg,
         contextFlow: msg.contextFlow,
         toolCalls: msg.toolCalls,
         segments: msg.segments,
@@ -264,6 +263,7 @@ export function ManagerWorkspace({
                 {automation.selectedThreadTodos.length > 0 && (
                   <TodoList items={automation.selectedThreadTodos} className="mb-2" />
                 )}
+                {inlinePrompts}
                 <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
                   <PromptInput
                     ref={promptInputRef}

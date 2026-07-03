@@ -14,6 +14,7 @@ import {
   EDITING_INSTRUCTIONS,
   SEARCH_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
+  REASONING_INSTRUCTIONS,
   getModeInstructions,
 } from "./shared-sections.js";
 
@@ -51,6 +52,10 @@ Example:
   The class \`Person\` is in \`src/models/person.ts\`.
   The function \`calculateTotal\` is defined in \`lib/utils/math.ts\`.
 </outputFormatting>
+
+<reasoning>
+${REASONING_INSTRUCTIONS}
+</reasoning>
 ${modeBlock ? `\n${modeBlock}` : ""}`;
 }
 
