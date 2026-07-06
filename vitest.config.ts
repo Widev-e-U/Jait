@@ -17,11 +17,15 @@ export default defineConfig({
     globals: true,
     environment: "node",
     testTimeout: 30_000,
-    include: ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts"],
+    include: [
+      "packages/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.tsx",
+    ],
     coverage: {
       provider: "v8",
-      include: ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts"],
-      exclude: ["**/*.test.ts", "**/*.spec.ts", "**/index.ts"],
+      include: ["packages/*/src/**/*.ts", "apps/*/src/**/*.tsx", "apps/*/src/**/*.ts"],
+      exclude: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/index.ts"],
     },
   },
 });
