@@ -14,6 +14,7 @@ import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
 import { buildProjectDragPayload, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
+import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
 
 interface SessionSelectorProps {
@@ -175,6 +176,8 @@ export function SessionSelector({
                 )}
                 {filteredProjects.map((project) => {
                   const isActiveProject = project.id === activeProjectId
+                  const latestSessionId = getLatestProjectSessionId(project)
+                  const isLatestProjectSessionActive = isActiveProject && latestSessionId === activeSessionId
                   const remoteNode = project.nodeId && project.nodeId !== 'gateway'
                     ? nodes.find((n) => n.id === project.nodeId)
                     : null
@@ -184,7 +187,7 @@ export function SessionSelector({
                     <div
                       key={project.id}
                       className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${
-                        offline || isActiveProject ? 'cursor-default' : 'cursor-pointer'
+                        offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'
                       } ${
                         isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
                       }`}
@@ -200,7 +203,7 @@ export function SessionSelector({
                           JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined)),
                         )
                       }}
-                      onClick={() => { if (!offline && !isActiveProject) onSelectProject(project.id) }}
+                      onClick={() => { if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id) }}
                     >
                       {isActiveProject ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />

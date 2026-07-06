@@ -4194,8 +4194,6 @@ function App() {
                   }
                   setCurrentView(view)
                 }}
-                showSidebar={showSidebar}
-                onToggleSidebar={() => setShowSidebar((s) => !s)}
                 sessionSelector={
                   <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
                     <SessionSelector
@@ -4206,9 +4204,9 @@ function App() {
                       loading={projectsLoading}
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}
-                      onSelectProject={handleSwitchProject}
-                      onSelectPersonalSession={(sessionId) => { setShowSidebar(false); setShowMobileToolbar(false); switchSession(null, sessionId) }}
-                      onNewPersonalSession={() => { setShowSidebar(false); setShowMobileToolbar(false); void createSession(null) }}
+                      onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
+                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); switchSession(null, sessionId) }}
+                      onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
                       onChangeDirectory={handleChangeDirectory}

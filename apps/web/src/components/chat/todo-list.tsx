@@ -12,6 +12,8 @@ interface TodoListProps {
   items: TodoItem[]
   className?: string
   onClear?: () => void
+  /** When true the list sits inside a shared composer surface and should not draw its own outer border. */
+  merged?: boolean
 }
 
 export interface CollapsedTodoDisplay {
@@ -39,7 +41,7 @@ export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay
   }
 }
 
-export function TodoList({ items: rawItems, className, onClear }: TodoListProps) {
+export function TodoList({ items: rawItems, className, onClear, merged }: TodoListProps) {
   const items = Array.isArray(rawItems) ? rawItems : []
   const [expanded, setExpanded] = useState(false)
 
@@ -55,7 +57,11 @@ export function TodoList({ items: rawItems, className, onClear }: TodoListProps)
   const progressBarClassName = allCompleted ? 'bg-green-500' : 'bg-primary'
 
   return (
-    <div className={cn('rounded-lg border bg-muted/30 p-3 space-y-2', className)}>
+    <div className={cn(
+      'space-y-2',
+      merged ? 'px-3 py-2 border-b last:border-b-0' : 'rounded-lg border bg-muted/30 p-3',
+      className,
+    )}>
       {/* Header with progress — clickable to toggle */}
       <button
         type="button"

@@ -227,55 +227,58 @@ export function DeveloperChatWorkspace({
           ) : (
             <Suggestions suggestions={showProject && activeProject ? projectSuggestions : suggestions} onSelect={onHandleSuggestion} />
           )}
-          {developerChatUiState.showTodoList && (
-            <TodoList items={todoList} onClear={onClearTodoList} />
-          )}
-          {inlinePrompts}
-          <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
-            <PromptInput
-              ref={promptInputRef}
-              availableSkills={availableSkills}
-              draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-              value={inputValueRef.current}
-              syncKey={inputVersion}
-              segments={inputSegments}
-              onChange={onHandleInputChange}
-              onSubmit={onSubmit}
-              onStop={onCancelRequest}
-              onQueue={onQueue}
-              isLoading={isLoading}
-              submitLoading={developerChatSubmitLoading}
-              placeholder={developerPlaceholder}
-              onVoiceInput={onVoiceInput}
-              voiceRecording={voiceRecording}
-              voiceLevels={voiceLevels}
-              voiceTranscribing={voiceTranscribing}
-              onVoiceStop={onStopRecording}
-              mode={chatMode}
-              onModeChange={onChatModeChange}
-              responseStyle={chatResponseStyle}
-              onResponseStyleChange={onResponseStyleChange}
-              sendTarget={sendTarget}
-              onSendTargetChange={onSendTargetChange}
-              showSendTargetSelector={false}
-              provider={chatProvider}
-              onProviderChange={onProviderChange}
-              providerRuntimeMode={chatProviderRuntimeMode}
-              onProviderRuntimeModeChange={onProviderRuntimeModeChange}
-              cliModel={cliModel}
-              onCliModelChange={onCliModelChange}
-              repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
-              onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
-              availableFiles={availableFilesForMention}
-              onSearchFiles={onSearchFiles}
-              projectOpen={showProject}
-              projectName={activeProjectDisplayName ?? undefined}
-              projectPath={activeProjectRoot ?? undefined}
-              chatId={activeSessionId ?? undefined}
-              sessionInfo={sessionInfo}
-              projectNodeId={projectNodeId ?? undefined}
-            />
-          </ErrorBoundary>
+          <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+            {developerChatUiState.showTodoList && (
+              <TodoList items={todoList} onClear={onClearTodoList} merged />
+            )}
+            {inlinePrompts}
+            <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
+              <PromptInput
+                ref={promptInputRef}
+                availableSkills={availableSkills}
+                draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                value={inputValueRef.current}
+                syncKey={inputVersion}
+                segments={inputSegments}
+                onChange={onHandleInputChange}
+                onSubmit={onSubmit}
+                onStop={onCancelRequest}
+                onQueue={onQueue}
+                isLoading={isLoading}
+                submitLoading={developerChatSubmitLoading}
+                placeholder={developerPlaceholder}
+                onVoiceInput={onVoiceInput}
+                voiceRecording={voiceRecording}
+                voiceLevels={voiceLevels}
+                voiceTranscribing={voiceTranscribing}
+                onVoiceStop={onStopRecording}
+                mode={chatMode}
+                onModeChange={onChatModeChange}
+                responseStyle={chatResponseStyle}
+                onResponseStyleChange={onResponseStyleChange}
+                sendTarget={sendTarget}
+                onSendTargetChange={onSendTargetChange}
+                showSendTargetSelector={false}
+                provider={chatProvider}
+                onProviderChange={onProviderChange}
+                providerRuntimeMode={chatProviderRuntimeMode}
+                onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                cliModel={cliModel}
+                onCliModelChange={onCliModelChange}
+                repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
+                onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
+                availableFiles={availableFilesForMention}
+                onSearchFiles={onSearchFiles}
+                projectOpen={showProject}
+                projectName={activeProjectDisplayName ?? undefined}
+                projectPath={activeProjectRoot ?? undefined}
+                chatId={activeSessionId ?? undefined}
+                sessionInfo={sessionInfo}
+                projectNodeId={projectNodeId ?? undefined}
+                merged
+              />
+            </ErrorBoundary>
+          </div>
           {developerComposerControlRow}
         </div>
       </div>
@@ -459,105 +462,109 @@ export function DeveloperChatWorkspace({
 
           <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
             <div className="mx-auto w-full max-w-3xl space-y-1.5">
-              <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
-                {developerChatUiState.showTodoList && (
-                  <TodoList items={todoList} onClear={onClearTodoList} />
-                )}
-                {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
-                  <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0 break-words">{error}</span>
-                  </div>
-                )}
-                {hitMaxRounds && !isLoading && (
-                  <div className="flex flex-wrap items-center justify-center gap-2 py-1.5">
+              {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
+                <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 break-words">{error}</span>
+                </div>
+              )}
+              {hitMaxRounds && !isLoading && (
+                <div className="flex flex-wrap items-center justify-center gap-2 py-1.5">
+                  <button
+                    onClick={() => onContinueChat({ token, sessionId: activeSessionId })}
+                    className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Continue
+                  </button>
+                  {promptBeforeProcessingQueuedMessage && (
                     <button
-                      onClick={() => onContinueChat({ token, sessionId: activeSessionId })}
+                      onClick={onSendQueuedAfterInterruptedExit}
                       className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                      Continue
+                      Send queued
                     </button>
-                    {promptBeforeProcessingQueuedMessage && (
-                      <button
-                        onClick={onSendQueuedAfterInterruptedExit}
-                        className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
-                      >
-                        Send queued
-                      </button>
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {promptBeforeProcessingQueuedMessage
-                        ? 'Agent stopped before finishing - continue or send the queued message'
-                        : 'Agent stopped - continue to resume'}
-                    </span>
-                  </div>
-                )}
-                <ConsentQueue compact sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
-                {pendingPlan && (
-                  <PlanReview plan={pendingPlan} onApprove={onExecutePlan} onReject={onRejectPlan} isExecuting={isLoading} />
-                )}
-                {limitReached && (
-                  <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
-                )}
-                {changedFiles.length > 0 && (
-                  <FilesChanged
-                    files={changedFilesForComposer}
-                    onAccept={onAcceptFile}
-                    onReject={onRejectFile}
-                    onAcceptAll={onAcceptAllFiles}
-                    onRejectAll={onRejectAllFiles}
-                    onFileClick={onChangedFileClick}
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {promptBeforeProcessingQueuedMessage
+                      ? 'Agent stopped before finishing - continue or send the queued message'
+                      : 'Agent stopped - continue to resume'}
+                  </span>
+                </div>
+              )}
+              {pendingPlan && (
+                <PlanReview plan={pendingPlan} onApprove={onExecutePlan} onReject={onRejectPlan} isExecuting={isLoading} />
+              )}
+              {limitReached && (
+                <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
+              )}
+              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+                <div className="max-h-[40vh] overflow-y-auto">
+                  {developerChatUiState.showTodoList && (
+                    <TodoList items={todoList} onClear={onClearTodoList} merged />
+                  )}
+                  {changedFiles.length > 0 && (
+                    <FilesChanged
+                      files={changedFilesForComposer}
+                      onAccept={onAcceptFile}
+                      onReject={onRejectFile}
+                      onAcceptAll={onAcceptAllFiles}
+                      onRejectAll={onRejectAllFiles}
+                      onFileClick={onChangedFileClick}
+                      merged
+                    />
+                  )}
+                  <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
+                  {inlinePrompts}
+                </div>
+                <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
+                  <PromptInput
+                    ref={promptInputRef}
+                    availableSkills={availableSkills}
+                    draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                    value={inputValueRef.current}
+                    syncKey={inputVersion}
+                    segments={inputSegments}
+                    onChange={onHandleInputChange}
+                    onSubmit={onSubmit}
+                    onStop={onCancelRequest}
+                    onQueue={onQueue}
+                    isLoading={isLoading}
+                    submitLoading={developerChatSubmitLoading}
+                    disabled={limitReached}
+                    placeholder={developerPlaceholder}
+                    onVoiceInput={onVoiceInput}
+                    voiceRecording={voiceRecording}
+                    voiceLevels={voiceLevels}
+                    voiceTranscribing={voiceTranscribing}
+                    onVoiceStop={onStopRecording}
+                    mode={chatMode}
+                    onModeChange={onChatModeChange}
+                    responseStyle={chatResponseStyle}
+                    onResponseStyleChange={onResponseStyleChange}
+                    sendTarget={sendTarget}
+                    onSendTargetChange={onSendTargetChange}
+                    showSendTargetSelector={false}
+                    provider={chatProvider}
+                    onProviderChange={onProviderChange}
+                    providerRuntimeMode={chatProviderRuntimeMode}
+                    onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                    cliModel={cliModel}
+                    onCliModelChange={onCliModelChange}
+                    repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
+                    onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
+                    availableFiles={availableFilesForMention}
+                    onSearchFiles={onSearchFiles}
+                    projectOpen={showProject}
+                    projectName={activeProjectDisplayName ?? undefined}
+                    projectPath={activeProjectRoot ?? undefined}
+                    chatId={activeSessionId ?? undefined}
+                    sessionInfo={sessionInfo}
+                    projectNodeId={projectNodeId ?? undefined}
+                    merged
                   />
-                )}
-                {inlinePrompts}
+                </ErrorBoundary>
               </div>
-              <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
-                <PromptInput
-                  ref={promptInputRef}
-                  availableSkills={availableSkills}
-                  draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                  value={inputValueRef.current}
-                  syncKey={inputVersion}
-                  segments={inputSegments}
-                  onChange={onHandleInputChange}
-                  onSubmit={onSubmit}
-                  onStop={onCancelRequest}
-                  onQueue={onQueue}
-                  isLoading={isLoading}
-                  submitLoading={developerChatSubmitLoading}
-                  disabled={limitReached}
-                  placeholder={developerPlaceholder}
-                  onVoiceInput={onVoiceInput}
-                  voiceRecording={voiceRecording}
-                  voiceLevels={voiceLevels}
-                  voiceTranscribing={voiceTranscribing}
-                  onVoiceStop={onStopRecording}
-                  mode={chatMode}
-                  onModeChange={onChatModeChange}
-                  responseStyle={chatResponseStyle}
-                  onResponseStyleChange={onResponseStyleChange}
-                  sendTarget={sendTarget}
-                  onSendTargetChange={onSendTargetChange}
-                  showSendTargetSelector={false}
-                  provider={chatProvider}
-                  onProviderChange={onProviderChange}
-                  providerRuntimeMode={chatProviderRuntimeMode}
-                  onProviderRuntimeModeChange={onProviderRuntimeModeChange}
-                  cliModel={cliModel}
-                  onCliModelChange={onCliModelChange}
-                  repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
-                  onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
-                  availableFiles={availableFilesForMention}
-                  onSearchFiles={onSearchFiles}
-                  projectOpen={showProject}
-                  projectName={activeProjectDisplayName ?? undefined}
-                  projectPath={activeProjectRoot ?? undefined}
-                  chatId={activeSessionId ?? undefined}
-                  sessionInfo={sessionInfo}
-                  projectNodeId={projectNodeId ?? undefined}
-                />
-              </ErrorBoundary>
               {developerComposerControlRow}
             </div>
           </div>

@@ -5,6 +5,9 @@ const port = Number(process.env.PORT ?? 3000);
 const gatewayTarget = process.env.JAIT_GATEWAY_URL ?? 'http://localhost:8000';
 export default defineConfig({
     plugins: [react()],
+    build: {
+        sourcemap: true,
+    },
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),

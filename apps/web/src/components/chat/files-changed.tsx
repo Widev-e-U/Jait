@@ -23,6 +23,8 @@ interface FilesChangedProps {
   /** Open the diff view for a file */
   onFileClick?: (path: string) => void
   className?: string
+  /** When true the panel sits inside a shared composer surface and should not draw its own outer border. */
+  merged?: boolean
 }
 
 export function FilesChanged({
@@ -33,6 +35,7 @@ export function FilesChanged({
   onRejectAll,
   onFileClick,
   className,
+  merged,
 }: FilesChangedProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [compactActions, setCompactActions] = useState(false)
@@ -71,9 +74,13 @@ export function FilesChanged({
   )
 
   return (
-    <div ref={rootRef} className={cn('overflow-hidden rounded-lg border bg-muted/30', className)}>
+    <div ref={rootRef} className={cn(
+      'overflow-hidden',
+      merged ? 'border-b' : 'rounded-lg border bg-muted/30',
+      className,
+    )}>
       {/* Header */}
-      <div className={cn('flex h-8 items-center justify-between gap-2 bg-muted/20 px-3', expanded && 'border-b')}>
+      <div className={cn('flex h-8 items-center justify-between gap-2 px-3', !merged && 'bg-muted/20', expanded && 'border-b')}>
         <button
           type="button"
           className="flex min-w-0 items-center gap-1.5 text-left"

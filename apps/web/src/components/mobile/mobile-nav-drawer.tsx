@@ -10,7 +10,6 @@ import {
   Mail,
   MessageSquare,
   Brain,
-  PanelLeftClose,
   Settings,
   Terminal as TerminalIcon,
   Wifi,
@@ -46,8 +45,6 @@ interface MobileNavDrawerProps {
   onNavigate: (view: AppView) => void
 
   // Projects / sessions sidebar
-  showSidebar: boolean
-  onToggleSidebar: () => void
   sessionSelector: ReactNode
 
   // Project tools
@@ -75,8 +72,6 @@ export function MobileNavDrawer({
   onClose,
   currentView,
   onNavigate,
-  showSidebar,
-  onToggleSidebar,
   sessionSelector,
   showProjectTools,
   activeProjectId,
@@ -159,25 +154,14 @@ export function MobileNavDrawer({
             </div>
           </nav>
 
-          {/* Projects / sessions toggle + selector */}
+          {/* Projects / sessions selector */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <button
-              onClick={onToggleSidebar}
-              className={`flex shrink-0 items-center gap-2 border-b px-3 py-2.5 text-xs font-medium transition-colors ${
-                showSidebar ? 'bg-secondary/50 text-foreground' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-              }`}
-              aria-expanded={showSidebar}
-              aria-label="Toggle projects panel"
-            >
-              <PanelLeftClose className={`h-4 w-4 ${showSidebar ? '' : 'rotate-180'}`} />
+            <div className="flex h-9 shrink-0 items-center border-b px-3 text-xs font-medium text-foreground">
               <span>Projects & Chats</span>
-            </button>
-
-            {showSidebar && (
-              <div className="min-h-0 flex-1">
-                {sessionSelector}
-              </div>
-            )}
+            </div>
+            <div className="min-h-0 flex-1">
+              {sessionSelector}
+            </div>
           </div>
 
           {/* Project tools */}

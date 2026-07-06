@@ -55,9 +55,11 @@ export interface ConsentQueueProps {
   sessionId?: string | null
   /** Called when approve-all mode is successfully enabled */
   onApproveAllEnabled?: () => void
+  /** If true, render as a block inside a shared merged composer surface */
+  merged?: boolean
 }
 
-export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled }: ConsentQueueProps) {
+export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled, merged }: ConsentQueueProps) {
   const { queue, approve, reject, approveAllForSession } = useConsentQueue(sessionId)
   const { policy } = useConsentPolicy()
   const [approvingAll, setApprovingAll] = useState(false)
@@ -80,7 +82,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`${merged ? 'px-3.5 py-2.5 border-t bg-background dark:bg-card' : 'space-y-2'} ${className}`}>
       {/* Queue header */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
