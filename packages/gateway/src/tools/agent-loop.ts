@@ -656,17 +656,17 @@ export function toolDefsToSchemas(defs: Array<{ name: string; description: strin
 // ── Inline-thinking extraction helper ────────────────────────────────
 
 /**
- * Extract `<thinking>...</thinking>` / `<think>...</think>` blocks from a
+ * Extract `<thinking>...</thinking>` / `<think>...</think>` / `<reasoning>...</reasoning>` blocks from a
  * raw content stream. Reasoning is returned in `thinking`, visible text in
  * `clean`, and any trailing fragment that might be an incomplete tag is kept
  * as `leftover` to be reprocessed once more data arrives.
  *
  * Only *leading* reasoning blocks are extracted. Once ordinary content begins,
- * any later `<thinking>` / ` utes.` tags are treated as visible content so code
+ * any later `<thinking>` / `</think>` / `<reasoning>` tags are treated as visible content so code
  * discussions that mention XML/HTML tags are not accidentally stripped.
  */
 function extractInlineThinkingBlocks(raw: string): { clean: string; thinking: string; leftover: string } {
-  const OPEN_RE = /^(<(thinking|think)>)/i;
+  const OPEN_RE = /^(<(thinking|think|reasoning)>)/i;
   let clean = "";
   let thinking = "";
   let leftover = raw;

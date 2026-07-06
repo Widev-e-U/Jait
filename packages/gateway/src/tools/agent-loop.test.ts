@@ -287,6 +287,31 @@ describe("parseOpenAIStream", () => {
     expect(parsed.contentText).toBe("Done.");
     expect(parsed.thinkingText).toBe("quick check");
   });
+
+  it("extracts leading `<reasoning>` blocks into thinking events", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"<reasoning>step one reasoning</reasoning>Hello "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"world"}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("Hello world");
+    expect(parsed.thinkingText).toBe("step one reasoning");
+    expect(events.filter((event) => event.type === "token").map((event) => (event as { content: string }).content).join("")).toBe("Hello world");
+    expect(events.filter((event) => event.type === "thinking").map((event) => (event as { content: string }).content).join("")).toBe("step one reasoning");
+  });
+
+  it("does not strip `<reasoning>` tags that appear after visible content has started", async () => {
+    const events: AgentLoopEvent[] = [];
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"Use `<reasoning>` tags like "}}]}\n',
+      'data: {"choices":[{"delta":{"content":"<reasoning>this</reasoning>` in HTML."}}]}\n',
+    ]), (event) => events.push(event));
+
+    expect(parsed.contentText).toBe("Use `<reasoning>` tags like <reasoning>this</reasoning>` in HTML.");
+    expect(parsed.thinkingText).toBe("");
+    expect(events.filter((event) => event.type === "thinking")).toHaveLength(0);
+  });
 });
 
 describe("repairToolCallHistory", () => {

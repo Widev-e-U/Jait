@@ -1714,7 +1714,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       className={cn(
         'group relative z-10 flex flex-col',
         merged
-          ? 'bg-background/50 dark:bg-card/50'
+          ? 'border-t bg-background/50 dark:bg-card/50'
           : 'rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
