@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -530,23 +531,27 @@ export function SettingsPage({
                 </Button>
                 {updateInfo?.hasUpdate && (
                   <>
-                    <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying}>
-                      {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
-                      {updateApplying ? 'Updating...' : `Update gateway to v${updateInfo.latestVersion}`}
-                    </Button>
-                    {platform === 'electron' ? (
-                      <Button size="sm" variant="outline" onClick={async () => {
+                    {platform === 'web' ? (
+                      <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying}>
+                        {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                        {updateApplying ? 'Updating...' : `Update gateway to v${updateInfo.latestVersion}`}
+                      </Button>
+                    ) : platform === 'electron' ? (
+                      <Button size="sm" onClick={async () => {
                         const desktop = (window as any).jaitDesktop
-                        const result = await desktop.checkForUpdate()
-                        if (result.updateAvailable) {
-                          await desktop.downloadUpdate()
+                        toast.info('Downloading update...')
+                        const dl = await desktop.downloadUpdate()
+                        if (dl?.ok) {
+                          toast.success('Update downloaded. Restarting...')
                           await desktop.installUpdate()
+                        } else {
+                          toast.error('Download failed')
                         }
                       }}>
                         <Download className="mr-1.5 h-4 w-4" />
-                        Update desktop app
+                        Update to v{updateInfo.latestVersion}
                       </Button>
-                    ) : platform !== 'web' && (
+                    ) : (
                       <Button size="sm" variant="outline" asChild>
                         <a href="https://github.com/Widev-e-U/Jait/releases/latest" target="_blank" rel="noopener noreferrer">
                           <Download className="mr-1.5 h-4 w-4" />

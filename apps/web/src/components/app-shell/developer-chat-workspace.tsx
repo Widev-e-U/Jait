@@ -276,6 +276,7 @@ export function DeveloperChatWorkspace({
                 sessionInfo={sessionInfo}
                 projectNodeId={projectNodeId ?? undefined}
                 merged
+                mergedShowTopDivider={developerChatUiState.showTodoList || Boolean(inlinePrompts)}
               />
             </ErrorBoundary>
           </div>
@@ -562,6 +563,7 @@ export function DeveloperChatWorkspace({
                     sessionInfo={sessionInfo}
                     projectNodeId={projectNodeId ?? undefined}
                     merged
+                    mergedShowTopDivider
                   />
                 </ErrorBoundary>
               </div>
