@@ -386,6 +386,37 @@ describe('isInlineToolCall', () => {
       result: { ok: true, message: 'Saved screenshot to /tmp/capture.png' },
     })).toBe(true)
   })
+
+  it('treats image.view results with a data URI as inline-rendered tool calls', () => {
+    expect(isInlineToolCall({
+      callId: '1',
+      tool: 'image.view',
+      args: { path: 'logo.png' },
+      status: 'success',
+      startedAt: 1,
+      completedAt: 2,
+      result: { ok: true, message: 'Displaying image logo.png', data: { path: 'logo.png', base64: 'ABC123', dataUri: 'data:image/png;base64,ABC123', mimeType: 'image/png', size: 4 } },
+    })).toBe(true)
+  })
+
+  it('keeps image.view tool groups expanded so the image stays visible', () => {
+    expect(shouldInitiallyCollapseToolCallGroup(
+      [
+        {
+          callId: '1',
+          tool: 'image.view',
+          args: { path: 'logo.png' },
+          status: 'success',
+          startedAt: 1,
+          completedAt: 2,
+          result: { ok: true, message: 'Displaying image logo.png', data: { path: 'logo.png', base64: 'ABC123', dataUri: 'data:image/png;base64,ABC123', mimeType: 'image/png', size: 4 } },
+        },
+        { callId: '2', tool: 'read', args: { path: 'b.ts' }, status: 'success', startedAt: 3, completedAt: 4 },
+        { callId: '3', tool: 'read', args: { path: 'c.ts' }, status: 'success', startedAt: 5, completedAt: 6 },
+      ],
+      true,
+    )).toBe(false)
+  })
 })
 
 describe('AgentToolCallWrapper', () => {

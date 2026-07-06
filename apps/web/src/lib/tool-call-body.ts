@@ -5,6 +5,7 @@ export interface ToolCallBodyInput {
   displayOutput: string
   snapshotText: string | null
   screenshotPath: string | null
+  imageDataUri?: string | null
 }
 
 export type ToolCallBodyKind =
@@ -12,6 +13,7 @@ export type ToolCallBodyKind =
   | 'terminal'
   | 'browserSnapshot'
   | 'browserScreenshot'
+  | 'imageView'
   | 'editDiff'
   | 'subagent'
   | 'threadList'
@@ -345,6 +347,26 @@ export function getToolImagePath(
   return null
 }
 
+export function getToolImageDataUri(
+  tool: string,
+  _args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): string | null {
+  const normalizedTool = normalizeToolName(tool)
+  if (normalizedTool !== 'image.view') return null
+
+  const dataUri = resultData?.dataUri
+  if (typeof dataUri === 'string' && dataUri.startsWith('data:image/')) return dataUri
+
+  const base64 = resultData?.base64
+  if (typeof base64 === 'string' && base64.trim()) {
+    const mimeType = typeof resultData?.mimeType === 'string' ? resultData.mimeType : 'image/png'
+    return `data:${mimeType};base64,${base64}`
+  }
+
+  return null
+}
+
 export function normalizeToolName(name: string): string {
   const raw = name.replace(/^functions[._]/, '')
   if (raw === 'spawn_agent') return 'agent.spawn'
@@ -512,6 +534,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (isTerminal) return 'terminal'
   if (normalizedTool === 'browser.snapshot' && input.snapshotText) return 'browserSnapshot'
   if (input.screenshotPath) return 'browserScreenshot'
+  if (normalizedTool === 'image.view' && input.imageDataUri) return 'imageView'
   if (isAgentToolName(normalizedTool)) return 'subagent'
   if (normalizedTool === 'thread.control' && (input.args.action === 'create_many' || input.args.action === 'create')) return 'threadList'
   if (input.status === 'success' && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'

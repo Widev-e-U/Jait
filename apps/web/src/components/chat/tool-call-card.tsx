@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
@@ -1516,7 +1516,8 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
   )
 }
 
-function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
+function BrowserSnapshotView({ snapshot }: { snapshot: string | null | undefined }) {
+  if (!snapshot) return null
   const lines = snapshot.split('\n')
   const url = lines.find((line) => line.startsWith('URL: '))?.replace('URL: ', '').trim()
   const title = lines.find((line) => line.startsWith('Title: '))?.replace('Title: ', '').trim()
@@ -1561,39 +1562,87 @@ function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
   )
 }
 
-function BrowserScreenshotView({ path }: { path: string }) {
+function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
   const [loaded, setLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const trimmedPath = path.trim()
-  const src = resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
+  const trimmedPath = typeof path === 'string' ? path.trim() : ''
+  const src = trimmedPath
+    ? resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
+    : null
 
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
-      <div className="text-xs text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
-      <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
-        <img
-          src={src}
-          alt="Browser screenshot"
-          className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
-          onLoad={() => setLoaded(true)}
-          onError={() => setLoaded(false)}
-          onClick={() => loaded && setExpanded(true)}
-        />
-        {loaded && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
-          </div>
-        )}
-      </div>
-      {!loaded && (
+      {trimmedPath && (
+        <div className="text-xs text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
+      )}
+      {src && (
+        <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
+          <img
+            src={src}
+            alt="Browser screenshot"
+            className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
+            onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(false)}
+            onClick={() => loaded && setExpanded(true)}
+          />
+          {loaded && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
+            </div>
+          )}
+        </div>
+      )}
+      {(!src || !loaded) && (
         <div className="rounded bg-background p-2 text-muted-foreground">
           Preview unavailable in browser. Open the screenshot path directly from the host environment.
         </div>
       )}
-      {expanded && (
+      {src && expanded && (
         <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
           <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
             <img src={src} alt="Browser screenshot" className="max-h-[85vh] w-full object-contain" />
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
+function ImageView({ src, alt, caption }: { src: string | null | undefined; alt: string; caption?: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const trimmedSrc = typeof src === 'string' ? src.trim() : ''
+  return (
+    <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
+      {caption && (
+        <div className="text-xs text-muted-foreground">{caption}</div>
+      )}
+      {trimmedSrc ? (
+        <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
+          <img
+            src={trimmedSrc}
+            alt={alt}
+            className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
+            onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(false)}
+            onClick={() => loaded && setExpanded(true)}
+          />
+          {loaded && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
+            </div>
+          )}
+        </div>
+      ) : null}
+      {!trimmedSrc || !loaded ? (
+        <div className="rounded bg-background p-2 text-muted-foreground">
+          Image could not be displayed.
+        </div>
+      ) : null}
+      {trimmedSrc && expanded && (
+        <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
+          <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
+            <img src={trimmedSrc} alt={alt} className="max-h-[85vh] w-full object-contain" />
           </DialogContent>
         </Dialog>
       )}
@@ -1900,7 +1949,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserScreenshot'
+  return bodyKind === 'browserScreenshot' || bodyKind === 'imageView'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -1910,6 +1959,7 @@ export function isInlineToolCall(call: ToolCallInfo): boolean {
     : undefined
   const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
   const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
+  const imageDataUri = getToolImageDataUri(normalizedTool, normalizedArgs, resultData)
 
   return isInlineToolBodyKind(getToolCallBodyKind({
     tool: normalizedTool,
@@ -1918,6 +1968,7 @@ export function isInlineToolCall(call: ToolCallInfo): boolean {
     displayOutput: formatOutput(call.result, normalizedTool) || call.streamingOutput || '',
     snapshotText: typeof resultData?.snapshot === 'string' ? resultData.snapshot : null,
     screenshotPath,
+    imageDataUri,
   }))
 }
 
@@ -2081,6 +2132,7 @@ function ToolCallCardInner({
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
+  const imageDataUri = getToolImageDataUri(normalizedTool, normalizedArgs, resultData)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
     || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
@@ -2114,6 +2166,7 @@ function ToolCallCardInner({
     displayOutput,
     snapshotText,
     screenshotPath,
+    imageDataUri,
   })
   const inlineBody = isInlineToolBodyKind(bodyKind)
   const hasExpandableContent = bodyKind === 'terminal'
@@ -2312,10 +2365,12 @@ function ToolCallCardInner({
         <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
-  ) : bodyKind === 'browserSnapshot' ? (
-    <BrowserSnapshotView snapshot={snapshotText!} />
-  ) : bodyKind === 'browserScreenshot' ? (
-    <BrowserScreenshotView path={screenshotPath!} />
+  ) : bodyKind === 'browserSnapshot' && snapshotText ? (
+    <BrowserSnapshotView snapshot={snapshotText} />
+  ) : bodyKind === 'browserScreenshot' && screenshotPath ? (
+    <BrowserScreenshotView path={screenshotPath} />
+  ) : bodyKind === 'imageView' && imageDataUri ? (
+    <ImageView src={imageDataUri} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
       <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">

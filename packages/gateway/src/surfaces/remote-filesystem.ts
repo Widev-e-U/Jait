@@ -95,6 +95,19 @@ export class RemoteFileSystemSurface implements Surface {
     return result.content;
   }
 
+  async readBinary(filePath: string): Promise<Uint8Array> {
+    this.ensureRunning();
+    this._opCount++;
+    const result = await this.ws.proxyFsOp<{ content: string }>(
+      this._nodeId!,
+      "readBinary",
+      { path: filePath },
+    );
+    const buffer = Buffer.from(result.content, "base64");
+    this.onOutput?.(`read binary ${filePath} (${buffer.length} bytes)`);
+    return buffer;
+  }
+
   async write(filePath: string, content: string): Promise<void> {
     this.ensureRunning();
     this._opCount++;

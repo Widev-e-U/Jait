@@ -1784,6 +1784,11 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const content = await readFile(filePath, "utf-8");
       return { content, size: content.length };
     }
+    case "readBinary": {
+      const filePath = resolve(params.path as string);
+      const buffer = await readFile(filePath);
+      return { content: buffer.toString("base64"), size: buffer.length };
+    }
     case "write": {
       const filePath = resolve(params.path as string);
       const content = params.content as string;

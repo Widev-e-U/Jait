@@ -276,6 +276,7 @@ export function DeveloperChatWorkspace({
                 sessionInfo={sessionInfo}
                 projectNodeId={projectNodeId ?? undefined}
                 merged
+                mergedShowTopDivider={developerChatUiState.showTodoList || Boolean(inlinePrompts)}
               />
             </ErrorBoundary>
           </div>
@@ -517,6 +518,9 @@ export function DeveloperChatWorkspace({
                   <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
                   {inlinePrompts}
                 </div>
+                {(() => {
+                  const hasItemsAboveComposer = developerChatUiState.showTodoList || changedFiles.length > 0 || Boolean(inlinePrompts)
+                  return (
                 <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                   <PromptInput
                     ref={promptInputRef}
@@ -562,8 +566,11 @@ export function DeveloperChatWorkspace({
                     sessionInfo={sessionInfo}
                     projectNodeId={projectNodeId ?? undefined}
                     merged
+                    mergedShowTopDivider={hasItemsAboveComposer}
                   />
                 </ErrorBoundary>
+                  )
+                })()}
               </div>
               {developerComposerControlRow}
             </div>

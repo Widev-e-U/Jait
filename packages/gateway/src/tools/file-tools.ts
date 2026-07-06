@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { getFs } from "./core/get-fs.js";
+import { basename } from "node:path";
 
 interface FileReadInput {
   path: string;
@@ -224,7 +225,8 @@ export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<I
     },
     async execute(input: ImageViewInput, context: ToolContext): Promise<ToolResult> {
       try {
-        if (!IMAGE_FILE_PATTERN.test(input.path.trim())) {
+        const trimmedPath = input.path.trim();
+        if (!IMAGE_FILE_PATTERN.test(trimmedPath)) {
           return { ok: false, message: "Only PNG, JPG, GIF, or WEBP images are supported" };
         }
         const fs = await getFs(registry, context, input.path);
@@ -232,10 +234,15 @@ export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<I
         if (info.isDirectory) {
           return { ok: false, message: `${input.path} is not a file` };
         }
+        const bytes = await fs.readBinary(input.path);
+        const extension = trimmedPath.match(/\.(png|jpe?g|gif|webp)$/i)?.[1]?.toLowerCase() ?? "png";
+        const mimeType = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : extension === "gif" ? "image/gif" : "image/jpeg";
+        const base64 = Buffer.from(bytes).toString("base64");
+        const dataUri = `data:${mimeType};base64,${base64}`;
         return {
           ok: true,
-          message: `Displaying image ${input.path}`,
-          data: { path: input.path, ...info },
+          message: `Displaying image ${basename(trimmedPath)}`,
+          data: { path: input.path, base64, dataUri, mimeType, size: bytes.length, modified: info.modified, isDirectory: info.isDirectory },
         };
       } catch (err) {
         return {

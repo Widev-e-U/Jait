@@ -88,6 +88,15 @@ export class FileSystemSurface implements Surface {
     return content;
   }
 
+  async readBinary(filePath: string): Promise<Buffer> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    this._opCount++;
+    const content = await readFile(abs);
+    this.onOutput?.(`read binary ${relative(this.guard!.projectRoot, abs)} (${content.length} bytes)`);
+    return content;
+  }
+
   async write(filePath: string, content: string): Promise<void> {
     this.ensureRunning();
     const abs = await this.guard!.validateWithSymlinkCheck(filePath);

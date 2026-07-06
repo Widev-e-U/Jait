@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImagePath, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('normalizes multi-segment tool names used by tool cards', () => {
@@ -358,5 +358,69 @@ describe('tool call body helpers', () => {
         'Saved screenshot to /home/user/project/.tmp/jait-preview-live.png',
       ),
     ).toBe('/home/user/project/.tmp/jait-preview-live.png')
+  })
+
+  it('builds an image data URI from image.view base64 results', () => {
+    expect(
+      getToolImageDataUri('image.view', { path: 'logo.png' }, {
+        base64: 'ABC123',
+        mimeType: 'image/png',
+      }),
+    ).toBe('data:image/png;base64,ABC123')
+  })
+
+  it('prefers a pre-built dataUri from image.view results', () => {
+    expect(
+      getToolImageDataUri('image.view', { path: 'logo.png' }, {
+        dataUri: 'data:image/jpeg;base64,XYZ',
+        base64: 'ABC123',
+        mimeType: 'image/png',
+      }),
+    ).toBe('data:image/jpeg;base64,XYZ')
+  })
+
+  it('falls back to image/png mime type when missing', () => {
+    expect(
+      getToolImageDataUri('image.view', { path: 'logo.png' }, {
+        base64: 'ABC123',
+      }),
+    ).toBe('data:image/png;base64,ABC123')
+  })
+
+  it('returns null for non image.view tools even when base64 is present', () => {
+    expect(
+      getToolImageDataUri('file.read', { path: 'logo.png' }, {
+        base64: 'ABC123',
+        mimeType: 'image/png',
+      }),
+    ).toBeNull()
+  })
+
+  it('renders image.view results with a data URI as inline image cards', () => {
+    expect(
+      getToolCallBodyKind({
+        tool: 'image.view',
+        args: { path: 'logo.png' },
+        status: 'success',
+        displayOutput: '',
+        snapshotText: null,
+        screenshotPath: null,
+        imageDataUri: 'data:image/png;base64,ABC123',
+      }),
+    ).toBe('imageView')
+  })
+
+  it('does not render an image card for image.view without a data URI', () => {
+    expect(
+      getToolCallBodyKind({
+        tool: 'image.view',
+        args: { path: 'logo.png' },
+        status: 'success',
+        displayOutput: '',
+        snapshotText: null,
+        screenshotPath: null,
+        imageDataUri: null,
+      }),
+    ).toBe('none')
   })
 })
