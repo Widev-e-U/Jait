@@ -66,6 +66,11 @@ To deploy to a server after publish: `npm install -g @jait/gateway@<version>` an
 - Keep path boundaries and SSRF protections intact when adding new tools or surfaces.
 - Memory behavior is documented in `docs/memory-model.md`; keep privacy, scope, and provenance rules aligned there when changing memory features.
 
+## Jait Tool Routing
+- When a user provides a Jait chat/session ID, use the dedicated chat tools first: `chat.traces`/`mcp__jait.chat_traces` for exact persisted chat traces and `session.search`/`mcp__jait.session_search` for searching prior chat messages or thread activity.
+- Do not use generic `memory.search` as proof that a chat does not exist. `memory.search` is for saved memories/reminders, not persisted chat rows.
+- If the expected chat tools are not visible, discover them first by searching for chat/session trace tools before asking the user to repeat context.
+
 ## Preview Workflow Preference
 - When the user asks for a preview, the goal is to show the actual live web UI they can iterate on while prompting, not just any responding local URL.
 - Start from the project's normal development entrypoint first, usually `bun run dev` from the repo root unless the project clearly documents a different command.

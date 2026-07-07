@@ -93,6 +93,10 @@ HOST=0.0.0.0               # Bind address (default: 0.0.0.0)
 JWT_SECRET=change-me        # Auth secret (auto-generated if not set)
 ```
 
+### Global agent instructions
+
+Jait also reads `~/.jait/SOUL.md` when building provider system prompts. Use it for durable user-level instructions that should apply across projects and providers, such as tool-routing preferences. Set `JAIT_SOUL_PATH=/path/to/file.md` or `JAIT_GLOBAL_INSTRUCTIONS_PATH=/path/to/file.md` to use a different file. The file is token-bounded and ignored when missing or empty.
+
 ### All provider options
 
 See [`.env.example`](.env.example) for the full list, including:

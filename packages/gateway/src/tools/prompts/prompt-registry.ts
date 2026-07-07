@@ -11,6 +11,10 @@
  *  3. Falls back to the default resolver (last registered)
  */
 
+import { existsSync, readFileSync } from "fs";
+import { homedir } from "os";
+import { join, resolve } from "path";
+
 import type { ChatMode } from "../chat-modes.js";
 import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS } from "./shared-sections.js";
 
@@ -53,6 +57,34 @@ If you are asked to generate content that is harmful, hateful, racist, sexist, l
 Avoid content that violates copyrights.`;
 
 export const DEFAULT_REMINDER = `[REMINDER] Send a brief progress update to the user before your next tool calls. If you have a todo list, update it now. Keep going until the task is fully resolved.`;
+
+export const DEFAULT_GLOBAL_INSTRUCTIONS_PATH = join(homedir(), ".jait", "SOUL.md");
+const MAX_GLOBAL_INSTRUCTIONS_CHARS = 12_000;
+
+function resolveGlobalInstructionsPath(): string {
+  const raw = process.env["JAIT_SOUL_PATH"]?.trim()
+    || process.env["JAIT_GLOBAL_INSTRUCTIONS_PATH"]?.trim()
+    || DEFAULT_GLOBAL_INSTRUCTIONS_PATH;
+
+  if (raw === "~") return homedir();
+  if (raw.startsWith("~/") || raw.startsWith("~\\")) return join(homedir(), raw.slice(2));
+  return resolve(raw);
+}
+
+export function loadGlobalJaitInstructions(): string | null {
+  try {
+    const filePath = resolveGlobalInstructionsPath();
+    if (!existsSync(filePath)) return null;
+
+    const content = readFileSync(filePath, "utf8").trim();
+    if (!content) return null;
+
+    if (content.length <= MAX_GLOBAL_INSTRUCTIONS_CHARS) return content;
+    return content.slice(0, MAX_GLOBAL_INSTRUCTIONS_CHARS) + "\n\n[truncated]";
+  } catch {
+    return null;
+  }
+}
 
 // ── Registry singleton ───────────────────────────────────────────────
 
@@ -170,6 +202,11 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
       prompt += `\n\n<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`;
     }
 
+  }
+
+  const globalInstructions = loadGlobalJaitInstructions();
+  if (globalInstructions) {
+    prompt += "\n\n<globalJaitInstructions>\nUser-level instructions loaded from the Jait global instruction file. These apply across projects and providers unless a higher-priority instruction conflicts.\n\n" + globalInstructions + "\n</globalJaitInstructions>";
   }
 
   return prompt;

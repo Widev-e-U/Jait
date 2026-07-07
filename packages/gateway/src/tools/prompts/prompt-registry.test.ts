@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "./prompt-registry.js";
 import "./index.js";
@@ -95,6 +98,35 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("<responseStyle>");
     expect(prompt).toContain("Write in concise caveman style.");
     expect(prompt).toContain("If the topic is risky, subtle, or confusing, fall back to normal precise prose.");
+  });
+
+  it("injects global SOUL instructions from JAIT_SOUL_PATH", () => {
+    const originalSoulPath = process.env["JAIT_SOUL_PATH"];
+    const originalGlobalPath = process.env["JAIT_GLOBAL_INSTRUCTIONS_PATH"];
+    const dir = mkdtempSync(join(tmpdir(), "jait-soul-"));
+    const soulPath = join(dir, "SOUL.md");
+    writeFileSync(soulPath, "Always use chat.traces before memory.search for Jait chat IDs.");
+
+    try {
+      process.env["JAIT_SOUL_PATH"] = soulPath;
+      delete process.env["JAIT_GLOBAL_INSTRUCTIONS_PATH"];
+
+      const prompt = buildSystemPrompt("agent", {
+        model: "gpt-4o",
+        baseUrl: "https://api.openai.com/v1",
+      });
+
+      expect(prompt).toContain("<globalJaitInstructions>");
+      expect(prompt).toContain("Always use chat.traces before memory.search for Jait chat IDs.");
+    } finally {
+      if (originalSoulPath === undefined) delete process.env["JAIT_SOUL_PATH"];
+      else process.env["JAIT_SOUL_PATH"] = originalSoulPath;
+
+      if (originalGlobalPath === undefined) delete process.env["JAIT_GLOBAL_INSTRUCTIONS_PATH"];
+      else process.env["JAIT_GLOBAL_INSTRUCTIONS_PATH"] = originalGlobalPath;
+
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("does not inject the skill evaluation appendix", () => {
