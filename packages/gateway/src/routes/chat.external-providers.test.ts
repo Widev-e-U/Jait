@@ -9,7 +9,12 @@ import { signAuthToken } from "../security/http-auth.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
-import { getExternalFileMutationPath, normalizeProviderSessionError } from "./chat.js";
+import {
+  getExternalFileMutationPath,
+  getProviderRequestErrorMessage,
+  isNonRecoverableProviderRequestError,
+  normalizeProviderSessionError,
+} from "./chat.js";
 
 describe("getExternalFileMutationPath", () => {
   it("recognizes edit-style tool names used by external providers", () => {
@@ -35,6 +40,20 @@ describe("normalizeProviderSessionError", () => {
     expect(normalizeProviderSessionError("Usage limit reached for this provider")).toBe("Authentication required");
     expect(normalizeProviderSessionError("Please log in before continuing")).toBe("Authentication required");
     expect(normalizeProviderSessionError("Temporary provider outage")).toBe("Temporary provider outage");
+  });
+
+  it("extracts actionable ACP details and distinguishes non-recoverable limits", () => {
+    const error = Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+
+    expect(getProviderRequestErrorMessage(error)).toContain("out of credits");
+    expect(isNonRecoverableProviderRequestError(error)).toBe(true);
+    expect(isNonRecoverableProviderRequestError(new Error("Session process exited"))).toBe(false);
   });
 });
 
@@ -109,6 +128,18 @@ class MockChatProvider implements CliProviderAdapter {
   private emit(event: ProviderEvent): void {
     this.emitForTest(event);
   }
+}
+
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
 }
 
 class MockTodoChatProvider extends MockChatProvider {
@@ -218,6 +249,34 @@ async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promis
 }
 
 describe("chat external provider runtime mode selection", () => {
+  it("streams actionable provider limit errors without retrying a fresh session", { timeout: 30_000 }, async () => {
+    const provider = new MockCreditErrorChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "continue the task",
+        sessionId: "chat-provider-credit-error-session",
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Your workspace is out of credits");
+    expect(response.body).not.toContain('"message":"Internal error"');
+    expect(provider.startSession).toHaveBeenCalledTimes(1);
+    expect(provider.sendTurn).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
   it("passes the requested runtime mode to the provider and restarts when the mode changes", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();

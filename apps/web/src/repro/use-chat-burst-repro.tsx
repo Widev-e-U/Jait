@@ -2,30 +2,33 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Message } from '@/components/chat/message'
 import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
+import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import type { MessageSegment } from '@/hooks/useChat'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import '@/index.css'
 
-const TOKEN_COUNT = 200
-const TOKEN_INTERVAL_MS = 1
+const TOKEN_COUNT = 90
 
-type RenderMode = 'immediate' | 'raf'
+type RenderMode = 'legacy' | 'raf'
 
 function getMode(): RenderMode {
-  return new URLSearchParams(window.location.search).get('mode') === 'immediate'
-    ? 'immediate'
+  return new URLSearchParams(window.location.search).get('mode') === 'legacy'
+    ? 'legacy'
     : 'raf'
 }
 
 function UseChatBurstRepro() {
   const mode = getMode()
   const [thinking, setThinking] = useState('')
-  const [metrics, setMetrics] = useState<{ renderCount: number; thinkingCommitCount: number } | null>(null)
+  const [metrics, setMetrics] = useState<{
+    renderCount: number
+    thinkingCommitCount: number
+    elapsedMs: number
+  } | null>(null)
   const [done, setDone] = useState(false)
   const renderCountRef = useRef(0)
   const thinkingCommitCountRef = useRef(0)
   const pendingThinkingRef = useRef('')
-  const frameRef = useRef<number | null>(null)
 
   renderCountRef.current += 1
 
@@ -34,43 +37,45 @@ function UseChatBurstRepro() {
   }, [thinking])
 
   useEffect(() => {
-    let index = 0
-    const flushRaf = () => {
-      frameRef.current = null
-      setThinking(pendingThinkingRef.current)
+    let cancelled = false
+    const scheduler = createStreamRenderScheduler({
+      onFlush: () => setThinking(pendingThinkingRef.current),
+    })
+
+    const run = async () => {
+      const startedAt = performance.now()
+      for (let index = 1; index <= TOKEN_COUNT; index += 1) {
+        if (cancelled) return
+        const next = `${pendingThinkingRef.current}w${index} `
+        pendingThinkingRef.current = next
+
+        if (mode === 'legacy') {
+          setThinking(next)
+          await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+        } else {
+          scheduler.schedule()
+        }
+      }
+
+      if (cancelled) return
+      scheduler.flushNow()
+      window.setTimeout(() => {
+        if (cancelled) return
+        setMetrics({
+          renderCount: renderCountRef.current,
+          thinkingCommitCount: thinkingCommitCountRef.current,
+          elapsedMs: Math.round(performance.now() - startedAt),
+        })
+        setDone(true)
+      }, 50)
     }
 
-    const interval = window.setInterval(() => {
-      index += 1
-      const next = `${pendingThinkingRef.current}w${index} `
-      pendingThinkingRef.current = next
-
-      if (mode === 'immediate') {
-        setThinking(next)
-      } else if (frameRef.current === null) {
-        frameRef.current = window.requestAnimationFrame(flushRaf)
-      }
-
-      if (index >= TOKEN_COUNT) {
-        window.clearInterval(interval)
-        if (frameRef.current !== null) {
-          window.cancelAnimationFrame(frameRef.current)
-          frameRef.current = null
-          setThinking(pendingThinkingRef.current)
-        }
-        window.setTimeout(() => {
-          setMetrics({
-            renderCount: renderCountRef.current,
-            thinkingCommitCount: thinkingCommitCountRef.current,
-          })
-          setDone(true)
-        }, 50)
-      }
-    }, TOKEN_INTERVAL_MS)
+    const startTimer = window.setTimeout(() => void run(), 0)
 
     return () => {
-      window.clearInterval(interval)
-      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
+      cancelled = true
+      window.clearTimeout(startTimer)
+      scheduler.cancel()
     }
   }, [mode])
 
@@ -99,6 +104,8 @@ function UseChatBurstRepro() {
         <dd data-testid="render-count">{metrics?.renderCount ?? renderCountRef.current}</dd>
         <dt>thinking length</dt>
         <dd data-testid="thinking-length">{thinking.length}</dd>
+        <dt>elapsed ms</dt>
+        <dd data-testid="elapsed-ms">{metrics?.elapsedMs ?? 0}</dd>
         <dt>done</dt>
         <dd data-testid="done">{String(done)}</dd>
       </dl>

@@ -12,6 +12,7 @@ import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
+import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -77,21 +78,7 @@ export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
   return eventType === 'mode_notice'
 }
 
-export function shouldYieldAfterBufferedStreamEvent(eventType: unknown): boolean {
-  return eventType === 'token' || eventType === 'thinking'
-}
-
-const STREAM_BUFFER_FLUSH_INTERVAL_MS = 80
 const STREAMING_FLUSH_DEADLINE_MS = 300
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise(resolve => {
-    window.requestAnimationFrame(() => {
-      // Yield back to the microtask queue so React can process pending work
-      Promise.resolve().then(resolve)
-    })
-  })
-}
 
 export function shouldProcessResumeStreamEvent(
   lastSeqBySession: Map<string, number>,
@@ -555,6 +542,7 @@ export function useChat(
     const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
 
     ;(async () => {
+      let cancelPendingSubscribeFlush: (() => void) | null = null
       try {
         const res = await fetch(
           `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
@@ -578,19 +566,11 @@ export function useChat(
         let receivedDone = false
         let wasStreaming = false
 
-        // ── rAF-batched message updater for high-frequency stream events ──
+        // Coalesce only React commits. Transport events keep flowing
+        // synchronously and the latest snapshot is rendered on the next paint.
         let pendingSubscribeUpdates: Partial<ChatMessage> | null = null
-        let pendingSubscribeFrame: number | null = null
 
         const flushSubscribeUpdates = () => {
-          if (pendingSubscribeFrame !== null) {
-            window.cancelAnimationFrame(pendingSubscribeFrame)
-            pendingSubscribeFrame = null
-          }
-          if (pendingSubscribeDeadline !== null) {
-            clearTimeout(pendingSubscribeDeadline)
-            pendingSubscribeDeadline = null
-          }
           if (!isCurrentResumeRun() || !pendingSubscribeUpdates || !assistantId) return
           const updates = pendingSubscribeUpdates
           const targetId = assistantId
@@ -603,35 +583,18 @@ export function useChat(
           }))
         }
 
-        let pendingSubscribeDeadline: ReturnType<typeof setTimeout> | null = null
-
-        const scheduleSubscribeFlush = () => {
-          if (pendingSubscribeFrame !== null) return
-          if (pendingSubscribeDeadline !== null) return
-          pendingSubscribeDeadline = setTimeout(() => {
-            pendingSubscribeDeadline = null
-            if (pendingSubscribeFrame !== null) {
-              window.cancelAnimationFrame(pendingSubscribeFrame)
-              pendingSubscribeFrame = null
-            }
-            flushSubscribeUpdates()
-          }, STREAMING_FLUSH_DEADLINE_MS)
-          pendingSubscribeFrame = window.requestAnimationFrame(() => {
-            pendingSubscribeFrame = null
-            if (pendingSubscribeDeadline !== null) {
-              clearTimeout(pendingSubscribeDeadline)
-              pendingSubscribeDeadline = null
-            }
-            flushSubscribeUpdates()
-          })
-        }
+        const subscribeScheduler = createStreamRenderScheduler({
+          onFlush: flushSubscribeUpdates,
+          deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
+        })
+        cancelPendingSubscribeFlush = subscribeScheduler.cancel
 
         const batchSubscribeUpdate = (updates: Partial<ChatMessage>) => {
           pendingSubscribeUpdates = {
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          scheduleSubscribeFlush()
+          subscribeScheduler.schedule()
         }
 
         // Imperative stream writer: all live answer components (text, thinking,
@@ -821,7 +784,7 @@ export function useChat(
                 applyStreamSnapshot()
               } else if (data.type === 'tool_call_delta') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                flushSubscribeUpdates()
+                subscribeScheduler.flushNow()
                 stream.pushToolCallDelta(
                   data.call_id as string,
                   (data.name_delta as string) || '',
@@ -831,7 +794,7 @@ export function useChat(
                 applyStreamSnapshot()
               } else if (data.type === 'tool_start') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                flushSubscribeUpdates()
+                subscribeScheduler.flushNow()
                 stream.pushToolStart(
                   data.call_id as string,
                   data.tool as string,
@@ -841,7 +804,7 @@ export function useChat(
                 applyStreamSnapshot()
               } else if (data.type === 'approval_required') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                flushSubscribeUpdates()
+                subscribeScheduler.flushNow()
                 stream.pushApprovalRequired(
                   data.request_id as string,
                   (data.call_id as string) || `approval-${data.request_id as string}`,
@@ -855,7 +818,7 @@ export function useChat(
                 applyStreamSnapshot()
               } else if (data.type === 'tool_result') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                flushSubscribeUpdates()
+                subscribeScheduler.flushNow()
                 stream.pushToolResult(
                   data.call_id as string,
                   data.ok as boolean,
@@ -922,7 +885,7 @@ export function useChat(
               } else if (data.type === 'done') {
                 receivedDone = true
                 // Flush any batched token updates before marking completion
-                flushSubscribeUpdates()
+                subscribeScheduler.flushNow()
                 const finalSnapshot = stream.finish()
                 setState(prev => {
                   // Only signal completion if this was an active chat response,
@@ -963,9 +926,6 @@ export function useChat(
                   ],
                 }))
               }
-              if (lineIndex < lines.length - 1 && shouldYieldAfterBufferedStreamEvent(data.type)) {
-                await waitForNextPaint()
-              }
             } catch (parseErr) {
               if (!(parseErr instanceof SyntaxError)) throw parseErr
               // incomplete JSON chunk — wait for next line
@@ -973,7 +933,7 @@ export function useChat(
           }
         }
         // Flush any remaining batched updates when stream ends
-        flushSubscribeUpdates()
+        subscribeScheduler.flushNow()
         // The SSE connection ended without a `done` event while the gateway
         // reported it was still streaming — the connection dropped silently
         // (proxy idle timeout, background-tab throttling, network blip).
@@ -997,6 +957,7 @@ export function useChat(
           if (transient) scheduleResumeReconnect()
         }
       } finally {
+        cancelPendingSubscribeFlush?.()
         if (streamAbortRef.current === streamController) streamAbortRef.current = null
         if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
       }
@@ -1187,8 +1148,6 @@ export function useChat(
     // thinking, tool calls/outputs/results) flows through one ordered
     // MessageSegment accumulator. React only sees the snapshot when we flush.
     const stream = createMessageStream()
-    let bufferedFlushTimer: ReturnType<typeof setInterval> | null = null
-    let bufferedFlushRunning = false
     let pendingContextFlow: LlmContextFlow | undefined
 
     const commitBufferedUpdates = () => {
@@ -1204,26 +1163,11 @@ export function useChat(
       }))
     }
 
-    const startBufferedFlushLoop = () => {
-      if (bufferedFlushTimer !== null) return
-      bufferedFlushRunning = true
-      bufferedFlushTimer = setInterval(() => {
-        if (!bufferedFlushRunning) return
-        commitBufferedUpdates()
-      }, STREAM_BUFFER_FLUSH_INTERVAL_MS)
-    }
-
-    const stopBufferedFlushLoop = () => {
-      bufferedFlushRunning = false
-      if (bufferedFlushTimer !== null) {
-        clearInterval(bufferedFlushTimer)
-        bufferedFlushTimer = null
-      }
-    }
-
-    const flushBufferImmediately = () => {
-      commitBufferedUpdates()
-    }
+    const streamScheduler = createStreamRenderScheduler({
+      onFlush: commitBufferedUpdates,
+      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
+    })
+    const flushBufferImmediately = streamScheduler.flushNow
 
     const updateMessage = (options?: { immediate?: boolean }) => {
       if (isStale()) return
@@ -1231,10 +1175,10 @@ export function useChat(
         flushBufferImmediately()
         return
       }
-      startBufferedFlushLoop()
+      streamScheduler.schedule()
     }
 
-    stream.markDirty(() => startBufferedFlushLoop())
+    stream.markDirty(streamScheduler.schedule)
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1447,7 +1391,6 @@ export function useChat(
               return 'queued'
             } else if (data.type === 'done') {
               completed = true
-              stopBufferedFlushLoop()
               flushBufferImmediately()
               const snapshot = stream.snapshot()
               if (!isStale()) {
@@ -1486,16 +1429,12 @@ export function useChat(
             } else if (data.type === 'error') {
               throw new Error(data.message)
             }
-            if (lineIndex < lines.length - 1 && shouldYieldAfterBufferedStreamEvent(data.type)) {
-              await waitForNextPaint()
-            }
           } catch (parseErr) {
             if (!(parseErr instanceof SyntaxError)) throw parseErr
             // incomplete JSON chunk — wait for next line
           }
         }
       }
-      stopBufferedFlushLoop()
       flushBufferImmediately()
       if (!completed && !isStale()) {
         const snapshot = stream.snapshot()
@@ -1527,7 +1466,7 @@ export function useChat(
         }))
       }
     } catch (error) {
-      stopBufferedFlushLoop()
+      streamScheduler.cancel()
       stream.finish()
       flushBufferImmediately()
       if (error instanceof Error && error.name === 'AbortError') {

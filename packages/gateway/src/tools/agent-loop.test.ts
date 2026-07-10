@@ -17,6 +17,7 @@ import {
   type OpenAIToolCall,
 } from "./agent-loop.js";
 import { ToolRegistry } from "./registry.js";
+import { computeContextUsage } from "./token-estimator.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -107,6 +108,7 @@ describe("parseOllamaStream", () => {
     const events: AgentLoopEvent[] = [];
     const reader = streamReader([
       JSON.stringify({ message: { role: "assistant", content: "<thinking>pondering</thinking>Hi" } }) + "\n",
+      JSON.stringify({ done: true, done_reason: "stop" }) + "\n",
     ]);
     const parsed = await parseOllamaStream(reader, (event) => events.push(event));
     expect(parsed.contentText).toBe("Hi");
@@ -118,10 +120,62 @@ describe("parseOllamaStream", () => {
   it("keeps <thinking> tags as visible content once text has started", async () => {
     const reader = streamReader([
       JSON.stringify({ message: { role: "assistant", content: "Use <thinking>this</thinking> tags" } }) + "\n",
+      JSON.stringify({ done: true, done_reason: "stop" }) + "\n",
     ]);
     const parsed = await parseOllamaStream(reader);
     expect(parsed.contentText).toBe("Use <thinking>this</thinking> tags");
     expect(parsed.thinkingText).toBe("");
+  });
+
+  it("rejects provider error chunks instead of treating them as empty success", async () => {
+    const reader = streamReader([
+      JSON.stringify({ error: "model runner disconnected" }) + "\n",
+    ]);
+
+    await expect(parseOllamaStream(reader)).rejects.toThrow("model runner disconnected");
+  });
+
+  it("rejects a stream that closes before Ollama's terminal done chunk", async () => {
+    const reader = streamReader([
+      JSON.stringify({ message: { role: "assistant", content: "partial" } }) + "\n",
+    ]);
+
+    await expect(parseOllamaStream(reader)).rejects.toThrow(/before.*done/i);
+  });
+
+  it("propagates reader failures instead of returning a partial response", async () => {
+    const failure = new Error("socket reset");
+    const reader = {
+      read: vi.fn().mockRejectedValue(failure),
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>;
+
+    await expect(parseOllamaStream(reader)).rejects.toThrow("socket reset");
+  });
+
+  it("returns streamed partials when the user aborts before the done chunk", async () => {
+    const controller = new AbortController();
+    const encoder = new TextEncoder();
+    let reads = 0;
+    const reader = {
+      read: vi.fn(async () => {
+        if (reads++ === 0) {
+          return {
+            done: false,
+            value: encoder.encode(
+              JSON.stringify({ message: { role: "assistant", content: "partial" }, done: false }) + "\n",
+            ),
+          };
+        }
+        controller.abort();
+        throw new DOMException("Aborted", "AbortError");
+      }),
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>;
+
+    const parsed = await parseOllamaStream(reader, undefined, controller.signal);
+
+    expect(parsed.contentText).toBe("partial");
+    expect(parsed.interrupted).toBe(true);
+    expect(parsed.finishReason).toBeNull();
   });
 });
 
@@ -312,6 +366,20 @@ describe("parseOpenAIStream", () => {
     expect(parsed.thinkingText).toBe("");
     expect(events.filter((event) => event.type === "thinking")).toHaveLength(0);
   });
+
+  it("rejects OpenAI-compatible error chunks", async () => {
+    await expect(parseOpenAIStream(streamReader([
+      'data: {"error":{"message":"upstream overloaded"}}\n\n',
+    ]))).rejects.toThrow("upstream overloaded");
+  });
+
+  it("propagates OpenAI-compatible reader failures", async () => {
+    const reader = {
+      read: vi.fn().mockRejectedValue(new Error("connection closed")),
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>;
+
+    await expect(parseOpenAIStream(reader)).rejects.toThrow("connection closed");
+  });
 });
 
 describe("repairToolCallHistory", () => {
@@ -330,6 +398,24 @@ describe("repairToolCallHistory", () => {
       tool_call_id: "call-1",
       name: "execute",
     });
+  });
+
+  it("preserves a completed tool call and result at the history tail", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-1", "execute")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "deployed" }),
+        tool_call_id: "call-1",
+        name: "execute",
+      },
+    ];
+    const original = structuredClone(history);
+
+    __testUtils.repairToolCallHistory(history);
+
+    expect(history).toEqual(original);
   });
 
   it("drops orphaned tool results left behind by context pruning", () => {
@@ -434,6 +520,43 @@ describe("context pruning summary", () => {
     expect(reinjected).toBeDefined();
   });
 
+  it("compacts tool output from the current turn without dropping protocol pairs", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system prompt" },
+      { role: "user", content: "Inspect the repository and finish the task." },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-1", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "a".repeat(6_000) }),
+        tool_call_id: "call-1",
+        name: "file_read",
+      },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-2", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "b".repeat(6_000) }),
+        tool_call_id: "call-2",
+        name: "file_read",
+      },
+    ];
+    const contextWindow = 2_000;
+
+    expect(__testUtils.pruneHistory(history, contextWindow, [])).toBe(false);
+    expect(__testUtils.compactToolResultsToBudget(history, [], contextWindow)).toBe(true);
+    __testUtils.repairToolCallHistory(history);
+
+    expect(computeContextUsage(history, [], contextWindow).total).toBeLessThanOrEqual(
+      Math.floor(contextWindow * 0.45),
+    );
+    expect(history[1]).toMatchObject({
+      role: "user",
+      content: "Inspect the repository and finish the task.",
+    });
+    expect(history.filter((message) => message.role === "assistant" && message.tool_calls)).toHaveLength(2);
+    expect(history.filter((message) => message.role === "tool")).toHaveLength(2);
+    expect(history.some((message) => message.content.includes("older tool result compacted"))).toBe(true);
+  });
+
   it("does not re-inject when the tail user message is already substantive", () => {
     const history: AgentMessage[] = [
       { role: "system", content: "system prompt" },
@@ -495,6 +618,145 @@ describe("executeOneToolCall retry accounting", () => {
 });
 
 describe("runAgentLoop persistence", () => {
+  it("recovers when the provider returns an empty completion after a successful tool", async () => {
+    const responses = [
+      [
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Deployment finished and verified."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Deploy and verify the change." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "file_read",
+            description: "Read a file",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-empty-after-tool",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "Tool completed" }),
+    );
+
+    expect(fetchCalls).toBe(3);
+    expect(result.content).toBe("Deployment finished and verified.");
+    expect(history.some((message) => message.role === "tool" && message.tool_call_id === "call-1")).toBe(true);
+    expect(history.at(-1)).toMatchObject({
+      role: "assistant",
+      content: "Deployment finished and verified.",
+    });
+    expect(history.some((message) =>
+      message.role === "system" && message.content.includes("previous response ended without a final answer")
+    )).toBe(false);
+  });
+
+  it("surfaces an explicit error when empty post-tool completions exhaust recovery", async () => {
+    const toolResponse = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const emptyResponse = [
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of toolResponse) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 }))
+      .mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of emptyResponse) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 }));
+    const persist = vi.fn();
+    let toolExecutions = 0;
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Finish the task." },
+    ];
+
+    await expect(runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "file_read",
+            description: "Read a file",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-empty-exhausted",
+        abort: new AbortController(),
+        maxRounds: 5,
+        mode: "agent",
+        onPersist: persist,
+      },
+      async () => {
+        toolExecutions++;
+        return { ok: true, message: "Tool completed" };
+      },
+    )).rejects.toThrow(/empty response after tool execution.*3 attempt/i);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    expect(toolExecutions).toBe(1);
+    expect(persist).not.toHaveBeenCalled();
+    expect(history.some((message) => message.role === "tool" && message.tool_call_id === "call-1")).toBe(true);
+  });
+
   it("continues with a follow-up round when steering arrives during a final text response", async () => {
     const responses = [
       [

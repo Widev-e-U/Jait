@@ -507,6 +507,7 @@ export function serializeMessagesForOllama(messages: AgentMessage[]) {
 export async function parseOllamaStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onEvent?: (event: AgentLoopEvent) => void,
+  signal?: AbortSignal,
 ): Promise<ParsedStream> {
   const decoder = new TextDecoder();
   let buffer = "";
@@ -514,6 +515,8 @@ export async function parseOllamaStream(
   let thinkingText = "";
   let finishReason: string | null = null;
   let usage: ParsedStream["usage"] | undefined;
+  let sawDone = false;
+  let interrupted = false;
   const toolCalls: OpenAIToolCall[] = [];
   const extractThinking = createThinkingExtractor();
 
@@ -521,7 +524,17 @@ export async function parseOllamaStream(
     const trimmed = line.trim();
     if (!trimmed) return;
     let chunk: any;
-    try { chunk = JSON.parse(trimmed); } catch { return; }
+    try {
+      chunk = JSON.parse(trimmed);
+    } catch {
+      throw new Error("Ollama returned malformed stream data");
+    }
+    if (chunk.error) {
+      const detail = typeof chunk.error === "string"
+        ? chunk.error
+        : JSON.stringify(chunk.error);
+      throw new Error(`Ollama stream error: ${detail}`);
+    }
 
     const message = chunk.message;
     if (message) {
@@ -555,6 +568,7 @@ export async function parseOllamaStream(
     }
 
     if (chunk.done) {
+      sawDone = true;
       finishReason = chunk.done_reason ?? "stop";
       const pe = chunk.prompt_eval_count;
       const ec = chunk.eval_count;
@@ -565,11 +579,19 @@ export async function parseOllamaStream(
   };
 
   while (true) {
+    if (signal?.aborted) {
+      interrupted = true;
+      break;
+    }
     let readResult: { done: boolean; value?: Uint8Array };
     try {
       readResult = await reader.read();
-    } catch {
-      break;
+    } catch (error) {
+      if (signal?.aborted) {
+        interrupted = true;
+        break;
+      }
+      throw error;
     }
     const { done, value } = readResult;
     if (done) {
@@ -583,11 +605,15 @@ export async function parseOllamaStream(
     for (const line of lines) processLine(line);
   }
 
+  if (!sawDone && !interrupted) {
+    throw new Error("Ollama stream ended before its terminal done chunk");
+  }
+
   // Ollama reports done_reason "stop" even when emitting tool calls; normalize
   // to the OpenAI convention the loop expects.
   if (toolCalls.length > 0 && finishReason === "stop") finishReason = "tool_calls";
 
-  return { contentText, thinkingText, toolCalls, finishReason, usage };
+  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted };
 }
 
 // ── Build OpenAI tool schemas ────────────────────────────────────────
@@ -741,6 +767,7 @@ interface ParsedStream {
   thinkingText: string;
   toolCalls: OpenAIToolCall[];
   finishReason: string | null;
+  interrupted?: boolean;
   /** Token usage reported by the provider (from the final chunk). */
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
@@ -748,6 +775,7 @@ interface ParsedStream {
 export async function parseOpenAIStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onEvent?: (event: AgentLoopEvent) => void,
+  signal?: AbortSignal,
 ): Promise<ParsedStream> {
   const decoder = new TextDecoder();
   let buffer = "";
@@ -755,6 +783,7 @@ export async function parseOpenAIStream(
   let thinkingText = "";
   let finishReason: string | null = null;
   let usage: ParsedStream["usage"] | undefined;
+  let interrupted = false;
   const extractThinking = createThinkingExtractor();
 
   const toolCallMap = new Map<
@@ -764,12 +793,18 @@ export async function parseOpenAIStream(
 
   const processLine = (line: string) => {
     const trimmed = line.trim();
-    if (!trimmed || !trimmed.startsWith("data: ")) return;
-    const payload = trimmed.slice(6);
+    if (!trimmed || !trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trimStart();
     if (payload === "[DONE]") return;
 
     try {
       const chunk = JSON.parse(payload);
+      if (chunk.error) {
+        const detail = typeof chunk.error === "string"
+          ? chunk.error
+          : chunk.error.message ?? JSON.stringify(chunk.error);
+        throw new Error(`Provider stream error: ${detail}`);
+      }
       const choice = chunk.choices?.[0];
       if (!choice) return;
 
@@ -839,18 +874,28 @@ export async function parseOpenAIStream(
           };
         }
       }
-    } catch {
-      // partial JSON chunk — ignore
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error("Provider returned malformed SSE data");
+      }
+      throw error;
     }
   };
 
   while (true) {
+    if (signal?.aborted) {
+      interrupted = true;
+      break;
+    }
     let readResult: { done: boolean; value?: Uint8Array };
     try {
       readResult = await reader.read();
-    } catch {
-      // Abort or network error — return whatever we've accumulated so far
-      break;
+    } catch (error) {
+      if (signal?.aborted) {
+        interrupted = true;
+        break;
+      }
+      throw error;
     }
     const { done, value } = readResult;
     if (done) {
@@ -874,7 +919,7 @@ export async function parseOpenAIStream(
     .sort(([a], [b]) => a - b)
     .map(([, tc]) => tc);
 
-  return { contentText, thinkingText, toolCalls, finishReason, usage };
+  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted };
 }
 
 // ── Execute a single tool call with validation + retry ───────────────
@@ -1054,6 +1099,7 @@ export const __testUtils = {
   isTransientFailure,
   isSubstantiveUserMessage,
   pruneHistory,
+  compactToolResultsToBudget,
   repairToolCallHistory,
 };
 
@@ -1081,6 +1127,8 @@ const TOOL_RESULT_MAX_CHARS = 30_000;
 const MAX_UNPRODUCTIVE_ROUNDS = 4;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
+/** Max times we re-prompt when a provider ends a round without text or tool calls. */
+const MAX_EMPTY_RESPONSE_RETRIES = 2;
 /**
  * Max times we auto-continue a response that was cut off by the output token
  * limit (finish_reason="length"). Reasoning models (e.g. gpt-5) can exhaust
@@ -1528,6 +1576,59 @@ export function pruneHistory(
   return pruned;
 }
 
+const COMPACTED_TOOL_RESULT_MIN_CHARS = 800;
+const RECENT_TOOL_RESULTS_TO_KEEP_FULL = 2;
+
+function compactToolResultContent(content: string, targetChars: number): string {
+  if (content.length <= targetChars) return content;
+  const marker = `\n\n[older tool result compacted for context; ${content.length - targetChars} chars omitted]\n\n`;
+  const available = Math.max(0, targetChars - marker.length);
+  const headChars = Math.ceil(available * 0.7);
+  const tailChars = Math.max(0, available - headChars);
+  return `${content.slice(0, headChars)}${marker}${tailChars > 0 ? content.slice(-tailChars) : ""}`;
+}
+
+/**
+ * Tool-heavy work can exceed the model context entirely within the current user
+ * turn. Preserve every assistant/tool protocol pair, but progressively compact
+ * older tool payloads until the next request has enough response headroom.
+ */
+function compactToolResultsToBudget(
+  history: AgentMessage[],
+  toolSchemas: unknown[],
+  contextWindow: number,
+): boolean {
+  const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
+  let usage = computeContextUsage(history, toolSchemas, contextWindow);
+  if (usage.total <= targetTokens) return false;
+
+  const toolIndices = history
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => message.role === "tool" && message.content.length > COMPACTED_TOOL_RESULT_MIN_CHARS)
+    .map(({ index }) => index);
+  const recentStart = Math.max(0, toolIndices.length - RECENT_TOOL_RESULTS_TO_KEEP_FULL);
+  const candidates = [...toolIndices.slice(0, recentStart), ...toolIndices.slice(recentStart)];
+  let compacted = false;
+
+  for (const index of candidates) {
+    if (usage.total <= targetTokens) break;
+    const message = history[index]!;
+    const tokensToFree = usage.total - targetTokens;
+    const charsToFree = Math.ceil(tokensToFree * 3.7) + 256;
+    const targetChars = Math.max(
+      COMPACTED_TOOL_RESULT_MIN_CHARS,
+      message.content.length - charsToFree,
+    );
+    if (targetChars >= message.content.length) continue;
+
+    message.content = compactToolResultContent(message.content, targetChars);
+    compacted = true;
+    usage = computeContextUsage(history, toolSchemas, contextWindow);
+  }
+
+  return compacted;
+}
+
 export async function runAgentLoop(
   options: AgentLoopOptions,
   executeTool: ToolExecutor,
@@ -1567,6 +1668,16 @@ export async function runAgentLoop(
   let consecutiveUnproductiveRounds = 0;
   /** Times we've re-prompted for plain-text tool calls in this loop run. */
   let plainTextRetries = 0;
+  /** Consecutive terminal provider responses with no visible text or tool call. */
+  let emptyResponseRetries = 0;
+  const emptyResponseRecoveryPrompts = new Set<AgentMessage>();
+  const clearEmptyResponseRecoveryPrompts = () => {
+    for (const prompt of emptyResponseRecoveryPrompts) {
+      const index = history.indexOf(prompt);
+      if (index >= 0) history.splice(index, 1);
+    }
+    emptyResponseRecoveryPrompts.clear();
+  };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
 
@@ -1661,10 +1772,17 @@ export async function runAgentLoop(
       // Lower threshold because the estimator is imprecise (char/token ratio doesn't match real tokenization).
       if (usage.ratio >= 0.60) {
         const pruned = pruneHistory(history, contextWindow, activeSchemas);
-        if (pruned) {
+        const compactedToolResults = compactToolResultsToBudget(
+          history,
+          activeSchemas,
+          contextWindow,
+        );
+        if (pruned || compactedToolResults) {
           usage = computeContextUsage(history, activeSchemas, contextWindow);
           onEvent?.({ type: "context_usage", ...usage, pruned: true });
-          log.info(`Context pruned: ${usage.total}/${contextWindow} tokens (${(usage.ratio * 100).toFixed(0)}%)`);
+          log.info(
+            `Context compacted: ${usage.total}/${contextWindow} tokens (${(usage.ratio * 100).toFixed(0)}%)`,
+          );
         }
       }
     }
@@ -1728,6 +1846,7 @@ export async function runAgentLoop(
     let thinkingText = "";
     let toolCalls: OpenAIToolCall[] = [];
     let finishReason: string | null = null;
+    let streamInterrupted = false;
 
     try {
       // Use a generous timeout (10 min) for LLM streaming — slow local models
@@ -1765,9 +1884,11 @@ export async function runAgentLoop(
       }
 
       const parsed = isOllama
-        ? await parseOllamaStream(reader as any, onEvent)
-        : await parseOpenAIStream(reader as any, onEvent);
+        ? await parseOllamaStream(reader as any, onEvent, abort.signal)
+        : await parseOpenAIStream(reader as any, onEvent, abort.signal);
+      clearEmptyResponseRecoveryPrompts();
       contentText = parsed.contentText;
+      streamInterrupted = parsed.interrupted === true;
       thinkingText = parsed.thinkingText;
       toolCalls = parsed.toolCalls;
       finishReason = parsed.finishReason;
@@ -1793,6 +1914,7 @@ export async function runAgentLoop(
       if (roundContextUsage) metrics.contextUsage = roundContextUsage;
       currentRound.metrics = metrics;
     } catch (fetchErr) {
+      clearEmptyResponseRecoveryPrompts();
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
@@ -1801,6 +1923,7 @@ export async function runAgentLoop(
     }
 
     fullContent += contentText;
+    if (contentText.trim()) emptyResponseRetries = 0;
 
     // ── Track segments for interleaved rendering ──
     if (thinkingText) {
@@ -1821,8 +1944,24 @@ export async function runAgentLoop(
       }
     }
 
+    if (streamInterrupted || abort.signal.aborted) {
+      if (contentText) history.push({ role: "assistant", content: contentText });
+      log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
+      return {
+        content: fullContent,
+        executedToolCalls,
+        segments,
+        rounds: round + 1,
+        aborted: true,
+        hitMaxRounds: false,
+        persisted,
+        fingerprints: toolCallFingerprints,
+      };
+    }
+
     // ── Model returned tool calls → queue & execute ──
     if (toolCalls.length > 0) {
+      emptyResponseRetries = 0;
       if (finishReason && finishReason !== "tool_calls") {
         log.warn(
           `LLM returned ${toolCalls.length} tool call(s) with finish_reason="${finishReason}" — executing anyway`,
@@ -2143,6 +2282,33 @@ export async function runAgentLoop(
           "Your previous response was cut off because it reached the output token limit. Resume exactly where you left off — do not repeat any text you already produced, do not restart, and do not re-summarize. Continue seamlessly from the final character of your previous output.",
       });
       continue;
+    }
+
+    if (!contentText.trim() && toolCalls.length === 0) {
+      const canRetry = emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < maxRounds;
+      if (canRetry) {
+        emptyResponseRetries++;
+        const afterTools = executedToolCalls.length > 0;
+        const message = afterTools
+          ? `Provider returned no final answer after tool execution — retrying (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES})`
+          : `Provider returned an empty response — retrying (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES})`;
+        log.warn(`${message} for session ${sessionId}`);
+        onEvent?.({ type: "steering", message });
+        const recoveryPrompt: AgentMessage = {
+          role: "system",
+          content: afterTools
+            ? "Your previous response ended without a final answer after the tools completed. Continue from the completed tool results and give the user a concise final answer. Do not repeat completed tool calls."
+            : "Your previous response was empty. Answer the user's request now. Return either a substantive response or a structured tool call.",
+        };
+        history.push(recoveryPrompt);
+        emptyResponseRecoveryPrompts.add(recoveryPrompt);
+        continue;
+      }
+
+      const phase = executedToolCalls.length > 0 ? " after tool execution" : "";
+      throw new Error(
+        `LLM returned an empty response${phase} and did not recover after ${emptyResponseRetries + 1} attempt(s)`,
+      );
     }
 
     if (steering?.hasPending) {

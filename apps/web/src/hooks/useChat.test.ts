@@ -4,7 +4,6 @@ import {
   formatChatHttpError,
   getVisibleChangedFiles,
   shouldFlushStreamTextImmediately,
-  shouldYieldAfterBufferedStreamEvent,
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
@@ -104,7 +103,7 @@ describe('shouldShowContinueAfterDone', () => {
 })
 
 describe('shouldFlushStreamTextImmediately', () => {
-  it('time-batches assistant text and thinking chunks', () => {
+  it('schedules assistant text and thinking instead of forcing synchronous commits', () => {
     expect(shouldFlushStreamTextImmediately('token')).toBe(false)
     expect(shouldFlushStreamTextImmediately('thinking')).toBe(false)
     expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)
@@ -112,15 +111,6 @@ describe('shouldFlushStreamTextImmediately', () => {
 
   it('still flushes mode notices immediately', () => {
     expect(shouldFlushStreamTextImmediately('mode_notice')).toBe(true)
-  })
-})
-
-describe('shouldYieldAfterBufferedStreamEvent', () => {
-  it('yields to the browser between buffered text events only', () => {
-    expect(shouldYieldAfterBufferedStreamEvent('token')).toBe(true)
-    expect(shouldYieldAfterBufferedStreamEvent('thinking')).toBe(true)
-    expect(shouldYieldAfterBufferedStreamEvent('tool_output')).toBe(false)
-    expect(shouldYieldAfterBufferedStreamEvent('done')).toBe(false)
   })
 })
 

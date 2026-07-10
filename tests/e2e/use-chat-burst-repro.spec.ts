@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-async function runMode(page: Page, mode: 'immediate' | 'raf') {
+async function runMode(page: Page, mode: 'legacy' | 'raf') {
   await page.goto(`/use-chat-burst-repro.html?mode=${mode}`)
   await expect(page.getByRole('heading', { name: 'useChat Burst Repro' })).toBeVisible()
   await expect(page.getByTestId('done')).toHaveText('true', { timeout: 10000 })
@@ -9,18 +9,20 @@ async function runMode(page: Page, mode: 'immediate' | 'raf') {
     mode,
     thinkingLength: Number(await page.getByTestId('thinking-length').textContent()),
     commitCount: Number(await page.getByTestId('commit-count').textContent()),
+    elapsedMs: Number(await page.getByTestId('elapsed-ms').textContent()),
   }
 }
 
 test.describe('useChat burst stream rendering', () => {
-  test('rAF batching sharply reduces commits through the real message/tool-card renderer', async ({ page }) => {
-    const immediate = await runMode(page, 'immediate')
+  test('synchronous ingest avoids the legacy frame-per-event drain through the real renderer', async ({ page }) => {
+    const legacy = await runMode(page, 'legacy')
     const raf = await runMode(page, 'raf')
 
-    console.log(JSON.stringify({ immediate, raf }))
+    console.log(JSON.stringify({ legacy, raf }))
 
-    expect(immediate.thinkingLength).toBeGreaterThan(600)
-    expect(raf.thinkingLength).toBe(immediate.thinkingLength)
-    expect(raf.commitCount).toBeLessThan(immediate.commitCount / 2)
+    expect(legacy.thinkingLength).toBeGreaterThan(300)
+    expect(raf.thinkingLength).toBe(legacy.thinkingLength)
+    expect(raf.commitCount).toBeLessThan(legacy.commitCount / 4)
+    expect(raf.elapsedMs).toBeLessThan(legacy.elapsedMs / 4)
   })
 })

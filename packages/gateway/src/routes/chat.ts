@@ -29,6 +29,7 @@ import { signAuthToken } from "../security/http-auth.js";
 import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
 import {
   runAgentLoop,
+  repairToolCallHistory,
   retryToolCall,
   buildTieredToolSchemas,
   fromOpenAIName,
@@ -193,6 +194,51 @@ function buildExternalProviderRecentContext(history: ChatMessage[], limit = 4): 
       return `${roleLabel}: ${truncateExternalContextContent(normalizeExternalContextContent(message.content))}`;
     }),
   ].join("\n");
+}
+
+export function getProviderRequestErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error.trim() || "Provider request failed";
+  if (!error || typeof error !== "object") return "Provider request failed";
+
+  const record = error as Record<string, unknown>;
+  const data = record.data;
+  if (data && typeof data === "object") {
+    const nestedMessage = (data as Record<string, unknown>).message;
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage.trim();
+    }
+  }
+
+  return typeof record.message === "string" && record.message.trim()
+    ? record.message.trim()
+    : "Provider request failed";
+}
+
+export function isNonRecoverableProviderRequestError(error: unknown): boolean {
+  const detail = getProviderRequestErrorMessage(error).toLowerCase();
+  const data = error && typeof error === "object"
+    ? (error as Record<string, unknown>).data
+    : undefined;
+  const providerCode = data && typeof data === "object"
+    ? String((data as Record<string, unknown>).codexErrorInfo ?? "").toLowerCase()
+    : "";
+
+  return [
+    "authentication",
+    "not authenticated",
+    "not logged in",
+    "login required",
+    "credentials",
+    "api key",
+    "usage limit",
+    "rate limit",
+    "quota",
+    "limit reached",
+    "limit exceeded",
+    "out of credits",
+    "insufficient credits",
+    "usagelimitexceeded",
+  ].some((needle) => detail.includes(needle) || providerCode.includes(needle));
 }
 
 export function normalizeProviderSessionError(message: string): string {
@@ -2520,6 +2566,13 @@ export function registerChatRoutes(
           contextFlowJson = JSON.stringify(cliContextFlow);
           await cliProvider.sendTurn(providerSessionId, cliContent);
         } catch (sendErr) {
+          const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
+          if (isNonRecoverableProviderRequestError(sendErr)) {
+            console.warn(`[chat/cli] sendTurn rejected without recovery: ${providerErrorMessage}`);
+            checkDone();
+            throw new Error(providerErrorMessage);
+          }
+
           // Session likely died (process exited) — start a fresh one
           console.warn(`[chat/cli] sendTurn failed on cached session, recovering:`, sendErr);
           activeCliSessions.delete(sessionId);
@@ -2581,7 +2634,11 @@ export function registerChatRoutes(
             recoveryContextBlock,
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
-          await cliProvider.sendTurn(providerSessionId, recoveryContent);
+          try {
+            await cliProvider.sendTurn(providerSessionId, recoveryContent);
+          } catch (recoveryError) {
+            throw new Error(getProviderRequestErrorMessage(recoveryError));
+          }
         }
 
         // Wait for the turn-completion event (may already be resolved if
@@ -2845,16 +2902,62 @@ export function registerChatRoutes(
       const wasCancelled = err instanceof Error && err.name === "AbortError";
       if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
 
-      // Save partial content for real (non-cancel) errors — but only if the
-      // agentic loop didn't already persist this turn's assistant message.
-      if (!wasCancelled && !loopPersisted && (fullContent || partialToolCalls.length > 0)) {
-        const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
-        persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
-        assistantTurnPersisted = true;
-      } else if (!wasCancelled && !loopPersisted) {
-        // No partial content — persist the error message itself so it's visible on reload.
-        const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
-        persistMessage(sessionId, "assistant", errMsg2, undefined, JSON.stringify([{ type: "error", content: errMsg2 }]), contextFlowJson);
+      // Save the live accumulator for real (non-cancel) errors. The loop result
+      // is unavailable when parsing throws, but token/tool events have already
+      // populated this snapshot and must survive reload.
+      if (!wasCancelled && !loopPersisted) {
+        const acc = sessionStreamingState.get(sessionId);
+        const streamedContent = fullContent || acc?.content || "";
+        const streamedToolCalls = partialToolCalls.length > 0
+          ? partialToolCalls
+          : (acc?.toolCalls ?? []);
+        const streamedSegmentsJson = resultSegmentsJson
+          ?? (acc?.segments.length ? JSON.stringify(acc.segments) : undefined);
+        const streamedThinking = acc?.thinking || undefined;
+        if (
+          streamedContent ||
+          streamedThinking ||
+          streamedToolCalls.length > 0 ||
+          streamedSegmentsJson
+        ) {
+          const tcJson = streamedToolCalls.length > 0
+            ? JSON.stringify(streamedToolCalls)
+            : undefined;
+          persistMessage(
+            sessionId,
+            "assistant",
+            streamedContent,
+            tcJson,
+            streamedSegmentsJson,
+            contextFlowJson,
+            streamedThinking,
+          );
+          history.push({
+            role: "assistant",
+            content: streamedContent,
+            ...(streamedToolCalls.length > 0
+              ? { uiToolCalls: streamedToolCalls.map((call) => ({ ...call })) }
+              : {}),
+            ...(acc?.segments.length ? { segments: [...acc.segments] } : {}),
+            ...(streamedThinking ? { thinking: streamedThinking } : {}),
+          });
+        } else {
+          const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
+          const errorSegments = [{ type: "error", content: errMsg2 }];
+          persistMessage(
+            sessionId,
+            "assistant",
+            errMsg2,
+            undefined,
+            JSON.stringify(errorSegments),
+            contextFlowJson,
+          );
+          history.push({
+            role: "assistant",
+            content: errMsg2,
+            segments: errorSegments,
+          });
+        }
         assistantTurnPersisted = true;
       }
 
@@ -2895,29 +2998,11 @@ export function registerChatRoutes(
     sessionStreamingState.delete(sessionId);
     sessionStreamSeq.delete(sessionId);
 
-    // Clean up in-memory history: remove any dangling assistant tool_calls
-    // messages that never got a text response (e.g. cancelled mid-tool-call).
-    // This prevents them from showing as "running" on reload.
+    // Preserve completed tool-call/result pairs for the next request. If a
+    // cancellation genuinely interrupted a call, synthesize only its missing
+    // result so every provider receives valid tool history.
     const currentHistory = sessionHistory.get(sessionId);
-    if (currentHistory) {
-      // Walk backwards: if the last messages are assistant+tool_calls with no
-      // following text response, and the corresponding tool results are missing,
-      // remove them so the history is clean for the next session load.
-      while (currentHistory.length > 0) {
-        const last = currentHistory[currentHistory.length - 1]!;
-        // Remove orphaned tool result messages at the tail
-        if (last.role === "tool") {
-          currentHistory.pop();
-          continue;
-        }
-        // Remove assistant messages that only contain tool_calls with no text
-        if (last.role === "assistant" && last.tool_calls && !last.content) {
-          currentHistory.pop();
-          continue;
-        }
-        break;
-      }
-    }
+    if (currentHistory) repairToolCallHistory(currentHistory);
 
     // Detect whether any Jait-managed tool timed out during this turn. Only
     // meaningful for the Jait agentic loop: external CLI providers (codex /
