@@ -20,15 +20,19 @@ function getMode(): RenderMode {
 function UseChatBurstRepro() {
   const mode = getMode()
   const [thinking, setThinking] = useState('')
+  const [content, setContent] = useState('')
   const [metrics, setMetrics] = useState<{
     renderCount: number
     thinkingCommitCount: number
+    contentCommitCount: number
     elapsedMs: number
   } | null>(null)
   const [done, setDone] = useState(false)
   const renderCountRef = useRef(0)
   const thinkingCommitCountRef = useRef(0)
+  const contentCommitCountRef = useRef(0)
   const pendingThinkingRef = useRef('')
+  const pendingContentRef = useRef('')
 
   renderCountRef.current += 1
 
@@ -37,20 +41,30 @@ function UseChatBurstRepro() {
   }, [thinking])
 
   useEffect(() => {
+    if (content.length > 0) contentCommitCountRef.current += 1
+  }, [content])
+
+  useEffect(() => {
     let cancelled = false
     const scheduler = createStreamRenderScheduler({
-      onFlush: () => setThinking(pendingThinkingRef.current),
+      onFlush: () => {
+        setThinking(pendingThinkingRef.current)
+        setContent(pendingContentRef.current)
+      },
     })
 
     const run = async () => {
       const startedAt = performance.now()
       for (let index = 1; index <= TOKEN_COUNT; index += 1) {
         if (cancelled) return
-        const next = `${pendingThinkingRef.current}w${index} `
-        pendingThinkingRef.current = next
+        const nextThinking = `${pendingThinkingRef.current}thought${index} `
+        const nextContent = `${pendingContentRef.current}word${index} `
+        pendingThinkingRef.current = nextThinking
+        pendingContentRef.current = nextContent
 
         if (mode === 'legacy') {
-          setThinking(next)
+          setThinking(nextThinking)
+          setContent(nextContent)
           await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
         } else {
           scheduler.schedule()
@@ -64,6 +78,7 @@ function UseChatBurstRepro() {
         setMetrics({
           renderCount: renderCountRef.current,
           thinkingCommitCount: thinkingCommitCountRef.current,
+          contentCommitCount: contentCommitCountRef.current,
           elapsedMs: Math.round(performance.now() - startedAt),
         })
         setDone(true)
@@ -90,7 +105,8 @@ function UseChatBurstRepro() {
   const segments = useMemo<MessageSegment[]>(() => [
     { type: 'toolGroup', callIds: ['proof-tool'] },
     { type: 'thinking', content: thinking },
-  ], [thinking])
+    { type: 'text', content },
+  ], [content, thinking])
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -98,12 +114,16 @@ function UseChatBurstRepro() {
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <dt>mode</dt>
         <dd data-testid="mode">{mode}</dd>
-        <dt>commits</dt>
+        <dt>thinking commits</dt>
         <dd data-testid="commit-count">{metrics?.thinkingCommitCount ?? thinkingCommitCountRef.current}</dd>
+        <dt>plain-text commits</dt>
+        <dd data-testid="content-commit-count">{metrics?.contentCommitCount ?? contentCommitCountRef.current}</dd>
         <dt>renders</dt>
         <dd data-testid="render-count">{metrics?.renderCount ?? renderCountRef.current}</dd>
         <dt>thinking length</dt>
         <dd data-testid="thinking-length">{thinking.length}</dd>
+        <dt>plain-text length</dt>
+        <dd data-testid="content-length">{content.length}</dd>
         <dt>elapsed ms</dt>
         <dd data-testid="elapsed-ms">{metrics?.elapsedMs ?? 0}</dd>
         <dt>done</dt>
@@ -111,7 +131,7 @@ function UseChatBurstRepro() {
       </dl>
       <Message
         role="assistant"
-        content=""
+        content={content}
         thinking={thinking}
         toolCalls={toolCalls}
         segments={segments}

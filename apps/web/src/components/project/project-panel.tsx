@@ -307,7 +307,7 @@ function pathsMatchProjectFile(candidatePath: string, filePath: string, rootPath
 /*  Remote (server-backed) project helpers                           */
 /* ------------------------------------------------------------------ */
 import { getApiUrl } from '@/lib/gateway-url'
-import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/preview-session'
+import { deriveManagedPreviewSessionId, isSamePreviewSession, shouldStopManagedPreviewForTarget } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
 
 const API_URL = getApiUrl()
@@ -3681,9 +3681,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     // dev-preview.open right after preview.start) must NOT kill the container
     // that was just created.
     if (managedPreviewSession) {
-      const currentTarget = managedPreviewSession.target?.trim() ?? ''
-      const isSameTarget = trimmed && currentTarget && trimmed === currentTarget
-      if (!isSameTarget) {
+      if (shouldStopManagedPreviewForTarget(managedPreviewSession.target, trimmed)) {
         void stopManagedPreviewSession(false)
       }
     }

@@ -103,9 +103,9 @@ describe('shouldShowContinueAfterDone', () => {
 })
 
 describe('shouldFlushStreamTextImmediately', () => {
-  it('schedules assistant text and thinking instead of forcing synchronous commits', () => {
-    expect(shouldFlushStreamTextImmediately('token')).toBe(false)
-    expect(shouldFlushStreamTextImmediately('thinking')).toBe(false)
+  it('flushes every assistant text and thinking delta immediately', () => {
+    expect(shouldFlushStreamTextImmediately('token')).toBe(true)
+    expect(shouldFlushStreamTextImmediately('thinking')).toBe(true)
     expect(shouldFlushStreamTextImmediately('tool_output')).toBe(false)
   })
 

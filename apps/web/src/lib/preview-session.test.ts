@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveManagedPreviewSessionId, isSamePreviewSession, type PreviewSessionLike } from './preview-session'
+import { deriveManagedPreviewSessionId, isSamePreviewSession, shouldStopManagedPreviewForTarget, type PreviewSessionLike } from './preview-session'
 
 function createSession(overrides: Partial<PreviewSessionLike> = {}): PreviewSessionLike {
   return {
@@ -75,9 +75,20 @@ describe('isSamePreviewSession', () => {
   })
 })
 
+describe('shouldStopManagedPreviewForTarget', () => {
+  it('keeps a command-started managed preview when both stable targets are blank', () => {
+    expect(shouldStopManagedPreviewForTarget(null, null)).toBe(false)
+  })
+
+  it('stops only when switching between distinct explicit targets', () => {
+    expect(shouldStopManagedPreviewForTarget('3000', '3001')).toBe(true)
+    expect(shouldStopManagedPreviewForTarget('3000', '3000')).toBe(false)
+  })
+})
+
 describe('deriveManagedPreviewSessionId', () => {
-  it('creates an isolated nested preview session id', () => {
-    expect(deriveManagedPreviewSessionId('session-123')).toBe('session-123::managed-preview')
+  it('uses the chat session id shared with preview.open', () => {
+    expect(deriveManagedPreviewSessionId('session-123')).toBe('session-123')
   })
 
   it('returns null for empty session ids', () => {

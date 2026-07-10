@@ -73,9 +73,9 @@ export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; h
 }
 
 export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
-  // Mode notices are lightweight control messages that should be reflected
-  // immediately (e.g. mode changes), bypassing the normal buffered flush.
-  return eventType === 'mode_notice'
+  // Preserve the provider's text cadence. Tool output may still be coalesced,
+  // but visible assistant text and thinking must reach React per stream delta.
+  return eventType === 'token' || eventType === 'thinking' || eventType === 'mode_notice'
 }
 
 const STREAMING_FLUSH_DEADLINE_MS = 300
@@ -589,12 +589,13 @@ export function useChat(
         })
         cancelPendingSubscribeFlush = subscribeScheduler.cancel
 
-        const batchSubscribeUpdate = (updates: Partial<ChatMessage>) => {
+        const batchSubscribeUpdate = (updates: Partial<ChatMessage>, immediate = false) => {
           pendingSubscribeUpdates = {
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          subscribeScheduler.schedule()
+          if (immediate) subscribeScheduler.flushNow()
+          else subscribeScheduler.schedule()
         }
 
         // Imperative stream writer: all live answer components (text, thinking,
@@ -604,11 +605,11 @@ export function useChat(
         const stream = createMessageStream()
         let pendingResumeContextFlow: LlmContextFlow | undefined
 
-        const applyStreamSnapshot = () => {
+        const applyStreamSnapshot = (immediate = false) => {
           const snapshot = stream.snapshot()
           const updates = snapshotToChatMessageUpdates(snapshot)
           if (pendingResumeContextFlow !== undefined) updates.contextFlow = pendingResumeContextFlow
-          batchSubscribeUpdate(updates)
+          batchSubscribeUpdate(updates, immediate)
         }
 
         // When a client (re)opens the resume stream during a run that hasn't
@@ -777,11 +778,11 @@ export function useChat(
               } else if (data.type === 'token') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 stream.pushText(data.content as string)
-                applyStreamSnapshot()
+                applyStreamSnapshot(true)
               } else if (data.type === 'thinking') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 stream.pushThinking(data.content as string)
-                applyStreamSnapshot()
+                applyStreamSnapshot(true)
               } else if (data.type === 'tool_call_delta') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()

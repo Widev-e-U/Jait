@@ -47,10 +47,16 @@ function isSameRemoteBrowser(
     && (previous?.startedAt ?? null) === (next?.startedAt ?? null)
 }
 
+export function shouldStopManagedPreviewForTarget(currentTarget: string | null | undefined, nextTarget: string | null | undefined): boolean {
+  const current = currentTarget?.trim() ?? ''
+  const next = nextTarget?.trim() ?? ''
+  return Boolean(current && next && current !== next)
+}
+
 export function deriveManagedPreviewSessionId(sessionId: string | null | undefined): string | null {
   const trimmed = sessionId?.trim()
   if (!trimmed) return null
-  return `${trimmed}::managed-preview`
+  return trimmed
 }
 
 export function isSamePreviewSession(
