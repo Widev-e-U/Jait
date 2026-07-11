@@ -556,9 +556,10 @@ export function ProviderModelSelector({
   )
 
   const selectorContent = (
-    <>
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(9.5rem,0.8fr)_minmax(13rem,1.45fr)] overflow-hidden">
+      <section className="flex min-h-0 min-w-0 flex-col border-r" aria-labelledby="provider-selector-heading">
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
-        <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
+        <div id="provider-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
       </div>
       {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
         <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
@@ -576,7 +577,7 @@ export function ProviderModelSelector({
           Device is offline — only Jait (gateway) is available
         </div>
       )}
-      <div className={cn('shrink-0 overflow-y-auto p-1', isMobile ? 'max-h-28' : 'min-h-24 max-h-56')}>
+      <div role="listbox" aria-labelledby="provider-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
         {providerEntries.map((entry) => {
           const Icon = entry.icon
           const active = entry.value === provider
@@ -587,11 +588,14 @@ export function ProviderModelSelector({
               <div className="flex items-start gap-1.5">
                 <button
                   type="button"
+                  role="option"
+                  aria-selected={active}
+                  aria-describedby={`provider-description-${entry.value}`}
                   onClick={() => handleProviderSelect(entry.value)}
                   disabled={!entry.isAvailable}
                   className={cn(
                     'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
-                    'hover:bg-accent hover:text-accent-foreground',
+                    'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     !entry.isAvailable && 'cursor-not-allowed opacity-60',
                   )}
                 >
@@ -615,7 +619,7 @@ export function ProviderModelSelector({
                         <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
                       )}
                     </div>
-                    <div className={cn('text-xs leading-snug text-muted-foreground', isMobile && 'hidden')}>
+                    <div id={`provider-description-${entry.value}`} className="text-xs leading-snug text-muted-foreground">
                       {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
                     </div>
                   </div>
@@ -662,23 +666,28 @@ export function ProviderModelSelector({
         )}
       </div>
 
-      <div className="shrink-0 border-y px-3 py-2">
-        <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
+      </section>
+
+      <section className="flex min-h-0 min-w-0 flex-col" aria-labelledby="model-selector-heading">
+      <div className="shrink-0 border-b px-3 py-2">
+        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
       </div>
       <div className="shrink-0 border-b px-3 py-2">
         <div className="flex items-center gap-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <label htmlFor="provider-model-search" className="sr-only">Search models</label>
           <input
+            id="provider-model-search"
             ref={inputRef}
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search models..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-1">
+      <div role="listbox" aria-labelledby="model-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
         {recentModels.length > 0 && (
           <>
             <div className="flex items-center gap-1.5 px-2 py-1.5">
@@ -790,7 +799,8 @@ export function ProviderModelSelector({
           </p>
         </div>
       )}
-    </>
+      </section>
+    </div>
   )
 
   return (
@@ -834,7 +844,7 @@ export function ProviderModelSelector({
             align="start"
             side="top"
             collisionPadding={8}
-            className="flex w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
+            className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
             style={{ maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))' }}
           >
             {selectorContent}
@@ -926,10 +936,13 @@ function ModelItem({ model, selected, onSelect }: { model: ModelDef; selected: b
   return (
     <button
       type="button"
+      role="option"
+      aria-selected={selected}
+      aria-label={`${formatModelDisplayLabel(model.name)}${model.isDefault ? ', default model' : ''}`}
       onClick={() => onSelect(model.id)}
       className={cn(
         'flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left transition-colors',
-        'hover:bg-accent hover:text-accent-foreground',
+        'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         selected && 'bg-accent/50',
       )}
     >

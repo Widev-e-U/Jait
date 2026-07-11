@@ -417,7 +417,7 @@ function StreamingText({
 }) {
   return (
     <div className={proseClassName(compact)}>
-      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{content}</div>
+      <div data-streaming-text="true" className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{content}</div>
     </div>
   )
 }

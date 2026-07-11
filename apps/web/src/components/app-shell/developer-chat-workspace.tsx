@@ -316,6 +316,7 @@ export function DeveloperChatWorkspace({
   const elementCacheRef = useRef<Map<string, {
     key: string
     element: ReactNode
+    content: unknown
     contextFlow: unknown
     hasContextFlow: unknown
     hasMemoryProvenance: unknown
@@ -350,6 +351,7 @@ export function DeveloperChatWorkspace({
       const cached = cache.get(msg.id)
       const key =
         sharedKey
+        + '|' + (msg.content === cached?.content ? 's' : 'd')
         + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
         + '|' + (msg.hasContextFlow === cached?.hasContextFlow ? 's' : 'd')
         + '|' + (msg.hasMemoryProvenance === cached?.hasMemoryProvenance ? 's' : 'd')
@@ -363,7 +365,7 @@ export function DeveloperChatWorkspace({
         + '|' + (msg.segments === cached?.segments ? 's' : 'd')
         + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
         + '|' + msg.role
-      if (cached && cached.key === key) {
+      if (cached && cached.key === key && !isStreaming) {
         messageElements.push(cached.element)
         continue
       }
@@ -407,6 +409,7 @@ export function DeveloperChatWorkspace({
       cache.set(msg.id, {
         key,
         element,
+        content: msg.content,
         contextFlow: msg.contextFlow,
         hasContextFlow: msg.hasContextFlow,
         hasMemoryProvenance: msg.hasMemoryProvenance,

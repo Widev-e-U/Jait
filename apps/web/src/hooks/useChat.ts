@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { TodoItem } from '@/components/chat/todo-list'
 import type { ChangedFile, FileChangeState } from '@/components/chat/files-changed'
@@ -13,6 +14,7 @@ import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
+import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -543,6 +545,7 @@ export function useChat(
 
     ;(async () => {
       let cancelPendingSubscribeFlush: (() => void) | null = null
+      let textPacer: ReturnType<typeof createStreamTextPacer> | null = null
       try {
         const res = await fetch(
           `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
@@ -594,7 +597,7 @@ export function useChat(
             ...pendingSubscribeUpdates,
             ...updates,
           }
-          if (immediate) subscribeScheduler.flushNow()
+          if (immediate) flushSync(subscribeScheduler.flushNow)
           else subscribeScheduler.schedule()
         }
 
@@ -604,6 +607,13 @@ export function useChat(
         // current assistant message on each rAF flush.
         const stream = createMessageStream()
         let pendingResumeContextFlow: LlmContextFlow | undefined
+
+        textPacer = createStreamTextPacer({
+          onText: (chunk) => stream.pushText(chunk),
+          onThinking: (chunk) => stream.pushThinking(chunk),
+          onCommit: () => applyStreamSnapshot(true),
+          deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
+        })
 
         const applyStreamSnapshot = (immediate = false) => {
           const snapshot = stream.snapshot()
@@ -652,6 +662,7 @@ export function useChat(
               pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
               if (data.type === 'snapshot') {
+                textPacer.flushNow()
                 const rawMsgs = data.messages as Array<{
                   id: string;
                   role: 'user' | 'assistant';
@@ -777,13 +788,12 @@ export function useChat(
                 }))
               } else if (data.type === 'token') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                stream.pushText(data.content as string)
-                applyStreamSnapshot(true)
+                textPacer.enqueueText(data.content as string)
               } else if (data.type === 'thinking') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                stream.pushThinking(data.content as string)
-                applyStreamSnapshot(true)
+                textPacer.enqueueThinking(data.content as string)
               } else if (data.type === 'tool_call_delta') {
+                await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolCallDelta(
@@ -794,6 +804,7 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'tool_start') {
+                await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolStart(
@@ -804,6 +815,7 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'approval_required') {
+                await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushApprovalRequired(
@@ -814,10 +826,12 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'tool_output') {
+                await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 stream.pushToolOutput(data.call_id as string, data.content as string)
                 applyStreamSnapshot()
               } else if (data.type === 'tool_result') {
+                await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolResult(
@@ -885,6 +899,7 @@ export function useChat(
                 })
               } else if (data.type === 'done') {
                 receivedDone = true
+                await textPacer.waitUntilIdle()
                 // Flush any batched token updates before marking completion
                 subscribeScheduler.flushNow()
                 const finalSnapshot = stream.finish()
@@ -934,6 +949,7 @@ export function useChat(
           }
         }
         // Flush any remaining batched updates when stream ends
+        await textPacer.waitUntilIdle()
         subscribeScheduler.flushNow()
         // The SSE connection ended without a `done` event while the gateway
         // reported it was still streaming — the connection dropped silently
@@ -958,6 +974,7 @@ export function useChat(
           if (transient) scheduleResumeReconnect()
         }
       } finally {
+        textPacer?.cancel()
         cancelPendingSubscribeFlush?.()
         if (streamAbortRef.current === streamController) streamAbortRef.current = null
         if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
@@ -1151,6 +1168,13 @@ export function useChat(
     const stream = createMessageStream()
     let pendingContextFlow: LlmContextFlow | undefined
 
+    const textPacer = createStreamTextPacer({
+      onText: (chunk) => stream.pushText(chunk),
+      onThinking: (chunk) => stream.pushThinking(chunk),
+      onCommit: () => updateMessage({ immediate: true }),
+      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
+    })
+
     const commitBufferedUpdates = () => {
       if (isStale()) return
       const snapshot = stream.snapshot()
@@ -1173,7 +1197,7 @@ export function useChat(
     const updateMessage = (options?: { immediate?: boolean }) => {
       if (isStale()) return
       if (options?.immediate) {
-        flushBufferImmediately()
+        flushSync(flushBufferImmediately)
         return
       }
       streamScheduler.schedule()
@@ -1254,12 +1278,11 @@ export function useChat(
             pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
             if (data.type === 'thinking') {
-              stream.pushThinking(data.content as string)
-              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
+              textPacer.enqueueThinking(data.content as string)
             } else if (data.type === 'token') {
-              stream.pushText(data.content as string)
-              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
+              textPacer.enqueueText(data.content as string)
             } else if (data.type === 'tool_call_delta') {
+              await textPacer.waitUntilIdle()
               stream.pushToolCallDelta(
                 data.call_id as string,
                 (data.name_delta as string) || '',
@@ -1268,6 +1291,7 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'tool_start') {
+              await textPacer.waitUntilIdle()
               stream.pushToolStart(
                 data.call_id as string,
                 data.tool as string,
@@ -1276,6 +1300,7 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'approval_required') {
+              await textPacer.waitUntilIdle()
               stream.pushApprovalRequired(
                 data.request_id as string,
                 (data.call_id as string) || `approval-${data.request_id as string}`,
@@ -1284,9 +1309,11 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'tool_output') {
+              await textPacer.waitUntilIdle()
               stream.pushToolOutput(data.call_id as string, data.content as string)
               updateMessage()
             } else if (data.type === 'tool_result') {
+              await textPacer.waitUntilIdle()
               stream.pushToolResult(
                 data.call_id as string,
                 data.ok as boolean,
@@ -1325,8 +1352,7 @@ export function useChat(
               setPendingPlan(plan)
             } else if (data.type === 'mode_notice') {
               // Mode notice — append as assistant content
-              stream.pushText(`\n\n*${data.message as string}*`)
-              updateMessage({ immediate: shouldFlushStreamTextImmediately(data.type) })
+              textPacer.enqueueText(`\n\n*${data.message as string}*`)
             } else if (data.type === 'todo_list') {
               // AI updated the task list
               setTodoList(normalizeTodoStateValue(data.items))
@@ -1361,6 +1387,7 @@ export function useChat(
                 })
               }
             } else if (data.type === 'queued') {
+              await textPacer.waitUntilIdle()
               flushBufferImmediately()
               const queued = data.message as Partial<QueuedChatMessage> | undefined
               if (!isStale()) {
@@ -1392,6 +1419,7 @@ export function useChat(
               return 'queued'
             } else if (data.type === 'done') {
               completed = true
+              await textPacer.waitUntilIdle()
               flushBufferImmediately()
               const snapshot = stream.snapshot()
               if (!isStale()) {
@@ -1436,6 +1464,7 @@ export function useChat(
           }
         }
       }
+      await textPacer.waitUntilIdle()
       flushBufferImmediately()
       if (!completed && !isStale()) {
         const snapshot = stream.snapshot()
@@ -1467,6 +1496,7 @@ export function useChat(
         }))
       }
     } catch (error) {
+      textPacer.flushNow()
       streamScheduler.cancel()
       stream.finish()
       flushBufferImmediately()
@@ -1557,6 +1587,7 @@ export function useChat(
       }
       return 'retry'
     }
+    textPacer.cancel()
     finishOwnedDirectStream()
     return 'sent'
   }, [authToken, clearUnfinishedTodoList, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])

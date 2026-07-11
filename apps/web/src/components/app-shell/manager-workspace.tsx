@@ -153,6 +153,7 @@ export function ManagerWorkspace({
   const elementCacheRef = useRef<Map<string, {
     key: string
     element: ReactNode
+    content: unknown
     contextFlow: unknown
     toolCalls: unknown
     segments: unknown
@@ -175,12 +176,13 @@ export function ManagerWorkspace({
       const cached = cache.get(msg.id)
       const key =
         sharedKey
+        + '|' + (msg.content === cached?.content ? 's' : 'd')
         + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
         + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
         + '|' + (msg.segments === cached?.segments ? 's' : 'd')
         + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
         + '|' + msg.role
-      if (cached && cached.key === key) {
+      if (cached && cached.key === key && !isStreaming) {
         messageElements.push(cached.element)
         continue
       }
@@ -209,6 +211,7 @@ export function ManagerWorkspace({
       cache.set(msg.id, {
         key,
         element,
+        content: msg.content,
         contextFlow: msg.contextFlow,
         toolCalls: msg.toolCalls,
         segments: msg.segments,
