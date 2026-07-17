@@ -2485,6 +2485,7 @@ export function registerChatRoutes(
                 // sends a complete message without preceding token deltas.
                 if (tokenBytesThisBlock === 0) {
                   contentChunks.push(event.content);
+                  accumulateToken(sessionId, event.content);
                   safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
                   emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
                 }
@@ -2696,14 +2697,27 @@ export function registerChatRoutes(
 
         // Persist assistant message with tool calls and segments
         if (sessionError) {
-          // A session.error was received — persist the error message so it's visible on reload.
-          const errSegJson = JSON.stringify([{ type: "error", content: sessionError }]);
+          const hasPartialOutput = fullContent.length > 0 || cliToolCalls.length > 0 || cliSegments.length > 0;
+          const persistedContent = hasPartialOutput ? fullContent : sessionError;
+          const persistedSegments = hasPartialOutput
+            ? [...cliSegments, { type: "error" as const, content: sessionError }]
+            : [{ type: "error" as const, content: sessionError }];
+          const persistedToolCalls = hasPartialOutput && cliToolCalls.length > 0 ? cliToolCalls : undefined;
           history.push({
             role: "assistant",
-            content: sessionError,
+            content: persistedContent,
+            uiToolCalls: persistedToolCalls,
+            segments: persistedSegments,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
-          persistMessage(sessionId, "assistant", sessionError, undefined, errSegJson, contextFlowJson);
+          persistMessage(
+            sessionId,
+            "assistant",
+            persistedContent,
+            persistedToolCalls ? JSON.stringify(persistedToolCalls) : undefined,
+            JSON.stringify(persistedSegments),
+            contextFlowJson,
+          );
           assistantTurnPersisted = true;
         } else {
           history.push({

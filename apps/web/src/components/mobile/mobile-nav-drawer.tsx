@@ -1,24 +1,16 @@
 import type { ReactNode } from 'react'
 import {
   Boxes,
-  Bug,
   Calendar,
-  Code,
-  FolderOpen,
-  GitBranch,
-  Globe,
   Mail,
   MessageSquare,
   Brain,
   Settings,
-  Terminal as TerminalIcon,
   Wifi,
   X,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { isMobileProjectTargetActive, type MobileProjectControlState, type MobileProjectTarget } from '@/lib/mobile-project-controls'
 import type { AppView } from '@/lib/app-view'
 
 interface NavItem {
@@ -47,22 +39,6 @@ interface MobileNavDrawerProps {
   // Projects / sessions sidebar
   sessionSelector: ReactNode
 
-  // Project tools
-  showProjectTools: boolean
-  activeProjectId: string | null
-  mobileProjectControlState: MobileProjectControlState
-  onProjectTargetAction: (target: MobileProjectTarget) => void
-  changedFilesCount: number
-  previewOpen: boolean
-  showArchitecture: boolean
-  showDebugPanel: boolean
-  showProject: boolean
-  authLoading: boolean
-  projectsLoading: boolean
-  onToggleArchitecture: () => void
-  onToggleDebugPanel: () => void
-  onTogglePreview: () => void
-
   // Settings
   onOpenSettings: () => void
 }
@@ -73,20 +49,6 @@ export function MobileNavDrawer({
   currentView,
   onNavigate,
   sessionSelector,
-  showProjectTools,
-  activeProjectId,
-  mobileProjectControlState,
-  onProjectTargetAction,
-  changedFilesCount,
-  previewOpen,
-  showArchitecture,
-  showDebugPanel,
-  showProject,
-  authLoading,
-  projectsLoading,
-  onToggleArchitecture,
-  onToggleDebugPanel,
-  onTogglePreview,
   onOpenSettings,
 }: MobileNavDrawerProps) {
   return (
@@ -164,112 +126,8 @@ export function MobileNavDrawer({
             </div>
           </div>
 
-          {/* Project tools */}
-          {showProjectTools && (
-            <div className="shrink-0 border-t p-2">
-              <div className="mb-1.5 px-1 text-2xs font-medium text-muted-foreground">Project tools</div>
-              <div className="grid grid-cols-4 gap-1">
-                <DrawerToolButton
-                  label="Terminal"
-                  active={isMobileProjectTargetActive(mobileProjectControlState, 'terminal')}
-                  onClick={() => onProjectTargetAction('terminal')}
-                  icon={TerminalIcon}
-                />
-                {activeProjectId && (
-                  <>
-                    <DrawerToolButton
-                      label="Files"
-                      active={isMobileProjectTargetActive(mobileProjectControlState, 'files')}
-                      onClick={() => onProjectTargetAction('files')}
-                      icon={FolderOpen}
-                    />
-                    <DrawerToolButton
-                      label="Changes"
-                      active={isMobileProjectTargetActive(mobileProjectControlState, 'git')}
-                      onClick={() => onProjectTargetAction('git')}
-                      icon={GitBranch}
-                      badge={changedFilesCount > 0 ? (changedFilesCount > 99 ? '99+' : String(changedFilesCount)) : undefined}
-                    />
-                    <DrawerToolButton
-                      label="Editor"
-                      active={isMobileProjectTargetActive(mobileProjectControlState, 'editor')}
-                      onClick={() => onProjectTargetAction('editor')}
-                      icon={Code}
-                    />
-                  </>
-                )}
-              </div>
-              {showProject && activeProjectId && (
-                <div className="mt-1.5 grid grid-cols-3 gap-1">
-                  <DrawerToolButton
-                    label="Preview"
-                    active={previewOpen}
-                    disabled={authLoading || projectsLoading}
-                    onClick={onTogglePreview}
-                    icon={Globe}
-                  />
-                  <DrawerToolButton
-                    label="Arch"
-                    active={showArchitecture}
-                    disabled={authLoading || projectsLoading}
-                    onClick={onToggleArchitecture}
-                    icon={Boxes}
-                  />
-                  <DrawerToolButton
-                    label="Debug"
-                    active={showDebugPanel}
-                    disabled={!showProject}
-                    onClick={onToggleDebugPanel}
-                    icon={Bug}
-                  />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </aside>
     </>
-  )
-}
-
-function DrawerToolButton({
-  label,
-  active,
-  disabled,
-  onClick,
-  icon: Icon,
-  badge,
-}: {
-  label: string
-  active: boolean
-  disabled?: boolean
-  onClick: () => void
-  icon: typeof MessageSquare
-  badge?: string
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={onClick}
-          disabled={disabled}
-          aria-label={label}
-          className={`relative flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-2xs transition-colors ${
-            active
-              ? 'bg-secondary text-foreground'
-              : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-          } ${disabled ? 'opacity-40' : ''}`}
-        >
-          <Icon className="h-5 w-5" />
-          <span>{label}</span>
-          {badge && (
-            <span className="absolute right-1 top-0.5 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">
-              {badge}
-            </span>
-          )}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="left">{label}</TooltipContent>
-    </Tooltip>
   )
 }

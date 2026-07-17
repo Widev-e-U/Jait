@@ -66,6 +66,10 @@ const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
 const CODE_HIGHLIGHT_CACHE_LIMIT = 120
 const codeHighlightCache = new Map<string, string | null>()
 
+export function getMobileMessageActionsPositionClassName(outsideBubble = false): string {
+  return outsideBubble ? 'right-0 top-full mt-0.5' : '-right-7 bottom-0.5'
+}
+
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
   return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
 }
@@ -875,7 +879,7 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            outsideBubble ? 'right-0 top-full mt-0.5' : 'right-0.5 bottom-0.5',
+            getMobileMessageActionsPositionClassName(outsideBubble),
           )}
         >
           <DropdownMenu>

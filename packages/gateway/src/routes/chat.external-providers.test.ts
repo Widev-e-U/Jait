@@ -176,6 +176,21 @@ class MockTodoChatProvider extends MockChatProvider {
   });
 }
 
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+
 class MockInterleavedToolChatProvider extends MockChatProvider {
   override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
     setTimeout(() => {
@@ -630,5 +645,71 @@ describe("chat external provider runtime mode selection", () => {
     ]);
 
     await app.close();
+  });
+
+  it("preserves a cancelled external-provider partial answer after reload", { timeout: 30_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const provider = new MockCancelledChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const sessionService = new SessionService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("cancelled-chat-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Cancelled Chat" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      providerRegistry,
+      sessionService,
+      userService,
+    });
+
+    const responsePromise = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "start a long answer",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    await waitForAssertion(() => expect(provider.partialEmitted).toBe(true));
+
+    const cancelResponse = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/cancel`,
+      headers,
+    });
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(cancelResponse.json()).toMatchObject({ ok: true, cancelled: true });
+    await responsePromise;
+
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers,
+    });
+
+    expect(messagesResponse.statusCode).toBe(200);
+    const body = messagesResponse.json() as {
+      messages: Array<{ role: string; content: string; segments?: Array<{ type: string; content?: string }> }>;
+    };
+    const assistantMessage = body.messages.find((message) => message.role === "assistant");
+    expect(assistantMessage?.content).toBe("Partial answer before cancellation.");
+    expect(assistantMessage?.segments).toEqual([
+      { type: "text", content: "Partial answer before cancellation." },
+      { type: "error", content: "Turn cancelled" },
+    ]);
+
+    await app.close();
+    sqlite.close();
   });
 });

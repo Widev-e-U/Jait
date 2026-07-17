@@ -4219,42 +4219,6 @@ function App() {
                     />
                   </ErrorBoundary>
                 }
-                showProjectTools={viewMode === 'developer' || (viewMode === 'manager' && Boolean(automation.selectedThread))}
-                activeProjectId={activeProjectId}
-                mobileProjectControlState={mobileProjectControlState}
-                onProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
-                changedFilesCount={changedFiles.length}
-                previewOpen={previewOpen}
-                showArchitecture={showArchitecture}
-                showDebugPanel={showDebugPanel}
-                showProject={showProject}
-                authLoading={authLoading}
-                projectsLoading={projectsLoading}
-                onToggleArchitecture={() => {
-                  if (showArchitecture) {
-                    projectRef.current?.closeArchitectureTab()
-                    setArchitectureRequest(null)
-                    setShowArchitecture(false)
-                  } else {
-                    setShowArchitecture(true)
-                    openArchitectureInProject()
-                  }
-                }}
-                onToggleDebugPanel={() => setShowDebugPanel((d) => !d)}
-                onTogglePreview={() => {
-                  if (previewOpen) {
-                    closeDevPreviewPanel()
-                  } else {
-                    const nextTarget = projectPreviewState.target
-                      ?? devPreviewTarget?.trim()
-                      ?? savedDevPreview?.target?.trim()
-                      ?? null
-                    if (routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)) {
-                      return
-                    }
-                    openDevPreviewPanel()
-                  }
-                }}
                 onOpenSettings={() => setCurrentView('settings')}
               />
             )}
