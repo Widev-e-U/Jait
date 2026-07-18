@@ -24,6 +24,7 @@ const DEFAULT_ITEM_HEIGHT = 120
 const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
 const ESTIMATE_TEXT_LIMIT = 12_000
+export const INITIAL_CONVERSATION_SCROLL_OFFSET = Number.MAX_SAFE_INTEGER
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
@@ -69,6 +70,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const virtualizer = useVirtualizer({
     count: childItems.length,
     getScrollElement: () => scrollRef.current,
+    initialOffset: INITIAL_CONVERSATION_SCROLL_OFFSET,
     estimateSize: (index) => {
       const text = messageContentsRef.current?.[index]
       if (!text) return DEFAULT_ITEM_HEIGHT

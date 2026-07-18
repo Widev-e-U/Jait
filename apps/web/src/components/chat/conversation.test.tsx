@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Conversation } from './conversation'
+import { Conversation, INITIAL_CONVERSATION_SCROLL_OFFSET } from './conversation'
 
 describe('Conversation', () => {
+  it('starts at the lowest available scroll position before the chat paints', () => {
+    expect(INITIAL_CONVERSATION_SCROLL_OFFSET).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('renders a scroll container that keeps mobile pull-to-refresh out of the chat surface', () => {
     const markup = renderToStaticMarkup(
       <Conversation messageContents={['hello']}>
