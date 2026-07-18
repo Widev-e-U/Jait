@@ -11,6 +11,13 @@ import { parseContextFlowEvent } from '@/lib/context-flow'
 import { normalizeTodoStateValue } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
+import {
+  deleteCachedChatHistory,
+  getChatCacheScope,
+  readCachedChatHistory,
+  reconcileChatHistory,
+  writeCachedChatHistory,
+} from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
@@ -25,7 +32,7 @@ import {
 } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
-const STREAM_SNAPSHOT_LIMIT = 10
+const STREAM_SNAPSHOT_LIMIT = 120
 const LAZY_LOAD_BATCH_SIZE = 20
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
 
@@ -376,6 +383,7 @@ export function useChat(
   onLoginRequired?: () => void,
   projectSurfaceId?: string | null,
 ) {
+  const cacheScope = getChatCacheScope(authToken, API_URL)
   const [state, setState] = useState<ChatState>({
     messages: [],
     isLoading: false,
@@ -408,6 +416,7 @@ export function useChat(
   const resumeStreamRunIdRef = useRef(0)
   const lastResumeSeqBySessionRef = useRef(new Map<string, number>())
   const requestVersionRef = useRef(0)
+  const cacheWriteReadySessionRef = useRef<string | null>(null)
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -417,6 +426,25 @@ export function useChat(
   // chat "freezing" until the user manually reloads or switches sessions.
   const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumeReconnectAttemptsRef = useRef(0)
+
+  useEffect(() => {
+    if (
+      !cacheScope
+      || !sessionId
+      || cacheWriteReadySessionRef.current !== sessionId
+      || state.isLoadingHistory
+      || state.messages.length === 0
+    ) return
+
+    const timer = window.setTimeout(() => {
+      void writeCachedChatHistory(cacheScope, sessionId, {
+        messages: state.messages,
+        hasMore: state.hasMore,
+        totalMessages: state.totalMessages,
+      })
+    }, 750)
+    return () => window.clearTimeout(timer)
+  }, [cacheScope, sessionId, state.hasMore, state.isLoadingHistory, state.messages, state.totalMessages])
 
   const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean }) => {
     if (
@@ -503,6 +531,7 @@ export function useChat(
     preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
     prevSessionIdRef.current = sessionId
+    cacheWriteReadySessionRef.current = null
 
     // Abort any previous stream-resume connection
     if (streamAbortRef.current) {
@@ -542,6 +571,18 @@ export function useChat(
     streamResumeSessionRef.current = sessionId
     const resumeRunId = ++resumeStreamRunIdRef.current
     const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
+    let serverSnapshotReceived = false
+
+    void readCachedChatHistory(cacheScope, sessionId).then((cached) => {
+      if (!cached || serverSnapshotReceived || !isCurrentResumeRun()) return
+      setState(prev => ({
+        ...prev,
+        messages: cached.messages,
+        isLoadingHistory: false,
+        hasMore: cached.hasMore,
+        totalMessages: cached.totalMessages,
+      }))
+    })
 
     ;(async () => {
       let cancelPendingSubscribeFlush: (() => void) | null = null
@@ -559,7 +600,24 @@ export function useChat(
           setState(prev => ({ ...prev, isLoadingHistory: false }))
           return
         }
-        if (!res.ok || !isCurrentResumeRun()) return
+        if (res.status === 404) {
+          serverSnapshotReceived = true
+          void deleteCachedChatHistory(cacheScope, sessionId)
+          if (isCurrentResumeRun()) {
+            setState(prev => ({
+              ...prev,
+              messages: [],
+              isLoadingHistory: false,
+              hasMore: false,
+              totalMessages: 0,
+            }))
+          }
+          return
+        }
+        if (!res.ok || !isCurrentResumeRun()) {
+          if (isCurrentResumeRun()) setState(prev => ({ ...prev, isLoadingHistory: false }))
+          return
+        }
         const reader = res.body?.getReader()
         if (!reader) return
 
@@ -662,6 +720,8 @@ export function useChat(
               pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
               if (data.type === 'snapshot') {
+                serverSnapshotReceived = true
+                cacheWriteReadySessionRef.current = sessionId
                 textPacer.flushNow()
                 const rawMsgs = data.messages as Array<{
                   id: string;
@@ -777,15 +837,19 @@ export function useChat(
                     toolCalls: lastMsg.toolCalls,
                   })
                 }
-                setState(prev => ({
-                  ...prev,
-                  messages: mergeSnapshotMessagesWithOptimisticUsers(msgs, prev.messages),
-                  isLoadingHistory: false,
-                  isLoading: snapshotStreaming,
-                  error: null,
-                  hasMore: !!(data.hasMore),
-                  totalMessages: typeof data.total === 'number' ? data.total : prev.totalMessages,
-                }))
+                setState(prev => {
+                  const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
+                  const reconciledMessages = reconcileChatHistory(prev.messages, msgs, totalMessages)
+                  return {
+                    ...prev,
+                    messages: mergeSnapshotMessagesWithOptimisticUsers(reconciledMessages, prev.messages),
+                    isLoadingHistory: false,
+                    isLoading: snapshotStreaming,
+                    error: null,
+                    hasMore: reconciledMessages.length < totalMessages,
+                    totalMessages,
+                  }
+                })
               } else if (data.type === 'token') {
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 textPacer.enqueueText(data.content as string)
@@ -994,7 +1058,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback((options?: { force?: boolean }) => {
@@ -1089,6 +1153,7 @@ export function useChat(
         }
         return msg
       })
+      cacheWriteReadySessionRef.current = sessionId
       setState(prev => ({
         ...prev,
         messages: [...olderMsgs, ...prev.messages],
@@ -1921,13 +1986,24 @@ export function useChat(
         throw new Error(errText || `HTTP ${res.status}`)
       }
 
-      const data = await res.json() as { messages?: ChatMessage[] }
-      setState(prev => ({
-        ...prev,
-        messages: data.messages ?? [],
-        isLoading: false,
-        error: null,
-      }))
+      const data = await res.json() as {
+        messages?: ChatMessage[]
+        total?: number
+        hasMore?: boolean
+      }
+      cacheWriteReadySessionRef.current = requestSessionId
+      setState(prev => {
+        const messages = data.messages ?? []
+        const totalMessages = data.total ?? messages.length
+        return {
+          ...prev,
+          messages,
+          isLoading: false,
+          error: null,
+          hasMore: data.hasMore ?? messages.length < totalMessages,
+          totalMessages,
+        }
+      })
 
       await sendMessage(editedContent.trim(), {
         token: effectiveToken,

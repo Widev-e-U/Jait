@@ -2,6 +2,11 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { AutomationRepo } from '@/lib/agents-api'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
+import {
+  getChatCacheScope,
+  readCachedProjectIndex,
+  writeCachedProjectIndex,
+} from '@/lib/chat-history-cache'
 
 const API_URL = getApiUrl()
 const PROJECT_LIST_LIMIT = 10
@@ -49,6 +54,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 }
 
 export function useProjects(token?: string | null, onLoginRequired?: () => void) {
+  const cacheScope = getChatCacheScope(token, API_URL)
   const [projects, setProjects] = useState<ProjectRecord[]>([])
   const [personalSessions, setPersonalSessions] = useState<ProjectSession[]>([])
   const [archivedSessionsByProject, setArchivedSessionsByProject] = useState<Record<string, ProjectSession[]>>({})
@@ -57,6 +63,9 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const [visibleLimit, setVisibleLimit] = useState(PROJECT_LIST_LIMIT)
   const [hasMoreProjects, setHasMoreProjects] = useState(false)
   const [loading, setLoading] = useState(true)
+  const cacheHydratedScopeRef = useRef<string | null>(null)
+  const hasCachedProjectIndexRef = useRef(false)
+  const cacheWriteReadyScopeRef = useRef<string | null>(null)
   const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
   if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
@@ -72,6 +81,56 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     [projects, activeProjectId],
   )
 
+  const hydrateCachedProjectIndex = useCallback(() => {
+    if (!cacheScope) {
+      cacheHydratedScopeRef.current = null
+      hasCachedProjectIndexRef.current = false
+      cacheWriteReadyScopeRef.current = null
+      return false
+    }
+    if (cacheHydratedScopeRef.current === cacheScope) return hasCachedProjectIndexRef.current
+
+    cacheHydratedScopeRef.current = cacheScope
+    const cached = readCachedProjectIndex<ProjectRecord, ProjectSession>(cacheScope)
+    hasCachedProjectIndexRef.current = Boolean(cached)
+    cacheWriteReadyScopeRef.current = cacheScope
+
+    if (!cached) {
+      setProjects([])
+      setPersonalSessions([])
+      setActiveProjectId(null)
+      setActiveSessionId(null)
+      return false
+    }
+
+    const routeSelection = initialRouteSelectionRef.current
+    const routedPersonalSession = routeSelection?.projectId == null
+      ? cached.personalSessions.find((session) => session.id === routeSelection?.sessionId)
+      : null
+    const routedProject = routeSelection?.projectId
+      ? cached.projects.find((project) => project.id === routeSelection.projectId)
+      : cached.projects.find((project) => project.sessions.some((session) => session.id === routeSelection?.sessionId))
+    const routedProjectSession = routedProject?.sessions.find((session) => session.id === routeSelection?.sessionId) ?? null
+
+    setProjects(cached.projects)
+    setPersonalSessions(cached.personalSessions)
+    setActiveProjectId(
+      routedPersonalSession
+        ? null
+        : routedProjectSession
+          ? routedProject?.id ?? null
+          : cached.activeProjectId,
+    )
+    setActiveSessionId(
+      routedPersonalSession?.id
+        ?? routedProjectSession?.id
+        ?? cached.activeSessionId,
+    )
+    setHasMoreProjects(cached.hasMoreProjects)
+    setLoading(false)
+    return true
+  }, [cacheScope])
+
   const fetchProjects = useCallback(async () => {
     if (!token) {
       setProjects([])
@@ -80,12 +139,16 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       setActiveProjectId(null)
       setActiveSessionId(null)
       setHasMoreProjects(false)
+      cacheHydratedScopeRef.current = null
+      hasCachedProjectIndexRef.current = false
+      cacheWriteReadyScopeRef.current = null
       // Keep loading=true until we get a real token and can actually fetch.
       // Setting false here caused a flash of "Add Project" empty state.
       return
     }
 
-    setLoading(true)
+    const hasCachedProjectIndex = hydrateCachedProjectIndex()
+    if (!hasCachedProjectIndex) setLoading(true)
     try {
       const [projectsRes, sessionsRes, lastActiveRes] = await Promise.all([
         fetch(`${API_URL}/api/projects?status=active&limit=${visibleLimit}`, { headers: authHeaders(token) }),
@@ -146,7 +209,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     } finally {
       setLoading(false)
     }
-  }, [onLoginRequired, token, visibleLimit])
+  }, [hydrateCachedProjectIndex, onLoginRequired, token, visibleLimit])
 
   const createProject = useCallback(async (options: CreateProjectOptions = {}) => {
     if (!token) {
@@ -500,6 +563,20 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  useEffect(() => {
+    if (!cacheScope || cacheWriteReadyScopeRef.current !== cacheScope) return
+    const timer = window.setTimeout(() => {
+      writeCachedProjectIndex(cacheScope, {
+        projects,
+        personalSessions,
+        activeProjectId,
+        activeSessionId,
+        hasMoreProjects,
+      })
+    }, 100)
+    return () => window.clearTimeout(timer)
+  }, [activeProjectId, activeSessionId, cacheScope, hasMoreProjects, personalSessions, projects])
 
   return {
     projects,
