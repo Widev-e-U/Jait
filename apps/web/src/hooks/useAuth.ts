@@ -110,6 +110,7 @@ export function useAuth() {
       await initAuthToken()
       const token = getAuthToken()
       if (token) {
+        setState((prev) => ({ ...prev, token }))
         void loadFromToken(token)
         return
       }

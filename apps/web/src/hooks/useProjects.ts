@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { AutomationRepo } from '@/lib/agents-api'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
@@ -563,6 +563,10 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  useLayoutEffect(() => {
+    hydrateCachedProjectIndex()
+  }, [hydrateCachedProjectIndex])
 
   useEffect(() => {
     if (!cacheScope || cacheWriteReadyScopeRef.current !== cacheScope) return

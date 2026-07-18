@@ -4,12 +4,15 @@ import type { ChatMessage } from '@/hooks/useChat'
 import {
   CHAT_HISTORY_CACHE_MESSAGE_LIMIT,
   CHAT_HISTORY_CACHE_RETENTION_MS,
+  STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
   getChatCacheScope,
   isChatCacheFresh,
   prepareChatHistoryForCache,
+  readCachedStartupChat,
   readCachedProjectIndex,
   reconcileChatHistory,
   writeCachedProjectIndex,
+  writeCachedStartupChat,
 } from '@/lib/chat-history-cache'
 
 function createToken(subject?: string): string {
@@ -93,6 +96,25 @@ describe('chat history retention', () => {
     expect(cached.messages.at(-1)).not.toHaveProperty('contextFlow')
     expect(cached.hasMore).toBe(true)
     expect(cached.updatedAt).toBe(123)
+  })
+})
+
+describe('startup chat cache', () => {
+  it('restores the latest messages synchronously and keeps pagination metadata', () => {
+    const storage = createStorage()
+    const messages = Array.from({ length: STARTUP_CHAT_CACHE_MESSAGE_LIMIT + 2 }, (_, index) => message(String(index)))
+
+    writeCachedStartupChat('gateway::user-1', 'session-1', {
+      messages,
+      hasMore: false,
+      totalMessages: messages.length,
+    }, storage)
+
+    const cached = readCachedStartupChat('gateway::user-1', 'session-1', storage)
+    expect(cached?.messages).toHaveLength(STARTUP_CHAT_CACHE_MESSAGE_LIMIT)
+    expect(cached?.messages[0]?.id).toBe('2')
+    expect(cached?.hasMore).toBe(true)
+    expect(cached?.totalMessages).toBe(messages.length)
   })
 })
 

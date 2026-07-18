@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { TodoItem } from '@/components/chat/todo-list'
@@ -15,8 +15,10 @@ import {
   deleteCachedChatHistory,
   getChatCacheScope,
   readCachedChatHistory,
+  readCachedStartupChat,
   reconcileChatHistory,
   writeCachedChatHistory,
+  writeCachedStartupChat,
 } from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
@@ -437,6 +439,11 @@ export function useChat(
     ) return
 
     const timer = window.setTimeout(() => {
+      writeCachedStartupChat(cacheScope, sessionId, {
+        messages: state.messages,
+        hasMore: state.hasMore,
+        totalMessages: state.totalMessages,
+      })
       void writeCachedChatHistory(cacheScope, sessionId, {
         messages: state.messages,
         hasMore: state.hasMore,
@@ -525,7 +532,7 @@ export function useChat(
   }, [resumeSessionStream, sessionId])
 
   // When sessionId changes, load history / resume active stream via SSE
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
     const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
     preserveMessagesOnNextResumeRef.current = false
@@ -554,12 +561,15 @@ export function useChat(
     setTodoList([])
 
     let cancelled = false
+    const startupCache = readCachedStartupChat(cacheScope, sessionId)
     setState(prev => ({
       ...prev,
-      messages: preserveExistingMessages ? prev.messages : [],
+      messages: preserveExistingMessages ? prev.messages : startupCache?.messages ?? [],
       isLoading: false,
-      isLoadingHistory: true,
+      isLoadingHistory: !startupCache,
       error: null,
+      hasMore: startupCache?.hasMore ?? false,
+      totalMessages: startupCache?.totalMessages ?? 0,
     }))
     if (!preserveExistingMessages) setChangedFiles([])
     setContextUsage(null)
@@ -574,7 +584,7 @@ export function useChat(
     let serverSnapshotReceived = false
 
     void readCachedChatHistory(cacheScope, sessionId).then((cached) => {
-      if (!cached || serverSnapshotReceived || !isCurrentResumeRun()) return
+      if (!cached || startupCache || serverSnapshotReceived || !isCurrentResumeRun()) return
       setState(prev => ({
         ...prev,
         messages: cached.messages,

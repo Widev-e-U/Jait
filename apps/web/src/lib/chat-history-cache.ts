@@ -7,6 +7,8 @@ const CHAT_HISTORY_DATABASE_NAME = 'jait-chat-history-cache'
 const CHAT_HISTORY_DATABASE_VERSION = 1
 const CHAT_HISTORY_STORE_NAME = 'chat-history'
 const PROJECT_INDEX_STORAGE_PREFIX = 'jait:project-index:v1:'
+const STARTUP_CHAT_STORAGE_PREFIX = 'jait:startup-chat:v1:'
+export const STARTUP_CHAT_CACHE_MESSAGE_LIMIT = 120
 const CHAT_HISTORY_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 let lastChatHistoryPruneAt = 0
@@ -122,6 +124,50 @@ export function reconcileChatHistory(
 
 function chatHistoryKey(scope: string, sessionId: string): string {
   return `${scope}::${sessionId}`
+}
+
+function startupChatStorageKey(scope: string, sessionId: string): string {
+  return `${STARTUP_CHAT_STORAGE_PREFIX}${encodeURIComponent(chatHistoryKey(scope, sessionId))}`
+}
+
+export function readCachedStartupChat(
+  scope: string | null,
+  sessionId: string,
+  storage: Pick<Storage, 'getItem' | 'removeItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
+  now = Date.now(),
+): CachedChatHistory | null {
+  if (!scope || !sessionId || !storage) return null
+  const key = startupChatStorageKey(scope, sessionId)
+  try {
+    const cached = JSON.parse(storage.getItem(key) ?? 'null') as CachedChatHistory | null
+    if (!cached || !Array.isArray(cached.messages) || !isChatCacheFresh(cached.updatedAt, now)) {
+      storage.removeItem(key)
+      return null
+    }
+    return cached
+  } catch {
+    storage.removeItem(key)
+    return null
+  }
+}
+
+export function writeCachedStartupChat(
+  scope: string | null,
+  sessionId: string,
+  history: Omit<CachedChatHistory, 'updatedAt'>,
+  storage: Pick<Storage, 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
+): void {
+  if (!scope || !sessionId || !storage || history.messages.length === 0) return
+  try {
+    const prepared = prepareChatHistoryForCache(history.messages, history.hasMore, history.totalMessages)
+    storage.setItem(startupChatStorageKey(scope, sessionId), JSON.stringify({
+      ...prepared,
+      messages: prepared.messages.slice(-STARTUP_CHAT_CACHE_MESSAGE_LIMIT),
+      hasMore: prepared.hasMore || prepared.messages.length > STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
+    }))
+  } catch {
+    // Startup cache writes are best-effort and must never interrupt chat rendering.
+  }
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
