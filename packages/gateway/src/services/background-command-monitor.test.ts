@@ -85,6 +85,24 @@ describe("BackgroundCommandMonitor", () => {
     expect(results[0]!.exitCode).toBe(1);
   });
 
+  it("fires from the injected completion sentinel when OSC markers are absent", async () => {
+    const results: BackgroundCommandResult[] = [];
+    backgroundCommandMonitor.setCompletionHandler((r) => {
+      results.push(r);
+    });
+    const surface = new FakeSurface();
+    const completionToken = "__JAIT_BACKGROUND_DONE_019f74ed-1111-7222-a333-abcdefabcdef__";
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "printf hi", surface, completionToken });
+
+    surface.emit("printf hi\r\nhi\r\n" + completionToken + ":0\r\n");
+    await flush();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!).toMatchObject({ command: "printf hi", exitCode: 0 });
+    expect(results[0]!.output).toBe("hi");
+    expect(backgroundCommandMonitor.activeCount).toBe(0);
+  });
+
   it("does not fire for a never-ending process (no done marker)", async () => {
     const handler = vi.fn();
     backgroundCommandMonitor.setCompletionHandler(handler);

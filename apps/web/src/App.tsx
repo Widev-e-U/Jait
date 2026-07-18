@@ -2479,11 +2479,12 @@ function App() {
     if (changedFiles.length === 0) return
     if (changedFiles.length <= previousCount) return
     if (suppressProjectAutoOpenRef.current) return
+    if (isMobile) return
     if (!showProject) {
       showProjectRef.current = true
       setShowProject(true)
     }
-  }, [changedFiles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [changedFiles.length, isMobile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the project editor
   const changedPaths = useMemo(

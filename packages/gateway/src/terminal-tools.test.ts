@@ -8,6 +8,7 @@ import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import type { TerminalSurface } from "./surfaces/terminal.js";
 import { SecretInputService } from "./services/secret-input.js";
+import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 
 function makeContext() {
   return {
@@ -196,6 +197,33 @@ describe("terminal.run tool status reporting", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
+  });
+
+  it("background mode appends a completion sentinel after the requested command", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const writes: string[] = [];
+    const surface = {
+      id: "term-existing",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      addOutputListener() {},
+      removeOutputListener() {},
+      write(data: string) {
+        writes.push(data);
+      },
+      snapshot() {
+        return { metadata: { shell: "/bin/bash" } };
+      },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const tool = createTerminalRunTool(registry);
+
+    const result = await tool.execute({ command: "printf hi", terminalId: "term-existing", isBackground: true }, makeContext());
+
+    expect(result.ok).toBe(true);
+    expect(writes[0]).toMatch(/^printf hi\nprintf '\\n__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:%s\\n' "\$\?"\r$/);
+    backgroundCommandMonitor.clearForTests();
   });
 
   it("completes when a non-OSC shell prompt returns", async () => {

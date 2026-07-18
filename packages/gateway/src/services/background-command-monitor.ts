@@ -39,6 +39,8 @@ export interface TrackBackgroundCommandOptions {
   terminalId: string;
   command: string;
   surface: MonitorableSurface;
+  /** Optional sentinel printed by the terminal tool when shell integration is unavailable. */
+  completionToken?: string;
   /**
    * Stop watching after this long. Guards against never-ending processes
    * (servers/watchers) leaking listeners forever. Default 30 minutes.
@@ -49,6 +51,7 @@ export interface TrackBackgroundCommandOptions {
 // OSC 633;D;{exitCode} — command finished (exit code may be empty/negative).
 // eslint-disable-next-line no-control-regex
 const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
+const SENTINEL_RE = /__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:(-?\d+)/;
 
 const DEFAULT_MAX_WATCH_MS = 30 * 60_000;
 const MAX_OUTPUT_CHARS = 4000;
@@ -66,6 +69,7 @@ export function extractCompletionOutput(raw: string, command: string): string {
     .replace(/\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1b\\))/g, "")
     // eslint-disable-next-line no-control-regex
     .replace(/\x07/g, "")
+    .replace(SENTINEL_RE, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "");
 
@@ -86,6 +90,10 @@ export function extractCompletionOutput(raw: string, command: string): string {
     text = "…(truncated)\n" + text.slice(-MAX_OUTPUT_CHARS);
   }
   return text || "(no output)";
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 interface ActiveWatcher {
@@ -138,7 +146,10 @@ class BackgroundCommandMonitor {
     const listener = (data: string) => {
       if (finished) return;
       raw += data;
-      const match = raw.match(OSC_DONE_RE);
+      const tokenMatch = options.completionToken
+        ? raw.match(new RegExp(`${escapeRegExp(options.completionToken)}:(-?\\d+)`))
+        : null;
+      const match = raw.match(OSC_DONE_RE) ?? tokenMatch;
       if (!match) return;
 
       finished = true;

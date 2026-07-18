@@ -133,4 +133,35 @@ describe('project editor reopen behavior', () => {
     expect(setSavedProject).toHaveBeenCalledWith({ open: true, remotePath: '/repo' })
     expect(calls).toEqual(['showProject', 'layout', 'panel'])
   })
+
+
+  it('auto-opening changed files remains desktop-only', () => {
+    const setShowProject = vi.fn()
+    const showProjectRef = { current: false }
+
+    const autoOpenForChangedFiles = (isMobile: boolean) => {
+      const previousCount = 0
+      const changedFiles = [{ path: '/repo/file.ts', state: 'undecided' }]
+      const suppressProjectAutoOpen = false
+      const showProject = false
+
+      if (previousCount === null) return
+      if (changedFiles.length === 0) return
+      if (changedFiles.length <= previousCount) return
+      if (suppressProjectAutoOpen) return
+      if (isMobile) return
+      if (!showProject) {
+        showProjectRef.current = true
+        setShowProject(true)
+      }
+    }
+
+    autoOpenForChangedFiles(true)
+    expect(setShowProject).not.toHaveBeenCalled()
+    expect(showProjectRef.current).toBe(false)
+
+    autoOpenForChangedFiles(false)
+    expect(setShowProject).toHaveBeenCalledWith(true)
+    expect(showProjectRef.current).toBe(true)
+  })
 })
