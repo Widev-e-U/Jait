@@ -588,13 +588,13 @@ export function createTerminalRunTool(
         //    the terminal for completion (OSC 633) so the agent can be
         //    automatically re-triggered when the command finishes.
         if (isBackground) {
-          surface.write(command + "\r");
           backgroundCommandMonitor.track({
             sessionId: context.sessionId,
             terminalId,
             command,
             surface,
           });
+          surface.write(command + "\r");
           return {
             ok: true,
             message: `Background command started in terminal ${terminalId}. You'll be notified automatically when it finishes — end your turn and wait rather than polling.`,

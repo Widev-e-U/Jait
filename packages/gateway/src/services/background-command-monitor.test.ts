@@ -55,6 +55,22 @@ describe("BackgroundCommandMonitor", () => {
     expect(backgroundCommandMonitor.activeCount).toBe(0);
   });
 
+  it("handles completion emitted immediately after tracking starts", async () => {
+    const results: BackgroundCommandResult[] = [];
+    backgroundCommandMonitor.setCompletionHandler((r) => {
+      results.push(r);
+    });
+    const surface = new FakeSurface();
+
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "true", surface });
+    surface.emit("true\r\n" + oscDone(0));
+    await flush();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!).toMatchObject({ command: "true", exitCode: 0 });
+    expect(backgroundCommandMonitor.activeCount).toBe(0);
+  });
+
   it("captures a non-zero exit code", async () => {
     const results: BackgroundCommandResult[] = [];
     backgroundCommandMonitor.setCompletionHandler((r) => {
