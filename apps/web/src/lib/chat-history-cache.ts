@@ -18,6 +18,7 @@ export interface CachedChatHistory {
   hasMore: boolean
   totalMessages: number
   updatedAt: number
+  streaming?: boolean
 }
 
 interface StoredChatHistory extends CachedChatHistory {
@@ -78,11 +79,12 @@ export function prepareChatHistoryForCache(
   hasMore: boolean,
   totalMessages: number,
   updatedAt = Date.now(),
+  preserveEmptyAssistant = false,
 ): CachedChatHistory {
   const stableMessages = messages
     .filter((message) => !message.optimistic)
     .filter((message, index, source) => {
-      if (index !== source.length - 1 || message.role !== 'assistant') return true
+      if (index !== source.length - 1 || message.role !== 'assistant' || preserveEmptyAssistant) return true
       return Boolean(message.content || message.thinking || message.toolCalls?.length || message.segments?.length)
     })
     .slice(-CHAT_HISTORY_CACHE_MESSAGE_LIMIT)
@@ -159,9 +161,16 @@ export function writeCachedStartupChat(
 ): void {
   if (!scope || !sessionId || !storage || history.messages.length === 0) return
   try {
-    const prepared = prepareChatHistoryForCache(history.messages, history.hasMore, history.totalMessages)
+    const prepared = prepareChatHistoryForCache(
+      history.messages,
+      history.hasMore,
+      history.totalMessages,
+      Date.now(),
+      history.streaming === true,
+    )
     storage.setItem(startupChatStorageKey(scope, sessionId), JSON.stringify({
       ...prepared,
+      streaming: history.streaming === true,
       messages: prepared.messages.slice(-STARTUP_CHAT_CACHE_MESSAGE_LIMIT),
       hasMore: prepared.hasMore || prepared.messages.length > STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
     }))

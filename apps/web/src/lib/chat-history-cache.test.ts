@@ -108,6 +108,7 @@ describe('startup chat cache', () => {
       messages,
       hasMore: false,
       totalMessages: messages.length,
+      streaming: true,
     }, storage)
 
     const cached = readCachedStartupChat('gateway::user-1', 'session-1', storage)
@@ -115,6 +116,24 @@ describe('startup chat cache', () => {
     expect(cached?.messages[0]?.id).toBe('2')
     expect(cached?.hasMore).toBe(true)
     expect(cached?.totalMessages).toBe(messages.length)
+    expect(cached?.streaming).toBe(true)
+  })
+
+  it('keeps an empty assistant placeholder while generation is active', () => {
+    const storage = createStorage()
+    const messages: ChatMessage[] = [
+      { id: 'user', role: 'user', content: 'hello' },
+      { id: 'assistant', role: 'assistant', content: '' },
+    ]
+
+    writeCachedStartupChat('gateway::user-1', 'session-1', {
+      messages,
+      hasMore: false,
+      totalMessages: messages.length,
+      streaming: true,
+    }, storage)
+
+    expect(readCachedStartupChat('gateway::user-1', 'session-1', storage)?.messages.at(-1)).toEqual(messages[1])
   })
 })
 

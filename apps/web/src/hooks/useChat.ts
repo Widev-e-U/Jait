@@ -443,6 +443,7 @@ export function useChat(
         messages: state.messages,
         hasMore: state.hasMore,
         totalMessages: state.totalMessages,
+        streaming: state.isLoading,
       })
       void writeCachedChatHistory(cacheScope, sessionId, {
         messages: state.messages,
@@ -451,7 +452,7 @@ export function useChat(
       })
     }, 750)
     return () => window.clearTimeout(timer)
-  }, [cacheScope, sessionId, state.hasMore, state.isLoadingHistory, state.messages, state.totalMessages])
+  }, [cacheScope, sessionId, state.hasMore, state.isLoading, state.isLoadingHistory, state.messages, state.totalMessages])
 
   const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean }) => {
     if (
@@ -565,7 +566,7 @@ export function useChat(
     setState(prev => ({
       ...prev,
       messages: preserveExistingMessages ? prev.messages : startupCache?.messages ?? [],
-      isLoading: false,
+      isLoading: startupCache?.streaming === true,
       isLoadingHistory: !startupCache,
       error: null,
       hasMore: startupCache?.hasMore ?? false,
