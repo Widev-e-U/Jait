@@ -413,24 +413,9 @@ function StaticMarkdown({
   )
 }
 
-function StreamingText({
+export const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   compact,
-}: {
-  content: string
-  compact?: boolean
-}) {
-  return (
-    <div className={proseClassName(compact)}>
-      <div data-streaming-text="true" className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{content}</div>
-    </div>
-  )
-}
-
-const AssistantMarkdown = memo(function AssistantMarkdown({
-  content,
-  compact,
-  isStreaming,
   onOpenPath,
 }: {
   content: string
@@ -439,10 +424,6 @@ const AssistantMarkdown = memo(function AssistantMarkdown({
   preferLlmUi?: boolean
   onOpenPath?: MessageProps['onOpenPath']
 }) {
-  if (isStreaming) {
-    return <StreamingText content={content} compact={compact} />
-  }
-
   return <StaticMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
 })
 AssistantMarkdown.displayName = 'AssistantMarkdown'

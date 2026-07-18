@@ -41,6 +41,7 @@ import {
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
+import { buildBackgroundCommandContinuationPayload } from "../services/background-command-continuation.js";
 import { matchSkills } from "../services/thread-router.js";
 import {
   type ChatMode,
@@ -1596,9 +1597,6 @@ export function registerChatRoutes(
     if (!sessionService || !userService) return;
     const session = sessionService.getById(result.sessionId);
     if (!session || session.status !== "active" || !session.userId) return;
-    const settings = userService.getSettings(session.userId);
-    // Idle auto-turn is only wired for the native Jait provider for now.
-    if ((settings?.chatProvider ?? "jait") !== "jait") return;
     const user = userService.findById(session.userId);
     if (!user) return;
     try {
@@ -1607,7 +1605,13 @@ export function registerChatRoutes(
         method: "POST",
         url: "/api/chat",
         headers: { authorization: `Bearer ${token}` },
-        payload: { sessionId: result.sessionId, _systemNotification: note },
+        payload: buildBackgroundCommandContinuationPayload({
+          sessionId: result.sessionId,
+          notification: note,
+          userId: user.id,
+          userService,
+          sessionState: sessionStateService,
+        }),
       });
     } catch (err) {
       app.log.error(err, "Failed to start background-command notification turn");
@@ -2507,7 +2511,7 @@ export function registerChatRoutes(
           chatMode,
           promptCtx,
         );
-        const cliContentWithAttachments = appendUploadedAttachmentPromptBlock(content, attachments);
+        const cliContentWithAttachments = appendUploadedAttachmentPromptBlock(systemNotification ?? content, attachments);
         const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${cliContentWithAttachments}` : cliContentWithAttachments;
         const recentContextBlock = isNewCliSession ? buildExternalProviderRecentContext(history) : null;
         let cliContent = cliUserContent;

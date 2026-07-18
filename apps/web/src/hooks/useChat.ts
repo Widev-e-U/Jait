@@ -18,12 +18,12 @@ import {
   readCachedStartupChat,
   reconcileChatHistory,
   writeCachedChatHistory,
-  writeCachedStartupChat,
 } from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import { createStreamTextPacer } from '@/lib/stream-text-pacer'
+import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -419,6 +419,8 @@ export function useChat(
   const lastResumeSeqBySessionRef = useRef(new Map<string, number>())
   const requestVersionRef = useRef(0)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
+  const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
+  if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -429,6 +431,8 @@ export function useChat(
   const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumeReconnectAttemptsRef = useRef(0)
 
+  useEffect(() => () => startupCacheWriterRef.current?.flush(), [])
+
   useEffect(() => {
     if (
       !cacheScope
@@ -438,13 +442,17 @@ export function useChat(
       || state.messages.length === 0
     ) return
 
-    const timer = window.setTimeout(() => {
-      writeCachedStartupChat(cacheScope, sessionId, {
+    startupCacheWriterRef.current?.schedule({
+      scope: cacheScope,
+      sessionId,
+      history: {
         messages: state.messages,
         hasMore: state.hasMore,
         totalMessages: state.totalMessages,
         streaming: state.isLoading,
-      })
+      },
+    })
+    const timer = window.setTimeout(() => {
       void writeCachedChatHistory(cacheScope, sessionId, {
         messages: state.messages,
         hasMore: state.hasMore,
@@ -535,6 +543,7 @@ export function useChat(
   // When sessionId changes, load history / resume active stream via SSE
   useLayoutEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
+    startupCacheWriterRef.current?.flush()
     const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
     preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
@@ -1184,6 +1193,7 @@ export function useChat(
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
+    if (requestSessionId) cacheWriteReadySessionRef.current = requestSessionId
     const outboundAttachments = mergeChatAttachments(options.attachments, attachmentsFromSegments(options.displaySegments))
     const assistantId = createOptimisticMessageId('assistant')
 
