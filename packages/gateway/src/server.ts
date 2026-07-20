@@ -68,6 +68,7 @@ import type { HookBus } from "./scheduler/hooks.js";
 import type { SchedulerService } from "./scheduler/service.js";
 import type { MemoryService } from "./memory/contracts.js";
 import type { UserService } from "./services/users.js";
+import type { ProviderAccountService } from "./services/provider-accounts.js";
 import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
@@ -128,6 +129,7 @@ export interface ServerDeps {
   maintenanceService?: import("./services/maintenance.js").MaintenanceService;
   notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
+  providerAccountService?: ProviderAccountService;
   shutdown?: () => Promise<void>;
   gitService?: GitService;
   previewService?: import("./services/preview.js").PreviewService;
@@ -306,6 +308,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.providerRegistry) {
     registerProviderRoutes(app, config, {
       providerRegistry: deps.providerRegistry,
+      providerAccountService: deps.providerAccountService,
       userService: deps.userService,
       ws: deps.ws,
     });

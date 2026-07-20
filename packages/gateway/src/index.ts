@@ -35,6 +35,7 @@ import { UserQuestionService } from "./services/user-questions.js";
 import { UserSecretService } from "./services/user-secrets.js";
 import { EmailService } from "./services/email/index.js";
 import { UserService } from "./services/users.js";
+import { ProviderAccountService } from "./services/provider-accounts.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
@@ -142,9 +143,12 @@ async function main() {
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
-  for (const acpProvider of loadAcpProviderConfigs()) {
-    providerRegistry.register(new AcpProvider(acpProvider));
+  const acpProviderConfigs = loadAcpProviderConfigs();
+  for (const acpProvider of acpProviderConfigs) {
+    if (acpProvider.id !== "codex") providerRegistry.register(new AcpProvider(acpProvider));
   }
+  const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs);
+  providerAccountService.load();
 
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();
@@ -861,6 +865,7 @@ async function main() {
     maintenanceService,
     notifications,
     providerRegistry,
+    providerAccountService,
     previewService,
     architectureDiagramService,
     gitService,

@@ -71,6 +71,8 @@ export type ProviderEvent =
 
 export interface CliProviderAdapter {
   readonly id: ProviderId;
+  readonly providerType?: ProviderId;
+  readonly ownerUserId?: string;
   readonly info: ProviderInfo;
 
   /**
@@ -139,6 +141,8 @@ export interface CliProviderAdapter {
    * Returns an unsubscribe function.
    */
   onEvent(handler: (event: ProviderEvent) => void): () => void;
+
+  dispose?(): Promise<void>;
 }
 
 export interface StartSessionOptions {

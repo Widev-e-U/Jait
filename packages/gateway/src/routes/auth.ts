@@ -28,7 +28,6 @@ function clearAuthCookie(reply: FastifyReply): void {
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper", "gpt", "elevenlabs"]);
-const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
 const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter", "ollama"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -191,8 +190,8 @@ export function registerAuthRoutes(
       patch.sttProvider = body.stt_provider as SttProvider;
     }
 
-    if (typeof body.chat_provider === "string" && CHAT_PROVIDER_VALUES.has(body.chat_provider as ChatProvider)) {
-      patch.chatProvider = body.chat_provider as ChatProvider;
+    if (typeof body.chat_provider === "string" && body.chat_provider.trim()) {
+      patch.chatProvider = body.chat_provider.trim();
     }
 
     if (typeof body.jait_backend === "string" && JAIT_BACKEND_VALUES.has(body.jait_backend as JaitBackend)) {

@@ -1,4 +1,5 @@
 import type React from 'react'
+import { providerTypeFromId } from '@jait/shared'
 import {
   ArrowUpCircle,
   Brain,
@@ -318,20 +319,21 @@ export function AppHeader(props: AppHeaderProps) {
             <ContextIndicator usage={contextUsage} />
             {(() => {
               const effectiveModel = cliModel ?? model
-              const displayProvider = chatProvider === 'codex' ? 'openai'
-                : chatProvider === 'claude-code' ? 'anthropic'
+              const chatProviderType = providerTypeFromId(chatProvider)
+              const displayProvider = chatProviderType === 'codex' ? 'openai'
+                : chatProviderType === 'claude-code' ? 'anthropic'
                 : provider ?? 'ollama'
-              const displayModel = chatProvider === 'codex' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Codex')
-                : chatProvider === 'claude-code' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Claude Code')
+              const displayModel = chatProviderType === 'codex' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Codex')
+                : chatProviderType === 'claude-code' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Claude Code')
                 : effectiveModel ? getModelDisplayName(effectiveModel) : null
-              const tooltipText = chatProvider === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
-                : chatProvider === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
+              const tooltipText = chatProviderType === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
+                : chatProviderType === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
                 : effectiveModel ?? ''
               return displayModel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="ui-pill cursor-default sm:mr-2">
-                      <ModelIcon provider={displayProvider} model={chatProvider === 'codex' ? 'codex' : chatProvider === 'claude-code' ? 'claude-3' : effectiveModel ?? undefined} size={16} />
+                      <ModelIcon provider={displayProvider} model={chatProviderType === 'codex' ? 'codex' : chatProviderType === 'claude-code' ? 'claude-3' : effectiveModel ?? undefined} size={16} />
                       <span className="text-xs text-muted-foreground hidden sm:inline">{displayModel}</span>
                     </div>
                   </TooltipTrigger>

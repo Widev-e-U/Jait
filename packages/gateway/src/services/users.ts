@@ -6,7 +6,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "wyoming" | "whisper" | "gpt" | "elevenlabs";
-export type ChatProvider = "jait" | "codex" | "claude-code";
+export type ChatProvider = string;
 export type JaitBackend = "openai" | "openrouter" | "ollama";
 /** Reasoning effort levels for reasoning-capable models (OpenAI o-series / GPT-5, etc). */
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high";

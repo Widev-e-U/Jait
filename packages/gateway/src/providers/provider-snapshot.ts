@@ -16,6 +16,7 @@ import type { ProviderAuthInfo, RuntimeMode } from "./contracts.js";
 
 export interface ProviderSnapshot {
   id: string;
+  providerType?: string;
   name: string;
   description: string;
   available: boolean;
@@ -54,6 +55,11 @@ export class ProviderSnapshotCache {
     return this.refresh();
   }
 
+  invalidate(): void {
+    this.snapshot = null;
+    this.computedAt = 0;
+  }
+
   /** Kick a background refresh without awaiting it (used to warm at startup). */
   warm(): void {
     void this.refresh().catch(() => {});
@@ -85,6 +91,7 @@ export class ProviderSnapshotCache {
         );
         return {
           id: p.id,
+          providerType: p.providerType ?? p.info.providerType,
           name: p.info.name,
           description: p.info.description,
           available: p.info.available,

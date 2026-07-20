@@ -1087,4 +1087,25 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 43,
+    name: "provider_accounts",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS provider_accounts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider_type TEXT NOT NULL,
+          label TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_user_type_label ON provider_accounts(user_id, provider_type, label)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_provider_accounts_user ON provider_accounts(user_id, updated_at DESC)`);
+      db.exec(`UPDATE user_settings SET chat_provider = 'jait' WHERE chat_provider = 'codex'`);
+      db.exec(`UPDATE session_state SET value = '"jait"' WHERE key = 'chat.provider' AND value = '"codex"'`);
+    },
+  },
+
 ];

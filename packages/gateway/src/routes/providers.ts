@@ -21,6 +21,7 @@ import {
   fetchOllamaModels,
 } from "../providers/model-fetchers.js";
 import type { UserService } from "../services/users.js";
+import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache } from "../providers/provider-snapshot.js";
@@ -29,6 +30,7 @@ import { ProviderSnapshotCache } from "../providers/provider-snapshot.js";
 
 export interface ProviderRouteDeps {
   providerRegistry: ProviderRegistry;
+  providerAccountService?: ProviderAccountService;
   userService?: UserService;
   ws?: WsControlPlane;
 }
@@ -46,6 +48,64 @@ export function registerProviderRoutes(
   const snapshotCache = new ProviderSnapshotCache(providerRegistry);
   snapshotCache.warm();
 
+  app.get("/api/provider-accounts", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    return { accounts: deps.providerAccountService?.list(authUser.id) ?? [] };
+  });
+
+  app.post("/api/provider-accounts", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.providerAccountService) return reply.status(503).send({ error: "Provider account service is unavailable" });
+    const body = (request.body ?? {}) as { providerType?: string; label?: string };
+    try {
+      const account = deps.providerAccountService.create(
+        authUser.id,
+        typeof body.providerType === "string" ? body.providerType : "",
+        typeof body.label === "string" ? body.label : "",
+      );
+      snapshotCache.invalidate();
+      return reply.status(201).send({ account });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create provider account";
+      const status = message.includes("UNIQUE constraint") ? 409 : 400;
+      return reply.status(status).send({ error: status === 409 ? "An account with this label already exists" : message });
+    }
+  });
+
+  app.patch("/api/provider-accounts/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.providerAccountService) return reply.status(503).send({ error: "Provider account service is unavailable" });
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { label?: string };
+    try {
+      const account = await deps.providerAccountService.rename(id, authUser.id, typeof body.label === "string" ? body.label : "");
+      if (!account) return reply.status(404).send({ error: "Provider account not found" });
+      snapshotCache.invalidate();
+      return { account };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to rename provider account";
+      const status = message.includes("UNIQUE constraint") ? 409 : 400;
+      return reply.status(status).send({ error: status === 409 ? "An account with this label already exists" : message });
+    }
+  });
+
+  app.delete("/api/provider-accounts/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.providerAccountService) return reply.status(503).send({ error: "Provider account service is unavailable" });
+    const { id } = request.params as { id: string };
+    const deleted = await deps.providerAccountService.delete(id, authUser.id);
+    if (!deleted) return reply.status(404).send({ error: "Provider account not found" });
+    if (deps.userService?.getSettings(authUser.id).chatProvider === id) {
+      deps.userService.updateSettings(authUser.id, { chatProvider: "jait" });
+    }
+    snapshotCache.invalidate();
+    return { ok: true };
+  });
+
   /** List available providers (local + remote) */
   app.get("/api/providers", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -54,7 +114,8 @@ export function registerProviderRoutes(
     // `?fresh=1` forces a synchronous re-probe (used by explicit UI refresh).
     const fresh = (request.query as { fresh?: string } | undefined)?.fresh;
     const force = fresh === "1" || fresh === "true";
-    const providerSnapshots = await snapshotCache.get(force);
+    const providerSnapshots = (await snapshotCache.get(force))
+      .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id));
 
     // Collect remote provider info from connected filesystem nodes (cheap, live).
     const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
@@ -82,7 +143,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.getAuthStatus) {
       return reply.status(501).send({ error: `Provider ${id} does not support auth status` });
@@ -96,7 +157,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.startLogin) {
       return reply.status(501).send({ error: `Provider ${id} does not support login` });
@@ -122,7 +183,7 @@ export function registerProviderRoutes(
       return reply.status(400).send({ error: "Missing or empty code" });
     }
 
-    const provider = providerRegistry.get(id as ProviderId);
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.sendLoginInput) {
       return reply.status(501).send({ error: `Provider ${id} does not support code input` });
@@ -138,7 +199,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.logout) {
       return reply.status(501).send({ error: `Provider ${id} does not support logout` });
@@ -159,7 +220,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.get(id as ProviderId);
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) {
       return reply.status(404).send({ error: `Unknown provider: ${id}` });
     }

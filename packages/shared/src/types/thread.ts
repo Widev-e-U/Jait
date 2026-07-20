@@ -9,8 +9,14 @@
 
 export type ProviderId = string;
 
+export function providerTypeFromId(providerId: ProviderId): ProviderId {
+  if (providerId.startsWith("codex-")) return "codex";
+  return providerId;
+}
+
 export interface ProviderInfo {
   id: ProviderId;
+  providerType?: ProviderId;
   name: string;
   description: string;
   available: boolean;

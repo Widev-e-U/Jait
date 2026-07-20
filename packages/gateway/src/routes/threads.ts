@@ -773,6 +773,11 @@ export function registerThreadRoutes(
     if (!resolvedProvider.providerId) {
       return reply.status(400).send({ error: resolvedProvider.error });
     }
+    const providerAvailable = providerRegistry.getForUser(resolvedProvider.providerId, authUser.id)
+      || ws?.getFsNodes().some((node) => node.providers?.includes(resolvedProvider.providerId!));
+    if (!providerAvailable) {
+      return reply.status(400).send({ error: `Provider '${resolvedProvider.providerId}' is not available for this user` });
+    }
     const thread = threadService.create({
       userId: authUser.id,
       sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
@@ -836,6 +841,11 @@ export function registerThreadRoutes(
       );
       if (!resolvedProvider.providerId) {
         return reply.status(400).send({ error: resolvedProvider.error });
+      }
+      const providerAvailable = providerRegistry.getForUser(resolvedProvider.providerId, authUser.id)
+        || ws?.getFsNodes().some((node) => node.providers?.includes(resolvedProvider.providerId!));
+      if (!providerAvailable) {
+        return reply.status(400).send({ error: `Provider '${resolvedProvider.providerId}' is not available for this user` });
       }
       providerId = resolvedProvider.providerId;
     }
@@ -959,7 +969,7 @@ export function registerThreadRoutes(
     // Determine if we need a remote provider:
     // If the path doesn't exist locally, look for a connected remote node
     // that matches the path's platform and has the requested provider.
-    let provider = providerRegistry.get(providerId);
+    let provider = providerRegistry.getForUser(providerId, authUser.id);
     let isRemote = false;
     let executionNode: { id: string; name: string } | null = null;
 

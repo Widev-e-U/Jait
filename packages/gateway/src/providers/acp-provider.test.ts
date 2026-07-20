@@ -518,6 +518,38 @@ describe("AcpProvider auth", () => {
     }
   });
 
+  it("uses account-scoped Codex credentials when the adapter id is an account id", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-account-home-"));
+    const previousCodexHome = process.env.CODEX_HOME;
+    delete process.env.CODEX_HOME;
+    writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ tokens: { access_token: "account-token" } }));
+
+    try {
+      const provider = new AcpProvider({
+        id: "codex-019f7e48-8294-7646-a594-11cc0ba2f50b",
+        providerType: "codex",
+        ownerUserId: "user-1",
+        name: "Codex — Work",
+        description: "Codex via ACP",
+        command: process.execPath,
+        args: ["-e", fakeAcpAgentScript],
+        env: { CODEX_HOME: codexHome },
+      });
+
+      expect(provider.providerType).toBe("codex");
+      expect(provider.ownerUserId).toBe("user-1");
+      await expect(provider.getAuthStatus()).resolves.toMatchObject({
+        login: true,
+        logout: true,
+        authenticated: true,
+      });
+    } finally {
+      if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousCodexHome;
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
   it("does not use OPENAI_API_KEY as Codex auth state", async () => {
     const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
     process.env.CODEX_HOME = codexHome;

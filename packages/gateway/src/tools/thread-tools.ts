@@ -434,7 +434,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
     try {
       let generatedTitle = "";
-      if (providerId === "codex" || providerId === "claude-code") {
+      const providerType = provider.providerType ?? providerId;
+      if (providerType === "codex" || providerType === "claude-code") {
         const raw = await generateTitleViaTurn(provider, providerSessionId, titleTask);
         generatedTitle = normalizeGeneratedThreadTitle(raw, "");
       } else if (deps.config) {

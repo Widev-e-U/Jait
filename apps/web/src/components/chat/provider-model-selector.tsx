@@ -61,11 +61,11 @@ const PROVIDER_DEFS: ProviderDef[] = [
 const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
 
 function providerDefFromInfo(info: ProviderInfo): ProviderDef {
-  const known = PROVIDER_DEF_BY_ID.get(info.id)
-  return known ?? {
+  const known = PROVIDER_DEF_BY_ID.get(info.providerType ?? info.id)
+  return {
     value: info.id,
     label: info.name || info.id,
-    icon: Network,
+    icon: known?.icon ?? Network,
     description: info.description,
   }
 }

@@ -744,7 +744,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
       content: record.content,
       queuedAt: typeof record.queuedAt === "number" ? record.queuedAt : undefined,
       mode: isValidChatMode(record.mode) ? record.mode : undefined,
-      provider: record.provider === "jait" || record.provider === "codex" || record.provider === "claude-code"
+      provider: typeof record.provider === "string" && record.provider.trim()
         ? record.provider
         : undefined,
       runtimeMode: record.runtimeMode === "full-access" || record.runtimeMode === "supervised"
@@ -2156,11 +2156,8 @@ export function registerChatRoutes(
     const memoryBlock = relevantMemory?.block;
     const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
 
-    const providerLabel = requestProvider === "codex"
-      ? "Codex"
-      : requestProvider === "claude-code"
-        ? "Claude Code"
-        : config.llmProvider === "openai" ? "OpenAI" : "Ollama";
+    const providerLabel = providerRegistry?.getForUser(requestProvider ?? "jait", authUser.id)?.info.name
+      ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
 
     // Create steering controller for this session
     const steering = new SteeringController();
@@ -2215,7 +2212,7 @@ export function registerChatRoutes(
 
         // Fall back to the local provider if path exists on the gateway
         if (!cliProvider) {
-          cliProvider = providerRegistry.get(requestProvider) ?? null;
+          cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
         }
 
         if (!cliProvider) {

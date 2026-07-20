@@ -61,7 +61,7 @@ export const userSettings = sqliteTable("user_settings", {
   apiKeys: text("api_keys"), // JSON object
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming' | 'gpt' | 'elevenlabs'
-  chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
+  chatProvider: text("chat_provider").notNull().default("jait"),
   jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids
   selectedModel: text("selected_model"), // last model id picked in the UI; used by background channels (e.g. WhatsApp)
@@ -70,6 +70,22 @@ export const userSettings = sqliteTable("user_settings", {
   projectPickerNodeId: text("project_picker_node_id"),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const providerAccounts = sqliteTable(
+  "provider_accounts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    providerType: text("provider_type").notNull(),
+    label: text("label").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_provider_accounts_user_type_label").on(table.userId, table.providerType, table.label),
+    index("idx_provider_accounts_user").on(table.userId, table.updatedAt),
+  ],
+);
 
 // ─── Assistant Profiles ─────────────────────────────────────────────
 export const assistantProfiles = sqliteTable(

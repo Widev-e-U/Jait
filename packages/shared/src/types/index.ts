@@ -66,6 +66,8 @@ export type {
   ScreenShareStopRequest,
 } from "./screen-share.js";
 
+export { providerTypeFromId } from "./thread.js";
+
 export type {
   ProviderId,
   ProviderInfo,

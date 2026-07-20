@@ -24,7 +24,7 @@ import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
-import type { ResponseStyle } from '@jait/shared'
+import { providerTypeFromId, type ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
   parseUserMessageSegments,
@@ -329,7 +329,7 @@ function hasImageAttachment(context: ChatHttpErrorContext): boolean {
 
 export function formatChatHttpError(status: number, context: ChatHttpErrorContext = {}): string {
   if (status === 413) {
-    if (context.provider === 'codex' && hasImageAttachment(context)) {
+    if (context.provider && providerTypeFromId(context.provider) === 'codex' && hasImageAttachment(context)) {
       return 'Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a project file path instead.'
     }
     if (hasImageAttachment(context)) {

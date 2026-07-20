@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, LogOut, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -24,7 +24,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
-import { agentsApi, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderAccount, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -163,8 +163,20 @@ export function SettingsPage({
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [providerAccounts, setProviderAccounts] = useState<ProviderInfo[]>([])
+  const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
+  const [newCodexAccountLabel, setNewCodexAccountLabel] = useState('')
+  const [providerAccountMutationBusy, setProviderAccountMutationBusy] = useState(false)
   const [providerAccountsLoading, setProviderAccountsLoading] = useState(false)
   const [providerLogoutBusy, setProviderLogoutBusy] = useState<ProviderId | null>(null)
+  const [providerLoginBusy, setProviderLoginBusy] = useState<ProviderId | null>(null)
+  const [providerLoginInstructions, setProviderLoginInstructions] = useState<{
+    providerId: ProviderId
+    message: string
+    userCode?: string
+    verificationUri?: string
+    requiresCodeInput?: boolean
+  } | null>(null)
+  const [providerLoginCode, setProviderLoginCode] = useState('')
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [search, setSearch] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -236,10 +248,15 @@ export function SettingsPage({
     if (!token) return
     setProviderAccountsLoading(true)
     try {
-      const { providers } = await agentsApi.listProvidersFresh()
+      const [{ providers }, accounts] = await Promise.all([
+        agentsApi.listProvidersFresh(),
+        agentsApi.listProviderAccounts(),
+      ])
       setProviderAccounts(providers.filter(isProviderAccount))
+      setConfiguredProviderAccounts(accounts)
     } catch {
       setProviderAccounts([])
+      setConfiguredProviderAccounts([])
     } finally {
       setProviderAccountsLoading(false)
     }
@@ -248,6 +265,37 @@ export function SettingsPage({
   useEffect(() => {
     void loadProviderAccounts()
   }, [loadProviderAccounts])
+
+  const handleCreateCodexAccount = async () => {
+    const label = newCodexAccountLabel.trim()
+    if (!label) return
+    setProviderAccountMutationBusy(true)
+    setError(null)
+    try {
+      await agentsApi.createProviderAccount('codex', label)
+      setNewCodexAccountLabel('')
+      setStatus(`Codex account “${label}” created. Sign in on its account row.`)
+      await loadProviderAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create Codex account.')
+    } finally {
+      setProviderAccountMutationBusy(false)
+    }
+  }
+
+  const handleDeleteProviderAccount = async (account: ProviderAccount) => {
+    setProviderAccountMutationBusy(true)
+    setError(null)
+    try {
+      await agentsApi.deleteProviderAccount(account.id)
+      setStatus(`Provider account “${account.label}” removed.`)
+      await loadProviderAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove provider account.')
+    } finally {
+      setProviderAccountMutationBusy(false)
+    }
+  }
 
   const handleProviderLogout = async (providerId: ProviderId) => {
     const label = providerAccounts.find((provider) => provider.id === providerId)?.name ?? PROVIDER_LABELS[providerId] ?? providerId
@@ -262,6 +310,67 @@ export function SettingsPage({
       setError(err instanceof Error ? err.message : `Failed to log out from ${label}.`)
     } finally {
       setProviderLogoutBusy(null)
+    }
+  }
+
+  const handleProviderLogin = async (providerId: ProviderId) => {
+    const label = providerAccounts.find((provider) => provider.id === providerId)?.name ?? PROVIDER_LABELS[providerId] ?? providerId
+    let loginWindow: Window | null = null
+    try {
+      loginWindow = window.open('about:blank', '_blank')
+    } catch {
+      loginWindow = null
+    }
+    setProviderLoginBusy(providerId)
+    setError(null)
+    setStatus(null)
+    setProviderLoginInstructions(null)
+    setProviderLoginCode('')
+    try {
+      const result = await agentsApi.startProviderLogin(providerId)
+      if (result.verificationUri) {
+        if (loginWindow) loginWindow.location.href = result.verificationUri
+        else window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
+      } else {
+        loginWindow?.close()
+      }
+      if (result.userCode) {
+        await navigator.clipboard.writeText(result.userCode).catch(() => undefined)
+      }
+      setProviderLoginInstructions({
+        providerId,
+        message: result.userCode
+          ? `${label} login started. Complete it in your browser with this device code.`
+          : result.requiresCodeInput
+            ? (result.inputPrompt ?? `Enter the authorization code from your browser to complete ${label} login.`)
+            : result.message,
+        userCode: result.userCode,
+        verificationUri: result.verificationUri,
+        requiresCodeInput: result.requiresCodeInput,
+      })
+      await loadProviderAccounts()
+    } catch (err) {
+      loginWindow?.close()
+      setError(err instanceof Error ? err.message : `Failed to start ${label} login.`)
+    } finally {
+      setProviderLoginBusy(null)
+    }
+  }
+
+  const handleProviderLoginCode = async (providerId: ProviderId) => {
+    const code = providerLoginCode.trim()
+    if (!code) return
+    setProviderLoginBusy(providerId)
+    setError(null)
+    try {
+      await agentsApi.sendProviderLoginInput(providerId, code)
+      setProviderLoginCode('')
+      setStatus('Authorization code sent. Completing login…')
+      await loadProviderAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send the authorization code.')
+    } finally {
+      setProviderLoginBusy(null)
     }
   }
 
@@ -859,12 +968,29 @@ export function SettingsPage({
                 <div>
                   <h2 className="text-base font-medium">{highlight('Provider accounts')}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Manage CLI provider sessions. Login is started from the provider picker; logout is handled here.
+                    Sign in or out of CLI providers. Signed-in identities are shown on their provider rows.
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => { void loadProviderAccounts() }} disabled={providerAccountsLoading}>
                   {providerAccountsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
                   Refresh
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row">
+                <Input
+                  value={newCodexAccountLabel}
+                  onChange={(event) => setNewCodexAccountLabel(event.target.value)}
+                  placeholder="Codex account label, e.g. Work"
+                  maxLength={80}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void handleCreateCodexAccount() }}
+                />
+                <Button
+                  className="sm:w-auto"
+                  onClick={() => { void handleCreateCodexAccount() }}
+                  disabled={!newCodexAccountLabel.trim() || providerAccountMutationBusy}
+                >
+                  {providerAccountMutationBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+                  Add Codex account
                 </Button>
               </div>
               <div className="space-y-2">
@@ -875,7 +1001,11 @@ export function SettingsPage({
                   const providerId = provider.id
                   const isSignedIn = auth?.authenticated === true
                   const isKnownSignedOut = auth?.authenticated === false
-                  const busy = providerLogoutBusy === providerId
+                  const logoutBusy = providerLogoutBusy === providerId
+                  const loginBusy = providerLoginBusy === providerId
+                  const busy = logoutBusy || loginBusy
+                  const loginInstructions = providerLoginInstructions?.providerId === providerId ? providerLoginInstructions : null
+                  const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
                   return (
                     <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
@@ -885,22 +1015,62 @@ export function SettingsPage({
                             {isSignedIn ? 'signed in' : auth?.authenticated === false ? 'signed out' : 'unknown'}
                           </Badge>
                         </div>
+                        {isSignedIn && auth?.username && (
+                          <p className="mt-1 text-xs text-muted-foreground">Signed in as {auth.username}</p>
+                        )}
                         {auth?.detail && (
                           <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
                         )}
+                        {loginInstructions && (
+                          <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                            <p>{loginInstructions.message}</p>
+                            {loginInstructions.userCode && (
+                              <code className="block rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>
+                            )}
+                            {loginInstructions.verificationUri && (
+                              <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Open login page
+                              </a>
+                            )}
+                            {loginInstructions.requiresCodeInput && (
+                              <div className="flex gap-2">
+                                <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === 'Enter') void handleProviderLoginCode(providerId) }} />
+                                <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(providerId) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {auth?.logout && (
-                        <Button
-                          className="w-full sm:w-auto"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => { void handleProviderLogout(providerId) }}
-                          disabled={busy || providerLogoutBusy !== null || isKnownSignedOut}
-                        >
-                          {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
-                          Logout
-                        </Button>
-                      )}
+                      <div className="flex w-full gap-2 sm:w-auto">
+                        {auth?.login && (
+                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(providerId) }} disabled={busy || providerLogoutBusy !== null}>
+                            {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
+                            Login
+                          </Button>
+                        )}
+                        {auth?.logout && (
+                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(providerId) }} disabled={busy || providerLoginBusy !== null || isKnownSignedOut}>
+                            {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
+                            Logout
+                          </Button>
+                        )}
+                        {configuredAccount && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label={`Remove ${configuredAccount.label}`}
+                            disabled={busy || providerAccountMutationBusy}
+                            onClick={() => {
+                              if (window.confirm(`Remove “${configuredAccount.label}” and its local credentials?`)) {
+                                void handleDeleteProviderAccount(configuredAccount)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

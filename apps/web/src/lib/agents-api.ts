@@ -85,6 +85,15 @@ export type {
   UserSecretRecord,
 } from '@jait/shared'
 
+export interface ProviderAccount {
+  id: string
+  userId: string
+  providerType: string
+  label: string
+  createdAt: string
+  updatedAt: string
+}
+
 type ProviderModelsResponse = {
   models: ProviderModelInfo[]
   recentModels?: string[]
@@ -150,6 +159,49 @@ export class AgentsApi {
   }
 
   // ── Providers ──────────────────────────────────────────────────
+
+  async listProviderAccounts(): Promise<ProviderAccount[]> {
+    const res = await fetch(`${API_URL}/api/provider-accounts`, { headers: this.getHeaders() })
+    if (!res.ok) throw new Error(`Failed to list provider accounts: ${res.statusText}`)
+    const data = await res.json() as { accounts: ProviderAccount[] }
+    return data.accounts
+  }
+
+  async createProviderAccount(providerType: string, label: string): Promise<ProviderAccount> {
+    const res = await fetch(`${API_URL}/api/provider-accounts`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ providerType, label }),
+    })
+    const data = await res.json().catch(() => null) as { account?: ProviderAccount; error?: string } | null
+    if (!res.ok || !data?.account) throw new Error(data?.error ?? `Failed to create provider account: ${res.statusText}`)
+    this._providersInflight = null
+    return data.account
+  }
+
+  async renameProviderAccount(accountId: string, label: string): Promise<ProviderAccount> {
+    const res = await fetch(`${API_URL}/api/provider-accounts/${accountId}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ label }),
+    })
+    const data = await res.json().catch(() => null) as { account?: ProviderAccount; error?: string } | null
+    if (!res.ok || !data?.account) throw new Error(data?.error ?? `Failed to rename provider account: ${res.statusText}`)
+    this._providersInflight = null
+    return data.account
+  }
+
+  async deleteProviderAccount(accountId: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/provider-accounts/${accountId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { error?: string } | null
+      throw new Error(data?.error ?? `Failed to delete provider account: ${res.statusText}`)
+    }
+    this._providersInflight = null
+  }
 
   private _providersInflight: Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> | null = null
   private _providersCachedAt = 0

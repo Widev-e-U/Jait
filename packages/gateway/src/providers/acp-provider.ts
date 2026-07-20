@@ -67,6 +67,8 @@ const CODEX_FALLBACK_MODELS: ProviderModelInfo[] = [
 
 export interface AcpProviderConfig {
   id: ProviderId;
+  providerType?: ProviderId;
+  ownerUserId?: string;
   name: string;
   description: string;
   command: string;
@@ -140,9 +142,11 @@ class JaitAcpClient implements Client {
 
 export class AcpProvider implements CliProviderAdapter {
   readonly id: ProviderId;
+  readonly providerType: ProviderId;
+  readonly ownerUserId?: string;
   readonly info: ProviderInfo;
 
-  private readonly config: Required<Omit<AcpProviderConfig, "env">> & { env?: Record<string, string> };
+  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId">> & { env?: Record<string, string> };
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
@@ -154,6 +158,8 @@ export class AcpProvider implements CliProviderAdapter {
 
   constructor(config: AcpProviderConfig) {
     this.id = config.id;
+    this.providerType = config.providerType ?? config.id;
+    this.ownerUserId = config.ownerUserId;
     this.authKind = config.auth === false ? null : "acp";
     this.config = {
       ...config,
@@ -163,6 +169,7 @@ export class AcpProvider implements CliProviderAdapter {
     };
     this.info = {
       id: config.id,
+      providerType: this.providerType,
       name: config.name,
       description: config.description,
       available: false,
@@ -240,7 +247,7 @@ export class AcpProvider implements CliProviderAdapter {
         );
       }
       if (isAcpModelDiscoveryTimeout(message)) {
-        const fallbackModels = getAcpFallbackModels(this.id);
+        const fallbackModels = getAcpFallbackModels(this.providerType);
         if (fallbackModels.length > 0) {
           this.cachedModels = fallbackModels;
           return this.cachedModels;
@@ -274,7 +281,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
     // Claude Code supports env-var API-key auth outside the CLI credential store.
-    if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
+    if (this.providerType === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
       const logout = cliAuthenticated === true;
       const status: ProviderAuthStatus = {
@@ -295,11 +302,11 @@ export class AcpProvider implements CliProviderAdapter {
     const login = (probe?.authMethods.length ?? 0) > 0;
     const acpLogout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
     probe?.child.kill();
-    const authenticated = this.id === "codex"
+    const authenticated = this.providerType === "codex"
       ? await this.checkProviderAuthenticated()
       : providerCliAuthenticated ?? await this.checkProviderAuthenticated();
     // Only offer logout when authenticated via a revocable credential.
-    const logout = this.id === "codex" ? (providerCliAuthenticated === true || this.hasCodexAuthFile()) : authenticated === true && (acpLogout || this.hasProviderCliLogout());
+    const logout = this.providerType === "codex" ? (providerCliAuthenticated === true || this.hasCodexAuthFile()) : authenticated === true && (acpLogout || this.hasProviderCliLogout());
     const result: ProviderAuthStatus = {
       login,
       logout,
@@ -321,7 +328,7 @@ export class AcpProvider implements CliProviderAdapter {
       this.authLoginProcess = null;
     }
 
-    if (this.id === "codex") {
+    if (this.providerType === "codex") {
       return this.startCodexDeviceLogin("ChatGPT");
     }
 
@@ -402,31 +409,31 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   private async checkProviderAuthenticated(): Promise<boolean | null> {
-    if (this.id === "codex") {
+    if (this.providerType === "codex") {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
-      return cliAuthenticated === true || checkCodexAuthFile();
+      return cliAuthenticated === true || checkCodexAuthFile(this.config.env);
     }
-    if (this.id === "claude-code") {
-      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000).catch(() => null);
+    if (this.providerType === "claude-code") {
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env).catch(() => null);
       return Boolean(process.env.ANTHROPIC_API_KEY?.trim()) || Boolean(status?.ok);
     }
     return null;
   }
 
   private async getProviderCliAuthenticated(): Promise<boolean | null> {
-    if (this.id === "codex") {
-      const status = await runAuthCommand(this.id, "codex", ["login", "status"], 10_000).catch(() => null);
+    if (this.providerType === "codex") {
+      const status = await runAuthCommand(this.id, "codex", ["login", "status"], 10_000, this.config.env).catch(() => null);
       return status ? status.ok : null;
     }
-    if (this.id === "claude-code") {
-      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000).catch(() => null);
+    if (this.providerType === "claude-code") {
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env).catch(() => null);
       return status ? status.ok : null;
     }
     return null;
   }
 
   private hasProviderCliLogout(): boolean {
-    return this.id === "codex" || this.id === "claude-code";
+    return this.providerType === "codex" || this.providerType === "claude-code";
   }
 
   /**
@@ -434,13 +441,13 @@ export class AcpProvider implements CliProviderAdapter {
    * from the UI.
    */
   private hasCodexAuthFile(): boolean {
-    if (this.id !== "codex") return false;
-    return checkCodexAuthFile();
+    if (this.providerType !== "codex") return false;
+    return checkCodexAuthFile(this.config.env);
   }
 
   private hasLocalProviderCredential(): boolean {
-    if (this.id === "codex") return checkCodexAuthFile();
-    if (this.id === "claude-code") return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+    if (this.providerType === "codex") return checkCodexAuthFile(this.config.env);
+    if (this.providerType === "claude-code") return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
     return this.cachedAuthStatus?.status.authenticated === true;
   }
 
@@ -468,11 +475,9 @@ export class AcpProvider implements CliProviderAdapter {
       // Always delete the local Codex auth file for Codex providers — this is the
       // source of truth that checkProviderAuthenticated() reads, regardless of whether
       // the ACP logout RPC succeeded or even ran.
-      if (this.id === "codex") {
-        if (!process.env.CODEX_HOME) {
-          await runAuthCommand(this.id, "codex", ["logout"], 20_000).catch(() => null);
-        }
-        removeCodexAuthFiles();
+      if (this.providerType === "codex") {
+        await runAuthCommand(this.id, "codex", ["logout"], 20_000, this.config.env).catch(() => null);
+        removeCodexAuthFiles(this.config.env);
         this.cachedAuthStatus = null; // invalidate cache
         return {
           ok: true,
@@ -482,8 +487,8 @@ export class AcpProvider implements CliProviderAdapter {
         };
       }
       if (!probe) {
-        if (this.id === "claude-code") {
-          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000);
+        if (this.providerType === "claude-code") {
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env);
           this.cachedAuthStatus = null;
           return result.ok
             ? {
@@ -498,8 +503,8 @@ export class AcpProvider implements CliProviderAdapter {
         return unsupportedLogout(this.id, "Could not connect to ACP agent.");
       }
       if (!probe.initialized.agentCapabilities?.auth?.logout) {
-        if (this.id === "claude-code") {
-          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000);
+        if (this.providerType === "claude-code") {
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env);
           this.cachedAuthStatus = null;
           return result.ok
             ? {
@@ -667,6 +672,15 @@ export class AcpProvider implements CliProviderAdapter {
         ? { outcome: "selected", optionId: pending.allowOptionId }
         : { outcome: "selected", optionId: pending.rejectOptionId },
     });
+  }
+
+  async dispose(): Promise<void> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    await Promise.all([...this.sessions.keys()].map((sessionId) => this.stopSession(sessionId)));
+    this.emitter.removeAllListeners();
   }
 
   async stopSession(sessionId: string): Promise<void> {
@@ -938,8 +952,9 @@ function getAcpFallbackModels(providerId: ProviderId): ProviderModelInfo[] {
   return [];
 }
 
-function getCodexAuthPaths(): string[] {
-  if (process.env.CODEX_HOME) return [join(process.env.CODEX_HOME, "auth.json")];
+function getCodexAuthPaths(env?: Record<string, string>): string[] {
+  const codexHome = env?.CODEX_HOME ?? process.env.CODEX_HOME;
+  if (codexHome) return [join(codexHome, "auth.json")];
   return [
     join(homedir(), ".codex", "auth.json"),
     process.env.USERPROFILE ? join(process.env.USERPROFILE, ".codex", "auth.json") : undefined,
@@ -947,12 +962,12 @@ function getCodexAuthPaths(): string[] {
   ].filter((path, index, paths): path is string => Boolean(path) && paths.indexOf(path) === index);
 }
 
-function readCodexAuthFile(): {
+function readCodexAuthFile(env?: Record<string, string>): {
   OPENAI_API_KEY?: string | null;
   tokens?: { access_token?: string | null };
   [key: string]: unknown;
 } | null {
-  for (const authPath of getCodexAuthPaths()) {
+  for (const authPath of getCodexAuthPaths(env)) {
     try {
       if (!existsSync(authPath)) continue;
       const raw = readFileSync(authPath, "utf-8");
@@ -968,8 +983,8 @@ function readCodexAuthFile(): {
   return null;
 }
 
-function checkCodexAuthFile(): boolean {
-  const auth = readCodexAuthFile();
+function checkCodexAuthFile(env?: Record<string, string>): boolean {
+  const auth = readCodexAuthFile(env);
   if (!auth) return false;
   try {
     if (auth.OPENAI_API_KEY) return true;
@@ -980,8 +995,8 @@ function checkCodexAuthFile(): boolean {
   }
 }
 
-function removeCodexAuthFiles(): void {
-  for (const authPath of getCodexAuthPaths()) {
+function removeCodexAuthFiles(env?: Record<string, string>): void {
+  for (const authPath of getCodexAuthPaths(env)) {
     if (existsSync(authPath)) rmSync(authPath, { force: true });
   }
 }

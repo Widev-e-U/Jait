@@ -27,9 +27,27 @@ export class ProviderRegistry {
     this.providers.set(adapter.id, adapter);
   }
 
+  async unregister(id: ProviderId): Promise<boolean> {
+    const provider = this.providers.get(id);
+    if (!provider) return false;
+    this.providers.delete(id);
+    await provider.dispose?.();
+    return true;
+  }
+
   /** Get a specific provider adapter */
   get(id: ProviderId): CliProviderAdapter | undefined {
     return this.providers.get(id);
+  }
+
+  getForUser(id: ProviderId, userId: string): CliProviderAdapter | undefined {
+    const provider = this.providers.get(id);
+    if (!provider || (provider.ownerUserId && provider.ownerUserId !== userId)) return undefined;
+    return provider;
+  }
+
+  isVisibleTo(id: ProviderId, userId: string): boolean {
+    return Boolean(this.getForUser(id, userId));
   }
 
   /** Get a provider or throw */

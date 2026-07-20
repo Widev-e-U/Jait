@@ -214,6 +214,7 @@ export function runAuthCommand(
   commandLine: string,
   args: string[],
   timeoutMs = 20_000,
+  env?: NodeJS.ProcessEnv,
 ): Promise<ProviderLogoutResult> {
   return new Promise((resolve) => {
     const spawnSpec = parseCommandLine(commandLine);
@@ -226,7 +227,7 @@ export function runAuthCommand(
       stdio: "pipe",
       windowsHide: true,
       shell: needsShell(spawnSpec.command),
-      env: buildProviderAuthEnv(),
+      env: buildProviderAuthEnv(env),
     });
     let output = "";
     const append = (chunk: Buffer) => {

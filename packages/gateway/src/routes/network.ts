@@ -745,7 +745,8 @@ async function buildGatewayNode(providerRegistry?: import("../providers/registry
   if (providerRegistry) {
     for (const p of providerRegistry.list()) {
       try { await p.checkAvailability(); } catch {}
-      if (p.info.available) gatewayProviders.push(p.id);
+      const providerType = p.providerType ?? p.id;
+      if (p.info.available && !gatewayProviders.includes(providerType)) gatewayProviders.push(providerType);
     }
   }
 
