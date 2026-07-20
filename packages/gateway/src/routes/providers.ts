@@ -51,7 +51,10 @@ export function registerProviderRoutes(
   app.get("/api/provider-accounts", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    return { accounts: deps.providerAccountService?.list(authUser.id) ?? [] };
+    return {
+      accounts: deps.providerAccountService?.list(authUser.id) ?? [],
+      providerTypes: deps.providerAccountService?.listTypes() ?? [],
+    };
   });
 
   app.post("/api/provider-accounts", async (request, reply) => {

@@ -17,6 +17,12 @@ export interface ProviderAccountRecord {
   updatedAt: string;
 }
 
+export interface ProviderAccountType {
+  providerType: string;
+  name: string;
+  description: string;
+}
+
 export class ProviderAccountService {
   private readonly definitions: Map<string, AcpProviderConfig>;
 
@@ -39,6 +45,16 @@ export class ProviderAccountService {
     return this.db.select().from(providerAccounts).where(eq(providerAccounts.userId, userId)).all();
   }
 
+  listTypes(): ProviderAccountType[] {
+    return [...this.definitions.values()]
+      .filter((definition) => definition.auth !== false)
+      .map((definition) => ({
+        providerType: definition.id,
+        name: definition.name,
+        description: definition.description,
+      }));
+  }
+
   get(id: string, userId: string): ProviderAccountRecord | null {
     return this.db.select().from(providerAccounts).where(and(
       eq(providerAccounts.id, id),
@@ -47,7 +63,8 @@ export class ProviderAccountService {
   }
 
   create(userId: string, providerType: string, label: string): ProviderAccountRecord {
-    if (providerType !== "codex" || !this.definitions.has(providerType)) {
+    const definition = this.definitions.get(providerType);
+    if (!definition || definition.auth === false) {
       throw new Error(`Provider accounts are not supported for ${providerType}`);
     }
     const normalizedLabel = this.normalizeLabel(label);
@@ -96,13 +113,31 @@ export class ProviderAccountService {
     if (!definition) return;
     const accountHome = this.accountHome(account.id);
     mkdirSync(accountHome, { recursive: true, mode: 0o700 });
+    const env = {
+      ...definition.env,
+      HOME: accountHome,
+      USERPROFILE: accountHome,
+      XDG_CONFIG_HOME: join(accountHome, ".config"),
+      XDG_DATA_HOME: join(accountHome, ".local", "share"),
+      XDG_CACHE_HOME: join(accountHome, ".cache"),
+      NPM_CONFIG_CACHE: definition.env?.NPM_CONFIG_CACHE
+        ?? process.env.NPM_CONFIG_CACHE
+        ?? process.env.npm_config_cache
+        ?? join(homedir(), ".npm"),
+      ...(account.providerType === "codex"
+        ? { CODEX_HOME: accountHome, OPENAI_API_KEY: "" }
+        : {}),
+      ...(account.providerType === "claude-code"
+        ? { CLAUDE_CONFIG_DIR: join(accountHome, ".claude"), ANTHROPIC_API_KEY: "" }
+        : {}),
+    };
     this.registry.register(new AcpProvider({
       ...definition,
       id: account.id,
       providerType: account.providerType,
       ownerUserId: account.userId,
       name: `${definition.name} — ${account.label}`,
-      env: { ...definition.env, CODEX_HOME: accountHome },
+      env,
     }));
   }
 

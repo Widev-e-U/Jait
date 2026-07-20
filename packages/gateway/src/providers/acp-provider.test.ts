@@ -3,10 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
-import type { ProviderEvent } from "./contracts.js";
+import type { ProviderAuthStatus, ProviderEvent } from "./contracts.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
 const fakeAcpAgentScript = `
 process.stdin.setEncoding("utf8");
@@ -198,6 +199,11 @@ afterEach(() => {
     delete process.env.OPENAI_API_KEY;
   } else {
     process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+  }
+  if (originalAnthropicApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
   }
 });
 
@@ -490,6 +496,52 @@ describe("AcpProvider auth", () => {
       logout: false,
       deviceCode: false,
     });
+  });
+
+  it("rechecks authentication while a login process is active", async () => {
+    const provider = new AcpProvider({
+      id: "codex-account",
+      providerType: "codex",
+      name: "Codex — Work",
+      description: "Codex via ACP",
+      command: process.execPath,
+    });
+    const internals = provider as unknown as {
+      authLoginProcess: object | null;
+      cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null;
+      _computeAuthStatus: () => Promise<ProviderAuthStatus>;
+    };
+    internals.cachedAuthStatus = {
+      status: { login: true, logout: false, deviceCode: false, authenticated: false },
+      expiresAt: Date.now() + 60_000,
+    };
+    internals.authLoginProcess = {};
+    internals._computeAuthStatus = async () => ({
+      login: true,
+      logout: true,
+      deviceCode: false,
+      authenticated: true,
+    });
+
+    await expect(provider.getAuthStatus()).resolves.toMatchObject({ authenticated: true });
+  });
+
+  it("does not inherit gateway API keys into owned provider accounts", () => {
+    process.env.ANTHROPIC_API_KEY = "gateway-key";
+    const provider = new AcpProvider({
+      id: "claude-code-account",
+      providerType: "claude-code",
+      ownerUserId: "user-1",
+      name: "Claude Code — Work",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      env: { ANTHROPIC_API_KEY: "" },
+    });
+    const internals = provider as unknown as {
+      hasEnvironmentCredential: (name: string) => boolean;
+    };
+
+    expect(internals.hasEnvironmentCredential("ANTHROPIC_API_KEY")).toBe(false);
   });
 
   it("reports Codex ACP auth from CODEX_HOME credentials", async () => {

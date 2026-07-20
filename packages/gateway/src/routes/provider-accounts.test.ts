@@ -26,12 +26,20 @@ describe("provider account routes", () => {
     const secondUser = users.createUser("second-user", "password123");
     const registry = new ProviderRegistry();
     const root = mkdtempSync(join(tmpdir(), "jait-provider-route-"));
-    const accounts = new ProviderAccountService(db, registry, [{
-      id: "codex",
-      name: "Codex",
-      description: "Codex test provider",
-      command: process.execPath,
-    }], root);
+    const accounts = new ProviderAccountService(db, registry, [
+      {
+        id: "codex",
+        name: "Codex",
+        description: "Codex test provider",
+        command: process.execPath,
+      },
+      {
+        id: "claude-code",
+        name: "Claude Code",
+        description: "Claude Code test provider",
+        command: process.execPath,
+      },
+    ], root);
     const app = Fastify({ logger: false });
     registerProviderRoutes(app, config, {
       providerRegistry: registry,
@@ -57,6 +65,10 @@ describe("provider account routes", () => {
     const secondList = await app.inject({ method: "GET", url: "/api/provider-accounts", headers: secondHeaders });
     expect(firstList.json().accounts).toHaveLength(1);
     expect(secondList.json().accounts).toHaveLength(0);
+    expect(firstList.json().providerTypes).toEqual([
+      expect.objectContaining({ providerType: "codex", name: "Codex" }),
+      expect.objectContaining({ providerType: "claude-code", name: "Claude Code" }),
+    ]);
 
     const forbiddenDelete = await app.inject({
       method: "DELETE",

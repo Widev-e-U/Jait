@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
+import { copyTextToClipboard } from '@/lib/clipboard'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
@@ -161,6 +162,7 @@ export function ProviderModelSelector({
     userCode?: string
     verificationUri?: string
     copied?: boolean
+    waitingForCompletion?: boolean
     requiresCodeInput?: boolean
     inputPrompt?: string
   } | null>(null)
@@ -185,12 +187,8 @@ export function ProviderModelSelector({
   }, [refreshProviders])
 
   const copyCode = async (providerId: ProviderId, code: string) => {
-    try {
-      await navigator.clipboard.writeText(code)
-      setLoginDialog((prev) => prev && prev.providerId === providerId ? { ...prev, copied: true } : prev)
-    } catch {
-      setLoginDialog((prev) => prev && prev.providerId === providerId ? { ...prev, copied: false } : prev)
-    }
+    const copied = await copyTextToClipboard(code)
+    setLoginDialog((prev) => prev && prev.providerId === providerId ? { ...prev, copied } : prev)
   }
 
   const sendCode = async (providerId: ProviderId) => {
@@ -225,15 +223,9 @@ export function ProviderModelSelector({
     })
     try {
       const result = await agentsApi.startProviderLogin(providerId)
-      let copied = false
-      if (result.userCode) {
-        try {
-          await navigator.clipboard.writeText(result.userCode)
-          copied = true
-        } catch {
-          copied = false
-        }
-      }
+      const copied = result.userCode
+        ? await copyTextToClipboard(result.userCode)
+        : false
       if (result.verificationUri) {
         window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
       }
@@ -249,6 +241,7 @@ export function ProviderModelSelector({
         userCode: result.userCode,
         verificationUri: result.verificationUri,
         copied,
+        waitingForCompletion: true,
         requiresCodeInput: result.requiresCodeInput,
         inputPrompt: result.inputPrompt,
       })
@@ -284,7 +277,7 @@ export function ProviderModelSelector({
         window.clearInterval(interval)
         refreshProviders(true)
         setLoginDialog((prev) => prev && prev.providerId === loginDialog.providerId
-          ? { ...prev, message: `${loginDialog.label} is logged in.` }
+          ? { ...prev, waitingForCompletion: false, message: `${loginDialog.label} is logged in.` }
           : prev)
         closeTimer = window.setTimeout(() => {
           setLoginDialog((prev) => prev && prev.providerId === loginDialog.providerId ? null : prev)
@@ -891,6 +884,12 @@ export function ProviderModelSelector({
                       {loginDialog.copied ? 'Copied' : 'Copy'}
                     </Button>
                   </div>
+                </div>
+              )}
+              {loginDialog.waitingForCompletion && (
+                <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Waiting for login completion…
                 </div>
               )}
               {loginDialog.requiresCodeInput && (

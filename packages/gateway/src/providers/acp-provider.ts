@@ -155,6 +155,7 @@ export class AcpProvider implements CliProviderAdapter {
   private cachedModels: ProviderModelInfo[] | null = null;
   private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
   private authProbeInFlight: Promise<ProviderAuthStatus> | null = null;
+  private activeLoginAuthProbeInFlight: Promise<ProviderAuthStatus> | null = null;
 
   constructor(config: AcpProviderConfig) {
     this.id = config.id;
@@ -264,7 +265,17 @@ export class AcpProvider implements CliProviderAdapter {
       return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
     }
 
-    // Return cached result if still fresh (30s TTL).
+    if (this.authLoginProcess) {
+      if (this.activeLoginAuthProbeInFlight) return this.activeLoginAuthProbeInFlight;
+      const activeProbe = this._computeAuthStatus().finally(() => {
+        if (this.activeLoginAuthProbeInFlight === activeProbe) {
+          this.activeLoginAuthProbeInFlight = null;
+        }
+      });
+      this.activeLoginAuthProbeInFlight = activeProbe;
+      return activeProbe;
+    }
+
     const now = Date.now();
     if (this.cachedAuthStatus && now < this.cachedAuthStatus.expiresAt) {
       return this.cachedAuthStatus.status;
@@ -281,7 +292,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
     // Claude Code supports env-var API-key auth outside the CLI credential store.
-    if (this.providerType === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
+    if (this.providerType === "claude-code" && this.hasEnvironmentCredential("ANTHROPIC_API_KEY")) {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
       const logout = cliAuthenticated === true;
       const status: ProviderAuthStatus = {
@@ -323,6 +334,8 @@ export class AcpProvider implements CliProviderAdapter {
   async startLogin(): Promise<ProviderLoginResult> {
     if (!this.authKind) return unsupportedLogin(this.id, "Auth is managed by the ACP agent.");
 
+    this.cachedAuthStatus = null;
+    this.activeLoginAuthProbeInFlight = null;
     if (this.authLoginProcess) {
       killAuthChildTree(this.authLoginProcess);
       this.authLoginProcess = null;
@@ -415,7 +428,7 @@ export class AcpProvider implements CliProviderAdapter {
     }
     if (this.providerType === "claude-code") {
       const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env).catch(() => null);
-      return Boolean(process.env.ANTHROPIC_API_KEY?.trim()) || Boolean(status?.ok);
+      return this.hasEnvironmentCredential("ANTHROPIC_API_KEY") || Boolean(status?.ok);
     }
     return null;
   }
@@ -447,8 +460,14 @@ export class AcpProvider implements CliProviderAdapter {
 
   private hasLocalProviderCredential(): boolean {
     if (this.providerType === "codex") return checkCodexAuthFile(this.config.env);
-    if (this.providerType === "claude-code") return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+    if (this.providerType === "claude-code") return this.hasEnvironmentCredential("ANTHROPIC_API_KEY");
     return this.cachedAuthStatus?.status.authenticated === true;
+  }
+
+  private hasEnvironmentCredential(name: string): boolean {
+    const configuredValue = this.config.env?.[name];
+    if (this.ownerUserId) return Boolean(configuredValue?.trim());
+    return Boolean((configuredValue ?? process.env[name])?.trim());
   }
 
   sendLoginInput(input: string): void {

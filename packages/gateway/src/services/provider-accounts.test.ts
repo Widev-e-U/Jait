@@ -45,6 +45,56 @@ describe("ProviderAccountService", () => {
     sqlite.close();
   });
 
+  it("creates isolated adapters for every login-capable ACP provider", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const registry = new ProviderRegistry();
+    const root = mkdtempSync(join(tmpdir(), "jait-provider-accounts-"));
+    roots.push(root);
+    const service = new ProviderAccountService(db, registry, [
+      {
+        id: "codex",
+        name: "Codex",
+        description: "Codex test provider",
+        command: process.execPath,
+      },
+      {
+        id: "claude-code",
+        name: "Claude Code",
+        description: "Claude Code test provider",
+        command: process.execPath,
+      },
+      {
+        id: "local-acp",
+        name: "Local ACP",
+        description: "ACP provider without Jait-managed login",
+        command: process.execPath,
+        auth: false,
+      },
+    ], root);
+
+    expect(service.listTypes()).toEqual([
+      expect.objectContaining({ providerType: "codex", name: "Codex" }),
+      expect.objectContaining({ providerType: "claude-code", name: "Claude Code" }),
+    ]);
+
+    const personal = service.create("user-1", "claude-code", "Personal");
+    const work = service.create("user-1", "claude-code", "Work");
+    const personalAdapter = registry.get(personal.id) as unknown as { config: { env?: Record<string, string> } };
+    const workAdapter = registry.get(work.id) as unknown as { config: { env?: Record<string, string> } };
+
+    expect(personalAdapter.config.env?.HOME).toBe(join(root, personal.id));
+    expect(workAdapter.config.env?.HOME).toBe(join(root, work.id));
+    expect(personalAdapter.config.env?.CLAUDE_CONFIG_DIR).not.toBe(workAdapter.config.env?.CLAUDE_CONFIG_DIR);
+    expect(personalAdapter.config.env?.NPM_CONFIG_CACHE).toBe(workAdapter.config.env?.NPM_CONFIG_CACHE);
+    expect(personalAdapter.config.env?.ANTHROPIC_API_KEY).toBe("");
+    expect(() => service.create("user-1", "local-acp", "Local")).toThrow(
+      "Provider accounts are not supported for local-acp",
+    );
+
+    sqlite.close();
+  });
+
   it("removes only the selected account and credential directory", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -71,7 +121,7 @@ describe("ProviderAccountService", () => {
     sqlite.close();
   });
 
-  it("rejects duplicate labels and unsupported account types", async () => {
+  it("rejects duplicate labels and unknown account types", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     const registry = new ProviderRegistry();

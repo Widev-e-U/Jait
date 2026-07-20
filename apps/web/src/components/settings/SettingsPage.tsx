@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -24,7 +24,8 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
-import { agentsApi, type ProviderAccount, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -164,7 +165,9 @@ export function SettingsPage({
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [providerAccounts, setProviderAccounts] = useState<ProviderInfo[]>([])
   const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
-  const [newCodexAccountLabel, setNewCodexAccountLabel] = useState('')
+  const [providerAccountTypes, setProviderAccountTypes] = useState<ProviderAccountType[]>([])
+  const [newProviderAccountType, setNewProviderAccountType] = useState('')
+  const [newProviderAccountLabel, setNewProviderAccountLabel] = useState('')
   const [providerAccountMutationBusy, setProviderAccountMutationBusy] = useState(false)
   const [providerAccountsLoading, setProviderAccountsLoading] = useState(false)
   const [providerLogoutBusy, setProviderLogoutBusy] = useState<ProviderId | null>(null)
@@ -175,6 +178,8 @@ export function SettingsPage({
     userCode?: string
     verificationUri?: string
     requiresCodeInput?: boolean
+    copied?: boolean
+    waitingForCompletion?: boolean
   } | null>(null)
   const [providerLoginCode, setProviderLoginCode] = useState('')
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
@@ -248,15 +253,23 @@ export function SettingsPage({
     if (!token) return
     setProviderAccountsLoading(true)
     try {
-      const [{ providers }, accounts] = await Promise.all([
+      const [{ providers }, accountData] = await Promise.all([
         agentsApi.listProvidersFresh(),
         agentsApi.listProviderAccounts(),
       ])
       setProviderAccounts(providers.filter(isProviderAccount))
-      setConfiguredProviderAccounts(accounts)
+      setConfiguredProviderAccounts(accountData.accounts)
+      setProviderAccountTypes(accountData.providerTypes)
+      setNewProviderAccountType((current) => (
+        accountData.providerTypes.some((type) => type.providerType === current)
+          ? current
+          : (accountData.providerTypes[0]?.providerType ?? '')
+      ))
     } catch {
       setProviderAccounts([])
       setConfiguredProviderAccounts([])
+      setProviderAccountTypes([])
+      setNewProviderAccountType('')
     } finally {
       setProviderAccountsLoading(false)
     }
@@ -266,18 +279,19 @@ export function SettingsPage({
     void loadProviderAccounts()
   }, [loadProviderAccounts])
 
-  const handleCreateCodexAccount = async () => {
-    const label = newCodexAccountLabel.trim()
-    if (!label) return
+  const handleCreateProviderAccount = async () => {
+    const label = newProviderAccountLabel.trim()
+    const accountType = providerAccountTypes.find((type) => type.providerType === newProviderAccountType)
+    if (!label || !accountType) return
     setProviderAccountMutationBusy(true)
     setError(null)
     try {
-      await agentsApi.createProviderAccount('codex', label)
-      setNewCodexAccountLabel('')
-      setStatus(`Codex account “${label}” created. Sign in on its account row.`)
+      await agentsApi.createProviderAccount(accountType.providerType, label)
+      setNewProviderAccountLabel('')
+      setStatus(`${accountType.name} account “${label}” created. Sign in on its account row.`)
       await loadProviderAccounts()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create Codex account.')
+      setError(err instanceof Error ? err.message : `Failed to create ${accountType.name} account.`)
     } finally {
       setProviderAccountMutationBusy(false)
     }
@@ -328,25 +342,27 @@ export function SettingsPage({
     setProviderLoginCode('')
     try {
       const result = await agentsApi.startProviderLogin(providerId)
+      const copied = result.userCode
+        ? await copyTextToClipboard(result.userCode, loginWindow && !loginWindow.closed ? loginWindow : window)
+        : false
       if (result.verificationUri) {
         if (loginWindow) loginWindow.location.href = result.verificationUri
         else window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
       } else {
         loginWindow?.close()
       }
-      if (result.userCode) {
-        await navigator.clipboard.writeText(result.userCode).catch(() => undefined)
-      }
       setProviderLoginInstructions({
         providerId,
         message: result.userCode
-          ? `${label} login started. Complete it in your browser with this device code.`
+          ? `${label} device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
           : result.requiresCodeInput
             ? (result.inputPrompt ?? `Enter the authorization code from your browser to complete ${label} login.`)
             : result.message,
         userCode: result.userCode,
         verificationUri: result.verificationUri,
         requiresCodeInput: result.requiresCodeInput,
+        copied,
+        waitingForCompletion: true,
       })
       await loadProviderAccounts()
     } catch (err) {
@@ -373,6 +389,40 @@ export function SettingsPage({
       setProviderLoginBusy(null)
     }
   }
+
+  const pendingLoginProviderId = providerLoginInstructions?.waitingForCompletion
+    ? providerLoginInstructions.providerId
+    : null
+  const pendingLoginProviderLabel = pendingLoginProviderId
+    ? (providerAccounts.find((provider) => provider.id === pendingLoginProviderId)?.name ?? pendingLoginProviderId)
+    : null
+
+  useEffect(() => {
+    if (!pendingLoginProviderId || !pendingLoginProviderLabel) return
+
+    let stopped = false
+    const interval = window.setInterval(() => {
+      void checkAuthStatus()
+    }, 2000)
+
+    async function checkAuthStatus() {
+      try {
+        const authStatus = await agentsApi.getProviderAuthStatus(pendingLoginProviderId!)
+        if (stopped || authStatus.authenticated !== true) return
+        stopped = true
+        window.clearInterval(interval)
+        setProviderLoginInstructions(null)
+        setStatus(`${pendingLoginProviderLabel} is logged in.`)
+        await loadProviderAccounts()
+      } catch {}
+    }
+
+    void checkAuthStatus()
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+    }
+  }, [loadProviderAccounts, pendingLoginProviderId, pendingLoginProviderLabel])
 
   const handleDiscard = useCallback(() => {
     setDraft(apiKeys)
@@ -976,21 +1026,31 @@ export function SettingsPage({
                   Refresh
                 </Button>
               </div>
-              <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row">
+              <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(12rem,1fr)_auto]">
+                <Select value={newProviderAccountType} onValueChange={setNewProviderAccountType}>
+                  <SelectTrigger aria-label="Provider account type">
+                    <SelectValue placeholder="Choose provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providerAccountTypes.map((type) => (
+                      <SelectItem key={type.providerType} value={type.providerType}>{type.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
-                  value={newCodexAccountLabel}
-                  onChange={(event) => setNewCodexAccountLabel(event.target.value)}
-                  placeholder="Codex account label, e.g. Work"
+                  value={newProviderAccountLabel}
+                  onChange={(event) => setNewProviderAccountLabel(event.target.value)}
+                  placeholder="Account label, e.g. Work"
                   maxLength={80}
-                  onKeyDown={(event) => { if (event.key === 'Enter') void handleCreateCodexAccount() }}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void handleCreateProviderAccount() }}
                 />
                 <Button
                   className="sm:w-auto"
-                  onClick={() => { void handleCreateCodexAccount() }}
-                  disabled={!newCodexAccountLabel.trim() || providerAccountMutationBusy}
+                  onClick={() => { void handleCreateProviderAccount() }}
+                  disabled={!newProviderAccountType || !newProviderAccountLabel.trim() || providerAccountMutationBusy}
                 >
                   {providerAccountMutationBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
-                  Add Codex account
+                  Add account
                 </Button>
               </div>
               <div className="space-y-2">
@@ -1025,7 +1085,29 @@ export function SettingsPage({
                           <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
                             <p>{loginInstructions.message}</p>
                             {loginInstructions.userCode && (
-                              <code className="block rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>
+                              <div className="flex items-center gap-2">
+                                <code className="min-w-0 flex-1 rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    void copyTextToClipboard(loginInstructions.userCode!).then((copied) => {
+                                      setProviderLoginInstructions((current) => (
+                                        current?.providerId === providerId ? { ...current, copied } : current
+                                      ))
+                                    })
+                                  }}
+                                >
+                                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                                  {loginInstructions.copied ? 'Copied' : 'Copy'}
+                                </Button>
+                              </div>
+                            )}
+                            {loginInstructions.waitingForCompletion && (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Waiting for login completion…
+                              </div>
                             )}
                             {loginInstructions.verificationUri && (
                               <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">

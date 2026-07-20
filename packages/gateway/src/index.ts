@@ -145,7 +145,7 @@ async function main() {
   const providerRegistry = new ProviderRegistry();
   const acpProviderConfigs = loadAcpProviderConfigs();
   for (const acpProvider of acpProviderConfigs) {
-    if (acpProvider.id !== "codex") providerRegistry.register(new AcpProvider(acpProvider));
+    if (acpProvider.auth === false) providerRegistry.register(new AcpProvider(acpProvider));
   }
   const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs);
   providerAccountService.load();

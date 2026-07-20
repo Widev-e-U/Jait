@@ -94,6 +94,12 @@ export interface ProviderAccount {
   updatedAt: string
 }
 
+export interface ProviderAccountType {
+  providerType: string
+  name: string
+  description: string
+}
+
 type ProviderModelsResponse = {
   models: ProviderModelInfo[]
   recentModels?: string[]
@@ -160,11 +166,10 @@ export class AgentsApi {
 
   // ── Providers ──────────────────────────────────────────────────
 
-  async listProviderAccounts(): Promise<ProviderAccount[]> {
+  async listProviderAccounts(): Promise<{ accounts: ProviderAccount[]; providerTypes: ProviderAccountType[] }> {
     const res = await fetch(`${API_URL}/api/provider-accounts`, { headers: this.getHeaders() })
     if (!res.ok) throw new Error(`Failed to list provider accounts: ${res.statusText}`)
-    const data = await res.json() as { accounts: ProviderAccount[] }
-    return data.accounts
+    return res.json() as Promise<{ accounts: ProviderAccount[]; providerTypes: ProviderAccountType[] }>
   }
 
   async createProviderAccount(providerType: string, label: string): Promise<ProviderAccount> {
