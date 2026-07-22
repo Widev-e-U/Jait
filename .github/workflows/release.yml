@@ -134,11 +134,17 @@ jobs:
         id: check
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+          if bash .github/scripts/release-git.sh tag-exists "$TAG"; then
             echo "Tag $TAG already exists — skipping"
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            STATUS=$?
+            if [ "$STATUS" -eq 1 ]; then
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Unable to verify whether tag $TAG exists"
+              exit "$STATUS"
+            fi
           fi
 
       - name: Create and push tag
@@ -149,8 +155,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
-          git push origin "$TAG"
-          echo "tagged=true" >> $GITHUB_OUTPUT
+          bash .github/scripts/release-git.sh push-tag "$TAG"
+          echo "tagged=true" >> "$GITHUB_OUTPUT"
           echo "✅ Tagged $TAG"
 
   # ── Build desktop apps (Electron) ──────────────────────────────────
