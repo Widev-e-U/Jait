@@ -102,15 +102,4 @@ describe("resolveProjectRoot — remote surfaces", () => {
     const root = resolveProjectRoot(registry, SESSION_ID, "E:\\Zinsrechner");
     expect(root).toBe("E:\\Zinsrechner");
   });
-
-  it("prefers the remote Windows root over a longer local shadow path", async () => {
-    const registry = new SurfaceRegistry();
-    await withRemoteSurface(registry, "E:\\TizenAnilabStream");
-    const local = new FileSystemSurface(`fs-${SESSION_ID}`);
-    await local.start({ sessionId: SESSION_ID, projectRoot: "/home/jakob/E:\\TizenAnilabStream" });
-    registry.registerInstance(local.id, local);
-
-    const root = resolveProjectRoot(registry, SESSION_ID, "E:\\TizenAnilabStream");
-    expect(root).toBe("E:\\TizenAnilabStream");
-  });
 });

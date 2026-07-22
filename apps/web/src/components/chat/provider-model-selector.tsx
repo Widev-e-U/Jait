@@ -12,7 +12,6 @@ import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
-import { getMissingRemoteProviderIds } from '@/lib/provider-options'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -359,17 +358,7 @@ export function ProviderModelSelector({
   const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
-    const source = [
-      ...(localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS),
-      ...getMissingRemoteProviderIds(localProviders, remoteProviders).map((providerId) => (
-        PROVIDER_DEF_BY_ID.get(providerId) ?? {
-          value: providerId,
-          label: providerId,
-          icon: Network,
-          description: `${providerId} running on a connected device`,
-        }
-      )),
-    ]
+    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
     return source.map((item) => {
       const status = providerStatus[item.value]
       let isAvailable: boolean

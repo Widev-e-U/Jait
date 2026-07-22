@@ -27,7 +27,6 @@ import {
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { getMissingRemoteProviderIds } from '@/lib/provider-options'
 
 interface ProviderSelectorProps {
   provider: ProviderId
@@ -261,17 +260,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
-    const source = [
-      ...(localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS),
-      ...getMissingRemoteProviderIds(localProviders, remoteProviders).map((providerId) => (
-        PROVIDER_DEF_BY_ID.get(providerId) ?? {
-          value: providerId,
-          label: providerId,
-          icon: Network,
-          description: `${providerId} running on a connected device`,
-        }
-      )),
-    ]
+    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
     return source.map((item) => {
       const status = providerStatus[item.value]
       const auth = status?.auth
