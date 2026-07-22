@@ -74,9 +74,13 @@ export function shouldResumeChatSession(params: {
   isLoadingHistory: boolean
   messageCount: number
   error?: string | null
+  forceRefresh?: boolean
 }): boolean {
   if (!params.sessionId || params.isLoadingHistory) return false
-  return params.isLoading || params.messageCount === 0 || params.error === TRANSIENT_CONNECTION_MESSAGE
+  return params.forceRefresh === true
+    || params.isLoading
+    || params.messageCount === 0
+    || params.error === TRANSIENT_CONNECTION_MESSAGE
 }
 
 export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; has_timed_out_tools?: unknown }): boolean {
@@ -1755,6 +1759,7 @@ export function useChat(
         isLoadingHistory: state.isLoadingHistory,
         messageCount: state.messages.length,
         error: state.error,
+        forceRefresh: true,
       })) return
       resumeSessionStream({ forceRestart: true })
     }
@@ -1779,12 +1784,13 @@ export function useChat(
         isLoadingHistory: state.isLoadingHistory,
         messageCount: state.messages.length,
         error: state.error,
+        forceRefresh: forceRestart,
       })) return
       resumeSessionStream(forceRestart ? { forceRestart: true } : undefined)
     }
 
     const handleFocus = () => {
-      resumeActiveStreamIfNeeded()
+      resumeActiveStreamIfNeeded(true)
     }
     const handleWake = () => {
       resumeActiveStreamIfNeeded(true)

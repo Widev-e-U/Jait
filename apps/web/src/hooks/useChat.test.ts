@@ -77,6 +77,16 @@ describe('shouldResumeChatSession', () => {
       messageCount: 2,
     })).toBe(false)
   })
+
+  it('refreshes a stable cached chat when a mobile browser wakes', () => {
+    expect(shouldResumeChatSession({
+      sessionId: 'session-1',
+      isLoading: false,
+      isLoadingHistory: false,
+      messageCount: 2,
+      forceRefresh: true,
+    })).toBe(true)
+  })
 })
 
 describe('getVisibleChangedFiles', () => {
