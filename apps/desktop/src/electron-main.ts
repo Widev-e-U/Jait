@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
+import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
@@ -817,37 +818,26 @@ import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
 // ── Provider detection ───────────────────────────────────────────────
-interface DesktopProviderStatus {
-  id: string;
-  installed: boolean;
-  authenticated: boolean | null;
-  detail?: string;
-}
-
 function detectCliProviders(): DesktopProviderStatus[] {
-  const providers: DesktopProviderStatus[] = [];
-  const cmd = process.platform === "win32" ? "where" : "which";
-  for (const bin of ["codex", "claude", "opencode", "gemini", "copilot"]) {
-    try {
-      execSync(`${cmd} ${bin}`, { stdio: "pipe", timeout: 5000 });
-    } catch {
-      continue;
-    }
-
-    const id = bin === "claude" ? "claude-code" : bin;
-    if (bin !== "codex") {
-      providers.push({ id, installed: true, authenticated: null });
-      continue;
-    }
-
-    try {
-      execSync("codex login status", { stdio: "pipe", timeout: 5000 });
-      providers.push({ id, installed: true, authenticated: true, detail: "Authenticated on this device" });
-    } catch {
-      providers.push({ id, installed: true, authenticated: false, detail: "Login required on this device" });
-    }
-  }
-  return providers;
+  const lookupCommand = process.platform === "win32" ? "where" : "which";
+  return detectDesktopProviders(
+    (binary) => {
+      try {
+        execSync(`${lookupCommand} ${binary}`, { stdio: "pipe", timeout: 5000 });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    (binary, args) => {
+      try {
+        execSync([binary, ...args].join(" "), { stdio: "pipe", timeout: 5000 });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  );
 }
 
 ipcMain.handle("desktop:detect-providers", () => detectCliProviders());
@@ -862,7 +852,7 @@ interface RemoteProviderSession {
   pendingTurn?: { resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
   nextRpcId: number;
   sessionId: string;
-  providerId: "codex" | "claude-code";
+  providerId: DesktopRemoteProviderId;
   kind: "rpc" | "claude-print";
   workingDirectory: string;
   mode: string;
@@ -1419,6 +1409,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         sessionId: string; providerId: string; workingDirectory: string;
         mode: string; model?: string; env?: Record<string, string>; mcpServers?: DesktopMcpServerRef[];
       };
+      if (!isSupportedDesktopProviderId(providerId)) {
+        throw new Error(`Provider ${providerId} is not implemented by the desktop remote runner`);
+      }
       const resolvedMcpServers = getDesktopJaitMcpServers(mcpServers);
 
       if (providerId === "claude-code") {
@@ -1604,6 +1597,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
     }
     case "list-models": {
       const { providerId } = params as { providerId: string };
+      if (!isSupportedDesktopProviderId(providerId)) {
+        throw new Error(`Provider ${providerId} is not implemented by the desktop remote runner`);
+      }
       if (providerId === "claude-code") {
         return getClaudeModelOptions();
       }
