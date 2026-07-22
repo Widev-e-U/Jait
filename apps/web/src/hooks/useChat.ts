@@ -412,6 +412,7 @@ export function useChat(
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
   const [messageQueue, setMessageQueue] = useState<QueuedChatMessage[]>([])
   const [completionCount, setCompletionCount] = useState(0)
+  const [fileChangeCount, setFileChangeCount] = useState(0)
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
 
@@ -992,6 +993,7 @@ export function useChat(
                   remoteNode: data.remoteNode as SessionInfo['remoteNode'],
                 })
               } else if (data.type === 'file_changed') {
+                setFileChangeCount((count) => count + 1)
                 // AI reported a file change
                 const filePath = data.path as string
                 const fileName = data.name as string
@@ -1481,6 +1483,7 @@ export function useChat(
                 remoteNode: data.remoteNode as SessionInfo['remoteNode'],
               })
             } else if (data.type === 'file_changed') {
+              setFileChangeCount((count) => count + 1)
               // AI reported a file change
               const filePath = data.path as string
               const fileName = data.name as string
@@ -2216,6 +2219,7 @@ export function useChat(
     changedFiles: getVisibleChangedFiles(changedFiles, isSwitchingSession),
     messageQueue,
     completionCount,
+    fileChangeCount,
     contextUsage,
     sessionInfo,
     sendMessage,

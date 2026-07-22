@@ -24,6 +24,7 @@ import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProj
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
 import { DetachedTabView } from '@/components/project/detached-tab-view'
+import { shouldRefreshSourceControlForStateKey } from '@/components/project/project-fs-changes'
 import { DetachedTerminalView } from '@/components/terminal/detached-terminal-view'
 import { AppFolderPickers } from '@/components/project/app-folder-pickers'
 import { GatewayUnavailable } from '@/components/gateway-unavailable'
@@ -576,6 +577,7 @@ function App() {
     changedFiles,
     messageQueue,
     completionCount,
+    fileChangeCount,
     contextUsage,
     sessionInfo,
     sendMessage,
@@ -738,7 +740,14 @@ function App() {
     allowQueuedMessageAfterInterruptedExit,
   })
   const sourceControlCompletionCountRef = useRef(completionCount)
+  const sourceControlFileChangeCountRef = useRef(fileChangeCount)
   const sourceControlRemoteCompletionCountRef = useRef(remoteMessageCompleteCount)
+
+  useEffect(() => {
+    if (fileChangeCount === sourceControlFileChangeCountRef.current) return
+    sourceControlFileChangeCountRef.current = fileChangeCount
+    setSourceControlRefreshSignal((previous) => previous + 1)
+  }, [fileChangeCount])
 
   useEffect(() => {
     if (completionCount === sourceControlCompletionCountRef.current) return
@@ -1443,6 +1452,9 @@ function App() {
         setTodoList(normalizeTodoStateValue(value))
         break
       case 'file_changed': {
+        if (shouldRefreshSourceControlForStateKey(key)) {
+          setSourceControlRefreshSignal((previous) => previous + 1)
+        }
         const fc = value as { path?: string; name?: string } | null
         if (fc?.path) addChangedFile(fc.path, fc.name ?? fc.path.split('/').pop() ?? fc.path)
         break

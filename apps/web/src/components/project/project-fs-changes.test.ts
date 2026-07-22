@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
+import {
+  fsChangesIncludeFile,
+  getFsWatcherRefreshDirs,
+  shouldRefreshSourceControlForStateKey,
+} from './project-fs-changes'
+
+describe('source control refresh', () => {
+  it('refreshes immediately for agent file-change events', () => {
+    expect(shouldRefreshSourceControlForStateKey('file_changed')).toBe(true)
+    expect(shouldRefreshSourceControlForStateKey('todo_list')).toBe(false)
+  })
+})
 
 describe('fsChangesIncludeFile', () => {
   it('matches project-relative watcher paths to the active file', () => {

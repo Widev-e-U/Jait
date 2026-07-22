@@ -20,6 +20,11 @@ function fallbackProjectTitle(rootPath?: string | null, fallback = "Untitled Pro
   return parts[parts.length - 1] || fallback;
 }
 
+function normalizeProjectRoot(rootPath: string): string {
+  const normalized = rootPath.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+}
+
 export function parseProjectMetadata(project: Pick<ProjectRow, "metadata"> | null | undefined): Record<string, unknown> {
   if (!project?.metadata) return {};
   try {
@@ -136,6 +141,16 @@ export class ProjectService {
         .where(and(...conditions))
         .get();
       if (existing) return existing;
+
+      if (nodeId === "gateway" && params.userId) {
+        const normalizedRoot = normalizeProjectRoot(rootPath);
+        const remoteExisting = this.list("active", params.userId).find((project) => (
+          project.nodeId !== "gateway"
+          && typeof project.rootPath === "string"
+          && normalizeProjectRoot(project.rootPath) === normalizedRoot
+        ));
+        if (remoteExisting) return remoteExisting;
+      }
     }
     return this.create(params);
   }

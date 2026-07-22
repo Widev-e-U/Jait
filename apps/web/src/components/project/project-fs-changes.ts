@@ -9,6 +9,10 @@ function normalizeComparablePath(path: string): string {
   return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized
 }
 
+export function shouldRefreshSourceControlForStateKey(key: string): boolean {
+  return key === 'file_changed'
+}
+
 function isAbsolutePath(path: string): boolean {
   return path.startsWith('/') || /^[a-zA-Z]:\//.test(path)
 }
