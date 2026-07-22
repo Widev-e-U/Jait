@@ -109,10 +109,15 @@ export function shouldOpenResumeStream(params: {
   hasActiveResumeStream: boolean
   directStreamSessionId: string | null
   hasActiveDirectStream: boolean
+  forceRestart?: boolean
 }): boolean {
   if (!params.sessionId) return false
   if (params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId) return false
-  if (params.hasActiveResumeStream && params.activeResumeSessionId === params.sessionId) return false
+  if (
+    !params.forceRestart
+    && params.hasActiveResumeStream
+    && params.activeResumeSessionId === params.sessionId
+  ) return false
   return true
 }
 
@@ -462,7 +467,7 @@ export function useChat(
     return () => window.clearTimeout(timer)
   }, [cacheScope, sessionId, state.hasMore, state.isLoading, state.isLoadingHistory, state.messages, state.totalMessages])
 
-  const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean }) => {
+  const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean; forceRestart?: boolean }) => {
     if (
       options?.afterDirectStream
       && sessionId
@@ -478,7 +483,17 @@ export function useChat(
       hasActiveResumeStream: !!streamAbortRef.current,
       directStreamSessionId: directStreamSessionRef.current,
       hasActiveDirectStream: !!abortControllerRef.current,
+      forceRestart: options?.forceRestart,
     })) return
+    if (
+      options?.forceRestart
+      && streamAbortRef.current
+      && streamResumeSessionRef.current === sessionId
+    ) {
+      streamAbortRef.current.abort()
+      streamAbortRef.current = null
+      streamResumeSessionRef.current = null
+    }
     pendingResumeAfterDirectStreamRef.current = false
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
@@ -1741,7 +1756,7 @@ export function useChat(
         messageCount: state.messages.length,
         error: state.error,
       })) return
-      resumeSessionStream()
+      resumeSessionStream({ forceRestart: true })
     }
 
     const handleVisibilityChange = () => {
@@ -1757,7 +1772,7 @@ export function useChat(
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const resumeActiveStreamIfNeeded = () => {
+    const resumeActiveStreamIfNeeded = (forceRestart = false) => {
       if (!shouldResumeChatSession({
         sessionId,
         isLoading: state.isLoading,
@@ -1765,22 +1780,25 @@ export function useChat(
         messageCount: state.messages.length,
         error: state.error,
       })) return
-      resumeSessionStream()
+      resumeSessionStream(forceRestart ? { forceRestart: true } : undefined)
     }
 
-    const handleResume = () => {
+    const handleFocus = () => {
       resumeActiveStreamIfNeeded()
     }
-
-    window.addEventListener('focus', handleResume)
-    window.addEventListener('pageshow', handleResume)
-    window.addEventListener('online', handleResume)
-    return () => {
-      window.removeEventListener('focus', handleResume)
-      window.removeEventListener('pageshow', handleResume)
-      window.removeEventListener('online', handleResume)
+    const handleWake = () => {
+      resumeActiveStreamIfNeeded(true)
     }
-  }, [state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
+
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('pageshow', handleWake)
+    window.addEventListener('online', handleWake)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('pageshow', handleWake)
+      window.removeEventListener('online', handleWake)
+    }
+  }, [state.error, state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients

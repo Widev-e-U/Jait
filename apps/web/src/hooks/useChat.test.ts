@@ -143,6 +143,17 @@ describe('shouldOpenResumeStream', () => {
     })).toBe(false)
   })
 
+  it('restarts a stale resume stream when a mobile browser wakes', () => {
+    expect(shouldOpenResumeStream({
+      sessionId: 'session-1',
+      activeResumeSessionId: 'session-1',
+      hasActiveResumeStream: true,
+      directStreamSessionId: null,
+      hasActiveDirectStream: false,
+      forceRestart: true,
+    })).toBe(true)
+  })
+
   it('does not open a resume stream while the direct chat stream owns the session', () => {
     expect(shouldOpenResumeStream({
       sessionId: 'session-1',
@@ -150,6 +161,7 @@ describe('shouldOpenResumeStream', () => {
       hasActiveResumeStream: false,
       directStreamSessionId: 'session-1',
       hasActiveDirectStream: true,
+      forceRestart: true,
     })).toBe(false)
   })
 
