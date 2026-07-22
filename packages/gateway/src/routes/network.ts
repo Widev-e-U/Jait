@@ -15,6 +15,8 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import { createRequire } from "node:module";
 import { scanNetwork } from "../lib/network-scan.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import type { AppConfig } from "../config.js";
+import { AUTH_COOKIE_NAME, extractBearerToken, verifyAuthToken } from "../security/http-auth.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../../package.json") as { version: string };
@@ -229,6 +231,7 @@ function runPtyCommand(input: {
 async function requestDeployPassword(input: {
   secretInput?: SecretInputService;
   sessionId: string;
+  userId?: string | null;
   title: string;
   prompt: string;
   requestedBy: string;
@@ -237,6 +240,7 @@ async function requestDeployPassword(input: {
   if (!input.secretInput) throw new Error("Secret input service is unavailable");
   return input.secretInput.requestSecret({
     sessionId: input.sessionId,
+    userId: input.userId,
     title: input.title,
     prompt: input.prompt,
     requestedBy: input.requestedBy,
@@ -416,6 +420,7 @@ async function runGuidedDeploy(input: {
   username: string;
   authMethod: DeployAuthMethod;
   sessionId: string;
+  userId?: string | null;
   secretInput?: SecretInputService;
   primaryUrl?: string;
   primaryToken?: string;
@@ -433,6 +438,7 @@ async function runGuidedDeploy(input: {
     sshPassword = await requestDeployPassword({
       secretInput: input.secretInput,
       sessionId: input.sessionId,
+      userId: input.userId,
       title: "SSH password",
       prompt: `Password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
@@ -458,6 +464,7 @@ async function runGuidedDeploy(input: {
     sshPassword = await requestDeployPassword({
       secretInput: input.secretInput,
       sessionId: input.sessionId,
+      userId: input.userId,
       title: "SSH password",
       prompt: `Password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
@@ -568,6 +575,7 @@ async function runGuidedDeploy(input: {
     sudoPassword = await requestDeployPassword({
       secretInput: input.secretInput,
       sessionId: input.sessionId,
+      userId: input.userId,
       title: "Administrator password",
       prompt: `Sudo password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
@@ -784,6 +792,7 @@ export function registerNetworkRoutes(
   providerRegistry?: import("../providers/registry.js").ProviderRegistry,
   secretInput?: SecretInputService,
   surfaceRegistry?: SurfaceRegistry,
+  config?: AppConfig,
 ) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
@@ -917,6 +926,11 @@ export function registerNetworkRoutes(
 
   // ---- POST /api/network/deploy — deploy gateway binary to a remote host ----
   app.post("/api/network/deploy", async (request, reply) => {
+    const authToken = extractBearerToken(request.headers.authorization)
+      ?? (request.cookies?.[AUTH_COOKIE_NAME] || null);
+    const authUser = config && authToken
+      ? await verifyAuthToken(authToken, config.jwtSecret)
+      : null;
     const body = (request.body ?? {}) as Record<string, unknown>;
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
@@ -968,6 +982,7 @@ export function registerNetworkRoutes(
         username,
         authMethod,
         sessionId,
+        userId: authUser?.id ?? null,
         secretInput,
         primaryUrl,
         primaryToken,

@@ -3,6 +3,7 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SecretInputService } from "../services/secret-input.js";
+import type { UserSecretService } from "../services/user-secrets.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { buildToolSchemas } from "./agent-loop.js";
 import { createToolRegistry } from "./index.js";
@@ -24,13 +25,25 @@ function context(overrides: Record<string, unknown> = {}) {
 
 function autoSubmitSecret(secret = "sudo-password") {
   let service: SecretInputService;
-  const requests: Array<{ title: string; prompt: string; requestedBy: string | null }> = [];
+  const requests: Array<{
+    title: string;
+    prompt: string;
+    requestedBy: string | null;
+    rememberable?: boolean;
+    rememberLabel?: string;
+    secretType?: string;
+    secretKey?: string;
+  }> = [];
   service = new SecretInputService({
     onRequest: (request) => {
       requests.push({
         title: request.title,
         prompt: request.prompt,
         requestedBy: request.requestedBy,
+        rememberable: request.rememberable,
+        rememberLabel: request.rememberLabel,
+        secretType: request.secretType,
+        secretKey: request.secretKey,
       });
       queueMicrotask(() => service.submit(request.id, secret, "user-1"));
     },
@@ -107,6 +120,10 @@ describe("elevated.run for external providers", () => {
       title: "Administrator password",
       prompt: "Password to run an elevated command: install system packages",
       requestedBy: "elevated.run",
+      rememberable: true,
+      rememberLabel: "Administrator password for local sudo",
+      secretType: "elevated-password",
+      secretKey: "linux:current-user",
     }]);
     expect(calls[0]?.command).toBe("sudo");
     expect(calls[0]?.args).toEqual(["-S", "-k", "-p", "", "--", "sh", "-lc", "apt-get update"]);
@@ -115,6 +132,23 @@ describe("elevated.run for external providers", () => {
       actionType: "tool.execute",
       toolName: "elevated.run",
     });
+  });
+  it("reuses an encrypted remembered password without opening another prompt", async () => {
+    const { service, requests } = autoSubmitSecret();
+    const { factory } = fakeSpawnFactory();
+    const userSecrets = {
+      getValue: vi.fn(() => "sudo-password"),
+    } as unknown as UserSecretService;
+    const tool = createElevatedRunTool(service, factory, {
+      platform: () => "linux",
+      getuid: () => 1000,
+    }, userSecrets);
+
+    const result = await tool.execute({ command: "apt-get update" }, context());
+
+    expect(result.ok).toBe(true);
+    expect(requests).toEqual([]);
+    expect(userSecrets.getValue).toHaveBeenCalledWith("user-1", "elevated-password", "linux:current-user");
   });
 });
 
@@ -215,6 +249,10 @@ describe("elevated.run on Windows", () => {
       title: "Administrator password",
       prompt: "Password for .\\Administrator to run an elevated command: inspect local services",
       requestedBy: "elevated.run",
+      rememberable: true,
+      rememberLabel: "Administrator password for .\\Administrator",
+      secretType: "elevated-password",
+      secretKey: "win32:.\\Administrator",
     }]);
     expect(calls[0]?.command).toBe("powershell.exe");
     expect(JSON.stringify(calls[0])).not.toContain(secret);

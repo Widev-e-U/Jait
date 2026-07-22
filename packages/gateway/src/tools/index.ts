@@ -283,7 +283,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
   tools.register(createReadTool(surfaceRegistry));
   tools.register(createEditTool(surfaceRegistry));
-  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService));
+  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService, deps.userSecretService));
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());
@@ -304,8 +304,8 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
-  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
-  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
+  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, deps.userSecretService));
+  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, deps.userSecretService));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
   // File tools (underlying implementations for core "read"/"edit")
@@ -465,7 +465,7 @@ export function createToolRegistry(
 
   // Network tools
   tools.register(createNetworkScanTool());
-  tools.register(createElevatedRunTool(deps.secretInputService));
+  tools.register(createElevatedRunTool(deps.secretInputService, undefined, undefined, deps.userSecretService));
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
   // Architecture tools

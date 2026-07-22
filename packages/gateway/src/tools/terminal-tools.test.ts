@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { rewriteProjectPathForSandboxCommand } from "./terminal-tools.js";
+import { getRememberedTerminalSecretDescriptor, rewriteProjectPathForSandboxCommand } from "./terminal-tools.js";
+
+describe("getRememberedTerminalSecretDescriptor", () => {
+  it("makes sudo and password prompts rememberable within the project", () => {
+    expect(getRememberedTerminalSecretDescriptor("sudo apt-get update", "[sudo] password for jakob:", "/project")).toEqual({
+      rememberLabel: "[sudo] password for jakob:",
+      secretType: "terminal-password",
+      secretKey: "/project:[sudo] password for jakob:",
+    });
+  });
+
+  it("separates SSH passwords and does not remember verification codes", () => {
+    expect(getRememberedTerminalSecretDescriptor("ssh jakob@host", "jakob@host's password:", "/project")?.secretType).toBe("terminal-ssh-password");
+    expect(getRememberedTerminalSecretDescriptor("login", "Verification code:", "/project")).toBeNull();
+  });
+});
 
 describe("rewriteProjectPathForSandboxCommand", () => {
   it("rewrites the project root when used as a standalone path token", () => {

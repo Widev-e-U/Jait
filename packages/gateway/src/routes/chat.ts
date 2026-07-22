@@ -35,6 +35,7 @@ import {
   fromOpenAIName,
   SteeringController,
   type AgentLoopEvent,
+  type AgentTodoItem,
   type ExecutedToolCall,
   type LlmContextFlowRound,
   type OpenAIToolCall,
@@ -240,6 +241,37 @@ export function isNonRecoverableProviderRequestError(error: unknown): boolean {
     "insufficient credits",
     "usagelimitexceeded",
   ].some((needle) => detail.includes(needle) || providerCode.includes(needle));
+}
+
+const CHAT_CONTINUATION_SYSTEM_NOTIFICATION = "[SYSTEM CONTINUATION] Resume the active task from the current conversation state. This is not a new user request. Continue executing unfinished work with the available tools, avoid repeating completed work, and stop only when the task is complete or a concrete blocker requires user input.";
+
+function normalizeChatTodoItems(value: unknown): AgentTodoItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is AgentTodoItem => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return typeof record.id === "number"
+      && typeof record.title === "string"
+      && (record.status === "not-started" || record.status === "in-progress" || record.status === "completed");
+  });
+}
+
+export function resolveChatSystemNotification(
+  body: Record<string, unknown>,
+  activeTodoItems: AgentTodoItem[] = [],
+): string | undefined {
+  if (body["_continue"] === true) {
+    const unfinished = activeTodoItems.filter((item) => item.status !== "completed");
+    if (unfinished.length === 0) return CHAT_CONTINUATION_SYSTEM_NOTIFICATION;
+    const todoBlock = activeTodoItems
+      .map((item) => `${item.id}. [${item.status}] ${item.title}`)
+      .join("\n");
+    return `${CHAT_CONTINUATION_SYSTEM_NOTIFICATION}\n\nActive session todo list:\n${todoBlock}\nBefore other work, call the todo tool with the complete list and accurate current statuses, then continue from the in-progress item.`;
+  }
+  const internalNotification = body["_systemNotification"];
+  return typeof internalNotification === "string" && internalNotification.trim()
+    ? internalNotification
+    : undefined;
 }
 
 export function normalizeProviderSessionError(message: string): string {
@@ -1835,12 +1867,13 @@ export function registerChatRoutes(
     const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
     const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
     const isQueuedDrainRequest = body["_queuedDrain"] === true;
-    // Internal-only: a hidden system message that starts an agent turn without a
-    // visible user bubble (used to re-trigger the agent when a background
-    // command finishes). Only ever set by the gateway's own app.inject calls.
-    const systemNotification = typeof body["_systemNotification"] === "string" && (body["_systemNotification"] as string).trim()
-      ? (body["_systemNotification"] as string)
-      : undefined;
+    // A hidden system message starts an agent turn without a visible user
+    // bubble. Background notifications are gateway-internal; Continue maps a
+    // public boolean marker to a fixed instruction so clients cannot inject roles.
+    const activeTodoItems = sessionStateService
+      ? normalizeChatTodoItems(sessionStateService.get(sessionId, ["todo_list"])["todo_list"])
+      : [];
+    const systemNotification = resolveChatSystemNotification(body, activeTodoItems);
 
     // Parse file attachments (images / files sent as base64 from the client)
     const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
@@ -2180,29 +2213,35 @@ export function registerChatRoutes(
 
         // Detect if the project lives on a remote node (e.g. Windows
         // desktop) and route the CLI provider session there instead of
-        // trying to spawn codex/claude-code locally on the gateway.
+        // trying to spawn codex/claude-code locally on the gateway. An explicit
+        // project node binding wins even if a misleading local shadow path exists.
         const pathExistsLocally = existsSync(cliWsRoot);
+        const boundRemoteNode = ws && projectRecord?.nodeId && projectRecord.nodeId !== "gateway"
+          ? ws.findNodeByDeviceId(projectRecord.nodeId)
+          : undefined;
         let cliProvider: CliProviderAdapter | null = null;
         let isRemote = false;
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
 
-        if (!pathExistsLocally && ws) {
+        if (ws && (boundRemoteNode || !pathExistsLocally)) {
           const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
             .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
             .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
             ?.nodeId as string | undefined;
 
-          // Prefer the node that owns the active remote filesystem surface. If
-          // no surface is available, fall back to matching by path platform.
+          // Prefer the project's explicit owner, then the active remote
+          // filesystem surface, then a platform-compatible connected node.
           const isWindowsPath = /^[A-Za-z]:[\\/]/.test(cliWsRoot);
           const expectedPlatform = isWindowsPath ? "windows" : null;
-          const candidateNodes = remoteSurfaceNodeId
-            ? ws.getFsNodes().filter((node) => node.id === remoteSurfaceNodeId)
-            : ws.getFsNodes();
+          const candidateNodes = boundRemoteNode
+            ? [boundRemoteNode]
+            : remoteSurfaceNodeId
+              ? ws.getFsNodes().filter((node) => node.id === remoteSurfaceNodeId)
+              : ws.getFsNodes();
           for (const node of candidateNodes) {
             if (node.isGateway) continue;
-            if (!remoteSurfaceNodeId && expectedPlatform && node.platform !== expectedPlatform) continue;
-            if (!node.providers?.includes(requestProvider)) continue;
+            if (!boundRemoteNode && !remoteSurfaceNodeId && expectedPlatform && node.platform !== expectedPlatform) continue;
+            if (!boundRemoteNode && !node.providers?.includes(requestProvider)) continue;
             cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
             isRemote = true;
             remoteNodeInfo = { nodeId: node.id, nodeName: node.name, platform: node.platform };
@@ -2210,8 +2249,9 @@ export function registerChatRoutes(
           }
         }
 
-        // Fall back to the local provider if path exists on the gateway
-        if (!cliProvider) {
+        // Only use a gateway-local CLI when the project is not explicitly owned
+        // by a connected remote node.
+        if (!cliProvider && !boundRemoteNode) {
           cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
         }
 
@@ -2836,6 +2876,7 @@ export function registerChatRoutes(
               disabledTools,
               mode: chatMode,
               onEvent,
+              initialTodoItems: activeTodoItems,
               onContext: (round) => {
                 contextRounds.push(round);
                 // Cap stored context_flow: if rounds accumulate too much data,

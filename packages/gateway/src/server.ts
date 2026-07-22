@@ -259,7 +259,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
 
-  registerNetworkRoutes(app, deps.ws, deps.sqlite, deps.providerRegistry, deps.secretInputService, deps.surfaceRegistry);
+  registerNetworkRoutes(app, deps.ws, deps.sqlite, deps.providerRegistry, deps.secretInputService, deps.surfaceRegistry, config);
 
   if (deps.screenShare && deps.ws) {
     registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });

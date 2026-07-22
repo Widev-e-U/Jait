@@ -124,6 +124,12 @@ export interface ExecutedToolCall {
   retryCount?: number;
 }
 
+export interface AgentTodoItem {
+  id: number;
+  title: string;
+  status: "not-started" | "in-progress" | "completed";
+}
+
 /** Events emitted during the loop */
 export type AgentLoopEvent =
   | { type: "token"; content: string }
@@ -138,7 +144,7 @@ export type AgentLoopEvent =
   | { type: "plan_action"; action: PlannedAction }
   | { type: "plan_complete"; planId: string; summary: string; actions: PlannedAction[] }
   | { type: "mode_notice"; mode: ChatMode; message: string }
-  | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
+  | { type: "todo_list"; items: AgentTodoItem[] }
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "error"; message: string };
 
@@ -227,6 +233,8 @@ export interface AgentLoopOptions {
   onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, thinking?: string) => void;
   /** Prior tool-call fingerprints from a previous run (e.g. Continue) — prevents re-issuing identical calls */
   priorFingerprints?: Map<string, number>;
+  /** Persisted session todo state, used to keep progress continuous across turns. */
+  initialTodoItems?: AgentTodoItem[];
 }
 
 export interface AgentLoopResult {
@@ -1136,6 +1144,38 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
  * full answer instead of a truncated fragment.
  */
 const MAX_LENGTH_CONTINUATIONS = 3;
+/** Max times we re-prompt when a model stops after only narrating its next action. */
+const MAX_INCOMPLETE_NARRATION_CONTINUATIONS = 2;
+const MAX_TODO_FINALIZATION_RETRIES = 2;
+const TODO_REMINDER_TOOL_INTERVAL = 12;
+
+function normalizeAgentTodoItems(value: unknown): AgentTodoItem[] | null {
+  if (!Array.isArray(value)) return null;
+  const items = value.filter((item): item is AgentTodoItem => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return typeof record.id === "number"
+      && typeof record.title === "string"
+      && (record.status === "not-started" || record.status === "in-progress" || record.status === "completed");
+  });
+  return items.length === value.length ? items : null;
+}
+
+function formatActiveTodoReminder(items: AgentTodoItem[]): string {
+  return items.map((item) => `${item.id}. [${item.status}] ${item.title}`).join("\n");
+}
+
+function looksLikeIncompleteAgentNarration(content: string): boolean {
+  const text = content.replace(/\s+/g, " ").trim();
+  if (!text || text.length > 600) return false;
+  if (/\b(done|completed|implemented|fixed|verified|passes?|finished|deployed)\b/i.test(text)) {
+    return false;
+  }
+
+  const promisesNextAction = /(?:^|[.!?]\s+)(?:next,?\s+)?(?:i['’]?ll|i am going to|i['’]?m going to|let me|next(?: up)?(?:,| is)?|now i['’]?ll)\b/i.test(text);
+  const namesConcreteAction = /\b(add|inspect|check|run|fix|implement|patch|deploy|verify|read|trace|test|update|wire|finish|push|build)\b/i.test(text);
+  return promisesNextAction && namesConcreteAction;
+}
 
 /**
  * Detect if the model emitted a tool call as plain text instead of structured format.
@@ -1680,6 +1720,11 @@ export async function runAgentLoop(
   };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
+  let incompleteNarrationContinuations = 0;
+  let todoFinalizationRetries = 0;
+  let activeTodoItems = normalizeAgentTodoItems(options.initialTodoItems) ?? [];
+  let nonTodoToolCallsSinceTodoUpdate = 0;
+  let lastTodoReminderAt = 0;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -2206,6 +2251,30 @@ export async function runAgentLoop(
       // At threshold, hard-stop.
       const roundStart = executedToolCalls.length - toolCalls.length;
       const roundCalls = executedToolCalls.slice(roundStart < 0 ? 0 : roundStart);
+
+      const latestTodoUpdate = [...roundCalls]
+        .reverse()
+        .find((call) => call.tool === "todo" && call.ok);
+      const updatedTodoItems = latestTodoUpdate
+        ? normalizeAgentTodoItems((latestTodoUpdate.data as { items?: unknown } | undefined)?.items)
+        : null;
+      if (updatedTodoItems) {
+        activeTodoItems = updatedTodoItems;
+        nonTodoToolCallsSinceTodoUpdate = 0;
+        lastTodoReminderAt = 0;
+      } else if (activeTodoItems.some((item) => item.status !== "completed")) {
+        nonTodoToolCallsSinceTodoUpdate += roundCalls.filter((call) => call.tool !== "todo").length;
+        if (nonTodoToolCallsSinceTodoUpdate - lastTodoReminderAt >= TODO_REMINDER_TOOL_INTERVAL) {
+          lastTodoReminderAt = nonTodoToolCallsSinceTodoUpdate;
+          const message = `Active todo list is stale after ${nonTodoToolCallsSinceTodoUpdate} additional tool calls — update it before more work:\n${formatActiveTodoReminder(activeTodoItems)}`;
+          history.push({
+            role: "system",
+            content: `[TODO UPDATE REQUIRED] ${message}\nCall the todo tool with the complete current list now, marking finished work completed and exactly one next item in-progress.`,
+          });
+          onEvent?.({ type: "steering", message });
+        }
+      }
+
       const anySuccess = roundCalls.some(c => c.ok);
       if (anySuccess) {
         consecutiveUnproductiveRounds = 0;
@@ -2280,6 +2349,61 @@ export async function runAgentLoop(
         role: "system",
         content:
           "Your previous response was cut off because it reached the output token limit. Resume exactly where you left off — do not repeat any text you already produced, do not restart, and do not re-summarize. Continue seamlessly from the final character of your previous output.",
+      });
+      continue;
+    }
+
+    // ── Todo continuity recovery ──
+    // Do not accept a final answer after additional work while the visible task
+    // list is still stale. Require the model to reconcile it first.
+    if (
+      mode === "agent" &&
+      hasTools &&
+      finishReason === "stop" &&
+      toolCalls.length === 0 &&
+      contentText.trim() &&
+      activeTodoItems.some((item) => item.status !== "completed") &&
+      nonTodoToolCallsSinceTodoUpdate > 0 &&
+      todoFinalizationRetries < MAX_TODO_FINALIZATION_RETRIES &&
+      round + 1 < maxRounds
+    ) {
+      todoFinalizationRetries++;
+      const message = `Agent tried to finish with a stale active todo list — requesting reconciliation (${todoFinalizationRetries}/${MAX_TODO_FINALIZATION_RETRIES})`;
+      log.warn(`${message} for session ${sessionId}`);
+      onEvent?.({ type: "steering", message });
+      history.push({ role: "assistant", content: contentText });
+      history.push({
+        role: "system",
+        content:
+          `[TODO UPDATE REQUIRED] You performed work after the last todo update. Before giving a final answer, call the todo tool with the complete current list and accurate statuses. Keep unfinished work visible and continue it; mark items completed only when actually verified.\nCurrent list:\n${formatActiveTodoReminder(activeTodoItems)}`,
+      });
+      continue;
+    }
+
+    // ── Incomplete narration recovery ──
+    // Some agent models stop after announcing the next action instead of doing it.
+    if (
+      mode === "agent" &&
+      hasTools &&
+      finishReason === "stop" &&
+      toolCalls.length === 0 &&
+      looksLikeIncompleteAgentNarration(contentText) &&
+      incompleteNarrationContinuations < MAX_INCOMPLETE_NARRATION_CONTINUATIONS &&
+      round + 1 < maxRounds
+    ) {
+      incompleteNarrationContinuations++;
+      log.warn(
+        `Agent stopped after narrating its next action — auto-continuing ${incompleteNarrationContinuations}/${MAX_INCOMPLETE_NARRATION_CONTINUATIONS} for session ${sessionId}`,
+      );
+      onEvent?.({
+        type: "steering",
+        message: `Agent announced work without performing it — continuing (${incompleteNarrationContinuations}/${MAX_INCOMPLETE_NARRATION_CONTINUATIONS})`,
+      });
+      history.push({ role: "assistant", content: contentText });
+      history.push({
+        role: "system",
+        content:
+          "You stopped after only describing the next action. Continue the active task now and perform that action using the available tools. Do not merely announce another next step. Stop only after completing the work or reporting a concrete blocker.",
       });
       continue;
     }

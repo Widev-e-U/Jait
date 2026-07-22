@@ -356,6 +356,22 @@ export function registerProjectRoutes(
         sessionService?.update(sessionId, { projectId, projectPath });
       } else {
         sessionService?.update(sessionId, { projectPath });
+        if (projectId) {
+          const existingProject = projectService?.getById(projectId, session?.userId ?? undefined);
+          const normalizeProjectPath = (value: string) => value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+          if (
+            existingProject
+            && (
+              !existingProject.rootPath
+              || normalizeProjectPath(existingProject.rootPath) === normalizeProjectPath(projectPath)
+            )
+          ) {
+            projectService?.update(projectId, {
+              ...(!existingProject.rootPath ? { rootPath: projectPath } : {}),
+              nodeId,
+            }, session?.userId ?? undefined);
+          }
+        }
       }
       if (projectId) projectService?.touch(projectId);
     } catch { /* best effort */ }

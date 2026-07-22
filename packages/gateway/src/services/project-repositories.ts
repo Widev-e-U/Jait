@@ -17,7 +17,7 @@ export interface ProjectRepositoryAssignment {
 }
 
 export class ProjectRepositoryAssignmentError extends Error {
-  constructor(readonly code: "PROJECT_NOT_FOUND" | "REPOSITORY_NOT_FOUND" | "PROJECT_HAS_NO_ROOT" | "PROJECT_NOT_GIT", message: string) {
+  constructor(readonly code: "PROJECT_NOT_FOUND" | "REPOSITORY_NOT_FOUND" | "PROJECT_HAS_NO_ROOT" | "PROJECT_NOT_GIT" | "PROJECT_NODE_OFFLINE", message: string) {
     super(message);
   }
 }
@@ -26,10 +26,15 @@ function folderName(path: string): string {
   return basename(path.replace(/[\\/]+$/, "")) || path;
 }
 
+function childPath(rootPath: string, name: string): string {
+  const root = rootPath.replace(/[\\/]+$/, "");
+  return /^[A-Za-z]:[\\/]/.test(root) ? root + "\\" + name : join(root, name);
+}
+
 export function projectHasGitMetadata(rootPath: string | null | undefined): boolean {
   const root = rootPath?.trim();
   if (!root) return false;
-  const gitPath = join(root, ".git");
+  const gitPath = childPath(root, ".git");
   try {
     if (!existsSync(gitPath)) return false;
     const stat = statSync(gitPath);
@@ -39,7 +44,51 @@ export function projectHasGitMetadata(rootPath: string | null | undefined): bool
   }
 }
 
-async function detectRepoDetails(rootPath: string, gitService: GitService): Promise<{ defaultBranch: string; remoteUrl?: string }> {
+async function remoteProjectHasGitMetadata(
+  rootPath: string,
+  nodeId: string,
+  ws: WsControlPlane,
+): Promise<boolean> {
+  try {
+    await ws.proxyFsOp(nodeId, "stat", { path: childPath(rootPath, ".git") });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function detectRepoDetails(
+  rootPath: string,
+  gitService: GitService,
+  remote?: { nodeId: string; ws: WsControlPlane },
+): Promise<{ defaultBranch: string; remoteUrl?: string }> {
+  if (remote) {
+    const git = async (args: string): Promise<string> => {
+      const result = await remote.ws.proxyFsOp<{ stdout: string }>(
+        remote.nodeId,
+        "git",
+        { cwd: rootPath, args },
+        30_000,
+      );
+      return result.stdout.trim();
+    };
+    const branch = await git("rev-parse --abbrev-ref HEAD").catch(() => "");
+    const remoteName = await git("remote")
+      .then((value) => value.split(/\r?\n/).map((entry) => entry.trim()).find(Boolean) ?? "")
+      .catch(() => "");
+    const remoteUrl = remoteName
+      ? await git("remote get-url " + remoteName).catch(() => "")
+      : "";
+    const remoteHead = remoteName
+      ? await git("symbolic-ref refs/remotes/" + remoteName + "/HEAD").catch(() => "")
+      : "";
+    const defaultBranch = remoteHead.split("/").pop()?.trim() || branch || "main";
+    return {
+      defaultBranch,
+      ...(remoteUrl ? { remoteUrl } : {}),
+    };
+  }
+
   let branch: string | undefined;
   let remoteUrl: string | null = null;
   try {
@@ -121,14 +170,35 @@ export async function assignRepositoryToProject(params: {
     }
   }
 
-  if (!projectHasGitMetadata(rootPath)) {
+  const configuredRemoteNodeId = project.nodeId?.trim() && project.nodeId !== "gateway"
+    ? project.nodeId.trim()
+    : null;
+  const remoteNode = configuredRemoteNodeId
+    ? params.ws?.findNodeByDeviceId(configuredRemoteNodeId)
+    : undefined;
+  if (configuredRemoteNodeId && !remoteNode) {
+    throw new ProjectRepositoryAssignmentError(
+      "PROJECT_NODE_OFFLINE",
+      "The project device is offline, so Jait cannot inspect its .git folder.",
+    );
+  }
+  const hasGitMetadata = configuredRemoteNodeId && params.ws
+    ? await remoteProjectHasGitMetadata(rootPath, configuredRemoteNodeId, params.ws)
+    : projectHasGitMetadata(rootPath);
+  if (!hasGitMetadata) {
     throw new ProjectRepositoryAssignmentError("PROJECT_NOT_GIT", "Project folder does not contain .git.");
   }
 
   let repo = params.repoService.findByPath(rootPath, project.userId ?? params.userId);
   let created = false;
   if (!repo) {
-    const details = await detectRepoDetails(rootPath, params.gitService);
+    const details = await detectRepoDetails(
+      rootPath,
+      params.gitService,
+      configuredRemoteNodeId && params.ws
+        ? { nodeId: configuredRemoteNodeId, ws: params.ws }
+        : undefined,
+    );
     repo = params.repoService.create({
       userId: project.userId ?? params.userId,
       deviceId: project.nodeId && project.nodeId !== "gateway" ? project.nodeId : undefined,
@@ -161,7 +231,6 @@ export async function autoAssignProjectRepositories(params: {
       const existingRepo = params.repoService.getById(existingRepositoryId);
       if (existingRepo && (!userId || existingRepo.userId === userId)) continue;
     }
-    if (!projectHasGitMetadata(project.rootPath)) continue;
     try {
       assignments.push(await assignRepositoryToProject({
         projectService: params.projectService,

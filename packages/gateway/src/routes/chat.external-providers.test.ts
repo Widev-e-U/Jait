@@ -14,7 +14,25 @@ import {
   getProviderRequestErrorMessage,
   isNonRecoverableProviderRequestError,
   normalizeProviderSessionError,
+  resolveChatSystemNotification,
 } from "./chat.js";
+
+describe("resolveChatSystemNotification", () => {
+  it("turns Continue into a fixed hidden system instruction", () => {
+    const notification = resolveChatSystemNotification(
+      { _continue: true, content: "" },
+      [
+        { id: 1, title: "Implement feature", status: "in-progress" },
+        { id: 2, title: "Run tests", status: "not-started" },
+      ],
+    );
+
+    expect(notification).toContain("SYSTEM CONTINUATION");
+    expect(notification).toContain("not a new user request");
+    expect(notification).toContain("1. [in-progress] Implement feature");
+    expect(notification).toContain("Before other work, call the todo tool");
+  });
+});
 
 describe("getExternalFileMutationPath", () => {
   it("recognizes edit-style tool names used by external providers", () => {

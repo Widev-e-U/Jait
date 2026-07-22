@@ -8,7 +8,7 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
-import { normalizeTodoStateValue } from '@/lib/todo-state'
+import { applyTodoLifecycle, normalizeTodoStateValue } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import {
@@ -253,6 +253,18 @@ export interface ChatMessage {
   segments?: MessageSegment[]
 }
 
+export function buildOptimisticTurnMessages(
+  userMessage: ChatMessage,
+  assistantMessage: ChatMessage,
+  continuation: boolean,
+): ChatMessage[] {
+  return continuation ? [assistantMessage] : [userMessage, assistantMessage]
+}
+
+export function getContinuationRequestFields(continuation: boolean): { _continue: true } | Record<string, never> {
+  return continuation ? { _continue: true } : {}
+}
+
 interface ChatState {
   messages: ChatMessage[]
   isLoading: boolean
@@ -341,6 +353,8 @@ export function formatChatHttpError(status: number, context: ChatHttpErrorContex
 }
 
 interface SendMessageOptions {
+  /** Resume the active task through a hidden system turn, without a user bubble. */
+  continuation?: boolean
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
   onLoginRequired?: () => void
@@ -406,8 +420,8 @@ export function useChat(
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
 
-  const clearUnfinishedTodoList = useCallback(() => {
-    setTodoList((items) => items.some((item) => item.status !== 'completed') ? [] : items)
+  const completeTodoTurn = useCallback(() => {
+    setTodoList((items) => applyTodoLifecycle(items, 'turn-complete'))
   }, [])
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -992,7 +1006,7 @@ export function useChat(
                   // not just the end of a history-only stream.
                   if (prev.isLoading) {
                     setCompletionCount(c => c + 1)
-                    clearUnfinishedTodoList()
+                    completeTodoTurn()
                   }
                   return {
                     ...prev,
@@ -1078,7 +1092,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
+  }, [authToken, cacheScope, completeTodoTurn, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback((options?: { force?: boolean }) => {
@@ -1214,15 +1228,22 @@ export function useChat(
 
     setState(prev => ({
       ...prev,
-      messages: [...prev.messages, userMessage, { id: assistantId, role: 'assistant', content: '' }],
+      messages: [
+        ...prev.messages,
+        ...buildOptimisticTurnMessages(
+          userMessage,
+          { id: assistantId, role: 'assistant', content: '' },
+          options.continuation === true,
+        ),
+      ],
       isLoading: true,
       error: null,
       hitMaxRounds: false,
     }))
 
-    // Clear the todo list for the new turn. Keep changed files so pending
-    // review state survives across follow-up prompts until the user decides.
-    setTodoList([])
+    // The active todo list belongs to the session, not one response. Preserve
+    // it across follow-ups and Continue so later progress updates replace it.
+    setTodoList((items) => applyTodoLifecycle(items, 'turn-start'))
 
     const controller = new AbortController()
     const ownsDirectStream = shouldOwnDirectChatStream({
@@ -1297,6 +1318,7 @@ export function useChat(
       const requestBody = {
         content,
         sessionId: requestSessionId,
+        ...getContinuationRequestFields(options.continuation === true),
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
         ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),
         ...(options.provider && options.provider !== 'jait' && options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
@@ -1527,7 +1549,7 @@ export function useChat(
                           : m
                       ),
                 }))
-                clearUnfinishedTodoList()
+                completeTodoTurn()
               } else {
                 // Stream is stale (session/provider changed), but still clean up
                 // the empty assistant placeholder so it doesn't linger.
@@ -1570,7 +1592,7 @@ export function useChat(
               ),
         }))
         setCompletionCount((prev) => prev + 1)
-        clearUnfinishedTodoList()
+        completeTodoTurn()
       } else if (!completed && isStale()) {
         // Stream ended without done event and session/provider changed —
         // clean up empty assistant placeholder to prevent ghost messages.
@@ -1676,7 +1698,7 @@ export function useChat(
     textPacer.cancel()
     finishOwnedDirectStream()
     return 'sent'
-  }, [authToken, clearUnfinishedTodoList, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])
+  }, [authToken, completeTodoTurn, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])
 
   // --- Message queue (queueing & steering) ---
   const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {
@@ -1930,10 +1952,10 @@ export function useChat(
     setMessageQueue([])
   }, [updateAndBroadcastFiles])
 
-  /** Send "Continue" to resume the agent after hitting max tool rounds */
+  /** Resume the agent after hitting max tool rounds without adding a user turn. */
   const continueChat = useCallback((options: SendMessageOptions = {}) => {
     setState(prev => ({ ...prev, hitMaxRounds: false }))
-    return sendMessage('Continue from where you left off.', options)
+    return sendMessage('', { ...options, continuation: true })
   }, [sendMessage])
 
   const restartFromMessage = useCallback(async (

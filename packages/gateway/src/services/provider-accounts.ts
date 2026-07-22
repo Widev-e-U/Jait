@@ -23,6 +23,15 @@ export interface ProviderAccountType {
   description: string;
 }
 
+export function registerConfiguredAcpProviders(
+  registry: ProviderRegistry,
+  definitions: AcpProviderConfig[],
+): void {
+  for (const definition of definitions) {
+    registry.register(new AcpProvider(definition));
+  }
+}
+
 export class ProviderAccountService {
   private readonly definitions: Map<string, AcpProviderConfig>;
 

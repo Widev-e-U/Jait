@@ -26,6 +26,11 @@ export interface SecretInputServiceOptions {
   defaultTimeoutMs?: number;
   onRequest?: (request: SecretInputRequest) => void;
   onResolved?: (request: SecretInputRequest) => void;
+  resolveRememberedSecret?: (input: {
+    userId: string | null;
+    secretType: string;
+    secretKey: string;
+  }) => string | null;
 }
 
 export class SecretInputService {
@@ -33,11 +38,13 @@ export class SecretInputService {
   private readonly defaultTimeoutMs: number;
   private readonly onRequest?: (request: SecretInputRequest) => void;
   private readonly onResolved?: (request: SecretInputRequest) => void;
+  private readonly resolveRememberedSecret?: SecretInputServiceOptions["resolveRememberedSecret"];
 
   constructor(options: SecretInputServiceOptions = {}) {
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 120_000;
     this.onRequest = options.onRequest;
     this.onResolved = options.onResolved;
+    this.resolveRememberedSecret = options.resolveRememberedSecret;
   }
 
   requestSecret(input: {
@@ -52,6 +59,15 @@ export class SecretInputService {
     secretKey?: string;
     timeoutMs?: number;
   }): Promise<string | null> {
+    if (input.rememberable && input.secretType && input.secretKey && this.resolveRememberedSecret) {
+      const remembered = this.resolveRememberedSecret({
+        userId: input.userId ?? null,
+        secretType: input.secretType,
+        secretKey: input.secretKey,
+      });
+      if (remembered) return Promise.resolve(remembered);
+    }
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (input.timeoutMs ?? this.defaultTimeoutMs));
     const request: SecretInputRequest = {
