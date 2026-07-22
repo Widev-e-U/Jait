@@ -568,7 +568,7 @@ export class WsControlPlane {
 
       // ── Filesystem node protocol ────────────────────────────────
       case "fs.register-node": {
-        const p = msg.payload as { id?: string; name?: string; platform?: string; providers?: string[] } | undefined;
+        const p = msg.payload as { id?: string; name?: string; platform?: string; providers?: string[]; providerStatuses?: FsNode["providerStatuses"] } | undefined;
         if (p?.id && p.name && p.platform) {
           const node: FsNode = {
             id: p.id,
@@ -577,6 +577,7 @@ export class WsControlPlane {
             clientId: client.id,
             isGateway: false,
             providers: Array.isArray(p.providers) ? p.providers : undefined,
+            providerStatuses: Array.isArray(p.providerStatuses) ? p.providerStatuses : undefined,
             registeredAt: new Date().toISOString(),
           };
           this.fsNodes.set(node.id, node);
@@ -598,7 +599,7 @@ export class WsControlPlane {
             type: "fs.node-registered" as WsEvent["type"],
             sessionId: "",
             timestamp: new Date().toISOString(),
-            payload: { nodeId: node.id, name: node.name, platform: node.platform, providers: node.providers ?? [] },
+            payload: { nodeId: node.id, name: node.name, platform: node.platform, providers: node.providers ?? [], providerStatuses: node.providerStatuses ?? [] },
           });
           const nodeState = this.nodeStates.getNode(node.id);
           if (nodeState) {

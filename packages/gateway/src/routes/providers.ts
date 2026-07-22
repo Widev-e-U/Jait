@@ -121,7 +121,7 @@ export function registerProviderRoutes(
       .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id));
 
     // Collect remote provider info from connected filesystem nodes (cheap, live).
-    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
+    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[]; providerStatuses?: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> }[] = [];
     if (ws) {
       for (const node of ws.getFsNodes()) {
         if (node.isGateway) continue;
@@ -130,6 +130,7 @@ export function registerProviderRoutes(
           nodeName: node.name,
           platform: node.platform,
           providers: node.providers ?? [],
+          providerStatuses: node.providerStatuses,
         });
       }
     }

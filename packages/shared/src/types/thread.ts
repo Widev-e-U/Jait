@@ -76,11 +76,19 @@ export interface ProviderModelInfo {
   reasoningEffortSupported?: boolean;
 }
 
+export interface RemoteProviderStatus {
+  id: ProviderId;
+  installed: boolean;
+  authenticated: boolean | null;
+  detail?: string;
+}
+
 export interface RemoteProviderInfo {
   nodeId: string;
   nodeName: string;
   platform: string;
   providers: string[];
+  providerStatuses?: RemoteProviderStatus[];
 }
 
 // ── Routing plan ─────────────────────────────────────────────────────

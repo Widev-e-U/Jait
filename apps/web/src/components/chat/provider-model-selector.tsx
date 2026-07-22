@@ -410,6 +410,15 @@ export function ProviderModelSelector({
     })
   }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToProjectNode, wsRemoteNode])
 
+  useEffect(() => {
+    if (!scopedToRepo && !scopedToProjectNode) return
+    if (repoLoading) return
+    const selectedProvider = providerEntries.find((item) => item.value === provider)
+    if (selectedProvider && !selectedProvider.isAvailable && provider !== 'jait') {
+      onProviderChange('jait')
+    }
+  }, [onProviderChange, provider, providerEntries, repoLoading, scopedToProjectNode, scopedToRepo])
+
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
   const currentModel = model ? models.find((entry) => entry.id === model) : null

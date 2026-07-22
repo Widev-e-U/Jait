@@ -24,7 +24,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
-import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
@@ -164,6 +164,7 @@ export function SettingsPage({
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [providerAccounts, setProviderAccounts] = useState<ProviderInfo[]>([])
+  const [remoteProviderNodes, setRemoteProviderNodes] = useState<RemoteProviderInfo[]>([])
   const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
   const [providerAccountTypes, setProviderAccountTypes] = useState<ProviderAccountType[]>([])
   const [newProviderAccountType, setNewProviderAccountType] = useState('')
@@ -253,11 +254,12 @@ export function SettingsPage({
     if (!token) return
     setProviderAccountsLoading(true)
     try {
-      const [{ providers }, accountData] = await Promise.all([
+      const [{ providers, remoteProviders }, accountData] = await Promise.all([
         agentsApi.listProvidersFresh(),
         agentsApi.listProviderAccounts(),
       ])
       setProviderAccounts(providers.filter(isProviderAccount))
+      setRemoteProviderNodes(remoteProviders)
       setConfiguredProviderAccounts(accountData.accounts)
       setProviderAccountTypes(accountData.providerTypes)
       setNewProviderAccountType((current) => (
@@ -1018,7 +1020,7 @@ export function SettingsPage({
                 <div>
                   <h2 className="text-base font-medium">{highlight('Provider accounts')}</h2>
                   <p className="text-sm text-muted-foreground">
-                    Sign in or out of CLI providers. Signed-in identities are shown on their provider rows.
+                    Provider accounts are tied to the device where their CLI login exists. Other devices cannot use them.
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => { void loadProviderAccounts() }} disabled={providerAccountsLoading}>
@@ -1054,7 +1056,7 @@ export function SettingsPage({
                 </Button>
               </div>
               <div className="space-y-2">
-                {providerAccounts.length === 0 && !providerAccountsLoading ? (
+                {providerAccounts.length === 0 && remoteProviderNodes.every((node) => (node.providerStatuses?.length ?? node.providers.length) === 0) && !providerAccountsLoading ? (
                   <p className="text-sm text-muted-foreground">No provider account actions are available on this gateway.</p>
                 ) : providerAccounts.map((provider) => {
                   const auth = provider.auth
@@ -1074,6 +1076,7 @@ export function SettingsPage({
                           <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
                             {isSignedIn ? 'signed in' : auth?.authenticated === false ? 'signed out' : 'unknown'}
                           </Badge>
+                          <Badge variant="outline" className="text-2xs">Gateway</Badge>
                         </div>
                         {isSignedIn && auth?.username && (
                           <p className="mt-1 text-xs text-muted-foreground">Signed in as {auth.username}</p>
@@ -1152,6 +1155,28 @@ export function SettingsPage({
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                      </div>
+                    </div>
+                  )
+                })}
+                {remoteProviderNodes.flatMap((node) => (
+                  (node.providerStatuses ?? node.providers.map((id) => ({ id, installed: true, authenticated: null, detail: undefined })))
+                    .map((provider) => ({ node, provider }))
+                )).map(({ node, provider }) => {
+                  const isSignedIn = provider.authenticated === true
+                  return (
+                    <div key={`${node.nodeId}:${provider.id}`} className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{PROVIDER_LABELS[provider.id] ?? provider.id}</p>
+                          <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
+                            {isSignedIn ? 'signed in' : provider.authenticated === false ? 'signed out' : 'unknown'}
+                          </Badge>
+                          <Badge variant="outline" className="text-2xs">{node.nodeName}</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {provider.detail ?? `Available only for projects on this ${node.platform} device.`}
+                        </p>
                       </div>
                     </div>
                   )

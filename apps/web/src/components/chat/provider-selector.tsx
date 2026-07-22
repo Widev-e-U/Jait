@@ -315,6 +315,15 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
     })
   }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToProjectNode, wsRemoteNode])
 
+  useEffect(() => {
+    if (!scopedToRepo && !scopedToProjectNode) return
+    if (repoLoading) return
+    const selectedProvider = providerEntries.find((item) => item.value === provider)
+    if (selectedProvider && !selectedProvider.isAvailable && provider !== 'jait') {
+      onChange('jait')
+    }
+  }, [onChange, provider, providerEntries, repoLoading, scopedToProjectNode, scopedToRepo])
+
   const current = providerEntries.find((p) => p.value === provider) ?? providerEntries[0] ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
 

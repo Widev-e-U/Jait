@@ -817,14 +817,35 @@ import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
 // ── Provider detection ───────────────────────────────────────────────
-function detectCliProviders(): string[] {
-  const providers: string[] = [];
+interface DesktopProviderStatus {
+  id: string;
+  installed: boolean;
+  authenticated: boolean | null;
+  detail?: string;
+}
+
+function detectCliProviders(): DesktopProviderStatus[] {
+  const providers: DesktopProviderStatus[] = [];
   const cmd = process.platform === "win32" ? "where" : "which";
   for (const bin of ["codex", "claude", "opencode", "gemini", "copilot"]) {
     try {
       execSync(`${cmd} ${bin}`, { stdio: "pipe", timeout: 5000 });
-      providers.push(bin === "claude" ? "claude-code" : bin);
-    } catch { /* not installed */ }
+    } catch {
+      continue;
+    }
+
+    const id = bin === "claude" ? "claude-code" : bin;
+    if (bin !== "codex") {
+      providers.push({ id, installed: true, authenticated: null });
+      continue;
+    }
+
+    try {
+      execSync("codex login status", { stdio: "pipe", timeout: 5000 });
+      providers.push({ id, installed: true, authenticated: true, detail: "Authenticated on this device" });
+    } catch {
+      providers.push({ id, installed: true, authenticated: false, detail: "Login required on this device" });
+    }
   }
   return providers;
 }

@@ -966,15 +966,20 @@ export function registerThreadRoutes(
     let workingDirectory = thread.workingDirectory ?? process.cwd();
     const pathExistsLocally = existsSync(workingDirectory);
 
-    // Determine if we need a remote provider:
-    // If the path doesn't exist locally, look for a connected remote node
-    // that matches the path's platform and has the requested provider.
-    let provider = providerRegistry.getForUser(providerId, authUser.id);
+    const matchingRepository = resolveThreadRepositoryForUser(authUser.id, workingDirectory);
+    const projectDeviceId = matchingRepository?.deviceId ?? null;
+    const mustRunRemotely = providerId !== "jait" && !!projectDeviceId;
+
+    let provider = mustRunRemotely
+      ? null
+      : providerRegistry.getForUser(providerId, authUser.id);
     let isRemote = false;
     let executionNode: { id: string; name: string } | null = null;
 
-    if (!pathExistsLocally && ws && providerId !== "jait") {
-      const remoteNode = findRemoteNodeForPath(ws, workingDirectory, providerId);
+    if (ws && providerId !== "jait" && (!pathExistsLocally || mustRunRemotely)) {
+      const remoteNode = mustRunRemotely
+        ? ws.getFsNodes().find((node) => node.id === projectDeviceId && node.providers?.includes(providerId))
+        : findRemoteNodeForPath(ws, workingDirectory, providerId);
       if (remoteNode) {
         provider = new RemoteCliProvider(ws, remoteNode.id, providerId);
         isRemote = true;
@@ -983,7 +988,10 @@ export function registerThreadRoutes(
     }
 
     if (!provider) {
-      return reply.status(400).send({ error: `Provider '${providerId}' not registered` });
+      const error = mustRunRemotely
+        ? `Provider '${providerId}' is unavailable on project device '${projectDeviceId}'`
+        : `Provider '${providerId}' not registered`;
+      return reply.status(mustRunRemotely ? 503 : 400).send({ error });
     }
 
     // Fall back to cwd only for local providers with non-existent paths

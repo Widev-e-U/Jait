@@ -20,7 +20,6 @@ import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from 
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
-import { existsSync } from "node:fs";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -261,6 +260,10 @@ export function normalizeProviderSessionError(message: string): string {
     "limit exceeded",
   ].some((needle) => lower.includes(needle));
   return isAuthOrLimitError ? "Authentication required" : compact;
+}
+
+export function canUseGatewayProviderForProject(projectNodeId: string | null | undefined): boolean {
+  return !projectNodeId || projectNodeId === "gateway";
 }
 
 function buildCliProviderSystemPrompt(
@@ -2178,30 +2181,22 @@ export function registerChatRoutes(
           ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
           : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
 
-        // Detect if the project lives on a remote node (e.g. Windows
-        // desktop) and route the CLI provider session there instead of
-        // trying to spawn codex/claude-code locally on the gateway.
-        const pathExistsLocally = existsSync(cliWsRoot);
         let cliProvider: CliProviderAdapter | null = null;
         let isRemote = false;
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
+        const projectNodeId = projectRecord?.nodeId?.trim();
+        const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
+          .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
+          .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
+          ?.nodeId as string | undefined;
+        const remoteOwnerNodeId = projectNodeId && projectNodeId !== "gateway"
+          ? projectNodeId
+          : remoteSurfaceNodeId;
 
-        if (!pathExistsLocally && ws) {
-          const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
-            .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
-            .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
-            ?.nodeId as string | undefined;
-
-          // Prefer the node that owns the active remote filesystem surface. If
-          // no surface is available, fall back to matching by path platform.
-          const isWindowsPath = /^[A-Za-z]:[\\/]/.test(cliWsRoot);
-          const expectedPlatform = isWindowsPath ? "windows" : null;
-          const candidateNodes = remoteSurfaceNodeId
-            ? ws.getFsNodes().filter((node) => node.id === remoteSurfaceNodeId)
-            : ws.getFsNodes();
+        if (remoteOwnerNodeId && ws) {
+          const candidateNodes = ws.getFsNodes().filter((node) => node.id === remoteOwnerNodeId);
           for (const node of candidateNodes) {
             if (node.isGateway) continue;
-            if (!remoteSurfaceNodeId && expectedPlatform && node.platform !== expectedPlatform) continue;
             if (!node.providers?.includes(requestProvider)) continue;
             cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
             isRemote = true;
@@ -2210,14 +2205,16 @@ export function registerChatRoutes(
           }
         }
 
-        // Fall back to the local provider if path exists on the gateway
-        if (!cliProvider) {
+        if (!cliProvider && canUseGatewayProviderForProject(projectNodeId) && !remoteSurfaceNodeId) {
           cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
         }
 
         if (!cliProvider) {
           clearInterval(keepalive);
-          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Unknown provider: ${requestProvider}` })}\n\n`);
+          const message = remoteOwnerNodeId
+            ? `Provider ${requestProvider} is unavailable on project device ${remoteOwnerNodeId}`
+            : `Unknown provider: ${requestProvider}`;
+          safeWrite(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
           reply.raw.end();
           return;
         }

@@ -10,11 +10,20 @@ import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import {
+  canUseGatewayProviderForProject,
   getExternalFileMutationPath,
   getProviderRequestErrorMessage,
   isNonRecoverableProviderRequestError,
   normalizeProviderSessionError,
 } from "./chat.js";
+
+describe("canUseGatewayProviderForProject", () => {
+  it("does not allow gateway CLI profiles in a remote project", () => {
+    expect(canUseGatewayProviderForProject("electron-windows-node")).toBe(false);
+    expect(canUseGatewayProviderForProject("gateway")).toBe(true);
+    expect(canUseGatewayProviderForProject(null)).toBe(true);
+  });
+});
 
 describe("getExternalFileMutationPath", () => {
   it("recognizes edit-style tool names used by external providers", () => {

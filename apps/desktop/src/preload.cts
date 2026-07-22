@@ -88,7 +88,7 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
 
   /** Detect locally installed CLI providers (codex, claude-code) */
   detectProviders: () =>
-    ipcRenderer.invoke(allowedIpcChannels.invoke[9]) as Promise<string[]>,
+    ipcRenderer.invoke(allowedIpcChannels.invoke[9]) as Promise<Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }>>,
 
   /** Execute a provider operation (start-session, send-turn, stop-session, etc.) */
   providerOp: (op: string, params: Record<string, unknown>) =>

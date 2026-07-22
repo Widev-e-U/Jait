@@ -631,11 +631,22 @@ export function useUICommands(opts: UseUICommandsOptions) {
         if (canActAsFsNode()) {
           // Ensure device ID is initialised from persistent storage
           void initDeviceId().then(async (deviceId) => {
-            // Detect locally installed CLI providers (codex, claude-code)
-            let providers: string[] = []
+            // Detect locally installed CLI providers and whether the desktop's
+            // own CLI authentication is ready for remote execution.
+            let providerStatuses: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> = []
             if (detectPlatform() === 'electron' && window.jaitDesktop?.detectProviders) {
-              try { providers = await window.jaitDesktop.detectProviders() } catch { /* */ }
+              try {
+                const detectedProviders = await window.jaitDesktop.detectProviders()
+                providerStatuses = detectedProviders.map((provider) => (
+                  typeof provider === 'string'
+                    ? { id: provider, installed: true, authenticated: null }
+                    : provider
+                ))
+              } catch { /* */ }
             }
+            const providers = providerStatuses
+              .filter((provider) => provider.installed && provider.authenticated !== false)
+              .map((provider) => provider.id)
             const nodeMsg = JSON.stringify({
               type: 'node.hello',
               payload: {
@@ -667,6 +678,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 name: getDeviceName(),
                 platform: detectFsNodePlatform(),
                 providers,
+                providerStatuses,
               },
             })
             if (ws.readyState === WebSocket.OPEN) ws.send(fsNodeMsg)

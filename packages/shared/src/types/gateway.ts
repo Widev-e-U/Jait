@@ -21,6 +21,13 @@ export interface DeviceInfo {
  * A filesystem node — a device that can expose its local filesystem
  * for remote browsing through the gateway.
  */
+export interface RemoteProviderStatus {
+  id: string;
+  installed: boolean;
+  authenticated: boolean | null;
+  detail?: string;
+}
+
 export interface FsNode {
   id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface FsNode {
   isGateway: boolean;
   /** CLI providers available on this node (e.g. ["codex", "claude-code"]) */
   providers?: string[];
+  providerStatuses?: RemoteProviderStatus[];
   registeredAt: string;
 }
 
