@@ -3,7 +3,7 @@
  * Follows the same pattern as ModeSelector.
  */
 
-import { useState, useEffect, useMemo, useRef, type ComponentType } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, type ComponentType } from 'react'
 import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, LogIn, LogOut, Copy, ExternalLink, Network } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import { getScopedProviderSource, resolveScopedProviderSelection } from '@/lib/provider-scope'
 
 interface ProviderSelectorProps {
   provider: ProviderId
@@ -112,8 +113,12 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
     inputPrompt?: string
   } | null>(null)
 
-  const refreshProviders = (fresh = false) => {
-    const request = fresh ? agentsApi.listProvidersFresh() : agentsApi.listProviders()
+  const refreshProviders = useCallback((fresh = false, live = false) => {
+    const request = fresh
+      ? agentsApi.listProvidersFresh()
+      : live
+        ? agentsApi.listProvidersLive()
+        : agentsApi.listProviders()
     request
       .then(({ providers, remoteProviders: remote }) => {
         const map: Record<string, ProviderInfo> = {}
@@ -123,11 +128,16 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
         setRemoteProviders(remote)
       })
       .catch(() => {/* ignore */})
-  }
+  }, [])
 
   useEffect(() => {
     refreshProviders()
-  }, [])
+  }, [refreshProviders])
+
+  useEffect(() => {
+    if (!projectNodeId || projectNodeId === 'gateway') return
+    refreshProviders(false, true)
+  }, [projectNodeId, refreshProviders])
 
   const copyCode = async (providerId: ProviderId, code: string) => {
     try {
@@ -260,9 +270,16 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
-    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
+    const sourceProviders = getScopedProviderSource({
+      localProviders,
+      remoteNode: wsRemoteNode,
+      remoteProviderIds: repoAvailable,
+      scopedToRemoteNode: scopedToProjectNode || (scopedToRepo && !repoIsGateway),
+    })
+    const source = sourceProviders.length > 0 ? sourceProviders.map(providerDefFromInfo) : PROVIDER_DEFS
     return source.map((item) => {
-      const status = providerStatus[item.value]
+      const sourceStatus = sourceProviders.find((providerInfo) => providerInfo.id === item.value)
+      const status = providerStatus[item.value] ?? sourceStatus
       const auth = status?.auth
 
       let isAvailable: boolean
@@ -286,7 +303,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           reason = 'Device is offline'
         } else {
           isAvailable = repoAvailable.includes(item.value)
-          reason = isAvailable ? undefined : 'Not available on this device'
+          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
           nodeLabel = repoRuntime?.locationLabel ?? 'device'
         }
       } else if (scopedToProjectNode) {
@@ -298,7 +315,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           reason = 'Device is offline'
         } else {
           isAvailable = wsRemoteNode.providers.includes(item.value)
-          reason = isAvailable ? undefined : 'Not available on this device'
+          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
           nodeLabel = wsRemoteNode.nodeName
         }
       } else {
@@ -318,9 +335,9 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   useEffect(() => {
     if (!scopedToRepo && !scopedToProjectNode) return
     if (repoLoading) return
-    const selectedProvider = providerEntries.find((item) => item.value === provider)
-    if (selectedProvider && !selectedProvider.isAvailable && provider !== 'jait') {
-      onChange('jait')
+    const nextProvider = resolveScopedProviderSelection(provider, providerEntries)
+    if (nextProvider !== provider) {
+      onChange(nextProvider)
     }
   }, [onChange, provider, providerEntries, repoLoading, scopedToProjectNode, scopedToRepo])
 

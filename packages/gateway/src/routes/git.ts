@@ -1210,20 +1210,24 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       const pathExistsLocally = existsSync(cwd);
       let cliProvider: CliProviderAdapter | null = null;
 
+      const registeredProvider = providerRegistry.getForUser(requestProvider, authUser.id);
+      const remoteProviderType = registeredProvider?.providerType ?? requestProvider;
+      const accountNodeId = registeredProvider?.executionNodeId;
       if (!pathExistsLocally && ws) {
         const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cwd);
         const expectedPlatform = isWindowsPath ? "windows" : null;
         for (const node of ws.getFsNodes()) {
           if (node.isGateway) continue;
           if (expectedPlatform && node.platform !== expectedPlatform) continue;
-          if (!node.providers?.includes(requestProvider)) continue;
-          cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
+          if (accountNodeId && accountNodeId !== node.id) continue;
+          if (!node.providers?.includes(remoteProviderType)) continue;
+          cliProvider = new RemoteCliProvider(ws, node.id, requestProvider, remoteProviderType);
           break;
         }
       }
 
       if (!cliProvider) {
-        cliProvider = providerRegistry.get(requestProvider) ?? null;
+        cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
       }
       if (!cliProvider) {
         return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });

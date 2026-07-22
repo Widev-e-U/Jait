@@ -2194,11 +2194,15 @@ export function registerChatRoutes(
           : remoteSurfaceNodeId;
 
         if (remoteOwnerNodeId && ws) {
+          const registeredProvider = providerRegistry.getForUser(requestProvider, authUser.id);
+          const remoteProviderType = registeredProvider?.providerType ?? requestProvider;
+          const accountNodeId = registeredProvider?.executionNodeId;
           const candidateNodes = ws.getFsNodes().filter((node) => node.id === remoteOwnerNodeId);
           for (const node of candidateNodes) {
             if (node.isGateway) continue;
-            if (!node.providers?.includes(requestProvider)) continue;
-            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
+            if (accountNodeId && accountNodeId !== node.id) continue;
+            if (!node.providers?.includes(remoteProviderType)) continue;
+            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider, remoteProviderType);
             isRemote = true;
             remoteNodeInfo = { nodeId: node.id, nodeName: node.name, platform: node.platform };
             break;

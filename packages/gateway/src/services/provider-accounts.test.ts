@@ -121,6 +121,30 @@ describe("ProviderAccountService", () => {
     sqlite.close();
   });
 
+  it("scopes remote accounts to one node without creating gateway credentials", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const registry = new ProviderRegistry();
+    const root = mkdtempSync(join(tmpdir(), "jait-provider-accounts-"));
+    roots.push(root);
+    const service = new ProviderAccountService(db, registry, [{
+      id: "codex",
+      name: "Codex",
+      description: "Codex test provider",
+      command: process.execPath,
+    }], root);
+
+    const windows = service.create("user-1", "codex", "Work", "windows-node");
+    const laptop = service.create("user-1", "codex", "Work", "laptop-node");
+
+    expect(windows.nodeId).toBe("windows-node");
+    expect(laptop.nodeId).toBe("laptop-node");
+    expect(registry.get(windows.id)?.executionNodeId).toBe("windows-node");
+    expect(existsSync(join(root, windows.id))).toBe(false);
+
+    sqlite.close();
+  });
+
   it("rejects duplicate labels and unknown account types", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

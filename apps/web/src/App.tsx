@@ -89,7 +89,7 @@ import {
 } from '@/lib/message-segment-builders'
 import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
-import { areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
+import { activeProjectDuringSwitch, areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
 import {
   areProjectUiValuesEqual,
   getPersistablePreviewTarget,
@@ -239,6 +239,7 @@ function App() {
   }, [])
   const activeProjectRef = useRef(activeProject)
   activeProjectRef.current = activeProject
+  const projectSwitchRequestRef = useRef(0)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
@@ -2094,7 +2095,12 @@ function App() {
 
     // Determine which session to activate (mirrors switchProject logic)
     const nextSessionId = getLatestProjectSessionId(project)
+    const requestId = ++projectSwitchRequestRef.current
 
+    setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
+    setProjectFiles([])
+    setActiveProjectFileId(null)
+    handleAvailableFilesForMentionChange([])
     switchProject(projectId)
 
     // Open the project directory on the gateway and directly hydrate from the
@@ -2107,18 +2113,27 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: project.rootPath, sessionId: nextSessionId, nodeId: project.nodeId || 'gateway' }),
         })
-        if (!res.ok) return
+        if (requestId !== projectSwitchRequestRef.current) return
+        if (!res.ok) {
+          setActiveProjectIfChanged(null)
+          toast.error('Failed to open project files.')
+          return
+        }
         const data = await res.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
+        if (requestId !== projectSwitchRequestRef.current) return
         const resolvedNodeId = data.nodeId || project.nodeId || undefined
         setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId })
         showProjectRef.current = true
         setShowProject(true)
         setSavedProject({ open: true, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
       } catch (e) {
+        if (requestId !== projectSwitchRequestRef.current) return
+        setActiveProjectIfChanged(null)
         console.error('Failed to open project:', e)
+        toast.error('Failed to open project files.')
       }
     }
-  }, [projects, switchProject, setSavedProject, isMobile])
+  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange])
 
   const handleCreateProject = useCallback(() => {
     setProjectPickerMode('project')
@@ -2453,7 +2468,7 @@ function App() {
 
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
-    if (!activeProject?.projectRoot || !activeSessionId) return
+    if (!activeProject?.projectRoot || !activeSessionId || activeProject.opening) return
     let cancelled = false
     ;(async () => {
       try {

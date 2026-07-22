@@ -43,6 +43,20 @@ function createMockWs(options: { sendTurnResult?: unknown } = {}) {
 }
 
 describe("RemoteCliProvider", () => {
+  it("routes a managed account through its underlying node provider", async () => {
+    const { ws } = createMockWs();
+    const provider = new RemoteCliProvider(ws, "node-1", "claude-code-account", "claude-code");
+
+    expect(await provider.checkAvailability()).toBe(true);
+    await provider.listModels();
+    expect(ws.proxyProviderOp).toHaveBeenCalledWith(
+      "node-1",
+      "list-models",
+      { providerId: "claude-code-account", providerType: "claude-code" },
+      90_000,
+    );
+  });
+
   it("installs one shared remote event dispatcher per websocket", async () => {
     const { ws, getRemoteHandlerSetCount } = createMockWs();
     const first = new RemoteCliProvider(ws, "node-1", "claude-code");

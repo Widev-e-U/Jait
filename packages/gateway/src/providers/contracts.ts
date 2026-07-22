@@ -73,6 +73,7 @@ export interface CliProviderAdapter {
   readonly id: ProviderId;
   readonly providerType?: ProviderId;
   readonly ownerUserId?: string;
+  readonly executionNodeId?: string;
   readonly info: ProviderInfo;
 
   /**

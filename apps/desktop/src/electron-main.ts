@@ -9,7 +9,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, N
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 const { autoUpdater } = electronUpdater;
@@ -842,6 +842,51 @@ function detectCliProviders(): DesktopProviderStatus[] {
 
 ipcMain.handle("desktop:detect-providers", () => detectCliProviders());
 
+const remoteProviderLoginProcesses = new Map<string, ChildProcess>();
+
+function remoteProviderAccountEnv(providerId: string, providerType: DesktopRemoteProviderId): Record<string, string> {
+  const accountHome = path.join(app.getPath("userData"), "provider-accounts", providerId);
+  mkdirSync(accountHome, { recursive: true, mode: 0o700 });
+  return {
+    ...process.env,
+    HOME: accountHome,
+    USERPROFILE: accountHome,
+    XDG_CONFIG_HOME: path.join(accountHome, ".config"),
+    XDG_DATA_HOME: path.join(accountHome, ".local", "share"),
+    XDG_CACHE_HOME: path.join(accountHome, ".cache"),
+    ...(providerType === "codex" ? { CODEX_HOME: accountHome, OPENAI_API_KEY: "" } : {}),
+    ...(providerType === "claude-code" ? { CLAUDE_CONFIG_DIR: path.join(accountHome, ".claude"), ANTHROPIC_API_KEY: "" } : {}),
+  } as Record<string, string>;
+}
+
+function remoteProviderCommand(providerType: DesktopRemoteProviderId): string {
+  return providerType === "claude-code" ? "claude" : "codex";
+}
+
+function remoteProviderAuthArgs(providerType: DesktopRemoteProviderId): string[] {
+  return providerType === "claude-code" ? ["auth", "status"] : ["login", "status"];
+}
+
+function remoteProviderLoginArgs(providerType: DesktopRemoteProviderId): string[] {
+  return providerType === "claude-code" ? ["auth", "login"] : ["login", "--device-auth"];
+}
+
+function remoteProviderLogoutArgs(providerType: DesktopRemoteProviderId): string[] {
+  return providerType === "claude-code" ? ["auth", "logout"] : ["logout"];
+}
+
+function parseRemoteLoginOutput(output: string): { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string } {
+  const verificationUri = output.match(/https?:\/\/[^\s<>"')]+/i)?.[0];
+  const userCode = output.match(/\b[A-Z0-9]{4,}(?:-[A-Z0-9]{3,}){1,4}\b/i)?.[0]?.toUpperCase();
+  const inputLine = output.split(/\r?\n/).find((line) => /(?:paste|enter).*(?:authorization|auth).*code|code.*browser/i.test(line));
+  return {
+    verificationUri,
+    userCode,
+    requiresCodeInput: !userCode && Boolean(inputLine),
+    inputPrompt: inputLine?.trim(),
+  };
+}
+
 // ── Remote provider runner ───────────────────────────────────────────
 // Manages codex/claude-code child processes on behalf of the gateway.
 // Each session spawns a child process and streams JSON-RPC events back.
@@ -1404,17 +1449,90 @@ function asDesktopNonEmptyString(value: unknown): string | undefined {
 
 ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<string, unknown>) => {
   switch (op) {
+    case "auth-status": {
+      const { providerId, providerType } = params as { providerId: string; providerType: string };
+      if (!isSupportedDesktopProviderId(providerType)) throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
+      try {
+        execSync([remoteProviderCommand(providerType), ...remoteProviderAuthArgs(providerType)].join(" "), {
+          stdio: "pipe", timeout: 10_000, env: remoteProviderAccountEnv(providerId, providerType),
+        });
+        return { login: true, logout: true, deviceCode: true, authenticated: true, detail: "Authenticated for this Jait account on this device" };
+      } catch {
+        return { login: true, logout: false, deviceCode: true, authenticated: false, detail: "Login required for this Jait account on this device" };
+      }
+    }
+    case "start-login": {
+      const { providerId, providerType } = params as { providerId: string; providerType: string };
+      if (!isSupportedDesktopProviderId(providerType)) throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
+      remoteProviderLoginProcesses.get(providerId)?.kill();
+      const child = spawn(remoteProviderCommand(providerType), remoteProviderLoginArgs(providerType), {
+        env: remoteProviderAccountEnv(providerId, providerType), stdio: ["pipe", "pipe", "pipe"], shell: true,
+      });
+      remoteProviderLoginProcesses.set(providerId, child);
+      let output = "";
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve();
+        };
+        const capture = (data: Buffer) => {
+          output += data.toString();
+          const details = parseRemoteLoginOutput(output);
+          if (details.verificationUri || details.userCode || details.requiresCodeInput) finish();
+        };
+        const timeout = setTimeout(finish, 15_000);
+        child.stdout?.on("data", capture);
+        child.stderr?.on("data", capture);
+        child.once("exit", () => {
+          remoteProviderLoginProcesses.delete(providerId);
+          finish();
+        });
+        child.once("error", finish);
+      });
+      const details = parseRemoteLoginOutput(output);
+      return { ok: true, status: "started", providerId, message: `Complete ${providerType} login on this device.`, rawOutput: output, ...details };
+    }
+    case "login-input": {
+      const { providerId, input } = params as { providerId: string; input: string };
+      const child = remoteProviderLoginProcesses.get(providerId);
+      if (!child?.stdin) throw new Error("No login is waiting for input");
+      child.stdin.write(`${input}\n`);
+      return { ok: true };
+    }
+    case "logout": {
+      const { providerId, providerType } = params as { providerId: string; providerType: string };
+      if (!isSupportedDesktopProviderId(providerType)) throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
+      try {
+        execSync([remoteProviderCommand(providerType), ...remoteProviderLogoutArgs(providerType)].join(" "), {
+          stdio: "pipe", timeout: 20_000, env: remoteProviderAccountEnv(providerId, providerType),
+        });
+        return { ok: true, status: "completed", providerId, message: `${providerType} logged out on this device.` };
+      } catch (error) {
+        return { ok: false, status: "error", providerId, message: error instanceof Error ? error.message : "Logout failed" };
+      }
+    }
+    case "delete-account": {
+      const { providerId } = params as { providerId: string };
+      remoteProviderLoginProcesses.get(providerId)?.kill();
+      remoteProviderLoginProcesses.delete(providerId);
+      rmSync(path.join(app.getPath("userData"), "provider-accounts", providerId), { recursive: true, force: true });
+      return { ok: true };
+    }
     case "start-session": {
-      const { sessionId, providerId, workingDirectory, mode, model, env: extraEnv, mcpServers } = params as {
-        sessionId: string; providerId: string; workingDirectory: string;
+      const { sessionId, providerId, providerType, workingDirectory, mode, model, env: extraEnv, mcpServers } = params as {
+        sessionId: string; providerId: string; providerType: string; workingDirectory: string;
         mode: string; model?: string; env?: Record<string, string>; mcpServers?: DesktopMcpServerRef[];
       };
-      if (!isSupportedDesktopProviderId(providerId)) {
-        throw new Error(`Provider ${providerId} is not implemented by the desktop remote runner`);
+      if (!isSupportedDesktopProviderId(providerType)) {
+        throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
       }
+      const providerEnv = { ...remoteProviderAccountEnv(providerId, providerType), ...extraEnv } as Record<string, string>;
       const resolvedMcpServers = getDesktopJaitMcpServers(mcpServers);
 
-      if (providerId === "claude-code") {
+      if (providerType === "claude-code") {
         remoteProviderSessions.set(sessionId, {
           child: null,
           pendingRpc: new Map(),
@@ -1425,7 +1543,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           workingDirectory,
           mode,
           model: model ?? null,
-          env: { ...process.env, ...extraEnv } as Record<string, string>,
+          env: providerEnv,
           mcpServers: resolvedMcpServers,
           mcpConfigPath: buildDesktopClaudeMcpConfig(sessionId, resolvedMcpServers),
           stopRequested: false,
@@ -1439,7 +1557,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
 
       const child = spawn(cmd, args, {
         cwd: workingDirectory,
-        env: { ...process.env, ...extraEnv } as Record<string, string>,
+        env: providerEnv,
         stdio: ["pipe", "pipe", "pipe"],
         shell: true,
       });
@@ -1454,7 +1572,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         workingDirectory,
         mode,
         model: model ?? null,
-        env: { ...process.env, ...extraEnv } as Record<string, string>,
+        env: providerEnv,
         mcpServers: resolvedMcpServers,
         stopRequested: false,
         pendingToolCalls: [],
@@ -1596,11 +1714,12 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       return { ok: true };
     }
     case "list-models": {
-      const { providerId } = params as { providerId: string };
-      if (!isSupportedDesktopProviderId(providerId)) {
-        throw new Error(`Provider ${providerId} is not implemented by the desktop remote runner`);
+      const { providerId, providerType } = params as { providerId: string; providerType: string };
+      if (!isSupportedDesktopProviderId(providerType)) {
+        throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
       }
-      if (providerId === "claude-code") {
+      const providerEnv = remoteProviderAccountEnv(providerId, providerType);
+      if (providerType === "claude-code") {
         return getClaudeModelOptions();
       }
 
@@ -1609,7 +1728,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
 
       const child = spawn(cmd, args, {
         cwd: process.cwd(),
-        env: process.env as Record<string, string>,
+        env: providerEnv,
         stdio: ["pipe", "pipe", "pipe"],
         shell: true,
       });
@@ -1624,7 +1743,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         workingDirectory: process.cwd(),
         mode: "full-access",
         model: null,
-        env: process.env as Record<string, string>,
+        env: providerEnv,
         stopRequested: false,
         pendingToolCalls: [],
       };

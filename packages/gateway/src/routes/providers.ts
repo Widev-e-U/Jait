@@ -25,6 +25,7 @@ import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache } from "../providers/provider-snapshot.js";
+import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 
 // ── Route registration ───────────────────────────────────────────
 
@@ -48,6 +49,17 @@ export function registerProviderRoutes(
   const snapshotCache = new ProviderSnapshotCache(providerRegistry);
   snapshotCache.warm();
 
+  const resolveProvider = (id: string, userId: string) => {
+    const account = deps.providerAccountService?.get(id, userId);
+    if (account && account.nodeId !== "gateway") {
+      if (!ws) return undefined;
+      const node = ws.getFsNodes().find((candidate) => candidate.id === account.nodeId && !candidate.isGateway);
+      if (!node) return undefined;
+      return new RemoteCliProvider(ws, node.id, account.id, account.providerType);
+    }
+    return providerRegistry.getForUser(id as ProviderId, userId);
+  };
+
   app.get("/api/provider-accounts", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -61,12 +73,21 @@ export function registerProviderRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     if (!deps.providerAccountService) return reply.status(503).send({ error: "Provider account service is unavailable" });
-    const body = (request.body ?? {}) as { providerType?: string; label?: string };
+    const body = (request.body ?? {}) as { providerType?: string; label?: string; nodeId?: string };
     try {
+      const nodeId = typeof body.nodeId === "string" && body.nodeId.trim() ? body.nodeId.trim() : "gateway";
+      if (nodeId !== "gateway") {
+        const node = ws?.getFsNodes().find((candidate) => candidate.id === nodeId && !candidate.isGateway);
+        if (!node) return reply.status(404).send({ error: `Node ${nodeId} is not connected` });
+        if (!node.providers?.includes(typeof body.providerType === "string" ? body.providerType : "")) {
+          return reply.status(409).send({ error: `Provider ${body.providerType ?? ""} is not installed on ${node.name}` });
+        }
+      }
       const account = deps.providerAccountService.create(
         authUser.id,
         typeof body.providerType === "string" ? body.providerType : "",
         typeof body.label === "string" ? body.label : "",
+        nodeId,
       );
       snapshotCache.invalidate();
       return reply.status(201).send({ account });
@@ -100,6 +121,13 @@ export function registerProviderRoutes(
     if (!authUser) return;
     if (!deps.providerAccountService) return reply.status(503).send({ error: "Provider account service is unavailable" });
     const { id } = request.params as { id: string };
+    const existingAccount = deps.providerAccountService.get(id, authUser.id);
+    if (existingAccount && existingAccount.nodeId !== "gateway" && ws) {
+      await ws.proxyProviderOp(existingAccount.nodeId, "delete-account", {
+        providerId: existingAccount.id,
+        providerType: existingAccount.providerType,
+      }, 90_000).catch(() => {});
+    }
     const deleted = await deps.providerAccountService.delete(id, authUser.id);
     if (!deleted) return reply.status(404).send({ error: "Provider account not found" });
     if (deps.userService?.getSettings(authUser.id).chatProvider === id) {
@@ -117,20 +145,43 @@ export function registerProviderRoutes(
     // `?fresh=1` forces a synchronous re-probe (used by explicit UI refresh).
     const fresh = (request.query as { fresh?: string } | undefined)?.fresh;
     const force = fresh === "1" || fresh === "true";
+    const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
+    const accountById = new Map(accounts.map((account) => [account.id, account]));
     const providerSnapshots = (await snapshotCache.get(force))
-      .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id));
+      .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id))
+      .filter((provider) => (accountById.get(provider.id)?.nodeId ?? "gateway") === "gateway");
 
     // Collect remote provider info from connected filesystem nodes (cheap, live).
-    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[]; providerStatuses?: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> }[] = [];
+    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[]; availableProviderTypes?: string[]; providerStatuses?: Array<{ id: string; providerType?: string; name?: string; installed: boolean; authenticated: boolean | null; detail?: string }> }[] = [];
     if (ws) {
       for (const node of ws.getFsNodes()) {
         if (node.isGateway) continue;
+        const nodeAccounts = accounts.filter((account) => account.nodeId === node.id);
+        const accountStatuses = await Promise.all(nodeAccounts.map(async (account) => {
+          const provider = new RemoteCliProvider(ws, node.id, account.id, account.providerType);
+          const status = await provider.getAuthStatus().catch((error) => ({
+            authenticated: null,
+            detail: error instanceof Error ? error.message : "Unable to check account",
+            login: true,
+            logout: true,
+            deviceCode: true,
+          }));
+          return {
+            id: account.id,
+            providerType: account.providerType,
+            name: `${account.providerType === "claude-code" ? "Claude Code" : "Codex"} — ${account.label}`,
+            installed: node.providers?.includes(account.providerType) ?? false,
+            authenticated: status.authenticated,
+            detail: status.detail,
+          };
+        }));
         remoteProviders.push({
           nodeId: node.id,
           nodeName: node.name,
           platform: node.platform,
-          providers: node.providers ?? [],
-          providerStatuses: node.providerStatuses,
+          providers: ["jait", ...accountStatuses.filter((status) => status.installed && status.authenticated === true).map((status) => status.id)],
+          availableProviderTypes: node.providers ?? [],
+          providerStatuses: accountStatuses,
         });
       }
     }
@@ -147,7 +198,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
+    const provider = resolveProvider(id, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.getAuthStatus) {
       return reply.status(501).send({ error: `Provider ${id} does not support auth status` });
@@ -161,7 +212,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
+    const provider = resolveProvider(id, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.startLogin) {
       return reply.status(501).send({ error: `Provider ${id} does not support login` });
@@ -187,7 +238,7 @@ export function registerProviderRoutes(
       return reply.status(400).send({ error: "Missing or empty code" });
     }
 
-    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
+    const provider = resolveProvider(id, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.sendLoginInput) {
       return reply.status(501).send({ error: `Provider ${id} does not support code input` });
@@ -203,7 +254,7 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
+    const provider = resolveProvider(id, authUser.id);
     if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
     if (!provider.logout) {
       return reply.status(501).send({ error: `Provider ${id} does not support logout` });
@@ -224,6 +275,24 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
+    const requestedNodeId = (request.query as { nodeId?: string } | undefined)?.nodeId?.trim();
+
+    if (id !== "jait" && requestedNodeId && requestedNodeId !== "gateway") {
+      if (!ws) return reply.status(503).send({ error: "Remote provider routing is unavailable" });
+      const node = ws.getFsNodes().find((candidate) => candidate.id === requestedNodeId);
+      if (!node) return reply.status(404).send({ error: `Node ${requestedNodeId} is not connected` });
+
+      const account = deps.providerAccountService?.get(id, authUser.id);
+      if (!account || account.nodeId !== node.id) {
+        return reply.status(404).send({ error: `Provider account ${id} is not configured for ${node.name}` });
+      }
+      const remoteProvider = new RemoteCliProvider(ws, node.id, account.id, account.providerType);
+      if (!await remoteProvider.checkAvailability()) {
+        return reply.status(409).send({ error: remoteProvider.info.unavailableReason ?? `Provider ${id} is unavailable on ${node.name}` });
+      }
+      return { models: await remoteProvider.listModels() };
+    }
+
     const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
     if (!provider) {
       return reply.status(404).send({ error: `Unknown provider: ${id}` });

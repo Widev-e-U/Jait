@@ -334,12 +334,16 @@ export function registerPlanRoutes(
         }
 
         let cliProvider: CliProviderAdapter | null = null;
-        const remoteNodeId = findRemoteNodeForCwd(repo.localPath, requestProvider);
+        const registeredProvider = deps.providerRegistry.getForUser(requestProvider, user.id);
+        const remoteProviderType = registeredProvider?.providerType ?? requestProvider;
+        const remoteNodeId = findRemoteNodeForCwd(repo.localPath, remoteProviderType);
         if (remoteNodeId && ws) {
-          cliProvider = new RemoteCliProvider(ws, remoteNodeId, requestProvider);
+          if (!registeredProvider?.executionNodeId || registeredProvider.executionNodeId === remoteNodeId) {
+            cliProvider = new RemoteCliProvider(ws, remoteNodeId, requestProvider, remoteProviderType);
+          }
         }
         if (!cliProvider) {
-          cliProvider = deps.providerRegistry.get(requestProvider) ?? null;
+          cliProvider = deps.providerRegistry.getForUser(requestProvider, user.id) ?? null;
         }
         if (!cliProvider) {
           return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });

@@ -12,7 +12,7 @@ interface JaitDesktop {
   }>
   getRoots: () => Promise<{ roots: { name: string; path: string; type: 'dir' | 'file' }[] }>
   fsOp: (op: string, params: Record<string, unknown>) => Promise<unknown>
-  detectProviders: () => Promise<Array<string | { id: string; installed: boolean; authenticated: boolean | null; detail?: string }>>
+  detectProviders: () => Promise<Array<string | { id: string; providerType?: string; name?: string; installed: boolean; authenticated: boolean | null; detail?: string }>>
   providerOp: (op: string, params: Record<string, unknown>) => Promise<unknown>
   toolOp: (tool: string, args: Record<string, unknown>, meta: Record<string, unknown>) => Promise<unknown>
   terminalOp: (op: string, params: Record<string, unknown>) => Promise<unknown>

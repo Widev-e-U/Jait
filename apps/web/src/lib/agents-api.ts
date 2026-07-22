@@ -89,6 +89,7 @@ export interface ProviderAccount {
   id: string
   userId: string
   providerType: string
+  nodeId: string
   label: string
   createdAt: string
   updatedAt: string
@@ -172,11 +173,11 @@ export class AgentsApi {
     return res.json() as Promise<{ accounts: ProviderAccount[]; providerTypes: ProviderAccountType[] }>
   }
 
-  async createProviderAccount(providerType: string, label: string): Promise<ProviderAccount> {
+  async createProviderAccount(providerType: string, label: string, nodeId = "gateway"): Promise<ProviderAccount> {
     const res = await fetch(`${API_URL}/api/provider-accounts`, {
       method: 'POST',
       headers: this.getHeaders(true),
-      body: JSON.stringify({ providerType, label }),
+      body: JSON.stringify({ providerType, label, nodeId }),
     })
     const data = await res.json().catch(() => null) as { account?: ProviderAccount; error?: string } | null
     if (!res.ok || !data?.account) throw new Error(data?.error ?? `Failed to create provider account: ${res.statusText}`)
@@ -233,6 +234,13 @@ export class AgentsApi {
       this._providersCachedAt = 0
     })
     return this._providersInflight
+  }
+
+  /** Refresh connected nodes without forcing expensive gateway CLI auth probes. */
+  async listProvidersLive(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
+    this._providersInflight = null
+    this._providersCachedAt = 0
+    return this.listProviders(false)
   }
 
   /** Force-refresh providers (bypasses the dedup cache and re-probes server-side). */
@@ -301,15 +309,18 @@ export class AgentsApi {
   private _modelsInflight = new Map<string, Promise<ProviderModelsResponse>>()
   private _modelsCachedAt = new Map<string, number>()
 
-  async listProviderModels(providerId: ProviderId): Promise<ProviderModelsResponse> {
+  async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
+    const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
+    const cacheKey = `${providerId}:${effectiveNodeId}`
     const now = Date.now()
-    const cachedAt = this._modelsCachedAt.get(providerId) ?? 0
-    const existing = this._modelsInflight.get(providerId)
+    const cachedAt = this._modelsCachedAt.get(cacheKey) ?? 0
+    const existing = this._modelsInflight.get(cacheKey)
     if (existing && now - cachedAt < 15_000) return existing
 
-    this._modelsCachedAt.set(providerId, now)
+    this._modelsCachedAt.set(cacheKey, now)
     const promise = (async () => {
-      const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
+      const nodeQuery = effectiveNodeId === 'gateway' ? '' : `?nodeId=${encodeURIComponent(effectiveNodeId)}`
+      const res = await fetch(`${API_URL}/api/providers/${providerId}/models${nodeQuery}`, {
         headers: this.getHeaders(),
       })
       if (!res.ok) {
@@ -318,10 +329,10 @@ export class AgentsApi {
       }
       return res.json() as Promise<ProviderModelsResponse>
     })()
-    this._modelsInflight.set(providerId, promise)
+    this._modelsInflight.set(cacheKey, promise)
     promise.catch(() => {
-      this._modelsInflight.delete(providerId)
-      this._modelsCachedAt.delete(providerId)
+      this._modelsInflight.delete(cacheKey)
+      this._modelsCachedAt.delete(cacheKey)
     })
     return promise
   }

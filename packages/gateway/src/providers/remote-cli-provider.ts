@@ -25,7 +25,7 @@ import type {
 import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { mapCodexNotification } from "./codex-event-mapper.js";
-import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
+import { DEVICE_PROVIDER_AUTH } from "./provider-auth.js";
 
 type RemoteProviderEventMetadata = { streamId: string; seq: number };
 type RemoteProviderEventHandler = (
@@ -71,6 +71,7 @@ function registerRemoteProviderEventListener(
 
 export class RemoteCliProvider implements CliProviderAdapter {
   readonly id: ProviderId;
+  readonly providerType: ProviderId;
   readonly info: ProviderInfo;
 
   private emitter = new EventEmitter();
@@ -84,15 +85,18 @@ export class RemoteCliProvider implements CliProviderAdapter {
     private ws: WsControlPlane,
     private nodeId: string,
     providerId: ProviderId,
+    providerType: ProviderId = providerId,
   ) {
     this.id = providerId;
+    this.providerType = providerType;
     this.info = {
       id: providerId,
+      providerType,
       name: `Remote ${providerId}`,
       description: `${providerId} running on remote device ${nodeId}`,
       available: true,
       modes: ["full-access", "supervised"],
-      auth: NO_PROVIDER_AUTH,
+      auth: DEVICE_PROVIDER_AUTH,
     };
   }
 
@@ -103,30 +107,41 @@ export class RemoteCliProvider implements CliProviderAdapter {
       this.info.unavailableReason = `Device ${this.nodeId} is not connected`;
       return false;
     }
-    const hasProvider = node.providers?.includes(
-      this.id === "claude-code" ? "claude-code" : this.id,
-    );
+    const hasProvider = node.providers?.includes(this.providerType);
     this.info.available = !!hasProvider;
     if (!hasProvider) {
-      this.info.unavailableReason = `Provider ${this.id} not available on device ${this.nodeId}`;
+      this.info.unavailableReason = `Provider ${this.providerType} not available on device ${this.nodeId}`;
     }
     return this.info.available;
   }
 
   async getAuthStatus(): Promise<ProviderAuthStatus> {
-    return {
-      ...NO_PROVIDER_AUTH,
-      authenticated: null,
-      detail: "Remote provider login is managed on the remote device.",
-    };
+    return this.ws.proxyProviderOp<ProviderAuthStatus>(this.nodeId, "auth-status", {
+      providerId: this.id,
+      providerType: this.providerType,
+    });
   }
 
   async startLogin(): Promise<ProviderLoginResult> {
-    return unsupportedLogin(this.id, "Remote provider login is managed on the remote device.");
+    return this.ws.proxyProviderOp<ProviderLoginResult>(this.nodeId, "start-login", {
+      providerId: this.id,
+      providerType: this.providerType,
+    }, 90_000);
+  }
+
+  sendLoginInput(input: string): void {
+    void this.ws.proxyProviderOp(this.nodeId, "login-input", {
+      providerId: this.id,
+      providerType: this.providerType,
+      input,
+    });
   }
 
   async logout(): Promise<ProviderLogoutResult> {
-    return unsupportedLogout(this.id, "Remote provider login is managed on the remote device.");
+    return this.ws.proxyProviderOp<ProviderLogoutResult>(this.nodeId, "logout", {
+      providerId: this.id,
+      providerType: this.providerType,
+    }, 90_000);
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
@@ -134,7 +149,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       const result = await this.ws.proxyProviderOp<ProviderModelInfo[]>(
         this.nodeId,
         "list-models",
-        { providerId: this.id },
+        { providerId: this.id, providerType: this.providerType },
         90_000,
       );
       return Array.isArray(result) ? result : [];
@@ -165,6 +180,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       }>(this.nodeId, "start-session", {
         sessionId,
         providerId: this.id,
+        providerType: this.providerType,
         workingDirectory: options.workingDirectory,
         mode: options.mode,
         model: options.model,

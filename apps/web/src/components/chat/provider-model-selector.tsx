@@ -12,6 +12,7 @@ import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
+import { getScopedProviderSource, resolveScopedProviderSelection } from '@/lib/provider-scope'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -169,8 +170,12 @@ export function ProviderModelSelector({
   const codeInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const refreshProviders = useCallback((fresh = false) => {
-    const request = fresh ? agentsApi.listProvidersFresh() : agentsApi.listProviders()
+  const refreshProviders = useCallback((fresh = false, live = false) => {
+    const request = fresh
+      ? agentsApi.listProvidersFresh()
+      : live
+        ? agentsApi.listProvidersLive()
+        : agentsApi.listProviders()
     request
       .then(({ providers, remoteProviders: remote }) => {
         const map: Record<string, ProviderInfo> = {}
@@ -185,6 +190,11 @@ export function ProviderModelSelector({
   useEffect(() => {
     refreshProviders()
   }, [refreshProviders])
+
+  useEffect(() => {
+    if (!projectNodeId || projectNodeId === 'gateway') return
+    refreshProviders(false, true)
+  }, [projectNodeId, refreshProviders])
 
   const copyCode = async (providerId: ProviderId, code: string) => {
     const copied = await copyTextToClipboard(code)
@@ -311,7 +321,7 @@ export function ProviderModelSelector({
 
     let cancelled = false
     setLoadingModels(true)
-    agentsApi.listProviderModels(provider)
+    agentsApi.listProviderModels(provider, projectNodeId)
       .then((result) => {
         if (cancelled) return
         setModelError(null)
@@ -335,7 +345,7 @@ export function ProviderModelSelector({
     return () => {
       cancelled = true
     }
-  }, [provider])
+  }, [provider, projectNodeId])
 
   useEffect(() => {
     if (provider === 'jait') return
@@ -358,9 +368,16 @@ export function ProviderModelSelector({
   const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
-    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
+    const sourceProviders = getScopedProviderSource({
+      localProviders,
+      remoteNode: wsRemoteNode,
+      remoteProviderIds: repoAvailable,
+      scopedToRemoteNode: scopedToProjectNode || (scopedToRepo && !repoIsGateway),
+    })
+    const source = sourceProviders.length > 0 ? sourceProviders.map(providerDefFromInfo) : PROVIDER_DEFS
     return source.map((item) => {
-      const status = providerStatus[item.value]
+      const sourceStatus = sourceProviders.find((providerInfo) => providerInfo.id === item.value)
+      const status = providerStatus[item.value] ?? sourceStatus
       let isAvailable: boolean
       let reason: string | undefined
       let nodeLabel: string | undefined
@@ -381,7 +398,7 @@ export function ProviderModelSelector({
           reason = 'Device is offline'
         } else {
           isAvailable = repoAvailable.includes(item.value)
-          reason = isAvailable ? undefined : 'Not available on this device'
+          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
           nodeLabel = repoRuntime?.locationLabel ?? 'device'
         }
       } else if (scopedToProjectNode) {
@@ -393,7 +410,7 @@ export function ProviderModelSelector({
           reason = 'Device is offline'
         } else {
           isAvailable = wsRemoteNode.providers.includes(item.value)
-          reason = isAvailable ? undefined : 'Not available on this device'
+          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
           nodeLabel = wsRemoteNode.nodeName
         }
       } else {
@@ -413,9 +430,9 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!scopedToRepo && !scopedToProjectNode) return
     if (repoLoading) return
-    const selectedProvider = providerEntries.find((item) => item.value === provider)
-    if (selectedProvider && !selectedProvider.isAvailable && provider !== 'jait') {
-      onProviderChange('jait')
+    const nextProvider = resolveScopedProviderSelection(provider, providerEntries)
+    if (nextProvider !== provider) {
+      onProviderChange(nextProvider)
     }
   }, [onProviderChange, provider, providerEntries, repoLoading, scopedToProjectNode, scopedToRepo])
 

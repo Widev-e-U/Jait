@@ -12,6 +12,7 @@ export interface ProviderAccountRecord {
   id: string;
   userId: string;
   providerType: string;
+  nodeId: string;
   label: string;
   createdAt: string;
   updatedAt: string;
@@ -62,7 +63,7 @@ export class ProviderAccountService {
     )).get() ?? null;
   }
 
-  create(userId: string, providerType: string, label: string): ProviderAccountRecord {
+  create(userId: string, providerType: string, label: string, nodeId = "gateway"): ProviderAccountRecord {
     const definition = this.definitions.get(providerType);
     if (!definition || definition.auth === false) {
       throw new Error(`Provider accounts are not supported for ${providerType}`);
@@ -73,6 +74,7 @@ export class ProviderAccountService {
       id: `${providerType}-${uuidv7()}`,
       userId,
       providerType,
+      nodeId: nodeId.trim() || "gateway",
       label: normalizedLabel,
       createdAt: now,
       updatedAt: now,
@@ -104,7 +106,7 @@ export class ProviderAccountService {
       eq(providerAccounts.id, id),
       eq(providerAccounts.userId, userId),
     )).run();
-    rmSync(this.accountHome(id), { recursive: true, force: true });
+    if (account.nodeId === "gateway") rmSync(this.accountHome(id), { recursive: true, force: true });
     return true;
   }
 
@@ -112,6 +114,18 @@ export class ProviderAccountService {
     const definition = this.definitions.get(account.providerType);
     if (!definition) return;
     const accountHome = this.accountHome(account.id);
+    if (account.nodeId !== "gateway") {
+      this.registry.register(new AcpProvider({
+        ...definition,
+        id: account.id,
+        providerType: account.providerType,
+        ownerUserId: account.userId,
+        executionNodeId: account.nodeId,
+        name: `${definition.name} — ${account.label}`,
+        auth: false,
+      }));
+      return;
+    }
     mkdirSync(accountHome, { recursive: true, mode: 0o700 });
     const env = {
       ...definition.env,

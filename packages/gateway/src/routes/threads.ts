@@ -977,11 +977,14 @@ export function registerThreadRoutes(
     let executionNode: { id: string; name: string } | null = null;
 
     if (ws && providerId !== "jait" && (!pathExistsLocally || mustRunRemotely)) {
+      const registeredProvider = providerRegistry.getForUser(providerId, authUser.id);
+      const remoteProviderType = registeredProvider?.providerType ?? providerId;
+      const accountNodeId = registeredProvider?.executionNodeId;
       const remoteNode = mustRunRemotely
-        ? ws.getFsNodes().find((node) => node.id === projectDeviceId && node.providers?.includes(providerId))
-        : findRemoteNodeForPath(ws, workingDirectory, providerId);
+        ? ws.getFsNodes().find((node) => node.id === projectDeviceId && (!accountNodeId || accountNodeId === node.id) && node.providers?.includes(remoteProviderType))
+        : findRemoteNodeForPath(ws, workingDirectory, remoteProviderType);
       if (remoteNode) {
-        provider = new RemoteCliProvider(ws, remoteNode.id, providerId);
+        provider = new RemoteCliProvider(ws, remoteNode.id, providerId, remoteProviderType);
         isRemote = true;
         executionNode = { id: remoteNode.id, name: remoteNode.name };
       }

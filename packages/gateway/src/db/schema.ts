@@ -77,12 +77,13 @@ export const providerAccounts = sqliteTable(
     id: text("id").primaryKey(),
     userId: text("user_id").notNull(),
     providerType: text("provider_type").notNull(),
+    nodeId: text("node_id").notNull().default("gateway"),
     label: text("label").notNull(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    uniqueIndex("idx_provider_accounts_user_type_label").on(table.userId, table.providerType, table.label),
+    uniqueIndex("idx_provider_accounts_user_node_type_label").on(table.userId, table.nodeId, table.providerType, table.label),
     index("idx_provider_accounts_user").on(table.userId, table.updatedAt),
   ],
 );

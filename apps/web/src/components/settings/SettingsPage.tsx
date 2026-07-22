@@ -168,6 +168,7 @@ export function SettingsPage({
   const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
   const [providerAccountTypes, setProviderAccountTypes] = useState<ProviderAccountType[]>([])
   const [newProviderAccountType, setNewProviderAccountType] = useState('')
+  const [newProviderAccountNodeId, setNewProviderAccountNodeId] = useState('gateway')
   const [newProviderAccountLabel, setNewProviderAccountLabel] = useState('')
   const [providerAccountMutationBusy, setProviderAccountMutationBusy] = useState(false)
   const [providerAccountsLoading, setProviderAccountsLoading] = useState(false)
@@ -281,6 +282,14 @@ export function SettingsPage({
     void loadProviderAccounts()
   }, [loadProviderAccounts])
 
+  useEffect(() => {
+    if (newProviderAccountNodeId === "gateway") return
+    const selectedNode = remoteProviderNodes.find((node) => node.nodeId === newProviderAccountNodeId)
+    if (!selectedNode?.availableProviderTypes?.includes(newProviderAccountType)) {
+      setNewProviderAccountNodeId("gateway")
+    }
+  }, [newProviderAccountNodeId, newProviderAccountType, remoteProviderNodes])
+
   const handleCreateProviderAccount = async () => {
     const label = newProviderAccountLabel.trim()
     const accountType = providerAccountTypes.find((type) => type.providerType === newProviderAccountType)
@@ -288,9 +297,12 @@ export function SettingsPage({
     setProviderAccountMutationBusy(true)
     setError(null)
     try {
-      await agentsApi.createProviderAccount(accountType.providerType, label)
+      await agentsApi.createProviderAccount(accountType.providerType, label, newProviderAccountNodeId)
       setNewProviderAccountLabel('')
-      setStatus(`${accountType.name} account “${label}” created. Sign in on its account row.`)
+      const targetName = newProviderAccountNodeId === "gateway"
+        ? "Gateway"
+        : (remoteProviderNodes.find((node) => node.nodeId === newProviderAccountNodeId)?.nodeName ?? newProviderAccountNodeId)
+      setStatus(`${accountType.name} account “${label}” created on ${targetName}. Sign in on its account row.`)
       await loadProviderAccounts()
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to create ${accountType.name} account.`)
@@ -314,7 +326,11 @@ export function SettingsPage({
   }
 
   const handleProviderLogout = async (providerId: ProviderId) => {
-    const label = providerAccounts.find((provider) => provider.id === providerId)?.name ?? PROVIDER_LABELS[providerId] ?? providerId
+    const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
+    const label = providerAccounts.find((provider) => provider.id === providerId)?.name
+      ?? (configuredAccount ? `${PROVIDER_LABELS[configuredAccount.providerType] ?? configuredAccount.providerType} — ${configuredAccount.label}` : undefined)
+      ?? PROVIDER_LABELS[providerId]
+      ?? providerId
     setProviderLogoutBusy(providerId)
     setError(null)
     setStatus(null)
@@ -330,7 +346,11 @@ export function SettingsPage({
   }
 
   const handleProviderLogin = async (providerId: ProviderId) => {
-    const label = providerAccounts.find((provider) => provider.id === providerId)?.name ?? PROVIDER_LABELS[providerId] ?? providerId
+    const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
+    const label = providerAccounts.find((provider) => provider.id === providerId)?.name
+      ?? (configuredAccount ? `${PROVIDER_LABELS[configuredAccount.providerType] ?? configuredAccount.providerType} — ${configuredAccount.label}` : undefined)
+      ?? PROVIDER_LABELS[providerId]
+      ?? providerId
     let loginWindow: Window | null = null
     try {
       loginWindow = window.open('about:blank', '_blank')
@@ -396,7 +416,9 @@ export function SettingsPage({
     ? providerLoginInstructions.providerId
     : null
   const pendingLoginProviderLabel = pendingLoginProviderId
-    ? (providerAccounts.find((provider) => provider.id === pendingLoginProviderId)?.name ?? pendingLoginProviderId)
+    ? (providerAccounts.find((provider) => provider.id === pendingLoginProviderId)?.name
+      ?? configuredProviderAccounts.find((account) => account.id === pendingLoginProviderId)?.label
+      ?? pendingLoginProviderId)
     : null
 
   useEffect(() => {
@@ -1028,7 +1050,7 @@ export function SettingsPage({
                   Refresh
                 </Button>
               </div>
-              <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(12rem,1fr)_auto]">
+              <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(10rem,0.7fr)_minmax(12rem,1fr)_auto]">
                 <Select value={newProviderAccountType} onValueChange={setNewProviderAccountType}>
                   <SelectTrigger aria-label="Provider account type">
                     <SelectValue placeholder="Choose provider" />
@@ -1037,6 +1059,18 @@ export function SettingsPage({
                     {providerAccountTypes.map((type) => (
                       <SelectItem key={type.providerType} value={type.providerType}>{type.name}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <Select value={newProviderAccountNodeId} onValueChange={setNewProviderAccountNodeId}>
+                  <SelectTrigger aria-label="Provider account device">
+                    <SelectValue placeholder="Choose device" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gateway">Gateway</SelectItem>
+                    {remoteProviderNodes.map((node) => {
+                      const supported = node.availableProviderTypes?.includes(newProviderAccountType) ?? false
+                      return <SelectItem key={node.nodeId} value={node.nodeId} disabled={!supported}>{node.nodeName}{supported ? "" : " (provider unavailable)"}</SelectItem>
+                    })}
                   </SelectContent>
                 </Select>
                 <Input
@@ -1160,15 +1194,20 @@ export function SettingsPage({
                   )
                 })}
                 {remoteProviderNodes.flatMap((node) => (
-                  (node.providerStatuses ?? node.providers.map((id) => ({ id, installed: true, authenticated: null, detail: undefined })))
+                  (node.providerStatuses ?? node.providers.map((id) => ({ id, providerType: id, name: undefined, installed: true, authenticated: null, detail: undefined })))
                     .map((provider) => ({ node, provider }))
                 )).map(({ node, provider }) => {
                   const isSignedIn = provider.authenticated === true
+                  const configuredAccount = configuredProviderAccounts.find((account) => account.id === provider.id)
+                  const loginBusy = providerLoginBusy === provider.id
+                  const logoutBusy = providerLogoutBusy === provider.id
+                  const busy = loginBusy || logoutBusy
+                  const loginInstructions = providerLoginInstructions?.providerId === provider.id ? providerLoginInstructions : null
                   return (
                     <div key={`${node.nodeId}:${provider.id}`} className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium">{PROVIDER_LABELS[provider.id] ?? provider.id}</p>
+                          <p className="text-sm font-medium">{provider.name ?? PROVIDER_LABELS[provider.providerType ?? provider.id] ?? provider.id}</p>
                           <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
                             {isSignedIn ? 'signed in' : provider.authenticated === false ? 'signed out' : 'unknown'}
                           </Badge>
@@ -1177,6 +1216,45 @@ export function SettingsPage({
                         <p className="mt-1 text-xs text-muted-foreground">
                           {provider.detail ?? `Available only for projects on this ${node.platform} device.`}
                         </p>
+                        {loginInstructions && (
+                          <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                            <p>{loginInstructions.message}</p>
+                            {loginInstructions.userCode && <code className="block rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>}
+                            {loginInstructions.verificationUri && (
+                              <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" /> Open login page
+                              </a>
+                            )}
+                            {loginInstructions.requiresCodeInput && (
+                              <div className="flex gap-2">
+                                <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === "Enter") void handleProviderLoginCode(provider.id) }} />
+                                <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(provider.id) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
+                              </div>
+                            )}
+                            {loginInstructions.waitingForCompletion && <div className="flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for login completion…</div>}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex w-full gap-2 sm:w-auto">
+                        {!isSignedIn && (
+                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(provider.id) }} disabled={busy}>
+                            {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
+                            Login
+                          </Button>
+                        )}
+                        {isSignedIn && (
+                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(provider.id) }} disabled={busy}>
+                            {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
+                            Logout
+                          </Button>
+                        )}
+                        {configuredAccount && (
+                          <Button variant="outline" size="icon" aria-label={`Remove ${configuredAccount.label}`} disabled={busy || providerAccountMutationBusy} onClick={() => {
+                            if (window.confirm(`Remove “${configuredAccount.label}” and its credentials from ${node.nodeName}?`)) void handleDeleteProviderAccount(configuredAccount)
+                          }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )

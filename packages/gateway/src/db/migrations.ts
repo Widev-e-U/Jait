@@ -1108,4 +1108,14 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 44,
+    name: "provider_accounts_node_scope",
+    run(db) {
+      try { db.exec(`ALTER TABLE provider_accounts ADD COLUMN node_id TEXT NOT NULL DEFAULT 'gateway'`); } catch { /* exists */ }
+      db.exec(`DROP INDEX IF EXISTS idx_provider_accounts_user_type_label`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_user_node_type_label ON provider_accounts(user_id, node_id, provider_type, label)`);
+    },
+  },
+
 ];

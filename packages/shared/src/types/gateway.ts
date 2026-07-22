@@ -23,6 +23,8 @@ export interface DeviceInfo {
  */
 export interface RemoteProviderStatus {
   id: string;
+  providerType?: string;
+  name?: string;
   installed: boolean;
   authenticated: boolean | null;
   detail?: string;

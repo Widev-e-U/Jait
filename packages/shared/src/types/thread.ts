@@ -11,6 +11,7 @@ export type ProviderId = string;
 
 export function providerTypeFromId(providerId: ProviderId): ProviderId {
   if (providerId.startsWith("codex-")) return "codex";
+  if (providerId.startsWith("claude-code-")) return "claude-code";
   return providerId;
 }
 
@@ -78,6 +79,8 @@ export interface ProviderModelInfo {
 
 export interface RemoteProviderStatus {
   id: ProviderId;
+  providerType?: ProviderId;
+  name?: string;
   installed: boolean;
   authenticated: boolean | null;
   detail?: string;
@@ -88,6 +91,7 @@ export interface RemoteProviderInfo {
   nodeName: string;
   platform: string;
   providers: string[];
+  availableProviderTypes?: string[];
   providerStatuses?: RemoteProviderStatus[];
 }
 

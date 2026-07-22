@@ -1,4 +1,4 @@
-import { ExternalLink, Maximize2, Minimize2, X } from 'lucide-react'
+import { ExternalLink, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
 import type { RefObject } from 'react'
 
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -154,7 +154,14 @@ export function DeveloperWorkspacePanes({
   const shouldShowProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showDesktopProject
   const shouldShowMobileProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showMobileProjectFullscreen
 
-  const renderProjectPanel = (mobile = false) => (
+  const renderProjectPanel = (mobile = false) => activeProject?.opening ? (
+    <div className={mobile ? 'flex h-full min-h-0 items-center justify-center' : 'flex min-h-0 flex-1 items-center justify-center'}>
+      <div className="flex max-w-full items-center gap-2 px-4 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        <span className="truncate">Opening {activeProject.projectRoot}…</span>
+      </div>
+    </div>
+  ) : (
     <ErrorBoundary
       name="Editor project"
       variant="section"

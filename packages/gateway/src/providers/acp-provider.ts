@@ -69,6 +69,7 @@ export interface AcpProviderConfig {
   id: ProviderId;
   providerType?: ProviderId;
   ownerUserId?: string;
+  executionNodeId?: string;
   name: string;
   description: string;
   command: string;
@@ -144,9 +145,10 @@ export class AcpProvider implements CliProviderAdapter {
   readonly id: ProviderId;
   readonly providerType: ProviderId;
   readonly ownerUserId?: string;
+  readonly executionNodeId?: string;
   readonly info: ProviderInfo;
 
-  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId">> & { env?: Record<string, string> };
+  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId">> & { env?: Record<string, string> };
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
@@ -161,6 +163,7 @@ export class AcpProvider implements CliProviderAdapter {
     this.id = config.id;
     this.providerType = config.providerType ?? config.id;
     this.ownerUserId = config.ownerUserId;
+    this.executionNodeId = config.executionNodeId;
     this.authKind = config.auth === false ? null : "acp";
     this.config = {
       ...config,
@@ -180,6 +183,11 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async checkAvailability(): Promise<boolean> {
+    if (this.executionNodeId && this.executionNodeId !== "gateway") {
+      this.info.available = false;
+      this.info.unavailableReason = `Available only on device ${this.executionNodeId}`;
+      return false;
+    }
     const command = this.config.command;
     // Async probe so we never block the event loop (this runs for every
     // provider on each /api/providers refresh). A non-zero exit still counts
@@ -550,6 +558,9 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    if (this.executionNodeId && this.executionNodeId !== "gateway") {
+      throw new Error(`Provider account ${this.id} must run on device ${this.executionNodeId}`);
+    }
     const sessionId = uuidv7();
     const session: ProviderSession = {
       id: sessionId,
