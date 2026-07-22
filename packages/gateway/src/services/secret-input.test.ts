@@ -6,34 +6,6 @@ afterEach(() => {
 });
 
 describe("SecretInputService", () => {
-  it("returns a remembered secret before emitting a prompt request", async () => {
-    const onRequest = vi.fn();
-    const resolveRememberedSecret = vi.fn(() => "saved-password");
-    const service = new SecretInputService({
-      defaultTimeoutMs: 10,
-      onRequest,
-      resolveRememberedSecret,
-    });
-
-    const value = await service.requestSecret({
-      sessionId: "session-remembered",
-      userId: "user-1",
-      title: "Administrator password",
-      prompt: "Password for sudo",
-      rememberable: true,
-      secretType: "elevated-password",
-      secretKey: "linux:current-user",
-    });
-
-    expect(value).toBe("saved-password");
-    expect(resolveRememberedSecret).toHaveBeenCalledWith({
-      userId: "user-1",
-      secretType: "elevated-password",
-      secretKey: "linux:current-user",
-    });
-    expect(onRequest).not.toHaveBeenCalled();
-    expect(service.listPending()).toEqual([]);
-  });
   it("lists pending requests by session and user visibility", async () => {
     const service = new SecretInputService();
 

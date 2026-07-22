@@ -15,7 +15,6 @@ import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import { createTerminalRunTool } from "../terminal-tools.js";
 import type { SecretInputService } from "../../services/secret-input.js";
-import type { UserSecretService } from "../../services/user-secrets.js";
 
 interface ExecuteInput {
   /** The shell command to execute */
@@ -41,13 +40,9 @@ interface ExecuteInput {
   sandboxMountMode?: "none" | "read-only" | "read-write";
 }
 
-export function createExecuteTool(
-  registry: SurfaceRegistry,
-  secretInput?: SecretInputService,
-  userSecrets?: UserSecretService,
-): ToolDefinition<ExecuteInput> {
+export function createExecuteTool(registry: SurfaceRegistry, secretInput?: SecretInputService): ToolDefinition<ExecuteInput> {
   // Delegate to the existing terminal.run implementation
-  const inner = createTerminalRunTool(registry, undefined, undefined, secretInput, userSecrets);
+  const inner = createTerminalRunTool(registry, undefined, undefined, secretInput);
 
   return {
     name: "execute",

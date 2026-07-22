@@ -1,13 +1,5 @@
 import type { TodoItem } from '@/components/chat/todo-list'
 
-export type TodoLifecycleEvent = 'turn-start' | 'turn-complete' | 'session-clear'
-
-export function applyTodoLifecycle(items: TodoItem[], event: TodoLifecycleEvent): TodoItem[] {
-  if (event === 'session-clear') return []
-  if (event === 'turn-start' && items.length > 0 && items.every((item) => item.status === 'completed')) return []
-  return items
-}
-
 export function normalizeTodoStateValue(value: unknown): TodoItem[] {
   return Array.isArray(value) ? value as TodoItem[] : []
 }

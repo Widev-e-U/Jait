@@ -1,28 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyTodoLifecycle, mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from './todo-state'
-
-describe('applyTodoLifecycle', () => {
-  const unfinished = [
-    { id: 1, title: 'Implement feature', status: 'in-progress' as const },
-    { id: 2, title: 'Run tests', status: 'not-started' as const },
-  ]
-
-  it('preserves unfinished todos when a turn starts or completes', () => {
-    expect(applyTodoLifecycle(unfinished, 'turn-start')).toBe(unfinished)
-    expect(applyTodoLifecycle(unfinished, 'turn-complete')).toBe(unfinished)
-  })
-
-  it('clears unfinished todos only when the session itself is cleared', () => {
-    expect(applyTodoLifecycle(unfinished, 'session-clear')).toEqual([])
-  })
-
-  it('keeps a completed list visible until the next turn starts', () => {
-    const completed = unfinished.map((item) => ({ ...item, status: 'completed' as const }))
-    expect(applyTodoLifecycle(completed, 'turn-complete')).toBe(completed)
-    expect(applyTodoLifecycle(completed, 'turn-start')).toEqual([])
-  })
-})
+import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from './todo-state'
 
 describe('normalizeTodoStateValue', () => {
   it('returns items when the persisted value is a todo array', () => {

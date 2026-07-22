@@ -1,10 +1,7 @@
 import { spawn, type SpawnOptionsWithoutStdio } from "node:child_process";
 import { platform } from "node:os";
 import type { SecretInputService } from "../services/secret-input.js";
-import type { UserSecretService } from "../services/user-secrets.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
-
-const ELEVATED_PASSWORD_SECRET_TYPE = "elevated-password";
 
 interface ElevatedRunInput {
   command: string;
@@ -279,7 +276,6 @@ export function createElevatedRunTool(
   secretInput?: SecretInputService,
   spawnFactory: ElevatedSpawnFactory = defaultSpawnFactory,
   runtime: ElevatedToolRuntime = {},
-  userSecrets?: UserSecretService,
 ): ToolDefinition<ElevatedRunInput> {
   return {
     name: "elevated.run",
@@ -313,32 +309,21 @@ export function createElevatedRunTool(
 
       let password: string | null = null;
       if (!isElevatedAlready && !useUac) {
-        const secretKey = `${currentPlatform}:${windowsUsername || "current-user"}`;
-        const rememberLabel = windowsUsername
-          ? `Administrator password for ${windowsUsername}`
-          : "Administrator password for local sudo";
-        password = userSecrets?.getValue(context.userId, ELEVATED_PASSWORD_SECRET_TYPE, secretKey) ?? null;
-        if (!password) {
-          if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
-          password = await secretInput.requestSecret({
-            sessionId: context.sessionId,
-            userId: context.userId,
-            title: "Administrator password",
-            prompt: currentPlatform === "win32"
-              ? (input.reason?.trim()
-                ? `Password for ${windowsUsername} to run an elevated command: ${input.reason.trim()}`
-                : `Password for ${windowsUsername} to run an elevated command`)
-              : (input.reason?.trim()
-                ? `Password to run an elevated command: ${input.reason.trim()}`
-                : "Password to run an elevated command with sudo"),
-            requestedBy: "elevated.run",
-            rememberable: true,
-            rememberLabel,
-            secretType: ELEVATED_PASSWORD_SECRET_TYPE,
-            secretKey,
-            timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
-          });
-        }
+        if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
+        password = await secretInput.requestSecret({
+          sessionId: context.sessionId,
+          userId: context.userId,
+          title: "Administrator password",
+          prompt: currentPlatform === "win32"
+            ? (input.reason?.trim()
+              ? `Password for ${windowsUsername} to run an elevated command: ${input.reason.trim()}`
+              : `Password for ${windowsUsername} to run an elevated command`)
+            : (input.reason?.trim()
+              ? `Password to run an elevated command: ${input.reason.trim()}`
+              : "Password to run an elevated command with sudo"),
+          requestedBy: "elevated.run",
+          timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
+        });
         if (!password) return { ok: false, message: "Administrator password was not provided" };
       }
 

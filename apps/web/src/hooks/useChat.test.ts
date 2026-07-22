@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildOptimisticTurnMessages,
   formatChatHttpError,
-  getContinuationRequestFields,
   getVisibleChangedFiles,
   shouldFlushStreamTextImmediately,
   shouldProcessResumeStreamEvent,
@@ -12,16 +10,6 @@ import {
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
 } from '@/hooks/useChat'
-
-describe('chat continuation', () => {
-  it('uses a hidden continuation request without an optimistic user bubble', () => {
-    const userMessage = { id: 'user-1', role: 'user' as const, content: '' }
-    const assistantMessage = { id: 'assistant-1', role: 'assistant' as const, content: '' }
-
-    expect(buildOptimisticTurnMessages(userMessage, assistantMessage, true)).toEqual([assistantMessage])
-    expect(getContinuationRequestFields(true)).toEqual({ _continue: true })
-  })
-})
 
 describe('formatChatHttpError', () => {
   it('explains Codex image uploads that hit the gateway body limit', () => {

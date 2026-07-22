@@ -35,7 +35,7 @@ import { UserQuestionService } from "./services/user-questions.js";
 import { UserSecretService } from "./services/user-secrets.js";
 import { EmailService } from "./services/email/index.js";
 import { UserService } from "./services/users.js";
-import { ProviderAccountService, registerConfiguredAcpProviders } from "./services/provider-accounts.js";
+import { ProviderAccountService } from "./services/provider-accounts.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
@@ -46,7 +46,7 @@ import { RepoProposalService } from "./services/repo-proposals.js";
 import { ReminderService } from "./services/reminders.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { JaitProvider } from "./providers/jait-provider.js";
-import { loadAcpProviderConfigs } from "./providers/acp-provider.js";
+import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
 import { VoiceAssistantService } from "./voice-assistant/service.js";
 import { verifyAuthToken } from "./security/http-auth.js";
 import { ProjectWatcher } from "./services/project-watcher.js";
@@ -144,7 +144,9 @@ async function main() {
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
   const acpProviderConfigs = loadAcpProviderConfigs();
-  registerConfiguredAcpProviders(providerRegistry, acpProviderConfigs);
+  for (const acpProvider of acpProviderConfigs) {
+    if (acpProvider.auth === false) providerRegistry.register(new AcpProvider(acpProvider));
+  }
   const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs);
   providerAccountService.load();
 
@@ -397,9 +399,6 @@ async function main() {
   const trustEngine = new TrustEngine(db);
   const secretInputService = new SecretInputService({
     defaultTimeoutMs: 120_000,
-    resolveRememberedSecret: ({ userId, secretType, secretKey }) => (
-      userSecretService.getValue(userId, secretType, secretKey)
-    ),
     onRequest: (request) => {
       ws.broadcastAll({
         type: "secret.requested",

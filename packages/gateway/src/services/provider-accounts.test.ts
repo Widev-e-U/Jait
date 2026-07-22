@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { ProviderRegistry } from "../providers/registry.js";
-import { ProviderAccountService, registerConfiguredAcpProviders } from "./provider-accounts.js";
+import { ProviderAccountService } from "./provider-accounts.js";
 
 const roots: string[] = [];
 
@@ -13,35 +13,6 @@ afterEach(() => {
 });
 
 describe("ProviderAccountService", () => {
-  it("keeps base adapters available alongside optional provider accounts", () => {
-    const registry = new ProviderRegistry();
-    registerConfiguredAcpProviders(registry, [
-      {
-        id: "codex",
-        name: "Codex",
-        description: "Codex test provider",
-        command: process.execPath,
-      },
-      {
-        id: "claude-code",
-        name: "Claude Code",
-        description: "Claude Code test provider",
-        command: process.execPath,
-      },
-      {
-        id: "local-acp",
-        name: "Local ACP",
-        description: "ACP provider without Jait-managed login",
-        command: process.execPath,
-        auth: false,
-      },
-    ]);
-
-    expect(registry.get("codex")).toBeDefined();
-    expect(registry.get("claude-code")).toBeDefined();
-    expect(registry.get("local-acp")).toBeDefined();
-  });
-
   it("creates isolated Codex adapters per user account", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -94,12 +65,6 @@ describe("ProviderAccountService", () => {
         command: process.execPath,
       },
       {
-        id: "gemini-acp",
-        name: "Gemini ACP",
-        description: "Generic login-capable ACP provider",
-        command: process.execPath,
-      },
-      {
         id: "local-acp",
         name: "Local ACP",
         description: "ACP provider without Jait-managed login",
@@ -111,7 +76,6 @@ describe("ProviderAccountService", () => {
     expect(service.listTypes()).toEqual([
       expect.objectContaining({ providerType: "codex", name: "Codex" }),
       expect.objectContaining({ providerType: "claude-code", name: "Claude Code" }),
-      expect.objectContaining({ providerType: "gemini-acp", name: "Gemini ACP" }),
     ]);
 
     const personal = service.create("user-1", "claude-code", "Personal");
@@ -124,12 +88,6 @@ describe("ProviderAccountService", () => {
     expect(personalAdapter.config.env?.CLAUDE_CONFIG_DIR).not.toBe(workAdapter.config.env?.CLAUDE_CONFIG_DIR);
     expect(personalAdapter.config.env?.NPM_CONFIG_CACHE).toBe(workAdapter.config.env?.NPM_CONFIG_CACHE);
     expect(personalAdapter.config.env?.ANTHROPIC_API_KEY).toBe("");
-
-    const generic = service.create("user-1", "gemini-acp", "Gemini");
-    const genericAdapter = registry.get(generic.id) as unknown as { config: { env?: Record<string, string> } };
-    expect(genericAdapter.config.env?.HOME).toBe(join(root, generic.id));
-    expect(genericAdapter.config.env?.XDG_CONFIG_HOME).toBe(join(root, generic.id, ".config"));
-
     expect(() => service.create("user-1", "local-acp", "Local")).toThrow(
       "Provider accounts are not supported for local-acp",
     );

@@ -20,7 +20,6 @@ import type { TerminalSurface } from "../surfaces/terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SecretInputService } from "../services/secret-input.js";
-import type { UserSecretService } from "../services/user-secrets.js";
 import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -156,20 +155,6 @@ function isSshCommand(command: string): boolean {
 
 function isSshSecretPrompt(command: string, prompt: string): boolean {
   return isSshCommand(command) && /(?:password|passphrase).*:\s*$/i.test(prompt);
-}
-
-export function getRememberedTerminalSecretDescriptor(
-  command: string,
-  prompt: string,
-  projectRoot: string,
-): { rememberLabel: string; secretType: string; secretKey: string } | null {
-  const normalizedPrompt = cleanChunk(prompt).trim().replace(/\s+/g, " ");
-  if (!/(?:password|passphrase)/i.test(normalizedPrompt)) return null;
-  return {
-    rememberLabel: normalizedPrompt,
-    secretType: isSshSecretPrompt(command, normalizedPrompt) ? "terminal-ssh-password" : "terminal-password",
-    secretKey: `${projectRoot}:${normalizedPrompt.toLowerCase()}`,
-  };
 }
 
 /** Race a promise against an AbortSignal */
@@ -526,7 +511,6 @@ export function createTerminalRunTool(
   sandboxManager = new SandboxManager(),
   ws?: WsControlPlane,
   secretInput?: SecretInputService,
-  userSecrets?: UserSecretService,
 ): ToolDefinition<TerminalRunInput> {
   return {
     name: "terminal.run",
@@ -629,22 +613,14 @@ export function createTerminalRunTool(
           context.onOutputChunk,
           context.signal,
           secretInput
-            ? async (prompt) => {
-                const remembered = getRememberedTerminalSecretDescriptor(command, prompt, context.projectRoot);
-                const saved = remembered
-                  ? userSecrets?.getValue(context.userId, remembered.secretType, remembered.secretKey)
-                  : null;
-                if (saved) return saved;
-                return secretInput.requestSecret({
-                  sessionId: context.sessionId,
-                  userId: context.userId,
-                  title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
-                  prompt,
-                  requestedBy: "terminal.run",
-                  ...(remembered ? { rememberable: true, ...remembered } : {}),
-                  timeoutMs: 120_000,
-                });
-              }
+            ? (prompt) => secretInput.requestSecret({
+                sessionId: context.sessionId,
+                userId: context.userId,
+                title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
+                prompt,
+                requestedBy: "terminal.run",
+                timeoutMs: 120_000,
+              })
             : undefined,
         );
 
@@ -723,9 +699,8 @@ export function createJaitTerminalTool(
   sandboxManager = new SandboxManager(),
   ws?: WsControlPlane,
   secretInput?: SecretInputService,
-  userSecrets?: UserSecretService,
 ): ToolDefinition<TerminalRunInput> {
-  const base = createTerminalRunTool(registry, sandboxManager, ws, secretInput, userSecrets);
+  const base = createTerminalRunTool(registry, sandboxManager, ws, secretInput);
   return {
     ...base,
     name: "jait.terminal",

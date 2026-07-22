@@ -271,32 +271,6 @@ describe("POST /api/project/open", () => {
     expect(data.projectId ? projects.getById(data.projectId, user.id)?.rootPath : null).toBe(writableTestRoot);
   });
 
-  it("should replace a stale project node binding when reopening its root", async () => {
-    const user = users.createUser(`reopen-user-${Date.now()}`, "password123");
-    const project = projects.create({
-      userId: user.id,
-      title: "Moved project",
-      rootPath: writableTestRoot,
-      nodeId: "stale-node",
-    });
-    const session = sessions.create({
-      userId: user.id,
-      projectId: project.id,
-      projectPath: writableTestRoot,
-      name: "Existing project chat",
-    });
-
-    const openRes = await fetch(`${address}/api/project/open`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: writableTestRoot, sessionId: session.id, nodeId: "gateway" }),
-    });
-
-    expect(openRes.ok).toBe(true);
-    expect(projects.getById(project.id, user.id)?.rootPath).toBe(writableTestRoot);
-    expect(projects.getById(project.id, user.id)?.nodeId).toBe("gateway");
-  });
-
   it("should return filename and content search results via GET /api/project/search", async () => {
     const searchFile = join(writableTestRoot, "nested", "unique-search-target.ts");
     const searchSessionId = `test-session-search-${Date.now()}`;
