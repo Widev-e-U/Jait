@@ -28,7 +28,7 @@ export function registerConfiguredAcpProviders(
   definitions: AcpProviderConfig[],
 ): void {
   for (const definition of definitions) {
-    registry.register(new AcpProvider(definition));
+    if (definition.auth === false) registry.register(new AcpProvider(definition));
   }
 }
 

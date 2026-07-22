@@ -12,6 +12,7 @@ import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryEntry, MemoryScope, MemoryService } from "../memory/contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
+import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProjectService } from "../services/projects.js";
@@ -2278,22 +2279,35 @@ export function registerChatRoutes(
         // back up files before CLI providers (Codex/Claude) write them,
         // enabling the keep/discard (undo) flow.
         // Use _skipBroadcast so the UI doesn't open the project panel.
-        let cliFsSurface: FileSystemSurface | null = null;
+        let cliFsSurface: FileSystemSurface | RemoteFileSystemSurface | null = null;
         if (surfaceRegistry) {
           const fsId = `fs-${sessionId}`;
-          const existing = surfaceRegistry.getSurface(fsId);
-          if (existing instanceof FileSystemSurface && existing.state === "running") {
+          const existing = isRemote && remoteNodeInfo
+            ? surfaceRegistry.getBySession(sessionId).find((surface) =>
+                surface instanceof RemoteFileSystemSurface
+                && surface.state === "running"
+                && surface.nodeId === remoteNodeInfo.nodeId)
+            : surfaceRegistry.getSurface(fsId);
+          if (
+            (existing instanceof FileSystemSurface || existing instanceof RemoteFileSystemSurface)
+            && existing.state === "running"
+          ) {
             cliFsSurface = existing;
           } else {
             try {
               const prevHandler = surfaceRegistry.onSurfaceStarted;
               surfaceRegistry.onSurfaceStarted = null as any;
-              const started = await surfaceRegistry.startSurface("filesystem", fsId, {
-                sessionId,
-                projectRoot: cliWsRoot,
-              });
+              const started = await surfaceRegistry.startSurface(
+                isRemote ? "remote-filesystem" : "filesystem",
+                fsId,
+                {
+                  sessionId,
+                  projectRoot: cliWsRoot,
+                  ...(isRemote && remoteNodeInfo ? { nodeId: remoteNodeInfo.nodeId } : {}),
+                },
+              );
               surfaceRegistry.onSurfaceStarted = prevHandler;
-              cliFsSurface = started as FileSystemSurface;
+              cliFsSurface = started as FileSystemSurface | RemoteFileSystemSurface;
             } catch { /* best effort */ }
           }
         }

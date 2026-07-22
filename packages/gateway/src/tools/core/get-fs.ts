@@ -240,6 +240,8 @@ export function resolveProjectRoot(
   /** Optional fallback from session record before falling back to process.cwd() */
   sessionProjectPath?: string | null,
 ): string {
+  const fallback = sessionProjectPath?.trim();
+  const fallbackIsWindows = fallback ? /^[A-Za-z]:[\\\\/]/.test(fallback) : null;
   let best: string | null = null;
   let bestLen = -1;
   for (const s of registry.getBySession(sessionId)) {
@@ -249,11 +251,14 @@ export function resolveProjectRoot(
     ) {
       const root = (s.snapshot().metadata as Record<string, unknown>)
         ?.projectRoot as string | undefined;
-      if (root && root.length > bestLen) {
+      if (!root) continue;
+      const rootIsWindows = /^[A-Za-z]:[\\\\/]/.test(root);
+      if (fallbackIsWindows !== null && rootIsWindows !== fallbackIsWindows) continue;
+      if (root.length > bestLen) {
         best = root;
         bestLen = root.length;
       }
     }
   }
-  return best ?? sessionProjectPath?.trim() ?? process.cwd();
+  return best ?? fallback ?? process.cwd();
 }

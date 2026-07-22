@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("ProviderAccountService", () => {
-  it("keeps base adapters available alongside optional provider accounts", () => {
+  it("registers only providers that do not use managed accounts", () => {
     const registry = new ProviderRegistry();
     registerConfiguredAcpProviders(registry, [
       {
@@ -37,8 +37,8 @@ describe("ProviderAccountService", () => {
       },
     ]);
 
-    expect(registry.get("codex")).toBeDefined();
-    expect(registry.get("claude-code")).toBeDefined();
+    expect(registry.get("codex")).toBeUndefined();
+    expect(registry.get("claude-code")).toBeUndefined();
     expect(registry.get("local-acp")).toBeDefined();
   });
 
