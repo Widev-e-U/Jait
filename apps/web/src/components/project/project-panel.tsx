@@ -62,6 +62,8 @@ interface ProjectPanelProps {
   autoOpenRemotePath?: string | null
   /** Surface ID for the active project (ensures REST calls target the right surface) */
   surfaceId?: string | null
+  /** Node that owns the project; Git operations must execute on this exact node. */
+  projectNodeId?: string | null
   /** Mobile mode — renders stacked tabs instead of side-by-side panes */
   isMobile?: boolean
   /** Control visibility of the directory tree pane (default: true) */
@@ -1253,6 +1255,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   onAvailableFilesChange,
   autoOpenRemotePath,
   surfaceId,
+  projectNodeId,
   isMobile,
   showTree: showTreeProp = true,
   showEditor: showEditorProp = true,
@@ -1862,8 +1865,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitStatusLoading(true)
     try {
       const [status, diffs] = await Promise.all([
-        gitApi.status(remoteRoot),
-        gitApi.fileDiffs(remoteRoot).catch(() => [] as FileDiffEntry[]),
+        gitApi.status(remoteRoot, undefined, projectNodeId),
+        gitApi.fileDiffs(remoteRoot, undefined, undefined, projectNodeId).catch(() => [] as FileDiffEntry[]),
       ])
       if (requestSeq === gitStatusRequestSeqRef.current) {
         setGitStatus(status)
@@ -1879,7 +1882,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         setGitStatusLoading(false)
       }
     }
-  }, [remoteRoot])
+  }, [projectNodeId, remoteRoot])
 
   const persistGitAutoFetchMode = useCallback((mode: GitAutoFetchMode) => {
     setGitAutoFetchMode(mode)
@@ -1934,7 +1937,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         if (!ready || cancelled) return
 
         try {
-          await gitApi.fetch(remoteRoot, gitAutoFetchMode === 'all')
+          await gitApi.fetch(remoteRoot, gitAutoFetchMode === 'all', projectNodeId)
           await fetchGitStatus()
         } catch {
           // Keep the loop alive; auth or remote issues should not break the panel.
@@ -2335,7 +2338,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.discard(remoteRoot, [discardPath])
+      await gitApi.discard(remoteRoot, [discardPath], projectNodeId)
       let refreshedContent: string | null = null
       try {
         refreshedContent = await remoteReadFile(tab.path, surfaceId)
@@ -2377,7 +2380,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     } finally {
       setGitActionBusy(false)
     }
-  }, [activeTabId, bumpTree, confirm, fetchGitStatus, findWorkingTreeDiffEntry, gitActionBusy, openTabs, remoteRoot, surfaceId])
+  }, [activeTabId, bumpTree, confirm, fetchGitStatus, findWorkingTreeDiffEntry, gitActionBusy, openTabs, projectNodeId, remoteRoot, surfaceId])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -3557,7 +3560,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
       let entry = findDiffEntry(workingTreeDiffEntries)
       if (!entry) {
-        const freshDiffs = await gitApi.fileDiffs(remoteRoot).catch(() => [] as FileDiffEntry[])
+        const freshDiffs = await gitApi.fileDiffs(remoteRoot, undefined, undefined, projectNodeId).catch(() => [] as FileDiffEntry[])
         if (freshDiffs.length > 0) {
           setWorkingTreeDiffEntries(freshDiffs)
           entry = findDiffEntry(freshDiffs)
@@ -3629,7 +3632,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [onToggleEditor, remoteRoot, showEditorProp, surfaceId, workingTreeDiffEntries])
+  }, [onToggleEditor, projectNodeId, remoteRoot, showEditorProp, surfaceId, workingTreeDiffEntries])
 
   const handleOpenReviewDiff = useCallback(async ({
     path,
@@ -3961,6 +3964,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     try {
       await gitApi.runStackedAction(remoteRoot, action, {
         commitMessage: commitMessage.trim() || undefined,
+        nodeId: projectNodeId,
       })
       setCommitMessage('')
       setScDiffFile(null)
@@ -3980,7 +3984,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setGitActionError(err instanceof Error ? err.message : 'Git action failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
+  }, [projectNodeId, remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
 
   /* ---- Git pull ---- */
   const handleGitPull = useCallback(async () => {
@@ -3988,28 +3992,28 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.pull(remoteRoot)
+      await gitApi.pull(remoteRoot, projectNodeId)
       await fetchGitStatus()
       bumpTree()
     } catch (err) {
       setGitActionError(err instanceof Error ? err.message : 'Pull failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
+  }, [projectNodeId, remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
 
   const handleGitSync = useCallback(async () => {
     if (!remoteRoot || gitActionBusy) return
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.sync(remoteRoot)
+      await gitApi.sync(remoteRoot, projectNodeId)
       await fetchGitStatus()
       bumpTree()
     } catch (err) {
       setGitActionError(err instanceof Error ? err.message : 'Sync failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
+  }, [projectNodeId, remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
 
   /* ---- Discard all changes ---- */
   const handleDiscardAll = useCallback(async () => {
@@ -4021,7 +4025,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.discard(remoteRoot)
+      await gitApi.discard(remoteRoot, undefined, projectNodeId)
       setDiscardConfirm(null)
       setScDiffFile(null)
       setOpenTabs(prev => prev.filter(t => t.type !== 'diff'))
@@ -4031,7 +4035,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setGitActionError(err instanceof Error ? err.message : 'Discard failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus, bumpTree])
+  }, [projectNodeId, remoteRoot, gitActionBusy, gitStatus, fetchGitStatus, bumpTree])
 
   /* ---- Discard single file ---- */
   const handleDiscardFile = useCallback(async (filePath: string) => {
@@ -4039,7 +4043,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.discard(remoteRoot, [filePath])
+      await gitApi.discard(remoteRoot, [filePath], projectNodeId)
       setDiscardConfirm(null)
       // Close diff tab for this file if open
       const tabId = `git-diff:${filePath}`
@@ -4051,7 +4055,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setGitActionError(err instanceof Error ? err.message : 'Discard failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
+  }, [projectNodeId, remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
 
   /* ---- Discard folder ---- */
   const handleDiscardFolder = useCallback(async (paths: string[]) => {
@@ -4060,7 +4064,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setGitActionBusy(true)
     setGitActionError(null)
     try {
-      await gitApi.discard(remoteRoot, uniquePaths)
+      await gitApi.discard(remoteRoot, uniquePaths, projectNodeId)
       setDiscardConfirm(null)
       setOpenTabs((prev) => prev.filter((tab) => tab.type !== 'diff' || !uniquePaths.includes(tab.path)))
       if (scDiffFile?.path && uniquePaths.includes(scDiffFile.path)) setScDiffFile(null)
@@ -4070,16 +4074,16 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setGitActionError(err instanceof Error ? err.message : 'Discard failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
+  }, [projectNodeId, remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
 
   /* ---- Stage paths ---- */
   const handleStagePaths = useCallback(async (paths: string[]) => {
     if (!remoteRoot || gitActionBusy || paths.length === 0) return
     try {
-      await gitApi.stage(remoteRoot, [...new Set(paths)])
+      await gitApi.stage(remoteRoot, [...new Set(paths)], projectNodeId)
       await fetchGitStatus()
     } catch { /* ignore */ }
-  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+  }, [projectNodeId, remoteRoot, gitActionBusy, fetchGitStatus])
 
   /* ---- Stage file ---- */
   const handleStageFile = useCallback(async (filePath: string) => {
@@ -4090,10 +4094,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const handleUnstagePaths = useCallback(async (paths: string[]) => {
     if (!remoteRoot || gitActionBusy || paths.length === 0) return
     try {
-      await gitApi.unstage(remoteRoot, [...new Set(paths)])
+      await gitApi.unstage(remoteRoot, [...new Set(paths)], projectNodeId)
       await fetchGitStatus()
     } catch { /* ignore */ }
-  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+  }, [projectNodeId, remoteRoot, gitActionBusy, fetchGitStatus])
 
   /* ---- Unstage file ---- */
   const handleUnstageFile = useCallback(async (filePath: string) => {
@@ -4104,19 +4108,19 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const handleStageAll = useCallback(async () => {
     if (!remoteRoot || gitActionBusy || (gitStatus?.workingTree.files.length ?? 0) === 0) return
     try {
-      await gitApi.stage(remoteRoot)
+      await gitApi.stage(remoteRoot, undefined, projectNodeId)
       await fetchGitStatus()
     } catch { /* ignore */ }
-  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
+  }, [projectNodeId, remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
 
   /* ---- Unstage all files ---- */
   const handleUnstageAll = useCallback(async () => {
     if (!remoteRoot || gitActionBusy || (gitStatus?.index.files.length ?? 0) === 0) return
     try {
-      await gitApi.unstage(remoteRoot)
+      await gitApi.unstage(remoteRoot, undefined, projectNodeId)
       await fetchGitStatus()
     } catch { /* ignore */ }
-  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
+  }, [projectNodeId, remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
 
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
@@ -4379,13 +4383,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setCommitMsgGenerating(true)
     setGitActionError(null)
     try {
-      const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel)
+      const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel, projectNodeId)
       if (message) setCommitMessage(message)
     } catch (err) {
       setGitActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
     }
     setCommitMsgGenerating(false)
-  }, [remoteRoot, changedFileCount, commitMsgGenerating, gitActionBusy, provider, cliModel])
+  }, [projectNodeId, remoteRoot, changedFileCount, commitMsgGenerating, gitActionBusy, provider, cliModel])
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
   const canRunPrimaryGitAction = !gitActionBusy && (changedFileCount > 0 || canSyncChanges(gitStatus))

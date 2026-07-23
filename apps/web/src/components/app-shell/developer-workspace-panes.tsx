@@ -172,6 +172,7 @@ export function DeveloperWorkspacePanes({
         ref={projectRef}
         autoOpenRemotePath={activeProject?.projectRoot ?? null}
         surfaceId={activeProject?.surfaceId ?? null}
+        projectNodeId={activeProject?.nodeId ?? null}
         files={projectFiles as any}
         activeFileId={activeProjectFileId}
         onActiveFileChange={onActiveProjectFileChange}

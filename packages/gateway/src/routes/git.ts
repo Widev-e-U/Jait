@@ -27,14 +27,22 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveJaitLlmConfig, callJaitLlmCompletion } from "../services/jait-llm.js";
 import type { ProviderId, CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
+import { resolveRemoteGitNodeId } from "./git-node-routing.js";
 
 /**
  * Find a connected remote FsNode that matches a working directory path.
  * Returns the node ID if the cwd doesn't exist locally and a remote node
  * with a matching platform is connected, otherwise null.
  */
-function findRemoteNodeForCwd(ws: WsControlPlane | undefined, cwd: string): string | null {
+function findRemoteNodeForCwd(
+  ws: WsControlPlane | undefined,
+  cwd: string,
+  requestedNodeId?: string | null,
+): string | null {
   if (!ws) return null;
+  if (requestedNodeId) {
+    return resolveRemoteGitNodeId(ws.getFsNodes(), cwd, requestedNodeId, existsSync(cwd));
+  }
   // If the path exists locally, use local git
   if (existsSync(cwd)) return null;
   // Detect path platform from format
@@ -46,6 +54,11 @@ function findRemoteNodeForCwd(ws: WsControlPlane | undefined, cwd: string): stri
     return node.id;
   }
   return null;
+}
+
+function getRequestedGitNodeId(request: { body?: unknown }): string | null {
+  const nodeId = (request.body as { nodeId?: unknown } | null)?.nodeId;
+  return typeof nodeId === "string" && nodeId.trim() ? nodeId.trim() : null;
 }
 
 /** Find any connected remote fs node (for gh CLI ops that don't need a cwd). */
@@ -155,7 +168,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd, branch, githubToken } = request.body as { cwd: string; branch?: string; githubToken?: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         // Remote: run basic git commands via proxy and build a simplified status
         const gitProxy = async (args: string) => {
@@ -267,7 +280,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd } = request.body as { cwd: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 15_000);
@@ -301,7 +314,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd, all } = request.body as { cwd: string; all?: boolean };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const remotes = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: "remote" }, 15_000)
           .then((r) => r.stdout.split("\n").map((line) => line.trim()).filter(Boolean))
@@ -332,7 +345,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd } = request.body as { cwd: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: "pull --rebase" }, 60_000);
         return { ok: true, output: trimCommandOutput(r.stdout) };
@@ -351,7 +364,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd } = request.body as { cwd: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string, timeout = 60_000) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, timeout);
@@ -424,7 +437,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
 
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         // Proxy to remote node via compound git-stacked-action operation
         const result = await ws.proxyFsOp(remoteNodeId, "git-stacked-action", {
@@ -462,7 +475,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
 
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp(remoteNodeId, "git-run-commit-flow", {
           cwd,
@@ -488,7 +501,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
 
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const readConfig = async (key: string) => {
           try {
@@ -535,7 +548,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return reply.status(400).send({ error: "Missing cwd or branch" });
     }
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         await ws.proxyFsOp(remoteNodeId, "git", { cwd: body.cwd, args: `checkout "${body.branch}"` }, 15_000);
         return { ok: true };
@@ -556,7 +569,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return reply.status(400).send({ error: "Missing cwd or branch" });
     }
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
@@ -586,7 +599,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const { cwd } = request.body as { cwd: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);
@@ -613,7 +626,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const body = request.body as { cwd?: string; baseBranch?: string; branch?: string };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         // ── Remote execution node ───────────────────────────────────
         // If we have a branch (thread PR diff), try forge-based PR diff stats first.
@@ -712,7 +725,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const body = request.body as { cwd?: string; baseBranch?: string; branch?: string };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         // Proxy to remote node via compound git-file-diffs operation
         const files = await ws.proxyFsOp(remoteNodeId, "git-file-diffs", {
@@ -736,7 +749,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const body = request.body as { cwd?: string; paths?: string[] };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 30_000);
@@ -777,7 +790,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const body = request.body as { cwd?: string; paths?: string[] };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
@@ -807,7 +820,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const body = request.body as { cwd?: string; paths?: string[] };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
@@ -853,7 +866,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return reply.status(400).send({ error: "Missing cwd, baseBranch, or newBranch" });
     }
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         // Proxy worktree creation to the remote node
         const result = await ws.proxyFsOp<{ path: string; branch: string }>(remoteNodeId, "git-create-worktree", {
@@ -879,7 +892,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return reply.status(400).send({ error: "Missing cwd or path" });
     }
     try {
-      const remoteNodeId = findRemoteNodeForCwd(ws, body.path);
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.path, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         await ws.proxyFsOp(remoteNodeId, "git-remove-worktree", { path: body.path }, 30_000);
         return { ok: true };
@@ -899,7 +912,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const cwd = body.cwd ?? "";
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request)) : findAnyRemoteNode(ws);
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean; username: string | null }>(
           remoteNodeId, "gh-check", {}, 15_000,
@@ -958,7 +971,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request)) : findAnyRemoteNode(ws);
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp<unknown[]>(
           remoteNodeId, "gh-pr-checks", { cwd, branch }, 15_000,
@@ -984,7 +997,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request)) : findAnyRemoteNode(ws);
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp<{ ok: boolean; username: string | null }>(
           remoteNodeId, "gh-auth-token", { token }, 30_000,
@@ -1116,7 +1129,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     try {
       // Get the current diff text
       let diffText = "";
-      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);

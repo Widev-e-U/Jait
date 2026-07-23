@@ -179,6 +179,10 @@ function authHeaders(json = false): HeadersInit {
   return h
 }
 
+function withNodeId<T extends Record<string, unknown>>(body: T, nodeId?: string | null): T & { nodeId?: string } {
+  return nodeId && nodeId !== 'gateway' ? { ...body, nodeId } : body
+}
+
 async function gitPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_URL}/api/git/${path}`, {
     method: 'POST',
@@ -195,41 +199,41 @@ async function gitPost<T>(path: string, body: unknown): Promise<T> {
 // ── Public API ───────────────────────────────────────────────────────
 
 export const gitApi = {
-  status(cwd: string, branch?: string): Promise<GitStatusResult> {
-    return gitPost<GitStatusResult>('status', {
+  status(cwd: string, branch?: string, nodeId?: string | null): Promise<GitStatusResult> {
+    return gitPost<GitStatusResult>('status', withNodeId({
       cwd,
       ...(branch ? { branch } : {}),
-    })
+    }, nodeId))
   },
 
-  listBranches(cwd: string): Promise<GitListBranchesResult> {
-    return gitPost<GitListBranchesResult>('branches', { cwd })
+  listBranches(cwd: string, nodeId?: string | null): Promise<GitListBranchesResult> {
+    return gitPost<GitListBranchesResult>('branches', withNodeId({ cwd }, nodeId))
   },
 
-  pull(cwd: string): Promise<GitPullResult> {
-    return gitPost<GitPullResult>('pull', { cwd })
+  pull(cwd: string, nodeId?: string | null): Promise<GitPullResult> {
+    return gitPost<GitPullResult>('pull', withNodeId({ cwd }, nodeId))
   },
 
-  sync(cwd: string): Promise<GitSyncResult> {
-    return gitPost<GitSyncResult>('sync', { cwd })
+  sync(cwd: string, nodeId?: string | null): Promise<GitSyncResult> {
+    return gitPost<GitSyncResult>('sync', withNodeId({ cwd }, nodeId))
   },
 
-  fetch(cwd: string, all = false): Promise<GitFetchResult> {
-    return gitPost<GitFetchResult>('fetch', { cwd, all })
+  fetch(cwd: string, all = false, nodeId?: string | null): Promise<GitFetchResult> {
+    return gitPost<GitFetchResult>('fetch', withNodeId({ cwd, all }, nodeId))
   },
 
   runStackedAction(
     cwd: string,
     action: GitStackedAction,
-    opts?: { commitMessage?: string; featureBranch?: boolean; baseBranch?: string },
+    opts?: { commitMessage?: string; featureBranch?: boolean; baseBranch?: string; nodeId?: string | null },
   ): Promise<GitStepResult> {
-    return gitPost<GitStepResult>('run-stacked-action', {
+    return gitPost<GitStepResult>('run-stacked-action', withNodeId({
       cwd,
       action,
       ...(opts?.commitMessage ? { commitMessage: opts.commitMessage } : {}),
       ...(opts?.featureBranch ? { featureBranch: true } : {}),
       ...(opts?.baseBranch ? { baseBranch: opts.baseBranch } : {}),
-    })
+    }, opts?.nodeId))
   },
 
   checkout(cwd: string, branch: string): Promise<void> {
@@ -245,18 +249,18 @@ export const gitApi = {
   },
 
   /** Discard changes for specific files, or all if paths is omitted/empty. */
-  discard(cwd: string, paths?: string[]): Promise<{ ok: boolean; discardedCount: number }> {
-    return gitPost<{ ok: boolean; discardedCount: number }>('discard', { cwd, paths })
+  discard(cwd: string, paths?: string[], nodeId?: string | null): Promise<{ ok: boolean; discardedCount: number }> {
+    return gitPost<{ ok: boolean; discardedCount: number }>('discard', withNodeId({ cwd, paths }, nodeId))
   },
 
   /** Stage files (git add). Stages all if paths is omitted/empty. */
-  stage(cwd: string, paths?: string[]): Promise<{ ok: boolean }> {
-    return gitPost<{ ok: boolean }>('stage', { cwd, paths })
+  stage(cwd: string, paths?: string[], nodeId?: string | null): Promise<{ ok: boolean }> {
+    return gitPost<{ ok: boolean }>('stage', withNodeId({ cwd, paths }, nodeId))
   },
 
   /** Unstage files (git reset). Unstages all if paths is omitted/empty. */
-  unstage(cwd: string, paths?: string[]): Promise<{ ok: boolean }> {
-    return gitPost<{ ok: boolean }>('unstage', { cwd, paths })
+  unstage(cwd: string, paths?: string[], nodeId?: string | null): Promise<{ ok: boolean }> {
+    return gitPost<{ ok: boolean }>('unstage', withNodeId({ cwd, paths }, nodeId))
   },
 
   init(cwd: string): Promise<void> {
@@ -275,12 +279,12 @@ export const gitApi = {
     })
   },
 
-  fileDiffs(cwd: string, baseBranch?: string, branch?: string): Promise<FileDiffEntry[]> {
-    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', {
+  fileDiffs(cwd: string, baseBranch?: string, branch?: string, nodeId?: string | null): Promise<FileDiffEntry[]> {
+    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', withNodeId({
       cwd,
       ...(baseBranch ? { baseBranch } : {}),
       ...(branch ? { branch } : {}),
-    }).then(r => r.files)
+    }, nodeId)).then(r => r.files)
   },
 
   createWorktree(
@@ -328,12 +332,12 @@ export const gitApi = {
     return gitPost<PrCheck[]>('pr-checks', { cwd, branch })
   },
 
-  generateCommitMessage(cwd: string, provider?: ProviderId, model?: string | null): Promise<{ message: string }> {
-    return gitPost<{ message: string }>('generate-commit-message', {
+  generateCommitMessage(cwd: string, provider?: ProviderId, model?: string | null, nodeId?: string | null): Promise<{ message: string }> {
+    return gitPost<{ message: string }>('generate-commit-message', withNodeId({
       cwd,
       ...(provider ? { provider } : {}),
       ...(model ? { model } : {}),
-    })
+    }, nodeId))
   },
 }
 

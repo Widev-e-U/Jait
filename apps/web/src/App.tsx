@@ -97,6 +97,11 @@ import {
 } from '@/lib/project-ui-state'
 import { projectSuggestions, suggestions } from '@/lib/chat-suggestions'
 import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
+import {
+  readProjectModelSelections,
+  saveProjectModelSelection,
+  writeProjectModelSelections,
+} from '@/lib/project-model-cache'
 import { isResponseStyle } from '@/lib/response-style'
 import { getNonEmptyMessage } from '@/lib/values'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
@@ -1549,11 +1554,17 @@ function App() {
     }
 
     const ccm = state['chat.cliModels']
-    if (ccm && typeof ccm === 'object' && !Array.isArray(ccm)) {
-      setCliModelsByProvider(ccm as Partial<Record<CliProviderId, string | null>>)
+    const cachedProjectModels = readProjectModelSelections(activeProjectId)
+    if (cachedProjectModels) {
+      setCliModelsByProvider(cachedProjectModels as Partial<Record<CliProviderId, string | null>>)
+    } else if (ccm && typeof ccm === 'object' && !Array.isArray(ccm)) {
+      const sessionModels = ccm as Partial<Record<CliProviderId, string | null>>
+      setCliModelsByProvider(sessionModels)
+      writeProjectModelSelections(activeProjectId, sessionModels)
     } else {
       const migrated = loadLegacyCliModelsByProvider(chatProvider)
       setCliModelsByProvider(migrated)
+      writeProjectModelSelections(activeProjectId, migrated)
     }
 
     const cv = state['chat.view']
@@ -1900,7 +1911,8 @@ function App() {
       ...current,
       [chatProvider]: model,
     }))
-  }, [chatProvider])
+    saveProjectModelSelection(activeProjectId, chatProvider, model)
+  }, [activeProjectId, chatProvider])
 
   const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1917,13 +1929,14 @@ function App() {
     const serialized = JSON.stringify(payload)
     if (serialized === prevCliModelsPayloadRef.current) return
     prevCliModelsPayloadRef.current = serialized
+    writeProjectModelSelections(activeProjectId, payload ?? {})
     setSavedCliModels(payload)
     if (consumeSuppressedUiSync('chat.cliModels')) return
     sendUIState('chat.cliModels', payload, activeSessionId)
 
     localStorage.removeItem('cliModelsByProvider')
     localStorage.removeItem('cliModel')
-  }, [cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token, consumeSuppressedUiSync])
+  }, [activeProjectId, cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token, consumeSuppressedUiSync])
 
   // ── Restore the Jait provider's selected model across new chats ──
   // The model picked in the provider/model selector is persisted to the user
@@ -2102,6 +2115,10 @@ function App() {
     // Determine which session to activate (mirrors switchProject logic)
     const nextSessionId = getLatestProjectSessionId(project)
     const requestId = ++projectSwitchRequestRef.current
+    const cachedProjectModels = readProjectModelSelections(projectId)
+    setCliModelsByProvider(cachedProjectModels ?? (
+      settings?.selected_model ? { jait: settings.selected_model } : {}
+    ))
 
     setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
     setProjectFiles([])
@@ -2139,7 +2156,7 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange])
+  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.selected_model])
 
   const handleCreateProject = useCallback(() => {
     setProjectPickerMode('project')
@@ -2637,7 +2654,7 @@ function App() {
     }
 
     let cancelled = false
-    gitApi.status(activeProjectRoot)
+    gitApi.status(activeProjectRoot, undefined, activeProject?.nodeId)
       .then((status) => {
         if (!cancelled) setComposerGitStatus(status)
       })
@@ -2648,7 +2665,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeProjectRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
+  }, [activeProject?.nodeId, activeProjectRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
   const changedFilesForComposer = useMemo(
     () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeProjectRoot),
     [activeProjectRoot, changedFiles, composerGitStatus],
