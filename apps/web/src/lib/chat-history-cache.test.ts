@@ -11,6 +11,7 @@ import {
   readCachedStartupChat,
   readCachedProjectIndex,
   reconcileChatHistory,
+  selectImmediateChatHistory,
   writeCachedProjectIndex,
   writeCachedStartupChat,
 } from '@/lib/chat-history-cache'
@@ -134,6 +135,25 @@ describe('startup chat cache', () => {
     }, storage)
 
     expect(readCachedStartupChat('gateway::user-1', 'session-1', storage)?.messages.at(-1)).toEqual(messages[1])
+  })
+
+  it('does not paint an older or incomplete snapshot during a project switch', () => {
+    const completedCache = {
+      messages: [message('cached')],
+      hasMore: false,
+      totalMessages: 1,
+      updatedAt: Date.UTC(2026, 6, 23, 10, 0, 0),
+      sessionLastActiveAt: '2026-07-23T09:59:00.000Z',
+    }
+    const streamingCache = {
+      ...completedCache,
+      streaming: true,
+      sessionLastActiveAt: '2026-07-23T10:01:00.000Z',
+    }
+
+    expect(selectImmediateChatHistory(completedCache, '2026-07-23T10:01:00.000Z')).toBeNull()
+    expect(selectImmediateChatHistory(streamingCache, '2026-07-23T10:01:00.000Z')).toBeNull()
+    expect(selectImmediateChatHistory(completedCache, completedCache.sessionLastActiveAt)).toBe(completedCache)
   })
 })
 

@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { homedir } from "node:os";
 import { delimiter, isAbsolute, join } from "node:path";
+import { extractDeviceAuthDetails as extractSharedDeviceAuthDetails } from "@jait/shared";
 import type {
   ProviderAuthCapabilities,
   ProviderId,
@@ -115,99 +116,7 @@ export function buildProviderAuthEnv(overrides?: NodeJS.ProcessEnv): NodeJS.Proc
   return env;
 }
 
-export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string } {
-  const clean = stripAnsi(output);
-  const verificationUri = clean.match(/https?:\/\/[^\s<>"')]+/i)?.[0]?.replace(/[.,;:]+$/, "");
-  const codeShape = /^[A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4}$/i;
-  const normalizeCode = (value: string): string | undefined => {
-    const candidate = value.trim().replace(/\s+/g, "-").toUpperCase();
-    const compact = candidate.replace(/-/g, "");
-    const blocked = new Set([
-      "AUTHORIZATION",
-      "AUTHORISATION",
-      "AUTHENTICATION",
-      "DEVICE",
-      "LOGIN",
-      "OPENAI",
-      "CODE",
-      "BROWSER",
-      "THIS",
-      "ONE",
-      "TIME",
-    ]);
-    if (blocked.has(compact)) return undefined;
-    const parts = candidate.split("-").filter(Boolean);
-    // Reject instructional text captured by greedy regex. A real auth code is
-    // either random with digits, or uniformly-sized random letters (e.g.
-    // "ABCD-EFGH"). English phrases like "AUTHORIZATION-CODE-FROM-YOUR-BROWSER"
-    // are all-letter, variable-length, and may contain known instruction words.
-    const blockedParts = parts.filter((part) => blocked.has(part)).length;
-    if (parts.length > 1 && blockedParts >= 2) return undefined;
-    if (parts.length > 1 && blockedParts === parts.length) return undefined;
-    const hasDigit = /[0-9]/.test(compact);
-    const uniformPartLengths = parts.length > 1 && parts.every((p) => p.length === parts[0]!.length);
-    if (!hasDigit && !uniformPartLengths && compact.length > 6) return undefined;
-    if (!codeShape.test(candidate)) return undefined;
-    return candidate;
-  };
-  const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!/enter\s+this\s+one-time\s+code/i.test(lines[index] ?? "")) continue;
-    const nextLine = lines[index + 1];
-    if (!nextLine) continue;
-    const normalized = normalizeCode(nextLine);
-    if (normalized) return { verificationUri, userCode: normalized };
-  }
-  const codePatterns = [
-    /(?:user\s*)?code(?:\s+is)?\s*[:=]?\s*([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){0,4})/i,
-    /enter\s+(?:the\s+)?(?:code\s+)?([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4})/i,
-    /copy\s+(?:the\s+)?(?:code\s+)?([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4})/i,
-    /\b([A-Z0-9]{4,}(?:[- ][A-Z0-9]{4,}){1,4})\b/,
-  ];
-  let userCode: string | undefined;
-  for (const pattern of codePatterns) {
-    const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
-    for (const match of clean.matchAll(globalPattern)) {
-      const raw = match[1]?.trim();
-      if (!raw || /^HTTPS?$/i.test(raw)) continue;
-      const normalized = normalizeCode(raw);
-      if (normalized) {
-        userCode = normalized;
-        break;
-      }
-    }
-    if (userCode) {
-      break;
-    }
-  }
-
-  // Detect when the CLI is waiting for the user to paste a code FROM the browser
-  // INTO the CLI (reverse of device-code flow). Only applies when no userCode was
-  // found in the output (i.e. the CLI hasn't shown one — it's asking for one).
-  let requiresCodeInput: boolean | undefined;
-  let inputPrompt: string | undefined;
-  if (!userCode) {
-    const inputRequestPatterns = [
-      /enter\s+(?:the\s+)?authorization\s+code/i,
-      /paste\s+(?:the\s+)?(?:authorization\s+|auth\s+)?code/i,
-      /enter\s+(?:the\s+)?code\s+(?:from|shown|displayed)/i,
-      /code\s+from\s+(?:your\s+)?browser/i,
-      /authorization\s+code\s*:/i,
-    ];
-    for (const line of lines) {
-      for (const pattern of inputRequestPatterns) {
-        if (pattern.test(line)) {
-          requiresCodeInput = true;
-          inputPrompt = line.replace(/[:\s]+$/, "").trim();
-          break;
-        }
-      }
-      if (requiresCodeInput) break;
-    }
-  }
-
-  return { verificationUri, userCode, requiresCodeInput, inputPrompt };
-}
+export const extractDeviceAuthDetails = extractSharedDeviceAuthDetails;
 
 export function runAuthCommand(
   providerId: ProviderId,

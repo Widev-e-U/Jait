@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
+import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 const { autoUpdater } = electronUpdater;
 
@@ -875,17 +876,6 @@ function remoteProviderLogoutArgs(providerType: DesktopRemoteProviderId): string
   return providerType === "claude-code" ? ["auth", "logout"] : ["logout"];
 }
 
-function parseRemoteLoginOutput(output: string): { verificationUri?: string; userCode?: string; requiresCodeInput?: boolean; inputPrompt?: string } {
-  const verificationUri = output.match(/https?:\/\/[^\s<>"')]+/i)?.[0];
-  const userCode = output.match(/\b[A-Z0-9]{4,}(?:-[A-Z0-9]{3,}){1,4}\b/i)?.[0]?.toUpperCase();
-  const inputLine = output.split(/\r?\n/).find((line) => /(?:paste|enter).*(?:authorization|auth).*code|code.*browser/i.test(line));
-  return {
-    verificationUri,
-    userCode,
-    requiresCodeInput: !userCode && Boolean(inputLine),
-    inputPrompt: inputLine?.trim(),
-  };
-}
 
 // ── Remote provider runner ───────────────────────────────────────────
 // Manages codex/claude-code child processes on behalf of the gateway.
@@ -1480,8 +1470,8 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         };
         const capture = (data: Buffer) => {
           output += data.toString();
-          const details = parseRemoteLoginOutput(output);
-          if (details.verificationUri || details.userCode || details.requiresCodeInput) finish();
+          const details = extractDeviceAuthDetails(output);
+          if (hasCompleteDeviceAuthDetails(details)) finish();
         };
         const timeout = setTimeout(finish, 15_000);
         child.stdout?.on("data", capture);
@@ -1492,7 +1482,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         });
         child.once("error", finish);
       });
-      const details = parseRemoteLoginOutput(output);
+      const details = extractDeviceAuthDetails(output);
       return { ok: true, status: "started", providerId, message: `Complete ${providerType} login on this device.`, rawOutput: output, ...details };
     }
     case "login-input": {

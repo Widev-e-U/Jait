@@ -17,6 +17,7 @@ import {
   readCachedChatHistory,
   readCachedStartupChat,
   reconcileChatHistory,
+  selectImmediateChatHistory,
   writeCachedChatHistory,
 } from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
@@ -393,6 +394,7 @@ export function useChat(
   authToken?: string | null,
   onLoginRequired?: () => void,
   projectSurfaceId?: string | null,
+  sessionLastActiveAt?: string | null,
 ) {
   const cacheScope = getChatCacheScope(authToken, API_URL)
   const [state, setState] = useState<ChatState>({
@@ -460,6 +462,7 @@ export function useChat(
         hasMore: state.hasMore,
         totalMessages: state.totalMessages,
         streaming: state.isLoading,
+        sessionLastActiveAt,
       },
     })
     const timer = window.setTimeout(() => {
@@ -467,10 +470,11 @@ export function useChat(
         messages: state.messages,
         hasMore: state.hasMore,
         totalMessages: state.totalMessages,
+        sessionLastActiveAt,
       })
     }, 750)
     return () => window.clearTimeout(timer)
-  }, [cacheScope, sessionId, state.hasMore, state.isLoading, state.isLoadingHistory, state.messages, state.totalMessages])
+  }, [cacheScope, sessionId, sessionLastActiveAt, state.hasMore, state.isLoading, state.isLoadingHistory, state.messages, state.totalMessages])
 
   const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean; forceRestart?: boolean }) => {
     if (
@@ -591,7 +595,10 @@ export function useChat(
     setTodoList([])
 
     let cancelled = false
-    const startupCache = readCachedStartupChat(cacheScope, sessionId)
+    const startupCache = selectImmediateChatHistory(
+      readCachedStartupChat(cacheScope, sessionId),
+      sessionLastActiveAt,
+    )
     setState(prev => ({
       ...prev,
       messages: preserveExistingMessages ? prev.messages : startupCache?.messages ?? [],
@@ -613,7 +620,8 @@ export function useChat(
     const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
     let serverSnapshotReceived = false
 
-    void readCachedChatHistory(cacheScope, sessionId).then((cached) => {
+    void readCachedChatHistory(cacheScope, sessionId).then((stored) => {
+      const cached = selectImmediateChatHistory(stored, sessionLastActiveAt)
       if (!cached || startupCache || serverSnapshotReceived || !isCurrentResumeRun()) return
       setState(prev => ({
         ...prev,
@@ -1099,7 +1107,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, refreshTrigger])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, sessionLastActiveAt, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback((options?: { force?: boolean }) => {

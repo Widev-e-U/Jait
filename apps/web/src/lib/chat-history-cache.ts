@@ -19,6 +19,7 @@ export interface CachedChatHistory {
   totalMessages: number
   updatedAt: number
   streaming?: boolean
+  sessionLastActiveAt?: string | null
 }
 
 interface StoredChatHistory extends CachedChatHistory {
@@ -72,6 +73,15 @@ export function isChatCacheFresh(updatedAt: number, now = Date.now()): boolean {
   return Number.isFinite(updatedAt)
     && updatedAt > 0
     && now - updatedAt <= CHAT_HISTORY_CACHE_RETENTION_MS
+}
+
+export function selectImmediateChatHistory(
+  cached: CachedChatHistory | null,
+  sessionLastActiveAt?: string | null,
+): CachedChatHistory | null {
+  if (!cached || cached.streaming === true) return null
+  if (sessionLastActiveAt && cached.sessionLastActiveAt !== sessionLastActiveAt) return null
+  return cached
 }
 
 export function prepareChatHistoryForCache(
@@ -171,6 +181,7 @@ export function writeCachedStartupChat(
     storage.setItem(startupChatStorageKey(scope, sessionId), JSON.stringify({
       ...prepared,
       streaming: history.streaming === true,
+      sessionLastActiveAt: history.sessionLastActiveAt ?? null,
       messages: prepared.messages.slice(-STARTUP_CHAT_CACHE_MESSAGE_LIMIT),
       hasMore: prepared.hasMore || prepared.messages.length > STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
     }))
@@ -266,6 +277,7 @@ export async function readCachedChatHistory(
       hasMore: stored.hasMore,
       totalMessages: stored.totalMessages,
       updatedAt: stored.updatedAt,
+      sessionLastActiveAt: stored.sessionLastActiveAt ?? null,
     }
   } catch {
     return null
@@ -293,6 +305,7 @@ export async function writeCachedChatHistory(
     const transaction = database.transaction(CHAT_HISTORY_STORE_NAME, 'readwrite')
     transaction.objectStore(CHAT_HISTORY_STORE_NAME).put({
       ...prepared,
+      sessionLastActiveAt: history.sessionLastActiveAt ?? null,
       key: chatHistoryKey(scope, sessionId),
       scope,
       sessionId,

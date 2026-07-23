@@ -604,7 +604,13 @@ function App() {
     refreshMessages,
     loadOlderMessages,
     respondToApproval,
-  } = useChat(activeSessionId, token, onLoginRequired, activeProject?.surfaceId ?? null)
+  } = useChat(
+    activeSessionId,
+    token,
+    onLoginRequired,
+    activeProject?.surfaceId ?? null,
+    activeSessionRecord?.lastActiveAt ?? null,
+  )
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
