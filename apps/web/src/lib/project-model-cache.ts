@@ -1,6 +1,7 @@
 export type ProjectModelSelections = Partial<Record<string, string | null>>
 
 const PROJECT_MODEL_CACHE_PREFIX = 'jait:project-models:v1:'
+const PROJECT_PROVIDER_CACHE_PREFIX = 'jait:project-provider:v1:'
 
 function projectModelCacheKey(projectId: string): string {
   return `${PROJECT_MODEL_CACHE_PREFIX}${projectId}`
@@ -70,4 +71,38 @@ export function saveProjectModelSelection(
     delete selections[provider]
   }
   writeProjectModelSelections(projectId, selections, storage)
+}
+
+function projectProviderCacheKey(projectId: string): string {
+  return `${PROJECT_PROVIDER_CACHE_PREFIX}${projectId}`
+}
+
+export function readProjectProviderSelection(
+  projectId: string | null | undefined,
+  storage?: Storage,
+): string | null {
+  if (!projectId) return null
+  const target = resolveStorage(storage)
+  if (!target) return null
+  try {
+    const provider = target.getItem(projectProviderCacheKey(projectId))?.trim()
+    return provider || null
+  } catch {
+    return null
+  }
+}
+
+export function saveProjectProviderSelection(
+  projectId: string | null | undefined,
+  provider: string,
+  storage?: Storage,
+): void {
+  if (!projectId || !provider.trim()) return
+  const target = resolveStorage(storage)
+  if (!target) return
+  try {
+    target.setItem(projectProviderCacheKey(projectId), provider)
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
 }

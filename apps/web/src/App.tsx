@@ -99,7 +99,9 @@ import { projectSuggestions, suggestions } from '@/lib/chat-suggestions'
 import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
 import {
   readProjectModelSelections,
+  readProjectProviderSelection,
   saveProjectModelSelection,
+  saveProjectProviderSelection,
   writeProjectModelSelections,
 } from '@/lib/project-model-cache'
 import { isResponseStyle } from '@/lib/response-style'
@@ -1896,7 +1898,8 @@ function App() {
 
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
-  }, [])
+    saveProjectProviderSelection(activeProjectId, provider)
+  }, [activeProjectId])
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -2116,9 +2119,11 @@ function App() {
     const nextSessionId = getLatestProjectSessionId(project)
     const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
+    const cachedProjectProvider = readProjectProviderSelection(projectId)
     setCliModelsByProvider(cachedProjectModels ?? (
       settings?.selected_model ? { jait: settings.selected_model } : {}
     ))
+    setChatProvider((cachedProjectProvider ?? settings?.chat_provider ?? 'jait') as ProviderId)
 
     setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
     setProjectFiles([])
@@ -2156,7 +2161,7 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.selected_model])
+  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
 
   const handleCreateProject = useCallback(() => {
     setProjectPickerMode('project')
@@ -2551,11 +2556,13 @@ function App() {
   // localStorage value before the real server settings arrive.
   useEffect(() => {
     if (authLoading) return
-    if (settings.chat_provider && settings.chat_provider !== chatProvider) {
-      setChatProvider(settings.chat_provider as ProviderId)
+    const cachedProjectProvider = readProjectProviderSelection(activeProjectId)
+    const provider = cachedProjectProvider ?? settings.chat_provider
+    if (provider && provider !== chatProvider) {
+      setChatProvider(provider as ProviderId)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.chat_provider, authLoading])
+  }, [activeProjectId, settings.chat_provider, authLoading])
 
   useEffect(() => {
     if (!(isElectron && desktopPlatform === 'win32')) return

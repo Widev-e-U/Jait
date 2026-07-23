@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   readProjectModelSelections,
+  readProjectProviderSelection,
   saveProjectModelSelection,
+  saveProjectProviderSelection,
 } from '@/lib/project-model-cache'
 
 const storage = new Map<string, string>()
@@ -31,5 +33,16 @@ describe('project model cache', () => {
     expect(readProjectModelSelections('project-b', localStorageMock)).toEqual({
       codex: 'gpt-5.3-codex',
     })
+  })
+
+  it('keeps the last selected provider isolated per project', () => {
+    saveProjectProviderSelection('project-a', 'codex', localStorageMock)
+    saveProjectProviderSelection('project-b', 'jait', localStorageMock)
+
+    expect(readProjectProviderSelection('project-a', localStorageMock)).toBe('codex')
+    expect(readProjectProviderSelection('project-b', localStorageMock)).toBe('jait')
+
+    saveProjectProviderSelection('project-a', 'claude-code', localStorageMock)
+    expect(readProjectProviderSelection('project-a', localStorageMock)).toBe('claude-code')
   })
 })

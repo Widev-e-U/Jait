@@ -52,4 +52,21 @@ describe('getScopedProviderSource', () => {
     expect(resolveScopedProviderSelection('codex-gateway-account', providers)).toBe('jait')
     expect(resolveScopedProviderSelection('codex', providers)).toBe('codex')
   })
+
+  it('restores the preferred provider after a temporary project availability fallback', () => {
+    const windowsProviders = [
+      { value: 'jait' as const, isAvailable: true },
+      { value: 'codex' as const, isAvailable: false },
+    ]
+    const gatewayProviders = [
+      { value: 'jait' as const, isAvailable: true },
+      { value: 'codex' as const, isAvailable: true },
+    ]
+
+    const windowsSelection = resolveScopedProviderSelection('codex', windowsProviders, 'codex')
+    const restoredSelection = resolveScopedProviderSelection(windowsSelection, gatewayProviders, 'codex')
+
+    expect(windowsSelection).toBe('jait')
+    expect(restoredSelection).toBe('codex')
+  })
 })

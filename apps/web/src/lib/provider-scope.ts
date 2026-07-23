@@ -25,7 +25,12 @@ function gatewayJaitProvider(localProviders: ProviderInfo[]): ProviderInfo {
 export function resolveScopedProviderSelection(
   selectedProviderId: ProviderId,
   providers: Array<{ value: ProviderId; isAvailable: boolean }>,
+  preferredProviderId?: ProviderId,
 ): ProviderId {
+  if (preferredProviderId) {
+    const preferredProvider = providers.find((provider) => provider.value === preferredProviderId)
+    if (preferredProvider?.isAvailable) return preferredProviderId
+  }
   if (selectedProviderId === 'jait') return selectedProviderId
   const selectedProvider = providers.find((provider) => provider.value === selectedProviderId)
   return selectedProvider?.isAvailable ? selectedProviderId : 'jait'
