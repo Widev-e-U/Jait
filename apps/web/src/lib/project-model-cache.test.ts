@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   readProjectModelSelections,
   readProjectProviderSelection,
+  readProjectReasoningEffortSelection,
   saveProjectModelSelection,
   saveProjectProviderSelection,
+  saveProjectReasoningEffortSelection,
 } from '@/lib/project-model-cache'
 
 const storage = new Map<string, string>()
@@ -44,5 +46,24 @@ describe('project model cache', () => {
 
     saveProjectProviderSelection('project-a', 'claude-code', localStorageMock)
     expect(readProjectProviderSelection('project-a', localStorageMock)).toBe('claude-code')
+  })
+
+  it('restores reasoning effort with the project and provider selection', () => {
+    saveProjectProviderSelection('project-a', 'codex', localStorageMock)
+    saveProjectModelSelection('project-a', 'codex', 'gpt-5.6-sol', localStorageMock)
+    saveProjectReasoningEffortSelection('project-a', 'codex', 'medium', localStorageMock)
+
+    saveProjectProviderSelection('project-b', 'jait', localStorageMock)
+    saveProjectReasoningEffortSelection('project-b', 'jait', 'low', localStorageMock)
+
+    expect(readProjectReasoningEffortSelection('project-b', 'jait', localStorageMock)).toBe('low')
+    expect(readProjectReasoningEffortSelection('project-a', 'codex', localStorageMock)).toBe('medium')
+  })
+
+  it('distinguishes an explicit default effort from no project preference', () => {
+    saveProjectReasoningEffortSelection('project-a', 'codex', null, localStorageMock)
+
+    expect(readProjectReasoningEffortSelection('project-a', 'codex', localStorageMock)).toBeNull()
+    expect(readProjectReasoningEffortSelection('project-b', 'codex', localStorageMock)).toBeUndefined()
   })
 })

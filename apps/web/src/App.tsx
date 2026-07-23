@@ -3746,12 +3746,13 @@ function App() {
     projectOpen: showProject,
     sessionInfo,
     projectNodeId: activeProject?.nodeId,
+    projectId: activeProjectId,
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
     chatMode, setChatMode, chatProvider, handleChatProviderChange,
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
-    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId,
+    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectId,
   ])
 
   const activityEvents: ActivityEvent[] = [
@@ -4118,6 +4119,7 @@ function App() {
               />
             ) : <DeveloperChatWorkspace
                 activeProject={activeProject}
+                activeProjectId={activeProjectId}
                 activeProjectDisplayName={activeProjectDisplayName}
                 activeProjectRoot={activeProjectRoot}
                 activeSessionId={activeSessionId}

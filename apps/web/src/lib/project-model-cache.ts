@@ -1,7 +1,9 @@
 export type ProjectModelSelections = Partial<Record<string, string | null>>
+export type ProjectReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
 const PROJECT_MODEL_CACHE_PREFIX = 'jait:project-models:v1:'
 const PROJECT_PROVIDER_CACHE_PREFIX = 'jait:project-provider:v1:'
+const PROJECT_REASONING_EFFORT_CACHE_PREFIX = 'jait:project-reasoning-effort:v1:'
 
 function projectModelCacheKey(projectId: string): string {
   return `${PROJECT_MODEL_CACHE_PREFIX}${projectId}`
@@ -102,6 +104,51 @@ export function saveProjectProviderSelection(
   if (!target) return
   try {
     target.setItem(projectProviderCacheKey(projectId), provider)
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function projectReasoningEffortCacheKey(projectId: string): string {
+  return `${PROJECT_REASONING_EFFORT_CACHE_PREFIX}${projectId}`
+}
+
+export function readProjectReasoningEffortSelection(
+  projectId: string | null | undefined,
+  provider: string,
+  storage?: Storage,
+): ProjectReasoningEffort | null | undefined {
+  if (!projectId || !provider.trim()) return undefined
+  const target = resolveStorage(storage)
+  if (!target) return undefined
+  try {
+    const raw = target.getItem(projectReasoningEffortCacheKey(projectId))
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const value = parsed[provider]
+    if (value === null) return null
+    return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high'
+      ? value
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function saveProjectReasoningEffortSelection(
+  projectId: string | null | undefined,
+  provider: string,
+  reasoningEffort: ProjectReasoningEffort | null,
+  storage?: Storage,
+): void {
+  if (!projectId || !provider.trim()) return
+  const target = resolveStorage(storage)
+  if (!target) return
+  try {
+    const raw = target.getItem(projectReasoningEffortCacheKey(projectId))
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {}
+    parsed[provider] = reasoningEffort
+    target.setItem(projectReasoningEffortCacheKey(projectId), JSON.stringify(parsed))
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }

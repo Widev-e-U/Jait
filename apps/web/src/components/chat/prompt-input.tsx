@@ -108,6 +108,8 @@ interface PromptInputProps {
   sessionInfo?: SessionInfo | null
   /** Node ID of the open project (scopes CLI providers to that device). */
   projectNodeId?: string
+  /** Project ID used to restore project-scoped model preferences. */
+  projectId?: string | null
   /** Active chat/thread id — surfaced via a subtle copy button for quick handoff. */
   chatId?: string | null
   /** Display name for the currently selected project. */
@@ -696,6 +698,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onMoveToGateway,
   sessionInfo,
   projectNodeId,
+  projectId,
   projectName,
   projectPath,
   chatId,
@@ -1938,6 +1941,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       onMoveToGateway={onMoveToGateway}
                       sessionInfo={sessionInfo}
                       projectNodeId={projectNodeId}
+                      projectId={projectId}
                     />
                   )}
                   {showProviderRuntimeSelector && (

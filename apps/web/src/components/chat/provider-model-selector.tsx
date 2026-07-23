@@ -13,6 +13,10 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
 import { getScopedProviderSource, resolveScopedProviderSelection } from '@/lib/provider-scope'
+import {
+  readProjectReasoningEffortSelection,
+  saveProjectReasoningEffortSelection,
+} from '@/lib/project-model-cache'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -52,6 +56,7 @@ interface ProviderModelSelectorProps {
   onMoveToGateway?: () => void
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
   projectNodeId?: string
+  projectId?: string | null
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
@@ -140,6 +145,7 @@ export function ProviderModelSelector({
   onMoveToGateway,
   sessionInfo,
   projectNodeId,
+  projectId,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings, settings } = useAuth()
@@ -488,6 +494,12 @@ export function ProviderModelSelector({
     onProviderChange(nextProvider)
   }
 
+  useEffect(() => {
+    const savedReasoningEffort = readProjectReasoningEffortSelection(projectId, provider)
+    if (savedReasoningEffort === undefined || savedReasoningEffort === reasoningEffort) return
+    updateSettings({ reasoning_effort: savedReasoningEffort }).catch(() => {})
+  }, [projectId, provider, reasoningEffort, updateSettings])
+
   const REASONING_EFFORTS: { value: ReasoningEffort; label: string; hint: string }[] = [
     { value: 'minimal', label: 'Minimal', hint: 'Fastest, least thinking' },
     { value: 'low', label: 'Low', hint: 'Brief reasoning' },
@@ -496,6 +508,7 @@ export function ProviderModelSelector({
   ]
 
   const handleReasoningEffortChange = (next: ReasoningEffort | null) => {
+    saveProjectReasoningEffortSelection(projectId, provider, next)
     updateSettings({ reasoning_effort: next }).catch(() => {})
   }
 
@@ -523,6 +536,7 @@ export function ProviderModelSelector({
       // Clear a leftover reasoning-effort preference when moving to a model
       // that doesn't accept it, so it isn't silently forwarded to the API.
       if (reasoningEffort && !selectedModel?.reasoningEffortSupported) {
+        saveProjectReasoningEffortSelection(projectId, provider, null)
         updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => {})
       } else {
         updateSettings({ selected_model: modelId }).catch(() => {})

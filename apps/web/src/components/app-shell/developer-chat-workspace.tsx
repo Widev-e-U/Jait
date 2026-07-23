@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 
 interface DeveloperChatWorkspaceProps {
   activeProject: any
+  activeProjectId: string | null
   activeProjectDisplayName: string | null
   activeProjectRoot: string | null
   activeSessionId: string | null
@@ -108,6 +109,7 @@ interface DeveloperChatWorkspaceProps {
 
 export function DeveloperChatWorkspace({
   activeProject,
+  activeProjectId,
   activeProjectDisplayName,
   activeProjectRoot,
   activeSessionId,
@@ -275,6 +277,7 @@ export function DeveloperChatWorkspace({
                 chatId={activeSessionId ?? undefined}
                 sessionInfo={sessionInfo}
                 projectNodeId={projectNodeId ?? undefined}
+                projectId={activeProjectId}
                 merged
                 mergedShowTopDivider={developerChatUiState.showTodoList || Boolean(inlinePrompts)}
               />
@@ -568,6 +571,7 @@ export function DeveloperChatWorkspace({
                     chatId={activeSessionId ?? undefined}
                     sessionInfo={sessionInfo}
                     projectNodeId={projectNodeId ?? undefined}
+                    projectId={activeProjectId}
                     merged
                     mergedShowTopDivider={hasItemsAboveComposer}
                   />
