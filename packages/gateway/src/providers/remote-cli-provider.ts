@@ -41,6 +41,49 @@ interface RemoteProviderEventDispatcher {
 
 const remoteProviderEventDispatchers = new WeakMap<WsControlPlane, RemoteProviderEventDispatcher>();
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function normalizeCodexModelList(result: unknown): ProviderModelInfo[] {
+  const response = asRecord(result);
+  const rawModels = Array.isArray(result)
+    ? result
+    : Array.isArray(response?.data)
+      ? response.data
+      : [];
+
+  return rawModels.flatMap((rawModel) => {
+    const model = asRecord(rawModel);
+    if (!model || model.hidden === true) return [];
+
+    const id = asNonEmptyString(model.id) ?? asNonEmptyString(model.model);
+    if (!id) return [];
+
+    const name = asNonEmptyString(model.displayName)
+      ?? asNonEmptyString(model.name)
+      ?? id;
+    const description = asNonEmptyString(model.description) ?? undefined;
+    const reasoningEffortSupported = Array.isArray(model.supportedReasoningEfforts)
+      ? model.supportedReasoningEfforts.length > 0
+      : undefined;
+
+    return [{
+      id,
+      name,
+      ...(description ? { description } : {}),
+      ...(typeof model.isDefault === "boolean" ? { isDefault: model.isDefault } : {}),
+      ...(reasoningEffortSupported !== undefined ? { reasoningEffortSupported } : {}),
+    }];
+  });
+}
+
 function registerRemoteProviderEventListener(
   ws: WsControlPlane,
   listener: RemoteProviderEventHandler,
@@ -152,6 +195,9 @@ export class RemoteCliProvider implements CliProviderAdapter {
         { providerId: this.id, providerType: this.providerType },
         90_000,
       );
+      if (this.providerType === "codex") {
+        return normalizeCodexModelList(result);
+      }
       return Array.isArray(result) ? result : [];
     } catch {
       return [];

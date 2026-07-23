@@ -3,7 +3,7 @@ import type { WsControlPlane } from "../ws.js";
 import { RemoteCliProvider } from "./remote-cli-provider.js";
 import type { ProviderEvent } from "./contracts.js";
 
-function createMockWs(options: { sendTurnResult?: unknown } = {}) {
+function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: unknown } = {}) {
   let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
   let remoteHandlerSetCount = 0;
 
@@ -14,6 +14,9 @@ function createMockWs(options: { sendTurnResult?: unknown } = {}) {
       isGateway: false,
     })),
     proxyProviderOp: vi.fn(async (_nodeId: string, op: string) => {
+      if (op === "list-models") {
+        return options.listModelsResult ?? [];
+      }
       if (op === "start-session") {
         return { ok: true, providerThreadId: "remote-thread-1" };
       }
@@ -55,6 +58,38 @@ describe("RemoteCliProvider", () => {
       { providerId: "claude-code-account", providerType: "claude-code" },
       90_000,
     );
+  });
+
+  it("normalizes the Codex app-server model list returned by Windows desktop nodes", async () => {
+    const { ws } = createMockWs({
+      listModelsResult: {
+        data: [
+          {
+            id: "gpt-5.6-sol",
+            displayName: "GPT-5.6-Sol",
+            description: "Latest frontier agentic coding model.",
+            hidden: false,
+            isDefault: true,
+            supportedReasoningEfforts: [
+              { reasoningEffort: "low", description: "Fast responses with lighter reasoning" },
+              { reasoningEffort: "medium", description: "Balances speed and reasoning depth" },
+            ],
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    const provider = new RemoteCliProvider(ws, "node-1", "windows-codex", "codex");
+
+    await expect(provider.listModels()).resolves.toEqual([
+      {
+        id: "gpt-5.6-sol",
+        name: "GPT-5.6-Sol",
+        description: "Latest frontier agentic coding model.",
+        isDefault: true,
+        reasoningEffortSupported: true,
+      },
+    ]);
   });
 
   it("installs one shared remote event dispatcher per websocket", async () => {
