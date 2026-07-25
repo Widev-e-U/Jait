@@ -1142,14 +1142,89 @@ function waitForRemoteTurn(session: RemoteProviderSession, timeoutMs = 30 * 60 *
   });
 }
 
+/** Offline fallback only — live discovery via discoverClaudeModelOptions() is preferred. */
 function getClaudeModelOptions() {
   return [
     { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
+    { id: "fable", name: "Fable", description: "Claude Fable alias for the top-tier Mythos-class model" },
     { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
     { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
     { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
     { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
   ];
+}
+
+const CLAUDE_MODEL_DISCOVERY_TIMEOUT_MS = 30_000;
+const CLAUDE_MODEL_CACHE_TTL_MS = 5 * 60_000;
+let claudeModelCache: { models: Array<Record<string, unknown>>; fetchedAt: number } | null = null;
+
+/**
+ * Ask the local Claude Code CLI which models it supports, live. The stream-json
+ * control protocol's `initialize` response carries the same model list the CLI
+ * shows in its /model picker (including new models like Fable), so the picker
+ * never goes stale the way a hardcoded list does. Falls back to the static
+ * aliases only when the CLI cannot be spawned or does not answer in time.
+ */
+async function discoverClaudeModelOptions(env: NodeJS.ProcessEnv): Promise<Array<Record<string, unknown>>> {
+  if (claudeModelCache && Date.now() - claudeModelCache.fetchedAt < CLAUDE_MODEL_CACHE_TTL_MS) {
+    return claudeModelCache.models;
+  }
+
+  const models = await new Promise<Array<Record<string, unknown>>>((resolve) => {
+    const child = spawn("claude", [
+      "--print",
+      "--input-format", "stream-json",
+      "--output-format", "stream-json",
+      "--verbose",
+    ], { cwd: process.cwd(), env, stdio: ["pipe", "pipe", "pipe"], shell: true });
+
+    let settled = false;
+    const settle = (result: Array<Record<string, unknown>>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill();
+      resolve(result);
+    };
+    const timer = setTimeout(() => settle([]), CLAUDE_MODEL_DISCOVERY_TIMEOUT_MS);
+
+    child.on("error", () => settle([]));
+    child.on("exit", () => settle([]));
+    child.stdin?.on("error", () => {/* ignore broken pipe */});
+
+    const requestId = `list-models-${Date.now()}`;
+    child.stdin?.write(JSON.stringify({
+      type: "control_request",
+      request_id: requestId,
+      request: { subtype: "initialize" },
+    }) + "\n");
+
+    const rl = createInterface({ input: child.stdout! });
+    rl.on("line", (line) => {
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(line); } catch { return; }
+      if (msg.type !== "control_response") return;
+      const response = msg.response as Record<string, unknown> | undefined;
+      if (response?.request_id !== requestId) return;
+      const payload = response.response as Record<string, unknown> | undefined;
+      const rawModels = Array.isArray(payload?.models) ? payload.models as Array<Record<string, unknown>> : [];
+      settle(rawModels.flatMap((m) => {
+        const id = typeof m.value === "string" && m.value ? m.value : null;
+        if (!id) return [];
+        return [{
+          id,
+          name: typeof m.displayName === "string" && m.displayName ? m.displayName : id,
+          ...(typeof m.description === "string" && m.description ? { description: m.description } : {}),
+          ...(id === "default" ? { isDefault: true } : {}),
+          ...(typeof m.supportsEffort === "boolean" ? { reasoningEffortSupported: m.supportsEffort } : {}),
+        }];
+      }));
+    });
+  });
+
+  if (models.length === 0) return getClaudeModelOptions();
+  claudeModelCache = { models, fetchedAt: Date.now() };
+  return models;
 }
 
 function mapClaudeStreamEvent(session: RemoteProviderSession, event: Record<string, unknown>) {
@@ -1710,7 +1785,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       }
       const providerEnv = remoteProviderAccountEnv(providerId, providerType);
       if (providerType === "claude-code") {
-        return getClaudeModelOptions();
+        return discoverClaudeModelOptions(providerEnv);
       }
 
       const cmd = "codex";

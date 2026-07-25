@@ -703,6 +703,7 @@ describe("AcpProvider auth", () => {
 
     await expect(provider.listModels()).resolves.toEqual([
       expect.objectContaining({ id: "default", isDefault: true }),
+      expect.objectContaining({ id: "fable" }),
       expect.objectContaining({ id: "sonnet" }),
       expect.objectContaining({ id: "opus" }),
       expect.objectContaining({ id: "haiku" }),

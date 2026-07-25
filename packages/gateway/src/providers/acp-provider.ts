@@ -56,6 +56,7 @@ const REPLAYABLE_EVENT_TTL_MS = 30_000;
 const REPLAYABLE_EVENT_LIMIT = 20;
 const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
+  { id: "fable", name: "Fable", description: "Claude Fable alias for the top-tier Mythos-class model" },
   { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
   { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
   { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
