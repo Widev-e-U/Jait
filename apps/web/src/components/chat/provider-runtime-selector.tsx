@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Check, ChevronDown, Eye, Shield } from 'lucide-react'
 import {
   DropdownMenu,
@@ -7,7 +7,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { agentsApi, type ProviderId, type ProviderInfo, type RuntimeMode } from '@/lib/agents-api'
+import { type ProviderId, type RuntimeMode } from '@/lib/agents-api'
+import { useProviders } from '@/hooks/useProviders'
 
 interface ProviderRuntimeSelectorProps {
   provider: ProviderId
@@ -32,23 +33,13 @@ const MODE_LABELS: Record<RuntimeMode, { label: string; description: string; ico
 }
 
 export function ProviderRuntimeSelector({ provider, value, onChange, disabled, className, compact = false }: ProviderRuntimeSelectorProps) {
-  const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
-
-  useEffect(() => {
-    agentsApi.listProviders()
-      .then(({ providers }) => {
-        const next: Record<string, ProviderInfo> = {}
-        for (const item of providers) next[item.id] = item
-        setProviderStatus(next)
-      })
-      .catch(() => {})
-  }, [])
+  const { providers } = useProviders()
 
   const supportedModes = useMemo<RuntimeMode[]>(() => {
-    const modes = providerStatus[provider]?.modes
+    const modes = providers.find((entry) => entry.id === provider)?.modes
     if (!modes || modes.length === 0) return provider === 'jait' ? [] : ['full-access', 'supervised']
     return modes as RuntimeMode[]
-  }, [provider, providerStatus])
+  }, [provider, providers])
 
   if (provider === 'jait' || supportedModes.length <= 1) return null
 

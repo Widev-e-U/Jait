@@ -6,13 +6,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderId } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
+import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
-import { getScopedProviderSource, resolveScopedProviderSelection } from '@/lib/provider-scope'
+import { GATEWAY_NODE_ID, resolveScopedProviderSelection, scopeProviders } from '@/lib/provider-scope'
 import {
   readProjectReasoningEffortSelection,
   saveProjectReasoningEffortSelection,
@@ -67,14 +68,8 @@ const PROVIDER_DEFS: ProviderDef[] = [
 
 const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
 
-function providerDefFromInfo(info: ProviderInfo): ProviderDef {
-  const known = PROVIDER_DEF_BY_ID.get(info.providerType ?? info.id)
-  return {
-    value: info.id,
-    label: info.name || info.id,
-    icon: known?.icon ?? Network,
-    description: info.description,
-  }
+function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
+  return PROVIDER_DEF_BY_ID.get(providerType ?? id)?.icon ?? Network
 }
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
@@ -152,9 +147,13 @@ export function ProviderModelSelector({
   const reasoningEffort = settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
-  const [localProviders, setLocalProviders] = useState<ProviderInfo[]>([])
-  const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
+  const {
+    providers: allProviders,
+    remoteProviders,
+    loaded: providersLoaded,
+    error: providersError,
+    refresh: refreshProviders,
+  } = useProviders()
   const [models, setModels] = useState<ModelDef[]>([])
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
@@ -176,31 +175,13 @@ export function ProviderModelSelector({
   const codeInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const refreshProviders = useCallback((fresh = false, live = false) => {
-    const request = fresh
-      ? agentsApi.listProvidersFresh()
-      : live
-        ? agentsApi.listProvidersLive()
-        : agentsApi.listProviders()
-    request
-      .then(({ providers, remoteProviders: remote }) => {
-        const map: Record<string, ProviderInfo> = {}
-        for (const item of providers) map[item.id] = item
-        setProviderStatus(map)
-        setLocalProviders(providers)
-        setRemoteProviders(remote)
-      })
-      .catch(() => {})
-  }, [])
-
+  // Re-probe when the selector is opened so auth changes made outside the app
+  // (a Claude Code / Codex CLI login, a device coming online) show up the
+  // moment the user looks at the list. The store throttles forced probes.
   useEffect(() => {
-    refreshProviders()
-  }, [refreshProviders])
-
-  useEffect(() => {
-    if (!projectNodeId || projectNodeId === 'gateway') return
-    refreshProviders(false, true)
-  }, [projectNodeId, refreshProviders])
+    if (!open) return
+    refreshProviders({ fresh: true })
+  }, [open, refreshProviders])
 
   const copyCode = async (providerId: ProviderId, code: string) => {
     const copied = await copyTextToClipboard(code)
@@ -217,7 +198,7 @@ export function ProviderModelSelector({
       setLoginDialog((prev) => prev && prev.providerId === providerId
         ? { ...prev, requiresCodeInput: false, message: 'Code sent. Completing login…' }
         : prev)
-      refreshProviders(true)
+      refreshProviders({ fresh: true, force: true })
     } catch (error) {
       setLoginDialog((prev) => prev && prev.providerId === providerId
         ? { ...prev, tone: 'error', message: error instanceof Error ? error.message : 'Failed to send code.' }
@@ -261,7 +242,7 @@ export function ProviderModelSelector({
         requiresCodeInput: result.requiresCodeInput,
         inputPrompt: result.inputPrompt,
       })
-      refreshProviders(true)
+      refreshProviders({ fresh: true, force: true })
     } catch (error) {
       setLoginDialog({
         providerId,
@@ -291,7 +272,7 @@ export function ProviderModelSelector({
 
         stopped = true
         window.clearInterval(interval)
-        refreshProviders(true)
+        refreshProviders({ fresh: true, force: true })
         setLoginDialog((prev) => prev && prev.providerId === loginDialog.providerId
           ? { ...prev, waitingForCompletion: false, message: `${loginDialog.label} is logged in.` }
           : prev)
@@ -320,14 +301,51 @@ export function ProviderModelSelector({
     }
   }, [open, isMobile])
 
+  // ── Provider scope ─────────────────────────────────────────────────
+  // A project pinned to a device scopes the picker to that device; on the
+  // gateway every provider is listed, each labelled with the device it runs on.
+  const scopeNodeId = (projectNodeId?.trim() || repoRuntime?.nodeId || GATEWAY_NODE_ID)
+  const connectedNodeIds = useMemo(() => remoteProviders.map((node) => node.nodeId), [remoteProviders])
+
+  const { entries: scopedEntries, scopeNodeOffline, scopeNodeLabel } = useMemo(() => scopeProviders({
+    providers: allProviders,
+    scopeNodeId,
+    connectedNodeIds,
+    scopeNodeLabel: repoRuntime?.locationLabel,
+    loading: !providersLoaded || Boolean(repoRuntime?.loading),
+  }), [allProviders, connectedNodeIds, providersLoaded, repoRuntime?.loading, repoRuntime?.locationLabel, scopeNodeId])
+
+  const providerEntries = useMemo(() => scopedEntries.map((entry) => ({
+    value: entry.id,
+    label: entry.name || entry.id,
+    icon: providerIconFor(entry.providerType, entry.id),
+    description: entry.description,
+    isAvailable: entry.isAvailable,
+    reason: entry.reason,
+    nodeId: entry.nodeId,
+    nodeLabel: entry.nodeName,
+    auth: entry.auth,
+  })), [scopedEntries])
+
+  // Models come from the device that hosts the selected provider — never from
+  // the project's device, which may be a different machine entirely.
+  const activeEntry = providerEntries.find((entry) => entry.value === provider)
+  const activeProviderNodeId = activeEntry?.nodeId
+  // Re-fetch once the active provider becomes authenticated (e.g. right after a
+  // CLI login): the earlier fetch failed with an auth error and nothing else
+  // would re-trigger it, leaving the panel stuck on "not logged in".
+  const activeProviderAuthenticated = activeEntry?.auth?.authenticated === true
+  const providerScopeResolved = providersLoaded || Boolean(providersError)
+
   useEffect(() => {
+    if (!providerScopeResolved) return
     setModels([])
     setModelError(null)
     setRecentIds(loadRecentModels())
 
     let cancelled = false
     setLoadingModels(true)
-    agentsApi.listProviderModels(provider, projectNodeId)
+    agentsApi.listProviderModels(provider, activeProviderNodeId)
       .then((result) => {
         if (cancelled) return
         setModelError(null)
@@ -351,7 +369,7 @@ export function ProviderModelSelector({
     return () => {
       cancelled = true
     }
-  }, [provider, projectNodeId])
+  }, [provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved])
 
   useEffect(() => {
     if (provider === 'jait') return
@@ -363,84 +381,22 @@ export function ProviderModelSelector({
     if (nextModel !== model) onModelChange(nextModel)
   }, [provider, loadingModels, model, models, onModelChange])
 
-  const scopedToRepo = repoRuntime != null
-  const repoAvailable = repoRuntime?.availableProviders ?? []
-  const repoOnline = repoRuntime?.online ?? true
-  const repoLoading = repoRuntime?.loading ?? false
-  const repoIsGateway = repoRuntime?.hostType === 'gateway'
-
-  const wsNodeIsRemote = Boolean(projectNodeId && projectNodeId !== 'gateway')
-  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === projectNodeId) : undefined
-  const scopedToProjectNode = wsNodeIsRemote && !scopedToRepo
-
-  const providerEntries = useMemo(() => {
-    const sourceProviders = getScopedProviderSource({
-      localProviders,
-      remoteNode: wsRemoteNode,
-      remoteProviderIds: repoAvailable,
-      scopedToRemoteNode: scopedToProjectNode || (scopedToRepo && !repoIsGateway),
-    })
-    const source = sourceProviders.length > 0 ? sourceProviders.map(providerDefFromInfo) : PROVIDER_DEFS
-    return source.map((item) => {
-      const sourceStatus = sourceProviders.find((providerInfo) => providerInfo.id === item.value)
-      const status = providerStatus[item.value] ?? sourceStatus
-      let isAvailable: boolean
-      let reason: string | undefined
-      let nodeLabel: string | undefined
-
-      if (scopedToRepo) {
-        if (item.value === 'jait') {
-          isAvailable = true
-          nodeLabel = 'Gateway'
-        } else if (repoIsGateway) {
-          isAvailable = status?.available !== false
-          reason = status?.unavailableReason
-          nodeLabel = 'Gateway'
-        } else if (repoLoading) {
-          isAvailable = false
-          reason = 'Checking device…'
-        } else if (!repoOnline) {
-          isAvailable = false
-          reason = 'Device is offline'
-        } else {
-          isAvailable = repoAvailable.includes(item.value)
-          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
-          nodeLabel = repoRuntime?.locationLabel ?? 'device'
-        }
-      } else if (scopedToProjectNode) {
-        if (item.value === 'jait') {
-          isAvailable = true
-          nodeLabel = 'Gateway'
-        } else if (!wsRemoteNode) {
-          isAvailable = false
-          reason = 'Device is offline'
-        } else {
-          isAvailable = wsRemoteNode.providers.includes(item.value)
-          reason = isAvailable ? undefined : sourceStatus?.unavailableReason ?? 'Not available on this device'
-          nodeLabel = wsRemoteNode.nodeName
-        }
-      } else {
-        const isLocallyAvailable = status?.available !== false
-        const remoteNode = !isLocallyAvailable
-          ? remoteProviders.find((remote) => remote.providers.includes(item.value))
-          : undefined
-        isAvailable = isLocallyAvailable || !!remoteNode
-        reason = status?.unavailableReason
-        nodeLabel = !status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'
-      }
-
-      return { ...item, isAvailable, reason, nodeLabel, auth: status?.auth }
-    })
-  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToProjectNode, wsRemoteNode])
-
+  // Drop a selection the current scope cannot run — e.g. the project moved to a
+  // device that does not host the selected provider. Only done once the
+  // provider list is known, so a slow first load never resets the choice.
   useEffect(() => {
-    if (!scopedToRepo && !scopedToProjectNode) return
-    if (repoLoading) return
+    if (!providersLoaded) return
+    if (repoRuntime?.loading) return
+    const entry = providerEntries.find((item) => item.value === provider)
+    // Merely signed out is not a reason to switch: on the gateway the entry
+    // stays selected so the user can log in from right here. A provider this
+    // scope cannot reach at all (wrong device, offline device) is replaced.
+    if (entry && (entry.isAvailable || scopeNodeId === GATEWAY_NODE_ID)) return
     const nextProvider = resolveScopedProviderSelection(provider, providerEntries)
     if (nextProvider !== provider) {
       onProviderChange(nextProvider)
     }
-  }, [onProviderChange, provider, providerEntries, repoLoading, scopedToProjectNode, scopedToRepo])
+  }, [onProviderChange, provider, providerEntries, providersLoaded, repoRuntime?.loading, scopeNodeId])
 
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
@@ -448,13 +404,10 @@ export function ProviderModelSelector({
   const displayModelLabel = loadingModels
       ? 'Loading'
       : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
-  const locationLabel = scopedToRepo
-    ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
-    : scopedToProjectNode
-      ? (wsRemoteNode?.nodeName ?? projectNodeId)
-      : sessionInfo?.isRemote && sessionInfo.remoteNode
-        ? sessionInfo.remoteNode.nodeName
-        : undefined
+  const locationLabel = currentProvider.nodeLabel
+    ?? scopeNodeLabel
+    ?? (sessionInfo?.isRemote ? sessionInfo.remoteNode?.nodeName : undefined)
+  const showMoveToGateway = Boolean(onMoveToGateway) && scopeNodeOffline
 
   const searchLower = search.trim().toLowerCase()
   const filteredModels = useMemo(() => {
@@ -594,27 +547,26 @@ export function ProviderModelSelector({
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
         <div id="provider-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
       </div>
-      {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
-        <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-          Device is offline — only Jait (gateway) is available
-        </div>
-      )}
-      {scopedToRepo && repoLoading && (
+      {repoRuntime?.loading && (
         <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
           Connecting to device…
         </div>
       )}
-      {scopedToProjectNode && !wsRemoteNode && (
+      {!repoRuntime?.loading && scopeNodeOffline && (
         <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-          Device is offline — only Jait (gateway) is available
+          {scopeNodeLabel ?? 'This device'} is offline — only Jait (gateway) is available
         </div>
       )}
       <div role="listbox" aria-labelledby="provider-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
         {providerEntries.map((entry) => {
           const Icon = entry.icon
           const active = entry.value === provider
-          const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToProjectNode && (!scopedToRepo || repoIsGateway)
+          // Login works for gateway and device-hosted accounts alike — the
+          // gateway proxies the login to whichever device owns the account.
+          const showLoginAction = Boolean(entry.auth?.login)
+            && entry.auth?.authenticated !== true
+            && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           const loginBusy = authBusyProvider === entry.value
           return (
             <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
@@ -678,7 +630,7 @@ export function ProviderModelSelector({
             </div>
           )
         })}
-        {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && onMoveToGateway && (
+        {showMoveToGateway && onMoveToGateway && (
           <>
             <div className="mx-2 my-1 border-t" />
             <button

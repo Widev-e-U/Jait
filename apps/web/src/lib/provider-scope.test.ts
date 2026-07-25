@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProviderInfo, RemoteProviderInfo } from './agents-api'
-import { getScopedProviderSource, resolveScopedProviderSelection } from './provider-scope'
+import type { ProviderInfo } from './agents-api'
+import { resolveScopedProviderSelection, scopeProviders } from './provider-scope'
 
 const jaitProvider: ProviderInfo = {
   id: 'jait',
@@ -9,6 +9,8 @@ const jaitProvider: ProviderInfo = {
   description: 'Built in',
   available: true,
   modes: ['full-access', 'supervised'],
+  nodeId: 'gateway',
+  nodeName: 'Gateway',
 }
 
 const gatewayAccount: ProviderInfo = {
@@ -18,39 +20,103 @@ const gatewayAccount: ProviderInfo = {
   description: 'Gateway account',
   available: true,
   modes: ['full-access', 'supervised'],
+  nodeId: 'gateway',
+  nodeName: 'Gateway',
 }
 
-const windowsNode: RemoteProviderInfo = {
+const windowsAccount: ProviderInfo = {
+  id: 'codex-windows-account',
+  providerType: 'codex',
+  name: 'Codex — Windows',
+  description: 'Runs on Windows workstation',
+  available: true,
+  modes: ['full-access', 'supervised'],
   nodeId: 'windows-node',
   nodeName: 'Windows workstation',
-  platform: 'windows',
-  providers: ['codex'],
-  providerStatuses: [
-    { id: 'codex', installed: true, authenticated: true, detail: 'Signed in on Windows' },
-  ],
+  auth: { login: true, logout: true, deviceCode: true, authenticated: true },
 }
 
-describe('getScopedProviderSource', () => {
-  it('shows gateway Jait plus providers belonging to the selected remote node', () => {
-    const providers = getScopedProviderSource({
-      localProviders: [jaitProvider, gatewayAccount],
-      remoteNode: windowsNode,
-      scopedToRemoteNode: true,
+const allProviders = [jaitProvider, gatewayAccount, windowsAccount]
+
+describe('scopeProviders', () => {
+  it('lists every provider with its device when working on the gateway', () => {
+    const { entries, scopeNodeOffline } = scopeProviders({
+      providers: allProviders,
+      scopeNodeId: 'gateway',
+      connectedNodeIds: ['windows-node'],
     })
 
-    expect(providers.map((provider) => provider.id)).toEqual(['jait', 'codex'])
-    expect(providers.find((provider) => provider.id === 'codex')?.auth?.authenticated).toBe(true)
-    expect(providers.some((provider) => provider.id === gatewayAccount.id)).toBe(false)
+    expect(entries.map((entry) => entry.id)).toEqual([
+      'jait',
+      'codex-gateway-account',
+      'codex-windows-account',
+    ])
+    expect(entries.map((entry) => entry.nodeName)).toEqual([
+      'Gateway',
+      'Gateway',
+      'Windows workstation',
+    ])
+    expect(entries.every((entry) => entry.isAvailable)).toBe(true)
+    expect(scopeNodeOffline).toBe(false)
   })
 
+  it('shows only the project device plus Jait when the project lives on a device', () => {
+    const { entries, scopeNodeLabel } = scopeProviders({
+      providers: allProviders,
+      scopeNodeId: 'windows-node',
+      connectedNodeIds: ['windows-node'],
+    })
+
+    expect(entries.map((entry) => entry.id)).toEqual(['jait', 'codex-windows-account'])
+    expect(entries.find((entry) => entry.id === 'codex-windows-account')?.isAvailable).toBe(true)
+    expect(scopeNodeLabel).toBe('Windows workstation')
+  })
+
+  it('keeps Jait usable and flags the device when the project device is offline', () => {
+    const { entries, scopeNodeOffline } = scopeProviders({
+      providers: allProviders,
+      scopeNodeId: 'windows-node',
+      connectedNodeIds: [],
+      scopeNodeLabel: 'Windows workstation',
+    })
+
+    expect(scopeNodeOffline).toBe(true)
+    expect(entries.find((entry) => entry.id === 'jait')?.isAvailable).toBe(true)
+    const windows = entries.find((entry) => entry.id === 'codex-windows-account')
+    expect(windows?.isAvailable).toBe(false)
+    expect(windows?.reason).toContain('offline')
+  })
+
+  it('reports the gateway reason when a gateway provider is not signed in', () => {
+    const { entries } = scopeProviders({
+      providers: [
+        jaitProvider,
+        { ...gatewayAccount, available: false, unavailableReason: 'Login required' },
+      ],
+      scopeNodeId: 'gateway',
+    })
+
+    const account = entries.find((entry) => entry.id === gatewayAccount.id)
+    expect(account?.isAvailable).toBe(false)
+    expect(account?.reason).toBe('Login required')
+  })
+
+  it('falls back to Jait before providers have loaded', () => {
+    const { entries } = scopeProviders({ providers: [], loading: true })
+    expect(entries.map((entry) => entry.id)).toEqual(['jait'])
+    expect(entries[0]?.isAvailable).toBe(true)
+  })
+})
+
+describe('resolveScopedProviderSelection', () => {
   it('replaces a gateway-only account selection when the project moves to Windows', () => {
     const providers = [
       { value: 'jait', isAvailable: true },
-      { value: 'codex', isAvailable: true },
+      { value: 'codex-windows-account', isAvailable: true },
     ]
 
     expect(resolveScopedProviderSelection('codex-gateway-account', providers)).toBe('jait')
-    expect(resolveScopedProviderSelection('codex', providers)).toBe('codex')
+    expect(resolveScopedProviderSelection('codex-windows-account', providers)).toBe('codex-windows-account')
   })
 
   it('restores the preferred provider after a temporary project availability fallback', () => {

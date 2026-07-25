@@ -22,7 +22,6 @@ import {
   type AutomationRepo,
   type ThreadActivity,
   type ThreadMessageMetadata,
-  type ProviderInfo,
   type ProviderId,
   type RuntimeMode,
 } from '@/lib/agents-api'
@@ -37,6 +36,7 @@ import {
 import { gitApi } from '@/lib/git-api'
 import { generateDeviceId } from '@/lib/device-id'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { useProviders } from '@/hooks/useProviders'
 import { resolveThreadPrStateFromPoll, type ThreadPrState } from '@/lib/thread-pr-state'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -88,15 +88,32 @@ function extractTodosFromActivities(activities: ThreadActivity[]): TodoItem[] {
   return []
 }
 
-function mapNodeStatesToRemoteProviders(nodes: NodeState[]): RemoteProviderInfo[] {
-  return nodes
-    .filter((node) => node.role !== 'gateway')
-    .map((node) => ({
+/**
+ * Combine the gateway's per-account remote provider data with the live node
+ * registry.
+ *
+ * The gateway knows which provider *accounts* exist on each device and whether
+ * they are signed in; the registry only knows which CLI *binaries* a device has
+ * installed. Overwriting one with the other (as this used to do) made the same
+ * provider look available or unavailable depending on which message arrived
+ * last, so the registry is now only used to track which devices are connected.
+ */
+function mergeRemoteProviders(fromGateway: RemoteProviderInfo[], nodes: NodeState[]): RemoteProviderInfo[] {
+  const connectedNodes = nodes.filter((node) => node.role !== 'gateway')
+  if (connectedNodes.length === 0) return fromGateway
+
+  const byNodeId = new Map(fromGateway.map((node) => [node.nodeId, node]))
+  return connectedNodes.map((node) => {
+    const known = byNodeId.get(node.id)
+    return {
       nodeId: node.id,
-      nodeName: node.name,
-      platform: node.platform,
-      providers: node.capabilities.providers,
-    }))
+      nodeName: node.name || known?.nodeName || node.id,
+      platform: node.platform || known?.platform || 'unknown',
+      providers: known?.providers ?? [],
+      availableProviderTypes: node.capabilities.providers ?? known?.availableProviderTypes,
+      ...(known?.providerStatuses ? { providerStatuses: known.providerStatuses } : {}),
+    }
+  })
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -121,11 +138,22 @@ export function useAutomation(enabled = true) {
   const [activities, setActivities] = useState<ThreadActivity[]>([])
   const [threadPrStates, setThreadPrStates] = useState<Record<string, ThreadPrState>>({})
   const [ghAvailable, setGhAvailable] = useState(true)
-  const [providers, setProviders] = useState<ProviderInfo[]>([])
-  const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
+  // Providers come from the shared store, so this hook, the settings page and
+  // the chat pickers always show the same list from a single request.
+  const {
+    providers,
+    remoteProviders: gatewayRemoteProviders,
+    loaded: providerSnapshotLoaded,
+    refresh: refreshProviderSnapshot,
+  } = useProviders()
   const [nodeRegistry, setNodeRegistry] = useState<NodeState[]>([])
+  const [nodeRegistryLoaded, setNodeRegistryLoaded] = useState(false)
+  const remoteProviders = useMemo(
+    () => mergeRemoteProviders(gatewayRemoteProviders, nodeRegistry),
+    [gatewayRemoteProviders, nodeRegistry],
+  )
+  const providersLoaded = providerSnapshotLoaded || nodeRegistryLoaded
   const [loading, setLoading] = useState(false)
-  const [providersLoaded, setProvidersLoaded] = useState(false)
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -211,13 +239,10 @@ export function useAutomation(enabled = true) {
     if (!getAuthToken()) return // skip when not authenticated
     setLoading(true)
     try {
-      const [provResult, repos] = await Promise.all([
-        agentsApi.listProviders(),
+      const [, repos] = await Promise.all([
+        refreshProviderSnapshot(),
         agentsApi.listRepos(),
       ])
-      setProviders(provResult.providers)
-      setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
-      setProvidersLoaded(true)
       setLocalRepositories(repos.map(mapDbRepoToAutomationRepository))
       setError(null)
     } catch (err) {
@@ -225,21 +250,17 @@ export function useAutomation(enabled = true) {
     } finally {
       setLoading(false)
     }
-  }, [nodeRegistry])
+  }, [refreshProviderSnapshot])
 
   /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
   const refreshProviders = useCallback(async () => {
     if (!getAuthToken()) return
     try {
-      const [provResult, repos] = await Promise.all([
-        agentsApi.listProvidersFresh(),
-        agentsApi.listRepos(),
-      ])
-      setProviders(provResult.providers)
-      setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
+      refreshProviderSnapshot({ fresh: true })
+      const repos = await agentsApi.listRepos()
       setLocalRepositories(repos.map(mapDbRepoToAutomationRepository))
     } catch { /* best-effort */ }
-  }, [nodeRegistry])
+  }, [refreshProviderSnapshot])
 
   const getRuntimeInfoForRepository = useCallback(
     (repository: RepositoryConnection) => getRepositoryRuntimeInfo(repository, {
@@ -401,34 +422,27 @@ export function useAutomation(enabled = true) {
       }
       case 'node.registry': {
         const snapshot = payload as unknown as NodeRegistrySnapshot | undefined
-        const nodes = snapshot?.nodes ?? []
-        setNodeRegistry(nodes)
-        setRemoteProviders(mapNodeStatesToRemoteProviders(nodes))
-        setProvidersLoaded(true)
+        setNodeRegistry(snapshot?.nodes ?? [])
+        setNodeRegistryLoaded(true)
         break
       }
       case 'node.updated': {
         const node = payload as unknown as NodeState | undefined
         if (!node) break
-        setNodeRegistry(prev => {
-          const next = prev.some((entry) => entry.id === node.id)
-            ? prev.map((entry) => entry.id === node.id ? node : entry)
-            : [...prev, node]
-          setRemoteProviders(mapNodeStatesToRemoteProviders(next))
-          return next
-        })
-        setProvidersLoaded(true)
+        setNodeRegistry(prev => prev.some((entry) => entry.id === node.id)
+          ? prev.map((entry) => entry.id === node.id ? node : entry)
+          : [...prev, node])
+        setNodeRegistryLoaded(true)
+        // A device that just appeared may host provider accounts the gateway
+        // has not probed yet.
+        void refreshProviders()
         break
       }
       case 'node.disconnected': {
         const nodeId = (payload.nodeId as string | undefined) ?? ((payload.node as unknown as NodeState | undefined)?.id)
         if (!nodeId) break
-        setNodeRegistry(prev => {
-          const next = prev.filter((entry) => entry.id !== nodeId)
-          setRemoteProviders(mapNodeStatesToRemoteProviders(next))
-          return next
-        })
-        setProvidersLoaded(true)
+        setNodeRegistry(prev => prev.filter((entry) => entry.id !== nodeId))
+        setNodeRegistryLoaded(true)
         break
       }
     }

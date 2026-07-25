@@ -135,6 +135,7 @@ describe('automation repositories', () => {
       providersLoaded: true,
     })).toEqual({
       hostType: 'device',
+      nodeId: 'desktop-1',
       locationLabel: 'Desktop (Windows)',
       online: true,
       loading: false,
@@ -240,6 +241,7 @@ describe('getRepositoryRuntimeInfo gateway repos', () => {
     )
     expect(runtime).toEqual({
       hostType: 'gateway',
+      nodeId: 'gateway',
       locationLabel: 'Gateway',
       online: true,
       loading: false,

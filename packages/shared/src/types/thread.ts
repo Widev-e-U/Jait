@@ -24,6 +24,15 @@ export interface ProviderInfo {
   unavailableReason?: string;
   modes: RuntimeMode[];
   auth?: ProviderAuthInfo;
+  /**
+   * Device the provider actually runs on: `"gateway"` for gateway-hosted
+   * providers, otherwise the connected node's id. Every provider belongs to
+   * exactly one device — clients scope and route by this field instead of
+   * re-deriving device ownership from node capability lists.
+   */
+  nodeId?: string;
+  /** Human-readable name of {@link nodeId} ("Gateway", "Windows workstation", …). */
+  nodeName?: string;
 }
 
 export type RuntimeMode = "full-access" | "supervised";

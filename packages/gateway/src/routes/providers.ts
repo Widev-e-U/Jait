@@ -24,10 +24,30 @@ import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
-import { ProviderSnapshotCache } from "../providers/provider-snapshot.js";
+import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 
 // ── Route registration ───────────────────────────────────────────
+
+const GATEWAY_NODE_NAME = "Gateway";
+
+type ProviderInfoPayload = ProviderSnapshot & { nodeId: string; nodeName: string };
+
+interface RemoteProviderPayload {
+  nodeId: string;
+  nodeName: string;
+  platform: string;
+  providers: string[];
+  availableProviderTypes?: string[];
+  providerStatuses?: Array<{
+    id: string;
+    providerType?: string;
+    name?: string;
+    installed: boolean;
+    authenticated: boolean | null;
+    detail?: string;
+  }>;
+}
 
 export interface ProviderRouteDeps {
   providerRegistry: ProviderRegistry;
@@ -137,7 +157,17 @@ export function registerProviderRoutes(
     return { ok: true };
   });
 
-  /** List available providers (local + remote) */
+  /**
+   * List available providers.
+   *
+   * `providers` is the single authoritative list: every entry — gateway-hosted
+   * or living on a connected node — carries the `nodeId`/`nodeName` of the
+   * device it runs on. Clients scope by that field rather than cross-referencing
+   * node capability lists, which used to mix provider *types* with account ids.
+   *
+   * `remoteProviders` is the same data grouped per node, kept for the settings
+   * screen and older clients.
+   */
   app.get("/api/providers", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -147,12 +177,14 @@ export function registerProviderRoutes(
     const force = fresh === "1" || fresh === "true";
     const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
     const accountById = new Map(accounts.map((account) => [account.id, account]));
-    const providerSnapshots = (await snapshotCache.get(force))
+    const gatewayProviders: ProviderInfoPayload[] = (await snapshotCache.get(force))
       .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id))
-      .filter((provider) => (accountById.get(provider.id)?.nodeId ?? "gateway") === "gateway");
+      .filter((provider) => (accountById.get(provider.id)?.nodeId ?? "gateway") === "gateway")
+      .map((provider) => ({ ...provider, nodeId: "gateway", nodeName: GATEWAY_NODE_NAME }));
 
     // Collect remote provider info from connected filesystem nodes (cheap, live).
-    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[]; availableProviderTypes?: string[]; providerStatuses?: Array<{ id: string; providerType?: string; name?: string; installed: boolean; authenticated: boolean | null; detail?: string }> }[] = [];
+    const remoteProviders: RemoteProviderPayload[] = [];
+    const nodeProviders: ProviderInfoPayload[] = [];
     if (ws) {
       for (const node of ws.getFsNodes()) {
         if (node.isGateway) continue;
@@ -183,11 +215,37 @@ export function registerProviderRoutes(
           availableProviderTypes: node.providers ?? [],
           providerStatuses: accountStatuses,
         });
+        for (const status of accountStatuses) {
+          nodeProviders.push({
+            id: status.id,
+            providerType: status.providerType,
+            name: status.name,
+            description: status.detail ?? `Runs on ${node.name}`,
+            available: status.installed && status.authenticated === true,
+            unavailableReason: !status.installed
+              ? `Not installed on ${node.name}`
+              : status.authenticated === false
+                ? `Login required on ${node.name}`
+                : status.authenticated === null
+                  ? status.detail ?? `Unable to check this account on ${node.name}`
+                  : undefined,
+            modes: ["full-access", "supervised"],
+            auth: {
+              login: true,
+              logout: status.authenticated === true,
+              deviceCode: true,
+              authenticated: status.authenticated,
+              detail: status.detail,
+            },
+            nodeId: node.id,
+            nodeName: node.name,
+          });
+        }
       }
     }
 
     return {
-      providers: providerSnapshots,
+      providers: [...gatewayProviders, ...nodeProviders],
       remoteProviders,
     };
   });
@@ -218,6 +276,9 @@ export function registerProviderRoutes(
       return reply.status(501).send({ error: `Provider ${id} does not support login` });
     }
     const result = await provider.startLogin();
+    // Auth state is about to change — drop the cached snapshot so the next
+    // `/api/providers` reflects the login instead of serving a stale probe.
+    snapshotCache.invalidate();
     if (!result.ok && result.status === "unsupported") {
       return reply.status(501).send(result);
     }
@@ -260,6 +321,7 @@ export function registerProviderRoutes(
       return reply.status(501).send({ error: `Provider ${id} does not support logout` });
     }
     const result = await provider.logout();
+    snapshotCache.invalidate();
     if (!result.ok && result.status === "unsupported") {
       return reply.status(501).send(result);
     }
@@ -275,17 +337,19 @@ export function registerProviderRoutes(
     if (!authUser) return;
 
     const { id } = request.params as { id: string };
-    const requestedNodeId = (request.query as { nodeId?: string } | undefined)?.nodeId?.trim();
+    // The provider account itself decides where models come from. The `nodeId`
+    // query param is only a hint from older clients: honouring it caused a hard
+    // 404 whenever the open project's device disagreed with the selected
+    // provider's device (e.g. a gateway account selected inside a remote
+    // project), which surfaced as "models failed to load".
+    const account = id === "jait" ? null : deps.providerAccountService?.get(id, authUser.id) ?? null;
+    const providerNodeId = account?.nodeId ?? "gateway";
 
-    if (id !== "jait" && requestedNodeId && requestedNodeId !== "gateway") {
+    if (account && providerNodeId !== "gateway") {
       if (!ws) return reply.status(503).send({ error: "Remote provider routing is unavailable" });
-      const node = ws.getFsNodes().find((candidate) => candidate.id === requestedNodeId);
-      if (!node) return reply.status(404).send({ error: `Node ${requestedNodeId} is not connected` });
+      const node = ws.getFsNodes().find((candidate) => candidate.id === providerNodeId);
+      if (!node) return reply.status(404).send({ error: `The device hosting ${account.label} is not connected` });
 
-      const account = deps.providerAccountService?.get(id, authUser.id);
-      if (!account || account.nodeId !== node.id) {
-        return reply.status(404).send({ error: `Provider account ${id} is not configured for ${node.name}` });
-      }
       const remoteProvider = new RemoteCliProvider(ws, node.id, account.id, account.providerType);
       if (!await remoteProvider.checkAvailability()) {
         return reply.status(409).send({ error: remoteProvider.info.unavailableReason ?? `Provider ${id} is unavailable on ${node.name}` });

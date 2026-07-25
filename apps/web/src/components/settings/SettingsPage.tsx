@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { ActivityFeed } from '@/components/activity'
 import type { ProjectRecord } from '@/hooks/useProjects'
+import { useProviders } from '@/hooks/useProviders'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
@@ -24,7 +25,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
-import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
@@ -163,8 +164,15 @@ export function SettingsPage({
   const [error, setError] = useState<string | null>(null)
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
-  const [providerAccounts, setProviderAccounts] = useState<ProviderInfo[]>([])
-  const [remoteProviderNodes, setRemoteProviderNodes] = useState<RemoteProviderInfo[]>([])
+  // Provider data comes from the shared store so this page, the chat pickers
+  // and the automation hook never disagree about what exists.
+  const { providers: allProviders, remoteProviders: remoteProviderNodes, refresh: refreshProviderSnapshot } = useProviders()
+  // Device accounts are rendered from `remoteProviderNodes` further down, so the
+  // gateway list must exclude them to avoid listing the same account twice.
+  const providerAccounts = useMemo(
+    () => allProviders.filter((provider) => (provider.nodeId ?? 'gateway') === 'gateway' && isProviderAccount(provider)),
+    [allProviders],
+  )
   const [configuredProviderAccounts, setConfiguredProviderAccounts] = useState<ProviderAccount[]>([])
   const [providerAccountTypes, setProviderAccountTypes] = useState<ProviderAccountType[]>([])
   const [newProviderAccountType, setNewProviderAccountType] = useState('')
@@ -255,12 +263,10 @@ export function SettingsPage({
     if (!token) return
     setProviderAccountsLoading(true)
     try {
-      const [{ providers, remoteProviders }, accountData] = await Promise.all([
-        agentsApi.listProvidersFresh(),
+      const [, accountData] = await Promise.all([
+        refreshProviderSnapshot({ fresh: true, force: true }),
         agentsApi.listProviderAccounts(),
       ])
-      setProviderAccounts(providers.filter(isProviderAccount))
-      setRemoteProviderNodes(remoteProviders)
       setConfiguredProviderAccounts(accountData.accounts)
       setProviderAccountTypes(accountData.providerTypes)
       setNewProviderAccountType((current) => (
@@ -269,14 +275,13 @@ export function SettingsPage({
           : (accountData.providerTypes[0]?.providerType ?? '')
       ))
     } catch {
-      setProviderAccounts([])
       setConfiguredProviderAccounts([])
       setProviderAccountTypes([])
       setNewProviderAccountType('')
     } finally {
       setProviderAccountsLoading(false)
     }
-  }, [token])
+  }, [refreshProviderSnapshot, token])
 
   useEffect(() => {
     void loadProviderAccounts()

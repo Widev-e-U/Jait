@@ -18,6 +18,8 @@ export interface AutomationRepository {
 
 export interface RepositoryRuntimeInfo {
   hostType: 'gateway' | 'device'
+  /** Device the repo lives on: `"gateway"` or a connected node id. */
+  nodeId: string
   locationLabel: string
   online: boolean
   loading: boolean
@@ -226,6 +228,7 @@ export function getRepositoryRuntimeInfo(
   if (!repository.deviceId) {
     return {
       hostType: 'gateway',
+      nodeId: 'gateway',
       locationLabel: 'Gateway',
       online: true,
       loading: false,
@@ -241,6 +244,7 @@ export function getRepositoryRuntimeInfo(
 
   return {
     hostType: 'device',
+    nodeId: repository.deviceId,
     locationLabel,
     online: isOnline,
     loading: !isOnline && !providersLoaded,

@@ -37,6 +37,7 @@ import {
   type RepositoryRuntimeInfo,
 } from '@/lib/automation-repositories'
 import type { AgentThread } from '@/lib/agents-api'
+import { providerTypeFromId } from '@jait/shared'
 
 const TITLE_PLACEHOLDER_SUFFIX = 'Generating title…'
 export function isTitlePending(title: string): boolean {
@@ -124,7 +125,9 @@ export function ManagerRepoRuntimeMeta({
   runtime: RepositoryRuntimeInfo
   className?: string
 }) {
-  const cliProviders = runtime.availableProviders.filter(
+  // `availableProviders` holds provider account ids ("codex-01J…"); the badge
+  // shows one chip per underlying CLI, so map ids back to their type first.
+  const cliProviders = [...new Set(runtime.availableProviders.map(providerTypeFromId))].filter(
     (provider): provider is 'codex' | 'claude-code' => provider === 'codex' || provider === 'claude-code',
   )
 

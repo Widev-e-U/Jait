@@ -213,7 +213,9 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    if (this.cachedModels) return this.cachedModels;
+    // An empty result is never cached: it would pin the picker to "no models"
+    // until the gateway restarts, even after a successful login.
+    if (this.cachedModels?.length) return this.cachedModels;
 
     const probe = await this.probeAcpAuth();
     try {
@@ -244,9 +246,12 @@ export class AcpProvider implements CliProviderAdapter {
           ACP_PROBE_CLOSE_TIMEOUT_MS,
         ).catch(() => {});
       }
+      // Fallbacks are keyed by provider *type*: `this.id` is the account id
+      // ("claude-code-01J…") for per-account providers, which matched nothing
+      // and left the picker empty whenever the agent advertised no models.
       this.cachedModels = models.length > 0
         ? models
-        : getAcpFallbackModels(this.id);
+        : getAcpFallbackModels(this.providerType);
       return this.cachedModels;
     } catch (error) {
       const message = extractErrorMessage(error, "ACP model discovery failed");
@@ -255,7 +260,9 @@ export class AcpProvider implements CliProviderAdapter {
           `${this.info.name} is logged in, but the provider rejected model discovery: ${message}. Check provider usage limits or account access.`,
         );
       }
-      if (isAcpModelDiscoveryTimeout(message)) {
+      // Discovery is best-effort: as long as this is not an auth problem, the
+      // CLI's well-known models are a better answer than an empty picker.
+      if (!isAuthenticationRequiredMessage(message)) {
         const fallbackModels = getAcpFallbackModels(this.providerType);
         if (fallbackModels.length > 0) {
           this.cachedModels = fallbackModels;
@@ -970,10 +977,6 @@ function isAuthenticationRequiredMessage(message: string): boolean {
     || lower.includes("not logged in")
     || lower.includes("login required")
     || lower.includes("credentials are not configured");
-}
-
-function isAcpModelDiscoveryTimeout(message: string): boolean {
-  return /\btimeout\b|timed out|operation timed out/i.test(message);
 }
 
 function getAcpFallbackModels(providerId: ProviderId): ProviderModelInfo[] {
