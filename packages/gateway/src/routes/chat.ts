@@ -2094,6 +2094,12 @@ export function registerChatRoutes(
     let loopPersisted = false;
     let assistantTurnPersisted = false;
     activeStreams.add(sessionId);
+    ws?.broadcastToUser(authUser.id, {
+      type: "session.streaming",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { sessionId, streaming: true },
+    });
     // Reset streaming accumulator for this turn so reload snapshots start fresh.
     // Eagerly (re)create it so the invariant "activeStreams.has => accumulator
     // exists" holds for the entire run, including the pre-first-token window
@@ -3018,6 +3024,12 @@ export function registerChatRoutes(
     clearInterval(keepalive);
 
     activeStreams.delete(sessionId);
+    ws?.broadcastToUser(authUser.id, {
+      type: "session.streaming",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { sessionId, streaming: false },
+    });
     sessionAbortControllers.delete(sessionId);
     sessionSteeringControllers.delete(sessionId);
     unregisterInterventionResume();
@@ -3227,6 +3239,19 @@ export function registerChatRoutes(
       limit: DEFAULT_UI_MESSAGE_LIMIT,
       messages: windowed.messages,
     };
+  });
+
+  // Which of the user's sessions are currently generating a response — used
+  // to seed the sidebar's per-session loading indicator on page load (the
+  // live "session.streaming" WS broadcast keeps it in sync after that).
+  app.get("/api/sessions/streaming", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!sessionService) return { sessionIds: [] };
+    const sessionIds = sessionService.list("active", authUser.id)
+      .filter((session) => activeStreams.has(session.id))
+      .map((session) => session.id);
+    return { sessionIds };
   });
 
   // List messages in a session

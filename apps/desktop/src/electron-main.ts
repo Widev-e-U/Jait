@@ -1331,8 +1331,11 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
     args.push("--mcp-config", session.mcpConfigPath);
   }
 
-  args.push(message);
-
+  // The message is sent over stdin rather than as a CLI argument: on Windows
+  // this spawn goes through `shell: true` (cmd.exe), whose command-line is
+  // capped at ~8191 chars, and long turns (system prompt + memory + recent
+  // history) routinely exceed that, causing `spawn ENAMETOOLONG`. `claude
+  // --print` reads the prompt from stdin when no positional argument is given.
   const child = spawn("claude", args, {
     cwd: session.workingDirectory,
     env: session.env,
@@ -1345,6 +1348,8 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 
   // Suppress EPIPE errors when child exits before we finish writing
   child.stdin?.on("error", () => {/* ignore broken pipe */});
+  child.stdin?.write(message);
+  child.stdin?.end();
   sendProviderEvent(session.sessionId, { type: "turn.started", sessionId: session.sessionId });
 
   let buffer = "";

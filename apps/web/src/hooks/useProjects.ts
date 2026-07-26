@@ -66,6 +66,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const cacheHydratedScopeRef = useRef<string | null>(null)
   const hasCachedProjectIndexRef = useRef(false)
   const cacheWriteReadyScopeRef = useRef<string | null>(null)
+  const activeProjectIdRef = useRef<string | null>(null)
+  activeProjectIdRef.current = activeProjectId
   const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
   if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
@@ -164,6 +166,26 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       if (projectsRes.ok) {
         const data = await projectsRes.json() as { projects: ProjectRecord[]; hasMore?: boolean }
         nextProjects = data.projects
+
+        // The list above is capped to `visibleLimit` and ordered by each
+        // project's own activity — unrelated activity on other (e.g. remote
+        // node) projects can push the currently active project off this
+        // page. Without this, that active project would look "gone" below
+        // and we'd silently fall back to whatever the server considers last
+        // active, flipping the user onto a different project on reload.
+        const currentActiveProjectId = activeProjectIdRef.current
+        if (currentActiveProjectId && !nextProjects.some((project) => project.id === currentActiveProjectId)) {
+          try {
+            const activeProjectRes = await fetch(`${API_URL}/api/projects/${currentActiveProjectId}`, { headers: authHeaders(token) })
+            if (activeProjectRes.ok) {
+              const activeProject = await activeProjectRes.json() as ProjectRecord
+              nextProjects = [activeProject, ...nextProjects]
+            }
+          } catch {
+            // Best-effort recovery; fall through with whatever the page returned.
+          }
+        }
+
         setProjects(nextProjects)
         setArchivedSessionsByProject((prev) => Object.fromEntries(
           Object.entries(prev).filter(([projectId]) => nextProjects.some((project) => project.id === projectId)),

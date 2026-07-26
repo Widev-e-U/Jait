@@ -35,6 +35,10 @@ interface SessionSelectorProps {
   onAssignRepository?: (projectId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
+  /** Called on any project/session row click, even if it's already active (e.g. to close a mobile drawer). */
+  onDismiss?: () => void
+  /** IDs of sessions currently generating a response — rendered with a loading spinner. */
+  streamingSessionIds?: Set<string>
   sessionInfo?: SessionInfo | null
   nodes?: FsNode[]
   repositories?: AutomationRepository[]
@@ -89,6 +93,8 @@ export function SessionSelector({
   onAssignRepository,
   onShowMore,
   onShowFewer,
+  onDismiss,
+  streamingSessionIds,
   sessionInfo,
   nodes = [],
   repositories = [],
@@ -212,7 +218,10 @@ export function SessionSelector({
                           JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined)),
                         )
                       }}
-                      onClick={() => { if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id) }}
+                      onClick={() => {
+                        onDismiss?.()
+                        if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id)
+                      }}
                     >
                       {isActiveProject ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
@@ -321,17 +330,25 @@ export function SessionSelector({
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
                         {recentSessions.map((session) => {
                           const isActiveSession = isActiveProject && session.id === activeSessionId
+                          const isStreaming = streamingSessionIds?.has(session.id) ?? false
                           return (
                             <div
                               key={session.id}
-                              className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition-colors ${
+                              className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors ${
                                 isActiveSession ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                               }`}
-                              onClick={() => { if (!isActiveSession) onSelectProjectSession?.(project.id, session.id) }}
+                              onClick={() => {
+                                onDismiss?.()
+                                if (!isActiveSession) onSelectProjectSession?.(project.id, session.id)
+                              }}
                             >
-                              <MessageSquare className={`h-3 w-3 shrink-0 ${isActiveSession ? 'text-primary' : 'text-muted-foreground'}`} />
+                              {isStreaming ? (
+                                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                              ) : (
+                                <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActiveSession ? 'text-primary' : 'text-muted-foreground'}`} />
+                              )}
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-2xs font-medium">
+                                <div className="truncate text-xs font-medium">
                                   {session.name || 'Untitled session'}
                                 </div>
                               </div>
@@ -405,17 +422,25 @@ export function SessionSelector({
                 )}
                 {filteredPersonalSessions.map((session) => {
                   const isActive = activeProjectId === null && session.id === activeSessionId
+                  const isStreaming = streamingSessionIds?.has(session.id) ?? false
                   return (
                     <div
                       key={session.id}
-                      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors text-sm ${
+                      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
                         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                       }`}
-                      onClick={() => { if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id) }}
+                      onClick={() => {
+                        onDismiss?.()
+                        if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id)
+                      }}
                     >
-                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                      {isStreaming ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                      ) : (
+                        <MessageSquare className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                      )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium">
+                        <div className="truncate text-sm font-medium">
                           {session.name || 'Personal chat'}
                         </div>
                         <div className="text-2xs text-muted-foreground">

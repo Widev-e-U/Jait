@@ -28,6 +28,7 @@ export type WsEventType =
   | "message.delta"
   | "message.started"
   | "message.complete"
+  | "session.streaming"
   | "tool.call"
   | "tool.result"
   | "consent.required"
@@ -95,6 +96,14 @@ export interface ProjectOpenData {
 
 export interface ProjectCloseData {
   surfaceId: string;
+}
+
+/** Payload for a `session.streaming` WsEvent — broadcast to every client of a
+ * user (not just those subscribed to the session) so the sidebar can show a
+ * loading indicator for sessions running in the background. */
+export interface SessionStreamingData {
+  sessionId: string;
+  streaming: boolean;
 }
 
 export interface TerminalFocusData {

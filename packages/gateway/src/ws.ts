@@ -826,6 +826,20 @@ export class WsControlPlane {
     }
   }
 
+  /**
+   * Broadcast to every connected client for a user, regardless of which
+   * session each client currently has subscribed. Used for cross-session
+   * status (e.g. "this other chat is streaming") that must reach the sidebar
+   * even when the browser tab is focused on a different session.
+   */
+  broadcastToUser(userId: string, event: WsEvent) {
+    for (const client of this.clients.values()) {
+      if (client.userId === userId && client.ws.readyState === 1) {
+        this.send(client.ws, event);
+      }
+    }
+  }
+
   /** Send a typed UI command to all clients subscribed to the session (server → frontend) */
   sendUICommand(command: UICommandPayload, sessionId = "") {
     const event: WsEvent = {

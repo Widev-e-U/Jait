@@ -5,7 +5,9 @@
  * `nodeId`/`nodeName`. Scoping is therefore a single filter:
  *
  *  - Working on the gateway (no project device, or the project lives on the
- *    gateway): show every provider there is, each labelled with its device.
+ *    gateway): show only gateway-hosted providers. A project running on the
+ *    gateway can never route a turn to another device's provider, so that
+ *    device's entries would be selectable but non-functional.
  *  - Working inside a project pinned to a device: show only that device's
  *    providers, plus Jait, which always runs on the gateway and is the
  *    guaranteed fallback.
@@ -89,7 +91,7 @@ export function scopeProviders({
 
   const visible = scope
     ? annotated.filter((provider) => provider.nodeId === scope || isGatewayNativeProvider(provider))
-    : annotated
+    : annotated.filter((provider) => provider.nodeId === GATEWAY_NODE_ID)
 
   const resolvedScopeLabel = scope
     ? visible.find((provider) => provider.nodeId === scope)?.nodeName ?? scopeNodeLabel ?? scope

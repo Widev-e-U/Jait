@@ -21,6 +21,7 @@ export type {
   ProjectUIState,
   ProjectOpenData,
   ProjectCloseData,
+  SessionStreamingData,
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,

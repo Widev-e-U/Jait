@@ -39,7 +39,7 @@ const windowsAccount: ProviderInfo = {
 const allProviders = [jaitProvider, gatewayAccount, windowsAccount]
 
 describe('scopeProviders', () => {
-  it('lists every provider with its device when working on the gateway', () => {
+  it('lists only gateway-hosted providers when working on the gateway', () => {
     const { entries, scopeNodeOffline } = scopeProviders({
       providers: allProviders,
       scopeNodeId: 'gateway',
@@ -49,12 +49,10 @@ describe('scopeProviders', () => {
     expect(entries.map((entry) => entry.id)).toEqual([
       'jait',
       'codex-gateway-account',
-      'codex-windows-account',
     ])
     expect(entries.map((entry) => entry.nodeName)).toEqual([
       'Gateway',
       'Gateway',
-      'Windows workstation',
     ])
     expect(entries.every((entry) => entry.isAvailable)).toBe(true)
     expect(scopeNodeOffline).toBe(false)

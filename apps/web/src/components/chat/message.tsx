@@ -869,7 +869,7 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
               >
                 <MoreVertical className="h-4 w-4" />
               </button>

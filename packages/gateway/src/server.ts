@@ -155,6 +155,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     // params (e.g. /api/email/messages/:id). Fastify defaults maxParamLength to
     // 100, which makes those routes silently fall through to the SPA 404.
     maxParamLength: 4000,
+    // Fastify's 1MB default silently rejects base64 JSON payloads (voice
+    // transcription audio, chat attachments) once they cross ~25s of 16kHz
+    // mono audio or a small image. 25MB matches OpenAI's own audio upload cap.
+    bodyLimit: 25 * 1024 * 1024,
   });
 
   await app.register(fastifyCookie);

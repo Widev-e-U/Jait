@@ -30,6 +30,7 @@ interface DeveloperSidebarsProps {
   showProject: boolean
   showSidebar: boolean
   showTerminal: boolean
+  streamingSessionIds: Set<string>
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
   onBlur: (event: FocusEvent<HTMLElement>) => void
@@ -70,6 +71,7 @@ export function DeveloperSidebars({
   showProject,
   showSidebar,
   showTerminal,
+  streamingSessionIds,
   sidebarRef,
   onAssignRepository,
   onBlur,
@@ -205,6 +207,7 @@ export function DeveloperSidebars({
               sessionInfo={sessionInfo}
               nodes={fsNodes}
               repositories={repositories}
+              streamingSessionIds={streamingSessionIds}
             />
           </ErrorBoundary>
         </aside>

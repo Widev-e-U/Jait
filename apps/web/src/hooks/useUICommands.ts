@@ -10,6 +10,7 @@ import {
   DevPreviewOpenData,
   ArchitectureUpdateData,
   FsChangesPayload,
+  SessionStreamingData,
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 
@@ -133,6 +134,8 @@ interface UseUICommandsOptions {
   onMessageStarted?: () => void
   /** Called when the gateway broadcasts that an assistant message has completed. */
   onMessageComplete?: () => void
+  /** Called when any of the user's sessions starts/stops streaming a response, regardless of which session is currently open. */
+  onSessionStreamingChange?: (sessionId: string, streaming: boolean) => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway broadcasts preview session state changes. */
@@ -166,6 +169,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onFullState,
     onMessageStarted,
     onMessageComplete,
+    onSessionStreamingChange,
     onThreadEvent,
     onFsChanges,
     onConnectionStateChange,
@@ -181,6 +185,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onMessageStartedRef.current = onMessageStarted
   const onMessageCompleteRef = useRef(onMessageComplete)
   onMessageCompleteRef.current = onMessageComplete
+  const onSessionStreamingChangeRef = useRef(onSessionStreamingChange)
+  onSessionStreamingChangeRef.current = onSessionStreamingChange
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
   const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
@@ -265,6 +271,10 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'message.complete') {
         // Assistant message finished on another device — refresh chat
         onMessageCompleteRef.current?.()
+      } else if (msg.type === 'session.streaming') {
+        // Any of the user's sessions started/stopped streaming — sidebar-wide, not session-scoped
+        const payload = msg.payload as SessionStreamingData
+        onSessionStreamingChangeRef.current?.(payload.sessionId, payload.streaming)
       } else if (msg.type === 'fs.changes') {
         // Native filesystem change events from the project watcher
         const payload = msg.payload as FsChangesPayload

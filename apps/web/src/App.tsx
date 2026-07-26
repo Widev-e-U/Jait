@@ -498,6 +498,36 @@ function App() {
     suppressProjectAutoOpenRef.current = false
   }, [activeSessionId])
 
+  // Which sessions (across all projects, not just the one currently open) are
+  // actively generating a response — lets the sidebar show a loading spinner
+  // for chats running in the background, including on other devices.
+  const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    if (!token) {
+      setStreamingSessionIds(new Set())
+      return
+    }
+    let cancelled = false
+    fetch(`${API_URL}/api/sessions/streaming`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { sessionIds?: string[] } | null) => {
+        if (cancelled || !data?.sessionIds) return
+        setStreamingSessionIds(new Set(data.sessionIds))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [token])
+  const handleSessionStreamingChange = useCallback((sessionId: string, streaming: boolean) => {
+    setStreamingSessionIds((prev) => {
+      const isStreaming = prev.has(sessionId)
+      if (isStreaming === streaming) return prev
+      const next = new Set(prev)
+      if (streaming) next.add(sessionId)
+      else next.delete(sessionId)
+      return next
+    })
+  }, [])
+
   const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
   const userQuestionInput = useUserQuestionPrompt({ token, sessionId: activeSessionId })
   const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
@@ -1671,6 +1701,7 @@ function App() {
     onFullState: handleFullState,
     onMessageStarted: handleMessageStarted,
     onMessageComplete: handleMessageComplete,
+    onSessionStreamingChange: handleSessionStreamingChange,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
       automation.handleThreadEvent(type, payload)
       // Keep the project sidebar's node tags in sync when nodes come/go online.
@@ -3980,6 +4011,7 @@ function App() {
                   showProject={showProject}
                   showSidebar={showSidebar}
                   showTerminal={showTerminal}
+                  streamingSessionIds={streamingSessionIds}
                   sidebarRef={sidebarRef}
                   onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
                   onBlur={handleSidebarBlur}
@@ -4299,9 +4331,9 @@ function App() {
                       loading={projectsLoading}
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}
-                      onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
-                      onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
-                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); switchSession(null, sessionId) }}
+                      onSelectProject={(projectId) => { void handleSwitchProject(projectId) }}
+                      onSelectProjectSession={(projectId, sessionId) => { handleSelectProjectSession(projectId, sessionId) }}
+                      onSelectPersonalSession={(sessionId) => { switchSession(null, sessionId) }}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
@@ -4309,9 +4341,11 @@ function App() {
                       onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
                       onShowMore={showMoreProjects}
                       onShowFewer={showFewerProjects}
+                      onDismiss={() => { setCurrentView('chat'); setShowMobileToolbar(false) }}
                       sessionInfo={sessionInfo}
                       nodes={fsNodes}
                       repositories={automation.repositories}
+                      streamingSessionIds={streamingSessionIds}
                     />
                   </ErrorBoundary>
                 }
