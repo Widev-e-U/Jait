@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -1098,7 +1098,10 @@ function App() {
   // immediately instead of leaving the previous project's panel visibility
   // stuck on — these flags otherwise only ever get reset by project-scoped
   // restore effects, which never run once there's no active project.
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) so the reset lands before paint — a
+  // passive effect here let the stale project layout flash/jiggle into view
+  // for one frame before collapsing.
+  useLayoutEffect(() => {
     if (activeProjectId) return
     showProjectRef.current = false
     setShowProject(false)
