@@ -1918,7 +1918,10 @@ function App() {
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
     saveProjectProviderSelection(activeProjectId, provider)
-  }, [activeProjectId])
+    if (token) {
+      void updateSettings({ chat_provider: provider as ChatProvider })
+    }
+  }, [activeProjectId, token, updateSettings])
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -1983,20 +1986,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId, token, authLoading, loadingCliModels, settings?.selected_model])
 
-  // Track whether the initial server sync has happened so we don't PATCH on mount
-  const chatProviderInitialized = useRef(false)
-
-  useEffect(() => {
-    // Only persist to server after the first render (user-initiated change)
-    if (!chatProviderInitialized.current) {
-      chatProviderInitialized.current = true
-      return
-    }
-    if (token) {
-      void updateSettings({ chat_provider: chatProvider as ChatProvider })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatProvider])
 
   useEffect(() => {
     prevViewModeRef.current = viewMode

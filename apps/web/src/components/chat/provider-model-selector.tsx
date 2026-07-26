@@ -384,6 +384,16 @@ export function ProviderModelSelector({
   // Drop a selection the current scope cannot run — e.g. the project moved to a
   // device that does not host the selected provider. Only done once the
   // provider list is known, so a slow first load never resets the choice.
+  //
+  // `providersLoaded` latches true after the shared store's *first* response
+  // and never resets (provider-store.ts) — including the very first page-load
+  // probe, which can be a stale gateway-side snapshot (e.g. an account that
+  // hadn't finished authenticating yet). Acting on that immediately would
+  // silently switch the user's provider on every reload/project-switch that
+  // happens to land on a stale snapshot. So the first time an entry looks
+  // unavailable, request a fresh re-probe and wait for it to confirm before
+  // actually switching anything.
+  const unavailableSinceRef = useRef<string | null>(null)
   useEffect(() => {
     if (!providersLoaded) return
     if (repoRuntime?.loading) return
@@ -391,12 +401,21 @@ export function ProviderModelSelector({
     // Merely signed out is not a reason to switch: on the gateway the entry
     // stays selected so the user can log in from right here. A provider this
     // scope cannot reach at all (wrong device, offline device) is replaced.
-    if (entry && (entry.isAvailable || scopeNodeId === GATEWAY_NODE_ID)) return
+    if (entry && (entry.isAvailable || scopeNodeId === GATEWAY_NODE_ID)) {
+      unavailableSinceRef.current = null
+      return
+    }
+    const key = `${provider}:${scopeNodeId}`
+    if (unavailableSinceRef.current !== key) {
+      unavailableSinceRef.current = key
+      void refreshProviders({ fresh: true })
+      return
+    }
     const nextProvider = resolveScopedProviderSelection(provider, providerEntries)
     if (nextProvider !== provider) {
       onProviderChange(nextProvider)
     }
-  }, [onProviderChange, provider, providerEntries, providersLoaded, repoRuntime?.loading, scopeNodeId])
+  }, [onProviderChange, provider, providerEntries, providersLoaded, refreshProviders, repoRuntime?.loading, scopeNodeId])
 
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
