@@ -173,7 +173,13 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         // page. Without this, that active project would look "gone" below
         // and we'd silently fall back to whatever the server considers last
         // active, flipping the user onto a different project on reload.
+        // `activeProjectIdRef` reflects committed React state, which on a
+        // fresh mount may not have caught up with the cache hydration that
+        // just ran a few lines above (its `setActiveProjectId` call hasn't
+        // necessarily flushed yet) — fall back to reading the cache
+        // directly so this recovery still fires on the very first fetch.
         const currentActiveProjectId = activeProjectIdRef.current
+          ?? (cacheScope ? readCachedProjectIndex<ProjectRecord, ProjectSession>(cacheScope)?.activeProjectId ?? null : null)
         if (currentActiveProjectId && !nextProjects.some((project) => project.id === currentActiveProjectId)) {
           try {
             const activeProjectRes = await fetch(`${API_URL}/api/projects/${currentActiveProjectId}`, { headers: authHeaders(token) })

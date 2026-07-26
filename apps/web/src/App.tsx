@@ -4331,9 +4331,9 @@ function App() {
                       loading={projectsLoading}
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}
-                      onSelectProject={(projectId) => { void handleSwitchProject(projectId) }}
-                      onSelectProjectSession={(projectId, sessionId) => { handleSelectProjectSession(projectId, sessionId) }}
-                      onSelectPersonalSession={(sessionId) => { switchSession(null, sessionId) }}
+                      onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
+                      onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
+                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); switchSession(null, sessionId) }}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
