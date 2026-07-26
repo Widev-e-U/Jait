@@ -68,7 +68,7 @@ const codeHighlightCache = new Map<string, string | null>()
 
 export function getMobileMessageActionsPositionClassName(isUser: boolean, outsideBubble = false): string {
   if (outsideBubble) return 'right-0 top-full mt-0.5'
-  return isUser ? 'right-0.5 bottom-0.5' : '-right-7 bottom-0.5'
+  return isUser ? 'right-1.5 bottom-1' : '-right-7 bottom-0.5'
 }
 
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
@@ -869,7 +869,7 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
               >
                 <MoreVertical className="h-4 w-4" />
               </button>

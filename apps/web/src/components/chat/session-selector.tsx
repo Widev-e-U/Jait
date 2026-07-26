@@ -266,14 +266,14 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      <div className="flex shrink-0 self-start">
+                      <div className="mt-0.5 flex shrink-0 self-start">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
                               aria-label="Project actions"
-                              className="h-5.5 w-5.5 shrink-0 text-muted-foreground transition-opacity hover:text-foreground data-[state=open]:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                              className="h-6 w-6 shrink-0 text-muted-foreground transition-opacity hover:text-foreground data-[state=open]:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <MoreVertical className="h-3 w-3" />
