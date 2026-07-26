@@ -1593,6 +1593,16 @@ export function registerChatRoutes(
       const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note);
       if (steer.status === "steered") return;
     } catch {
+      /* fall through to the thread/idle path */
+    }
+
+    try {
+      // Background commands started from ACP/CLI provider threads (e.g. Claude Code)
+      // carry the threadId as sessionId, not a native chat session ID — resumeChatSession
+      // above can't find those, so also check the thread resume registry.
+      const threadResume = await interventionRunResumeRegistry.resumeThread(result.sessionId, note);
+      if (threadResume.status === "queued") return;
+    } catch {
       /* fall through to the idle path */
     }
 
