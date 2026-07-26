@@ -134,6 +134,47 @@ export function reconcileChatHistory(
   return reconciled.slice(-totalMessages)
 }
 
+function chatMessageContentEqual(a: ChatMessage, b: ChatMessage): boolean {
+  return (
+    a.role === b.role
+    && a.content === b.content
+    && a.thinking === b.thinking
+    && a.thinkingDuration === b.thinkingDuration
+    && a.hasContextFlow === b.hasContextFlow
+    && a.hasMemoryProvenance === b.hasMemoryProvenance
+    && a.optimistic === b.optimistic
+    && JSON.stringify(a.toolCalls) === JSON.stringify(b.toolCalls)
+    && JSON.stringify(a.segments) === JSON.stringify(b.segments)
+    && JSON.stringify(a.displaySegments) === JSON.stringify(b.displaySegments)
+    && JSON.stringify(a.attachments) === JSON.stringify(b.attachments)
+    && JSON.stringify(a.referencedFiles) === JSON.stringify(b.referencedFiles)
+    && JSON.stringify(a.contextFlow) === JSON.stringify(b.contextFlow)
+  )
+}
+
+/**
+ * A fresh snapshot fetch (e.g. re-subscribing on window focus) always parses
+ * brand-new message/toolCall/segment objects, even when nothing actually
+ * changed server-side. Passing those straight to setState defeats the
+ * per-message render cache in developer-chat-workspace.tsx (which skips
+ * rebuilding a <Message> only when its fields are reference-equal), so every
+ * message re-renders and the transcript visibly jiggles on refocus even
+ * though nothing changed. Reuse the previous object whenever its content is
+ * equivalent so unaffected messages keep stable references.
+ */
+export function reuseUnchangedMessages(next: ChatMessage[], prev: ChatMessage[]): ChatMessage[] {
+  if (prev.length === 0) return next
+  const prevById = new Map(prev.map((message) => [message.id, message]))
+  const merged = next.map((message) => {
+    const prior = prevById.get(message.id)
+    return prior && chatMessageContentEqual(prior, message) ? prior : message
+  })
+  if (merged.length === prev.length && merged.every((message, index) => message === prev[index])) {
+    return prev
+  }
+  return merged
+}
+
 function chatHistoryKey(scope: string, sessionId: string): string {
   return `${scope}::${sessionId}`
 }

@@ -17,6 +17,7 @@ import {
   readCachedChatHistory,
   readCachedStartupChat,
   reconcileChatHistory,
+  reuseUnchangedMessages,
   selectImmediateChatHistory,
   writeCachedChatHistory,
 } from '@/lib/chat-history-cache'
@@ -888,9 +889,13 @@ export function useChat(
                 setState(prev => {
                   const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
                   const reconciledMessages = reconcileChatHistory(prev.messages, msgs, totalMessages)
+                  const nextMessages = reuseUnchangedMessages(
+                    mergeSnapshotMessagesWithOptimisticUsers(reconciledMessages, prev.messages),
+                    prev.messages,
+                  )
                   return {
                     ...prev,
-                    messages: mergeSnapshotMessagesWithOptimisticUsers(reconciledMessages, prev.messages),
+                    messages: nextMessages,
                     isLoadingHistory: false,
                     isLoading: snapshotStreaming,
                     error: null,

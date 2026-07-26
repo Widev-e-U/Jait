@@ -11,6 +11,7 @@ import {
   readCachedStartupChat,
   readCachedProjectIndex,
   reconcileChatHistory,
+  reuseUnchangedMessages,
   selectImmediateChatHistory,
   writeCachedProjectIndex,
   writeCachedStartupChat,
@@ -182,6 +183,49 @@ describe('reconcileChatHistory', () => {
       message('8'),
       message('9'),
     ])
+  })
+})
+
+describe('reuseUnchangedMessages', () => {
+  it('preserves object identity for messages whose content is unchanged', () => {
+    const prev = [message('0'), message('1'), message('2')]
+    // A fresh snapshot fetch always parses brand-new objects, even when the
+    // underlying content is identical (e.g. a focus-triggered re-subscribe).
+    const next = [message('0'), message('1'), message('2')]
+
+    const result = reuseUnchangedMessages(next, prev)
+
+    expect(result).toBe(prev)
+    expect(result[0]).toBe(prev[0])
+    expect(result[1]).toBe(prev[1])
+    expect(result[2]).toBe(prev[2])
+  })
+
+  it('only replaces the object reference for messages that actually changed', () => {
+    const prev = [message('0'), message('1'), message('2')]
+    const next = [message('0'), message('1', 'edited-1'), message('2')]
+
+    const result = reuseUnchangedMessages(next, prev)
+
+    expect(result).not.toBe(prev)
+    expect(result[0]).toBe(prev[0])
+    expect(result[1]).toBe(next[1])
+    expect(result[1].content).toBe('edited-1')
+    expect(result[2]).toBe(prev[2])
+  })
+
+  it('detects changes in tool calls and segments beyond plain content', () => {
+    const prev = [{ ...message('0'), toolCalls: [{ callId: 'a', tool: 'read', args: {}, status: 'success' as const }] }]
+    const next = [{ ...message('0'), toolCalls: [{ callId: 'a', tool: 'read', args: {}, status: 'running' as const }] }]
+
+    const result = reuseUnchangedMessages(next, prev)
+
+    expect(result[0]).toBe(next[0])
+  })
+
+  it('returns the new array as-is when there is no previous history to compare against', () => {
+    const next = [message('0'), message('1')]
+    expect(reuseUnchangedMessages(next, [])).toBe(next)
   })
 })
 
