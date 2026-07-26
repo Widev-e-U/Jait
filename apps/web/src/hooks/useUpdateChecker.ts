@@ -141,6 +141,41 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
     if (token) void handleCheckUpdate()
   }, [token, handleCheckUpdate])
 
+  // Main process pushes 'available'/'downloaded' events whenever its background
+  // poll (on launch + every 4h, see electron-main.ts initAutoUpdater) finds a
+  // new version — without this, the UI only ever reflected the one-shot mount
+  // check above and stayed stale until the user restarted the app.
+  const lastNotifiedVersionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isElectron) return
+    const desktop = (window as any).jaitDesktop
+    if (!desktop?.onUpdateEvent) return
+
+    const applyPushedUpdate = (version: string | undefined, downloaded: boolean) => {
+      setUpdateInfo((prev) => ({
+        currentVersion: prev?.currentVersion ?? '',
+        latestVersion: version ?? prev?.latestVersion ?? '',
+        hasUpdate: true,
+      }))
+      if (version && lastNotifiedVersionRef.current !== version) {
+        lastNotifiedVersionRef.current = version
+        toast(downloaded ? `Update v${version} downloaded — restart to install.` : `Update v${version} is available.`)
+      }
+    }
+
+    const offAvailable = desktop.onUpdateEvent('available', (_event: unknown, data: { version?: string }) => {
+      applyPushedUpdate(data?.version, false)
+    })
+    const offDownloaded = desktop.onUpdateEvent('downloaded', (_event: unknown, data: { version?: string }) => {
+      applyPushedUpdate(data?.version, true)
+    })
+
+    return () => {
+      offAvailable?.()
+      offDownloaded?.()
+    }
+  }, [isElectron])
+
   return {
     updateInfo,
     updateChecking,
