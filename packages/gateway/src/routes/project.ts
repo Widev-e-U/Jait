@@ -6,7 +6,7 @@
  * the browser's File System Access API.
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { exec } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { platform } from "node:os";
@@ -232,6 +232,21 @@ function findFsSurfaceWithBackup(
   return preferred ?? null;
 }
 
+// Serializes concurrent POST /api/project/open calls for the same session.
+// Without this, two near-simultaneous requests (e.g. two restore effects
+// firing on page load) both read the "existing surfaces" list before either
+// has created its replacement, so both create a surface and neither sees
+// the other's — leaving duplicate (and, for remote nodes, doubly-slow)
+// filesystem surfaces running for the same session.
+const projectOpenLocks = new Map<string, Promise<unknown>>();
+
+function withProjectOpenLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = projectOpenLocks.get(sessionId) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  projectOpenLocks.set(sessionId, run.then(() => undefined, () => undefined));
+  return run;
+}
+
 export function registerProjectRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
@@ -271,6 +286,15 @@ export function registerProjectRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
     }
 
+    return withProjectOpenLock(sessionId, () => doProjectOpen(reply, projectPath, sessionId, nodeId));
+  });
+
+  async function doProjectOpen(
+    reply: FastifyReply,
+    projectPath: string,
+    sessionId: string,
+    nodeId: string,
+  ) {
     let isRemote = ws?.isRemoteNode(nodeId) ?? false;
 
     // If the requested nodeId looks like a remote node but is no longer connected,
@@ -384,7 +408,7 @@ export function registerProjectRoutes(
     }
 
     return { surfaceId, projectRoot: projectPath, nodeId, projectId };
-  });
+  }
 
   // GET /api/project/list?path=&surfaceId= — list directory entries
   app.get("/api/project/list", async (req, reply) => {

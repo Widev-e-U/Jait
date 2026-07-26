@@ -982,7 +982,22 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
 }
 
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
-const activeCliSessions = new Map<string, { providerId: ProviderId; runtimeMode: RuntimeMode; providerSessionId: string; provider: CliProviderAdapter }>();
+const activeCliSessions = new Map<string, {
+  providerId: ProviderId;
+  runtimeMode: RuntimeMode;
+  providerSessionId: string;
+  provider: CliProviderAdapter;
+  /**
+   * The remote node's WS clientId at the moment this session was started.
+   * A device keeps a stable node id across reconnects, but a reconnect (app
+   * restart, sleep/wake) wipes whatever in-memory provider process the node
+   * was holding for `providerSessionId`. If the node's current clientId no
+   * longer matches, the cached session is talking to a process that no
+   * longer exists — reusing it makes send-turn silently hang (no error, no
+   * events) instead of running. Only set for remote (non-gateway) sessions.
+   */
+  remoteClientId?: string;
+}>();
 
 function parseRuntimeMode(raw: unknown): RuntimeMode {
   return raw === "supervised" ? "supervised" : "full-access";
@@ -2200,6 +2215,7 @@ export function registerChatRoutes(
         let cliProvider: CliProviderAdapter | null = null;
         let isRemote = false;
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
+        let remoteNodeClientId: string | undefined;
         const projectNodeId = projectRecord?.nodeId?.trim();
         const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
           .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
@@ -2221,6 +2237,7 @@ export function registerChatRoutes(
             cliProvider = new RemoteCliProvider(ws, node.id, requestProvider, remoteProviderType);
             isRemote = true;
             remoteNodeInfo = { nodeId: node.id, nodeName: node.name, platform: node.platform };
+            remoteNodeClientId = node.clientId;
             break;
           }
         }
@@ -2285,14 +2302,32 @@ export function registerChatRoutes(
         let providerSessionId: string;
         let isNewCliSession = false;
 
-        if (cachedCliSession && cachedCliSession.providerId === requestProvider && cachedCliSession.runtimeMode === runtimeMode) {
+        // A cached remote session is only safe to reuse if the remote node's
+        // connection hasn't changed since it was created — a reconnect (app
+        // restart, sleep/wake) wipes the client's in-memory provider process,
+        // so the old providerSessionId would point at nothing and silently
+        // hang instead of erroring.
+        const remoteConnectionUnchanged = !isRemote || (
+          !!cachedCliSession?.remoteClientId && cachedCliSession.remoteClientId === remoteNodeClientId
+        );
+
+        if (
+          cachedCliSession
+          && cachedCliSession.providerId === requestProvider
+          && cachedCliSession.runtimeMode === runtimeMode
+          && remoteConnectionUnchanged
+        ) {
           // Existing session with the same provider — try to reuse it
           providerSessionId = cachedCliSession.providerSessionId;
           cliProvider = cachedCliSession.provider;
           console.log(`[chat/cli] Reusing ${requestProvider}/${runtimeMode} session ${providerSessionId} for ${sessionId}`);
         } else {
-          // If the user switched providers, stop the old session first
+          // If the user switched providers (or the remote node reconnected),
+          // stop the old session first
           if (cachedCliSession) {
+            if (!remoteConnectionUnchanged) {
+              console.warn(`[chat/cli] Remote node reconnected since session ${cachedCliSession.providerSessionId} was started — discarding stale session for ${sessionId}`);
+            }
             try { await cachedCliSession.provider.stopSession(cachedCliSession.providerSessionId); } catch { /* best effort */ }
             activeCliSessions.delete(sessionId);
           }
@@ -2306,7 +2341,7 @@ export function registerChatRoutes(
           });
           providerSessionId = session.id;
           isNewCliSession = true;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
+          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider, remoteClientId: isRemote ? remoteNodeClientId : undefined });
           console.log(`[chat/cli] Started new ${requestProvider}/${runtimeMode}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
 
@@ -2606,7 +2641,7 @@ export function registerChatRoutes(
             mcpServers,
           });
           providerSessionId = freshSession.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
+          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider, remoteClientId: isRemote ? remoteNodeClientId : undefined });
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
 
           // Re-register listener for the new session
