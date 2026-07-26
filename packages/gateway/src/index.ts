@@ -36,6 +36,7 @@ import { UserSecretService } from "./services/user-secrets.js";
 import { EmailService } from "./services/email/index.js";
 import { UserService } from "./services/users.js";
 import { ProviderAccountService } from "./services/provider-accounts.js";
+import { ProviderUsageService } from "./services/provider-usage.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
@@ -147,7 +148,8 @@ async function main() {
   for (const acpProvider of acpProviderConfigs) {
     if (acpProvider.auth === false) providerRegistry.register(new AcpProvider(acpProvider));
   }
-  const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs);
+  const providerUsageService = new ProviderUsageService(db);
+  const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs, undefined, providerUsageService);
   providerAccountService.load();
 
   // Surface registry — register all surface factories
@@ -162,6 +164,7 @@ async function main() {
 
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
+  providerUsageService.attachNotifications(notifications);
 
   // Project file watcher — uses @parcel/watcher (same as VS Code) for
   // native recursive watching with event coalescing.
@@ -866,6 +869,7 @@ async function main() {
     notifications,
     providerRegistry,
     providerAccountService,
+    providerUsageService,
     previewService,
     architectureDiagramService,
     gitService,

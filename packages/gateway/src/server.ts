@@ -130,6 +130,7 @@ export interface ServerDeps {
   notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
   providerAccountService?: ProviderAccountService;
+  providerUsageService?: import("./services/provider-usage.js").ProviderUsageService;
   shutdown?: () => Promise<void>;
   gitService?: GitService;
   previewService?: import("./services/preview.js").PreviewService;
@@ -309,6 +310,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerProviderRoutes(app, config, {
       providerRegistry: deps.providerRegistry,
       providerAccountService: deps.providerAccountService,
+      providerUsageService: deps.providerUsageService,
       userService: deps.userService,
       ws: deps.ws,
     });

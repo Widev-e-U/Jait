@@ -1118,4 +1118,25 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 45,
+    name: "provider_usage",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS provider_usage (
+          account_id TEXT NOT NULL,
+          rate_limit_type TEXT NOT NULL,
+          provider_type TEXT NOT NULL,
+          status TEXT,
+          utilization REAL,
+          resets_at TEXT,
+          is_using_overage INTEGER NOT NULL DEFAULT 0,
+          raw_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_usage_account_type ON provider_usage(account_id, rate_limit_type)`);
+    },
+  },
+
 ];

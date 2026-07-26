@@ -7,6 +7,7 @@ import { providerAccounts } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { AcpProvider, type AcpProviderConfig } from "../providers/acp-provider.js";
 import type { ProviderRegistry } from "../providers/registry.js";
+import type { ClaudeRateLimitInfo, ProviderUsageService } from "./provider-usage.js";
 
 export interface ProviderAccountRecord {
   id: string;
@@ -32,6 +33,7 @@ export class ProviderAccountService {
     private readonly registry: ProviderRegistry,
     definitions: AcpProviderConfig[],
     private readonly accountsRoot = join(homedir(), ".jait", "provider-accounts"),
+    private readonly usageService?: ProviderUsageService,
   ) {
     this.definitions = new Map(definitions.map((definition) => [definition.id, definition]));
   }
@@ -110,12 +112,24 @@ export class ProviderAccountService {
     return true;
   }
 
+  /** Subscribes to a provider's events to capture Claude Code's real subscription rate-limit data (see provider-usage.ts). */
+  private trackUsage(provider: AcpProvider, account: ProviderAccountRecord): void {
+    if (!this.usageService || account.providerType !== "claude-code") return;
+    const usageService = this.usageService;
+    provider.onEvent((event) => {
+      if (event.type !== "activity" || event.kind !== "usage_update") return;
+      const payload = event.payload as { _meta?: Record<string, unknown> } | undefined;
+      const rateLimit = payload?._meta?.["_claude/rateLimit"] as ClaudeRateLimitInfo | undefined;
+      if (rateLimit) usageService.recordClaudeRateLimit(account.id, account.providerType, rateLimit);
+    });
+  }
+
   private register(account: ProviderAccountRecord): void {
     const definition = this.definitions.get(account.providerType);
     if (!definition) return;
     const accountHome = this.accountHome(account.id);
     if (account.nodeId !== "gateway") {
-      this.registry.register(new AcpProvider({
+      const provider = new AcpProvider({
         ...definition,
         id: account.id,
         providerType: account.providerType,
@@ -123,7 +137,9 @@ export class ProviderAccountService {
         executionNodeId: account.nodeId,
         name: `${definition.name} — ${account.label}`,
         auth: false,
-      }));
+      });
+      this.trackUsage(provider, account);
+      this.registry.register(provider);
       return;
     }
     mkdirSync(accountHome, { recursive: true, mode: 0o700 });
@@ -145,14 +161,16 @@ export class ProviderAccountService {
         ? { CLAUDE_CONFIG_DIR: join(accountHome, ".claude"), ANTHROPIC_API_KEY: "" }
         : {}),
     };
-    this.registry.register(new AcpProvider({
+    const provider = new AcpProvider({
       ...definition,
       id: account.id,
       providerType: account.providerType,
       ownerUserId: account.userId,
       name: `${definition.name} — ${account.label}`,
       env,
-    }));
+    });
+    this.trackUsage(provider, account);
+    this.registry.register(provider);
   }
 
   private accountHome(id: string): string {

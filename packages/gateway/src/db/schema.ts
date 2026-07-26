@@ -4,7 +4,7 @@
  * Tables: sessions, audit_log, trust_levels, consent_log, consent_session_approvals
  * All IDs are UUIDv7 (sortable by time). Single-operator — no users table.
  */
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // ─── Projects ──────────────────────────────────────────────────────
 export const projects = sqliteTable(
@@ -85,6 +85,25 @@ export const providerAccounts = sqliteTable(
   (table) => [
     uniqueIndex("idx_provider_accounts_user_node_type_label").on(table.userId, table.nodeId, table.providerType, table.label),
     index("idx_provider_accounts_user").on(table.userId, table.updatedAt),
+  ],
+);
+
+// ─── Provider Usage (subscription rate limits) ───────────────────────
+export const providerUsage = sqliteTable(
+  "provider_usage",
+  {
+    accountId: text("account_id").notNull(),
+    rateLimitType: text("rate_limit_type").notNull(), // 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'overage' | ...
+    providerType: text("provider_type").notNull(),
+    status: text("status"), // 'allowed' | 'allowed_warning' | 'rejected'
+    utilization: real("utilization"), // fraction 0-1, as reported by the provider SDK
+    resetsAt: text("resets_at"), // ISO timestamp
+    isUsingOverage: integer("is_using_overage").notNull().default(0),
+    rawJson: text("raw_json").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_provider_usage_account_type").on(table.accountId, table.rateLimitType),
   ],
 );
 

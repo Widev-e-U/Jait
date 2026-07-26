@@ -22,6 +22,7 @@ import {
 } from "../providers/model-fetchers.js";
 import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
+import type { ProviderUsageService } from "../services/provider-usage.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
@@ -52,6 +53,7 @@ interface RemoteProviderPayload {
 export interface ProviderRouteDeps {
   providerRegistry: ProviderRegistry;
   providerAccountService?: ProviderAccountService;
+  providerUsageService?: ProviderUsageService;
   userService?: UserService;
   ws?: WsControlPlane;
 }
@@ -87,6 +89,13 @@ export function registerProviderRoutes(
       accounts: deps.providerAccountService?.list(authUser.id) ?? [],
       providerTypes: deps.providerAccountService?.listTypes() ?? [],
     };
+  });
+
+  app.get("/api/provider-usage", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const accountIds = (deps.providerAccountService?.list(authUser.id) ?? []).map((account) => account.id);
+    return { usage: deps.providerUsageService?.listForUser(accountIds) ?? [] };
   });
 
   app.post("/api/provider-accounts", async (request, reply) => {
