@@ -151,8 +151,8 @@ export function DeveloperWorkspacePanes({
   const hasManagerThread = Boolean(automationSelectedThread)
   const shouldShowDesktopPanes = (viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopProject || showTerminal))
     || (viewMode === 'manager' && hasManagerThread && showDesktopProject)
-  const shouldShowProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showDesktopProject
-  const shouldShowMobileProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showMobileProjectFullscreen
+  const shouldShowProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showDesktopProject && Boolean(activeProject)
+  const shouldShowMobileProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showMobileProjectFullscreen && Boolean(activeProject)
 
   const renderProjectPanel = (mobile = false) => activeProject?.opening ? (
     <div className={mobile ? 'flex h-full min-h-0 items-center justify-center' : 'flex min-h-0 flex-1 items-center justify-center'}>

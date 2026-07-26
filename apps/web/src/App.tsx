@@ -1093,6 +1093,22 @@ function App() {
     setActiveProjectIfChanged(null)
   }, [activeProjectId, setActiveProjectIfChanged])
 
+  // Editor mode (project panel, architecture, dev preview) is project-only.
+  // When navigating to a plain chat (activeProjectId -> null), hide it
+  // immediately instead of leaving the previous project's panel visibility
+  // stuck on — these flags otherwise only ever get reset by project-scoped
+  // restore effects, which never run once there's no active project.
+  useEffect(() => {
+    if (activeProjectId) return
+    showProjectRef.current = false
+    setShowProject(false)
+    setShowArchitecture(false)
+    setDevPreviewTarget(null)
+    setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
+    setProjectFiles([])
+    setActiveProjectFileId(null)
+  }, [activeProjectId])
+
   // ── Persistent session state for changed files ─────────────────────
   type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
   const [, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
