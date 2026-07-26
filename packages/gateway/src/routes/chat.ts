@@ -1021,7 +1021,7 @@ type SequencedStreamEvent = StreamEvent & { seq: number };
 type StreamSubscriber = (event: SequencedStreamEvent) => void;
 const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 
-const DEFAULT_UI_MESSAGE_LIMIT = 120;
+const DEFAULT_UI_MESSAGE_LIMIT = 150;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {

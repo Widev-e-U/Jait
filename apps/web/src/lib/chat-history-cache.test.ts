@@ -227,6 +227,23 @@ describe('reuseUnchangedMessages', () => {
     const next = [message('0'), message('1')]
     expect(reuseUnchangedMessages(next, [])).toBe(next)
   })
+
+  it('trusts historical messages by id without deep-comparing far outside the tail', () => {
+    // A long, fully-settled session: everything except the last few messages
+    // is an immutable persisted row. Those should be reused by id alone
+    // (cheap), while the tail still gets the full content diff.
+    const prev = Array.from({ length: 40 }, (_, i) => message(String(i)))
+    const next = Array.from({ length: 40 }, (_, i) => message(String(i)))
+
+    const result = reuseUnchangedMessages(next, prev)
+
+    // Historical (pre-tail) messages: reused by reference even though they
+    // are distinct objects, without needing content equality to hold.
+    expect(result[0]).toBe(prev[0])
+    expect(result[27]).toBe(prev[27])
+    // Tail messages: still content-compared and reused since unchanged.
+    expect(result[39]).toBe(prev[39])
+  })
 })
 
 describe('project index cache', () => {

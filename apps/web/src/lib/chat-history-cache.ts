@@ -161,13 +161,27 @@ function chatMessageContentEqual(a: ChatMessage, b: ChatMessage): boolean {
  * message re-renders and the transcript visibly jiggles on refocus even
  * though nothing changed. Reuse the previous object whenever its content is
  * equivalent so unaffected messages keep stable references.
+ *
+ * Only the tail of the conversation can still be mutating (an in-flight
+ * stream, or a retry-tool call, which always targets the most recent
+ * assistant message). Everything further back is an immutable persisted row,
+ * so those are reused by id without paying for a deep JSON.stringify diff of
+ * potentially large toolCalls/segments payloads. Without this, every snapshot
+ * (including the one right after opening a cached session) re-diffs the
+ * entire loaded history on the main thread — the more history a session
+ * accumulates, the slower every chat open and reconnect gets.
  */
+const DEEP_COMPARE_TAIL_SIZE = 12
+
 export function reuseUnchangedMessages(next: ChatMessage[], prev: ChatMessage[]): ChatMessage[] {
   if (prev.length === 0) return next
   const prevById = new Map(prev.map((message) => [message.id, message]))
-  const merged = next.map((message) => {
+  const tailStart = Math.max(0, next.length - DEEP_COMPARE_TAIL_SIZE)
+  const merged = next.map((message, index) => {
     const prior = prevById.get(message.id)
-    return prior && chatMessageContentEqual(prior, message) ? prior : message
+    if (!prior) return message
+    if (index < tailStart) return prior
+    return chatMessageContentEqual(prior, message) ? prior : message
   })
   if (merged.length === prev.length && merged.every((message, index) => message === prev[index])) {
     return prev

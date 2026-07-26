@@ -36,8 +36,11 @@ import {
 } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
-const STREAM_SNAPSHOT_LIMIT = 120
-const LAZY_LOAD_BATCH_SIZE = 20
+const STREAM_SNAPSHOT_LIMIT = 150
+// Kept close to STREAM_SNAPSHOT_LIMIT: a much smaller lazy-load batch meant
+// scrolling back through an older conversation required many round trips in
+// quick succession, each showing a brief "Load earlier messages" spinner.
+const LAZY_LOAD_BATCH_SIZE = 60
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
 
 function authHeaders(token?: string | null): Record<string, string> {
