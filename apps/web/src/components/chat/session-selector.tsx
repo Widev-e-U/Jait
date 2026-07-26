@@ -26,6 +26,7 @@ interface SessionSelectorProps {
   hasMoreProjects?: boolean
   showFewerProjects?: boolean
   onSelectProject: (projectId: string) => void
+  onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onNewPersonalSession?: () => void
   onCreateProject: () => void
@@ -38,6 +39,8 @@ interface SessionSelectorProps {
   nodes?: FsNode[]
   repositories?: AutomationRepository[]
 }
+
+const RECENT_SESSIONS_LIMIT = 5
 
 function isNodeOffline(nodeId: string | null, onlineNodeIds: Set<string>): boolean {
   if (!nodeId || nodeId === 'gateway') return false
@@ -77,6 +80,7 @@ export function SessionSelector({
   hasMoreProjects = false,
   showFewerProjects = false,
   onSelectProject,
+  onSelectProjectSession,
   onSelectPersonalSession,
   onNewPersonalSession,
   onCreateProject,
@@ -183,9 +187,14 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
                   const repository = getProjectRepository(project, repositories)
+                  const recentSessions = [...project.sessions]
+                    .sort((a, b) => (
+                      Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt)
+                    ))
+                    .slice(0, RECENT_SESSIONS_LIMIT)
                   return (
+                    <div key={project.id}>
                     <div
-                      key={project.id}
                       className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${
                         offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'
                       } ${
@@ -307,6 +316,33 @@ export function SessionSelector({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                    </div>
+                    {recentSessions.length > 1 && (
+                      <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
+                        {recentSessions.map((session) => {
+                          const isActiveSession = isActiveProject && session.id === activeSessionId
+                          return (
+                            <div
+                              key={session.id}
+                              className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition-colors ${
+                                isActiveSession ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
+                              }`}
+                              onClick={() => { if (!isActiveSession) onSelectProjectSession?.(project.id, session.id) }}
+                            >
+                              <MessageSquare className={`h-3 w-3 shrink-0 ${isActiveSession ? 'text-primary' : 'text-muted-foreground'}`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-2xs font-medium">
+                                  {session.name || 'Untitled session'}
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-2xs text-muted-foreground">
+                                {formatTime(session.lastActiveAt || session.createdAt)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                     </div>
                   )
                 })}

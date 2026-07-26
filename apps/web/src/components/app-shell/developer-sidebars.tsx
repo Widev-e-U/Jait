@@ -39,6 +39,7 @@ interface DeveloperSidebarsProps {
   onRemoveProject: (projectId: string) => void
   onSelectPersonalSession: (sessionId: string) => void
   onSelectProject: (projectId: string) => void
+  onSelectProjectSession: (projectId: string, sessionId: string) => void
   onShowFewer: () => void
   onShowMore: () => void
   onToggleArchitecture: () => void
@@ -78,6 +79,7 @@ export function DeveloperSidebars({
   onRemoveProject,
   onSelectPersonalSession,
   onSelectProject,
+  onSelectProjectSession,
   onShowFewer,
   onShowMore,
   onToggleArchitecture,
@@ -191,6 +193,7 @@ export function DeveloperSidebars({
               hasMoreProjects={hasMoreProjects}
               showFewerProjects={projects.length > projectListLimit}
               onSelectProject={onSelectProject}
+              onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
               onNewPersonalSession={onCreatePersonalSession}
               onCreateProject={onCreateProject}

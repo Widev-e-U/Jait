@@ -45,6 +45,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
+  // Set briefly after a click inside the conversation (e.g. expanding a tool
+  // call or reasoning block) so the resize this causes doesn't get treated
+  // as new streamed content and yank the view down to the bottom.
+  const suppressAutoScrollRef = useRef(false)
+  const suppressAutoScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Track inner container width for pretext layout calculations.
   const innerRef = useRef<HTMLDivElement | null>(null)
@@ -144,18 +149,29 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       touchStartYRef.current = null
     }
 
+    const handleClick = () => {
+      suppressAutoScrollRef.current = true
+      clearTimeout(suppressAutoScrollTimerRef.current)
+      suppressAutoScrollTimerRef.current = setTimeout(() => {
+        suppressAutoScrollRef.current = false
+      }, 400)
+    }
+
     el.addEventListener('wheel', handleWheel, { passive: true })
     el.addEventListener('touchstart', handleTouchStart, { passive: true })
     el.addEventListener('touchmove', handleTouchMove, { passive: false })
     el.addEventListener('touchend', clearTouchState, { passive: true })
     el.addEventListener('touchcancel', clearTouchState, { passive: true })
+    el.addEventListener('click', handleClick, { capture: true, passive: true })
     return () => {
       el.removeEventListener('wheel', handleWheel)
       el.removeEventListener('touchstart', handleTouchStart)
       el.removeEventListener('touchmove', handleTouchMove)
       el.removeEventListener('touchend', clearTouchState)
       el.removeEventListener('touchcancel', clearTouchState)
+      el.removeEventListener('click', handleClick, { capture: true })
       clearTimeout(userScrollTimerRef.current)
+      clearTimeout(suppressAutoScrollTimerRef.current)
     }
   }, [loading]) // re-attach when scroll element mounts (loading → !loading)
 
@@ -243,7 +259,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const el = scrollRef.current
     if (!el) return
     const id = setInterval(() => {
-      if (!stickToBottomRef.current) return
+      if (!stickToBottomRef.current || suppressAutoScrollRef.current) return
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
       if (dist > BOTTOM_SYNC_DELTA_PX) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
     }, BOTTOM_SYNC_INTERVAL_MS)
@@ -257,7 +273,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!sizerEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
-      if (!stickToBottomRef.current) {
+      if (!stickToBottomRef.current || suppressAutoScrollRef.current) {
         updateBottomState()
         return
       }

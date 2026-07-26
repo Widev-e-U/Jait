@@ -1101,8 +1101,18 @@ function App() {
   // useLayoutEffect (not useEffect) so the reset lands before paint — a
   // passive effect here let the stale project layout flash/jiggle into view
   // for one frame before collapsing.
+  //
+  // Same applies when switching directly from one project to a different
+  // one: the restore effects that apply the new project's saved layout only
+  // run once its project.ui fetch resolves, so without this the previous
+  // project's stale panel/tree/editor state paints for a frame (or longer,
+  // on a slow fetch) before being overwritten with the new project's data.
+  const prevActiveProjectIdRef = useRef<string | null>(null)
   useLayoutEffect(() => {
-    if (activeProjectId) return
+    const prevProjectId = prevActiveProjectIdRef.current
+    prevActiveProjectIdRef.current = activeProjectId
+    const switchingProjects = !!prevProjectId && prevProjectId !== activeProjectId
+    if (activeProjectId && !switchingProjects) return
     showProjectRef.current = false
     setShowProject(false)
     setShowArchitecture(false)
@@ -2115,7 +2125,7 @@ function App() {
 
   // Wrap switchProject so clicking a project also opens its remote directory
   // and shows the correct files/session in the editor.
-  const handleSwitchProject = useCallback(async (projectId: string) => {
+  const handleSwitchProject = useCallback(async (projectId: string, sessionId?: string) => {
     const project = projects.find((w) => w.id === projectId)
     if (!project) return
 
@@ -2123,8 +2133,10 @@ function App() {
       setShowSidebar(false)
     }
 
-    // Determine which session to activate (mirrors switchProject logic)
-    const nextSessionId = getLatestProjectSessionId(project)
+    // Determine which session to activate (mirrors switchProject logic) —
+    // an explicit sessionId (e.g. picked from the sidebar's recent-sessions
+    // list) wins over the project's most-recently-active session.
+    const nextSessionId = sessionId ?? getLatestProjectSessionId(project)
     const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
     const cachedProjectProvider = readProjectProviderSelection(projectId)
@@ -2137,7 +2149,11 @@ function App() {
     setProjectFiles([])
     setActiveProjectFileId(null)
     handleAvailableFilesForMentionChange([])
-    switchProject(projectId)
+    if (nextSessionId) {
+      switchSession(projectId, nextSessionId)
+    } else {
+      switchProject(projectId)
+    }
 
     // Open the project directory on the gateway and directly hydrate from the
     // response rather than relying on the WS `project.open` event, which is
@@ -2169,7 +2185,17 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, switchProject, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+  }, [projects, switchProject, switchSession, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+
+  const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
+    if (projectId === activeProjectId) {
+      if (sessionId === activeSessionId) return
+      if (isMobile) setShowSidebar(false)
+      switchSession(projectId, sessionId)
+      return
+    }
+    void handleSwitchProject(projectId, sessionId)
+  }, [activeProjectId, activeSessionId, isMobile, switchSession, handleSwitchProject])
 
   const handleCreateProject = useCallback(() => {
     setProjectPickerMode('project')
@@ -3963,6 +3989,7 @@ function App() {
                   onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
                   onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
                   onSelectProject={handleSwitchProject}
+                  onSelectProjectSession={handleSelectProjectSession}
                   onShowFewer={showFewerProjects}
                   onShowMore={showMoreProjects}
                   onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
@@ -4273,6 +4300,7 @@ function App() {
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}
                       onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
+                      onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
                       onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); switchSession(null, sessionId) }}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
