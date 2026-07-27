@@ -1992,6 +1992,43 @@ ipcMain.handle("desktop:get-roots", async () => {
 });
 
 // ── Generic filesystem operation handler (for remote project ops) ──────────
+// fs-op results don't just cross this IPC boundary — the renderer JSON-wraps
+// them into a single WebSocket frame to the gateway, so a file's content is
+// held in memory several times over (Buffer here, base64/utf-8 string in the
+// renderer, stringified frame copy). An uncapped read of a large file (a build
+// artifact, an archive, a video) inflates the renderer past V8's ~2 GB heap
+// ceiling and hard-crashes it with an OOM — and since the requesting client
+// retries when the connection drops, it becomes a deterministic crash loop.
+// Cap read sizes and fail with a clear error naming the file instead.
+const MAX_FS_OP_READ_BYTES = 20 * 1024 * 1024;
+const MAX_FS_OP_READ_BINARY_BYTES = 30 * 1024 * 1024;
+
+// Diff content reads get a tighter cap: the `git show` side of a diff already
+// fails safely past gitExecLocal's 10 MB maxBuffer, but the working-tree side
+// was read with no limit — one rebuilt 400+ MB artifact sitting modified in a
+// project made every diff request inflate main and the renderer to ~2 GB and
+// OOM-crash the window (deterministically, on every client reconnect).
+const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
+
+/** Read a working-tree file for diff display; oversized files get a short placeholder instead. */
+async function readDiffFileCapped(absPath: string): Promise<string> {
+  const info = await fsStat(absPath);
+  if (info.size > MAX_DIFF_FILE_BYTES) {
+    return `(file too large to diff: ${(info.size / 1048576).toFixed(1)} MB, limit ${(MAX_DIFF_FILE_BYTES / 1048576).toFixed(0)} MB)`;
+  }
+  return readFile(absPath, "utf-8");
+}
+
+async function assertReadableSize(filePath: string, maxBytes: number): Promise<void> {
+  const info = await fsStat(filePath);
+  if (info.size > maxBytes) {
+    throw new Error(
+      `File too large to open remotely: ${filePath} is ${(info.size / 1048576).toFixed(1)} MB ` +
+      `(limit ${(maxBytes / 1048576).toFixed(0)} MB)`,
+    );
+  }
+}
+
 ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
   const { resolve, dirname, join, relative } = await import("node:path");
 
@@ -2071,11 +2108,13 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
     }
     case "read": {
       const filePath = resolve(params.path as string);
+      await assertReadableSize(filePath, MAX_FS_OP_READ_BYTES);
       const content = await readFile(filePath, "utf-8");
       return { content, size: content.length };
     }
     case "readBinary": {
       const filePath = resolve(params.path as string);
+      await assertReadableSize(filePath, MAX_FS_OP_READ_BINARY_BYTES);
       const buffer = await readFile(filePath);
       return { content: buffer.toString("base64"), size: buffer.length };
     }
@@ -2164,7 +2203,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
     case "git-file-read": {
       // Read a file from disk (for diff original/modified content)
       const filePath = resolve(params.path as string);
-      const content = await readFile(filePath, "utf-8");
+      const content = await readDiffFileCapped(filePath);
       return { content };
     }
     case "git-file-diffs": {
@@ -2241,7 +2280,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           }
           let modified = "";
           if (status !== "D") {
-            try { modified = await readFile(join(cwd, filePath), "utf-8"); } catch { /* deleted */ }
+            try { modified = await readDiffFileCapped(join(cwd, filePath)); } catch { /* deleted */ }
           }
           entries.push({ path: filePath, original, modified, status });
         }
@@ -2267,7 +2306,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           }
           let modified = "";
           if (status !== "D") {
-            try { modified = await readFile(join(cwd, filePath), "utf-8"); } catch { /* */ }
+            try { modified = await readDiffFileCapped(join(cwd, filePath)); } catch { /* */ }
           }
           entries.push({ path: filePath, original, modified, status });
         }
@@ -2282,7 +2321,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           if (!fp || seen.has(fp)) continue;
           seen.add(fp);
           let modified = "";
-          try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* */ }
+          try { modified = await readDiffFileCapped(join(cwd, fp)); } catch { /* */ }
           entries.push({ path: fp, original: "", modified, status: "?" });
         }
       }

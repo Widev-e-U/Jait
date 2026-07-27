@@ -7,7 +7,7 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { readFile, writeFile, unlink, mkdir, rm, readdir } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir, rm, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
@@ -33,6 +33,22 @@ const DEFAULT_TIMEOUT = 30_000;
 
 function trimCommandOutput(stdout: string): string {
   return stdout.replace(/\r?\n$/, "");
+}
+
+// Working-tree reads for diff entries must be size-capped: the `git show` side
+// of a diff already fails safely past exec's maxBuffer, but an uncapped
+// readFile of a large modified file (a rebuilt artifact, an archive) balloons
+// this process and every client that receives the diff payload — desktop
+// renderers hit V8's ~2 GB heap ceiling and OOM-crash on every reconnect.
+const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
+
+/** Read a working-tree file for diff display; oversized files get a short placeholder instead. */
+async function readDiffFileCapped(absPath: string): Promise<string> {
+  const info = await stat(absPath);
+  if (info.size > MAX_DIFF_FILE_BYTES) {
+    return `(file too large to diff: ${(info.size / 1048576).toFixed(1)} MB, limit ${(MAX_DIFF_FILE_BYTES / 1048576).toFixed(0)} MB)`;
+  }
+  return readFile(absPath, "utf-8");
 }
 
 function escapeShellArg(value: string): string {
@@ -1963,7 +1979,7 @@ export class GitService {
       let modified = "";
       if (status !== "D") {
         try {
-          modified = await readFile(join(cwd, filePath), "utf-8");
+          modified = await readDiffFileCapped(join(cwd, filePath));
         } catch {
           modified = "";
         }
@@ -2013,7 +2029,7 @@ export class GitService {
       let modified = "";
       if (status !== "D") {
         try {
-          modified = await readFile(join(cwd, filePath), "utf-8");
+          modified = await readDiffFileCapped(join(cwd, filePath));
         } catch { modified = ""; }
       }
 
@@ -2028,7 +2044,7 @@ export class GitService {
       if (!fp || seen.has(fp)) continue;
       seen.add(fp);
       let modified = "";
-      try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* skip */ }
+      try { modified = await readDiffFileCapped(join(cwd, fp)); } catch { /* skip */ }
       entries.push({ path: fp, original: "", modified, status: "?" });
     }
 
