@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } 
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
+import { resolveRemoteCodexApprovalPolicy } from "./remote-codex-config.js";
 const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
@@ -1727,7 +1728,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         rpcNotify(sess, "initialized");
 
         // Start thread
-        const approvalPolicy = mode === "supervised" ? "on-failure" : "never";
+        const approvalPolicy = resolveRemoteCodexApprovalPolicy(mode);
         const sandbox = mode === "supervised" ? "project-write" : "danger-full-access";
         const threadResult = await rpcSend(sess, "thread/start", {
           model: model ?? null,
