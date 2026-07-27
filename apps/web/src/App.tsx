@@ -2178,7 +2178,13 @@ function App() {
     setCliModelsByProvider(cachedProjectModels ?? (
       settings?.selected_model ? { jait: settings.selected_model } : {}
     ))
-    setChatProvider((cachedProjectProvider ?? settings?.chat_provider ?? 'jait') as ProviderId)
+    const resolvedProvider = (cachedProjectProvider ?? settings?.chat_provider ?? 'jait') as ProviderId
+    setChatProvider(resolvedProvider)
+    // Pin the resolved provider to this project the first time it's visited,
+    // so a later provider change made on a *different* project (which also
+    // updates the shared global `settings.chat_provider` default) can't leak
+    // back into this one just because it never had its own explicit pick.
+    if (!cachedProjectProvider) saveProjectProviderSelection(projectId, resolvedProvider)
 
     setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
     setProjectFiles([])
@@ -2630,6 +2636,10 @@ function App() {
     if (provider && provider !== chatProvider) {
       setChatProvider(provider as ProviderId)
     }
+    // Same pin as handleSwitchProject: lock in whatever provider a project
+    // ends up on (even via the global-default fallback) so later provider
+    // changes made elsewhere can't retroactively change this project too.
+    if (provider && !cachedProjectProvider) saveProjectProviderSelection(activeProjectId, provider)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId, settings.chat_provider, authLoading])
 
