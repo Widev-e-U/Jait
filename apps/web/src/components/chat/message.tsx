@@ -118,6 +118,8 @@ interface MessageProps {
     metadata?: {
       referencedFiles?: { path: string; name: string }[]
       displaySegments?: UserMessageSegment[]
+      /** Raw, unedited content of this message, for server-side target verification. */
+      originalContent?: string
     },
   ) => Promise<void> | void
   editComposer?: {
@@ -735,6 +737,7 @@ function MessageInner({
       await onEditMessage(messageId, submission.text, messageIndex, messageFromEnd, {
         referencedFiles: submission.referencedFiles,
         displaySegments: submission.displaySegments,
+        originalContent: content,
       })
     } catch (error) {
       setOptimisticUserDisplayText(null)
@@ -764,6 +767,7 @@ function MessageInner({
         .filter((segment): segment is Extract<UserMessageSegment, { type: 'file' }> => segment.type === 'file')
         .map((segment) => ({ path: segment.path, name: segment.name })),
       displaySegments: nextSegments ?? userDisplaySegments,
+      originalContent: content,
     })
   }
 

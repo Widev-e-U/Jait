@@ -3464,6 +3464,7 @@ function App() {
     metadata?: {
       referencedFiles?: { path: string; name: string }[]
       displaySegments?: UserMessageSegment[]
+      originalContent?: string
     },
   ) => {
     if (!activeSessionId || !token) return
@@ -3480,6 +3481,7 @@ function App() {
       displayContent: prepared.displayContent,
       referencedFiles: prepared.referencedFiles,
       displaySegments: prepared.displaySegments,
+      expectedContent: metadata?.originalContent,
       onLoginRequired: () => setShowLoginDialog(true),
     })
   }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, preparePromptSubmission, sendTarget])

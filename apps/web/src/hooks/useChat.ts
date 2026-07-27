@@ -375,6 +375,13 @@ interface SendMessageOptions {
   attachments?: ChatAttachment[]
   /** True when the message originates from the local queue and should roll back on send failure. */
   queued?: boolean
+  /**
+   * Raw content of the message being restarted-from, as currently rendered.
+   * Lets the server cross-check that the index/id it resolved actually
+   * points at the message the user clicked, instead of trusting a
+   * positional index that can drift from a locally stale message list.
+   */
+  expectedContent?: string
 }
 
 interface QueuedChatMessage extends QueuedMessage {
@@ -1986,7 +1993,7 @@ export function useChat(
     messageFromEnd?: number,
     options: SendMessageOptions = {},
   ) => {
-    const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
+    const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired, expectedContent } = options
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId
@@ -2001,7 +2008,7 @@ export function useChat(
         fetch(`${API_URL}/api/sessions/${requestSessionId}/restart-from`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ messageId, messageIndex, messageFromEnd }),
+          body: JSON.stringify({ messageId, messageIndex, messageFromEnd, expectedContent }),
         })
 
       const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))

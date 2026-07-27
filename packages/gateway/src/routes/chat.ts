@@ -3173,6 +3173,7 @@ export function registerChatRoutes(
     const messageId = typeof body["messageId"] === "string" ? body["messageId"] : "";
     const messageIndex = typeof body["messageIndex"] === "number" ? body["messageIndex"] : -1;
     const messageFromEnd = typeof body["messageFromEnd"] === "number" ? body["messageFromEnd"] : -1;
+    const expectedContent = typeof body["expectedContent"] === "string" ? body["expectedContent"] : undefined;
 
     if (!messageId && messageIndex < 0 && messageFromEnd < 0) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "messageId, messageFromEnd, or messageIndex is required" });
@@ -3213,8 +3214,7 @@ export function registerChatRoutes(
       return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
     }
 
-    const target = visibleEntries[targetVisibleIndex]!;
-    if (target.role !== "user") {
+    if (visibleEntries[targetVisibleIndex]!.role !== "user") {
       // The frontend messageFromEnd count can be off by 1 when it includes an
       // optimistic/streaming assistant message that the backend hasn't persisted.
       // Walk backwards to find the nearest user message as a fallback.
@@ -3225,6 +3225,28 @@ export function registerChatRoutes(
       }
       targetVisibleIndex = adjusted;
     }
+
+    if (expectedContent !== undefined && visibleEntries[targetVisibleIndex]!.content !== expectedContent) {
+      // The index/id resolved above can still land on the wrong turn (same
+      // off-by-one class as above, just landing on *a* user message instead
+      // of a non-user one). Re-anchor on the user message whose content
+      // actually matches what the client has rendered, picking the closest
+      // match to the originally resolved index in case of repeated content.
+      let bestIndex = -1;
+      let bestDistance = Infinity;
+      for (let i = 0; i < visibleEntries.length; i++) {
+        const entry = visibleEntries[i]!;
+        if (entry.role !== "user" || entry.content !== expectedContent) continue;
+        const distance = Math.abs(i - targetVisibleIndex);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = i;
+        }
+      }
+      if (bestIndex !== -1) targetVisibleIndex = bestIndex;
+    }
+
+    const target = visibleEntries[targetVisibleIndex]!;
 
     if (memoryService) {
       const toFlush = visibleEntries

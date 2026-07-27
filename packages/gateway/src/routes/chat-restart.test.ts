@@ -130,4 +130,67 @@ describe("chat restart from message", () => {
 
     await app.close();
   });
+
+  it("re-anchors on expectedContent when messageFromEnd points at the wrong (but valid) user message", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("restart-user3", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Restart Session 3" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const now = new Date("2026-04-25T00:00:00.000Z");
+    const at = (offset: number) => new Date(now.getTime() + offset).toISOString();
+
+    db.insert(messages).values([
+      { id: "m1", sessionId: session.id, role: "user", content: "first", createdAt: at(1) },
+      { id: "m2", sessionId: session.id, role: "assistant", content: "a1", createdAt: at(2) },
+      { id: "m3", sessionId: session.id, role: "user", content: "second", createdAt: at(3) },
+      { id: "m4", sessionId: session.id, role: "assistant", content: "a2", createdAt: at(4) },
+      { id: "m5", sessionId: session.id, role: "user", content: "third", createdAt: at(5) },
+      { id: "m6", sessionId: session.id, role: "assistant", content: "a3", createdAt: at(6) },
+    ]).run();
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+
+    // Simulates a client whose local message list is behind the server by one
+    // full turn (e.g. a turn landed via another tab/background reconnect).
+    // Its computed messageFromEnd for "second" (1) resolves, against the
+    // server's true history, to a different valid user message ("third")
+    // rather than triggering the role-mismatch fallback. Without content
+    // verification this would truncate the wrong turn and leave "second"
+    // and its answer behind as stale, duplicate-looking messages once the
+    // client resends "second" as a new turn.
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/restart-from`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { messageFromEnd: 1, expectedContent: "second" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      messages: [
+        { role: "user", content: "first" },
+        { role: "assistant", content: "a1" },
+      ],
+    });
+
+    const remaining = db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, session.id))
+      .orderBy(messages.createdAt)
+      .all();
+    expect(remaining.map((row) => row.id)).toEqual(["m1", "m2"]);
+
+    await app.close();
+  });
 });
