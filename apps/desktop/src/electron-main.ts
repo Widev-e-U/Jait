@@ -5,11 +5,11 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard, dialog } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
@@ -113,6 +113,36 @@ function setSetting(key: string, value: unknown): void {
 // Resolve the persistent device ID now that the settings helpers are available.
 // Must run after settingsPath/loadSettings/saveSettings/getSetting/setSetting are defined.
 persistentDeviceId = resolvePersistentDeviceId();
+
+// ── Crash diagnostics ─────────────────────────────────────────────────
+// The gray-screen recovery below relaunches the whole app after repeated
+// renderer crashes. That in-process crash counter resets to zero on every
+// relaunch (it's a fresh process), so if the actual cause isn't the
+// GPU/hw-accel fault it assumes, the app can relaunch forever — the whole
+// window silently flashing shut and reopening with no visible error and no
+// record of what's actually failing. Persist relaunch timestamps across
+// restarts so a real crash loop can be detected and broken instead of
+// looping indefinitely, and log crash details to disk so the cause (e.g.
+// `oom` vs a one-off `crashed`) is inspectable after the fact.
+const crashLogPath = path.join(app.getPath("userData"), "crash-log.txt");
+const CRASH_LOOP_WINDOW_MS = 10 * 60 * 1000;
+const CRASH_LOOP_RELAUNCH_LIMIT = 3;
+
+function logCrashEvent(line: string): void {
+  try {
+    mkdirSync(path.dirname(crashLogPath), { recursive: true });
+    appendFileSync(crashLogPath, `${new Date().toISOString()} ${line}\n`, "utf-8");
+  } catch { /* best-effort */ }
+}
+
+/** Records a relaunch and returns true once relaunches are looping rather than recovering. */
+function recordRelaunchAndDetectLoop(): boolean {
+  const now = Date.now();
+  const recent = getSetting<number[]>("relaunchTimestamps", []).filter((t) => now - t < CRASH_LOOP_WINDOW_MS);
+  recent.push(now);
+  setSetting("relaunchTimestamps", recent);
+  return recent.length > CRASH_LOOP_RELAUNCH_LIMIT;
+}
 
 // ── Hardware acceleration recovery ─────────────────────────────────────
 // A previous renderer/GPU crash loop persists `disableHwAccel` so the next
@@ -463,6 +493,7 @@ function createMainWindow(): BrowserWindow {
 
   win.webContents.on("render-process-gone", (_event, details) => {
     console.error(`[electron] render-process-gone: ${details.reason} (exitCode=${details.exitCode})`);
+    logCrashEvent(`render-process-gone reason=${details.reason} exitCode=${details.exitCode}`);
     if (win.isDestroyed()) return;
 
     renderCrashCount += 1;
@@ -472,6 +503,21 @@ function createMainWindow(): BrowserWindow {
     // After repeated crashes, assume a GPU/hardware-acceleration fault and
     // relaunch the app with the GPU disabled so the next session survives.
     if (renderCrashCount >= 3) {
+      if (recordRelaunchAndDetectLoop()) {
+        // Already relaunched repeatedly in the last 10 minutes and it's still
+        // crashing — the hw-accel fix isn't the actual cause here. Relaunching
+        // again would just flash the whole window shut and reopen forever
+        // with nothing visible to the user. Stop and surface it instead.
+        logCrashEvent("crash loop detected — halting automatic relaunch");
+        dialog.showErrorBox(
+          "Jait keeps crashing",
+          `Jait's window has crashed and relaunched ${CRASH_LOOP_RELAUNCH_LIMIT}+ times in the last 10 minutes ` +
+          `(most recently: ${details.reason}). Automatic recovery has been paused so it stops flashing.\n\n` +
+          `Crash details were saved to:\n${crashLogPath}\n\n` +
+          `Please share that file, then quit and reopen Jait manually.`,
+        );
+        return;
+      }
       console.error("[electron] renderer crashed repeatedly — relaunching with hardware acceleration disabled");
       setSetting("disableHwAccel", true);
       isQuitting = true;
