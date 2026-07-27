@@ -1139,4 +1139,20 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 46: Explicit last-selected project/session ────────────────────
+  // `/api/projects/last-active` used to derive "what to reopen on reload"
+  // from sessions.lastActiveAt, which any activity (including background
+  // automation) bumps. That let unrelated activity silently steal the
+  // reopened project away from what the user actually last picked. These
+  // columns record the explicit pick instead.
+  {
+    id: 46,
+    name: "user_settings_last_selected",
+    run(db) {
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN last_selected_project_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN last_selected_session_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN last_selected_at TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

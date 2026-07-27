@@ -266,6 +266,31 @@ export class UserService {
     return this.getSettings(userId);
   }
 
+  /**
+   * The explicit last project/session the user picked in the UI, distinct
+   * from session activity (which includes background automation runs).
+   */
+  getLastSelection(userId: string): { projectId: string | null; sessionId: string | null } {
+    const row = this.db.select().from(userSettings).where(eq(userSettings.userId, userId)).get();
+    return {
+      projectId: typeof (row as any)?.lastSelectedProjectId === "string" ? (row as any).lastSelectedProjectId : null,
+      sessionId: typeof (row as any)?.lastSelectedSessionId === "string" ? (row as any).lastSelectedSessionId : null,
+    };
+  }
+
+  setLastSelection(userId: string, projectId: string | null, sessionId: string | null): void {
+    this.getSettings(userId); // ensure a settings row exists
+    this.db
+      .update(userSettings)
+      .set({
+        lastSelectedProjectId: projectId,
+        lastSelectedSessionId: sessionId,
+        lastSelectedAt: new Date().toISOString(),
+      } as any)
+      .where(eq(userSettings.userId, userId))
+      .run();
+  }
+
   bindSessionToUser(userId: string, sessionId: string): boolean {
     const session = this.db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
     if (!session) return false;

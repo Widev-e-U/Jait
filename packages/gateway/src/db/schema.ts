@@ -68,6 +68,13 @@ export const userSettings = sqliteTable("user_settings", {
   reasoningEffort: text("reasoning_effort"), // 'minimal' | 'low' | 'medium' | 'high' | null (only for reasoning-capable models)
   projectPickerPath: text("project_picker_path"),
   projectPickerNodeId: text("project_picker_node_id"),
+  // Explicit "last selected" project/session, set only when the user picks
+  // one in the UI. Distinct from sessions.lastActiveAt, which is bumped by
+  // any activity (including background automation) and must not be used to
+  // decide what reopens on reload.
+  lastSelectedProjectId: text("last_selected_project_id"),
+  lastSelectedSessionId: text("last_selected_session_id"),
+  lastSelectedAt: text("last_selected_at"),
   updatedAt: text("updated_at").notNull(),
 });
 

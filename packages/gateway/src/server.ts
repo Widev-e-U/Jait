@@ -204,6 +204,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       repoService: deps.repoService,
       gitService: deps.gitService,
       ws: deps.ws,
+      userService: deps.userService,
     });
   }
   if (deps.assistantProfileService) {

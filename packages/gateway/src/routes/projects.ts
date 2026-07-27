@@ -4,6 +4,7 @@ import type { ProjectService } from "../services/projects.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ProjectStateService } from "../services/project-state.js";
 import type { RepositoryService } from "../services/repositories.js";
+import type { UserService } from "../services/users.js";
 import { GitService } from "../services/git.js";
 import {
   assignRepositoryToProject,
@@ -18,6 +19,7 @@ export interface ProjectEntityRouteDeps {
   repoService?: RepositoryService;
   gitService?: GitService;
   ws?: WsControlPlane;
+  userService?: UserService;
 }
 
 export function registerProjectEntityRoutes(
@@ -134,8 +136,25 @@ export function registerProjectEntityRoutes(
   app.get("/api/projects/last-active", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const session = sessionService.lastActive(authUser.id);
     await maybeAutoAssignProjectRepos(authUser.id);
+
+    // Prefer the explicit selection the user last made in the UI. Falling
+    // back to session activity (sessions.lastActiveAt) would let unrelated
+    // activity — e.g. a background automation turn on some other project —
+    // silently steal the reopened project on the next reload, since that
+    // column is bumped by any activity, not just explicit selection.
+    const explicit = deps.userService?.getLastSelection(authUser.id);
+    if (explicit?.sessionId) {
+      const session = sessionService.getById(explicit.sessionId, authUser.id);
+      if (session && session.status === "active") {
+        return {
+          project: session.projectId ? projectService.getById(session.projectId, authUser.id) ?? null : null,
+          session,
+        };
+      }
+    }
+
+    const session = sessionService.lastActive(authUser.id);
     if (!session?.projectId) {
       return { project: null, session };
     }
@@ -161,6 +180,7 @@ export function registerProjectEntityRoutes(
     if (sessionId) {
       sessionService.touch(sessionId);
     }
+    deps.userService?.setLastSelection(authUser.id, projectId, sessionId);
     return { ok: true };
   });
 
