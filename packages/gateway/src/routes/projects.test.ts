@@ -252,6 +252,58 @@ describe("project routes", () => {
     expect(lastActive.session?.id).toBe(selectedSession.id);
   });
 
+  it("keeps an explicitly selected project with no session yet as last-active", async () => {
+    const user = userService.createUser("select-user-no-session", "password123");
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+
+    const selectedProjectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Selected Project", rootPath: "/project/selected" },
+    });
+    const selectedProject = JSON.parse(selectedProjectRes.body) as { id: string };
+
+    // User explicitly picks this project in the UI before it has any
+    // sessions, so the client persists sessionId: null (see
+    // getLatestProjectSessionId in apps/web/src/lib/project-sessions.ts).
+    const selectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects/select",
+      headers,
+      payload: { projectId: selectedProject.id, sessionId: null },
+    });
+    expect(selectRes.statusCode).toBe(200);
+
+    // Unrelated activity happens afterwards on a different project (e.g. a
+    // background automation turn) — this must not steal "last-active".
+    const otherProjectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Other Project", rootPath: "/project/other" },
+    });
+    const otherProject = JSON.parse(otherProjectRes.body) as { id: string };
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${otherProject.id}/sessions`,
+      headers,
+      payload: { name: "Background automation chat" },
+    });
+
+    const lastActiveRes = await app.inject({
+      method: "GET",
+      url: "/api/projects/last-active",
+      headers,
+    });
+    expect(lastActiveRes.statusCode).toBe(200);
+    const lastActive = JSON.parse(lastActiveRes.body) as {
+      project: { id: string } | null;
+      session: { id: string } | null;
+    };
+    expect(lastActive.project?.id).toBe(selectedProject.id);
+  });
+
   it("archives a project (and its active sessions) even when it still has sessions", async () => {
     const user = userService.createUser("delete-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);

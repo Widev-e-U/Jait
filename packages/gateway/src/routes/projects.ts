@@ -153,6 +153,17 @@ export function registerProjectEntityRoutes(
         };
       }
     }
+    // The explicit selection can be a project with no session yet (e.g. a
+    // freshly created project, or one whose sessions were all archived) —
+    // that's still a real explicit pick and must win over activity-based
+    // fallback, not just be dropped because sessionId is null.
+    if (explicit?.projectId) {
+      const project = projectService.getById(explicit.projectId, authUser.id);
+      if (project) {
+        const [latestSession] = sessionService.listByProject(project.id, "active", authUser.id, 1);
+        return { project, session: latestSession ?? null };
+      }
+    }
 
     const session = sessionService.lastActive(authUser.id);
     if (!session?.projectId) {
