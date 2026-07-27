@@ -17,6 +17,8 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProjectService } from "../services/projects.js";
+import type { WsControlPlane } from "../ws.js";
+import type { WsEventType } from "@jait/shared/types";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
@@ -26,7 +28,22 @@ export function registerSessionRoutes(
   hooks?: HookBus,
   sessionState?: SessionStateService,
   projectService?: ProjectService,
+  ws?: WsControlPlane,
 ) {
+  /** Broadcast a chat/session event over WS to the owning user's other clients */
+  const broadcastChatEvent = (
+    userId: string,
+    event: "created" | "updated" | "archived" | "deleted",
+    data: Record<string, unknown>,
+  ): void => {
+    if (!ws) return;
+    ws.broadcastToUser(userId, {
+      type: `chat.${event}` as WsEventType,
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: data,
+    });
+  };
   const parseSessionListLimit = (value: unknown) => {
     if (typeof value !== "string") return undefined;
     const parsed = Number.parseInt(value, 10);
@@ -83,6 +100,7 @@ export function registerSessionRoutes(
       projectService?.touch(session.projectId);
     }
 
+    broadcastChatEvent(authUser.id, "created", { projectId: session.projectId ?? null, session });
     return reply.status(201).send(session);
   });
 
@@ -139,7 +157,9 @@ export function registerSessionRoutes(
     sessionService.update(id, {
       name: typeof body["name"] === "string" ? body["name"] : undefined,
     }, authUser.id);
-    return sessionService.getById(id, authUser.id);
+    const updated = sessionService.getById(id, authUser.id);
+    broadcastChatEvent(authUser.id, "updated", { projectId: session.projectId ?? null, session: updated });
+    return updated;
   });
 
   // Soft-delete session
@@ -161,6 +181,7 @@ export function registerSessionRoutes(
       consentMethod: "auto",
     });
 
+    broadcastChatEvent(authUser.id, "deleted", { projectId: session.projectId ?? null, sessionId: id });
     return { ok: true };
   });
 
@@ -175,6 +196,7 @@ export function registerSessionRoutes(
     }
     sessionService.archive(id, authUser.id);
     hooks?.emit("session.end", { sessionId: id });
+    broadcastChatEvent(authUser.id, "archived", { projectId: session.projectId ?? null, sessionId: id });
     return sessionService.getById(id, authUser.id);
   });
 

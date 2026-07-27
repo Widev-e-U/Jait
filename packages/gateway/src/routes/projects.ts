@@ -11,6 +11,7 @@ import {
   ProjectRepositoryAssignmentError,
 } from "../services/project-repositories.js";
 import type { WsControlPlane } from "../ws.js";
+import type { WsEventType } from "@jait/shared/types";
 import { requireAuth } from "../security/http-auth.js";
 
 export interface ProjectEntityRouteDeps {
@@ -74,6 +75,36 @@ export function registerProjectEntityRoutes(
     throw err;
   };
 
+  /** Broadcast a project event over WS to the owning user's other clients */
+  const broadcastProjectEvent = (
+    userId: string,
+    event: "created" | "updated" | "deleted" | "restored",
+    data: Record<string, unknown>,
+  ): void => {
+    if (!deps.ws) return;
+    deps.ws.broadcastToUser(userId, {
+      type: `project.${event}` as WsEventType,
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: data,
+    });
+  };
+
+  /** Broadcast a chat/session event over WS to the owning user's other clients */
+  const broadcastChatEvent = (
+    userId: string,
+    event: "created" | "updated" | "archived" | "deleted",
+    data: Record<string, unknown>,
+  ): void => {
+    if (!deps.ws) return;
+    deps.ws.broadcastToUser(userId, {
+      type: `chat.${event}` as WsEventType,
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: data,
+    });
+  };
+
   app.post("/api/projects", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -85,7 +116,9 @@ export function registerProjectEntityRoutes(
       nodeId: typeof body["nodeId"] === "string" ? body["nodeId"] : "gateway",
     });
     await maybeAssignProjectRepo(project.id, authUser.id);
-    return reply.status(201).send(projectService.getById(project.id, authUser.id) ?? project);
+    const created = projectService.getById(project.id, authUser.id) ?? project;
+    broadcastProjectEvent(authUser.id, "created", { project: created });
+    return reply.status(201).send(created);
   });
 
   app.get("/api/projects", async (request, reply) => {
@@ -160,7 +193,9 @@ export function registerProjectEntityRoutes(
       nodeId: typeof body["nodeId"] === "string" ? body["nodeId"] : undefined,
     }, authUser.id);
     await maybeAssignProjectRepo(id, authUser.id);
-    return projectService.getById(id, authUser.id);
+    const updated = projectService.getById(id, authUser.id);
+    broadcastProjectEvent(authUser.id, "updated", { project: updated });
+    return updated;
   });
 
   app.post("/api/projects/:id/repository", async (request, reply) => {
@@ -183,6 +218,7 @@ export function registerProjectEntityRoutes(
         repoId,
         ws: deps.ws,
       });
+      broadcastProjectEvent(authUser.id, "updated", { project: assignment.project });
       return assignment;
     } catch (err) {
       return sendAssignmentError(reply, err);
@@ -197,6 +233,9 @@ export function registerProjectEntityRoutes(
       sessionService.deleteByProject(project.id, authUser.id);
     }
     const removed = projectService.deleteArchived(authUser.id);
+    for (const project of archived) {
+      broadcastProjectEvent(authUser.id, "deleted", { projectId: project.id, permanent: true });
+    }
     return { ok: true, removed };
   });
 
@@ -220,7 +259,9 @@ export function registerProjectEntityRoutes(
     }
     sessionService.restoreByProject(id, authUser.id);
     projectService.restore(id, authUser.id);
-    return projectService.getById(id, authUser.id);
+    const restored = projectService.getById(id, authUser.id);
+    broadcastProjectEvent(authUser.id, "restored", { project: restored });
+    return restored;
   });
 
   app.delete("/api/projects/:id", async (request, reply) => {
@@ -233,6 +274,7 @@ export function registerProjectEntityRoutes(
     }
     sessionService.archiveByProject(id, authUser.id);
     projectService.archive(id, authUser.id);
+    broadcastProjectEvent(authUser.id, "deleted", { projectId: id });
     return reply.status(204).send();
   });
 
@@ -265,6 +307,7 @@ export function registerProjectEntityRoutes(
       name: typeof body["name"] === "string" ? body["name"] : undefined,
     });
     projectService.touch(id);
+    broadcastChatEvent(authUser.id, "created", { projectId: id, session });
     return reply.status(201).send(session);
   });
 

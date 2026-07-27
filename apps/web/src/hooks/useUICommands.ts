@@ -307,9 +307,12 @@ export function useUICommands(opts: UseUICommandsOptions) {
         msg.type.startsWith('repo.') ||
         msg.type.startsWith('plan.') ||
         msg.type.startsWith('fs.node-') ||
-        msg.type.startsWith('node.')
+        msg.type.startsWith('node.') ||
+        msg.type.startsWith('project.') ||
+        msg.type.startsWith('chat.')
       ) {
-        // Thread, repo, plan, filesystem-node and node-registry events — forward to automation hook
+        // Thread, repo, plan, filesystem-node, node-registry, project and chat
+        // events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       } else if (msg.type === 'preview.session') {
         const session = (msg.payload as Record<string, unknown>)?.session as Record<string, unknown> | undefined

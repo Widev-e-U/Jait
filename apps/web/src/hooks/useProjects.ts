@@ -625,6 +625,105 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     setVisibleLimit(PROJECT_LIST_LIMIT)
   }, [])
 
+  // Applies project/chat mutations broadcast over WS by other clients (or
+  // this client's other tabs) so the sidebar stays live without a refetch.
+  // Every branch dedupes against the initiating client's own REST-driven
+  // update, since broadcasts are delivered back to the sender too.
+  const handleProjectEvent = useCallback((type: string, payload: Record<string, unknown>) => {
+    switch (type) {
+      case 'project.created': {
+        const project = payload.project as ProjectRecord | undefined
+        if (!project) break
+        setProjects((prev) => {
+          if (prev.some((p) => p.id === project.id)) return prev
+          return [{ ...project, sessions: project.sessions ?? [] }, ...prev].slice(0, visibleLimit)
+        })
+        break
+      }
+      case 'project.updated': {
+        const project = payload.project as ProjectRecord | undefined
+        if (!project) break
+        setProjects((prev) => prev.map((p) => (
+          p.id === project.id ? { ...project, sessions: project.sessions ?? p.sessions } : p
+        )))
+        break
+      }
+      case 'project.restored': {
+        const project = payload.project as ProjectRecord | undefined
+        if (!project) break
+        setProjects((prev) => {
+          if (prev.some((p) => p.id === project.id)) return prev
+          return [{ ...project, sessions: project.sessions ?? [] }, ...prev]
+        })
+        break
+      }
+      case 'project.deleted': {
+        const projectId = payload.projectId as string | undefined
+        if (!projectId) break
+        const nextProjects = projects.filter((p) => p.id !== projectId)
+        setProjects(nextProjects)
+        if (activeProjectIdRef.current === projectId) {
+          setActiveProjectId(nextProjects[0]?.id ?? null)
+          setActiveSessionId(getLatestProjectSessionId(nextProjects[0]))
+        }
+        setArchivedSessionsByProject((prev) => {
+          if (!(projectId in prev)) return prev
+          const next = { ...prev }
+          delete next[projectId]
+          return next
+        })
+        break
+      }
+      case 'chat.created': {
+        const projectId = (payload.projectId as string | null | undefined) ?? null
+        const session = payload.session as ProjectSession | undefined
+        if (!session) break
+        if (projectId) {
+          setProjects((prev) => prev.map((project) => {
+            if (project.id !== projectId) return project
+            if (project.sessions.some((s) => s.id === session.id)) return project
+            return { ...project, lastActiveAt: session.lastActiveAt, sessions: [session, ...project.sessions] }
+          }))
+        } else {
+          setPersonalSessions((prev) => (
+            prev.some((s) => s.id === session.id) ? prev : [session, ...prev]
+          ))
+        }
+        break
+      }
+      case 'chat.updated': {
+        const session = payload.session as ProjectSession | undefined
+        if (!session) break
+        setProjects((prev) => prev.map((project) => ({
+          ...project,
+          sessions: project.sessions.map((entry) => (entry.id === session.id ? { ...entry, ...session } : entry)),
+        })))
+        setPersonalSessions((prev) => prev.map((entry) => (entry.id === session.id ? { ...entry, ...session } : entry)))
+        setArchivedSessionsByProject((prev) => Object.fromEntries(
+          Object.entries(prev).map(([pid, sessions]) => [
+            pid,
+            sessions.map((entry) => (entry.id === session.id ? { ...entry, ...session } : entry)),
+          ]),
+        ))
+        break
+      }
+      case 'chat.archived':
+      case 'chat.deleted': {
+        const sessionId = payload.sessionId as string | undefined
+        if (!sessionId) break
+        setProjects((prev) => prev.map((project) => (
+          project.sessions.some((s) => s.id === sessionId)
+            ? { ...project, sessions: project.sessions.filter((s) => s.id !== sessionId) }
+            : project
+        )))
+        setPersonalSessions((prev) => prev.filter((s) => s.id !== sessionId))
+        break
+      }
+      default:
+        break
+    }
+  }, [projects, visibleLimit])
+
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
@@ -673,5 +772,6 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     showMoreProjects,
     showFewerProjects,
     projectListLimit: PROJECT_LIST_LIMIT,
+    handleProjectEvent,
   }
 }

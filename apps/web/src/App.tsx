@@ -489,11 +489,14 @@ function App() {
     showMoreProjects,
     showFewerProjects,
     projectListLimit,
+    handleProjectEvent,
   } = useProjects(
     token,
     onLoginRequired,
   )
   fetchProjectsRef.current = fetchProjects
+  const handleProjectEventRef = useRef(handleProjectEvent)
+  handleProjectEventRef.current = handleProjectEvent
   useEffect(() => {
     suppressProjectAutoOpenRef.current = false
   }, [activeSessionId])
@@ -1700,6 +1703,10 @@ function App() {
     onMessageComplete: handleMessageComplete,
     onSessionStreamingChange: handleSessionStreamingChange,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
+      if (type.startsWith('project.') || type.startsWith('chat.')) {
+        handleProjectEventRef.current(type, payload)
+        return
+      }
       automation.handleThreadEvent(type, payload)
       // Keep the project sidebar's node tags in sync when nodes come/go online.
       if (type === 'fs.node-registered' || type === 'fs.node-disconnected' || type === 'node.disconnected' || type === 'node.updated' || type === 'node.registry') {

@@ -326,7 +326,7 @@ export function SessionSelector({
                         </DropdownMenu>
                       </div>
                     </div>
-                    {recentSessions.length > 1 && (
+                    {recentSessions.length > 0 && (
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
                         {recentSessions.map((session) => {
                           const isActiveSession = isActiveProject && session.id === activeSessionId
