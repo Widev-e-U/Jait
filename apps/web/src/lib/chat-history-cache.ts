@@ -12,6 +12,77 @@ export const STARTUP_CHAT_CACHE_MESSAGE_LIMIT = 120
 const CHAT_HISTORY_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 let lastChatHistoryPruneAt = 0
+let lastLocalCachePruneAt = 0
+
+type PruneableLocalStorage = Pick<Storage, 'getItem' | 'removeItem' | 'length' | 'key'>
+
+function collectStartupChatKeys(storage: PruneableLocalStorage): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (key && key.startsWith(STARTUP_CHAT_STORAGE_PREFIX)) keys.push(key)
+  }
+  return keys
+}
+
+// Startup-chat snapshots are written per session and, unlike the IndexedDB
+// chat history store, were never swept as a batch — only lazily on a read of
+// that exact key. On accounts with many sessions this silently fills the
+// origin's localStorage quota over weeks, and every write past that point
+// (including the active project/session selection) throws and is dropped,
+// freezing "last selected project" at whatever was cached before the quota
+// was hit.
+function pruneExpiredStartupChatEntries(storage: PruneableLocalStorage, now: number): void {
+  for (const key of collectStartupChatKeys(storage)) {
+    try {
+      const cached = JSON.parse(storage.getItem(key) ?? 'null') as CachedChatHistory | null
+      if (!cached || !isChatCacheFresh(cached.updatedAt, now)) storage.removeItem(key)
+    } catch {
+      storage.removeItem(key)
+    }
+  }
+}
+
+function maybePruneExpiredStartupChatEntries(storage: PruneableLocalStorage, now: number): void {
+  if (now - lastLocalCachePruneAt < CHAT_HISTORY_PRUNE_INTERVAL_MS) return
+  lastLocalCachePruneAt = now
+  pruneExpiredStartupChatEntries(storage, now)
+}
+
+// Writes that matter for correctness (active project/session selection) must
+// not silently vanish just because the quota is exhausted by expired
+// snapshots. Retry after forced pruning, then after evicting snapshots
+// outright, before giving up.
+function setItemWithQuotaRecovery(
+  storage: Pick<Storage, 'setItem'> & PruneableLocalStorage,
+  key: string,
+  value: string,
+  now: number,
+): void {
+  try {
+    storage.setItem(key, value)
+    return
+  } catch {
+    // fall through to recovery below
+  }
+  pruneExpiredStartupChatEntries(storage, now)
+  try {
+    storage.setItem(key, value)
+    return
+  } catch {
+    // still over quota after clearing expired entries — fall through
+  }
+  for (const staleKey of collectStartupChatKeys(storage)) {
+    storage.removeItem(staleKey)
+    try {
+      storage.setItem(key, value)
+      return
+    } catch {
+      continue
+    }
+  }
+  console.warn('[jait] local cache write failed even after evicting cached chat snapshots; storage quota may be exhausted', key)
+}
 
 export interface CachedChatHistory {
   messages: ChatMessage[]
@@ -222,24 +293,26 @@ export function writeCachedStartupChat(
   scope: string | null,
   sessionId: string,
   history: Omit<CachedChatHistory, 'updatedAt'>,
-  storage: Pick<Storage, 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
+  storage: (Pick<Storage, 'setItem'> & PruneableLocalStorage) | null = typeof localStorage !== 'undefined' ? localStorage : null,
 ): void {
   if (!scope || !sessionId || !storage || history.messages.length === 0) return
+  const now = Date.now()
+  maybePruneExpiredStartupChatEntries(storage, now)
   try {
     const prepared = prepareChatHistoryForCache(
       history.messages,
       history.hasMore,
       history.totalMessages,
-      Date.now(),
+      now,
       history.streaming === true,
     )
-    storage.setItem(startupChatStorageKey(scope, sessionId), JSON.stringify({
+    setItemWithQuotaRecovery(storage, startupChatStorageKey(scope, sessionId), JSON.stringify({
       ...prepared,
       streaming: history.streaming === true,
       sessionLastActiveAt: history.sessionLastActiveAt ?? null,
       messages: prepared.messages.slice(-STARTUP_CHAT_CACHE_MESSAGE_LIMIT),
       hasMore: prepared.hasMore || prepared.messages.length > STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
-    }))
+    }), now)
   } catch {
     // Startup cache writes are best-effort and must never interrupt chat rendering.
   }
@@ -411,12 +484,10 @@ export function readCachedProjectIndex<Project, Session>(
 export function writeCachedProjectIndex<Project, Session>(
   scope: string | null,
   cache: Omit<CachedProjectIndex<Project, Session>, 'updatedAt'>,
-  storage: Pick<Storage, 'setItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
+  storage: (Pick<Storage, 'setItem'> & PruneableLocalStorage) | null = typeof localStorage !== 'undefined' ? localStorage : null,
+  now = Date.now(),
 ): void {
   if (!scope || !storage) return
-  try {
-    storage.setItem(projectIndexStorageKey(scope), JSON.stringify({ ...cache, updatedAt: Date.now() }))
-  } catch {
-    // Project index caching is best-effort.
-  }
+  maybePruneExpiredStartupChatEntries(storage, now)
+  setItemWithQuotaRecovery(storage, projectIndexStorageKey(scope), JSON.stringify({ ...cache, updatedAt: now }), now)
 }

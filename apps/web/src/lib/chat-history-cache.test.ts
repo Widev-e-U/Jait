@@ -36,6 +36,28 @@ function createStorage() {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => { values.set(key, value) },
     removeItem: (key: string) => { values.delete(key) },
+    get length() { return values.size },
+    key: (index: number) => [...values.keys()][index] ?? null,
+  }
+}
+
+// Simulates a full localStorage quota: writes fail once the number of
+// distinct keys reaches `limit`, matching how a real QuotaExceededError
+// blocks all further writes until something is evicted.
+function createQuotaLimitedStorage(limit: number) {
+  const storage = createStorage()
+  return {
+    values: storage.values,
+    getItem: storage.getItem,
+    removeItem: storage.removeItem,
+    key: storage.key,
+    get length() { return storage.length },
+    setItem: (key: string, value: string) => {
+      if (!storage.values.has(key) && storage.values.size >= limit) {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError')
+      }
+      storage.values.set(key, value)
+    },
   }
 }
 
@@ -280,5 +302,53 @@ describe('project index cache', () => {
 
     expect(readCachedProjectIndex('gateway::user-1', storage, CHAT_HISTORY_CACHE_RETENTION_MS + 2)).toBeNull()
     expect(storage.values.has(key)).toBe(false)
+  })
+
+  it('survives a full quota by pruning expired startup-chat snapshots before retrying', () => {
+    const now = Date.UTC(2026, 6, 27)
+    const storage = createQuotaLimitedStorage(2)
+    // Fill the "quota" with stale startup-chat snapshots nobody has read
+    // recently — nothing ever swept these proactively before this fix.
+    storage.values.set(
+      'jait:startup-chat:v1:gateway%3A%3Auser-1%3A%3Aold-session',
+      JSON.stringify({ messages: [{ id: 'm1' }], hasMore: false, totalMessages: 1, updatedAt: now - CHAT_HISTORY_CACHE_RETENTION_MS - 1000 }),
+    )
+    storage.values.set('other-app-key', 'unrelated')
+
+    const cache = {
+      projects: [{ id: 'project-1' }],
+      personalSessions: [],
+      activeProjectId: 'project-1',
+      activeSessionId: 'session-1',
+      hasMoreProjects: false,
+    }
+
+    writeCachedProjectIndex('gateway::user-1', cache, storage, now)
+
+    expect(readCachedProjectIndex('gateway::user-1', storage, now)).toMatchObject(cache)
+    expect(storage.values.has('other-app-key')).toBe(true)
+  })
+
+  it('survives a full quota by evicting startup-chat snapshots outright when none have expired yet', () => {
+    const now = Date.UTC(2026, 6, 27)
+    const storage = createQuotaLimitedStorage(2)
+    // Two fresh (not-yet-expired) startup-chat snapshots leave no room for
+    // the project index write; pruning expired entries alone can't help.
+    storage.values.set('jait:startup-chat:v1:a', JSON.stringify({ messages: [{ id: 'm1' }], hasMore: false, totalMessages: 1, updatedAt: now }))
+    storage.values.set('jait:startup-chat:v1:b', JSON.stringify({ messages: [{ id: 'm1' }], hasMore: false, totalMessages: 1, updatedAt: now }))
+
+    const cache = {
+      projects: [{ id: 'project-1' }],
+      personalSessions: [],
+      activeProjectId: 'project-1',
+      activeSessionId: 'session-1',
+      hasMoreProjects: false,
+    }
+
+    // Without recovery this write would silently vanish, freezing the
+    // locally cached active project at whatever was written last.
+    writeCachedProjectIndex('gateway::user-1', cache, storage, now)
+
+    expect(readCachedProjectIndex('gateway::user-1', storage, now)).toMatchObject(cache)
   })
 })
