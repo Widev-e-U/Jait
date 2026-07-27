@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getMobileMessageActionsPositionClassName } from './message'
+import { getMobileMessageActionsPositionClassName } from './message-mobile-actions'
 
 describe('mobile message actions', () => {
   it('places assistant actions in the unused right gutter instead of over message text', () => {

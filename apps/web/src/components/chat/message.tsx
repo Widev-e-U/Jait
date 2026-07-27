@@ -49,6 +49,7 @@ import {
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
 } from './message-edit-layout'
+import { getMobileMessageActionsPositionClassName } from './message-mobile-actions'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
@@ -65,11 +66,6 @@ import {
 const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
 const CODE_HIGHLIGHT_CACHE_LIMIT = 120
 const codeHighlightCache = new Map<string, string | null>()
-
-export function getMobileMessageActionsPositionClassName(isUser: boolean, outsideBubble = false): string {
-  if (outsideBubble) return 'right-0 top-full mt-0.5'
-  return isUser ? 'right-1.5 bottom-1' : '-right-7 bottom-0.5'
-}
 
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
   return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
