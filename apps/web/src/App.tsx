@@ -1481,12 +1481,12 @@ function App() {
         }
         break
       case 'footer.menu':
-        if (!value) {
-          setShowMobileToolbar(false)
-        } else {
-          const v = value as { open?: boolean }
-          setShowMobileToolbar(v.open === true)
-        }
+        // Intentionally ignored. The mobile nav drawer is transient chrome,
+        // not session state — applying a persisted/cross-client value here
+        // reopens the drawer right after the user closes it (whenever the
+        // session being switched to had last been left with it open), and
+        // reopens it out of nowhere on reload. Only explicit user actions
+        // (hamburger button, dismiss/select handlers) should toggle it.
         break
       case 'chat.mode':
         if (value === 'swarm') {
@@ -1662,13 +1662,10 @@ function App() {
       setManagerMessageQueues({})
     }
 
-    const fm = state['footer.menu']
-    if (fm && typeof fm === 'object' && !Array.isArray(fm)) {
-      const footerMenu = fm as { open?: boolean }
-      setShowMobileToolbar(footerMenu.open === true)
-    } else {
-      setShowMobileToolbar(false)
-    }
+    // 'footer.menu' (the mobile nav drawer) is intentionally not restored
+    // here — see the matching case in handleStateSync for why applying a
+    // persisted/cross-session value reopens the drawer right after the user
+    // closes it and pops it open on reload.
 
     // ── Project-scoped state (bundled inside _project envelope) ──
     // The project state hook is authoritative for project.ui. The
