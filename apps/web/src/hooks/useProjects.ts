@@ -323,25 +323,42 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       method: 'POST',
       headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, sessionId }),
+      // Mobile reloads/navigations can tear down the document mid-request;
+      // keepalive lets the browser finish sending this best-effort write.
+      keepalive: true,
     }).catch(() => { /* best-effort */ })
   }, [token])
 
-  const switchProject = useCallback((projectId: string) => {
-    setActiveProjectId(projectId)
-    setActiveSessionId(() => {
-      const project = projects.find((item) => item.id === projectId)
-      if (!project) return null
-      const sessionId = getLatestProjectSessionId(project)
-      persistSelection(projectId, sessionId)
-      return sessionId
+  // Writes the new selection to localStorage synchronously, instead of
+  // relying on the debounced effect below, so a reload that happens right
+  // after switching projects/sessions can't race the write and restore the
+  // previous selection instead.
+  const persistActiveSelectionToCache = useCallback((projectId: string | null, sessionId: string | null) => {
+    if (!cacheScope || cacheWriteReadyScopeRef.current !== cacheScope) return
+    writeCachedProjectIndex(cacheScope, {
+      projects,
+      personalSessions,
+      activeProjectId: projectId,
+      activeSessionId: sessionId,
+      hasMoreProjects,
     })
-  }, [persistSelection, projects])
+  }, [cacheScope, hasMoreProjects, personalSessions, projects])
+
+  const switchProject = useCallback((projectId: string) => {
+    const project = projects.find((item) => item.id === projectId)
+    const sessionId = project ? getLatestProjectSessionId(project) : null
+    setActiveProjectId(projectId)
+    setActiveSessionId(sessionId)
+    persistSelection(projectId, sessionId)
+    persistActiveSelectionToCache(projectId, sessionId)
+  }, [persistActiveSelectionToCache, persistSelection, projects])
 
   const switchSession = useCallback((projectId: string | null, sessionId: string) => {
     setActiveProjectId(projectId)
     setActiveSessionId(sessionId)
     persistSelection(projectId, sessionId)
-  }, [persistSelection])
+    persistActiveSelectionToCache(projectId, sessionId)
+  }, [persistActiveSelectionToCache, persistSelection])
 
   const archiveSession = useCallback(async (sessionId: string) => {
     if (!token) {
