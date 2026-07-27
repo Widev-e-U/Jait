@@ -1346,6 +1346,7 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 
   session.child = child;
   session.stopRequested = false;
+  session.stderrBuffer = "";
 
   // Suppress EPIPE errors when child exits before we finish writing
   child.stdin?.on("error", () => {/* ignore broken pipe */});
@@ -1375,10 +1376,10 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
   });
 
   child.stderr?.on("data", (data: Buffer) => {
-    const text = data.toString().trim();
-    if (text) {
-      console.error(`[claude-remote:${session.sessionId}] stderr: ${text}`);
-    }
+    const text = data.toString();
+    session.stderrBuffer = (session.stderrBuffer ?? "") + text;
+    const trimmed = text.trim();
+    if (trimmed) console.error(`[claude-remote:${session.sessionId}] stderr: ${trimmed}`);
   });
 
   return new Promise((resolve, reject) => {
@@ -1395,15 +1396,17 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
         resolve();
         return;
       }
-      const error = `Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
-      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error });
-      reject(new Error(error));
+      const baseError = new Error(`Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`);
+      const error = appendProviderStderr(baseError, session);
+      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error: error.message });
+      reject(error);
     });
 
     child.on("error", (err) => {
       session.child = null;
-      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error: err.message });
-      reject(err);
+      const error = appendProviderStderr(err, session);
+      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error: error.message });
+      reject(error);
     });
   });
 }
