@@ -62,6 +62,7 @@ export class WsControlPlane {
     resolve: (value: any) => void;
     reject: (reason: Error) => void;
     timer: ReturnType<typeof setTimeout>;
+    clientId: string;
   }>();
 
   /** Pending remote tool execution requests */
@@ -192,12 +193,14 @@ export class WsControlPlane {
       });
 
       ws.on("close", () => {
+        this.rejectPendingProviderOpsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
       });
 
       ws.on("error", () => {
+        this.rejectPendingProviderOpsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
@@ -1322,7 +1325,7 @@ export class WsControlPlane {
         this.pendingProviderOps.delete(requestId);
         reject(new Error(`Provider operation '${op}' timed out on node ${nodeId}`));
       }, timeoutMs);
-      this.pendingProviderOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+      this.pendingProviderOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer, clientId: client.id });
       this.send(client.ws, {
         type: "provider.op-request" as WsEvent["type"],
         sessionId: "",
@@ -1356,6 +1359,19 @@ export class WsControlPlane {
       timestamp: new Date().toISOString(),
       payload: node,
     });
+  }
+
+  // A dropped node connection otherwise leaves proxyProviderOp() waiting on
+  // its own timeout (up to 30+ minutes for a running turn) before the gateway
+  // notices the remote session died, wedging the chat session as "processing"
+  // in the meantime. Reject those callers immediately instead.
+  private rejectPendingProviderOpsForClient(clientId: string) {
+    for (const [requestId, pending] of this.pendingProviderOps) {
+      if (pending.clientId !== clientId) continue;
+      clearTimeout(pending.timer);
+      this.pendingProviderOps.delete(requestId);
+      pending.reject(new Error("Node disconnected"));
+    }
   }
 
   private broadcastDisconnectedNodes(clientId: string) {

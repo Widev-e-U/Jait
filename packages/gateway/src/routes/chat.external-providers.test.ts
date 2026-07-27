@@ -656,6 +656,44 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
+  it("clears the streaming flag instead of wedging the session when the requested provider is unavailable", { timeout: 30_000 }, async () => {
+    // Regression test: the "!cliProvider" branch used to `return` directly
+    // out of the SSE handler, which skipped the activeStreams cleanup that
+    // normally runs after the try/catch. That left the session permanently
+    // marked as streaming (stuck spinner, queued-forever messages) any time
+    // a remote node briefly wasn't advertising the requested provider.
+    const providerRegistry = new ProviderRegistry();
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-unavailable-provider-session";
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "hello",
+        sessionId,
+        provider: "totally-bogus-provider",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Unknown provider: totally-bogus-provider");
+
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${sessionId}/messages`,
+      headers,
+    });
+
+    expect(messagesResponse.statusCode).toBe(200);
+    expect(messagesResponse.json()).toMatchObject({ streaming: false });
+
+    await app.close();
+  });
+
   it("preserves a cancelled external-provider partial answer after reload", { timeout: 30_000 }, async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

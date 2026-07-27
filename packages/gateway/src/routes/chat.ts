@@ -2247,13 +2247,15 @@ export function registerChatRoutes(
         }
 
         if (!cliProvider) {
-          clearInterval(keepalive);
+          // Must throw (not return) so the shared catch/cleanup below still
+          // runs — a bare early return here skipped activeStreams.delete()
+          // and the session.streaming:false broadcast, permanently wedging
+          // the session in "processing" whenever a remote node briefly
+          // dropped off or didn't advertise the requested provider.
           const message = remoteOwnerNodeId
             ? `Provider ${requestProvider} is unavailable on project device ${remoteOwnerNodeId}`
             : `Unknown provider: ${requestProvider}`;
-          safeWrite(`data: ${JSON.stringify({ type: "error", message })}\n\n`);
-          reply.raw.end();
-          return;
+          throw new Error(message);
         }
 
         const runtimeMode = resolveProviderRuntimeMode(cliProvider, requestRuntimeMode);
