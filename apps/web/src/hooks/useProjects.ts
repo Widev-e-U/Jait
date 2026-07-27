@@ -53,6 +53,21 @@ function authHeaders(token?: string | null): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+export function getMissingSelectedProjectId(
+  projects: ProjectRecord[],
+  routedProjectId: string | null,
+  activeProjectId: string | null,
+  cachedActiveProjectId: string | null,
+): string | null {
+  if (routedProjectId) {
+    return projects.some((project) => project.id === routedProjectId) ? null : routedProjectId
+  }
+  const currentActiveProjectId = activeProjectId ?? cachedActiveProjectId
+  return currentActiveProjectId && !projects.some((project) => project.id === currentActiveProjectId)
+    ? currentActiveProjectId
+    : null
+}
+
 export function useProjects(token?: string | null, onLoginRequired?: () => void) {
   const cacheScope = getChatCacheScope(token, API_URL)
   const [projects, setProjects] = useState<ProjectRecord[]>([])
@@ -173,16 +188,21 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         // page. Without this, that active project would look "gone" below
         // and we'd silently fall back to whatever the server considers last
         // active, flipping the user onto a different project on reload.
-        // `activeProjectIdRef` reflects committed React state, which on a
-        // fresh mount may not have caught up with the cache hydration that
-        // just ran a few lines above (its `setActiveProjectId` call hasn't
-        // necessarily flushed yet) — fall back to reading the cache
-        // directly so this recovery still fires on the very first fetch.
-        const currentActiveProjectId = activeProjectIdRef.current
-          ?? (cacheScope ? readCachedProjectIndex<ProjectRecord, ProjectSession>(cacheScope)?.activeProjectId ?? null : null)
-        if (currentActiveProjectId && !nextProjects.some((project) => project.id === currentActiveProjectId)) {
+        // An explicit project from a routed chat must win over shared cache
+        // state; a newly opened tab/window can otherwise inherit the project
+        // that the original window restored after launching it. Without a
+        // routed selection, recover committed state or the freshly hydrated
+        // cache, whose React state update may not have flushed yet.
+        const routeSelection = initialRouteSelectionRef.current
+        const missingSelectedProjectId = getMissingSelectedProjectId(
+          nextProjects,
+          routeSelection?.projectId ?? null,
+          activeProjectIdRef.current,
+          cacheScope ? readCachedProjectIndex<ProjectRecord, ProjectSession>(cacheScope)?.activeProjectId ?? null : null,
+        )
+        if (missingSelectedProjectId) {
           try {
-            const activeProjectRes = await fetch(`${API_URL}/api/projects/${currentActiveProjectId}`, { headers: authHeaders(token) })
+            const activeProjectRes = await fetch(`${API_URL}/api/projects/${missingSelectedProjectId}`, { headers: authHeaders(token) })
             if (activeProjectRes.ok) {
               const activeProject = await activeProjectRes.json() as ProjectRecord
               nextProjects = [activeProject, ...nextProjects]

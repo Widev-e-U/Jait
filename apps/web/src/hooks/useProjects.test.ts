@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { getMissingSelectedProjectId, type ProjectRecord } from '@/hooks/useProjects'
 import { getLatestProjectSessionId, type ProjectForSessionSelection } from '@/lib/project-sessions'
 
 function projectWithSessions(sessions: ProjectForSessionSelection['sessions']): ProjectForSessionSelection {
@@ -25,5 +26,18 @@ describe('getLatestProjectSessionId', () => {
   it('returns null for projects without chats', () => {
     expect(getLatestProjectSessionId(projectWithSessions([]))).toBeNull()
     expect(getLatestProjectSessionId(null)).toBeNull()
+  })
+})
+
+describe('getMissingSelectedProjectId', () => {
+  it('prioritizes the project from a routed chat over the cached active project', () => {
+    const listedProject = { id: 'listed-project' } as ProjectRecord
+
+    expect(getMissingSelectedProjectId(
+      [listedProject],
+      'routed-project',
+      null,
+      'cached-project',
+    )).toBe('routed-project')
   })
 })
