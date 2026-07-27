@@ -29,7 +29,7 @@ export {
   createCronUpdateTool,
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
-export { createProjectAssignRepositoryTool, createProjectCreateTool } from "./project-tools.js";
+export { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
 export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -158,7 +158,7 @@ import {
   createCronUpdateTool,
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
-import { createProjectAssignRepositoryTool, createProjectCreateTool } from "./project-tools.js";
+import { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -358,6 +358,14 @@ export function createToolRegistry(
     );
     tools.register(
       createProjectAssignRepositoryTool({
+        projectService: deps.projectService,
+        repoService: deps.repoService,
+        gitService: deps.gitService,
+        ws: deps.ws,
+      }),
+    );
+    tools.register(
+      createProjectMoveTool({
         projectService: deps.projectService,
         repoService: deps.repoService,
         gitService: deps.gitService,
