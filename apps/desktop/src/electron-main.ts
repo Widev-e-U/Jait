@@ -5,7 +5,7 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard, dialog, crashReporter } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -128,6 +128,17 @@ const crashLogPath = path.join(app.getPath("userData"), "crash-log.txt");
 const CRASH_LOOP_WINDOW_MS = 10 * 60 * 1000;
 const CRASH_LOOP_RELAUNCH_LIMIT = 3;
 
+// `render-process-gone` gives us a reason and an exit code, which is enough to
+// tell an OOM apart from a hard fault but not enough to say *what* faulted —
+// leaving a reproducible crash with no stack to work from. Starting Crashpad
+// makes Electron write a local minidump per crashed process, so the faulting
+// module is recoverable after the fact. `uploadToServer: false` keeps every
+// dump on this machine: there is no crash-collection endpoint to send them to,
+// and dumps can contain fragments of whatever was in memory (prompts, tokens),
+// so they must never leave the device implicitly.
+crashReporter.start({ productName: "Jait", companyName: "Jait", uploadToServer: false });
+const crashDumpDir = app.getPath("crashDumps");
+
 function logCrashEvent(line: string): void {
   try {
     mkdirSync(path.dirname(crashLogPath), { recursive: true });
@@ -141,7 +152,11 @@ function recordRelaunchAndDetectLoop(): boolean {
   const recent = getSetting<number[]>("relaunchTimestamps", []).filter((t) => now - t < CRASH_LOOP_WINDOW_MS);
   recent.push(now);
   setSetting("relaunchTimestamps", recent);
-  return recent.length > CRASH_LOOP_RELAUNCH_LIMIT;
+  // `>=`, not `>`: each relaunch already costs the user three renderer crashes,
+  // so tripping on the 4th means ~12 crashes of silent window-flashing before
+  // anything is surfaced. Stopping on the 3rd also makes the behaviour match
+  // what the dialog claims ("relaunched 3+ times").
+  return recent.length >= CRASH_LOOP_RELAUNCH_LIMIT;
 }
 
 // ── Hardware acceleration recovery ─────────────────────────────────────
@@ -508,13 +523,14 @@ function createMainWindow(): BrowserWindow {
         // crashing — the hw-accel fix isn't the actual cause here. Relaunching
         // again would just flash the whole window shut and reopen forever
         // with nothing visible to the user. Stop and surface it instead.
-        logCrashEvent("crash loop detected — halting automatic relaunch");
+        logCrashEvent(`crash loop detected — halting automatic relaunch (dumps: ${crashDumpDir})`);
         dialog.showErrorBox(
           "Jait keeps crashing",
           `Jait's window has crashed and relaunched ${CRASH_LOOP_RELAUNCH_LIMIT}+ times in the last 10 minutes ` +
           `(most recently: ${details.reason}). Automatic recovery has been paused so it stops flashing.\n\n` +
           `Crash details were saved to:\n${crashLogPath}\n\n` +
-          `Please share that file, then quit and reopen Jait manually.`,
+          `Crash dumps (these identify the faulting code) are in:\n${crashDumpDir}\n\n` +
+          `Please share both, then quit and reopen Jait manually.`,
         );
         return;
       }
