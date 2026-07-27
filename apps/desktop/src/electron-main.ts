@@ -1080,6 +1080,25 @@ function sendTerminalExitEvent(terminalId: string, exitCode: number | null, sign
   });
 }
 
+/**
+ * Kill a provider child process that was spawned with `shell: true`.
+ *
+ * On POSIX, `sh -c '<single command>'` execs directly into that command,
+ * so `child.pid` already is the real process and a normal signal reaches it.
+ * On Windows there's no such exec optimization: `child.pid` is cmd.exe's
+ * PID, which merely launched the real provider binary as a child console
+ * process. Sending it a signal (which Node maps to TerminateProcess) only
+ * tears down cmd.exe, leaving the actual claude/codex process running and
+ * unstoppable from here. `taskkill /t` kills the whole process tree instead.
+ */
+function killProcessTree(child: ChildProcess): void {
+  if (process.platform === "win32" && child.pid) {
+    spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    return;
+  }
+  child.kill("SIGTERM");
+}
+
 function defaultRemoteTerminalShell(): string {
   if (process.platform === "win32") {
     try {
@@ -1184,7 +1203,7 @@ async function discoverClaudeModelOptions(env: NodeJS.ProcessEnv): Promise<Array
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      child.kill();
+      killProcessTree(child);
       resolve(result);
     };
     const timer = setTimeout(() => settle([]), CLAUDE_MODEL_DISCOVERY_TIMEOUT_MS);
@@ -1743,7 +1762,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         const providerThreadId = threadResult?.thread?.id ?? threadResult?.threadId;
         return { ok: true, initResult, providerThreadId };
       } catch (err) {
-        child.kill();
+        killProcessTree(child);
         remoteProviderSessions.delete(sessionId);
         throw appendProviderStderr(err instanceof Error ? err : new Error(String(err)), sess);
       }
@@ -1776,7 +1795,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       const sess = remoteProviderSessions.get(sessionId);
       if (sess) {
         sess.stopRequested = true;
-        sess.child?.kill("SIGTERM");
+        if (sess.child) killProcessTree(sess.child);
         for (const p of sess.pendingRpc.values()) {
           clearTimeout(p.timer);
           p.reject(new Error("Session stopped"));
@@ -1857,7 +1876,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         const result = await rpcSend(tmpSess, "model/list", {}, 45_000);
         return result;
       } finally {
-        child.kill("SIGTERM");
+        killProcessTree(child);
       }
     }
     default:
