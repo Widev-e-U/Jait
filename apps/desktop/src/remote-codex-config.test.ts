@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRemoteCodexApprovalPolicy } from './remote-codex-config.js'
+import { resolveRemoteCodexThreadConfig } from './remote-codex-config.js'
 
-describe('resolveRemoteCodexApprovalPolicy', () => {
-  it('uses the current Codex app-server policy for supervised sessions', () => {
-    expect(resolveRemoteCodexApprovalPolicy('supervised')).toBe('on-request')
+describe('resolveRemoteCodexThreadConfig', () => {
+  it('uses current Codex app-server values for supervised sessions', () => {
+    expect(resolveRemoteCodexThreadConfig('supervised')).toEqual({
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    })
   })
 
   it('allows full access only when explicitly requested', () => {
-    expect(resolveRemoteCodexApprovalPolicy('full-access')).toBe('never')
-    expect(resolveRemoteCodexApprovalPolicy('unexpected-mode')).toBe('on-request')
+    expect(resolveRemoteCodexThreadConfig('full-access')).toEqual({
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+    })
+    expect(resolveRemoteCodexThreadConfig('unexpected-mode')).toEqual({
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    })
   })
 })
