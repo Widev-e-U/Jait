@@ -332,6 +332,7 @@ export function DeveloperChatWorkspace({
     toolCalls: unknown
     segments: unknown
     isStreaming: boolean
+    steered: unknown
   }>>(new Map())
   const cacheSessionRef = useRef<string | null>(null)
   if (cacheSessionRef.current !== activeSessionId) {
@@ -367,6 +368,7 @@ export function DeveloperChatWorkspace({
         + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
         + '|' + (msg.segments === cached?.segments ? 's' : 'd')
         + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
+        + '|' + (msg.steered === cached?.steered ? 's' : 'd')
         + '|' + msg.role
       if (cached && cached.key === key && !isStreaming) {
         messageElements.push(cached.element)
@@ -380,6 +382,7 @@ export function DeveloperChatWorkspace({
           messageFromEnd={messages.length - 1 - idx}
           role={msg.role}
           content={msg.content}
+          steered={msg.steered}
           contextFlow={msg.contextFlow}
           hasContextFlow={msg.hasContextFlow}
           hasMemoryProvenance={msg.hasMemoryProvenance}
@@ -425,6 +428,7 @@ export function DeveloperChatWorkspace({
         toolCalls: msg.toolCalls,
         segments: msg.segments,
         isStreaming,
+        steered: msg.steered,
       })
       messageElements.push(element)
     }

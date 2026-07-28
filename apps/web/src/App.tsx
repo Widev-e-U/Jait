@@ -627,6 +627,7 @@ function App() {
     rejectPlan,
     enqueueMessage,
     dequeueMessage,
+    recordSteeredMessage,
     updateQueueItem,
     reorderQueueItem,
     setMessageQueueState,
@@ -3262,11 +3263,12 @@ function App() {
         throw new Error(details || error || `Failed to steer: ${response.statusText}`)
       }
       dequeueMessage(id)
+      recordSteeredMessage(item.content, item.displayContent)
       toast.success('Steered with queued message')
     })().catch((err) => {
       toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
     })
-  }, [activeSessionId, dequeueMessage, isLoading, messageQueue, token])
+  }, [activeSessionId, dequeueMessage, isLoading, messageQueue, recordSteeredMessage, token])
 
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
     setManagerMessageQueues((prev) => ({

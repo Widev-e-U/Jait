@@ -242,6 +242,8 @@ export interface ChatMessage {
   content: string
   /** Local-only user message awaiting confirmation from a server snapshot. */
   optimistic?: boolean
+  /** Injected into a running agent turn via steering rather than sent as a normal turn. */
+  steered?: boolean
   /** Clean display text for user messages (without appended file contents) */
   displayContent?: string
   /** File references attached by the user (shown as chips in the bubble) */
@@ -1737,6 +1739,18 @@ export function useChat(
     setMessageQueue(prev => prev.filter(q => q.id !== id))
   }, [])
 
+  /** Insert a visible marker into the transcript for a message that was injected into the running turn via steering. */
+  const recordSteeredMessage = useCallback((content: string, displayContent?: string) => {
+    const steeredMessage: ChatMessage = {
+      id: createOptimisticMessageId('user'),
+      role: 'user',
+      content,
+      displayContent: displayContent ?? content,
+      steered: true,
+    }
+    setState(prev => ({ ...prev, messages: [...prev.messages, steeredMessage] }))
+  }, [])
+
   /** Update the content of a queued message (inline edit). */
   const updateQueueItem = useCallback((id: string, content: string) => {
     const trimmed = content.trim()
@@ -2254,6 +2268,7 @@ export function useChat(
     rejectPlan,
     enqueueMessage,
     dequeueMessage,
+    recordSteeredMessage,
     updateQueueItem,
     reorderQueueItem,
     setMessageQueueState,

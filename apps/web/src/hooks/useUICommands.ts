@@ -757,32 +757,32 @@ export function useUICommands(opts: UseUICommandsOptions) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gatewayEventHandler = (_event: unknown, data: any) => {
       if (data?.type === 'provider.event-from-child') {
+        const msg = JSON.stringify({
+          type: 'provider.event',
+          payload: {
+            sessionId: data.sessionId,
+            event: data.notification,
+          },
+        })
         const ws = wsRef.current
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'provider.event',
-            payload: {
-              sessionId: data.sessionId,
-              event: data.notification,
-            },
-          }))
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg)
+        else outgoingQueueRef.current.push(msg)
       } else if (data?.type === 'terminal.output-from-child') {
+        const msg = JSON.stringify({
+          type: 'terminal.output',
+          payload: { terminalId: data.terminalId, data: data.data },
+        })
         const ws = wsRef.current
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'terminal.output',
-            payload: { terminalId: data.terminalId, data: data.data },
-          }))
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg)
+        else outgoingQueueRef.current.push(msg)
       } else if (data?.type === 'terminal.exit-from-child') {
+        const msg = JSON.stringify({
+          type: 'terminal.exit',
+          payload: { terminalId: data.terminalId, exitCode: data.exitCode, signal: data.signal },
+        })
         const ws = wsRef.current
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'terminal.exit',
-            payload: { terminalId: data.terminalId, exitCode: data.exitCode, signal: data.signal },
-          }))
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg)
+        else outgoingQueueRef.current.push(msg)
       }
     }
     if (detectPlatform() === 'electron' && window.jaitDesktop?.onGatewayEvent) {

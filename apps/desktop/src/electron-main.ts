@@ -1390,6 +1390,10 @@ function mapClaudeStreamEvent(session: RemoteProviderSession, event: Record<stri
   const sessionId = session.sessionId;
   const type = typeof event.type === "string" ? event.type : "";
   switch (type) {
+    // `claude --output-format stream-json` never emits top-level "tool_use" /
+    // "tool_result" / "content_block_delta" events — those only ever appear
+    // nested inside "assistant" message content blocks (tool_use) and "user"
+    // message content blocks (tool_result). Unwrap them here instead.
     case "assistant": {
       const message = event.message as Record<string, unknown> | undefined;
       const content = message?.content;
@@ -1397,54 +1401,63 @@ function mapClaudeStreamEvent(session: RemoteProviderSession, event: Record<stri
         return [{ type: "token", sessionId, content }];
       }
       if (Array.isArray(content)) {
-        return content
-          .filter((block) => (block as Record<string, unknown>)?.type === "text")
-          .map((block) => ({
-            type: "token",
-            sessionId,
-            content: String((block as Record<string, unknown>).text ?? ""),
-          }));
+        const mapped: Record<string, unknown>[] = [];
+        for (const rawBlock of content) {
+          const block = rawBlock as Record<string, unknown>;
+          if (block?.type === "text" && typeof block.text === "string") {
+            mapped.push({ type: "token", sessionId, content: block.text });
+          } else if (block?.type === "tool_use") {
+            const callId = extractDesktopClaudeToolCallId(block)
+              ?? `${sessionId}-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            // The same tool_use block is re-sent as later partial-message
+            // snapshots fill in; only enqueue/emit tool.start once per callId.
+            if (session.pendingToolCalls.some((p) => p.callId === callId)) continue;
+            const rawTool = String(block.name ?? block.tool ?? "");
+            const normalizedTool = normalizeDesktopClaudeToolName(rawTool);
+            const args = normalizeDesktopClaudeToolArgs(rawTool, (block.input as Record<string, unknown> | undefined) ?? {});
+            session.pendingToolCalls.push({
+              callId,
+              rawTool,
+              normalizedTool,
+              args,
+              ...(extractDesktopClaudeProviderToolId(block) ? { providerCallId: extractDesktopClaudeProviderToolId(block) } : {}),
+            });
+            mapped.push({ type: "tool.start", sessionId, tool: normalizedTool, args, callId });
+          }
+        }
+        return mapped;
       }
       return [];
     }
-    case "content_block_delta": {
-      const delta = event.delta as Record<string, unknown> | undefined;
-      if (delta?.type === "text_delta") {
-        return [{ type: "token", sessionId, content: String(delta.text ?? "") }];
+    case "user": {
+      const message = event.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (!Array.isArray(content)) return [];
+      const mapped: Record<string, unknown>[] = [];
+      for (const rawBlock of content) {
+        const block = rawBlock as Record<string, unknown>;
+        if (block?.type !== "tool_result") continue;
+        const match = resolveDesktopClaudePendingToolCall(session.pendingToolCalls, block);
+        const rawTool = String(block.tool ?? match?.rawTool ?? "");
+        const blockContent = block.content;
+        const resultText = typeof blockContent === "string"
+          ? blockContent
+          : Array.isArray(blockContent)
+            ? blockContent
+              .filter((part) => (part as Record<string, unknown>)?.type === "text")
+              .map((part) => String((part as Record<string, unknown>).text ?? ""))
+              .join("")
+            : String(block.output ?? "");
+        mapped.push({
+          type: "tool.result",
+          sessionId,
+          tool: normalizeDesktopClaudeToolName(rawTool),
+          ok: block.is_error !== true,
+          message: resultText,
+          ...(match ? { callId: match.callId, data: match.args } : {}),
+        });
       }
-      return [];
-    }
-    case "tool_use": {
-      const rawTool = String(event.name ?? event.tool ?? "");
-      const normalizedTool = normalizeDesktopClaudeToolName(rawTool);
-      const args = normalizeDesktopClaudeToolArgs(rawTool, (event.input as Record<string, unknown> | undefined) ?? {});
-      const callId = extractDesktopClaudeToolCallId(event) ?? `${sessionId}-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      session.pendingToolCalls.push({
-        callId,
-        rawTool,
-        normalizedTool,
-        args,
-        ...(extractDesktopClaudeProviderToolId(event) ? { providerCallId: extractDesktopClaudeProviderToolId(event) } : {}),
-      });
-      return [{
-        type: "tool.start",
-        sessionId,
-        tool: normalizedTool,
-        args,
-        callId,
-      }];
-    }
-    case "tool_result": {
-      const match = resolveDesktopClaudePendingToolCall(session.pendingToolCalls, event);
-      const rawTool = String(event.tool ?? match?.rawTool ?? "");
-      return [{
-        type: "tool.result",
-        sessionId,
-        tool: normalizeDesktopClaudeToolName(rawTool),
-        ok: event.is_error !== true,
-        message: String(event.content ?? event.output ?? ""),
-        ...(match ? { callId: match.callId, data: match.args } : {}),
-      }];
+      return mapped;
     }
     case "result": {
       const resultContent = typeof event.result === "string" ? event.result : "";

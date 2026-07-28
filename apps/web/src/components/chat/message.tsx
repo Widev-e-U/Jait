@@ -2,7 +2,7 @@ import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { AlertTriangle, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -77,6 +77,8 @@ interface MessageProps {
   messageFromEnd?: number
   role: 'user' | 'assistant'
   content: string
+  /** Injected into a running agent turn via steering rather than sent as a normal turn. */
+  steered?: boolean
   contextFlow?: LlmContextFlow
   /** Lightweight badge: a contextFlow payload exists on the server (lazy-loaded). */
   hasContextFlow?: boolean
@@ -432,6 +434,7 @@ function MessageInner({
   messageFromEnd,
   role,
   content,
+  steered,
   contextFlow,
   hasContextFlow,
   hasMemoryProvenance,
@@ -1175,6 +1178,12 @@ function MessageInner({
                   </div>
                 ) : (
                   <div className="relative w-fit max-w-full">
+                    {steered && (
+                      <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
+                        <ArrowRight className="h-3 w-3" />
+                        Steered into running turn
+                      </span>
+                    )}
                     <AIMessageContent
                       ref={userBubbleRef}
                       data-message-from="user"
@@ -1182,6 +1191,7 @@ function MessageInner({
                         'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
                         canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
                         'leading-relaxed [font-size:0.9rem]',
+                        steered && 'border border-dashed border-primary/40 bg-primary/5',
                       )}
                       onClick={handleUserBubbleClick}
                       title={canEdit && !isEditing ? 'Click to edit message' : undefined}
