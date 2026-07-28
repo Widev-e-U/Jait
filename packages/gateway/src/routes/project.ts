@@ -6,6 +6,7 @@
  * the browser's File System Access API.
  */
 
+import { resolveProjectPanelOpen } from "@jait/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { exec } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
@@ -274,7 +275,7 @@ export function registerProjectRoutes(
   // This is called when a client picks a directory (e.g. Electron native dialog)
   // so that ALL clients on the session can browse files via the gateway REST API.
   app.post("/api/project/open", async (req, reply) => {
-    const body = req.body as { path?: string; sessionId?: string; nodeId?: string } | null;
+    const body = req.body as { path?: string; sessionId?: string; nodeId?: string; openPanel?: boolean } | null;
     const projectPath = body?.path;
     const sessionId = body?.sessionId;
     let nodeId = body?.nodeId || "gateway";
@@ -286,7 +287,7 @@ export function registerProjectRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
     }
 
-    return withProjectOpenLock(sessionId, () => doProjectOpen(reply, projectPath, sessionId, nodeId));
+    return withProjectOpenLock(sessionId, () => doProjectOpen(reply, projectPath, sessionId, nodeId, body?.openPanel));
   });
 
   async function doProjectOpen(
@@ -294,6 +295,7 @@ export function registerProjectRoutes(
     projectPath: string,
     sessionId: string,
     nodeId: string,
+    explicitPanelOpen?: boolean,
   ) {
     let isRemote = ws?.isRemoteNode(nodeId) ?? false;
 
@@ -338,6 +340,12 @@ export function registerProjectRoutes(
       }
     }
 
+    const existingProjectId = sessionService?.getById(sessionId)?.projectId ?? null;
+    const existingProjectUI = existingProjectId && projectState
+      ? projectState.get(existingProjectId, ["project.ui"])["project.ui"] as { panel?: { open?: boolean } | null } | null | undefined
+      : null;
+    const panelOpen = resolveProjectPanelOpen(explicitPanelOpen, existingProjectUI?.panel);
+
     // Stop any existing filesystem surface for this session
     const existing = surfaceRegistry.getBySession(sessionId)
       .filter((s) => (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running");
@@ -353,11 +361,13 @@ export function registerProjectRoutes(
           sessionId,
           projectRoot: projectPath,
           nodeId,
+          panelOpen,
         });
       } else {
         await surfaceRegistry.startSurface("filesystem", surfaceId, {
           sessionId,
           projectRoot: projectPath,
+          panelOpen,
         });
       }
     } catch (err) {
@@ -384,7 +394,7 @@ export function registerProjectRoutes(
       if (projectId) projectService?.touch(projectId);
     } catch { /* best effort */ }
 
-    const panelState = { open: true, remotePath: projectPath, surfaceId, nodeId };
+    const panelState = { open: panelOpen, remotePath: projectPath, surfaceId, nodeId };
     if (sessionId && sessionState) {
       sessionState.set(sessionId, { "project.panel": panelState });
     }
@@ -407,7 +417,7 @@ export function registerProjectRoutes(
       });
     }
 
-    return { surfaceId, projectRoot: projectPath, nodeId, projectId };
+    return { surfaceId, projectRoot: projectPath, nodeId, projectId, panelOpen };
   }
 
   // GET /api/project/list?path=&surfaceId= — list directory entries

@@ -25,6 +25,7 @@ export class RemoteFileSystemSurface implements Surface {
   private _startedAt: string | null = null;
   private _projectRoot: string | null = null;
   private _nodeId: string | null = null;
+  private _panelOpen: boolean | null = null;
   private _opCount = 0;
 
   /**
@@ -58,6 +59,7 @@ export class RemoteFileSystemSurface implements Surface {
     this._startedAt = new Date().toISOString();
     this._projectRoot = input.projectRoot;
     this._nodeId = input.nodeId ?? null;
+    this._panelOpen = typeof input.panelOpen === "boolean" ? input.panelOpen : null;
     this._setState("running");
   }
 
@@ -75,6 +77,7 @@ export class RemoteFileSystemSurface implements Surface {
       metadata: {
         projectRoot: this._projectRoot,
         nodeId: this._nodeId,
+        panelOpen: this._panelOpen,
         operationCount: this._opCount,
         remote: true,
       },

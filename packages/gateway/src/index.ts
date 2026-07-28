@@ -11,7 +11,7 @@ import { SessionStateService } from "./services/session-state.js";
 import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface, RemoteTerminalSurface } from "./surfaces/index.js";
-import type { SurfaceRegistrySnapshot } from "@jait/shared";
+import { resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
 import { createToolRegistry } from "./tools/index.js";
 import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
@@ -230,7 +230,12 @@ async function main() {
       const sid = snap.sessionId ?? "";
       const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
       const nodeId = (snap.metadata as Record<string, unknown>)?.nodeId as string | undefined;
-      const panelState = { open: true, remotePath: projectRoot, surfaceId: id, nodeId: nodeId ?? 'gateway' };
+      const requestedPanelOpen = (snap.metadata as Record<string, unknown>)?.panelOpen;
+      const panelOpen = resolveProjectPanelOpen(
+        typeof requestedPanelOpen === 'boolean' ? requestedPanelOpen : undefined,
+        null,
+      );
+      const panelState = { open: panelOpen, remotePath: projectRoot, surfaceId: id, nodeId: nodeId ?? 'gateway' };
 
       // Start native file watcher for local filesystems
       if (surface.type === "filesystem" && typeof projectRoot === "string") {
@@ -249,6 +254,7 @@ async function main() {
             surfaceId: id,
             projectRoot: projectRoot as string,
             nodeId: nodeId ?? 'gateway',
+            panelOpen,
           },
         },
         sid,

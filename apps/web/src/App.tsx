@@ -1203,7 +1203,7 @@ function App() {
                 ? await fetch(`${API_URL}/api/project/open`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+                    body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open }),
                   })
                 : null
               if (response && !response.ok) throw new Error('Failed to open project')
@@ -1318,7 +1318,7 @@ function App() {
               const response = await fetch(`${API_URL}/api/project/open`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+                body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open }),
               })
               if (!response.ok) throw new Error('Failed to open project')
               const data = await response.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
@@ -1394,7 +1394,7 @@ function App() {
     void fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: projectRoot, sessionId: activeSessionId, nodeId: requestedNodeId }),
+      body: JSON.stringify({ path: projectRoot, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: true }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error('Failed to open project')
@@ -2090,12 +2090,17 @@ function App() {
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
-  const openRemoteProjectOnGateway = useCallback(async (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => {
+  const openRemoteProjectOnGateway = useCallback(async (
+    dirPath: string,
+    nodeId?: string,
+    sessionIdOverride?: string | null,
+    openPanel?: boolean,
+  ) => {
     const sessionId = sessionIdOverride ?? activeSessionId
     const res = await fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway' }),
+      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
@@ -2210,13 +2215,13 @@ function App() {
           toast.error('Failed to open project files.')
           return
         }
-        const data = await res.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
+        const data = await res.json() as ProjectOpenData
         if (requestId !== projectSwitchRequestRef.current) return
         const resolvedNodeId = data.nodeId || project.nodeId || undefined
         setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId })
-        showProjectRef.current = true
-        setShowProject(true)
-        setSavedProject({ open: true, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
+        const panelOpen = data.panelOpen !== false
+        showProjectRef.current = panelOpen
+        setShowProject(panelOpen)
       } catch (e) {
         if (requestId !== projectSwitchRequestRef.current) return
         setActiveProjectIfChanged(null)
@@ -2224,7 +2229,7 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, switchSession, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     const knownSession = personalSessions.find((session) => session.id === sessionId)
@@ -2319,7 +2324,7 @@ function App() {
     }
     const nextOpen = options?.openEditor ?? projectPickerMode === 'editor'
     showProjectRef.current = nextOpen
-    await openRemoteProjectOnGateway(path, nodeId, session.id)
+    await openRemoteProjectOnGateway(path, nodeId, session.id, nextOpen)
     void automation.refresh()
     setShowProject(nextOpen)
     if (nextOpen && isMobile) {
@@ -2335,7 +2340,7 @@ function App() {
     sessionIdOverride?: string | null,
     options?: { mobileTarget?: 'background' | 'editor' },
   ) => {
-    await openRemoteProjectOnGateway(path, nodeId ?? undefined, sessionIdOverride)
+    await openRemoteProjectOnGateway(path, nodeId ?? undefined, sessionIdOverride, true)
     showProjectRef.current = true
     setShowProject(true)
     if (isMobile) {
@@ -2634,6 +2639,7 @@ function App() {
             path: activeProject.projectRoot,
             sessionId: activeSessionId,
             nodeId: activeProject.nodeId || 'gateway',
+            openPanel: showProjectRef.current,
           }),
         })
         if (!openRes.ok || cancelled) return

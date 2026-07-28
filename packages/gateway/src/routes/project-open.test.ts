@@ -187,15 +187,55 @@ describe("POST /api/project/open", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: TEST_DIR, sessionId: session.id }),
     });
-    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+    const { surfaceId, panelOpen } = (await openRes.json()) as { surfaceId: string; panelOpen: boolean };
 
+    expect(panelOpen).toBe(false);
     const state = projectState.get(project.id, ["project.ui"]);
     expect(state["project.ui"]).toEqual({
-      panel: { open: true, remotePath: TEST_DIR, surfaceId, nodeId: "gateway" },
+      panel: { open: false, remotePath: TEST_DIR, surfaceId, nodeId: "gateway" },
       tabs: { remoteRoot: TEST_DIR, tabs: [], activePath: null, activePreview: null },
       layout: { tree: false, editor: true },
       terminal: { open: true },
       preview: null,
+    });
+  });
+
+  it("should explicitly reopen a project whose editor panel was closed", async () => {
+    const user = users.createUser(`project-explicit-open-${Date.now()}`, "password123");
+    const project = projects.create({
+      userId: user.id,
+      title: "jait",
+      rootPath: TEST_DIR,
+      nodeId: "gateway",
+    });
+    const session = sessions.create({
+      userId: user.id,
+      projectId: project.id,
+      projectPath: TEST_DIR,
+      name: "Current chat",
+    });
+    projectState.set(project.id, {
+      "project.ui": {
+        panel: { open: false, remotePath: TEST_DIR, nodeId: "gateway" },
+        tabs: null,
+        layout: { tree: true, editor: false },
+        terminal: null,
+        preview: null,
+      },
+    });
+
+    const openRes = await fetch(`${address}/api/project/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: TEST_DIR, sessionId: session.id, openPanel: true }),
+    });
+    const data = (await openRes.json()) as { surfaceId: string; panelOpen: boolean };
+
+    expect(data.panelOpen).toBe(true);
+    const state = projectState.get(project.id, ["project.ui"]);
+    expect(state["project.ui"]).toMatchObject({
+      panel: { open: true, surfaceId: data.surfaceId },
+      layout: { tree: true, editor: false },
     });
   });
 

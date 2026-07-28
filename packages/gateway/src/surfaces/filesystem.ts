@@ -22,6 +22,7 @@ export class FileSystemSurface implements Surface {
   private _state: SurfaceState = "idle";
   private _sessionId: string | null = null;
   private _startedAt: string | null = null;
+  private _panelOpen: boolean | null = null;
   private guard: PathGuard | null = null;
   private _opCount = 0;
 
@@ -51,6 +52,7 @@ export class FileSystemSurface implements Surface {
   async start(input: SurfaceStartInput): Promise<void> {
     this._sessionId = input.sessionId;
     this._startedAt = new Date().toISOString();
+    this._panelOpen = typeof input.panelOpen === "boolean" ? input.panelOpen : null;
     this.guard = new PathGuard({
       projectRoot: input.projectRoot,
       ...this.guardOpts,
@@ -72,6 +74,7 @@ export class FileSystemSurface implements Surface {
       startedAt: this._startedAt ?? undefined,
       metadata: {
         projectRoot: this.guard?.projectRoot ?? null,
+        panelOpen: this._panelOpen,
         operationCount: this._opCount,
       },
     };

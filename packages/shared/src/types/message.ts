@@ -101,6 +101,7 @@ export interface ProjectOpenData {
   surfaceId: string;
   projectRoot: string;
   nodeId?: string;
+  panelOpen?: boolean;
 }
 
 export interface ProjectCloseData {
