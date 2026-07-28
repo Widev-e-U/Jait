@@ -6,7 +6,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { SessionInfo } from '@/hooks/useChat'
-import type { ProjectSession, ProjectRecord } from '@/hooks/useProjects'
+import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 
@@ -24,6 +24,8 @@ interface DeveloperSidebarsProps {
   projects: ProjectRecord[]
   projectsLoading: boolean
   repositories: AutomationRepository[]
+  searchLoading: boolean
+  searchResults: ProjectSearchResults | null
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
   showDebugPanel: boolean
@@ -38,6 +40,7 @@ interface DeveloperSidebarsProps {
   onCreateProject: () => void
   onCreatePersonalSession: () => void
   onRemoveProject: (projectId: string) => void
+  onSearch: (query: string) => void
   onSelectPersonalSession: (sessionId: string) => void
   onSelectProject: (projectId: string) => void
   onSelectProjectSession: (projectId: string, sessionId: string) => void
@@ -65,6 +68,8 @@ export function DeveloperSidebars({
   projects,
   projectsLoading,
   repositories,
+  searchLoading,
+  searchResults,
   sessionInfo,
   showArchitecture,
   showDebugPanel,
@@ -79,6 +84,7 @@ export function DeveloperSidebars({
   onCreateProject,
   onCreatePersonalSession,
   onRemoveProject,
+  onSearch,
   onSelectPersonalSession,
   onSelectProject,
   onSelectProjectSession,
@@ -194,6 +200,9 @@ export function DeveloperSidebars({
               loading={projectsLoading}
               hasMoreProjects={hasMoreProjects}
               showFewerProjects={projects.length > projectListLimit}
+              searchLoading={searchLoading}
+              searchResults={searchResults}
+              onSearch={onSearch}
               onSelectProject={onSelectProject}
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}

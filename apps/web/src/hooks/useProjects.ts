@@ -34,6 +34,11 @@ export interface ProjectRecord {
   sessions: ProjectSession[]
 }
 
+export interface ProjectSearchResults {
+  projects: ProjectRecord[]
+  personalSessions: ProjectSession[]
+}
+
 export interface CreateProjectOptions {
   title?: string
   rootPath?: string | null
@@ -78,6 +83,9 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const [visibleLimit, setVisibleLimit] = useState(PROJECT_LIST_LIMIT)
   const [hasMoreProjects, setHasMoreProjects] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [searchResults, setSearchResults] = useState<ProjectSearchResults | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchRequestRef = useRef(0)
   const cacheHydratedScopeRef = useRef<string | null>(null)
   const hasCachedProjectIndexRef = useRef(false)
   const cacheWriteReadyScopeRef = useRef<string | null>(null)
@@ -258,6 +266,92 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       setLoading(false)
     }
   }, [hydrateCachedProjectIndex, onLoginRequired, token, visibleLimit])
+
+  const loadProject = useCallback(async (projectId: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/projects/${projectId}`, { headers: authHeaders(token) })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const project = await response.json() as ProjectRecord
+      const loaded = { ...project, sessions: project.sessions ?? [] }
+      setProjects((prev) => [loaded, ...prev.filter((entry) => entry.id !== loaded.id)])
+      return loaded
+    } catch (err) {
+      console.error('Failed to load project:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
+  const loadSession = useCallback(async (sessionId: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}`, { headers: authHeaders(token) })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const session = await response.json() as ProjectSession
+      if (session.projectId) {
+        setProjects((prev) => prev.map((project) => (
+          project.id === session.projectId && !project.sessions.some((entry) => entry.id === session.id)
+            ? { ...project, sessions: [session, ...project.sessions] }
+            : project
+        )))
+      } else {
+        setPersonalSessions((prev) => [session, ...prev.filter((entry) => entry.id !== session.id)])
+      }
+      return session
+    } catch (err) {
+      console.error('Failed to load session:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
+  const searchChats = useCallback(async (query: string) => {
+    const normalized = query.trim()
+    const requestId = ++searchRequestRef.current
+    if (!normalized || !token) {
+      setSearchResults(null)
+      setSearchLoading(false)
+      return
+    }
+
+    setSearchResults(null)
+    setSearchLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/projects/search?q=${encodeURIComponent(normalized)}`, {
+        headers: authHeaders(token),
+      })
+      if (requestId !== searchRequestRef.current) return
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return
+      }
+      if (!response.ok) {
+        setSearchResults({ projects: [], personalSessions: [] })
+        return
+      }
+      setSearchResults(await response.json() as ProjectSearchResults)
+    } catch (err) {
+      if (requestId === searchRequestRef.current) {
+        console.error('Failed to search chats:', err)
+        setSearchResults({ projects: [], personalSessions: [] })
+      }
+    } finally {
+      if (requestId === searchRequestRef.current) setSearchLoading(false)
+    }
+  }, [onLoginRequired, token])
 
   const createProject = useCallback(async (options: CreateProjectOptions = {}) => {
     if (!token) {
@@ -617,6 +711,33 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [onLoginRequired, token])
 
+  const generateSessionTitle = useCallback(async (sessionId: string, prompt: string, model?: string) => {
+    if (!token || !prompt.trim()) return null
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}/generate-title`, {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, model }),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const data = await response.json() as { session: ProjectSession }
+      const session = data.session
+      setProjects((prev) => prev.map((project) => ({
+        ...project,
+        sessions: project.sessions.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry),
+      })))
+      setPersonalSessions((prev) => prev.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry))
+      return session
+    } catch (err) {
+      console.error('Failed to generate session title:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
   const showMoreProjects = useCallback(() => {
     setVisibleLimit((prev) => prev + PROJECT_LIST_LIMIT)
   }, [])
@@ -755,7 +876,12 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     activeSessionId,
     loading,
     hasMoreProjects,
+    searchResults,
+    searchLoading,
     fetchProjects,
+    loadProject,
+    loadSession,
+    searchChats,
     createProject,
     updateProject,
     assignProjectRepository,
@@ -769,6 +895,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     fetchArchivedProjects,
     restoreProject,
     renameSession,
+    generateSessionTitle,
     showMoreProjects,
     showFewerProjects,
     projectListLimit: PROJECT_LIST_LIMIT,

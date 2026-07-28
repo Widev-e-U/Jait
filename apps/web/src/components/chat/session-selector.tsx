@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -9,7 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import type { ProjectRecord, ProjectSession } from '@/hooks/useProjects'
+import type { ProjectRecord, ProjectSearchResults, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
 import { buildProjectDragPayload, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
@@ -25,6 +25,9 @@ interface SessionSelectorProps {
   loading?: boolean
   hasMoreProjects?: boolean
   showFewerProjects?: boolean
+  searchResults?: ProjectSearchResults | null
+  searchLoading?: boolean
+  onSearch?: (query: string) => void
   onSelectProject: (projectId: string) => void
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
@@ -83,6 +86,9 @@ export function SessionSelector({
   loading = false,
   hasMoreProjects = false,
   showFewerProjects = false,
+  searchResults,
+  searchLoading = false,
+  onSearch,
   onSelectProject,
   onSelectProjectSession,
   onSelectPersonalSession,
@@ -105,11 +111,28 @@ export function SessionSelector({
     [nodes],
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const displayedProjects = normalizedSearchQuery && onSearch
+    ? searchResults?.projects ?? []
+    : projects
+  const displayedPersonalSessions = normalizedSearchQuery && onSearch
+    ? searchResults?.personalSessions ?? []
+    : personalSessions
+
+  useEffect(() => {
+    if (!onSearch) return
+    if (!normalizedSearchQuery) {
+      onSearch('')
+      return
+    }
+    const timer = window.setTimeout(() => onSearch(searchQuery.trim()), 250)
+    return () => window.clearTimeout(timer)
+  }, [normalizedSearchQuery, onSearch, searchQuery])
 
   const filteredProjects = useMemo(() => {
-    if (!normalizedSearchQuery) return projects
-    return projects.filter((project) => {
+    if (!normalizedSearchQuery || onSearch) return displayedProjects
+    return displayedProjects.filter((project) => {
       const repository = getProjectRepository(project, repositories)
       const remoteNode = project.nodeId && project.nodeId !== 'gateway'
         ? nodes.find((n) => n.id === project.nodeId)
@@ -123,21 +146,23 @@ export function SessionSelector({
       ]
       return terms.some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     })
-  }, [nodes, normalizedSearchQuery, repositories, projects])
+  }, [displayedProjects, nodes, normalizedSearchQuery, onSearch, repositories])
 
   const filteredPersonalSessions = useMemo(() => {
-    if (!normalizedSearchQuery) return personalSessions
-    return personalSessions.filter((session) => (
+    if (!normalizedSearchQuery || onSearch) return displayedPersonalSessions
+    return displayedPersonalSessions.filter((session) => (
       [session.name, session.projectPath]
         .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     ))
-  }, [normalizedSearchQuery, personalSessions])
+  }, [displayedPersonalSessions, normalizedSearchQuery, onSearch])
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex h-[35px] shrink-0 items-center gap-2 px-2.5 border-b">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1">
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {searchLoading && normalizedSearchQuery
+            ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+            : <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <input
             type="search"
             value={searchQuery}
@@ -170,7 +195,7 @@ export function SessionSelector({
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {projects.length === 0 && (
+                {!normalizedSearchQuery && projects.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     No projects yet.
                     <br />
@@ -179,7 +204,7 @@ export function SessionSelector({
                     </button>
                   </p>
                 )}
-                {projects.length > 0 && filteredProjects.length === 0 && (
+                {normalizedSearchQuery && !searchLoading && filteredProjects.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     No matching projects.
                   </p>
@@ -193,11 +218,15 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
                   const repository = getProjectRepository(project, repositories)
-                  const recentSessions = [...project.sessions]
+                  const sortedSessions = [...project.sessions]
                     .sort((a, b) => (
                       Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt)
                     ))
-                    .slice(0, RECENT_SESSIONS_LIMIT)
+                  const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
+                  const recentSessions = normalizedSearchQuery
+                    ? sortedSessions
+                    : sortedSessions.slice(0, visibleSessionLimit)
+                  const hasOlderSessions = !normalizedSearchQuery && sortedSessions.length > recentSessions.length
                   return (
                     <div key={project.id}>
                     <div
@@ -358,6 +387,18 @@ export function SessionSelector({
                             </div>
                           )
                         })}
+                        {hasOlderSessions && (
+                          <button
+                            type="button"
+                            className="w-full rounded-md px-1.5 py-1 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                            onClick={() => setVisibleSessionsByProject((current) => ({
+                              ...current,
+                              [project.id]: visibleSessionLimit + RECENT_SESSIONS_LIMIT,
+                            }))}
+                          >
+                            Show older
+                          </button>
+                        )}
                       </div>
                     )}
                     </div>
@@ -402,7 +443,7 @@ export function SessionSelector({
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {personalSessions.length === 0 && (
+                {!normalizedSearchQuery && personalSessions.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     No personal chats yet.
                     {onNewPersonalSession && (
@@ -415,7 +456,7 @@ export function SessionSelector({
                     )}
                   </p>
                 )}
-                {personalSessions.length > 0 && filteredPersonalSessions.length === 0 && (
+                {normalizedSearchQuery && !searchLoading && filteredPersonalSessions.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     No matching personal chats.
                   </p>

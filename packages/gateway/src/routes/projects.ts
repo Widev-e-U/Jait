@@ -133,6 +133,15 @@ export function registerProjectEntityRoutes(
     return projectService.listWithSessions(authUser.id, status, limit);
   });
 
+  app.get("/api/projects/search", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const query = request.query as Record<string, unknown>;
+    const search = typeof query["q"] === "string" ? query["q"].trim() : "";
+    if (!search) return { projects: [], personalSessions: [] };
+    return projectService.searchWithSessions(authUser.id, search);
+  });
+
   app.get("/api/projects/last-active", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

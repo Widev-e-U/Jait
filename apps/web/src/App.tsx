@@ -79,11 +79,11 @@ import {
 import { getApiUrl, getStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
+import { shouldAutoTitleSession } from '@/lib/session-title'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
-import { deriveSessionTitle, shouldAutoTitleSession } from '@/lib/session-title'
 import {
   mergeAttachmentsIntoSegments,
 } from '@/lib/message-segment-builders'
@@ -483,8 +483,13 @@ function App() {
     clearArchivedProjects,
     fetchArchivedProjects,
     restoreProject,
-    renameSession,
+    generateSessionTitle,
     fetchProjects,
+    loadProject,
+    loadSession,
+    searchChats,
+    searchResults,
+    searchLoading,
     hasMoreProjects,
     showMoreProjects,
     showFewerProjects,
@@ -2161,7 +2166,7 @@ function App() {
   // Wrap switchProject so clicking a project also opens its remote directory
   // and shows the correct files/session in the editor.
   const handleSwitchProject = useCallback(async (projectId: string, sessionId?: string) => {
-    const project = projects.find((w) => w.id === projectId)
+    const project = projects.find((entry) => entry.id === projectId) ?? await loadProject(projectId)
     if (!project) return
 
     if (isMobile) {
@@ -2226,7 +2231,15 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, switchProject, switchSession, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+  }, [projects, loadProject, switchProject, switchSession, setSavedProject, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+
+  const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
+    const knownSession = personalSessions.find((session) => session.id === sessionId)
+    const session = knownSession ?? await loadSession(sessionId)
+    if (!session || session.projectId) return
+    if (isMobile) setShowSidebar(false)
+    switchSession(null, sessionId)
+  }, [isMobile, loadSession, personalSessions, switchSession])
 
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
     if (projectId === activeProjectId) {
@@ -2980,14 +2993,6 @@ function App() {
     setInputSegments(undefined)
   }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue])
 
-  const ensureSessionTitle = useCallback(async (sessionId: string, prompt: string) => {
-    if (!shouldAutoTitleSession(activeSessionRecord?.name)) return
-    const nextTitle = deriveSessionTitle(prompt)
-    if (!nextTitle || nextTitle === 'New Chat') return
-    await renameSession(sessionId, nextTitle)
-  }, [activeSessionRecord?.name, renameSession])
-
-
   const handleSubmit = async (
     chipFiles?: ReferencedFile[],
     fileAttachments?: ChatAttachment[],
@@ -3004,17 +3009,19 @@ function App() {
     }
 
     const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
+    const displayContent = prepared?.displayContent || promptText
     const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
-    const generatedTitle = deriveSessionTitle(prepared?.displayContent || promptText)
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
     let sid = activeSessionId
     if (!sid) {
-      const session = await createSession(undefined, generatedTitle)
+      const session = await createSession(undefined)
       sid = session?.id ?? null
     }
     if (!sid) return
-    await ensureSessionTitle(sid, prepared?.displayContent || promptText)
+    if (shouldAutoTitleSession(activeSessionRecord?.name)) {
+      void generateSessionTitle(sid, displayContent, chatProvider === 'jait' ? cliModel ?? undefined : undefined)
+    }
 
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
@@ -4021,6 +4028,8 @@ function App() {
                   projects={projects}
                   projectsLoading={projectsLoading}
                   repositories={automation.repositories}
+                  searchLoading={searchLoading}
+                  searchResults={searchResults}
                   sessionInfo={sessionInfo}
                   showArchitecture={showArchitecture}
                   showDebugPanel={showDebugPanel}
@@ -4035,7 +4044,8 @@ function App() {
                   onCreateProject={handleCreateProject}
                   onCreatePersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
                   onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
-                  onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
+                  onSearch={searchChats}
+                  onSelectPersonalSession={(sessionId) => { void handleSelectPersonalSession(sessionId) }}
                   onSelectProject={handleSwitchProject}
                   onSelectProjectSession={handleSelectProjectSession}
                   onShowFewer={showFewerProjects}
@@ -4347,9 +4357,12 @@ function App() {
                       loading={projectsLoading}
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}
+                      searchLoading={searchLoading}
+                      searchResults={searchResults}
+                      onSearch={searchChats}
                       onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
                       onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
-                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); switchSession(null, sessionId) }}
+                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSelectPersonalSession(sessionId) }}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}

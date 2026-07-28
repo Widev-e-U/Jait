@@ -508,7 +508,7 @@ export function AppHeader(props: AppHeaderProps) {
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <button className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isElectron ? 'mr-4' : ''}`}>
                     <Avatar className="h-7 w-7">
                       <AvatarFallback className="text-xs">{userInitial}</AvatarFallback>
                     </Avatar>

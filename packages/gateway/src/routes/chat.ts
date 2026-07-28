@@ -1507,22 +1507,6 @@ export function registerChatRoutes(
 
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
 
-  const shouldAutoRenameSession = (name: string | null | undefined) => {
-    const normalized = name?.trim() ?? "";
-    return !normalized || normalized === "New Chat" || normalized.startsWith("Session ");
-  };
-
-  const deriveSessionTitle = (raw: string) => {
-    const singleLine = raw
-      .replace(/\r/g, "\n")
-      .split("\n")
-      .map((line) => line.trim())
-      .find(Boolean) ?? "";
-    if (!singleLine) return "";
-    const cleaned = singleLine.replace(/\s+/g, " ").trim();
-    return cleaned.length > 80 ? cleaned.slice(0, 77).trimEnd() + "..." : cleaned;
-  };
-
   const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
     if (!ws) return;
     ws.broadcast(sessionId, {
@@ -1889,9 +1873,6 @@ export function registerChatRoutes(
       const session = sessionService.getById(sessionId, authUser.id);
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
-      }
-      if (content.trim() && shouldAutoRenameSession(session.name)) {
-        sessionService.update(sessionId, { name: deriveSessionTitle(content) }, authUser.id);
       }
     }
 

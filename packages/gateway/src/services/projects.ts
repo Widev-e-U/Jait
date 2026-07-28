@@ -116,6 +116,49 @@ export class ProjectService {
     };
   }
 
+  searchWithSessions(userId: string, rawQuery: string) {
+    const query = rawQuery.trim().toLowerCase();
+    if (!query) return { projects: [], personalSessions: [] };
+
+    const projectRows = this.list("active", userId);
+    const sessionRows = this.db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.status, "active"), eq(sessions.userId, userId)))
+      .orderBy(desc(sessions.lastActiveAt))
+      .all();
+
+    const matchingSessions = sessionRows.filter((session) => (
+      [session.name, session.projectPath]
+        .some((value) => value?.toLowerCase().includes(query))
+    ));
+    const sessionsByProject = new Map<string, typeof matchingSessions>();
+    const personalSessions: typeof matchingSessions = [];
+    for (const session of matchingSessions) {
+      if (!session.projectId) {
+        personalSessions.push(session);
+        continue;
+      }
+      const bucket = sessionsByProject.get(session.projectId) ?? [];
+      bucket.push(session);
+      sessionsByProject.set(session.projectId, bucket);
+    }
+
+    return {
+      projects: projectRows
+        .filter((project) => (
+          [project.title, project.rootPath]
+            .some((value) => value?.toLowerCase().includes(query))
+          || sessionsByProject.has(project.id)
+        ))
+        .map((project) => ({
+          ...project,
+          sessions: sessionsByProject.get(project.id) ?? [],
+        })),
+      personalSessions,
+    };
+  }
+
   getById(id: string, userId?: string) {
     if (userId) {
       return this.db.select().from(projects).where(and(eq(projects.id, id), eq(projects.userId, userId))).get();

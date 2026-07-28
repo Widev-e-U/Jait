@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { createServer } from "../server.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
@@ -128,6 +128,40 @@ describe("project routes", () => {
       sessions: Array<{ name: string; projectId: string | null }>;
     };
     expect(sessionsBody.sessions.some((session) => session.name === "Chat one" && session.projectId === null)).toBe(true);
+  });
+
+  it("generates an LLM title for a new chat", async () => {
+    const user = userService.createUser("title-user", "password123");
+    userService.updateSettings(user.id, { apiKeys: { OPENAI_API_KEY: "test-key" } });
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "Diagnose Electron gray screens" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    try {
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/api/sessions",
+        headers,
+        payload: {},
+      });
+      const session = JSON.parse(createRes.body) as { id: string; name: string };
+      expect(session.name).toBe("New Chat");
+
+      const titleRes = await app.inject({
+        method: "POST",
+        url: `/api/sessions/${session.id}/generate-title`,
+        headers,
+        payload: { prompt: "my windows node shows a gray window randomly" },
+      });
+      expect(titleRes.statusCode).toBe(200);
+      const titleBody = JSON.parse(titleRes.body) as { session: { name: string }; generated: boolean };
+      expect(titleBody.generated).toBe(true);
+      expect(titleBody.session.name).toBe("Diagnose Electron gray screens");
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("returns last-active project and supports project-scoped state", async () => {

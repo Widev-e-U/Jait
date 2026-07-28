@@ -19,6 +19,8 @@ import { requireAuth } from "../security/http-auth.js";
 import type { ProjectService } from "../services/projects.js";
 import type { WsControlPlane } from "../ws.js";
 import type { WsEventType } from "@jait/shared/types";
+import type { UserService } from "../services/users.js";
+import { generateTitleViaApi, normalizeGeneratedThreadTitle } from "../services/thread-title.js";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
@@ -29,6 +31,7 @@ export function registerSessionRoutes(
   sessionState?: SessionStateService,
   projectService?: ProjectService,
   ws?: WsControlPlane,
+  userService?: UserService,
 ) {
   /** Broadcast a chat/session event over WS to the owning user's other clients */
   const broadcastChatEvent = (
@@ -160,6 +163,53 @@ export function registerSessionRoutes(
     const updated = sessionService.getById(id, authUser.id);
     broadcastChatEvent(authUser.id, "updated", { projectId: session.projectId ?? null, session: updated });
     return updated;
+  });
+
+  app.post("/api/sessions/:id/generate-title", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const prompt = typeof body["prompt"] === "string" ? body["prompt"].trim() : "";
+    if (!prompt) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "prompt is required" });
+    }
+
+    const session = sessionService.getById(id, authUser.id);
+    if (!session) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+    const currentName = session.name?.trim() ?? "";
+    if (currentName && currentName !== "New Chat" && !currentName.startsWith("Session ")) {
+      return { session, generated: false };
+    }
+
+    const settings = userService?.getSettings(authUser.id);
+    let generated = true;
+    let title: string;
+    try {
+      title = await generateTitleViaApi({
+        task: prompt,
+        config,
+        apiKeys: settings?.apiKeys,
+        model: typeof body["model"] === "string" ? body["model"] : undefined,
+        jaitBackend: settings?.jaitBackend,
+      });
+    } catch {
+      generated = false;
+      title = normalizeGeneratedThreadTitle(prompt, "New Chat");
+    }
+
+    const latest = sessionService.getById(id, authUser.id);
+    const latestName = latest?.name?.trim() ?? "";
+    if (!latest || (latestName && latestName !== "New Chat" && !latestName.startsWith("Session "))) {
+      return { session: latest ?? session, generated: false };
+    }
+
+    sessionService.update(id, { name: title }, authUser.id);
+    const updated = sessionService.getById(id, authUser.id);
+    broadcastChatEvent(authUser.id, "updated", { projectId: session.projectId ?? null, session: updated });
+    return { session: updated, generated };
   });
 
   // Soft-delete session
