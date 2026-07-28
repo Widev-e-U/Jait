@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { getMissingSelectedProjectId, type ProjectRecord } from '@/hooks/useProjects'
+import {
+  getMissingSelectedProjectId,
+  prependProjectSession,
+  type ProjectRecord,
+  type ProjectSession,
+} from '@/hooks/useProjects'
 import { getLatestProjectSessionId, type ProjectForSessionSelection } from '@/lib/project-sessions'
 
 function projectWithSessions(sessions: ProjectForSessionSelection['sessions']): ProjectForSessionSelection {
@@ -39,5 +44,25 @@ describe('getMissingSelectedProjectId', () => {
       null,
       'cached-project',
     )).toBe('routed-project')
+  })
+})
+
+describe('prependProjectSession', () => {
+  it('keeps one project chat when the WebSocket event arrives before the create response', () => {
+    const session: ProjectSession = {
+      id: 'new-chat',
+      projectId: 'project-1',
+      name: 'New Chat',
+      projectPath: '/workspace/jait',
+      status: 'active',
+      createdAt: '2026-07-28T08:30:00.000Z',
+      lastActiveAt: '2026-07-28T08:30:00.000Z',
+      metadata: null,
+    }
+
+    const afterWebSocketEvent = prependProjectSession([], session)
+    const afterCreateResponse = prependProjectSession(afterWebSocketEvent, session)
+
+    expect(afterCreateResponse.map((entry) => entry.id)).toEqual(['new-chat'])
   })
 })

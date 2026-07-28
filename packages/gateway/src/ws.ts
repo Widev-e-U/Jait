@@ -91,6 +91,7 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[]; hasMore?: boolean };
+  getStreamingSessionIds?: (userId: string) => string[];
   getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 
@@ -319,6 +320,25 @@ export class WsControlPlane {
             sessionId: "",
             timestamp: new Date().toISOString(),
             payload: this.getThreadSnapshot(userId),
+          });
+          return;
+        }
+        if (resource === "root:/streaming-sessions") {
+          const userId = client.userId?.trim();
+          if (!userId || !this.getStreamingSessionIds) {
+            this.send(client.ws, {
+              type: "error",
+              sessionId: client.sessionId ?? "",
+              timestamp: new Date().toISOString(),
+              payload: { message: "Streaming session registry unavailable" },
+            });
+            return;
+          }
+          this.send(client.ws, {
+            type: "session.streaming-snapshot",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { sessionIds: this.getStreamingSessionIds(userId) },
           });
           return;
         }

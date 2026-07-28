@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getBackgroundSecretRequest,
+  getSecretRequestCommand,
+  getSessionSecretRequest,
   messageListHasMatchingSecretToolCall,
   shouldRenderSecretRequestDialog,
   secretRequestMatchesTool,
@@ -19,6 +22,37 @@ function secret(overrides: Partial<SecretInputRequest> = {}): SecretInputRequest
     ...overrides,
   }
 }
+
+describe('secret request routing', () => {
+  const currentRequest = secret({
+    id: 'secret-current',
+    sessionId: 'session-current',
+    command: 'sudo systemctl restart jait',
+  })
+  const backgroundRequest = secret({
+    id: 'secret-background',
+    sessionId: 'session-background',
+    command: 'ssh deploy@server.example',
+  })
+
+  it('keeps the current chat request inline and routes another chat to the notification', () => {
+    const requests = [backgroundRequest, currentRequest]
+
+    expect(getSessionSecretRequest(requests, 'session-current')).toBe(currentRequest)
+    expect(getBackgroundSecretRequest(requests, 'session-current')).toBe(backgroundRequest)
+  })
+
+  it('does not attach a request to a chat when no session is active', () => {
+    expect(getSessionSecretRequest([currentRequest], null)).toBeNull()
+    expect(getBackgroundSecretRequest([currentRequest], null)).toBe(currentRequest)
+  })
+
+  it('shows the exact command when available and falls back to the requesting tool', () => {
+    expect(getSecretRequestCommand(currentRequest)).toBe('sudo systemctl restart jait')
+    expect(getSecretRequestCommand(secret({ command: undefined }))).toBe('ssh.run')
+    expect(getSecretRequestCommand(secret({ command: '  ', requestedBy: null }))).toBe('Unknown command')
+  })
+})
 
 describe('secret input tool matching', () => {
   it('treats SSH password prompts as inline-capable', () => {

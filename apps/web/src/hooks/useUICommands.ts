@@ -11,6 +11,7 @@ import {
   ArchitectureUpdateData,
   FsChangesPayload,
   SessionStreamingData,
+  SessionStreamingSnapshotData,
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 
@@ -136,6 +137,8 @@ interface UseUICommandsOptions {
   onMessageComplete?: () => void
   /** Called when any of the user's sessions starts/stops streaming a response, regardless of which session is currently open. */
   onSessionStreamingChange?: (sessionId: string, streaming: boolean) => void
+  /** Called with the authoritative running-session set after every WebSocket connection. */
+  onSessionStreamingSnapshot?: (sessionIds: string[]) => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway broadcasts preview session state changes. */
@@ -170,6 +173,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onMessageStarted,
     onMessageComplete,
     onSessionStreamingChange,
+    onSessionStreamingSnapshot,
     onThreadEvent,
     onFsChanges,
     onConnectionStateChange,
@@ -187,6 +191,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onMessageCompleteRef.current = onMessageComplete
   const onSessionStreamingChangeRef = useRef(onSessionStreamingChange)
   onSessionStreamingChangeRef.current = onSessionStreamingChange
+  const onSessionStreamingSnapshotRef = useRef(onSessionStreamingSnapshot)
+  onSessionStreamingSnapshotRef.current = onSessionStreamingSnapshot
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
   const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
@@ -275,6 +281,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // Any of the user's sessions started/stopped streaming — sidebar-wide, not session-scoped
         const payload = msg.payload as SessionStreamingData
         onSessionStreamingChangeRef.current?.(payload.sessionId, payload.streaming)
+      } else if (msg.type === 'session.streaming-snapshot') {
+        const payload = msg.payload as SessionStreamingSnapshotData
+        onSessionStreamingSnapshotRef.current?.(payload.sessionIds)
       } else if (msg.type === 'fs.changes') {
         // Native filesystem change events from the project watcher
         const payload = msg.payload as FsChangesPayload
@@ -626,6 +635,10 @@ export function useUICommands(opts: UseUICommandsOptions) {
         ws.send(JSON.stringify({
           type: 'resource.subscribe',
           payload: { resource: 'root:/threads' },
+        }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/streaming-sessions' },
         }))
         ws.send(JSON.stringify({
           type: 'resource.subscribe',

@@ -22,6 +22,7 @@ export type {
   ProjectOpenData,
   ProjectCloseData,
   SessionStreamingData,
+  SessionStreamingSnapshotData,
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,

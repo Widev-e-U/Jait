@@ -29,6 +29,7 @@ export type WsEventType =
   | "message.started"
   | "message.complete"
   | "session.streaming"
+  | "session.streaming-snapshot"
   | "tool.call"
   | "tool.result"
   | "consent.required"
@@ -112,6 +113,11 @@ export interface ProjectCloseData {
 export interface SessionStreamingData {
   sessionId: string;
   streaming: boolean;
+}
+
+/** Authoritative streaming state sent when a client connects or reconnects. */
+export interface SessionStreamingSnapshotData {
+  sessionIds: string[];
 }
 
 export interface TerminalFocusData {

@@ -6,6 +6,7 @@ export interface SecretInputRequest {
   title: string
   prompt: string
   requestedBy: string | null
+  command?: string
   rememberable?: boolean
   rememberLabel?: string
   secretType?: string
@@ -18,6 +19,25 @@ interface ToolCallLike {
   tool: string
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'success' | 'error'
+}
+
+export function getSessionSecretRequest(
+  requests: SecretInputRequest[],
+  sessionId: string | null,
+): SecretInputRequest | null {
+  if (!sessionId) return null
+  return requests.find((request) => request.sessionId === sessionId) ?? null
+}
+
+export function getBackgroundSecretRequest(
+  requests: SecretInputRequest[],
+  sessionId: string | null,
+): SecretInputRequest | null {
+  return requests.find((request) => request.sessionId !== sessionId) ?? null
+}
+
+export function getSecretRequestCommand(request: SecretInputRequest): string {
+  return request.command?.trim() || request.requestedBy?.trim() || 'Unknown command'
 }
 
 const SSH_SECRET_REQUESTERS = new Set(['ssh.run', 'run.ssh', 'ssh.session.start'])

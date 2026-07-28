@@ -1505,6 +1505,14 @@ export function registerChatRoutes(
   _dbRef = db;
   _appRef = app;
 
+  const getStreamingSessionIds = (userId: string): string[] => {
+    if (!sessionService) return [];
+    return sessionService.list("active", userId)
+      .filter((session) => activeStreams.has(session.id))
+      .map((session) => session.id);
+  };
+  if (ws) ws.getStreamingSessionIds = getStreamingSessionIds;
+
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
 
   const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
@@ -3287,11 +3295,7 @@ export function registerChatRoutes(
   app.get("/api/sessions/streaming", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    if (!sessionService) return { sessionIds: [] };
-    const sessionIds = sessionService.list("active", authUser.id)
-      .filter((session) => activeStreams.has(session.id))
-      .map((session) => session.id);
-    return { sessionIds };
+    return { sessionIds: getStreamingSessionIds(authUser.id) };
   });
 
   // List messages in a session

@@ -7,6 +7,7 @@ export interface SecretInputRequest {
   title: string;
   prompt: string;
   requestedBy: string | null;
+  command?: string;
   rememberable?: boolean;
   rememberLabel?: string;
   secretType?: string;
@@ -46,6 +47,7 @@ export class SecretInputService {
     title: string;
     prompt: string;
     requestedBy?: string | null;
+    command?: string;
     rememberable?: boolean;
     rememberLabel?: string;
     secretType?: string;
@@ -61,6 +63,7 @@ export class SecretInputService {
       title: input.title,
       prompt: input.prompt,
       requestedBy: input.requestedBy ?? null,
+      command: input.command,
       rememberable: input.rememberable,
       rememberLabel: input.rememberLabel,
       secretType: input.secretType,

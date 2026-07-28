@@ -15,6 +15,7 @@ describe("SecretInputService", () => {
       title: "SSH password",
       prompt: "Password for host-a",
       requestedBy: "ssh.run",
+      command: "ssh deploy@host-a",
     });
     const sharedPromise = service.requestSecret({
       sessionId: "session-2",
@@ -30,6 +31,7 @@ describe("SecretInputService", () => {
       sessionId: "session-1",
       userId: "user-1",
       title: "SSH password",
+      command: "ssh deploy@host-a",
       status: "pending",
     });
     expect(sharedRequest).toMatchObject({

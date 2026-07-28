@@ -5,7 +5,7 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard, dialog, crashReporter } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard, dialog, crashReporter, type WebContents } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -14,6 +14,7 @@ import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 import { resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
+import { normalizeBrowserUrl } from "./browser-navigation.js";
 const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
@@ -84,6 +85,27 @@ let splashShownAt = 0;
 let tray: Tray | null = null;
 const detachedPreviewWindows = new Set<BrowserWindow>();
 const SPLASH_MIN_VISIBLE_MS = 1100;
+
+type BrowserNavigationState = {
+  url: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
+function getBrowserNavigationState(contents: WebContents): BrowserNavigationState {
+  return {
+    url: contents.getURL(),
+    canGoBack: contents.navigationHistory.canGoBack(),
+    canGoForward: contents.navigationHistory.canGoForward(),
+    isLoading: contents.isLoading(),
+  };
+}
+
+function sendBrowserNavigationState(contents: WebContents): void {
+  if (contents.isDestroyed()) return;
+  contents.send("browser:navigation-state", getBrowserNavigationState(contents));
+}
 
 // ── Persistent settings ───────────────────────────────────────────────
 const settingsPath = path.join(app.getPath("userData"), "desktop-settings.json");
@@ -437,6 +459,7 @@ function createMainWindow(): BrowserWindow {
       backgroundThrottling: false,
       additionalArguments: [
         `--gateway-url=${GATEWAY_URL}`,
+        `--jait-app-url=${IS_DEV ? DEV_SERVER_URL : "file:"}`,
         ...(persistentDeviceId ? [`--device-id=${persistentDeviceId}`] : []),
         ...(openedFolder ? [`--open-folder=${openedFolder}`] : []),
       ],
@@ -490,10 +513,16 @@ function createMainWindow(): BrowserWindow {
   // navigates the window to the dropped file's path instead of letting
   // the renderer's drop handler process it.
   win.webContents.on("will-navigate", (event, url) => {
-    // Allow same-origin navigations (hot-reload, SPA routing)
+    // Keep HTTP(S) navigation inside the window. The preload script adds
+    // desktop browser controls whenever navigation leaves the Jait app.
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return;
     event.preventDefault();
   });
+
+  win.webContents.on("did-navigate", () => sendBrowserNavigationState(win.webContents));
+  win.webContents.on("did-navigate-in-page", () => sendBrowserNavigationState(win.webContents));
+  win.webContents.on("did-start-loading", () => sendBrowserNavigationState(win.webContents));
+  win.webContents.on("did-stop-loading", () => sendBrowserNavigationState(win.webContents));
 
   // ── Gray-screen recovery ──────────────────────────────────────────────
   // The most common cause of a "gray screen of death" in Electron is the
@@ -669,6 +698,38 @@ ipcMain.handle("window:maximize", () => {
   else mainWindow?.maximize();
 });
 ipcMain.handle("window:close", () => mainWindow?.close());
+
+function getMainWindowContents(sender: WebContents): WebContents | null {
+  const contents = mainWindow?.webContents;
+  if (!contents || contents.isDestroyed() || contents.id !== sender.id) return null;
+  return contents;
+}
+
+ipcMain.handle("browser:get-navigation-state", (event) => {
+  const contents = getMainWindowContents(event.sender);
+  return contents ? getBrowserNavigationState(contents) : null;
+});
+ipcMain.handle("browser:back", (event) => {
+  const contents = getMainWindowContents(event.sender);
+  if (contents?.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
+});
+ipcMain.handle("browser:forward", (event) => {
+  const contents = getMainWindowContents(event.sender);
+  if (contents?.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
+});
+ipcMain.handle("browser:reload", (event) => {
+  const contents = getMainWindowContents(event.sender);
+  if (!contents) return;
+  if (contents.isLoading()) contents.stop();
+  else contents.reload();
+});
+ipcMain.handle("browser:navigate", async (event, value: string) => {
+  const contents = getMainWindowContents(event.sender);
+  const url = normalizeBrowserUrl(value);
+  if (!contents || !url) return { ok: false };
+  await contents.loadURL(url);
+  return { ok: true };
+});
 
 // ── Clipboard IPC ────────────────────────────────────────────────────
 ipcMain.handle("clipboard:read-text", () => clipboard.readText());

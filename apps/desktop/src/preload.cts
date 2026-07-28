@@ -20,13 +20,178 @@ const openFolderArg = process.argv.find((a: string) => a.startsWith("--open-fold
 const syncOpenFolder = openFolderArg ? openFolderArg.split("=").slice(1).join("=") : undefined;
 const deviceIdArg = process.argv.find((a: string) => a.startsWith("--device-id="));
 const syncDeviceId = deviceIdArg ? deviceIdArg.split("=").slice(1).join("=") : undefined;
+const jaitAppUrlArg = process.argv.find((a: string) => a.startsWith("--jait-app-url="));
+const jaitAppUrl = jaitAppUrlArg ? jaitAppUrlArg.split("=").slice(1).join("=") : undefined;
+
+type BrowserNavigationState = {
+  url: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+};
+
+function isJaitRenderer(): boolean {
+  if (location.protocol === "data:") return true;
+  if (!jaitAppUrl) return true;
+  if (jaitAppUrl === "file:") return location.protocol === "file:";
+
+  try {
+    return new URL(jaitAppUrl).origin === location.origin;
+  } catch {
+    return true;
+  }
+}
+
+function installBrowserToolbar(): void {
+  const mount = () => {
+    if (!document.documentElement || document.getElementById("jait-browser-toolbar")) return;
+
+    const host = document.createElement("div");
+    host.id = "jait-browser-toolbar";
+    host.style.cssText = [
+      "all: initial",
+      "position: fixed",
+      "inset: 0 0 auto 0",
+      "height: 44px",
+      "z-index: 2147483647",
+      "display: block",
+      "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "-webkit-app-region: drag",
+    ].join(";");
+
+    const shadow = host.attachShadow({ mode: "closed" });
+    const leftInset = process.platform === "darwin" ? "78px" : "8px";
+    const rightInset = process.platform === "win32" ? "148px" : "8px";
+    const linuxWindowControls = process.platform === "linux"
+      ? `
+        <div class="window-controls">
+          <button id="minimize" title="Minimize" aria-label="Minimize">−</button>
+          <button id="maximize" title="Maximize" aria-label="Maximize">□</button>
+          <button id="close" class="close" title="Close" aria-label="Close">×</button>
+        </div>`
+      : "";
+
+    shadow.innerHTML = `
+      <style>
+        :host { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        .toolbar {
+          height: 44px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0 ${rightInset} 0 ${leftInset};
+          color: #f4f4f5;
+          background: #202020;
+          border-bottom: 1px solid #3f3f46;
+          box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
+        }
+        button, input {
+          -webkit-app-region: no-drag;
+          font: inherit;
+        }
+        button {
+          width: 32px;
+          height: 30px;
+          border: 0;
+          border-radius: 6px;
+          color: #f4f4f5;
+          background: transparent;
+          cursor: pointer;
+          font-size: 19px;
+          line-height: 1;
+        }
+        button:hover:not(:disabled) { background: #3f3f46; }
+        button:disabled { color: #71717a; cursor: default; }
+        form {
+          min-width: 120px;
+          flex: 1;
+          margin: 0;
+          -webkit-app-region: no-drag;
+        }
+        input {
+          width: 100%;
+          height: 30px;
+          padding: 0 11px;
+          border: 1px solid #52525b;
+          border-radius: 7px;
+          outline: 0;
+          color: #fafafa;
+          background: #18181b;
+          font-size: 13px;
+        }
+        input:focus { border-color: #60a5fa; box-shadow: 0 0 0 1px #60a5fa; }
+        input.invalid { border-color: #ef4444; box-shadow: 0 0 0 1px #ef4444; }
+        .window-controls { display: flex; margin-left: 2px; }
+        .window-controls button { border-radius: 0; }
+        .window-controls .close:hover { background: #c42b1c; }
+      </style>
+      <div class="toolbar">
+        <button id="back" title="Back" aria-label="Back">←</button>
+        <button id="forward" title="Forward" aria-label="Forward">→</button>
+        <button id="reload" title="Reload" aria-label="Reload">↻</button>
+        <form id="address-form">
+          <input id="address" type="text" inputmode="url" autocomplete="off" spellcheck="false" aria-label="Address" />
+        </form>
+        ${linuxWindowControls}
+      </div>
+    `;
+
+    const back = shadow.querySelector<HTMLButtonElement>("#back")!;
+    const forward = shadow.querySelector<HTMLButtonElement>("#forward")!;
+    const reload = shadow.querySelector<HTMLButtonElement>("#reload")!;
+    const form = shadow.querySelector<HTMLFormElement>("#address-form")!;
+    const address = shadow.querySelector<HTMLInputElement>("#address")!;
+
+    const update = (state: BrowserNavigationState | null) => {
+      if (!state) return;
+      back.disabled = !state.canGoBack;
+      forward.disabled = !state.canGoForward;
+      reload.textContent = state.isLoading ? "×" : "↻";
+      reload.title = state.isLoading ? "Stop loading" : "Reload";
+      if (shadow.activeElement !== address) address.value = state.url;
+    };
+
+    back.addEventListener("click", () => { void ipcRenderer.invoke("browser:back"); });
+    forward.addEventListener("click", () => { void ipcRenderer.invoke("browser:forward"); });
+    reload.addEventListener("click", () => { void ipcRenderer.invoke("browser:reload"); });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      address.classList.remove("invalid");
+      void ipcRenderer.invoke("browser:navigate", address.value).then((result: { ok?: boolean } | null) => {
+        if (!result?.ok) address.classList.add("invalid");
+      });
+    });
+    shadow.querySelector<HTMLButtonElement>("#minimize")?.addEventListener("click", () => {
+      void ipcRenderer.invoke("window:minimize");
+    });
+    shadow.querySelector<HTMLButtonElement>("#maximize")?.addEventListener("click", () => {
+      void ipcRenderer.invoke("window:maximize");
+    });
+    shadow.querySelector<HTMLButtonElement>("#close")?.addEventListener("click", () => {
+      void ipcRenderer.invoke("window:close");
+    });
+
+    ipcRenderer.on("browser:navigation-state", (_event, state: BrowserNavigationState) => update(state));
+    document.documentElement.appendChild(host);
+    void ipcRenderer.invoke("browser:get-navigation-state").then((state: BrowserNavigationState | null) => update(state));
+  };
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", mount, { once: true });
+  } else {
+    mount();
+  }
+}
 
 // Stored IPC listener ref — contextBridge wraps callbacks so we must track the
 // real reference ourselves to make removeListener work.
 let _gatewayEventCb: ((...args: unknown[]) => void) | null = null;
 
-// Expose safe API to the renderer process
-contextBridge.exposeInMainWorld("jaitDesktop", {
+// Expose privileged APIs only to the Jait renderer. External pages loaded in
+// the same window receive navigation chrome but no filesystem/provider bridge.
+if (isJaitRenderer()) {
+  contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Synchronous gateway URL — available immediately at page load */
   gatewayUrl: syncGatewayUrl,
 
@@ -196,4 +361,7 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
     ipcRenderer.on(channel, callback);
     return () => { ipcRenderer.removeListener(channel, callback); };
   },
-});
+  });
+} else {
+  installBrowserToolbar();
+}

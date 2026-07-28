@@ -619,6 +619,7 @@ export function createTerminalRunTool(
                 title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
                 prompt,
                 requestedBy: "terminal.run",
+                command,
                 timeoutMs: 120_000,
               })
             : undefined,

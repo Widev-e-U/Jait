@@ -39,6 +39,15 @@ export interface ProjectSearchResults {
   personalSessions: ProjectSession[]
 }
 
+export function prependProjectSession(
+  sessions: ProjectSession[],
+  session: ProjectSession,
+): ProjectSession[] {
+  return sessions.some((entry) => entry.id === session.id)
+    ? sessions
+    : [session, ...sessions]
+}
+
 export interface CreateProjectOptions {
   title?: string
   rootPath?: string | null
@@ -416,7 +425,11 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       if (targetProjectId) {
         setProjects((prev) => prev.map((project) => (
           project.id === targetProjectId
-            ? { ...project, lastActiveAt: session.lastActiveAt, sessions: [session, ...project.sessions] }
+            ? {
+                ...project,
+                lastActiveAt: session.lastActiveAt,
+                sessions: prependProjectSession(project.sessions, session),
+              }
             : project
         )))
       } else {
@@ -802,8 +815,9 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         if (projectId) {
           setProjects((prev) => prev.map((project) => {
             if (project.id !== projectId) return project
-            if (project.sessions.some((s) => s.id === session.id)) return project
-            return { ...project, lastActiveAt: session.lastActiveAt, sessions: [session, ...project.sessions] }
+            const sessions = prependProjectSession(project.sessions, session)
+            if (sessions === project.sessions) return project
+            return { ...project, lastActiveAt: session.lastActiveAt, sessions }
           }))
         } else {
           setPersonalSessions((prev) => (

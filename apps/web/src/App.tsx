@@ -131,6 +131,7 @@ import {
   userReferencedProjectsFromSegments,
 } from '@/lib/user-message-segments'
 import {
+  BackgroundSecretPrompt,
   InlineSecretMounted,
   useSecretInputPrompt,
   useUserQuestionPrompt,
@@ -511,20 +512,11 @@ function App() {
   // for chats running in the background, including on other devices.
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
   useEffect(() => {
-    if (!token) {
-      setStreamingSessionIds(new Set())
-      return
-    }
-    let cancelled = false
-    fetch(`${API_URL}/api/sessions/streaming`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { sessionIds?: string[] } | null) => {
-        if (cancelled || !data?.sessionIds) return
-        setStreamingSessionIds(new Set(data.sessionIds))
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
+    setStreamingSessionIds(new Set())
   }, [token])
+  const handleSessionStreamingSnapshot = useCallback((sessionIds: string[]) => {
+    setStreamingSessionIds(new Set(sessionIds))
+  }, [])
   const handleSessionStreamingChange = useCallback((sessionId: string, streaming: boolean) => {
     setStreamingSessionIds((prev) => {
       const isStreaming = prev.has(sessionId)
@@ -1707,6 +1699,7 @@ function App() {
     onMessageStarted: handleMessageStarted,
     onMessageComplete: handleMessageComplete,
     onSessionStreamingChange: handleSessionStreamingChange,
+    onSessionStreamingSnapshot: handleSessionStreamingSnapshot,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
       if (type.startsWith('project.') || type.startsWith('chat.')) {
         handleProjectEventRef.current(type, payload)
@@ -2255,6 +2248,47 @@ function App() {
     setProjectPickerMode('project')
     setFolderPickerOpen(true)
   }, [])
+
+  const handleOpenSecretChat = useCallback(async (sessionId: string) => {
+    setCurrentView('chat')
+    setViewMode('developer')
+    setChatCollapsed(false)
+    setShowMobileToolbar(false)
+    if (isMobile) {
+      setShowSidebar(false)
+      setShowProject(false)
+      setShowTerminal(false)
+    }
+
+    const project = projects.find((entry) => entry.sessions.some((session) => session.id === sessionId))
+    if (project) {
+      handleSelectProjectSession(project.id, sessionId)
+      return
+    }
+    if (personalSessions.some((session) => session.id === sessionId)) {
+      switchSession(null, sessionId)
+      return
+    }
+
+    const session = await loadSession(sessionId)
+    if (!session) {
+      toast.error('The chat requesting this password is no longer available.')
+      return
+    }
+    if (session.projectId) {
+      await handleSwitchProject(session.projectId, session.id)
+    } else {
+      switchSession(null, session.id)
+    }
+  }, [
+    handleSelectProjectSession,
+    handleSwitchProject,
+    isMobile,
+    loadSession,
+    personalSessions,
+    projects,
+    switchSession,
+  ])
 
   const handleSessionSwitcherOpen = useCallback((open: boolean) => {
     if (!open || !activeProjectId) return
@@ -4417,6 +4451,16 @@ function App() {
           runtimeMode={chatProviderRuntimeMode}
           model={cliModel}
         />
+
+        {secretInput.backgroundRequest && (
+          <BackgroundSecretPrompt
+            request={secretInput.backgroundRequest}
+            submitting={secretInput.submitting}
+            onSubmit={secretInput.submitSecretRequest}
+            onCancel={secretInput.cancelSecretRequest}
+            onOpenChat={(sessionId) => { void handleOpenSecretChat(sessionId) }}
+          />
+        )}
 
         {/* Floating screen share window */}
         {showScreenShare && (

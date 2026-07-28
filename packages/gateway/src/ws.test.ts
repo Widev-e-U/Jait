@@ -328,6 +328,40 @@ describe("WsControlPlane", () => {
       c1.ws.close();
       c2.ws.close();
     });
+
+    it("broadcasts streaming lifecycle updates to every client for the user", async () => {
+      const token = await createToken("user-streaming-broadcast");
+      const otherToken = await createToken("other-streaming-user");
+      const first = openWs(port, { token });
+      const second = openWs(port, { token });
+      const other = openWs(port, { token: otherToken });
+
+      await Promise.all([waitForOpen(first.ws), waitForOpen(second.ws), waitForOpen(other.ws)]);
+      await Promise.all([
+        first.collector.next(),
+        second.collector.next(),
+        other.collector.next(),
+      ]);
+
+      plane.broadcastToUser("user-streaming-broadcast", {
+        type: "session.streaming",
+        sessionId: "background-session",
+        timestamp: new Date().toISOString(),
+        payload: { sessionId: "background-session", streaming: false },
+      });
+
+      const [firstUpdate, secondUpdate] = await Promise.all([
+        first.collector.next(),
+        second.collector.next(),
+      ]);
+      expect(firstUpdate.payload).toEqual({ sessionId: "background-session", streaming: false });
+      expect(secondUpdate.payload).toEqual({ sessionId: "background-session", streaming: false });
+      expect(await other.collector.maybeNext(500)).toBeNull();
+
+      first.ws.close();
+      second.ws.close();
+      other.ws.close();
+    });
   });
 
 
@@ -787,6 +821,28 @@ describe("WsControlPlane", () => {
       expect(Array.isArray(registry.payload.surfaces)).toBe(true);
       expect(registry.payload.surfaces).toHaveLength(1);
       expect(registry.payload.surfaces[0]?.id).toBe("surface-1");
+      client.ws.close();
+    });
+
+    it("returns the authoritative streaming-session snapshot after reconnect", async () => {
+      const token = await createToken("user-streaming-sessions");
+      plane.getStreamingSessionIds = (userId) => (
+        userId === "user-streaming-sessions" ? [] : ["wrong-user-session"]
+      );
+
+      const client = openWs(port, { token });
+      await waitForOpen(client.ws);
+      await client.collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client.ws.send(JSON.stringify({
+        type: "resource.subscribe",
+        payload: { resource: "root:/streaming-sessions" },
+      }));
+
+      const snapshot = await client.collector.next();
+      expect(snapshot.type).toBe("session.streaming-snapshot");
+      expect(snapshot.payload).toEqual({ sessionIds: [] });
       client.ws.close();
     });
 

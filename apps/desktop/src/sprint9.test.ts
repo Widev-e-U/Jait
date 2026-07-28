@@ -81,5 +81,7 @@ describe("sprint9 desktop app", () => {
     expect(allowedIpcChannels.invoke).toContain("terminal:start");
     expect(allowedIpcChannels.on).toContain("gateway:event");
     expect(allowedIpcChannels.invoke).toContain("clipboard:read-text");
+    expect(allowedIpcChannels.invoke).toContain("browser:navigate");
+    expect(allowedIpcChannels.on).toContain("browser:navigation-state");
   });
 });

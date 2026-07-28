@@ -233,6 +233,7 @@ async function requestDeployPassword(input: {
   prompt: string;
   requestedBy: string;
   secretKey: string;
+  command?: string;
 }): Promise<string | null> {
   if (!input.secretInput) throw new Error("Secret input service is unavailable");
   return input.secretInput.requestSecret({
@@ -240,6 +241,7 @@ async function requestDeployPassword(input: {
     title: input.title,
     prompt: input.prompt,
     requestedBy: input.requestedBy,
+    command: input.command,
     rememberable: true,
     rememberLabel: input.prompt,
     secretType: "network-deploy-password",
@@ -437,6 +439,7 @@ async function runGuidedDeploy(input: {
       prompt: `Password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
       secretKey: passwordKey,
+      command: `Deploy Jait to ${input.username}@${input.ip}`,
     });
     if (!sshPassword) return { ok: false, logs, error: "SSH password was not provided" };
   }
@@ -462,6 +465,7 @@ async function runGuidedDeploy(input: {
       prompt: `Password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
       secretKey: passwordKey,
+      command: `Deploy Jait to ${input.username}@${input.ip}`,
     });
     if (!sshPassword) return { ok: false, logs, error: "SSH password was not provided" };
     archResult = await runPtyCommand({
@@ -572,6 +576,7 @@ async function runGuidedDeploy(input: {
       prompt: `Sudo password for ${input.username}@${input.ip}`,
       requestedBy: "network.deploy",
       secretKey: `sudo:${passwordKey}`,
+      command: `Install Jait on ${input.username}@${input.ip}`,
     });
     if (!sudoPassword) return { ok: false, logs, error: "Sudo password was not provided" };
   }

@@ -322,6 +322,7 @@ export function createElevatedRunTool(
               ? `Password to run an elevated command: ${input.reason.trim()}`
               : "Password to run an elevated command with sudo"),
           requestedBy: "elevated.run",
+          command: shellCommand,
           timeoutMs: input.timeoutMs && input.timeoutMs > 120_000 ? input.timeoutMs : 120_000,
         });
         if (!password) return { ok: false, message: "Administrator password was not provided" };

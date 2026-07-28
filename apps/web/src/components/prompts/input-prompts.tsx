@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
-import { Eye, EyeOff, X } from 'lucide-react'
+import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import { triggerSystemNotification } from '@/lib/system-notifications'
 import {
+  getBackgroundSecretRequest,
+  getSecretRequestCommand,
+  getSessionSecretRequest,
   shouldRenderSecretRequestDialog,
   shouldRenderSecretRequestInline,
   type SecretInputRequest,
@@ -37,7 +41,8 @@ export function useSecretInputPrompt({
   const [remember, setRemember] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const activeRequest = requests[0] ?? null
+  const activeRequest = getSessionSecretRequest(requests, sessionId)
+  const backgroundRequest = getBackgroundSecretRequest(requests, sessionId)
   const renderInline = shouldRenderSecretRequestInline(activeRequest)
 
   const markInlineMounted = useCallback((requestId: string) => {
@@ -62,11 +67,11 @@ export function useSecretInputPrompt({
       })
       if (!res.ok) return
       const data = await res.json() as { requests: SecretInputRequest[] }
-      setRequests(data.requests.filter((request) => !sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)))
+      setRequests(data.requests)
     } catch {
       // gateway down or reconnecting
     }
-  }, [authHeaders, sessionId, token])
+  }, [authHeaders, token])
 
   useEffect(() => {
     if (!token) return
@@ -77,16 +82,21 @@ export function useSecretInputPrompt({
         const msg = JSON.parse(event.data) as { type: string; sessionId?: string; payload?: unknown }
         if (msg.type === 'secret.requested') {
           const request = msg.payload as SecretInputRequest
-          if (!sessionId || request.sessionId === sessionId || shouldRenderSecretRequestInline(request)) {
-            setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          if (request.sessionId !== sessionId) {
+            void triggerSystemNotification({
+              id: `secret-request:${request.id}`,
+              title: 'Password needed in another chat',
+              body: getSecretRequestCommand(request),
+              level: 'warning',
+              includeToast: false,
+            })
           }
         }
         if (msg.type === 'secret.resolved') {
           const resolved = msg.payload as { id?: string }
           if (resolved.id) {
             setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
-            setValue('')
-            setRemember(false)
           }
         }
       } catch {
@@ -96,43 +106,61 @@ export function useSecretInputPrompt({
     return () => ws.close()
   }, [refresh, sessionId, token])
 
-  const submitSecret = useCallback(async () => {
-    if (!activeRequest || !value) return
+  useEffect(() => {
+    setValue('')
+    setRemember(false)
+    setShowPassword(false)
+  }, [activeRequest?.id])
+
+  const submitSecretRequest = useCallback(async (
+    request: SecretInputRequest,
+    secretValue: string,
+    shouldRemember: boolean,
+  ) => {
+    if (!secretValue) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/submit`, {
+      const res = await fetch(`${API_URL}/api/secrets/requests/${request.id}/submit`, {
         method: 'POST',
         headers: authHeaders(true),
         credentials: 'include',
-        body: JSON.stringify({ value, remember: activeRequest.rememberable ? remember : false }),
+        body: JSON.stringify({
+          value: secretValue,
+          remember: request.rememberable ? shouldRemember : false,
+        }),
       })
       if (!res.ok) throw new Error('Failed to submit secret')
-      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
-      setValue('')
-      setRemember(false)
+      setRequests((prev) => prev.filter((item) => item.id !== request.id))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to submit secret')
     } finally {
       setSubmitting(false)
     }
-  }, [activeRequest, authHeaders, remember, value])
+  }, [authHeaders])
 
-  const cancelSecret = useCallback(async () => {
-    if (!activeRequest) return
+  const cancelSecretRequest = useCallback(async (request: SecretInputRequest) => {
     setSubmitting(true)
     try {
-      await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/cancel`, {
+      await fetch(`${API_URL}/api/secrets/requests/${request.id}/cancel`, {
         method: 'POST',
         headers: authHeaders(),
         credentials: 'include',
       })
-      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
-      setValue('')
-      setRemember(false)
+      setRequests((prev) => prev.filter((item) => item.id !== request.id))
     } finally {
       setSubmitting(false)
     }
-  }, [activeRequest, authHeaders])
+  }, [authHeaders])
+
+  const submitSecret = useCallback(async () => {
+    if (!activeRequest) return
+    await submitSecretRequest(activeRequest, value, remember)
+  }, [activeRequest, remember, submitSecretRequest, value])
+
+  const cancelSecret = useCallback(async () => {
+    if (!activeRequest) return
+    await cancelSecretRequest(activeRequest)
+  }, [activeRequest, cancelSecretRequest])
 
   const form = activeRequest ? (
     <SecretInputForm
@@ -180,11 +208,86 @@ export function useSecretInputPrompt({
 
   return {
     activeRequest,
+    backgroundRequest,
+    submitting,
     renderInline,
     form,
     inlinePrompt,
     markInlineMounted,
+    submitSecretRequest,
+    cancelSecretRequest,
   }
+}
+
+export function BackgroundSecretPrompt({
+  request,
+  submitting,
+  onSubmit,
+  onCancel,
+  onOpenChat,
+}: {
+  request: SecretInputRequest
+  submitting: boolean
+  onSubmit: (request: SecretInputRequest, value: string, remember: boolean) => Promise<void>
+  onCancel: (request: SecretInputRequest) => Promise<void>
+  onOpenChat: (sessionId: string) => void
+}) {
+  const [value, setValue] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    setValue('')
+    setRemember(false)
+    setShowPassword(false)
+  }, [request.id])
+
+  return (
+    <div
+      role="alert"
+      data-testid="background-secret-prompt"
+      className="fixed bottom-3 right-3 z-[100] w-[min(26rem,calc(100vw-1.5rem))] rounded-xl border border-yellow-500/30 bg-background/95 p-3.5 shadow-2xl backdrop-blur"
+    >
+      <div className="mb-2.5 flex items-start gap-2.5">
+        <div className="mt-0.5 rounded-md bg-yellow-500/10 p-1.5 text-yellow-600 dark:text-yellow-400">
+          <KeyRound className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">Password needed in another chat</p>
+          <p className="text-xs text-muted-foreground">{request.title}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+          onClick={() => onOpenChat(request.sessionId)}
+        >
+          Open chat
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <div className="mb-2.5 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
+        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Command</p>
+        <code className="block max-h-20 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
+          {getSecretRequestCommand(request)}
+        </code>
+      </div>
+      <SecretInputForm
+        request={request}
+        value={value}
+        onValueChange={setValue}
+        submitting={submitting}
+        showPassword={showPassword}
+        onShowPasswordChange={setShowPassword}
+        remember={remember}
+        onRememberChange={setRemember}
+        onSubmit={async () => onSubmit(request, value, remember)}
+        onCancel={async () => onCancel(request)}
+        autoFocus={false}
+      />
+    </div>
+  )
 }
 
 function SecretInputForm({
@@ -199,6 +302,7 @@ function SecretInputForm({
   onSubmit,
   onCancel,
   showTitle = false,
+  autoFocus = true,
 }: {
   request: SecretInputRequest
   value: string
@@ -211,6 +315,7 @@ function SecretInputForm({
   onSubmit: () => Promise<void>
   onCancel: () => Promise<void>
   showTitle?: boolean
+  autoFocus?: boolean
 }) {
   return (
     <div className="space-y-2.5">
@@ -239,7 +344,7 @@ function SecretInputForm({
               if (event.key === 'Enter') void onSubmit()
             }}
             className="h-9 pr-10 text-sm"
-            autoFocus
+            autoFocus={autoFocus}
           />
           <button
             type="button"
