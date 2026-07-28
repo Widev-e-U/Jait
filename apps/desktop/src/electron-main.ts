@@ -709,6 +709,13 @@ ipcMain.handle("browser:get-navigation-state", (event) => {
   const contents = getMainWindowContents(event.sender);
   return contents ? getBrowserNavigationState(contents) : null;
 });
+ipcMain.handle("browser:home", async (event) => {
+  const contents = getMainWindowContents(event.sender);
+  const win = mainWindow;
+  if (!contents || !win || win.isDestroyed()) return { ok: false };
+  await loadApp(win);
+  return { ok: true };
+});
 ipcMain.handle("browser:back", (event) => {
   const contents = getMainWindowContents(event.sender);
   if (contents?.navigationHistory.canGoBack()) contents.navigationHistory.goBack();

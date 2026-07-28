@@ -28,6 +28,7 @@ const allowedIpcChannels = {
     "clipboard:read-text",
     "desktop:open-preview-window",
     "browser:get-navigation-state",
+    "browser:home",
     "browser:back",
     "browser:forward",
     "browser:reload",

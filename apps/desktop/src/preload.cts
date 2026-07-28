@@ -127,6 +127,7 @@ function installBrowserToolbar(): void {
         .window-controls .close:hover { background: #c42b1c; }
       </style>
       <div class="toolbar">
+        <button id="home" title="Back to Jait" aria-label="Back to Jait">J</button>
         <button id="back" title="Back" aria-label="Back">←</button>
         <button id="forward" title="Forward" aria-label="Forward">→</button>
         <button id="reload" title="Reload" aria-label="Reload">↻</button>
@@ -137,6 +138,7 @@ function installBrowserToolbar(): void {
       </div>
     `;
 
+    const home = shadow.querySelector<HTMLButtonElement>("#home")!;
     const back = shadow.querySelector<HTMLButtonElement>("#back")!;
     const forward = shadow.querySelector<HTMLButtonElement>("#forward")!;
     const reload = shadow.querySelector<HTMLButtonElement>("#reload")!;
@@ -152,6 +154,7 @@ function installBrowserToolbar(): void {
       if (shadow.activeElement !== address) address.value = state.url;
     };
 
+    home.addEventListener("click", () => { void ipcRenderer.invoke("browser:home"); });
     back.addEventListener("click", () => { void ipcRenderer.invoke("browser:back"); });
     forward.addEventListener("click", () => { void ipcRenderer.invoke("browser:forward"); });
     reload.addEventListener("click", () => { void ipcRenderer.invoke("browser:reload"); });
