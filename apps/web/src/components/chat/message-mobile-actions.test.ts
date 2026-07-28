@@ -6,13 +6,13 @@ describe('mobile message actions', () => {
     const className = getMobileMessageActionsPositionClassName(false)
 
     expect(className).toContain('-right-7')
-    expect(className).not.toContain('right-1.5')
+    expect(className).not.toContain('right-0')
   })
 
   it('keeps user actions inside the message bubble', () => {
     const className = getMobileMessageActionsPositionClassName(true)
 
-    expect(className).toContain('right-1.5')
+    expect(className).toContain('right-0')
     expect(className).not.toContain('-right-7')
   })
 })
