@@ -3,7 +3,7 @@ import type { WsControlPlane } from "../ws.js";
 import { RemoteCliProvider } from "./remote-cli-provider.js";
 import type { ProviderEvent } from "./contracts.js";
 
-function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: unknown } = {}) {
+function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: unknown; stopSessionResult?: unknown } = {}) {
   let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
   let remoteHandlerSetCount = 0;
 
@@ -22,6 +22,9 @@ function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: un
       }
       if (op === "send-turn") {
         return options.sendTurnResult ?? { ok: true };
+      }
+      if (op === "stop-session") {
+        return options.stopSessionResult ?? { ok: true, stopped: true };
       }
       return { ok: true };
     }),
@@ -177,6 +180,15 @@ describe("RemoteCliProvider", () => {
     await sendTurn;
 
     expect(resolved).toBe(true);
+  });
+
+  it("reports when the desktop node no longer tracks a remote session", async () => {
+    const { ws } = createMockWs({ stopSessionResult: { ok: true, stopped: false } });
+    const provider = new RemoteCliProvider(ws, "node-1", "claude-code");
+
+    await expect(provider.stopSession("missing-session")).rejects.toThrow(
+      "Remote session missing-session is no longer tracked on device node-1",
+    );
   });
 
   it("uses remote provider-op completion as a fallback", async () => {

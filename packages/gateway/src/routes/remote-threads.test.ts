@@ -575,6 +575,58 @@ describe("remote provider e2e flow", () => {
     sqlite.close();
   });
 
+  it("stops a remote provider session after the gateway route state is recreated", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: {
+        title: "Restarted gateway stop",
+        providerId: "codex",
+        workingDirectory: REMOTE_CWD,
+      },
+    });
+
+    expect(createRes.statusCode).toBe(201);
+    const thread = createRes.json() as { id: string };
+
+    const startRes = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "keep working" },
+    });
+    expect(startRes.statusCode).toBe(200);
+    const started = startRes.json() as { providerSessionId: string };
+    expect(threadService.getById(thread.id)?.executionNodeId).toBe(mockWs.remoteNodeId);
+
+    await app.close();
+    app = Fastify({ logger: false });
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry: new ProviderRegistry(),
+      ws: mockWs as unknown as WsControlPlane,
+    });
+
+    const stopCallsBefore = mockWs.providerOpCalls.filter((call) => call.op === "stop-session").length;
+    const stopRes = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/stop`,
+      headers,
+    });
+
+    expect(stopRes.statusCode).toBe(200);
+    expect(mockWs.providerOpCalls.filter((call) => call.op === "stop-session")).toHaveLength(stopCallsBefore + 1);
+    expect(mockWs.providerOpCalls.at(-1)).toMatchObject({
+      op: "stop-session",
+      params: { sessionId: started.providerSessionId },
+    });
+    expect(threadService.getById(thread.id)?.status).toBe("interrupted");
+
+    await app.close();
+    sqlite.close();
+  });
+
   // ── Test: Multiple git routes proxy correctly ────────────────────
 
   it("routes all git operations through the remote node for non-local paths", async () => {

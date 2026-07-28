@@ -315,10 +315,14 @@ export class RemoteCliProvider implements CliProviderAdapter {
 
   async stopSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
-    try {
-      await this.ws.proxyProviderOp(this.nodeId, "stop-session", { sessionId }, 15_000);
-    } catch {
-      // Ignore — child may already be dead
+    const result = await this.ws.proxyProviderOp<{ stopped?: boolean }>(
+      this.nodeId,
+      "stop-session",
+      { sessionId },
+      15_000,
+    );
+    if (result?.stopped === false) {
+      throw new Error(`Remote session ${sessionId} is no longer tracked on device ${this.nodeId}`);
     }
     if (session) {
       session.status = "completed";

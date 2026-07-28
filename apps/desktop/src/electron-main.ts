@@ -1222,6 +1222,22 @@ function killProcessTree(child: ChildProcess): void {
   child.kill("SIGTERM");
 }
 
+function stopRemoteProviderSession(sessionId: string): boolean {
+  const session = remoteProviderSessions.get(sessionId);
+  if (!session) return false;
+
+  session.stopRequested = true;
+  if (session.child) killProcessTree(session.child);
+  for (const pending of session.pendingRpc.values()) {
+    clearTimeout(pending.timer);
+    pending.reject(new Error("Session stopped"));
+  }
+  session.pendingRpc.clear();
+  settleRemoteTurn(session, new Error("Session stopped"));
+  remoteProviderSessions.delete(sessionId);
+  return true;
+}
+
 function defaultRemoteTerminalShell(): string {
   if (process.platform === "win32") {
     try {
@@ -1915,18 +1931,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
     }
     case "stop-session": {
       const { sessionId } = params as { sessionId: string };
-      const sess = remoteProviderSessions.get(sessionId);
-      if (sess) {
-        sess.stopRequested = true;
-        if (sess.child) killProcessTree(sess.child);
-        for (const p of sess.pendingRpc.values()) {
-          clearTimeout(p.timer);
-          p.reject(new Error("Session stopped"));
-        }
-        settleRemoteTurn(sess, new Error("Session stopped"));
-        remoteProviderSessions.delete(sessionId);
-      }
-      return { ok: true };
+      return { ok: true, stopped: stopRemoteProviderSession(sessionId) };
     }
     case "list-models": {
       const { providerId, providerType } = params as { providerId: string; providerType: string };
@@ -3534,6 +3539,9 @@ app.on("child-process-gone", (_event, details) => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  for (const sessionId of [...remoteProviderSessions.keys()]) {
+    stopRemoteProviderSession(sessionId);
+  }
   for (const session of remoteTerminalSessions.values()) {
     try { session.pty.kill(); } catch { /* already exited */ }
   }

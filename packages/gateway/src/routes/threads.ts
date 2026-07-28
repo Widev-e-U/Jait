@@ -213,6 +213,28 @@ export function registerThreadRoutes(
   // can access them (they're not in the global providerRegistry)
   const remoteProviders = new Map<string, RemoteCliProvider>();
 
+  function resolveThreadStopProvider(
+    thread: Pick<ThreadInfo, "id" | "providerId" | "executionNodeId">,
+    userId: string,
+  ) {
+    const cachedProvider = remoteProviders.get(thread.id);
+    if (cachedProvider) return cachedProvider;
+
+    const providerId = thread.providerId as ProviderId;
+    const registeredProvider = providerRegistry.getForUser(providerId, userId);
+    const executionNodeId = thread.executionNodeId ?? registeredProvider?.executionNodeId;
+    if (ws && providerId !== "jait" && executionNodeId && executionNodeId !== "gateway") {
+      return new RemoteCliProvider(
+        ws,
+        executionNodeId,
+        providerId,
+        registeredProvider?.providerType ?? providerId,
+      );
+    }
+
+    return registeredProvider;
+  }
+
   if (ws) {
     ws.getThreadSnapshot = (userId: string): ThreadRegistrySnapshot => {
       const threads = threadService.list(userId, THREAD_REGISTRY_SNAPSHOT_LIMIT + 1);
@@ -927,7 +949,7 @@ export function registerThreadRoutes(
     // Stop any running session first
     if (existing.status === "running" && existing.providerSessionId) {
       try {
-        const provider = providerRegistry.get(existing.providerId as ProviderId);
+        const provider = resolveThreadStopProvider(existing, authUser.id);
         if (provider) await provider.stopSession(existing.providerSessionId);
       } catch { /* best effort */ }
       const unsub = threadUnsubs.get(id);
@@ -1541,11 +1563,20 @@ export function registerThreadRoutes(
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
 
     if (thread.providerSessionId) {
-      const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
-      if (provider) {
-        try {
-          await provider.stopSession(thread.providerSessionId);
-        } catch { /* best effort */ }
+      const provider = resolveThreadStopProvider(thread, authUser.id);
+      if (!provider) {
+        return reply.status(409).send({
+          error: "STOP_FAILED",
+          details: `Provider '${thread.providerId}' is unavailable on ${thread.executionNodeName ?? "the execution node"}`,
+        });
+      }
+      try {
+        await provider.stopSession(thread.providerSessionId);
+      } catch (error) {
+        return reply.status(502).send({
+          error: "STOP_FAILED",
+          details: error instanceof Error ? error.message : "Failed to stop provider session",
+        });
       }
       remoteProviders.delete(id);
     }
@@ -1573,7 +1604,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread has no active session" });
     }
 
-    const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+    const provider = resolveThreadStopProvider(thread, authUser.id);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     await provider.interruptTurn(thread.providerSessionId);
