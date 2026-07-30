@@ -46,6 +46,7 @@ import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerArchitectureRoutes } from "./routes/architecture.js";
+import { registerCodeGraphRoutes } from "./routes/code-graph.js";
 import { registerSecretRoutes } from "./routes/secrets.js";
 import { registerEmailRoutes } from "./routes/email.js";
 import { registerUserQuestionRoutes } from "./routes/user-questions.js";
@@ -135,6 +136,7 @@ export interface ServerDeps {
   gitService?: GitService;
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
+  codeGraphService?: import("./services/code-graph/code-graphs.js").CodeGraphService;
   secretInputService?: SecretInputService;
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
@@ -283,6 +285,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   if (deps.architectureDiagramService) {
     registerArchitectureRoutes(app, config, deps.architectureDiagramService);
+  }
+  if (deps.codeGraphService && deps.projectService) {
+    registerCodeGraphRoutes(app, config, deps.codeGraphService, deps.projectService);
   }
 
   if (deps.surfaceRegistry) {

@@ -353,6 +353,34 @@ export const architectureDiagrams = sqliteTable(
   ],
 );
 
+// ─── Repository Code Graph Indexes ──────────────────────────────────
+export const codeGraphIndexes = sqliteTable(
+  "code_graph_indexes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    repositoryId: text("repository_id"),
+    projectRoot: text("project_root").notNull(),
+    provider: text("provider").notNull().default("graphify"),
+    status: text("status").notNull().default("missing"),
+    graphPath: text("graph_path"),
+    graphVersion: text("graph_version"),
+    sourceRevision: text("source_revision"),
+    graphifyVersion: text("graphify_version"),
+    stats: text("stats"),
+    graphRagStatus: text("graphrag_status").notNull().default("not-prepared"),
+    graphRagPath: text("graphrag_path"),
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_code_graph_indexes_user_project").on(table.userId, table.projectRoot),
+    index("idx_code_graph_indexes_repository").on(table.repositoryId, table.updatedAt),
+    index("idx_code_graph_indexes_status").on(table.status, table.updatedAt),
+  ],
+);
+
 // ─── Agent Threads ───────────────────────────────────────────────────
 export const agentThreads = sqliteTable(
   "agent_threads",

@@ -70,6 +70,7 @@ export { createElevatedRunTool } from "./elevated-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
+export { createCodeGraphTools } from "./code-graph-tools.js";
 export {
   createPreviewOpenTool,
   createPreviewStopTool,
@@ -194,6 +195,7 @@ import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
+import { createCodeGraphTools } from "./code-graph-tools.js";
 import {
   createPreviewOpenTool,
   createPreviewStopTool,
@@ -211,6 +213,7 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
+import type { CodeGraphService } from "../services/code-graph/code-graphs.js";
 import type { SecretInputService } from "../services/secret-input.js";
 import type { UserQuestionService } from "../services/user-questions.js";
 import type { UserSecretService } from "../services/user-secrets.js";
@@ -264,6 +267,7 @@ export interface ToolRegistryDeps {
   shutdown?: () => Promise<void>;
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
+  codeGraphService?: CodeGraphService;
   secretInputService?: SecretInputService;
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
@@ -476,8 +480,13 @@ export function createToolRegistry(
   tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
-  // Architecture tools
+  // Architecture and code graph tools
   tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));
+  if (deps.codeGraphService) {
+    for (const tool of createCodeGraphTools(deps.codeGraphService)) {
+      tools.register(tool);
+    }
+  }
 
   // Maintenance tools
   if (deps.maintenanceService) {

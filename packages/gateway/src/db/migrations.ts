@@ -1155,4 +1155,35 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 47: Repository code graph indexes ────────────────────────────
+  {
+    id: 47,
+    name: "code_graph_indexes",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS code_graph_indexes (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          repository_id TEXT,
+          project_root TEXT NOT NULL,
+          provider TEXT NOT NULL DEFAULT 'graphify',
+          status TEXT NOT NULL DEFAULT 'missing',
+          graph_path TEXT,
+          graph_version TEXT,
+          source_revision TEXT,
+          graphify_version TEXT,
+          stats TEXT,
+          graphrag_status TEXT NOT NULL DEFAULT 'not-prepared',
+          graphrag_path TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_code_graph_indexes_user_project ON code_graph_indexes(user_id, project_root)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_code_graph_indexes_repository ON code_graph_indexes(repository_id, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_code_graph_indexes_status ON code_graph_indexes(status, updated_at DESC)`);
+    },
+  },
+
 ];

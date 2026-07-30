@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Boxes, ExternalLink, Globe, Loader2, Save, X } from 'lucide-react'
-import { ArchitecturePanel } from './architecture-panel'
+import { ArchitectureWorkspace } from './architecture-workspace'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { Button } from '@/components/ui/button'
@@ -138,7 +138,8 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Preview unavailable.</div>
           )
         ) : payload.tab.type === 'architecture' ? (
-          <ArchitecturePanel
+          <ArchitectureWorkspace
+            projectRoot={payload.projectRoot}
             diagram={payload.architectureDiagram ?? null}
             isGenerating={payload.architectureGenerating}
             theme={payload.theme}

@@ -3,7 +3,7 @@ import Editor, { loader } from '@monaco-editor/react'
 import { AlertCircle, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
-import { ArchitecturePanel } from './architecture-panel'
+import { ArchitectureWorkspace } from './architecture-workspace'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -4215,6 +4215,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         previewSrc: tab.previewSrc ?? null,
         previewMode: tab.previewMode ?? null,
       },
+      projectRoot: previewProjectRoot ?? remoteRoot,
       architectureDiagram: tab.type === 'architecture' ? (architectureDiagram ?? null) : null,
       architectureGenerating: tab.type === 'architecture' ? architectureGenerating : false,
       createdAt: Date.now(),
@@ -4247,7 +4248,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     if (!opened) return false
     handleCloseTab(tabId, { preserveManagedPreview: true })
     return true
-  }, [architectureDiagram, architectureGenerating, handleCloseTab, openTabs, resolvedTheme, surfaceId])
+  }, [architectureDiagram, architectureGenerating, handleCloseTab, openTabs, previewProjectRoot, remoteRoot, resolvedTheme, surfaceId])
 
   const handleDetachedTabDragEnd = useCallback((event: React.DragEvent<HTMLDivElement>, tabId: string) => {
     setDraggingTabId(null)
@@ -5389,7 +5390,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               ) : activeTab?.type === 'preview' ? renderPreviewPane(
                 'Open or start a preview from the side controls.',
               ) : activeTab?.type === 'architecture' ? (
-                <ArchitecturePanel
+                <ArchitectureWorkspace
+                  projectRoot={previewProjectRoot ?? remoteRoot}
                   diagram={architectureDiagram ?? null}
                   isGenerating={architectureGenerating}
                   onGenerate={onGenerateArchitecture}
@@ -6222,7 +6224,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         ) : activeTab?.type === 'preview' ? renderPreviewPane(
           'Open or start a preview from the side controls.',
         ) : activeTab?.type === 'architecture' ? (
-          <ArchitecturePanel
+          <ArchitectureWorkspace
+            projectRoot={previewProjectRoot ?? remoteRoot}
             diagram={architectureDiagram ?? null}
             isGenerating={architectureGenerating}
             onGenerate={onGenerateArchitecture}

@@ -58,6 +58,8 @@ import { NotificationService } from "./services/notifications.js";
 import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
+import { CodeGraphService } from "./services/code-graph/code-graphs.js";
+import { ensureGraphifyRuntime } from "./services/code-graph/graphify-runtime.js";
 import { ProjectService } from "./services/projects.js";
 import { autoAssignProjectRepositories } from "./services/project-repositories.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
@@ -75,6 +77,9 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
 }
 
 async function main() {
+  await ensureGraphifyRuntime({
+    onProgress: (message) => console.log(`[graphify] ${message}`),
+  });
   const config = loadConfig();
 
   if (config.nodeOnly) {
@@ -143,6 +148,7 @@ async function main() {
   const emailService = new EmailService(db, userSecretService);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
+  const codeGraphService = new CodeGraphService(db);
   const providerRegistry = new ProviderRegistry();
   const acpProviderConfigs = loadAcpProviderConfigs();
   for (const acpProvider of acpProviderConfigs) {
@@ -393,6 +399,7 @@ async function main() {
     notifications,
     previewService,
     architectureDiagramService,
+    codeGraphService,
   });
   providerRegistry.register(new JaitProvider({
     config,
@@ -591,6 +598,7 @@ async function main() {
     shutdown: shutdownRef,
     previewService,
     architectureDiagramService,
+    codeGraphService,
     secretInputService,
     userQuestionService,
     userSecretService,
@@ -878,6 +886,7 @@ async function main() {
     providerUsageService,
     previewService,
     architectureDiagramService,
+    codeGraphService,
     gitService,
     secretInputService,
     userQuestionService,

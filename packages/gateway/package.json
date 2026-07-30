@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.633",
+  "version": "0.1.634",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "author": "JakobWl",
   "type": "module",
@@ -21,6 +21,7 @@
     "build": "tsc",
     "dev": "bun run --filter @jait/web build && bun --watch src/index.ts",
     "start": "node dist/index.js",
+    "postinstall": "node ./bin/install-runtime.mjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
+import { inspectGraphifyRuntime, type GraphifyRuntimeStatus } from "../services/code-graph/graphify-runtime.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
 
@@ -46,6 +47,7 @@ export interface RunDoctorOptions {
   jaitDir?: string;
   minNodeVersion?: string;
   healthCheck?: (port: number) => Promise<unknown>;
+  graphifyCheck?: () => Promise<GraphifyRuntimeStatus>;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -205,6 +207,38 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
           status: "warn",
           message: "playwright dependency is not resolvable",
           fix: "Run the project install so browser tooling is available.",
+        },
+  );
+
+  let graphifyStatus: GraphifyRuntimeStatus;
+  try {
+    graphifyStatus = await (options.graphifyCheck
+      ? options.graphifyCheck()
+      : inspectGraphifyRuntime({ jaitDir, env: options.env ?? process.env }));
+  } catch (error) {
+    graphifyStatus = {
+      ready: false,
+      managed: true,
+      command: "graphify",
+      version: null,
+      expectedVersion: "unknown",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  checks.push(
+    graphifyStatus.ready
+      ? {
+          id: "graphify-runtime",
+          label: "Graphify runtime",
+          status: "pass",
+          message: `${graphifyStatus.version ?? "ready"} at ${graphifyStatus.command}`,
+        }
+      : {
+          id: "graphify-runtime",
+          label: "Graphify runtime",
+          status: "fail",
+          message: graphifyStatus.error ?? "Graphify is unavailable",
+          fix: "Start Jait to provision Graphify automatically. Python 3.10+ with venv and pip is required.",
         },
   );
 

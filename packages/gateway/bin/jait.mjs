@@ -190,7 +190,7 @@ function sleep(ms) {
   return new Promise((resolveP) => setTimeout(resolveP, ms));
 }
 
-async function waitForBackgroundStart(pid, port, { timeoutMs = 5000, pollMs = 250 } = {}) {
+async function waitForBackgroundStart(pid, port, { timeoutMs = 180000, pollMs = 250 } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!isProcessRunning(pid)) {
@@ -354,7 +354,7 @@ async function cmdStart(cliFlags) {
     if (started.reason === "exit") {
       console.error(`  The background process exited during startup.`);
     } else {
-      console.error(`  The background process did not answer /health within 5 seconds.`);
+      console.error(`  The background process did not answer /health within 3 minutes.`);
     }
     console.error(`  Logs: ${LOG_PATH}`);
     console.log("");

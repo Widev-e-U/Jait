@@ -5,6 +5,7 @@ export interface DetachedProjectTabPayload {
   title: string
   theme: 'light' | 'dark'
   surfaceId?: string | null
+  projectRoot?: string | null
   tab: {
     id: string
     type: DetachedProjectTabType
