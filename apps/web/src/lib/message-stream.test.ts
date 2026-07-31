@@ -32,6 +32,18 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('anchors a steering marker between the text streamed before and after it', () => {
+    const stream = createMessageStream()
+    stream.pushText('before the steer')
+    stream.pushSteering('do X instead', 'do X instead')
+    stream.pushText('after the steer')
+    expect(stream.snapshot().segments).toEqual([
+      { type: 'text', content: 'before the steer' },
+      { type: 'steering', content: 'do X instead', displayContent: 'do X instead' },
+      { type: 'text', content: 'after the steer' },
+    ])
+  })
+
   it('groups repeated tool call IDs once', () => {
     const stream = createMessageStream()
     stream.pushToolStart('a', 'x', {})

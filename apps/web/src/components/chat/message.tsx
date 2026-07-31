@@ -1055,6 +1055,20 @@ function MessageInner({
                   )
                 }
 
+                if (seg.type === 'steering') {
+                  return (
+                    <div key={`sg-${i}`} className="relative w-fit max-w-full">
+                      <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
+                        <ArrowRight className="h-3 w-3" />
+                        Steered into running turn
+                      </span>
+                      <div className="min-w-0 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
+                        {seg.displayContent ?? seg.content}
+                      </div>
+                    </div>
+                  )
+                }
+
                 return (typeof seg.content === 'string' && seg.content.trim()) ? (
                   <AIMessageContent
                     key={`ts-${i}`}

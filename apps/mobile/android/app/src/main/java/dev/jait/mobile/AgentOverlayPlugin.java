@@ -38,7 +38,10 @@ import org.json.JSONException;
     }
 )
 public class AgentOverlayPlugin extends Plugin {
-    private static final String CHANNEL_ID = "jait-agent-questions";
+    // Bumped from "jait-agent-questions": channel sound is locked in permanently the first
+    // time Android creates a channel with a given ID, so replacing the alarm-style ringtone
+    // with silence required a new channel ID to actually take effect on existing installs.
+    private static final String CHANNEL_ID = "jait-agent-questions-v2";
     private static final long NOTIFICATION_TIMEOUT_MS = 300_000L;
 
     private PluginCall activeCall;
@@ -76,6 +79,63 @@ public class AgentOverlayPlugin extends Plugin {
         }
 
         showPrompt(call);
+    }
+
+    /**
+     * Ask for the notification permission (Android 13+) and, if the "urgent" full-screen
+     * overlay can't fire, send the user to the one settings screen that can grant it.
+     * Android 14+ only auto-grants USE_FULL_SCREEN_INTENT to default dialer/alarm apps;
+     * everyone else is silently downgraded to a plain heads-up notification unless the
+     * user flips this toggle by hand, so there is no runtime dialog for it.
+     */
+    @PluginMethod
+    public void requestPermissions(PluginCall call) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            getPermissionState("notifications") != PermissionState.GRANTED
+        ) {
+            requestPermissionForAlias("notifications", call, "onRequestPermissionsResult");
+            return;
+        }
+        finishRequestPermissions(call);
+    }
+
+    @PermissionCallback
+    private void onRequestPermissionsResult(PluginCall call) {
+        finishRequestPermissions(call);
+    }
+
+    private void finishRequestPermissions(PluginCall call) {
+        boolean fullScreenIntentGranted = canUseFullScreenIntent();
+        if (!fullScreenIntentGranted) openFullScreenIntentSettingsInternal();
+        JSObject result = new JSObject();
+        result.put("notificationsGranted", getPermissionState("notifications") == PermissionState.GRANTED);
+        result.put("fullScreenIntentGranted", fullScreenIntentGranted);
+        call.resolve(result);
+    }
+
+    private boolean canUseFullScreenIntent() {
+        if (Build.VERSION.SDK_INT < 34) return true;
+        NotificationManager manager =
+            (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        return manager.canUseFullScreenIntent();
+    }
+
+    @PluginMethod
+    public void openFullScreenIntentSettings(PluginCall call) {
+        openFullScreenIntentSettingsInternal();
+        call.resolve();
+    }
+
+    private void openFullScreenIntentSettingsInternal() {
+        if (Build.VERSION.SDK_INT < 34) return;
+        try {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {
+        }
     }
 
     @PluginMethod
@@ -282,12 +342,7 @@ public class AgentOverlayPlugin extends Plugin {
         );
         channel.setDescription("Time-sensitive questions from your Jait agents");
         channel.enableVibration(true);
-        Uri alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-        AudioAttributes audioAttributes = new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build();
-        channel.setSound(alarmSound, audioAttributes);
+        channel.setSound(null, null);
         manager.createNotificationChannel(channel);
     }
 

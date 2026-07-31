@@ -4,9 +4,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
-import android.media.AudioAttributes;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -19,7 +16,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class JaitMessagingService extends FirebaseMessagingService {
-    private static final String CHANNEL_ID = "jait-agent-questions";
+    // Notification channel sound/vibration settings are locked in the first time Android
+    // creates a channel with a given ID and can never be changed afterward for an existing
+    // install - only a new channel ID picks up new settings, so this was bumped when the
+    // alarm-style ringtone was replaced with silence.
+    private static final String CHANNEL_ID = "jait-agent-questions-v2";
 
     @Override
     public void onNewToken(String token) {
@@ -127,12 +128,7 @@ public class JaitMessagingService extends FirebaseMessagingService {
         );
         channel.setDescription("Time-sensitive questions from your Jait agents");
         channel.enableVibration(true);
-        Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-        AudioAttributes attributes = new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build();
-        channel.setSound(sound, attributes);
+        channel.setSound(null, null);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
     }
 }

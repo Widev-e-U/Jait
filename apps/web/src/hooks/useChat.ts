@@ -22,7 +22,7 @@ import {
   writeCachedChatHistory,
 } from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
-import { createMessageStream, snapshotToChatMessageUpdates } from '@/lib/message-stream'
+import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamWriter } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
@@ -182,6 +182,8 @@ export type MessageSegment =
   | { type: 'thinking'; content: string }
   | { type: 'toolGroup'; callIds: string[] }
   | { type: 'error'; content: string }
+  /** A user message injected into a running turn via steering, anchored at the point it was received. */
+  | { type: 'steering'; content: string; displayContent?: string }
 
 export interface LlmContextFlowRound {
   round: number
@@ -443,6 +445,20 @@ export function useChat(
   const resumeStreamRunIdRef = useRef(0)
   const lastResumeSeqBySessionRef = useRef(new Map<string, number>())
   const requestVersionRef = useRef(0)
+  /**
+   * The message-stream writer for whichever turn is currently streaming (direct
+   * POST /api/chat response or a resumed SSE subscribe stream), so a mid-turn
+   * steer can be spliced into that turn's own ordered segment list instead of
+   * always being appended after the whole conversation. `isCurrent` reuses each
+   * stream's own staleness check so a steer that arrives after the turn already
+   * finished falls back to the old standalone-message behavior.
+   */
+  const activeStreamRef = useRef<{
+    getAssistantId: () => string | null
+    writer: MessageStreamWriter
+    flush: () => void
+    isCurrent: () => boolean
+  } | null>(null)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
   const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
   if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
@@ -739,6 +755,13 @@ export function useChat(
           const updates = snapshotToChatMessageUpdates(snapshot)
           if (pendingResumeContextFlow !== undefined) updates.contextFlow = pendingResumeContextFlow
           batchSubscribeUpdate(updates, immediate)
+        }
+
+        activeStreamRef.current = {
+          getAssistantId: () => assistantId,
+          writer: stream,
+          flush: () => applyStreamSnapshot(true),
+          isCurrent: isCurrentResumeRun,
         }
 
         // When a client (re)opens the resume stream during a run that hasn't
@@ -1336,6 +1359,12 @@ export function useChat(
     }
 
     stream.markDirty(streamScheduler.schedule)
+    activeStreamRef.current = {
+      getAssistantId: () => assistantId,
+      writer: stream,
+      flush: () => updateMessage({ immediate: true }),
+      isCurrent: () => !isStale(),
+    }
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1739,8 +1768,21 @@ export function useChat(
     setMessageQueue(prev => prev.filter(q => q.id !== id))
   }, [])
 
-  /** Insert a visible marker into the transcript for a message that was injected into the running turn via steering. */
+  /**
+   * Insert a visible marker into the transcript for a message that was injected
+   * into the running turn via steering. When a turn is actively streaming, the
+   * marker is spliced into that turn's own ordered segment list so it stays
+   * anchored between the content that came before and after the steer, rather
+   * than always being appended after the whole conversation (which made it look
+   * permanently stuck at the bottom while the assistant kept streaming above it).
+   */
   const recordSteeredMessage = useCallback((content: string, displayContent?: string) => {
+    const active = activeStreamRef.current
+    if (active?.isCurrent() && active.getAssistantId()) {
+      active.writer.pushSteering(content, displayContent)
+      active.flush()
+      return
+    }
     const steeredMessage: ChatMessage = {
       id: createOptimisticMessageId('user'),
       role: 'user',

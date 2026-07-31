@@ -73,6 +73,14 @@ export function normalizeMessageSegments(raw: unknown): MessageSegment[] {
         ? callIdsRaw.filter((id): id is string => typeof id === 'string' && id.length > 0)
         : []
       if (callIds.length > 0) out.push({ type: 'toolGroup', callIds })
+    } else if (type === 'steering') {
+      const content = (seg as { content?: unknown }).content
+      const displayContent = (seg as { displayContent?: unknown }).displayContent
+      out.push({
+        type: 'steering',
+        content: typeof content === 'string' ? content : String(content ?? ''),
+        ...(typeof displayContent === 'string' ? { displayContent } : {}),
+      })
     }
     // Unknown segment types are dropped rather than rendered, which keeps a
     // future/legacy payload from crashing the chat transcript.
