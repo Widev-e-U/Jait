@@ -7,6 +7,7 @@ import { mkdirSync, copyFileSync } from "fs";
 import { join } from "path";
 
 const SOURCE = join(__dirname, "..", "packages", "shared", "assets", "logo", "icon-1024.png");
+const FOREGROUND_SOURCE = join(__dirname, "..", "packages", "shared", "assets", "logo", "icon-android-foreground.svg");
 const RES_DIR = join(__dirname, "..", "apps", "mobile", "android", "app", "src", "main", "res");
 
 // Android mipmap density → pixel size mapping
@@ -45,11 +46,16 @@ async function main() {
     await img.clone().resize(size, size).png().toFile(join(outDir, "ic_launcher.png"));
     // Round launcher icon
     await img.clone().resize(size, size).png().toFile(join(outDir, "ic_launcher_round.png"));
-    // Foreground (for adaptive icon) — use same icon, Android crops it
-    await img.clone().resize(size, size).png().toFile(join(outDir, "ic_launcher_foreground.png"));
+    const foregroundSize = Math.round(size * 2.25);
+    await sharp(FOREGROUND_SOURCE).resize(foregroundSize, foregroundSize).png().toFile(join(outDir, "ic_launcher_foreground.png"));
 
     console.log(`  ${dir}: ${size}x${size}px`);
   }
+
+  await sharp(FOREGROUND_SOURCE)
+    .resize(1024, 1024)
+    .png()
+    .toFile(join(__dirname, "..", "apps", "mobile", "assets", "adaptive-icon.png"));
 
   // Generate splash screens (centered icon on dark background)
   for (const [dir, dims] of Object.entries(SPLASH_DENSITIES)) {

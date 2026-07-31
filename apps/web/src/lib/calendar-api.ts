@@ -6,7 +6,7 @@ const API_URL = getApiUrl()
 export interface CalendarAccount {
   id: string
   userId: string | null
-  provider: 'google'
+  provider: 'google' | 'android'
   email: string
   displayName: string
   status: 'connected' | 'error'
@@ -79,6 +79,21 @@ export const calendarApi = {
   async disconnect(accountId: string): Promise<void> {
     const response = await apiFetch(`${API_URL}/api/calendar/accounts/${accountId}`, { method: 'DELETE' })
     await asJson(response)
+  },
+
+  async syncDevice(snapshot: {
+    deviceId: string
+    deviceName: string
+    calendars: CalendarInfo[]
+    events: CalendarEvent[]
+  }): Promise<CalendarAccount> {
+    const response = await apiFetch(`${API_URL}/api/calendar/device/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    })
+    const data = await asJson<{ account: CalendarAccount }>(response)
+    return data.account
   },
 
   async calendars(accountId?: string): Promise<CalendarInfo[]> {

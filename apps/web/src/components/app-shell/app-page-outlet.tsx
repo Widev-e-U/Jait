@@ -1,5 +1,6 @@
 import { ErrorBoundary } from '@/components/error-boundary'
 import { EmailPage } from '@/components/email'
+import { CalendarPage } from '@/components/calendar'
 import { JobsPage } from '@/components/jobs'
 import { MemoryPage } from '@/components/reminders'
 import { NetworkPanel } from '@/components/network'
@@ -103,6 +104,16 @@ export function AppPageOutlet({
       <PageFrame isMobile={isMobile}>
         <ErrorBoundary name="Email" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
           <EmailPage isMobile={isMobile} />
+        </ErrorBoundary>
+      </PageFrame>
+    )
+  }
+
+  if (currentView === 'calendar') {
+    return (
+      <PageFrame isMobile={isMobile}>
+        <ErrorBoundary name="Calendar" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
+          <CalendarPage />
         </ErrorBoundary>
       </PageFrame>
     )

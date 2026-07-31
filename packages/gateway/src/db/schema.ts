@@ -283,6 +283,18 @@ export const calendarAccounts = sqliteTable(
   ],
 );
 
+export const deviceCalendarSnapshots = sqliteTable(
+  "device_calendar_snapshots",
+  {
+    accountId: text("account_id").primaryKey(),
+    userId: text("user_id"),
+    calendars: text("calendars").notNull().default("[]"),
+    events: text("events").notNull().default("[]"),
+    syncedAt: text("synced_at").notNull(),
+  },
+  (table) => [index("idx_device_calendar_snapshots_user").on(table.userId, table.syncedAt)],
+);
+
 // ─── Reminders ─────────────────────────────────────────────────────
 export const reminders = sqliteTable(
   "reminders",

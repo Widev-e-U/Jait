@@ -60,6 +60,24 @@ export function registerCalendarRoutes(
     return { accounts: calendar.listAccounts(user.id) };
   });
 
+  app.post("/api/calendar/device/sync", async (request, reply) => {
+    const user = await auth(request, reply);
+    if (!user) return;
+    const body = (request.body ?? {}) as import("../services/calendar/index.js").DeviceCalendarSnapshot;
+    if (!body.deviceId?.trim() || !Array.isArray(body.calendars) || !Array.isArray(body.events)) {
+      return reply.status(400).send({ error: "deviceId, calendars, and events are required" });
+    }
+    if (body.calendars.length > 500 || body.events.length > 5000) {
+      return reply.status(400).send({ error: "Calendar snapshot is too large" });
+    }
+    return { account: calendar.syncDeviceCalendar(user.id, {
+      deviceId: body.deviceId.trim(),
+      deviceName: body.deviceName?.trim() || "Android device",
+      calendars: body.calendars,
+      events: body.events,
+    }) };
+  });
+
   app.delete("/api/calendar/accounts/:id", async (request, reply) => {
     const user = await auth(request, reply);
     if (!user) return;

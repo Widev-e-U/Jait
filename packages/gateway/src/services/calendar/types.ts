@@ -1,4 +1,4 @@
-export type CalendarProvider = "google";
+export type CalendarProvider = "google" | "android";
 
 export interface CalendarAccount {
   id: string;
@@ -52,4 +52,11 @@ export interface ListCalendarEventsOptions {
   timeMax?: string;
   query?: string;
   limit?: number;
+}
+
+export interface DeviceCalendarSnapshot {
+  deviceId: string;
+  deviceName: string;
+  calendars: CalendarInfo[];
+  events: CalendarEvent[];
 }

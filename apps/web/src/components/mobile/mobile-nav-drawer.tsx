@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   Boxes,
   Calendar,
+  CalendarDays,
   Mail,
   MessageSquare,
   Brain,
@@ -23,6 +24,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { view: 'chat', label: 'Chat', icon: MessageSquare },
   { view: 'todo', label: 'Todo', icon: Boxes },
   { view: 'email', label: 'Email', icon: Mail },
+  { view: 'calendar', label: 'Calendar', icon: CalendarDays },
   { view: 'memory', label: 'Memory', icon: Brain },
   { view: 'jobs', label: 'Jobs', icon: Calendar },
   { view: 'network', label: 'Network', icon: Wifi },

@@ -6,4 +6,5 @@ export type {
   CalendarProvider,
   CalendarTokens,
   ListCalendarEventsOptions,
+  DeviceCalendarSnapshot,
 } from "./types.js";

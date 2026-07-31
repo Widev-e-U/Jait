@@ -1209,4 +1209,22 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 49,
+    name: "device_calendar_snapshots",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS device_calendar_snapshots (
+          account_id TEXT PRIMARY KEY,
+          user_id TEXT,
+          calendars TEXT NOT NULL DEFAULT '[]',
+          events TEXT NOT NULL DEFAULT '[]',
+          synced_at TEXT NOT NULL,
+          FOREIGN KEY (account_id) REFERENCES calendar_accounts(id) ON DELETE CASCADE
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_device_calendar_snapshots_user ON device_calendar_snapshots(user_id, synced_at DESC)`);
+    },
+  },
+
 ];

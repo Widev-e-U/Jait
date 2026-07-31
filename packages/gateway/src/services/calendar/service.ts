@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { JaitDB } from "../../db/connection.js";
-import { calendarAccounts } from "../../db/schema.js";
+import { calendarAccounts, deviceCalendarSnapshots } from "../../db/schema.js";
 import { uuidv7 } from "../../db/uuidv7.js";
 import type { UserSecretService } from "../user-secrets.js";
 import { GoogleCalendarClient } from "./google.js";
@@ -18,6 +18,7 @@ import type {
   CalendarEvent,
   CalendarInfo,
   CalendarTokens,
+  DeviceCalendarSnapshot,
   ListCalendarEventsOptions,
 } from "./types.js";
 
@@ -129,6 +130,41 @@ export class CalendarService {
       .map(rowToAccount);
   }
 
+  syncDeviceCalendar(userId: string | null, snapshot: DeviceCalendarSnapshot): CalendarAccount {
+    const now = new Date().toISOString();
+    const email = `device:${snapshot.deviceId}`;
+    const existing = this.db.select().from(calendarAccounts).where(and(
+      userId ? eq(calendarAccounts.userId, userId) : isNull(calendarAccounts.userId),
+      eq(calendarAccounts.provider, "android"),
+      eq(calendarAccounts.email, email),
+    )).get();
+    const accountId = existing?.id ?? uuidv7();
+    const row = {
+      id: accountId,
+      userId,
+      provider: "android",
+      email,
+      displayName: snapshot.deviceName || "Android device",
+      status: "connected",
+      error: null as string | null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (existing) this.db.update(calendarAccounts).set(row).where(eq(calendarAccounts.id, accountId)).run();
+    else this.db.insert(calendarAccounts).values(row).run();
+    this.db.insert(deviceCalendarSnapshots).values({
+      accountId,
+      userId,
+      calendars: JSON.stringify(snapshot.calendars),
+      events: JSON.stringify(snapshot.events),
+      syncedAt: now,
+    }).onConflictDoUpdate({
+      target: deviceCalendarSnapshots.accountId,
+      set: { calendars: JSON.stringify(snapshot.calendars), events: JSON.stringify(snapshot.events), syncedAt: now },
+    }).run();
+    return rowToAccount(row);
+  }
+
   getAccount(userId: string | null, accountId: string): CalendarAccount | null {
     const row = this.db
       .select()
@@ -155,6 +191,7 @@ export class CalendarService {
   disconnect(userId: string | null, accountId: string): boolean {
     const account = this.getAccount(userId, accountId);
     if (!account) return false;
+    this.db.delete(deviceCalendarSnapshots).where(eq(deviceCalendarSnapshots.accountId, accountId)).run();
     this.db.delete(calendarAccounts).where(eq(calendarAccounts.id, accountId)).run();
     const secretId = this.secrets.list(userId, TOKEN_SECRET_TYPE).find((secret) => secret.key === accountId)?.id;
     if (secretId) this.secrets.delete(secretId, userId);
@@ -166,6 +203,9 @@ export class CalendarService {
     calendars: CalendarInfo[];
   }> {
     const account = this.resolveAccount(userId, accountId);
+    if (account.provider === "android") {
+      return { account, calendars: this.loadDeviceSnapshot(account.id).calendars };
+    }
     const accessToken = await this.validAccessToken(account);
     return { account, calendars: await this.client.listCalendars(accessToken) };
   }
@@ -175,6 +215,21 @@ export class CalendarService {
     events: CalendarEvent[];
   }> {
     const account = this.resolveAccount(userId, accountId);
+    if (account.provider === "android") {
+      const now = new Date();
+      const timeMin = normalizeDate(options.timeMin, now).toISOString();
+      const timeMax = normalizeDate(options.timeMax, new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)).toISOString();
+      if (timeMax <= timeMin) throw new Error("timeMax must be after timeMin.");
+      const query = options.query?.trim().toLowerCase();
+      const limit = Math.max(1, Math.min(options.limit ?? 50, 250));
+      const events = this.loadDeviceSnapshot(account.id).events
+        .filter((event) => !options.calendarId || event.calendarId === options.calendarId)
+        .filter((event) => event.end >= timeMin && event.start <= timeMax)
+        .filter((event) => !query || `${event.title} ${event.description} ${event.location}`.toLowerCase().includes(query))
+        .sort((left, right) => left.start.localeCompare(right.start))
+        .slice(0, limit);
+      return { account, events };
+    }
     const accessToken = await this.validAccessToken(account);
     const now = new Date();
     const timeMin = normalizeDate(options.timeMin, now).toISOString();
@@ -268,6 +323,20 @@ export class CalendarService {
     return refreshed.accessToken;
   }
 
+  private loadDeviceSnapshot(accountId: string): { calendars: CalendarInfo[]; events: CalendarEvent[] } {
+    const row = this.db.select().from(deviceCalendarSnapshots)
+      .where(eq(deviceCalendarSnapshots.accountId, accountId)).get();
+    if (!row) return { calendars: [], events: [] };
+    try {
+      return {
+        calendars: JSON.parse(row.calendars) as CalendarInfo[],
+        events: JSON.parse(row.events) as CalendarEvent[],
+      };
+    } catch {
+      return { calendars: [], events: [] };
+    }
+  }
+
   private gcPending(): void {
     const cutoff = Date.now() - 10 * 60 * 1000;
     for (const [state, pending] of this.pending) {
@@ -287,7 +356,7 @@ function rowToAccount(row: typeof calendarAccounts.$inferSelect): CalendarAccoun
   return {
     id: row.id,
     userId: row.userId,
-    provider: "google",
+    provider: row.provider === "android" ? "android" : "google",
     email: row.email,
     displayName: row.displayName,
     status: row.status === "error" ? "error" : "connected",

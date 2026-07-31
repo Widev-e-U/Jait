@@ -4,6 +4,7 @@ import {
   ArrowUpCircle,
   Brain,
   Calendar,
+  CalendarDays,
   Cast,
   EllipsisVertical,
   Menu,
@@ -207,6 +208,21 @@ export function AppHeader(props: AppHeaderProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Email</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'calendar' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
+                  onClick={() => setCurrentView('calendar')}
+                  aria-label="Calendar"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  <span>Calendar</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Calendar</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -481,6 +497,10 @@ export function AppHeader(props: AppHeaderProps) {
                   <DropdownMenuItem onSelect={() => setCurrentView('email')}>
                     <Mail className="h-4 w-4 mr-2" />
                     Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('calendar')}>
+                    <CalendarDays className="h-4 w-4 mr-2" />
+                    Calendar
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
                     <Brain className="h-4 w-4 mr-2" />

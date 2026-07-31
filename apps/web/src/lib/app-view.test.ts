@@ -32,6 +32,10 @@ describe('appViewToPath', () => {
     expect(appViewToPath('email')).toBe('/emails')
   })
 
+  it('uses the calendar route', () => {
+    expect(appViewToPath('calendar')).toBe('/calendar')
+  })
+
   it('prefixes other views with a slash', () => {
     expect(appViewToPath('settings')).toBe('/settings')
     expect(appViewToPath('memory')).toBe('/memory')

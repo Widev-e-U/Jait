@@ -86,4 +86,48 @@ describe("CalendarService", () => {
     expect(service.listAccounts("u1")).toHaveLength(0);
     expect(secrets.list("u1", "calendar-account")).toHaveLength(0);
   });
+
+  it("persists, filters, and removes Android calendar snapshots", async () => {
+    const account = service.syncDeviceCalendar("u1", {
+      deviceId: "phone-1",
+      deviceName: "Samsung Galaxy",
+      calendars: [{
+        id: "7",
+        name: "Samsung Calendar",
+        description: "com.samsung.android.calendar",
+        timeZone: "Europe/Berlin",
+        primary: true,
+        selected: true,
+        accessRole: "reader",
+      }],
+      events: [{
+        id: "event-1",
+        calendarId: "7",
+        calendarName: "Samsung Calendar",
+        title: "Early shift",
+        description: "",
+        location: "Office",
+        start: "2026-08-02T05:00:00.000Z",
+        end: "2026-08-02T13:00:00.000Z",
+        allDay: false,
+        status: "confirmed",
+        organizer: "",
+        attendees: [],
+      }],
+    });
+
+    expect(account).toMatchObject({ provider: "android", displayName: "Samsung Galaxy" });
+    await expect(service.listCalendars("u1", account.id)).resolves.toMatchObject({
+      calendars: [expect.objectContaining({ name: "Samsung Calendar" })],
+    });
+    await expect(service.listEvents("u1", account.id, {
+      timeMin: "2026-08-01T00:00:00.000Z",
+      timeMax: "2026-08-03T00:00:00.000Z",
+      query: "office",
+    })).resolves.toMatchObject({
+      events: [expect.objectContaining({ title: "Early shift" })],
+    });
+    expect(service.disconnect("u1", account.id)).toBe(true);
+    expect(service.listAccounts("u1")).toHaveLength(0);
+  });
 });
