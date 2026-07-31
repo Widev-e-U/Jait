@@ -1124,13 +1124,38 @@ export function registerThreadRoutes(
       threadUnsubs.set(id, unsubscribe);
       registerThreadResume(id, async (message) => {
         const activeThread = threadService.getById(id);
-        if (!activeThread?.providerSessionId || activeThread.status !== "running") {
+        if (!activeThread?.providerSessionId) {
           return { status: "not-running" };
         }
-        const queued = pendingInterventionMessages.get(id) ?? [];
-        queued.push(message);
-        pendingInterventionMessages.set(id, queued);
-        return { status: "queued" };
+        if (activeThread.status === "running") {
+          const queued = pendingInterventionMessages.get(id) ?? [];
+          queued.push(message);
+          pendingInterventionMessages.set(id, queued);
+          return { status: "queued" };
+        }
+
+        // The thread's own turn already completed (e.g. a CLI/ACP agent that
+        // ended its turn right after kicking off a background command) —
+        // there's no running turn left to steer, so wake the thread back up
+        // with a fresh /send turn instead of silently dropping the message.
+        if (!activeThread.userId || !deps.userService) return { status: "not-running" };
+        const user = deps.userService.findById(activeThread.userId);
+        if (!user) return { status: "not-running" };
+        try {
+          const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+          const response = await app.inject({
+            method: "POST",
+            url: `/api/threads/${id}/send`,
+            headers: { authorization: `Bearer ${token}` },
+            payload: { message },
+          });
+          if (response.statusCode >= 400) {
+            return { status: "error", error: `send failed with status ${response.statusCode}` };
+          }
+          return { status: "queued" };
+        } catch (error) {
+          return { status: "error", error: error instanceof Error ? error.message : String(error) };
+        }
       });
 
       threadService.markRunning(id, session.id);

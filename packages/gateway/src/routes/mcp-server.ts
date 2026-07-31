@@ -501,6 +501,7 @@ export async function handleMcpRequest(
               const isReadOnly = tool.risk === "low" || tool.category === "gateway" || tool.name === "gateway.status";
               return {
                 name: tool.name.replace(/\./g, "_"),
+                ...(tool.displayName ? { title: tool.displayName } : {}),
                 description: tool.description,
                 inputSchema: hasProperties
                   ? { ...tool.parameters, type: "object" }

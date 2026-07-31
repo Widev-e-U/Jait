@@ -114,6 +114,8 @@ export type ToolSourceMetadata =
 
 export interface ToolDefinition<TInput = unknown> {
   name: string;
+  /** Human-friendly title advertised to MCP clients and used by tool UIs. */
+  displayName?: string;
   description: string;
   parameters: ToolParametersSchema;
   /** Tool tier — defaults to 'standard' if not set */

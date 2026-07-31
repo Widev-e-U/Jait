@@ -279,6 +279,17 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('prefers an MCP-provided display name over the transport identity', () => {
+    expect(getMcpToolLabel({
+      displayName: 'Terminal',
+      recipient_name: 'functions.mcp__jait__jait_terminal',
+      command: 'git status',
+    })).toEqual({
+      title: 'Terminal',
+      details: 'command: git status',
+    })
+  })
+
   it('extracts edited file paths from result messages when args omit the path', () => {
     expect(
       getToolFilePath('edit', {}, undefined, 'Edited apps/web/src/components/chat/tool-call-card.tsx successfully'),
@@ -394,6 +405,18 @@ describe('tool call body helpers', () => {
         mimeType: 'image/png',
       }),
     ).toBeNull()
+  })
+
+  it('renders jait.terminal with the terminal body while output streams', () => {
+    expect(getToolCallBodyKind({
+      tool: 'jait.terminal',
+      args: { command: 'bun test' },
+      status: 'running',
+      displayOutput: 'RUN v3',
+      snapshotText: null,
+      screenshotPath: null,
+      imageDataUri: null,
+    })).toBe('terminal')
   })
 
   it('renders image.view results with a data URI as inline image cards', () => {

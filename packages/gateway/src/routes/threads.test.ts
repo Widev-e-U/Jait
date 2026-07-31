@@ -500,6 +500,68 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("wakes an already-completed thread via /send when a background command finishes late", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("background-cmd-user", "secret");
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("claude-code");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      userService: users,
+    });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Claude helper", providerId: "claude-code", kind: "delegation" },
+    });
+    const thread = createResponse.json() as { id: string };
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "kick off a background build", titleTask: "" },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    // The agent ends its own turn right after starting the background command,
+    // so the thread flips to "completed" well before the command finishes.
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+    await waitFor(() => threadService.getById(thread.id)?.status === "completed");
+
+    // The background command finishes afterwards; this is the notification
+    // path backgroundCommandMonitor's completion handler drives in chat.ts.
+    const resume = await interventionRunResumeRegistry.resumeThread(
+      thread.id,
+      "Background command finished: build succeeded.",
+    );
+    expect(resume).toEqual({ status: "queued" });
+
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 2);
+    expect(provider.sendTurn.mock.calls[1]?.[0]).toBe("mock-session-1");
+    expectThreadTurnMessage(provider.sendTurn.mock.calls[1]?.[1], "Background command finished: build succeeded.");
+    expect(threadService.getById(thread.id)?.status).toBe("running");
+
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+    await waitFor(() => threadService.getById(thread.id)?.status === "completed");
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("drains persisted queued thread messages after the current turn completes", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

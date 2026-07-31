@@ -197,6 +197,8 @@ export function getMcpToolLabel(
 ): { title: string | null; details: string | null } {
   const nested = getInvocationObject(args, resultData)
   const title = firstNonEmptyString(
+    args.displayName,
+    args.display_name,
     args.recipient_name,
     args.recipientName,
     args.title,
@@ -213,7 +215,7 @@ export function getMcpToolLabel(
   const detailsSource = nested ?? args
   // Identity/wrapper fields are already conveyed by the card header + icon, so
   // never repeat them inside the details line (no "tool:" / "server:" noise).
-  const excludes = ['recipient_name', 'recipientName', 'tool', 'toolName', 'name', 'server', 'serverId', 'server_id']
+  const excludes = ['displayName', 'display_name', 'recipient_name', 'recipientName', 'tool', 'toolName', 'name', 'server', 'serverId', 'server_id']
   // Drop a redundant `title` that just echoes the tool identity (e.g. an MCP
   // wrapper name like "mcp.jait.file_patch"), but keep titles that carry real
   // content (e.g. a thread title the agent is creating).
@@ -527,7 +529,7 @@ export function canRenderEditDiff(tool: string, args: Record<string, unknown>): 
 
 export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind {
   const normalizedTool = normalizeToolName(input.tool)
-  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
+  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
     || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
 
   if (input.status === 'pending') return 'pending'

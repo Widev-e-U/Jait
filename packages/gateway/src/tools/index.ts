@@ -30,6 +30,7 @@ export {
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
 export { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
+export { createProjectMessageTool } from "./project-message-tool.js";
 export { createProjectEditorOpenTool } from "./project-editor-tools.js";
 export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
@@ -167,6 +168,7 @@ import {
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
+import { createProjectMessageTool } from "./project-message-tool.js";
 import { createProjectEditorOpenTool } from "./project-editor-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
@@ -443,6 +445,23 @@ export function createToolRegistry(
   if (deps.threadService && deps.providerRegistry) {
     tools.register(
       createThreadControlTool({
+        threadService: deps.threadService,
+        providerRegistry: deps.providerRegistry,
+        userService: deps.userService,
+        sessionState: deps.sessionState,
+        skillRegistry: deps.skillRegistry,
+        ws: deps.ws,
+        mcpConfig: deps.threadMcpConfig,
+        config: deps.config,
+      }),
+    );
+  }
+
+  if (deps.threadService && deps.providerRegistry && deps.projectService && deps.sessionService) {
+    tools.register(
+      createProjectMessageTool({
+        projectService: deps.projectService,
+        sessionService: deps.sessionService,
         threadService: deps.threadService,
         providerRegistry: deps.providerRegistry,
         userService: deps.userService,

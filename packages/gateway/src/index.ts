@@ -12,6 +12,7 @@ import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface, RemoteTerminalSurface } from "./surfaces/index.js";
 import { resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
+import { shouldSyncProjectSurfaceUi } from "./surfaces/project-ui-sync.js";
 import { createToolRegistry } from "./tools/index.js";
 import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
@@ -253,6 +254,8 @@ async function main() {
           console.error("Failed to start project watcher:", err.message),
         );
       }
+
+      if (!shouldSyncProjectSurfaceUi(surface)) return;
 
       // Push a UI command to open the project panel
       ws.sendUICommand(

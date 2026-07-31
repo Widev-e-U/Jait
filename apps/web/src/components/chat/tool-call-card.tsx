@@ -326,12 +326,30 @@ export function formatMcpHeaderText(
   return invocationLabel
 }
 
+export function getJaitMcpToolName(toolName: string, title?: string | null): string | null {
+  for (const candidate of [toolName, title]) {
+    if (!candidate) continue
+    const normalized = candidate
+      .replace(/^functions[._]/, '')
+      .replace(/__/g, '.')
+    const match = normalized.match(/^mcp[._]jait[._](.+)$/i)
+    if (!match?.[1]) continue
+    return match[1].replace(/_/g, '.')
+  }
+  return null
+}
+
 /**
  * Derive a friendly display label from an MCP inner tool name.
  * Falls back to a cleaned-up version of the raw name.
  */
 function getMcpDisplayLabel(innerName: string | null): { label: string; icon: typeof Terminal; color: string } | null {
   if (!innerName) return null
+  const jaitToolName = getJaitMcpToolName(innerName)
+  if (jaitToolName) {
+    const nativeMeta = toolMeta[jaitToolName]
+    if (nativeMeta) return nativeMeta
+  }
   const n = innerName.toLowerCase().replace(/^mcp__/, '').replace(/__/g, '.')
   if (n.startsWith('ssh')) return { label: 'SSH', icon: Terminal, color: 'text-yellow-500' }
   if (n.startsWith('git')) return { label: 'Git', icon: Terminal, color: 'text-orange-500' }
@@ -613,10 +631,11 @@ function EditDiffCountBadge({ counts }: { counts: { insertions: number; deletion
 
 function getCollapsedToolCategory(tool: string): string {
   const normalized = normalizeTool(tool)
+  const displayTool = getJaitMcpToolName(normalized) ?? normalized
 
-  if (normalized === 'execute' || normalized.startsWith('terminal.')) return 'terminal'
-  if (normalized === 'edit' || normalized === 'file.write' || normalized === 'file.patch') return 'edit'
-  if (normalized === 'read' || normalized === 'file.read') return 'read'
+  if (displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) return 'terminal'
+  if (displayTool === 'edit' || displayTool === 'file.write' || displayTool === 'file.patch') return 'edit'
+  if (displayTool === 'read' || displayTool === 'file.read') return 'read'
   if (normalized === 'search' || normalized === 'web.search' || normalized === 'browser.search') return 'search'
   if (normalized === 'web' || normalized === 'web.fetch') return 'web'
   if (normalized.startsWith('browser.')) return 'browser'
@@ -654,7 +673,8 @@ export function getToolCallWrapperIconKind(calls: ToolCallInfo[]): 'terminal' | 
 
   for (const call of calls) {
     const normalized = normalizeTool(call.tool)
-    if (normalized === 'execute' || normalized.startsWith('terminal.')) return 'terminal'
+    const displayTool = getJaitMcpToolName(normalized) ?? normalized
+    if (displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) return 'terminal'
     if (isMcpToolName(normalized)) hasMcp = true
     if (
       normalized === 'web'
@@ -1279,8 +1299,10 @@ export function getRunningHint(tool: string, args: Record<string, unknown>): str
 }
 
 function isTerminalTool(tool: string): boolean {
-  const n = normalizeTool(tool)
-  return n.startsWith('terminal.') || n === 'jait.terminal' || n === 'execute' || n.startsWith('ssh.') || n === 'run.ssh' || n === 'elevated.run'
+  const normalized = normalizeTool(tool)
+  const displayTool = getJaitMcpToolName(normalized) ?? normalized
+  return displayTool.startsWith('terminal.') || displayTool === 'jait.terminal' || displayTool === 'execute'
+    || displayTool.startsWith('ssh.') || displayTool === 'run.ssh' || displayTool === 'elevated.run'
 }
 
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
@@ -1445,12 +1467,87 @@ interface SubAgentToolCall {
   completedAt?: number
 }
 
-function SubAgentHistoryView({ data, message, status }: { data: Record<string, unknown>; message?: string; status?: 'pending' | 'running' | 'success' | 'error' }) {
+export function getLatestSubAgentActivity(streamingOutput: string | undefined): string | null {
+  if (!streamingOutput) return null
+  const latest = streamingOutput
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1)
+  if (!latest) return null
+  return truncate(
+    latest
+      .replace(/^\[sub-agent\]\s+Starting\s+(.+?)\.{3}$/, 'Using $1')
+      .replace(/^\[sub-agent\]\s+[✓✗]\s*/, ''),
+    120,
+  )
+}
+
+function SubAgentMission({ args }: { args: Record<string, unknown> }) {
+  const prompt = displayStr(args.prompt ?? args.message ?? args.description).trim()
+  const allowedTools = displayStr(args.allowedTools).trim()
+  if (!prompt && !allowedTools) return null
+
+  return (
+    <div className="border-b border-purple-500/15 bg-background/35 px-3 py-2.5">
+      <div className="text-2xs font-semibold uppercase tracking-wider text-purple-600/80 dark:text-purple-300/80">Mission</div>
+      {prompt && <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-foreground/90">{prompt}</div>}
+      {allowedTools && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {allowedTools.split(',').map((tool) => tool.trim()).filter(Boolean).map((tool) => (
+            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunning: boolean }) {
+  const scrollRef = useAutoScroll(output)
+  const latest = getLatestSubAgentActivity(output)
+  if (!output && !isRunning) return null
+
+  return (
+    <div className="border-b border-purple-500/15 px-3 py-2.5">
+      <div className="mb-2 flex min-w-0 items-center gap-2">
+        {isRunning ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-purple-500" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />}
+        <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Activity</span>
+        {latest && <span className="truncate text-xs text-foreground" title={latest}>{latest}</span>}
+        {isRunning && <span className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-purple-500" />}
+      </div>
+      {output ? (
+        <pre ref={scrollRef} className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-zinc-950 px-3 py-2 font-mono text-[11px] leading-5 text-zinc-200 shadow-inner">
+          {output}
+          {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-purple-300 align-text-bottom" />}
+        </pre>
+      ) : (
+        <div className="rounded-md border border-dashed border-purple-500/25 bg-purple-500/[0.025] px-3 py-2 text-xs text-muted-foreground">
+          Preparing the delegated task...
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubAgentHistoryView({
+  args,
+  data,
+  message,
+  status,
+  streamingOutput,
+}: {
+  args: Record<string, unknown>
+  data: Record<string, unknown>
+  message?: string
+  status?: 'pending' | 'running' | 'success' | 'error'
+  streamingOutput?: string
+}) {
   const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls as SubAgentToolCall[] : []
   const content = typeof data.content === 'string' ? data.content.trim() : ''
   const rounds = typeof data.rounds === 'number' ? data.rounds : null
   const durationMs = typeof data.durationMs === 'number' ? data.durationMs : null
-  const isRunning = status === 'running'
+  const isRunning = status === 'running' || status === 'pending'
 
   const nestedCalls: ToolCallInfo[] = toolCalls.map((tc, i) => ({
     callId: tc.callId ?? `sub-${i}`,
@@ -1465,10 +1562,12 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
   }))
 
   return (
-    <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
+    <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
       {(isRunning || rounds != null || toolCalls.length > 0 || durationMs != null) && (
-        <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
-          {isRunning && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
+        <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
+          <Network className="h-3.5 w-3.5 text-purple-500" />
+          <span className="font-medium text-foreground">Sub-agent workspace</span>
+          <span className="ml-auto" />
           {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
           {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
           {durationMs != null && (
@@ -1477,16 +1576,12 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
         </div>
       )}
 
-      {/* Running indicator when no nested calls yet */}
-      {isRunning && nestedCalls.length === 0 && !content && (
-        <div className="px-3 py-2 text-xs text-muted-foreground">
-          Agent is working...
-        </div>
-      )}
+      <SubAgentMission args={args} />
+      <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
       {/* Nested tool calls rendered as full ToolCallCards */}
       {nestedCalls.length > 0 && (
-        <div className="divide-y divide-border/30">
+        <div className="border-b border-purple-500/15 bg-background/25 py-1">
           {nestedCalls.map((call) => (
             <ToolCallCard key={call.callId} call={call} />
           ))}
@@ -1496,20 +1591,20 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
       {/* Final output */}
       {content && (
         <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
+          <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
+          <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
             {content}
-          </pre>
+          </div>
         </div>
       )}
 
       {/* Fallback to message if no content */}
       {!content && message && (
         <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
+          <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
+          <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
             {message}
-          </pre>
+          </div>
         </div>
       )}
     </div>
@@ -1670,7 +1765,8 @@ function getStructuredTerminalId(call: ToolCallInfo): string | null {
 
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
-  if (normalizedTool === 'surfaces.start') {
+  const displayTool = getJaitMcpToolName(normalizedTool) ?? normalizedTool
+  if (displayTool === 'surfaces.start') {
     if (call.args.type === 'terminal') return getStructuredTerminalId(call) !== null
 
     const data = call.result?.data
@@ -1681,7 +1777,7 @@ function isTerminalCreationCall(call: ToolCallInfo): boolean {
     return false
   }
 
-  if (normalizedTool === 'execute' || normalizedTool.startsWith('terminal.')) {
+  if (displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) {
     return getStructuredTerminalId(call) !== null
   }
 
@@ -1733,8 +1829,9 @@ function extractStreamingWebTarget(streamingArgs: string | undefined): string | 
 function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs?: string }) {
   // Normalise OpenAI name (terminal_run → terminal.run) for meta lookup
   const normalized = normalizeTool(tool)
-  const meta = toolMeta[normalized]
-  const isTerminalTool = normalized.startsWith('terminal.') || normalized === 'jait.terminal' || normalized === 'execute'
+  const displayTool = getJaitMcpToolName(normalized) ?? normalized
+  const meta = toolMeta[displayTool]
+  const isTerminalTool = displayTool.startsWith('terminal.') || displayTool === 'jait.terminal' || displayTool === 'execute'
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
   const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
   const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
@@ -2117,28 +2214,35 @@ function ToolCallCardInner({
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
     : undefined
-  const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
+  const initialNormalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
+  const initialMcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
+    ...(normalizedTool.startsWith('mcp.') && !initialNormalizedArgs.title ? { title: normalizedTool } : {}),
+    ...initialNormalizedArgs,
+  }, resultData) : null
+  const displayTool = getJaitMcpToolName(normalizedTool, initialMcpLabel?.title) ?? normalizedTool
+  const isJaitMcpTool = displayTool !== normalizedTool
+  const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultData)
   const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
     ...(normalizedTool.startsWith('mcp.') && !normalizedArgs.title ? { title: normalizedTool } : {}),
     ...normalizedArgs,
   }, resultData) : null
-  const mcpMeta = mcpLabel ? getMcpDisplayLabel(mcpLabel.title) : null
-  const meta = getToolMeta(normalizedTool)
+  const mcpMeta = mcpLabel && !isJaitMcpTool ? getMcpDisplayLabel(mcpLabel.title) : null
+  const meta = getToolMeta(displayTool)
   const Icon = mcpMeta?.icon ?? meta.icon
   const effectiveColor = mcpMeta?.color ?? meta.color
-  const summary = getCallSummary(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
-  const editDiffCounts = getEditDiffCounts(normalizedTool, normalizedArgs)
+  const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
+  const editDiffCounts = getEditDiffCounts(displayTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
-  const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
-  const imageDataUri = getToolImageDataUri(normalizedTool, normalizedArgs, resultData)
-  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
-    || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
+  const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)
+  const imageDataUri = getToolImageDataUri(displayTool, normalizedArgs, resultData)
+  const isTerminal = displayTool.startsWith('terminal.') || displayTool === 'jait.terminal' || displayTool === 'execute'
+    || displayTool.startsWith('ssh.') || displayTool === 'run.ssh' || displayTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
-  const runningHint = getRunningHint(normalizedTool, normalizedArgs)
+  const runningHint = getRunningHint(displayTool, normalizedArgs)
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
   const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
   const isPending = call.status === 'pending'
@@ -2152,15 +2256,15 @@ function ToolCallCardInner({
       setApprovalSubmitting(null)
     }
   }, [approvalSubmitting, call.approvalRequestId, onApprovalResponse])
-  const filePaths = getToolFilePaths(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
+  const filePaths = getToolFilePaths(displayTool, normalizedArgs, call.result?.data, call.result?.message)
     .map((path) => path.trim())
     .filter(Boolean)
-  const filePath = filePaths[0] ?? getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
-  const showFileSummary = !!filePath && (isEditLikeTool(normalizedTool) || normalizedTool === 'read' || normalizedTool === 'file.read')
+  const filePath = filePaths[0] ?? getToolFilePath(displayTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
+  const showFileSummary = !!filePath && (isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read')
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
   const bodyKind = getToolCallBodyKind({
-    tool: normalizedTool,
+    tool: displayTool,
     args: normalizedArgs,
     status: call.status,
     displayOutput,
@@ -2275,11 +2379,11 @@ function ToolCallCardInner({
     return () => window.clearInterval(id)
   }, [call.status])
 
-  const invocationLabels = getToolInvocationLabels(normalizedTool, normalizedArgs, call.result?.data, call.result?.message)
+  const invocationLabels = getToolInvocationLabels(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const isActive = call.status === 'running' || call.status === 'pending'
   const invocationLabel = isActive ? invocationLabels.running : invocationLabels.done
   const fileSummaryActionLabel = showFileSummary
-    ? getFileSummaryActionLabel(normalizedTool, isActive)
+    ? getFileSummaryActionLabel(displayTool, isActive)
     : invocationLabel
 
   const headerContent = (
@@ -2292,6 +2396,11 @@ function ToolCallCardInner({
       <span className="flex-1 truncate text-[13px] font-medium text-muted-foreground">
         {isPending ? (
           <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
+        ) : isAgentToolName(displayTool) ? (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-2">
+            <span className="shrink-0 font-semibold text-purple-600 dark:text-purple-400">Sub-agent</span>
+            <span className="truncate text-foreground" title={summary}>{summary || (isActive ? 'Working' : 'Completed')}</span>
+          </span>
         ) : isTerminal ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
             <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
@@ -2305,13 +2414,13 @@ function ToolCallCardInner({
                 <FileSummaryButton
                   key={`${p}-${i}`}
                   path={p}
-                  onOpenDiff={isEditLikeTool(normalizedTool) ? onOpenDiff : undefined}
+                  onOpenDiff={isEditLikeTool(displayTool) ? onOpenDiff : undefined}
                   disabled={call.status !== 'success'}
                 />
               ))}
             </span>
           </span>
-        ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
+        ) : mcpLabel && !isJaitMcpTool && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             {mcpLabel.title ? (
               <span className="min-w-0 truncate">
@@ -2373,17 +2482,18 @@ function ToolCallCardInner({
     <ImageView src={imageDataUri} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
-      <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
-        {(call.status === 'running' || call.status === 'pending') && childCalls.length > 0 && (
-          <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin text-purple-500" />
-            <span>{childCalls.length} tool{childCalls.length !== 1 ? 's' : ''}</span>
-          </div>
-        )}
-        {(call.status === 'running' || call.status === 'pending') && childCalls.length === 0 && (
-          <div className="px-3 py-2 text-xs text-muted-foreground">Agent is working...</div>
-        )}
-        <div className="divide-y divide-border/30">
+      <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
+        <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2 text-muted-foreground">
+          <Network className="h-3.5 w-3.5 text-purple-500" />
+          <span className="font-medium text-foreground">Sub-agent workspace</span>
+          <span className="ml-auto">{childCalls.length} tool{childCalls.length !== 1 ? 's' : ''}</span>
+        </div>
+        <SubAgentMission args={normalizedArgs} />
+        <SubAgentLiveActivity
+          output={call.streamingOutput}
+          isRunning={call.status === 'running' || call.status === 'pending'}
+        />
+        <div className="border-b border-purple-500/15 bg-background/25 py-1">
           {childCalls.map((child) => (
             <ToolCallCard
               key={child.callId}
@@ -2397,19 +2507,21 @@ function ToolCallCardInner({
           ))}
         </div>
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
-          <div className="border-t border-purple-500/15 px-3 py-2">
-            <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
+          <div className="px-3 py-2.5">
+            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
+            <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
               {call.result.message}
-            </pre>
+            </div>
           </div>
         )}
       </div>
     ) : (
       <SubAgentHistoryView
+        args={normalizedArgs}
         data={resultData ?? {}}
         message={call.result?.message}
         status={call.status}
+        streamingOutput={call.streamingOutput}
       />
     )
   ) : bodyKind === 'threadList' ? (
@@ -2817,6 +2929,35 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
+export function getAgentActivityHeadline(calls: ToolCallInfo[]): string {
+  const target = [...calls].reverse().find((call) => call.status === 'running' || call.status === 'pending')
+    ?? calls.at(-1)
+  if (!target) return 'Preparing tools'
+
+  const normalizedTool = normalizeTool(target.tool)
+  const resultData = target.result?.data && typeof target.result.data === 'object' && !Array.isArray(target.result.data)
+    ? target.result.data as Record<string, unknown>
+    : undefined
+  const initialArgs = normalizeToolArgs(normalizedTool, target.args, resultData)
+  const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
+    ...(normalizedTool.startsWith('mcp.') && !initialArgs.title ? { title: normalizedTool } : {}),
+    ...initialArgs,
+  }, resultData) : null
+  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title) ?? normalizedTool
+  const args = normalizeToolArgs(displayTool, target.args, resultData)
+  const isActive = target.status === 'running' || target.status === 'pending'
+  const labels = getToolInvocationLabels(displayTool, args, target.result?.data, target.result?.message)
+  const label = isActive ? labels.running : labels.done
+  const summary = getCallSummary(displayTool, args, target.result?.data, target.result?.message)
+
+  if (isAgentToolName(displayTool) && summary) return `Sub-agent: ${summary}`
+  if ((displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) && summary) {
+    return `${isActive ? 'Running' : 'Ran'}: ${truncate(summary, 90)}`
+  }
+  if (summary && !label.toLowerCase().includes(summary.toLowerCase())) return `${label}: ${truncate(summary, 90)}`
+  return label
+}
+
 function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
@@ -2837,6 +2978,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
     ? Math.max(...calls.map(c => c.completedAt ?? c.startedAt))
     : undefined
   const SummaryIcon = getToolCallWrapperIcon(calls)
+  const activityHeadline = getAgentActivityHeadline(calls)
 
   // Compute agent nesting so inner-agent tool calls render inside the agent card
   const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
@@ -2875,35 +3017,44 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
 
   return (
     <Collapsible open={effectiveOpen} onOpenChange={handleOpenChange}>
-      <div className="my-2">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
+      <div className="my-2 overflow-hidden rounded-lg border border-border/70 bg-card/55 shadow-sm">
+        <CollapsibleTrigger className={cn(
+          'flex w-full items-center gap-2.5 bg-gradient-to-r from-purple-500/[0.07] via-transparent to-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted/35',
+          effectiveOpen && 'border-b border-border/60',
+        )}>
           <ChevronRight className={cn(
             'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
             effectiveOpen && 'rotate-90',
           )} />
-          {isActive
-            ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
-            : <SummaryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-          }
-          <span className="text-sm font-medium text-foreground truncate">
-            {summarizeCollapsedToolCalls(calls)}
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-purple-500/20 bg-purple-500/10">
+            {isActive
+              ? <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
+              : <SummaryIcon className="h-4 w-4 text-purple-500" />
+            }
           </span>
-          <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
-            {!isActive && errorCount > 0 && (
-              <span className="text-red-500">{errorCount} failed</span>
-            )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                {isActive ? 'Agent activity' : 'Agent activity complete'}
+              </span>
+              <span className="rounded-full border border-border/60 bg-background/65 px-1.5 py-0.5 text-2xs text-muted-foreground">
+                {calls.length} call{calls.length !== 1 ? 's' : ''}
+              </span>
+            </span>
+            <span className="mt-0.5 block truncate text-xs font-medium text-foreground" title={activityHeadline}>
+              {activityHeadline}
+            </span>
+          </span>
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+            {!isActive && errorCount > 0 && <span className="text-red-500">{errorCount} failed</span>}
             <ElapsedLabel startedAt={startedAt} completedAt={completedAt} now={now} />
           </div>
-          {!isActive && errorCount === 0 && successCount > 0 && (
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
-          )}
-          {!isActive && errorCount > 0 && (
-            <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
-          )}
+          {!isActive && errorCount === 0 && successCount > 0 && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />}
+          {!isActive && errorCount > 0 && <XCircle className="h-4 w-4 shrink-0 text-red-500" />}
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="mt-1">
+          <div className="px-1 py-1">
             {needsInnerCollapse && (
               <button
                 type="button"

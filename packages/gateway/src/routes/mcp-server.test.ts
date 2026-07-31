@@ -131,6 +131,33 @@ describe("mcp-server", () => {
     });
   });
 
+  it("advertises human-friendly tool titles to MCP clients", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "jait.terminal",
+      displayName: "Terminal",
+      description: "Run a command",
+      tier: "standard",
+      category: "terminal",
+      source: "builtin",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      async execute() {
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const response = await handleMcpRequest({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    }, registry);
+
+    expect((response.result as { tools: Array<Record<string, unknown>> }).tools[0]).toMatchObject({
+      name: "jait_terminal",
+      title: "Terminal",
+    });
+  });
+
   it("builds the MCP callback base URL from forwarded headers", () => {
     expect(resolveMcpBaseUrl({
       headers: {

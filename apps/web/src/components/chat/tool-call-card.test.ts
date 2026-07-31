@@ -14,6 +14,9 @@ let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
 let getCallSummary: typeof import('./tool-call-card')['getCallSummary']
 let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
 let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText']
+let getJaitMcpToolName: typeof import('./tool-call-card')['getJaitMcpToolName']
+let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
+let getAgentActivityHeadline: typeof import('./tool-call-card')['getAgentActivityHeadline']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -39,6 +42,9 @@ beforeAll(async () => {
     getCallSummary,
     getEditDiffCounts,
     formatMcpHeaderText,
+    getJaitMcpToolName,
+    getLatestSubAgentActivity,
+    getAgentActivityHeadline,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -67,6 +73,32 @@ describe('getRunningHint', () => {
       recipient_name: 'functions.mcp__jait__jait_terminal',
       arguments: JSON.stringify({ command: 'bun run test' }),
     })).toBe('Executing bun run test...')
+  })
+})
+
+describe('Jait MCP display metadata', () => {
+  it('maps external-provider Jait MCP names back to native tools', () => {
+    expect(getJaitMcpToolName('mcp.jait.jait_terminal')).toBe('jait.terminal')
+    expect(getJaitMcpToolName('functions.mcp__jait__file_read')).toBe('file.read')
+  })
+
+  it('summarizes Jait MCP terminal calls as terminal activity', () => {
+    const call = {
+      callId: 'terminal-1',
+      tool: 'mcp.jait.jait_terminal',
+      args: { command: 'bun run test' },
+      status: 'running' as const,
+      startedAt: 1,
+    }
+    expect(summarizeCollapsedToolCalls([call])).toBe('1 terminal tool call')
+    expect(getAgentActivityHeadline([call])).toBe('Running: bun run test')
+  })
+})
+
+describe('sub-agent activity', () => {
+  it('turns streamed sub-agent events into a concise current action', () => {
+    expect(getLatestSubAgentActivity('[sub-agent] Starting file.read...\n')).toBe('Using file.read')
+    expect(getLatestSubAgentActivity('[sub-agent] Starting file.read...\n[sub-agent] ✓ Read src/app.ts\n')).toBe('Read src/app.ts')
   })
 })
 
