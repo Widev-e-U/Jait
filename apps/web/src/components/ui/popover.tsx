@@ -32,6 +32,7 @@ function PopoverContent({
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
   collisionPadding?: number | Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>
+  onOpenAutoFocus?: (event: Event) => void
   children?: React.ReactNode
   ref?: React.Ref<HTMLDivElement>
 }) {

@@ -271,7 +271,7 @@ export function DeveloperChatWorkspace({
                 onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
                 availableFiles={availableFilesForMention}
                 onSearchFiles={onSearchFiles}
-                projectOpen={showProject}
+                projectOpen={Boolean(activeProjectRoot)}
                 projectName={activeProjectDisplayName ?? undefined}
                 projectPath={activeProjectRoot ?? undefined}
                 chatId={activeSessionId ?? undefined}
@@ -569,7 +569,7 @@ export function DeveloperChatWorkspace({
                     onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={onSearchFiles}
-                    projectOpen={showProject}
+                    projectOpen={Boolean(activeProjectRoot)}
                     projectName={activeProjectDisplayName ?? undefined}
                     projectPath={activeProjectRoot ?? undefined}
                     chatId={activeSessionId ?? undefined}

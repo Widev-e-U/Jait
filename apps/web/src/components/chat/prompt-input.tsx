@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle,
 import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X, Copy, Check } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { StyleSelector } from '@/components/chat/style-selector'
@@ -761,8 +762,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
   const onSearchFilesRef = useRef(onSearchFiles)
   useEffect(() => { onSearchFilesRef.current = onSearchFiles }, [onSearchFiles])
-  const projectOpenRef = useRef(projectOpen)
-  useEffect(() => { projectOpenRef.current = projectOpen }, [projectOpen])
   const pushUndoRef = useRef<(immediate?: boolean) => void>(() => {})
 
   // Filtered skill list for the `/` slash menu (local, no async needed)
@@ -1283,10 +1282,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         if (cursor > 0 && textContent[cursor - 1] === '@') {
           const charBefore = cursor > 1 ? textContent[cursor - 2] : ' '
           if (charBefore === ' ' || charBefore === '\n' || charBefore === '\u00a0' || cursor === 1) {
-            if (projectOpenRef.current) {
-              setMentionQuery('')
-              setMentionOpen(true)
-            }
+            setMentionQuery('')
+            setMentionOpen(true)
           }
         }
       }
@@ -1829,15 +1826,26 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       </div>
 
       {/* @ mention popup */}
-      {mentionOpen && (searchResults.length > 0 || searchLoading) && (
-        <div
+      <Popover open={mentionOpen}>
+        <PopoverAnchor asChild>
+          <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
+        </PopoverAnchor>
+        <PopoverContent
           ref={menuRef}
-          className="absolute left-3 bottom-full mb-1 w-72 max-h-52 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg z-50"
+          role="listbox"
+          aria-label="File suggestions"
+          side="top"
+          align="start"
+          sideOffset={4}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="z-[80] w-72 max-h-52 overflow-y-auto rounded-lg p-1 shadow-lg"
         >
           {searchResults.map((file, i) => (
             <button
               key={file.path}
               type="button"
+              role="option"
+              aria-selected={i === mentionIndex}
               data-active={i === mentionIndex}
               className={cn(
                 'flex items-center gap-2 w-full text-left text-xs px-2 py-1.5 rounded-md transition-colors',
@@ -1862,16 +1870,27 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           )}
           {!searchLoading && searchResults.length === 0 && (
-            <div className="text-xs text-muted-foreground px-2 py-1.5">No matching files or folders</div>
+            <div className="text-xs text-muted-foreground px-2 py-1.5">
+              {projectOpen ? 'No matching files or folders' : 'Open a project to mention files'}
+            </div>
           )}
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
 
       {/* `/` slash-command (skills) popup */}
-      {slashOpen && (
-        <div
+      <Popover open={slashOpen}>
+        <PopoverAnchor asChild>
+          <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
+        </PopoverAnchor>
+        <PopoverContent
           ref={slashMenuRef}
-          className="absolute left-3 bottom-full mb-1 w-80 max-h-60 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg z-50"
+          role="listbox"
+          aria-label="Skill suggestions"
+          side="top"
+          align="start"
+          sideOffset={4}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="z-[80] w-80 max-h-60 overflow-y-auto rounded-lg p-1 shadow-lg"
         >
           <div className="px-2 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70">
             Skills
@@ -1880,6 +1899,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <button
               key={skill.id}
               type="button"
+              role="option"
+              aria-selected={i === slashIndex}
               data-active={i === slashIndex}
               className={cn(
                 'flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors',
@@ -1903,8 +1924,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           {slashResults.length === 0 && (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">No matching skills</div>
           )}
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
 
       <div className="flex min-w-0 items-start gap-2 px-3 pb-2.5 pt-0.5">
         {hasFooterLeftContent && (
