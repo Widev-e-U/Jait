@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+
 const TOKEN_KEY = 'jait-auth-token'
 const LEGACY_TOKEN_KEY = 'token'
 const CREDENTIAL_KEY = 'jait-auth-token'
@@ -29,7 +31,9 @@ function getDesktopBridge(): any | null {
 
 function isNativeApp(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as any).jaitDesktop || !!(window as any).Capacitor
+  // Capacitor.isNativePlatform(), not truthiness of window.Capacitor: @capacitor/core
+  // attaches that global as a module-load side effect even in plain browsers.
+  return !!(window as any).jaitDesktop || Capacitor.isNativePlatform()
 }
 
 /**

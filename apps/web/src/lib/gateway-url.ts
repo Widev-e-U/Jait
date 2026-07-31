@@ -11,11 +11,15 @@
  * of reading `import.meta.env.VITE_API_URL` directly.
  */
 
+import { Capacitor } from '@capacitor/core'
+
 const STORAGE_KEY = 'jait-gateway-url'
 
 function isStandaloneClient(): boolean {
   if (typeof window === 'undefined') return false
-  return Boolean((window as any).jaitDesktop || (window as any).Capacitor)
+  // Capacitor.isNativePlatform(), not truthiness of window.Capacitor: @capacitor/core
+  // attaches that global as a module-load side effect even in plain browsers.
+  return Boolean((window as any).jaitDesktop) || Capacitor.isNativePlatform()
 }
 
 function supportsGatewayOverride(): boolean {

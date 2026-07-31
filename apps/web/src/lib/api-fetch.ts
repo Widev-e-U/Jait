@@ -9,11 +9,14 @@
  *   because cross-origin WebViews cannot rely on cookies.
  */
 
+import { Capacitor } from '@capacitor/core'
 import { getAuthToken } from './auth-token'
 
 function isNativeApp(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as any).jaitDesktop || !!(window as any).Capacitor
+  // Capacitor.isNativePlatform(), not truthiness of window.Capacitor: @capacitor/core
+  // attaches that global as a module-load side effect even in plain browsers.
+  return !!(window as any).jaitDesktop || Capacitor.isNativePlatform()
 }
 
 function isCrossOriginDev(): boolean {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -278,9 +279,13 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
-  const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
   const isElectron = !!(window as any).jaitDesktop
-  const isCapacitor = !!(window as any).Capacitor
+  // @capacitor/core attaches `window.Capacitor` as a module-load side effect even in
+  // plain browsers (it's statically bundled via the device-calendar feature), so a
+  // truthy check on the global misclassifies every web session as the native app.
+  // isNativePlatform() checks the actual native bridge instead.
+  const isCapacitor = Capacitor.isNativePlatform()
+  const isStandaloneApp = isElectron || isCapacitor
   const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
   const gateway = useGatewayConnection({ isStandaloneApp })
   const {
