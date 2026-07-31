@@ -6,6 +6,7 @@ import type { ConsentManager } from "../security/consent-manager.js";
 import type { DeviceRegistry } from "../services/device-registry.js";
 import type { MobilePushService } from "../services/mobile-push.js";
 import type { SessionService } from "../services/sessions.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 interface MobileRouteDeps {
   deviceRegistry: DeviceRegistry;
@@ -81,6 +82,32 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
       return reply.code(404).send({ error: "Push device not found" });
     }
     return { ok: true };
+  });
+
+  app.post("/api/mobile/push-devices/test", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, deps.config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.mobilePush) return reply.code(503).send({ error: "Push notifications unavailable" });
+    const deviceCount = deps.mobilePush.list(authUser.id).length;
+    if (deviceCount === 0) return reply.code(404).send({ error: "No push devices registered for this user" });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const message = typeof body["message"] === "string" && body["message"].trim()
+      ? body["message"].trim()
+      : "This is a test push from Jait.";
+    const now = new Date();
+    await deps.mobilePush.sendUrgentQuestion({
+      id: uuidv7(),
+      sessionId: "test",
+      userId: authUser.id,
+      requestedBy: "mobile.test",
+      title: "Jait test notification",
+      attention: "urgent",
+      questions: [{ id: uuidv7(), header: "Test", question: message }],
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
+      status: "pending",
+    });
+    return { ok: true, devices: deviceCount };
   });
 
   app.get("/api/mobile/routines", async (request, reply) => {

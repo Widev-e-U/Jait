@@ -67,3 +67,6 @@ apps/mobile/.expo/
 
 # Local release signing material
 /private/
+
+# Firebase client config (project-specific)
+apps/mobile/android/app/google-services.json
