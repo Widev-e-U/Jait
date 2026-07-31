@@ -263,6 +263,26 @@ export const emailAccounts = sqliteTable(
   ],
 );
 
+// ─── Calendar Accounts (connected calendars; OAuth tokens live in user_secrets) ──
+export const calendarAccounts = sqliteTable(
+  "calendar_accounts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    provider: text("provider").notNull(), // 'google'
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    status: text("status").notNull().default("connected"), // 'connected' | 'error'
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_calendar_accounts_unique").on(table.userId, table.provider, table.email),
+    index("idx_calendar_accounts_user").on(table.userId, table.updatedAt),
+  ],
+);
+
 // ─── Reminders ─────────────────────────────────────────────────────
 export const reminders = sqliteTable(
   "reminders",

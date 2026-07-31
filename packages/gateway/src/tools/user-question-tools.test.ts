@@ -19,15 +19,17 @@ describe("user.ask tool", () => {
     const tool = createUserAskTool(service);
 
     expect(tool.tier).toBe("core");
-    expect(tool.description).toContain("missing requirement");
+    expect(tool.description).toContain("over other apps");
   });
 
   it("asks structured questions and returns answers keyed by question id", async () => {
     let service: UserQuestionService;
     let observedTitle = "";
+    let observedAttention = "";
     service = new UserQuestionService({
       onRequest: (request) => {
         observedTitle = request.title;
+        observedAttention = request.attention;
         queueMicrotask(() => {
           service.submit(request.id, {
             answers: {
@@ -41,6 +43,7 @@ describe("user.ask tool", () => {
 
     const result = await tool.execute({
       title: "Deployment choice",
+      attention: "urgent",
       questions: [{
         id: "deploy_target",
         header: "Target",
@@ -51,6 +54,7 @@ describe("user.ask tool", () => {
 
     expect(result.ok).toBe(true);
     expect(observedTitle).toBe("Deployment choice");
+    expect(observedAttention).toBe("urgent");
     expect(result.data).toEqual({
       answers: {
         deploy_target: { selected: ["staging"], freeText: "green pool", skipped: false },

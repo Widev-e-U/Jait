@@ -1,9 +1,12 @@
 /**
  * Update REST routes — check for new versions and trigger self-update.
  *
- *   GET    /api/update/check   — compare running version against npm latest
- *   POST   /api/update/apply   — install the new version and restart
+ *   GET    /api/update/check          — compare running version against npm latest
+ *   POST   /api/update/apply          — install the new version and restart
+ *   GET    /api/mobile-update/check   — compare installed Android APK against latest GitHub release
  */
+
+const GITHUB_REPO = "Widev-e-U/Jait";
 
 import type { FastifyInstance } from "fastify";
 import { execSync } from "node:child_process";
@@ -37,6 +40,53 @@ export function registerUpdateRoutes(
         currentVersion: CURRENT_VERSION,
         latestVersion: latest,
         hasUpdate,
+      };
+    } catch (err) {
+      return reply.status(502).send({
+        error: "Failed to check for updates",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  /** Check for a newer Android APK release on GitHub. */
+  app.get("/api/mobile-update/check", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+
+    const query = (request.query as Record<string, unknown>) ?? {};
+    const currentVersion = typeof query["currentVersion"] === "string" ? query["currentVersion"] : "";
+
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+        headers: { Accept: "application/vnd.github+json", "User-Agent": "jait-gateway" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) {
+        return reply.status(502).send({
+          error: "Failed to check for updates",
+          detail: `GitHub responded ${res.status}`,
+        });
+      }
+
+      const release = await res.json() as {
+        tag_name?: string;
+        assets?: Array<{ name: string; browser_download_url: string }>;
+      };
+      const latestVersion = (release.tag_name ?? "").replace(/^v/, "");
+      const apkAssets = (release.assets ?? []).filter((asset) => {
+        const assetName = asset.name.toLowerCase();
+        return assetName.endsWith(".apk") && !assetName.includes("unsigned");
+      });
+      const apkAsset = apkAssets.find((asset) => asset.name.toLowerCase().includes("android")) ?? apkAssets[0];
+      const hasUpdate = !!currentVersion && !!latestVersion && !!apkAsset && compareVersions(latestVersion, currentVersion) > 0;
+
+      return {
+        currentVersion,
+        latestVersion,
+        hasUpdate,
+        downloadUrl: apkAsset?.browser_download_url ?? null,
+        assetName: apkAsset?.name ?? null,
       };
     } catch (err) {
       return reply.status(502).send({

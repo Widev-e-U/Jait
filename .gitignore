@@ -64,3 +64,6 @@ playwright-report/
 apps/desktop/release/
 apps/desktop/build/appx-dist/
 apps/mobile/.expo/
+
+# Local release signing material
+/private/

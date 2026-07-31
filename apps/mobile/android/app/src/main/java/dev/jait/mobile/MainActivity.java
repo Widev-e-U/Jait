@@ -19,6 +19,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(AppUpdaterPlugin.class);
+        registerPlugin(AgentOverlayPlugin.class);
         registerSplashDismissal();
         super.onCreate(savedInstanceState);
         showAnimatedSplash();

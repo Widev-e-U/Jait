@@ -5,6 +5,7 @@ import { ToolName } from "./tool-names.js";
 interface UserAskInput {
   title?: string;
   timeoutMs?: number;
+  attention?: "normal" | "urgent";
   questions: Array<{
     id: string;
     header: string;
@@ -41,12 +42,17 @@ function normalizeQuestions(input: UserAskInput): UserQuestion[] {
 export function createUserAskTool(userQuestions: UserQuestionService): ToolDefinition<UserAskInput> {
   return {
     name: ToolName.UserAsk,
-    description: "Ask the user one or more structured questions and wait for their answers. Use this when progress is blocked by a real choice, missing requirement, or approval that cannot be inferred safely.",
+    description: "Ask the user one or more structured questions and wait for their answers. Set attention to urgent for alarms, wake-up prompts, or other time-sensitive requests that should appear over other apps with sound.",
     parameters: {
       type: "object",
       properties: {
         title: { type: "string", description: "Short title shown above the questions." },
         timeoutMs: { type: "number", description: "Optional timeout in milliseconds." },
+        attention: {
+          type: "string",
+          enum: ["normal", "urgent"],
+          description: "Use urgent for time-sensitive prompts that should open a native overlay with sound.",
+        },
         questions: {
           type: "array",
           description: "Questions to ask. Use stable IDs so answers are easy to map.",
@@ -106,6 +112,7 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
         userId: context.userId ?? null,
         requestedBy: ToolName.UserAsk,
         title: input.title,
+        attention: input.attention,
         questions,
         timeoutMs: input.timeoutMs,
       });

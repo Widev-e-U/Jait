@@ -27,6 +27,7 @@ export interface UserQuestionRequest {
   userId: string | null;
   requestedBy: string | null;
   title: string;
+  attention: "normal" | "urgent";
   questions: UserQuestion[];
   createdAt: string;
   expiresAt: string;
@@ -66,6 +67,7 @@ export class UserQuestionService {
     userId?: string | null;
     requestedBy?: string | null;
     title?: string;
+    attention?: "normal" | "urgent";
     questions: UserQuestion[];
     timeoutMs?: number;
   }): Promise<UserQuestionResult | null> {
@@ -77,6 +79,7 @@ export class UserQuestionService {
       userId: input.userId ?? null,
       requestedBy: input.requestedBy ?? null,
       title: input.title?.trim() || "Input requested",
+      attention: input.attention === "urgent" ? "urgent" : "normal",
       questions: input.questions,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),

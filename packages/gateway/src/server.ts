@@ -49,6 +49,7 @@ import { registerArchitectureRoutes } from "./routes/architecture.js";
 import { registerCodeGraphRoutes } from "./routes/code-graph.js";
 import { registerSecretRoutes } from "./routes/secrets.js";
 import { registerEmailRoutes } from "./routes/email.js";
+import { registerCalendarRoutes } from "./routes/calendar.js";
 import { registerUserQuestionRoutes } from "./routes/user-questions.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
 import { registerSkillRoutes } from "./routes/skills.js";
@@ -141,6 +142,7 @@ export interface ServerDeps {
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
   emailService?: import("./services/email/index.js").EmailService;
+  calendarService?: import("./services/calendar/index.js").CalendarService;
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
@@ -236,6 +238,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   if (deps.emailService) {
     registerEmailRoutes(app, config, deps.emailService);
+  }
+  if (deps.calendarService) {
+    registerCalendarRoutes(app, config, deps.calendarService);
   }
   if (deps.userQuestionService) {
     registerUserQuestionRoutes(app, config, deps.userQuestionService);

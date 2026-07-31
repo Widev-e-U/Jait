@@ -1186,4 +1186,27 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 48: Connected Google Calendar accounts ───────────────────────
+  {
+    id: 48,
+    name: "calendar_accounts_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS calendar_accounts (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          provider TEXT NOT NULL,
+          email TEXT NOT NULL,
+          display_name TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'connected',
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_accounts_unique ON calendar_accounts(user_id, provider, email)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_calendar_accounts_user ON calendar_accounts(user_id, updated_at DESC)`);
+    },
+  },
+
 ];

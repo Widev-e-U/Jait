@@ -335,7 +335,7 @@ jobs:
       && (
         github.event_name != 'push' ||
         github.ref != 'refs/heads/main' ||
-        needs.auto-tag.outputs.mobile_changed == 'true'
+        needs.auto-tag.outputs.changed == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -374,12 +374,38 @@ jobs:
         run: npx cap sync android
       - name: Set Android SDK path
         run: echo "sdk.dir=$ANDROID_HOME" > apps/mobile/android/local.properties
-      - name: Build APK
+      - name: Prepare Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "::error::ANDROID_KEYSTORE_BASE64 is not configured"; exit 1; }
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || { echo "::error::ANDROID_KEYSTORE_PASSWORD is not configured"; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "::error::ANDROID_KEY_ALIAS is not configured"; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "::error::ANDROID_KEY_PASSWORD is not configured"; exit 1; }
+          KEYSTORE_PATH="$RUNNER_TEMP/jait-release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "JAIT_ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Build signed APK
         working-directory: apps/mobile/android
+        env:
+          JAIT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JAIT_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          JAIT_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: chmod +x gradlew && ./gradlew assembleRelease
+      - name: Verify and name Android APK
+        run: |
+          APK_PATH="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          VERSION=$(jq -r '.version' packages/gateway/package.json)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+          mkdir -p apps/mobile/android/app/build/outputs/release-assets
+          cp "$APK_PATH" "apps/mobile/android/app/build/outputs/release-assets/Jait-$VERSION-android.apk"
       - name: Stage Android release assets on runner
         if: env.RELEASE_ASSET_MODE == 'runner'
-        run: cp -v apps/mobile/android/app/build/outputs/apk/release/*.apk "$RELEASE_ASSET_DIR"/
+        run: cp -v apps/mobile/android/app/build/outputs/release-assets/*.apk "$RELEASE_ASSET_DIR"/
       - name: Upload Android release assets to GitHub Artifacts
         if: env.RELEASE_ASSET_MODE == 'github-artifacts'
         uses: actions/upload-artifact@v4
@@ -387,7 +413,10 @@ jobs:
           name: android-release-assets
           retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
           if-no-files-found: error
-          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          path: apps/mobile/android/app/build/outputs/release-assets/*.apk
+      - name: Remove Android signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/jait-release.keystore"
 
   # ── Publish npm packages (in dependency order) ─────────────────────
   npm-publish:

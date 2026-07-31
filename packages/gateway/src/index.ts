@@ -34,6 +34,7 @@ import { SecretInputService } from "./services/secret-input.js";
 import { UserQuestionService } from "./services/user-questions.js";
 import { UserSecretService } from "./services/user-secrets.js";
 import { EmailService } from "./services/email/index.js";
+import { CalendarService } from "./services/calendar/index.js";
 import { UserService } from "./services/users.js";
 import { ProviderAccountService } from "./services/provider-accounts.js";
 import { ProviderUsageService } from "./services/provider-usage.js";
@@ -146,6 +147,7 @@ async function main() {
   const reminderService = new ReminderService(db);
   const userSecretService = new UserSecretService(db, config.jwtSecret);
   const emailService = new EmailService(db, userSecretService);
+  const calendarService = new CalendarService(db, userSecretService);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const codeGraphService = new CodeGraphService(db);
@@ -395,6 +397,7 @@ async function main() {
     gitService,
     userSecretService,
     emailService,
+    calendarService,
     maintenanceService,
     notifications,
     previewService,
@@ -603,6 +606,7 @@ async function main() {
     userQuestionService,
     userSecretService,
     emailService,
+    calendarService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -892,6 +896,7 @@ async function main() {
     userQuestionService,
     userSecretService,
     emailService,
+    calendarService,
     pluginManager,
     skillRegistry,
     clawhubClient,

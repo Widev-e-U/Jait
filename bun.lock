@@ -14,7 +14,7 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.77",
+      "version": "0.1.89",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
@@ -31,8 +31,9 @@
     },
     "apps/mobile": {
       "name": "@jait/mobile",
-      "version": "0.1.16",
+      "version": "0.1.17",
       "dependencies": {
+        "@capacitor/app": "^6.0.0",
         "@capacitor/core": "^6.2.0",
         "@capacitor/filesystem": "^6.0.0",
         "@capacitor/keyboard": "6",
@@ -61,8 +62,9 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.260",
+      "version": "0.1.283",
       "dependencies": {
+        "@capacitor/app": "^6.0.0",
         "@capacitor/filesystem": "^6.0.0",
         "@chenglou/pretext": "^0.0.4",
         "@jait/api-client": "workspace:*",
@@ -153,7 +155,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.568",
+      "version": "0.1.635",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -202,7 +204,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.54",
+      "version": "0.1.63",
       "dependencies": {
         "zod": "^3.24.0",
       },
@@ -514,6 +516,8 @@
     "@cacheable/utils": ["@cacheable/utils@2.4.1", "", { "dependencies": { "hashery": "^1.5.1", "keyv": "^5.6.0" } }, "sha512-eiFgzCbIneyMlLOmNG4g9xzF7Hv3Mga4LjxjcSC/ues6VYq2+gUbQI8JqNuw/ZM8tJIeIaBGpswAsqV2V7ApgA=="],
 
     "@capacitor/android": ["@capacitor/android@6.2.1", "", { "peerDependencies": { "@capacitor/core": "^6.2.0" } }, "sha512-8gd4CIiQO5LAIlPIfd5mCuodBRxMMdZZEdj8qG8m+dQ1sQ2xyemVpzHmRK8qSCHorsBUCg3D62j2cp6bEBAkdw=="],
+
+    "@capacitor/app": ["@capacitor/app@6.0.3", "", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-4gFUCbcVz0N/YYN32OBFerocWXslIv3Nc90gDiRsBkJc0plwK6kIUT6PKa5WtW2kfhteUeCVXQbvArH2fH+0Ug=="],
 
     "@capacitor/cli": ["@capacitor/cli@6.2.1", "", { "dependencies": { "@ionic/cli-framework-output": "^2.2.5", "@ionic/utils-fs": "^3.1.6", "@ionic/utils-subprocess": "2.1.11", "@ionic/utils-terminal": "^2.3.3", "commander": "^9.3.0", "debug": "^4.3.4", "env-paths": "^2.2.0", "kleur": "^4.1.4", "native-run": "^2.0.0", "open": "^8.4.0", "plist": "^3.0.5", "prompts": "^2.4.2", "rimraf": "^4.4.1", "semver": "^7.3.7", "tar": "^6.1.11", "tslib": "^2.4.0", "xml2js": "^0.5.0" }, "bin": { "cap": "bin/capacitor", "capacitor": "bin/capacitor" } }, "sha512-JKl0FpFge8PgQNInw12kcKieQ4BmOyazQ4JGJOfEpVXlgrX1yPhSZTPjngupzTCiK3I7q7iGG5kjun0fDqgSCA=="],
 

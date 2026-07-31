@@ -11,6 +11,7 @@ import { ExtensionSettings } from './ExtensionSettings'
 import { SkillSettings } from './SkillSettings'
 import { ChannelSettings } from './ChannelSettings'
 import { EmailSettings } from './EmailSettings'
+import { CalendarSettings } from './CalendarSettings'
 import { UsageSettings } from './UsageSettings'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -103,6 +104,7 @@ export interface UpdateInfo {
   currentVersion: string
   latestVersion: string
   hasUpdate: boolean
+  downloadUrl?: string | null
 }
 
 type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity'
@@ -599,6 +601,10 @@ export function SettingsPage({
     updateInfo?.latestVersion,
     appVersion,
   )
+  const androidPackageUnavailable = platform === 'capacitor'
+    && !!updateInfo?.latestVersion
+    && updateInfo.latestVersion !== updateInfo.currentVersion
+    && !updateInfo.downloadUrl
   const showDesktopSection = platform === 'electron' && matchesSearch(
     'desktop tray close window quit minimize app',
     appVersion,
@@ -691,7 +697,7 @@ export function SettingsPage({
           <TabsTrigger value="tools" className="flex-1 sm:flex-none">Tools</TabsTrigger>
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
-          <TabsTrigger value="email" className="flex-1 sm:flex-none">Email</TabsTrigger>
+          <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
         <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
 
@@ -707,7 +713,7 @@ export function SettingsPage({
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {updateInfo
-                    ? <>Gateway <span className="font-mono font-medium text-foreground">v{updateInfo.currentVersion}</span></>
+                    ? <>{platform === 'capacitor' ? 'App' : 'Gateway'} <span className="font-mono font-medium text-foreground">v{updateInfo.currentVersion}</span></>
                     : 'Check for the latest Jait version.'}
                   {appVersion && (
                     <> &middot; Desktop app <span className="font-mono font-medium text-foreground">v{appVersion}</span></>
@@ -742,17 +748,15 @@ export function SettingsPage({
                         Update to v{updateInfo.latestVersion}
                       </Button>
                     ) : (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href="https://github.com/Widev-e-U/Jait/releases/latest" target="_blank" rel="noopener noreferrer">
-                          <Download className="mr-1.5 h-4 w-4" />
-                          Download latest APK
-                        </a>
+                      <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying || !updateInfo?.downloadUrl}>
+                        {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                        {updateApplying ? 'Downloading...' : `Update to v${updateInfo.latestVersion}`}
                       </Button>
                     )}
                   </>
                 )}
               </div>
-              {updateInfo && !updateInfo.hasUpdate && (
+              {updateInfo && !updateInfo.hasUpdate && !androidPackageUnavailable && (
                 <p className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   You&apos;re on the latest version.
@@ -761,7 +765,13 @@ export function SettingsPage({
               {updateInfo?.hasUpdate && (
                 <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  Version {updateInfo.latestVersion} is available{platform !== 'web' ? ' — download from jait.dev' : ''}.
+                  Version {updateInfo.latestVersion} is available.
+                </p>
+              )}
+              {androidPackageUnavailable && (
+                <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Version {updateInfo?.latestVersion} has no signed Android APK yet.
                 </p>
               )}
             </Card>
@@ -1424,8 +1434,9 @@ export function SettingsPage({
           {showSkillsSection ? <SkillSettings token={token} /> : emptyState}
         </TabsContent>
 
-        <TabsContent value="email" className="space-y-6">
+        <TabsContent value="email" className="space-y-8">
           <EmailSettings token={token} />
+          <CalendarSettings token={token} />
         </TabsContent>
 
         <TabsContent value="channels" className="space-y-6">

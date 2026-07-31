@@ -33,6 +33,8 @@ const allowedIpcChannels = {
     "browser:forward",
     "browser:reload",
     "browser:navigate",
+    "desktop:present-agent-question",
+    "desktop:dismiss-agent-question",
   ],
   on: ["screen-share:start", "screen-share:stop", "gateway:event", "window:maximized-change", "browser:navigation-state"],
 };

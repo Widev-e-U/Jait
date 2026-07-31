@@ -60,6 +60,12 @@ export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createEmailTools } from "./email-tools.js";
+export { createCalendarTools } from "./calendar-tools.js";
+export {
+  createHomeAssistantCallServiceTool,
+  createHomeAssistantServicesTool,
+  createHomeAssistantStatesTool,
+} from "./homeassistant-tools.js";
 export {
   createSshRunTool,
   createSshSessionStartTool,
@@ -188,6 +194,12 @@ import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createEmailTools } from "./email-tools.js";
+import { createCalendarTools } from "./calendar-tools.js";
+import {
+  createHomeAssistantCallServiceTool,
+  createHomeAssistantServicesTool,
+  createHomeAssistantStatesTool,
+} from "./homeassistant-tools.js";
 import {
   createSshRunTool,
 } from "./ssh-tools.js";
@@ -272,6 +284,7 @@ export interface ToolRegistryDeps {
   userQuestionService?: UserQuestionService;
   userSecretService?: UserSecretService;
   emailService?: import("../services/email/index.js").EmailService;
+  calendarService?: import("../services/calendar/index.js").CalendarService;
   skillRegistry?: import("../skills/index.js").SkillRegistry;
 }
 
@@ -474,6 +487,16 @@ export function createToolRegistry(
       tools.register(tool);
     }
   }
+
+  if (deps.calendarService) {
+    for (const tool of createCalendarTools(deps.calendarService)) {
+      tools.register(tool);
+    }
+  }
+
+  tools.register(createHomeAssistantStatesTool());
+  tools.register(createHomeAssistantServicesTool());
+  tools.register(createHomeAssistantCallServiceTool());
 
   // Network tools
   tools.register(createNetworkScanTool());

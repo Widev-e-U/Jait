@@ -5,8 +5,8 @@ import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 //
 // Credentials are resolved (in priority order) from the per-request API keys
 // or the gateway environment:
-//   - HASS_URL    base URL of the instance, e.g. http://192.168.178.53:8123
-//   - HASS_TOKEN  a long-lived access token (HA → Profile → Security)
+//   - HA_URL / HASS_URL       base URL, e.g. http://192.168.178.53:8123
+//   - HA_TOKEN / HASS_TOKEN   a long-lived access token (HA → Profile → Security)
 // ---------------------------------------------------------------------------
 
 interface HassCreds {
@@ -15,20 +15,30 @@ interface HassCreds {
 }
 
 function resolveCreds(context: ToolContext): HassCreds | { error: string } {
-  const url = (context.apiKeys?.["HASS_URL"] ?? process.env["HASS_URL"] ?? "")
-    .trim()
-    .replace(/\/+$/, "");
-  const token = (context.apiKeys?.["HASS_TOKEN"] ?? process.env["HASS_TOKEN"] ?? "").trim();
+  const url = (
+    context.apiKeys?.["HA_URL"]
+    ?? context.apiKeys?.["HASS_URL"]
+    ?? process.env["HA_URL"]
+    ?? process.env["HASS_URL"]
+    ?? ""
+  ).trim().replace(/\/+$/, "");
+  const token = (
+    context.apiKeys?.["HA_TOKEN"]
+    ?? context.apiKeys?.["HASS_TOKEN"]
+    ?? process.env["HA_TOKEN"]
+    ?? process.env["HASS_TOKEN"]
+    ?? ""
+  ).trim();
   if (!url) {
     return {
       error:
-        "Home Assistant URL not configured. Set HASS_URL (e.g. http://192.168.178.53:8123) in the gateway environment.",
+        "Home Assistant URL not configured. Set HA_URL in Settings → API keys.",
     };
   }
   if (!token) {
     return {
       error:
-        "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HASS_TOKEN.",
+        "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HA_TOKEN in Settings → API keys.",
     };
   }
   return { url, token };
@@ -68,7 +78,7 @@ async function hassFetch(
 }
 
 function describeError(status: number, data: unknown): string {
-  if (status === 401) return "Home Assistant rejected the token (401 Unauthorized). Check HASS_TOKEN.";
+  if (status === 401) return "Home Assistant rejected the token (401 Unauthorized). Check HA_TOKEN.";
   if (status === 404) return "Home Assistant returned 404 Not Found — check the path/entity.";
   const detail =
     data && typeof data === "object" && "message" in data

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -398,6 +398,7 @@ interface UserQuestionRequest {
   sessionId: string
   requestedBy: string | null
   title: string
+  attention: 'normal' | 'urgent'
   questions: UserQuestionItem[]
   expiresAt: string
   status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
@@ -419,6 +420,7 @@ export function useUserQuestionPrompt({
   const [requests, setRequests] = useState<UserQuestionRequest[]>([])
   const [answers, setAnswers] = useState<Record<string, UserQuestionAnswer>>({})
   const [submitting, setSubmitting] = useState(false)
+  const nativeQuestionStatesRef = useRef(new Map<string, 'presenting' | 'resolved'>())
   const activeRequest = requests[0] ?? null
 
   const authHeaders = useCallback((contentType = false) => {
@@ -427,6 +429,101 @@ export function useUserQuestionPrompt({
     if (contentType) headers['Content-Type'] = 'application/json'
     return headers
   }, [token])
+
+  const submitRequestAnswers = useCallback(async (
+    request: UserQuestionRequest,
+    requestAnswers: Record<string, UserQuestionAnswer>,
+  ) => {
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/user-questions/requests/${request.id}/submit`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({ answers: requestAnswers }),
+      })
+      if (!res.ok) throw new Error('Failed to submit answers')
+      setRequests((prev) => prev.filter((item) => item.id !== request.id))
+      setAnswers({})
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit answers')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [authHeaders])
+
+  const presentNativeQuestion = useCallback(async (request: UserQuestionRequest) => {
+    nativeQuestionStatesRef.current.set(request.id, 'presenting')
+    const nativeRequest = {
+      id: request.id,
+      title: request.title,
+      attention: request.attention,
+      questions: request.questions,
+    }
+
+    try {
+      let result: { answers?: Record<string, UserQuestionAnswer>; dismissed?: boolean } | null = null
+      if (window.jaitDesktop?.presentAgentQuestion) {
+        result = await window.jaitDesktop.presentAgentQuestion(nativeRequest)
+      } else {
+        const agentOverlay = (window.Capacitor as {
+          Plugins?: {
+            AgentOverlay?: {
+              present: (options: { request: typeof nativeRequest }) => Promise<{ answers?: Record<string, UserQuestionAnswer>; dismissed?: boolean } | null>
+            }
+          }
+        } | undefined)?.Plugins?.AgentOverlay
+        if (agentOverlay) result = await agentOverlay.present({ request: nativeRequest })
+      }
+
+      if (result?.answers) {
+        await submitRequestAnswers(request, result.answers)
+        nativeQuestionStatesRef.current.delete(request.id)
+        return
+      }
+      if (result?.dismissed || nativeQuestionStatesRef.current.get(request.id) === 'resolved') {
+        nativeQuestionStatesRef.current.delete(request.id)
+        return
+      }
+    } catch {
+      if (nativeQuestionStatesRef.current.get(request.id) === 'resolved') {
+        nativeQuestionStatesRef.current.delete(request.id)
+        return
+      }
+      await triggerSystemNotification({
+        id: `user-question:${request.id}`,
+        title: request.title,
+        body: request.questions[0]?.question ?? 'Jait needs your input.',
+        level: 'warning',
+        includeToast: false,
+      })
+      nativeQuestionStatesRef.current.delete(request.id)
+      return
+    }
+
+    if (nativeQuestionStatesRef.current.get(request.id) === 'resolved') {
+      nativeQuestionStatesRef.current.delete(request.id)
+      return
+    }
+    await triggerSystemNotification({
+      id: `user-question:${request.id}`,
+      title: request.title,
+      body: request.questions[0]?.question ?? 'Jait needs your input.',
+      level: 'warning',
+      includeToast: false,
+    })
+    nativeQuestionStatesRef.current.delete(request.id)
+  }, [submitRequestAnswers])
+
+  const dismissNativeQuestion = useCallback((requestId: string) => {
+    if (window.jaitDesktop?.dismissAgentQuestion) {
+      void window.jaitDesktop.dismissAgentQuestion(requestId)
+    }
+    const agentOverlay = (window.Capacitor as {
+      Plugins?: { AgentOverlay?: { dismiss: (options: { requestId: string }) => Promise<unknown> } }
+    } | undefined)?.Plugins?.AgentOverlay
+    if (agentOverlay) void agentOverlay.dismiss({ requestId })
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!token) return
@@ -455,12 +552,27 @@ export function useUserQuestionPrompt({
         const msg = JSON.parse(event.data) as { type: string; payload?: unknown }
         if (msg.type === 'user-question.requested') {
           const request = msg.payload as UserQuestionRequest
-          // Always surface — see refresh() above for why session gating is unsafe here.
           setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          const appIsBackgrounded = document.visibilityState !== 'visible' || !document.hasFocus()
+          if (appIsBackgrounded && request.attention === 'urgent') {
+            void presentNativeQuestion(request)
+          } else if (appIsBackgrounded) {
+            void triggerSystemNotification({
+              id: `user-question:${request.id}`,
+              title: request.title,
+              body: request.questions[0]?.question ?? 'Jait needs your input.',
+              level: 'info',
+              includeToast: false,
+            })
+          }
         }
         if (msg.type === 'user-question.resolved') {
           const resolved = msg.payload as { id?: string }
           if (resolved.id) {
+            if (nativeQuestionStatesRef.current.get(resolved.id) === 'presenting') {
+              nativeQuestionStatesRef.current.set(resolved.id, 'resolved')
+            }
+            dismissNativeQuestion(resolved.id)
             setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
             setAnswers({})
           }
@@ -470,7 +582,7 @@ export function useUserQuestionPrompt({
       }
     }
     return () => ws.close()
-  }, [refresh, sessionId, token])
+  }, [dismissNativeQuestion, presentNativeQuestion, refresh, sessionId, token])
 
   useEffect(() => {
     if (!activeRequest) {
@@ -485,23 +597,8 @@ export function useUserQuestionPrompt({
 
   const submitAnswers = useCallback(async () => {
     if (!activeRequest) return
-    setSubmitting(true)
-    try {
-      const res = await fetch(`${API_URL}/api/user-questions/requests/${activeRequest.id}/submit`, {
-        method: 'POST',
-        headers: authHeaders(true),
-        credentials: 'include',
-        body: JSON.stringify({ answers }),
-      })
-      if (!res.ok) throw new Error('Failed to submit answers')
-      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
-      setAnswers({})
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to submit answers')
-    } finally {
-      setSubmitting(false)
-    }
-  }, [activeRequest, answers, authHeaders])
+    await submitRequestAnswers(activeRequest, answers)
+  }, [activeRequest, answers, submitRequestAnswers])
 
   const cancelRequest = useCallback(async () => {
     if (!activeRequest) return

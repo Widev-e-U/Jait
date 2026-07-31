@@ -15,6 +15,12 @@ import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/sh
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 import { resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
 import { normalizeBrowserUrl } from "./browser-navigation.js";
+import {
+  createAgentQuestionOverlayHtml,
+  parseAgentQuestionNavigation,
+  type AgentQuestionRequest,
+  type AgentQuestionResult,
+} from "./agent-question-overlay.js";
 const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
@@ -84,6 +90,8 @@ let splashWindow: BrowserWindow | null = null;
 let splashShownAt = 0;
 let tray: Tray | null = null;
 const detachedPreviewWindows = new Set<BrowserWindow>();
+const agentQuestionWindows = new Map<string, BrowserWindow>();
+const agentQuestionPromises = new Map<string, Promise<AgentQuestionResult | null>>();
 const SPLASH_MIN_VISIBLE_MS = 1100;
 
 type BrowserNavigationState = {
@@ -887,6 +895,92 @@ ipcMain.handle("desktop:get-sources", async () => {
   }));
 });
 
+function presentAgentQuestion(
+  request: AgentQuestionRequest,
+): Promise<AgentQuestionResult | null> {
+  const existing = agentQuestionPromises.get(request.id);
+  if (existing) return existing;
+
+  const promise = new Promise<AgentQuestionResult | null>((resolve) => {
+    const win = new BrowserWindow({
+      width: 500,
+      height: 660,
+      minWidth: 460,
+      minHeight: 520,
+      maxWidth: 620,
+      maxHeight: 820,
+      title: request.title,
+      frame: false,
+      show: false,
+      alwaysOnTop: true,
+      resizable: true,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      backgroundColor: "#0b1220",
+      icon: path.join(__dirname, "..", "assets", "icon.png"),
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    let settled = false;
+    const finish = (result: AgentQuestionResult | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+      if (!win.isDestroyed()) win.close();
+    };
+
+    agentQuestionWindows.set(request.id, win);
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    win.webContents.on("will-navigate", (event, navigationUrl) => {
+      const navigation = parseAgentQuestionNavigation(navigationUrl, request.id);
+      if (!navigation) {
+        if (!navigationUrl.startsWith("data:")) event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      finish(navigation.action === "submit" ? navigation.result : null);
+    });
+    win.webContents.on("before-input-event", (event, input) => {
+      if (input.key === "Escape") {
+        event.preventDefault();
+        finish(null);
+      }
+    });
+    win.once("ready-to-show", () => {
+      if (win.isDestroyed()) return;
+      shell.beep();
+      win.center();
+      win.show();
+      win.focus();
+      win.flashFrame(true);
+    });
+    win.on("closed", () => {
+      agentQuestionWindows.delete(request.id);
+      finish(null);
+    });
+    void win.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(createAgentQuestionOverlayHtml(request))}`,
+    );
+  }).finally(() => {
+    agentQuestionPromises.delete(request.id);
+  });
+
+  agentQuestionPromises.set(request.id, promise);
+  return promise;
+}
+
+function dismissAgentQuestion(requestId: string): void {
+  const win = agentQuestionWindows.get(requestId);
+  if (win && !win.isDestroyed()) win.close();
+}
+
 // Notification passthrough
 const notificationIcon = (() => {
   try {
@@ -895,6 +989,27 @@ const notificationIcon = (() => {
   } catch { /* ignore */ }
   return undefined;
 })();
+
+ipcMain.handle(
+  "desktop:present-agent-question",
+  async (_event, request: AgentQuestionRequest) => {
+    if (
+      !request ||
+      typeof request.id !== "string" ||
+      typeof request.title !== "string" ||
+      !Array.isArray(request.questions) ||
+      request.questions.length === 0
+    ) {
+      return null;
+    }
+    return presentAgentQuestion(request);
+  },
+);
+
+ipcMain.handle("desktop:dismiss-agent-question", (_event, requestId: string) => {
+  if (typeof requestId === "string") dismissAgentQuestion(requestId);
+  return { ok: true };
+});
 
 ipcMain.handle("desktop:notify", (_event, opts: { title: string; body: string }) => {
   const notification = new Notification({

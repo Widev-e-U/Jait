@@ -57,6 +57,24 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           latestVersion,
           hasUpdate,
         })
+      } else if (appPlatform === 'capacitor') {
+        let currentVersion = ''
+        try {
+          const { App } = await import('@capacitor/app')
+          const info = await App.getInfo()
+          currentVersion = info.version ?? ''
+        } catch {
+          currentVersion = ''
+        }
+
+        const res = await fetch(
+          `${apiUrl}/api/mobile-update/check?currentVersion=${encodeURIComponent(currentVersion)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (res.ok) {
+          const data = await res.json() as UpdateInfo
+          setUpdateInfo({ ...data, currentVersion: currentVersion || data.currentVersion })
+        }
       } else {
         const res = await fetch(`${apiUrl}/api/update/check`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -67,12 +85,33 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
       }
     } catch { /* ignore */ }
     setUpdateChecking(false)
-  }, [token, isElectron, apiUrl])
+  }, [token, isElectron, appPlatform, apiUrl])
 
   const handleApplyUpdate = useCallback(async () => {
     if (!token || !updateInfo?.hasUpdate) return
     setUpdateApplying(true)
     try {
+      if (appPlatform === 'capacitor') {
+        const downloadUrl = updateInfo.downloadUrl
+        const appUpdater = (window as any).Capacitor?.Plugins?.AppUpdater
+        if (!downloadUrl) {
+          toast.error('No APK found on the latest release')
+          return
+        }
+        if (!appUpdater) {
+          toast.error('Update plugin unavailable — update the app to get this feature')
+          return
+        }
+        toast.info('Downloading update...')
+        const result = await appUpdater.downloadAndInstall({ url: downloadUrl })
+        if (result?.ok) {
+          toast.success('Installer launched — follow the prompt to finish updating.')
+        } else {
+          toast.error('Download failed')
+        }
+        return
+      }
+
       const res = await fetch(`${apiUrl}/api/update/apply`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -87,9 +126,12 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         const data = await res.json().catch(() => ({}))
         toast.error(getNonEmptyMessage((data as any).error, 'Update failed'))
       }
-    } catch { toast.error('Update request failed') }
-    setUpdateApplying(false)
-  }, [token, updateInfo, apiUrl])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Update request failed')
+    } finally {
+      setUpdateApplying(false)
+    }
+  }, [token, updateInfo, appPlatform, apiUrl])
 
   const hardReloadAfterUpdate = useCallback(() => {
     const reloadUrl = new URL(window.location.href)
