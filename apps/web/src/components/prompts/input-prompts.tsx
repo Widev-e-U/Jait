@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import { generateDeviceId } from '@/lib/device-id'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import {
   getBackgroundSecretRequest,
@@ -429,6 +430,33 @@ export function useUserQuestionPrompt({
     if (contentType) headers['Content-Type'] = 'application/json'
     return headers
   }, [token])
+
+  useEffect(() => {
+    if (!token) return
+    const overlay = (window.Capacitor as { Plugins?: { AgentOverlay?: {
+      requestPermissions?: () => Promise<unknown>
+      getPushToken?: () => Promise<{ token: string }>
+      configurePush?: (options: { gatewayUrl: string; authToken: string; deviceId: string }) => Promise<unknown>
+    } } } | undefined)?.Plugins?.AgentOverlay
+    if (!overlay?.getPushToken) return
+    void Promise.resolve(overlay.requestPermissions?.()).then(() => overlay.getPushToken!()).then(async ({ token: pushToken }) => {
+      if (!pushToken) return
+      const deviceId = generateDeviceId()
+      await overlay.configurePush?.({ gatewayUrl: API_URL, authToken: token, deviceId })
+      await fetch(`${API_URL}/api/mobile/devices/register`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({
+          id: deviceId,
+          name: 'Jait Android',
+          platform: 'mobile',
+          capabilities: ['notifications', 'agent-question-overlay'],
+          pushToken,
+        }),
+      })
+    }).catch(() => { /* Push remains optional when Firebase is not configured. */ })
+  }, [authHeaders, token])
 
   const submitRequestAnswers = useCallback(async (
     request: UserQuestionRequest,

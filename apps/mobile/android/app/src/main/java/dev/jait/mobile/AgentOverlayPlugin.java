@@ -1,6 +1,7 @@
 package dev.jait.mobile;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -12,6 +13,7 @@ import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
@@ -22,6 +24,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.google.firebase.messaging.FirebaseMessaging;
 import java.util.Objects;
 import org.json.JSONException;
 
@@ -75,6 +78,34 @@ public class AgentOverlayPlugin extends Plugin {
         showPrompt(call);
     }
 
+    @PluginMethod
+    public void configurePush(PluginCall call) {
+        String gatewayUrl = call.getString("gatewayUrl");
+        String authToken = call.getString("authToken");
+        String deviceId = call.getString("deviceId");
+        if (gatewayUrl == null || authToken == null || deviceId == null) {
+            call.reject("gatewayUrl, authToken, and deviceId are required");
+            return;
+        }
+        getContext().getSharedPreferences("jait-push", Context.MODE_PRIVATE).edit()
+            .putString("gatewayUrl", gatewayUrl)
+            .putString("authToken", authToken)
+            .putString("deviceId", deviceId)
+            .apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getPushToken(PluginCall call) {
+        FirebaseMessaging.getInstance().getToken()
+            .addOnSuccessListener(token -> {
+                JSObject result = new JSObject();
+                result.put("token", token);
+                call.resolve(result);
+            })
+            .addOnFailureListener(error -> call.reject("Unable to obtain Firebase push token", error));
+    }
+
     @PermissionCallback
     private void notificationPermissionResult(PluginCall call) {
         if (call == null || activeCall != call) return;
@@ -83,6 +114,55 @@ public class AgentOverlayPlugin extends Plugin {
             return;
         }
         launchPromptActivity(call);
+    }
+
+    @PluginMethod
+    public void scheduleAlarm(PluginCall call) {
+        String alarmId = call.getString("id");
+        Long at = call.getLong("at");
+        if (alarmId == null || alarmId.isEmpty() || at == null || at <= System.currentTimeMillis()) {
+            call.reject("id and a future at timestamp are required");
+            return;
+        }
+        AlarmManager manager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !manager.canScheduleExactAlarms()) {
+            call.reject("Exact alarm permission is required");
+            return;
+        }
+        Intent intent = new Intent(getContext(), AlarmReceiver.class);
+        intent.putExtra("id", alarmId);
+        intent.putExtra("title", call.getString("title", "Jait alarm"));
+        intent.putExtra("body", call.getString("body", "It is time."));
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(getContext(), alarmId.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        manager.setAlarmClock(new AlarmManager.AlarmClockInfo(at, pendingIntent), pendingIntent);
+        JSObject result = new JSObject();
+        result.put("scheduled", true);
+        result.put("at", at);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void cancelAlarm(PluginCall call) {
+        String alarmId = call.getString("id");
+        if (alarmId == null || alarmId.isEmpty()) { call.reject("id is required"); return; }
+        Intent intent = new Intent(getContext(), AlarmReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(getContext(), alarmId.hashCode(), intent, PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+        if (pendingIntent != null) {
+            ((AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE)).cancel(pendingIntent);
+            pendingIntent.cancel();
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openExactAlarmSettings(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        }
+        call.resolve();
     }
 
     @PluginMethod
@@ -181,6 +261,7 @@ public class AgentOverlayPlugin extends Plugin {
     private Intent createActivityIntent(JSObject request) {
         Intent intent = new Intent(getContext(), AgentPromptActivity.class);
         intent.putExtra(AgentPromptActivity.EXTRA_REQUEST, request.toString());
+        intent.putExtra(AgentPromptActivity.EXTRA_DIRECT_SUBMIT, false);
         intent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK |
             Intent.FLAG_ACTIVITY_CLEAR_TOP |
@@ -268,6 +349,36 @@ public class AgentOverlayPlugin extends Plugin {
     private void clearActiveRequest() {
         activeCall = null;
         activeRequestId = null;
+    }
+
+    public static class AlarmReceiver extends BroadcastReceiver {
+        private static final String ALARM_CHANNEL_ID = "jait-wake-alarms";
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(ALARM_CHANNEL_ID, "Wake-up alarms", NotificationManager.IMPORTANCE_HIGH);
+                channel.enableVibration(true);
+                channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build());
+                manager.createNotificationChannel(channel);
+            }
+            Intent openIntent = new Intent(context, MainActivity.class);
+            openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent openPendingIntent = PendingIntent.getActivity(context, 7127, openIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            String alarmId = intent.getStringExtra("id");
+            NotificationCompat.Builder notification = new NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(intent.getStringExtra("title"))
+                .setContentText(intent.getStringExtra("body"))
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setContentIntent(openPendingIntent)
+                .setFullScreenIntent(openPendingIntent, true)
+                .setAutoCancel(true);
+            manager.notify(AgentPromptActivity.notificationId(alarmId == null ? "wake" : alarmId), notification.build());
+        }
     }
 
     @Override

@@ -40,6 +40,7 @@ import { UserService } from "./services/users.js";
 import { ProviderAccountService } from "./services/provider-accounts.js";
 import { ProviderUsageService } from "./services/provider-usage.js";
 import { DeviceRegistry } from "./services/device-registry.js";
+import { MobilePushService } from "./services/mobile-push.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
 import { ThreadService } from "./services/threads.js";
@@ -121,6 +122,7 @@ async function main() {
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
   const deviceRegistry = new DeviceRegistry();
+  const mobilePush = MobilePushService.fromEnvironment(db);
 
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
@@ -450,6 +452,9 @@ async function main() {
         payload: request,
       });
       console.log(`User question requested: ${request.title} (${request.id})`);
+      void mobilePush.sendUrgentQuestion(request).catch((error) => {
+        console.warn("[mobile-push] Failed to deliver urgent question", error);
+      });
     },
     onResolved: (request) => {
       ws.broadcastAll({
@@ -874,6 +879,7 @@ async function main() {
     },
     memoryService: memory,
     deviceRegistry,
+    mobilePush,
     sessionState,
     projectService,
     assistantProfileService,

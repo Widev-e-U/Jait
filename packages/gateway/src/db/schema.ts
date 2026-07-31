@@ -599,6 +599,28 @@ export const scheduledJobRuns = sqliteTable(
   ],
 );
 
+export const mobilePushRegistrations = sqliteTable(
+  "mobile_push_registrations",
+  {
+    deviceId: text("device_id").primaryKey(),
+    userId: text("user_id").notNull(),
+    token: text("token").notNull(),
+    platform: text("platform").notNull().default("android"),
+    enabled: integer("enabled").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_mobile_push_token").on(table.token),
+    index("idx_mobile_push_user_enabled").on(
+      table.userId,
+      table.enabled,
+      table.lastSeenAt,
+    ),
+  ],
+);
+
 // ─── Browser Collaboration ──────────────────────────────────────────
 export const browserSessions = sqliteTable(
   "browser_sessions",

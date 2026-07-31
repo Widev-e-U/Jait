@@ -70,18 +70,37 @@ function matchCronField(field: string, value: number): boolean {
   return Number.parseInt(field, 10) === value;
 }
 
-function matchesCronMinute(cron: string, date: Date): boolean {
+function getCronDateParts(date: Date, timeZone?: string): { minute: number; hour: number; day: number; month: number; weekday: number } {
+  if (!timeZone) {
+    return { minute: date.getUTCMinutes(), hour: date.getUTCHours(), day: date.getUTCDate(), month: date.getUTCMonth() + 1, weekday: date.getUTCDay() };
+  }
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone, minute: "2-digit", hour: "2-digit", hourCycle: "h23",
+    day: "2-digit", month: "2-digit", weekday: "short",
+  });
+  const values = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  const weekdays: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    minute: Number(values["minute"]), hour: Number(values["hour"]),
+    day: Number(values["day"]), month: Number(values["month"]),
+    weekday: weekdays[values["weekday"] ?? ""] ?? date.getUTCDay(),
+  };
+}
+
+export function matchesCronMinute(cron: string, date: Date, timeZone?: string): boolean {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return false;
 
   const [minute, hour, dayOfMonth, month, weekday] = parts as [string, string, string, string, string];
+  let local;
+  try { local = getCronDateParts(date, timeZone); } catch { return false; }
 
   return (
-    matchCronField(minute, date.getUTCMinutes()) &&
-    matchCronField(hour, date.getUTCHours()) &&
-    matchCronField(dayOfMonth, date.getUTCDate()) &&
-    matchCronField(month, date.getUTCMonth() + 1) && // cron months are 1-12
-    matchCronField(weekday, date.getUTCDay()) // cron weekdays: 0=Sun
+    matchCronField(minute, local.minute) &&
+    matchCronField(hour, local.hour) &&
+    matchCronField(dayOfMonth, local.day) &&
+    matchCronField(month, local.month) &&
+    matchCronField(weekday, local.weekday)
   );
 }
 
@@ -127,6 +146,11 @@ function normalizeToolName(name: string): string {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? value as Record<string, unknown> : undefined;
+}
+
+function getScheduledTimeZone(input: unknown): string | undefined {
+  const meta = asRecord(asRecord(input)?.["__jaitJobMeta"]);
+  return typeof meta?.["timeZone"] === "string" ? meta["timeZone"] : undefined;
 }
 
 function isScheduledAgentTask(input: unknown): boolean {
@@ -390,7 +414,7 @@ export class SchedulerService {
     try {
       const jobs = this.list().filter((j) => j.enabled);
       for (const job of jobs) {
-        if (matchesCronMinute(job.cron, now) && !isSameUtcMinute(job.lastRunAt, now)) {
+        if (matchesCronMinute(job.cron, now, getScheduledTimeZone(job.input)) && !isSameUtcMinute(job.lastRunAt, now)) {
           try {
             await this.trigger(job.id, undefined, now, "schedule");
           } catch (err) {

@@ -72,6 +72,7 @@ import type { MemoryService } from "./memory/contracts.js";
 import type { UserService } from "./services/users.js";
 import type { ProviderAccountService } from "./services/provider-accounts.js";
 import type { DeviceRegistry } from "./services/device-registry.js";
+import type { MobilePushService } from "./services/mobile-push.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
@@ -111,6 +112,7 @@ export interface ServerDeps {
   onAgentHook?: (payload: unknown) => Promise<unknown>;
   memoryService?: MemoryService;
   deviceRegistry?: DeviceRegistry;
+  mobilePush?: MobilePushService;
   sessionState?: SessionStateService;
   projectService?: ProjectService;
   assistantProfileService?: AssistantProfileService;
@@ -269,6 +271,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       deviceRegistry: deps.deviceRegistry,
       consentManager: deps.consentManager,
       sessionService: deps.sessionService,
+      config,
+      mobilePush: deps.mobilePush,
+      scheduler: deps.scheduler,
     });
   }
 

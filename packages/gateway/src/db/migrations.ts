@@ -1227,4 +1227,25 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 50,
+    name: "mobile_push_registrations",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS mobile_push_registrations (
+          device_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          token TEXT NOT NULL,
+          platform TEXT NOT NULL DEFAULT 'android',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mobile_push_token ON mobile_push_registrations(token)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_mobile_push_user_enabled ON mobile_push_registrations(user_id, enabled, last_seen_at DESC)`);
+    },
+  },
+
 ];

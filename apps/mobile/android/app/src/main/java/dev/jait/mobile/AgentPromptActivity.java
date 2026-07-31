@@ -32,6 +32,10 @@ import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 public class AgentPromptActivity extends AppCompatActivity {
     public static final String ACTION_RESULT = "dev.jait.mobile.AGENT_PROMPT_RESULT";
@@ -40,11 +44,13 @@ public class AgentPromptActivity extends AppCompatActivity {
     public static final String EXTRA_REQUEST_ID = "requestId";
     public static final String EXTRA_RESULT = "result";
     public static final String EXTRA_CANCELLED = "cancelled";
+    public static final String EXTRA_DIRECT_SUBMIT = "directSubmit";
 
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
     private final Map<String, EditText> freeTextInputs = new LinkedHashMap<>();
     private final List<String> questionIds = new ArrayList<>();
     private String requestId = "";
+    private boolean directSubmit;
     private BroadcastReceiver dismissReceiver;
 
     @Override
@@ -79,6 +85,7 @@ public class AgentPromptActivity extends AppCompatActivity {
     }
 
     private void renderRequest(Intent intent) {
+        directSubmit = intent.getBooleanExtra(EXTRA_DIRECT_SUBMIT, false);
         String rawRequest = intent.getStringExtra(EXTRA_REQUEST);
         if (rawRequest == null) {
             finish();
@@ -278,7 +285,8 @@ public class AgentPromptActivity extends AppCompatActivity {
             response.putExtra(EXTRA_REQUEST_ID, requestId);
             response.putExtra(EXTRA_RESULT, result.toString());
             response.putExtra(EXTRA_CANCELLED, cancelled);
-            sendBroadcast(response);
+            if (directSubmit) submitDirectly(result, cancelled);
+            else sendBroadcast(response);
         } catch (JSONException error) {
         }
 
@@ -286,6 +294,29 @@ public class AgentPromptActivity extends AppCompatActivity {
             (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         notificationManager.cancel(notificationId(requestId));
         finish();
+    }
+
+    private void submitDirectly(JSONObject result, boolean cancelled) {
+        new Thread(() -> {
+            try {
+                android.content.SharedPreferences prefs = getSharedPreferences("jait-push", MODE_PRIVATE);
+                String gatewayUrl = prefs.getString("gatewayUrl", "");
+                String authToken = prefs.getString("authToken", "");
+                if (gatewayUrl.isEmpty() || authToken.isEmpty()) return;
+                String action = cancelled ? "cancel" : "submit";
+                URL url = new URL(gatewayUrl + "/api/user-questions/requests/" + requestId + "/" + action);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("Authorization", "Bearer " + authToken);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setDoOutput(true);
+                byte[] body = (cancelled ? "{}" : result.toString()).getBytes(StandardCharsets.UTF_8);
+                try (OutputStream output = connection.getOutputStream()) { output.write(body); }
+                connection.getResponseCode();
+                connection.disconnect();
+            } catch (Exception ignored) {
+            }
+        }, "jait-question-submit").start();
     }
 
     private void registerDismissReceiver() {

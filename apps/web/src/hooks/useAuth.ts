@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { createContext, createElement, useState, useEffect, useCallback, useContext, type ReactNode } from 'react'
 import { clearAuthToken, getAuthToken, setAuthToken, initAuthToken, clearAuthCookie } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 
@@ -69,7 +69,7 @@ async function fetchSettings(token: string): Promise<UserSettings | null> {
   }
 }
 
-export function useAuth() {
+function useAuthState() {
   const [state, setState] = useState<AuthState>({
     user: null,
     token: null,
@@ -259,4 +259,19 @@ export function useAuth() {
     updateSettings,
     clearSessionArchive,
   }
+}
+
+type AuthContextValue = ReturnType<typeof useAuthState>
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const auth = useAuthState()
+  return createElement(AuthContext.Provider, { value: auth }, children)
+}
+
+export function useAuth(): AuthContextValue {
+  const auth = useContext(AuthContext)
+  if (!auth) throw new Error('useAuth must be used within AuthProvider')
+  return auth
 }

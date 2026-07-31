@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { migrateDatabase, openDatabase } from "../db/index.js";
-import { SchedulerService } from "../scheduler/service.js";
+import { matchesCronMinute, SchedulerService } from "../scheduler/service.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { registerJobRoutes } from "./jobs.js";
 
@@ -291,5 +291,12 @@ describe("job routes", () => {
 
     await app.close();
     sqlite.close();
+  });
+
+  it("matches daily jobs in their configured timezone", () => {
+    const instant = new Date("2026-07-31T05:00:00.000Z");
+    expect(matchesCronMinute("0 7 * * *", instant, "Europe/Berlin")).toBe(true);
+    expect(matchesCronMinute("0 7 * * *", instant, "UTC")).toBe(false);
+    expect(matchesCronMinute("0 7 * * *", instant, "Invalid/Timezone")).toBe(false);
   });
 });

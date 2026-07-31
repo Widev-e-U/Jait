@@ -210,6 +210,7 @@ import {
 import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
+import { createMobileAlarmScheduleTool } from "./mobile-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
 import { createCodeGraphTools } from "./code-graph-tools.js";
 import {
@@ -279,6 +280,7 @@ export interface ToolRegistryDeps {
   gitService?: GitService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
+  mobilePush?: import("../services/mobile-push.js").MobilePushService;
   /** Graceful shutdown callback — needed by the redeploy tool */
   shutdown?: () => Promise<void>;
   previewService?: PreviewService;
@@ -537,6 +539,9 @@ export function createToolRegistry(
   // Maintenance tools
   if (deps.maintenanceService) {
     tools.register(createMaintenanceRunTool(deps.maintenanceService, deps.notifications));
+  }
+  if (deps.mobilePush) {
+    tools.register(createMobileAlarmScheduleTool(deps.mobilePush));
   }
 
   // Agent spawn (sub-agent) tool — needs config for LLM settings
