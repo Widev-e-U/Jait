@@ -1,6 +1,6 @@
 {
   "name": "@jait/web",
-  "version": "0.1.288",
+  "version": "0.1.289",
   "private": true,
   "description": "Jait web frontend — bundled into @jait/gateway at build time",
   "author": "JakobWl",
@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@capacitor/app": "^6.0.0",
+    "@capacitor/core": "^6.2.0",
     "@capacitor/filesystem": "^6.0.0",
     "@chenglou/pretext": "^0.0.4",
     "@jait/api-client": "workspace:*",

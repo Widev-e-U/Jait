@@ -109,6 +109,18 @@ export interface UpdateInfo {
 
 type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity'
 
+const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
+  general: 'General',
+  api: 'API',
+  tools: 'Tools',
+  extensions: 'Extensions',
+  skills: 'Skills',
+  email: 'Mail & Calendar',
+  channels: 'Channels',
+  usage: 'Usage',
+  activity: 'Activity',
+}
+
 interface SettingsPageProps {
   username: string
   token: string | null
@@ -691,7 +703,19 @@ export function SettingsPage({
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)} className="space-y-4">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/70 p-1">
+        <div className="sm:hidden">
+          <Select value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)}>
+            <SelectTrigger aria-label="Settings page" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.entries(SETTINGS_TAB_LABELS) as [SettingsTab, string][]).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <TabsList className="hidden h-auto w-full flex-wrap justify-start gap-1 rounded-xl bg-muted/70 p-1 sm:flex">
           <TabsTrigger value="general" className="flex-1 sm:flex-none">General</TabsTrigger>
           <TabsTrigger value="api" className="flex-1 sm:flex-none">API</TabsTrigger>
           <TabsTrigger value="tools" className="flex-1 sm:flex-none">Tools</TabsTrigger>
@@ -699,7 +723,7 @@ export function SettingsPage({
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
-        <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
+          <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
 
         </TabsList>
 

@@ -6,13 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { calendarApi, type CalendarAccount, type CalendarEvent } from '@/lib/calendar-api'
-
-interface DeviceCalendarSnapshot {
-  deviceId: string
-  deviceName: string
-  calendars: Parameters<typeof calendarApi.syncDevice>[0]['calendars']
-  events: CalendarEvent[]
-}
+import { isDeviceCalendarAvailable, readDeviceCalendarSnapshot } from '@/lib/device-calendar'
 
 function formatEventTime(event: CalendarEvent): string {
   const start = new Date(event.start)
@@ -26,7 +20,7 @@ export function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const isAndroid = Boolean((window.Capacitor as { Plugins?: { DeviceCalendar?: unknown } } | undefined)?.Plugins?.DeviceCalendar)
+  const isAndroid = isDeviceCalendarAvailable()
 
   const loadAccounts = useCallback(async () => {
     const next = await calendarApi.accounts()
@@ -56,14 +50,11 @@ export function CalendarPage() {
   }, [accountId, loadEvents])
 
   const syncAndroid = useCallback(async () => {
-    const plugin = (window.Capacitor as {
-      Plugins?: { DeviceCalendar?: { readSnapshot: (options: { timeMin: number; timeMax: number }) => Promise<DeviceCalendarSnapshot> } }
-    } | undefined)?.Plugins?.DeviceCalendar
-    if (!plugin) return
+    if (!isAndroid) return
     setSyncing(true)
     try {
       const now = Date.now()
-      const snapshot = await plugin.readSnapshot({ timeMin: now - 30 * 86400000, timeMax: now + 90 * 86400000 })
+      const snapshot = await readDeviceCalendarSnapshot(now - 30 * 86400000, now + 90 * 86400000)
       const account = await calendarApi.syncDevice(snapshot)
       await loadAccounts()
       setAccountId(account.id)
@@ -74,7 +65,7 @@ export function CalendarPage() {
     } finally {
       setSyncing(false)
     }
-  }, [loadAccounts, loadEvents])
+  }, [isAndroid, loadAccounts, loadEvents])
 
   const selectedAccount = useMemo(() => accounts.find((account) => account.id === accountId), [accountId, accounts])
 
