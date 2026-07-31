@@ -87,6 +87,28 @@ function readOptionalString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+type McpProgressToken = string | number;
+
+function resolveMcpProgressToken(request: McpRequest): McpProgressToken | null {
+  const meta = request.params?.["_meta"];
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
+  const token = (meta as Record<string, unknown>)["progressToken"]
+    ?? (meta as Record<string, unknown>)["progress_token"];
+  return typeof token === "string" || typeof token === "number" ? token : null;
+}
+
+function createMcpProgressNotification(
+  progressToken: McpProgressToken,
+  progress: number,
+  message: string,
+): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    method: "notifications/progress",
+    params: { progressToken, progress, message },
+  };
+}
+
 function resolveMcpToolContextOverrides(
   request: Pick<FastifyRequest, "headers" | "query"> | null,
   params?: Record<string, unknown>,
@@ -352,12 +374,42 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
     const negotiatedVersion = requestedVersion ?? DEFAULT_MCP_PROTOCOL_VERSION;
     applyMcpProtocolVersionHeader(reply, negotiatedVersion);
+    const context = await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params);
+    const progressToken = resolveMcpProgressToken(body);
+    const acceptsEventStream = String(request.headers.accept ?? "").includes("text/event-stream");
+
+    if (body.id != null && body.method === "tools/call" && progressToken != null && acceptsEventStream) {
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+        "MCP-Protocol-Version": negotiatedVersion,
+      });
+      let progress = 0;
+      const response = await handleMcpRequest(
+        body,
+        toolRegistry,
+        negotiatedVersion,
+        context,
+        onToolExecuted,
+        (chunk) => {
+          progress += 1;
+          const notification = createMcpProgressNotification(progressToken, progress, chunk);
+          reply.raw.write(`event: message\ndata: ${JSON.stringify(notification)}\n\n`);
+        },
+      );
+      reply.raw.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
+      reply.raw.end();
+      return reply;
+    }
 
     const response = await handleMcpRequest(
       body,
       toolRegistry,
       negotiatedVersion,
-      await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
+      context,
       onToolExecuted,
     );
     if (body.id == null) {
@@ -443,16 +495,25 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       return reply.status(400).send({ error: "Invalid JSON-RPC request" });
     }
 
+    const client = clients.get(clientId);
+    const progressToken = resolveMcpProgressToken(body);
+    let progress = 0;
     const response = await handleMcpRequest(
       body,
       toolRegistry,
       DEFAULT_MCP_PROTOCOL_VERSION,
       await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
       onToolExecuted,
+      progressToken != null && client?.alive
+        ? (chunk) => {
+            progress += 1;
+            const notification = createMcpProgressNotification(progressToken, progress, chunk);
+            client.write(`event: message\ndata: ${JSON.stringify(notification)}\n\n`);
+          }
+        : undefined,
     );
 
     // Also push the response via SSE to the connected client
-    const client = clients.get(clientId);
     if (client?.alive) {
       client.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
     }
@@ -466,6 +527,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 // ── Request handler ──────────────────────────────────────────────────
 
 export type McpToolExecutedCallback = (toolName: string, result: ToolResult, context: ToolContext) => void;
+export type McpToolProgressCallback = (chunk: string) => void;
 
 export async function handleMcpRequest(
   request: McpRequest,
@@ -473,6 +535,7 @@ export async function handleMcpRequest(
   protocolVersion = DEFAULT_MCP_PROTOCOL_VERSION,
   contextOverrides: McpToolContextOverrides = {},
   onToolExecuted?: McpToolExecutedCallback,
+  onProgress?: McpToolProgressCallback,
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
@@ -559,6 +622,7 @@ export async function handleMcpRequest(
         providerId: contextOverrides.providerId,
         model: contextOverrides.model,
         runtimeMode: contextOverrides.runtimeMode,
+        onOutputChunk: onProgress,
       };
 
       try {

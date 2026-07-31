@@ -82,6 +82,20 @@ describe("mapCodexNotification", () => {
     });
   });
 
+  it("maps MCP progress messages to streaming tool output", () => {
+    const events = mapCodexNotification("item/mcpToolCall/progress", {
+      itemId: "call-1",
+      message: "RUN v3\n",
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "tool.output",
+      sessionId: "session-1",
+      callId: "call-1",
+      content: "RUN v3\n",
+    }]);
+  });
+
   it("maps provider-native spawn_agent function calls as agent tool events", () => {
     const events = mapCodexNotification("codex/event/item_started", {
       msg: {

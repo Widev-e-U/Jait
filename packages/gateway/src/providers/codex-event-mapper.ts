@@ -92,6 +92,8 @@ export function mapCodexNotification(
 
     case "item/mcpToolCall/progress": {
       const itemId = extractItemId(params);
+      const message = typeof params.message === "string" ? params.message : "";
+      if (message) return [{ type: "tool.output", sessionId, callId: itemId, content: message }];
       const toolName =
         typeof params.name === "string" ? params.name
           : typeof params.toolName === "string" ? params.toolName

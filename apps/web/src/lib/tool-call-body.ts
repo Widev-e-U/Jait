@@ -484,6 +484,18 @@ export function normalizeToolArgs(
     ) ?? merged.content
   }
 
+  if (normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
+    || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run') {
+    merged.command = firstNonEmptyString(
+      merged.command,
+      merged.cmd,
+      merged.shellCommand,
+      nested?.command,
+      nested?.cmd,
+      nested?.shellCommand,
+    ) ?? merged.command
+  }
+
   if (normalizedTool === 'web' || normalizedTool === 'web.search' || normalizedTool === 'browser.search' || normalizedTool === 'browser.fetch' || normalizedTool === 'web.fetch') {
     merged.query = firstNonEmptyString(
       merged.query,

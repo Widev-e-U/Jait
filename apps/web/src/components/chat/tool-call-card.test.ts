@@ -16,7 +16,6 @@ let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
 let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText']
 let getJaitMcpToolName: typeof import('./tool-call-card')['getJaitMcpToolName']
 let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
-let getAgentActivityHeadline: typeof import('./tool-call-card')['getAgentActivityHeadline']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -44,7 +43,6 @@ beforeAll(async () => {
     formatMcpHeaderText,
     getJaitMcpToolName,
     getLatestSubAgentActivity,
-    getAgentActivityHeadline,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -91,7 +89,12 @@ describe('Jait MCP display metadata', () => {
       startedAt: 1,
     }
     expect(summarizeCollapsedToolCalls([call])).toBe('1 terminal tool call')
-    expect(getAgentActivityHeadline([call])).toBe('Running: bun run test')
+  })
+
+  it('extracts terminal commands from wrapped MCP arguments', () => {
+    expect(getCallSummary('jait.terminal', {
+      arguments: JSON.stringify({ command: 'bun run test' }),
+    })).toBe('bun run test')
   })
 })
 

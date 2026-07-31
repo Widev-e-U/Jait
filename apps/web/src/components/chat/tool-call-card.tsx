@@ -2929,35 +2929,6 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
-export function getAgentActivityHeadline(calls: ToolCallInfo[]): string {
-  const target = [...calls].reverse().find((call) => call.status === 'running' || call.status === 'pending')
-    ?? calls.at(-1)
-  if (!target) return 'Preparing tools'
-
-  const normalizedTool = normalizeTool(target.tool)
-  const resultData = target.result?.data && typeof target.result.data === 'object' && !Array.isArray(target.result.data)
-    ? target.result.data as Record<string, unknown>
-    : undefined
-  const initialArgs = normalizeToolArgs(normalizedTool, target.args, resultData)
-  const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
-    ...(normalizedTool.startsWith('mcp.') && !initialArgs.title ? { title: normalizedTool } : {}),
-    ...initialArgs,
-  }, resultData) : null
-  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title) ?? normalizedTool
-  const args = normalizeToolArgs(displayTool, target.args, resultData)
-  const isActive = target.status === 'running' || target.status === 'pending'
-  const labels = getToolInvocationLabels(displayTool, args, target.result?.data, target.result?.message)
-  const label = isActive ? labels.running : labels.done
-  const summary = getCallSummary(displayTool, args, target.result?.data, target.result?.message)
-
-  if (isAgentToolName(displayTool) && summary) return `Sub-agent: ${summary}`
-  if ((displayTool === 'execute' || displayTool === 'jait.terminal' || displayTool.startsWith('terminal.')) && summary) {
-    return `${isActive ? 'Running' : 'Ran'}: ${truncate(summary, 90)}`
-  }
-  if (summary && !label.toLowerCase().includes(summary.toLowerCase())) return `${label}: ${truncate(summary, 90)}`
-  return label
-}
-
 function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
@@ -2978,7 +2949,6 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
     ? Math.max(...calls.map(c => c.completedAt ?? c.startedAt))
     : undefined
   const SummaryIcon = getToolCallWrapperIcon(calls)
-  const activityHeadline = getAgentActivityHeadline(calls)
 
   // Compute agent nesting so inner-agent tool calls render inside the agent card
   const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
@@ -3017,44 +2987,35 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
 
   return (
     <Collapsible open={effectiveOpen} onOpenChange={handleOpenChange}>
-      <div className="my-2 overflow-hidden rounded-lg border border-border/70 bg-card/55 shadow-sm">
-        <CollapsibleTrigger className={cn(
-          'flex w-full items-center gap-2.5 bg-gradient-to-r from-purple-500/[0.07] via-transparent to-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted/35',
-          effectiveOpen && 'border-b border-border/60',
-        )}>
+      <div className="my-2">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
           <ChevronRight className={cn(
             'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
             effectiveOpen && 'rotate-90',
           )} />
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-purple-500/20 bg-purple-500/10">
-            {isActive
-              ? <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
-              : <SummaryIcon className="h-4 w-4 text-purple-500" />
-            }
+          {isActive
+            ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
+            : <SummaryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          }
+          <span className="text-sm font-medium text-foreground truncate">
+            {summarizeCollapsedToolCalls(calls)}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                {isActive ? 'Agent activity' : 'Agent activity complete'}
-              </span>
-              <span className="rounded-full border border-border/60 bg-background/65 px-1.5 py-0.5 text-2xs text-muted-foreground">
-                {calls.length} call{calls.length !== 1 ? 's' : ''}
-              </span>
-            </span>
-            <span className="mt-0.5 block truncate text-xs font-medium text-foreground" title={activityHeadline}>
-              {activityHeadline}
-            </span>
-          </span>
-          <div className="ml-auto flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
-            {!isActive && errorCount > 0 && <span className="text-red-500">{errorCount} failed</span>}
+          <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
+            {!isActive && errorCount > 0 && (
+              <span className="text-red-500">{errorCount} failed</span>
+            )}
             <ElapsedLabel startedAt={startedAt} completedAt={completedAt} now={now} />
           </div>
-          {!isActive && errorCount === 0 && successCount > 0 && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />}
-          {!isActive && errorCount > 0 && <XCircle className="h-4 w-4 shrink-0 text-red-500" />}
+          {!isActive && errorCount === 0 && successCount > 0 && (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+          )}
+          {!isActive && errorCount > 0 && (
+            <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+          )}
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="px-1 py-1">
+          <div className="mt-1">
             {needsInnerCollapse && (
               <button
                 type="button"

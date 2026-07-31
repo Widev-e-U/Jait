@@ -269,6 +269,55 @@ describe("mcp-server", () => {
     });
   });
 
+  it("streams MCP tool progress over the streamable HTTP response", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "jait.terminal",
+      description: "Run a command",
+      tier: "standard",
+      category: "terminal",
+      source: "builtin",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      async execute(_input, context) {
+        context.onOutputChunk?.("first\n");
+        context.onOutputChunk?.("second\n");
+        return { ok: true, message: "done" };
+      },
+    });
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: { host: "127.0.0.1", port: 3000 } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp?sessionId=session-1&projectRoot=%2Ftmp%2Fproject",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "jait_terminal",
+          arguments: { command: "bun test" },
+          _meta: { progressToken: "progress-1" },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+    expect(response.body).toContain('"method":"notifications/progress"');
+    expect(response.body).toContain('"message":"first\\n"');
+    expect(response.body).toContain('"message":"second\\n"');
+    expect(response.body).toContain('"id":1');
+  });
+
   it("accepts initialized notifications over streamable HTTP MCP", async () => {
     const registry = new ToolRegistry();
     const app = Fastify();
@@ -366,6 +415,40 @@ describe("mcp-server", () => {
       model: "gpt-5-codex",
       runtimeMode: "supervised",
     });
+  });
+
+  it("forwards MCP tool output chunks to the request progress callback", async () => {
+    const registry = new ToolRegistry();
+    const chunks: string[] = [];
+    registry.register({
+      name: "jait.terminal",
+      description: "Run a command",
+      tier: "standard",
+      category: "terminal",
+      source: "builtin",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      async execute(_input, context) {
+        context.onOutputChunk?.("first\n");
+        context.onOutputChunk?.("second\n");
+        return { ok: true, message: "done" };
+      },
+    });
+
+    await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "jait_terminal", arguments: { command: "bun test" } },
+      },
+      registry,
+      "2025-03-26",
+      { sessionId: "session-1", projectRoot: "/tmp/project" },
+      undefined,
+      (chunk) => chunks.push(chunk),
+    );
+
+    expect(chunks).toEqual(["first\n", "second\n"]);
   });
 
   it("rejects tool calls when no session can be resolved", async () => {
