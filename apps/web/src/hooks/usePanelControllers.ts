@@ -38,7 +38,6 @@ interface UsePanelControllersOptions {
   showProjectEditor: boolean
   showProjectRef: RefObject<boolean>
   showProjectTree: boolean
-  suppressProjectAutoOpenRef: RefObject<boolean>
   applyProjectLayout: (layout: { tree: boolean; editor: boolean }, options?: { immediateSync?: boolean }) => void
 }
 
@@ -71,7 +70,6 @@ export function usePanelControllers({
   showProjectEditor,
   showProjectRef,
   showProjectTree,
-  suppressProjectAutoOpenRef,
   applyProjectLayout,
 }: UsePanelControllersOptions) {
   const openScreenSharePanel = useCallback(() => {
@@ -156,7 +154,6 @@ export function usePanelControllers({
   }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync, isMobile, setShowTerminal, setTerminalFullscreen])
 
   const closeProjectPanel = useCallback(() => {
-    suppressProjectAutoOpenRef.current = true
     showProjectRef.current = false
     setShowProject(false)
     const nextPanel = activeProject
@@ -175,7 +172,7 @@ export function usePanelControllers({
     if (nextPanel) {
       setSavedProject(nextPanel, { immediate: true })
     }
-  }, [activeProject, applyProjectLayout, isMobile, setSavedProject, setShowProject, showProjectRef, suppressProjectAutoOpenRef, prevProjectPanelPayloadRef])
+  }, [activeProject, applyProjectLayout, isMobile, setSavedProject, setShowProject, showProjectRef, prevProjectPanelPayloadRef])
   closeProjectPanelRef.current = closeProjectPanel
 
   const toggleProjectTree = useCallback(() => {

@@ -5,6 +5,7 @@ import {
   UIStateKey,
   ProjectOpenData,
   ProjectCloseData,
+  ProjectEditorOpenData,
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,
@@ -81,6 +82,7 @@ function canActAsFsNode(): boolean {
 type CommandDataMap = {
   'project.open': ProjectOpenData
   'project.close': ProjectCloseData
+  'project.editor.open': ProjectEditorOpenData
   'terminal.focus': TerminalFocusData
   'file.highlight': FileHighlightData
   'dev-preview.open': DevPreviewOpenData
@@ -93,6 +95,7 @@ type UICommandListener<T extends UICommandType = UICommandType> =
 interface Listeners {
   'project.open'?: UICommandListener<'project.open'>
   'project.close'?: UICommandListener<'project.close'>
+  'project.editor.open'?: UICommandListener<'project.editor.open'>
   'terminal.focus'?: UICommandListener<'terminal.focus'>
   'file.highlight'?: UICommandListener<'file.highlight'>
   'dev-preview.open'?: UICommandListener<'dev-preview.open'>

@@ -26,6 +26,28 @@ export function createProjectStatePersistRequestInit(
   }
 }
 
+export function getProjectStateRequestKey(
+  projectId: string | null,
+  key: string,
+  token?: string | null,
+): string | null {
+  return projectId && token ? `${projectId}:${key}:${token}` : null
+}
+
+export function resolveProjectStateSnapshot<T>(
+  value: T | null,
+  loading: boolean,
+  requestKey: string | null,
+  loadedRequestKey: string | null,
+): { value: T | null; loading: boolean } {
+  if (!requestKey) return { value: null, loading: false }
+  const matchesCurrentProject = requestKey === loadedRequestKey
+  return {
+    value: matchesCurrentProject ? value : null,
+    loading: loading || !matchesCurrentProject,
+  }
+}
+
 export function useProjectState<T>(
   projectId: string | null,
   key: string,
@@ -33,23 +55,27 @@ export function useProjectState<T>(
 ): [T | null, (value: T | null, options?: { immediate?: boolean }) => void, boolean] {
   const [value, setValueLocal] = useState<T | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const latestRef = useRef<T | null>(null)
   const localWriteVersionRef = useRef(0)
+  const requestKey = getProjectStateRequestKey(projectId, key, token)
 
   useEffect(() => {
     if (!projectId || !token) {
       setValueLocal(null)
+      setLoading(false)
+      setLoadedRequestKey(null)
       return
     }
 
     // Reset immediately so stale values from the previous project are not
     // consumed before the fetch for the new project completes.
     setValueLocal(null)
-    latestRef.current = null
+    setLoadedRequestKey(null)
 
     let cancelled = false
     const fetchVersion = localWriteVersionRef.current
+    const nextRequestKey = getProjectStateRequestKey(projectId, key, token)
     setLoading(true)
 
     fetchStateBatched('projects', projectId, key, token)
@@ -58,13 +84,15 @@ export function useProjectState<T>(
         if (fetchVersion !== localWriteVersionRef.current) return
         const next = val as T | null
         setValueLocal(next)
-        latestRef.current = next
       })
       .catch(() => {
         if (!cancelled) setValueLocal(null)
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setLoadedRequestKey(nextRequestKey)
+        }
       })
 
     return () => {
@@ -75,14 +103,14 @@ export function useProjectState<T>(
   const setValue = useCallback((next: T | null, options?: { immediate?: boolean }) => {
     localWriteVersionRef.current += 1
     setValueLocal(next)
-    latestRef.current = next
+    setLoadedRequestKey(requestKey)
 
     if (!projectId || !token) return
     primeStateValue('projects', projectId, token, key, next)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const persist = () => {
       fetch(`${API_URL}/api/projects/${projectId}/state`, {
-        ...createProjectStatePersistRequestInit(token, key, latestRef.current, options),
+        ...createProjectStatePersistRequestInit(token, key, next, options),
       }).catch(() => undefined)
     }
     if (options?.immediate) {
@@ -92,7 +120,7 @@ export function useProjectState<T>(
     debounceRef.current = setTimeout(() => {
       persist()
     }, 300)
-  }, [projectId, key, token])
+  }, [projectId, key, token, requestKey])
 
   useEffect(() => {
     return () => {
@@ -100,5 +128,6 @@ export function useProjectState<T>(
     }
   }, [])
 
-  return [value, setValue, loading]
+  const snapshot = resolveProjectStateSnapshot(value, loading, requestKey, loadedRequestKey)
+  return [snapshot.value, setValue, snapshot.loading]
 }

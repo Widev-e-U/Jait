@@ -135,33 +135,18 @@ describe('project editor reopen behavior', () => {
   })
 
 
-  it('auto-opening changed files remains desktop-only', () => {
+  it('agent file edits never open editor mode', () => {
     const setShowProject = vi.fn()
     const showProjectRef = { current: false }
 
-    const autoOpenForChangedFiles = (isMobile: boolean) => {
-      const previousCount = 0
+    const trackChangedFiles = () => {
       const changedFiles = [{ path: '/repo/file.ts', state: 'undecided' }]
-      const suppressProjectAutoOpen = false
-      const showProject = false
-
-      if (previousCount === null) return
-      if (changedFiles.length === 0) return
-      if (changedFiles.length <= previousCount) return
-      if (suppressProjectAutoOpen) return
-      if (isMobile) return
-      if (!showProject) {
-        showProjectRef.current = true
-        setShowProject(true)
-      }
+      return changedFiles.length
     }
 
-    autoOpenForChangedFiles(true)
+    expect(trackChangedFiles()).toBe(1)
+
     expect(setShowProject).not.toHaveBeenCalled()
     expect(showProjectRef.current).toBe(false)
-
-    autoOpenForChangedFiles(false)
-    expect(setShowProject).toHaveBeenCalledWith(true)
-    expect(showProjectRef.current).toBe(true)
   })
 })

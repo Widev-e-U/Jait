@@ -60,7 +60,7 @@ import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
+import type { ProjectEditorOpenData, ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
@@ -228,7 +228,6 @@ function App() {
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const projectRestoreRef = useRef<(() => void) | null>(null)
   const closeProjectPanelRef = useRef<(() => void) | null>(null)
-  const suppressProjectAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [projectPreviewRequest, setProjectPreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
   const [projectPreviewState, setProjectPreviewState] = useState<DevPreviewPanelState>({
@@ -503,9 +502,6 @@ function App() {
   fetchProjectsRef.current = fetchProjects
   const handleProjectEventRef = useRef(handleProjectEvent)
   handleProjectEventRef.current = handleProjectEvent
-  useEffect(() => {
-    suppressProjectAutoOpenRef.current = false
-  }, [activeSessionId])
 
   // Which sessions (across all projects, not just the one currently open) are
   // actively generating a response — lets the sidebar show a loading spinner
@@ -746,11 +742,6 @@ function App() {
 
   useEffect(() => {
     setInputSegments(undefined)
-  }, [activeSessionId])
-
-  const previousChangedFilesCountRef = useRef<number | null>(null)
-  useEffect(() => {
-    previousChangedFilesCountRef.current = null
   }, [activeSessionId])
 
   const handleMessageStarted = useCallback(() => {
@@ -1746,6 +1737,26 @@ function App() {
       'project.close': useCallback(() => {
         setActiveProjectIfChanged(null)
       }, [setActiveProjectIfChanged]),
+      'project.editor.open': useCallback((data: ProjectEditorOpenData) => {
+        const requestedRoot = data.projectRoot?.trim() || null
+        const activeRoot = activeProjectRef.current?.projectRoot?.trim()
+          || activeProjectRecordRef.current?.rootPath?.trim()
+          || null
+        if (requestedRoot && activeRoot && requestedRoot !== activeRoot) return
+
+        setCurrentView('chat')
+        setViewMode('developer')
+        showProjectRef.current = true
+        setShowProject(true)
+        if (isMobile) {
+          const layout = showMobileProjectPane('editor')
+          setShowProjectTree(layout.tree)
+          setShowProjectEditor(layout.editor)
+        } else {
+          setShowProjectTree(true)
+          setShowProjectEditor(true)
+        }
+      }, [isMobile]),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
         setCurrentView('chat')
         setShowTerminal(true)
@@ -2085,7 +2096,6 @@ function App() {
     showProjectEditor,
     showProjectRef,
     showProjectTree,
-    suppressProjectAutoOpenRef,
     applyProjectLayout,
   })
 
@@ -2435,8 +2445,6 @@ function App() {
       return
     }
 
-    suppressProjectAutoOpenRef.current = false
-
     if (!activeProjectRef.current && !activeProjectRecordRef.current && (authLoadingRef.current || projectsLoadingRef.current)) {
       await waitForProjectHydration()
     }
@@ -2654,23 +2662,7 @@ function App() {
     return () => { cancelled = true }
   }, [activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open project panel when the agent modifies files
-  useEffect(() => {
-    const previousCount = previousChangedFilesCountRef.current
-    previousChangedFilesCountRef.current = changedFiles.length
-
-    if (previousCount === null) return
-    if (changedFiles.length === 0) return
-    if (changedFiles.length <= previousCount) return
-    if (suppressProjectAutoOpenRef.current) return
-    if (isMobile) return
-    if (!showProject) {
-      showProjectRef.current = true
-      setShowProject(true)
-    }
-  }, [changedFiles.length, isMobile]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the project editor
+  // Absolute paths of files the agent has modified (undecided only), used to refresh an already-open project editor
   const changedPaths = useMemo(
     () => changedFiles.filter((f) => f.state === 'undecided').map((f) => f.path),
     [changedFiles],

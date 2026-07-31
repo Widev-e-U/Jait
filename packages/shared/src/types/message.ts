@@ -83,6 +83,7 @@ export interface WsEvent<T = unknown> {
 export type UICommandType =
   | "project.open"
   | "project.close"
+  | "project.editor.open"
   | "terminal.focus"
   | "file.highlight"
   | "dev-preview.open"
@@ -106,6 +107,10 @@ export interface ProjectOpenData {
 
 export interface ProjectCloseData {
   surfaceId: string;
+}
+
+export interface ProjectEditorOpenData {
+  projectRoot?: string;
 }
 
 /** Payload for a `session.streaming` WsEvent — broadcast to every client of a

@@ -30,6 +30,7 @@ export {
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
 export { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
+export { createProjectEditorOpenTool } from "./project-editor-tools.js";
 export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -166,6 +167,7 @@ import {
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createProjectAssignRepositoryTool, createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
+import { createProjectEditorOpenTool } from "./project-editor-tools.js";
 import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
@@ -390,6 +392,8 @@ export function createToolRegistry(
       }),
     );
   }
+
+  tools.register(createProjectEditorOpenTool(deps.ws));
 
   if (deps.repoService && deps.repoProposalService) {
     tools.register(createJaitTodosTool({

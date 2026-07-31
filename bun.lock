@@ -62,7 +62,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.283",
+      "version": "0.1.284",
       "dependencies": {
         "@capacitor/app": "^6.0.0",
         "@capacitor/filesystem": "^6.0.0",
@@ -155,7 +155,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.635",
+      "version": "0.1.636",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -204,7 +204,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.63",
+      "version": "0.1.64",
       "dependencies": {
         "zod": "^3.24.0",
       },
