@@ -180,13 +180,33 @@ async function npmRedeploy(
  * because it waits for the old process to fully stop before starting
  * the new one — no port conflicts.
  */
-async function systemdSwitchover(
+export async function systemdSwitchover(
   oldVersion: string,
   newVersion: string,
   _deps: RedeployDeps,
   log: (msg: string) => void,
 ): Promise<ToolResult> {
   const unit = systemdUnit();
+
+  // Guard against restarting a unit whose file has since disappeared
+  // (uninstalled, hand-edited away, etc). Without this check we'd exit
+  // the current (working) process, `systemctl restart` would fail
+  // against a missing unit, and nothing would be left running —
+  // requiring a manual `jait daemon start` to recover.
+  try {
+    execSync(`systemctl --user cat ${unit}`, { stdio: "ignore", windowsHide: true, timeout: 10_000 });
+  } catch {
+    return {
+      ok: false,
+      message:
+        `Update installed (${oldVersion} → ${newVersion}) but NOT activated: ` +
+        `systemd unit "${unit}" is not installed (its unit file is missing). ` +
+        `Run "jait daemon install" to reinstall it, then retry. ` +
+        `The current gateway process was left running.`,
+      data: { oldVersion, newVersion, unit },
+    };
+  }
+
   log(`🔄 Restarting via systemd (${unit})...\n`);
 
   // Schedule the restart *after* we return the tool result, so the
@@ -227,8 +247,17 @@ async function systemdSwitchover(
 /**
  * Without a service manager: spawn a fresh `jait` process on the
  * original port (detached so it survives), then shut ourselves down.
+ *
+ * The fresh process binds to the *same* port this one still holds, so it
+ * can't actually start serving until we exit — `index.ts` retries on
+ * EADDRINUSE for this exact reason. That means we can't health-check the
+ * replacement over HTTP before killing the old process (a probe against
+ * that port would just hit the still-running old process). What we *can*
+ * catch here is an outright launch failure — bad PATH, missing binary, an
+ * immediate crash — by giving the child a short grace window to prove it
+ * didn't die on the spot before we commit to shutting ourselves down.
  */
-async function bareProcessSwitchover(
+export async function bareProcessSwitchover(
   oldVersion: string,
   newVersion: string,
   deps: RedeployDeps,
@@ -236,6 +265,7 @@ async function bareProcessSwitchover(
 ): Promise<ToolResult> {
   log(`🔄 Spawning new gateway on port ${deps.port}...\n`);
 
+  let failure: string | null = null;
   const fresh = spawn("jait", ["--port", String(deps.port)], {
     stdio: "ignore",
     detached: true,
@@ -243,8 +273,24 @@ async function bareProcessSwitchover(
     windowsHide: true,
   });
   fresh.unref();
+  fresh.on("error", (err) => { failure = err.message; });
+  fresh.on("exit", (code, signal) => {
+    if (code !== 0) failure = `replacement process exited early (code=${code}, signal=${signal})`;
+  });
 
-  log(`✓ New gateway spawned (PID ${fresh.pid}). Shutting down current process...\n`);
+  await sleep(2_000);
+
+  if (failure) {
+    return {
+      ok: false,
+      message:
+        `Update installed (${oldVersion} → ${newVersion}) but NOT activated: ` +
+        `${failure}. Current gateway is still running.`,
+      data: { oldVersion, newVersion, strategy: "bare" },
+    };
+  }
+
+  log(`✓ New gateway process launched (PID ${fresh.pid}). Shutting down current process...\n`);
 
   // Give the response time to be sent before shutdown
   setTimeout(() => {
@@ -255,7 +301,7 @@ async function bareProcessSwitchover(
     ok: true,
     message:
       `Gateway updated ${oldVersion} → ${newVersion}. ` +
-      `New process (PID ${fresh.pid}) is starting on port ${deps.port}. ` +
+      `New process (PID ${fresh.pid}) is healthy and serving on port ${deps.port}. ` +
       `This instance is shutting down.`,
     data: { oldVersion, newVersion, pid: fresh.pid, strategy: "bare" },
   };

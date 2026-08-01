@@ -79,6 +79,31 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Bind, retrying on EADDRINUSE for up to `maxWaitMs`. The bare-process
+ * redeploy handoff (redeploy-tools.ts) spawns the replacement on the same
+ * port the outgoing process still holds, then kills the old process shortly
+ * after — without a retry here, that race reliably crashes the replacement
+ * before the port is actually free, leaving nothing listening.
+ */
+async function listenWithRetryOnConflict(
+  server: { listen: (opts: { port: number; host: string }) => Promise<unknown> },
+  opts: { port: number; host: string },
+  maxWaitMs = 20_000,
+): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    try {
+      await server.listen(opts);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== "EADDRINUSE" || Date.now() - start >= maxWaitMs) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+
 async function main() {
   await ensureGraphifyRuntime({
     onProgress: (message) => console.log(`[graphify] ${message}`),
@@ -1163,7 +1188,7 @@ async function main() {
   };
 
   // Start Fastify first, then attach WS to its HTTP server (shared port)
-  await server.listen({ port: config.port, host: config.host });
+  await listenWithRetryOnConflict(server, { port: config.port, host: config.host });
   ws.start(server.server); // shares port with Fastify
 
   // Attach voice-assistant WebSocket upgrade to the HTTP server
