@@ -103,7 +103,13 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           return
         }
         toast.info('Downloading update...')
-        const result = await appUpdater.downloadAndInstall({ url: downloadUrl })
+        // wearUrl is fire-and-forget on the native side: if a paired watch is
+        // reachable it downloads and installs independently over its own
+        // network, without blocking or depending on the phone's own install.
+        const result = await appUpdater.downloadAndInstall({
+          url: downloadUrl,
+          wearUrl: updateInfo.wearDownloadUrl ?? undefined,
+        })
         if (result?.ok) {
           toast.success('Installer launched — follow the prompt to finish updating.')
         } else {

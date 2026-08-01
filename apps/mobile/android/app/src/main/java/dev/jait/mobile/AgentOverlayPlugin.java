@@ -68,6 +68,7 @@ public class AgentOverlayPlugin extends Plugin {
 
         activeCall = call;
         activeRequestId = requestId;
+        WearBridge.relayQuestion(getContext(), request);
         // Called only while the web app is alive, so the app is always foreground here -
         // launching the Activity directly is unrestricted and shows the modal immediately.
         launchPromptActivity(call);
@@ -212,6 +213,7 @@ public class AgentOverlayPlugin extends Plugin {
         dismissIntent.setPackage(getContext().getPackageName());
         dismissIntent.putExtra(AgentPromptActivity.EXTRA_REQUEST_ID, requestId);
         getContext().sendBroadcast(dismissIntent);
+        WearBridge.relayDismiss(getContext(), requestId);
 
         if (Objects.equals(requestId, activeRequestId) && activeCall != null) {
             JSObject result = new JSObject();

@@ -46,6 +46,12 @@ public class AppUpdaterPlugin extends Plugin {
             return;
         }
 
+        // Both builds are cut from the same release, so kick off the watch's own
+        // download/install the moment the phone starts applying its update - independent of
+        // whether the phone's own install succeeds, and not blocking on it either.
+        String wearUrl = call.getString("wearUrl");
+        if (wearUrl != null) WearBridge.relayUpdate(getContext(), wearUrl);
+
         Context context = getContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
             waitingForInstallPermission = true;

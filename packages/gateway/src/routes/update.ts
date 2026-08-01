@@ -3,7 +3,8 @@
  *
  *   GET    /api/update/check          — compare running version against npm latest
  *   POST   /api/update/apply          — install the new version and restart
- *   GET    /api/mobile-update/check   — compare installed Android APK against latest GitHub release
+ *   GET    /api/mobile-update/check   — compare installed Android APK (and paired Wear OS APK,
+ *                                        if a release asset for it exists) against latest GitHub release
  */
 
 const GITHUB_REPO = "Widev-e-U/Jait";
@@ -79,6 +80,7 @@ export function registerUpdateRoutes(
         return assetName.endsWith(".apk") && !assetName.includes("unsigned");
       });
       const apkAsset = apkAssets.find((asset) => asset.name.toLowerCase().includes("android")) ?? apkAssets[0];
+      const wearAsset = apkAssets.find((asset) => asset.name.toLowerCase().includes("wear"));
       const hasUpdate = !!currentVersion && !!latestVersion && !!apkAsset && compareVersions(latestVersion, currentVersion) > 0;
 
       return {
@@ -87,6 +89,8 @@ export function registerUpdateRoutes(
         hasUpdate,
         downloadUrl: apkAsset?.browser_download_url ?? null,
         assetName: apkAsset?.name ?? null,
+        wearDownloadUrl: wearAsset?.browser_download_url ?? null,
+        wearAssetName: wearAsset?.name ?? null,
       };
     } catch (err) {
       return reply.status(502).send({

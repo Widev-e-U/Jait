@@ -1,4 +1,4 @@
-package dev.jait.mobile;
+package dev.jait.mobile.wear;
 
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
@@ -9,27 +9,33 @@ import android.os.Bundle;
 import android.view.WindowManager;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import com.google.android.gms.tasks.Tasks;
+import com.google.android.gms.wearable.MessageClient;
+import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.Wearable;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class AgentPromptActivity extends AppCompatActivity {
-    public static final String ACTION_RESULT = "dev.jait.mobile.AGENT_PROMPT_RESULT";
-    public static final String ACTION_DISMISS = "dev.jait.mobile.AGENT_PROMPT_DISMISS";
+public class WearQuestionActivity extends AppCompatActivity {
+    public static final String ACTION_DISMISS = "dev.jait.mobile.wear.QUESTION_DISMISS";
     public static final String EXTRA_REQUEST = "request";
     public static final String EXTRA_REQUEST_ID = "requestId";
-    public static final String EXTRA_RESULT = "result";
-    public static final String EXTRA_CANCELLED = "cancelled";
-    public static final String EXTRA_DIRECT_SUBMIT = "directSubmit";
+    private static final String ANSWER_PATH = "/jait/answer";
 
-    private AgentPromptView promptView;
     private String requestId = "";
-    private boolean directSubmit;
     private BroadcastReceiver dismissReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+        );
         registerDismissReceiver();
         renderRequest(getIntent());
     }
@@ -42,7 +48,6 @@ public class AgentPromptActivity extends AppCompatActivity {
     }
 
     private void renderRequest(Intent intent) {
-        directSubmit = intent.getBooleanExtra(EXTRA_DIRECT_SUBMIT, false);
         String rawRequest = intent.getStringExtra(EXTRA_REQUEST);
         if (rawRequest == null) {
             finish();
@@ -57,30 +62,38 @@ public class AgentPromptActivity extends AppCompatActivity {
                 return;
             }
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
-                .cancel(notificationId(requestId));
-            promptView = new AgentPromptView(this, this::handleResult);
-            setContentView(promptView.build(request));
+                .cancel(WearQuestionListenerService.notificationId(requestId));
+            setContentView(new WearPromptView(this, this::handleResult).build(request));
         } catch (JSONException error) {
             finish();
         }
     }
 
     private void handleResult(JSONObject result, boolean cancelled) {
-        WearBridge.relayDismiss(this, requestId);
-        if (directSubmit) {
-            AgentQuestionApi.submit(this, requestId, result, cancelled);
-        } else {
-            Intent response = new Intent(ACTION_RESULT);
-            response.setPackage(getPackageName());
-            response.putExtra(EXTRA_REQUEST_ID, requestId);
-            response.putExtra(EXTRA_RESULT, result.toString());
-            response.putExtra(EXTRA_CANCELLED, cancelled);
-            sendBroadcast(response);
-        }
-
+        sendAnswer(requestId, result, cancelled);
         ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
-            .cancel(notificationId(requestId));
+            .cancel(WearQuestionListenerService.notificationId(requestId));
         finish();
+    }
+
+    private void sendAnswer(String requestId, JSONObject result, boolean cancelled) {
+        new Thread(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("requestId", requestId);
+                payload.put("cancelled", cancelled);
+                if (!cancelled && result != null) payload.put("result", result);
+                byte[] data = payload.toString().getBytes(StandardCharsets.UTF_8);
+                List<Node> nodes = Tasks.await(
+                    Wearable.getNodeClient(this).getConnectedNodes(), 5, TimeUnit.SECONDS
+                );
+                MessageClient messageClient = Wearable.getMessageClient(this);
+                for (Node node : nodes) {
+                    Tasks.await(messageClient.sendMessage(node.getId(), ANSWER_PATH, data), 5, TimeUnit.SECONDS);
+                }
+            } catch (Exception ignored) {
+            }
+        }, "jait-wear-answer").start();
     }
 
     private void registerDismissReceiver() {
@@ -92,17 +105,13 @@ public class AgentPromptActivity extends AppCompatActivity {
             }
         };
         ContextCompat.registerReceiver(
-            this,
-            dismissReceiver,
-            new IntentFilter(ACTION_DISMISS),
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            this, dismissReceiver, new IntentFilter(ACTION_DISMISS), ContextCompat.RECEIVER_NOT_EXPORTED
         );
     }
 
     @Override
     public void onBackPressed() {
-        if (promptView != null) promptView.cancel();
-        else finish();
+        handleResult(null, true);
     }
 
     @Override
@@ -112,9 +121,5 @@ public class AgentPromptActivity extends AppCompatActivity {
             dismissReceiver = null;
         }
         super.onDestroy();
-    }
-
-    public static int notificationId(String requestId) {
-        return 0x4a17 ^ requestId.hashCode();
     }
 }

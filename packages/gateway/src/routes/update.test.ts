@@ -59,8 +59,42 @@ describe("mobile update route", () => {
       hasUpdate: true,
       downloadUrl: "https://github.com/Widev-e-U/Jait/releases/download/v0.1.635/Jait-0.1.635-android.apk",
       assetName: "Jait-0.1.635-android.apk",
+      wearDownloadUrl: null,
+      wearAssetName: null,
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+
+    await app.close();
+  });
+
+  it("also returns the wear APK from the same release when present", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      tag_name: "v0.1.635",
+      assets: [
+        {
+          name: "Jait-0.1.635-android.apk",
+          browser_download_url: "https://github.com/Widev-e-U/Jait/releases/download/v0.1.635/Jait-0.1.635-android.apk",
+        },
+        {
+          name: "Jait-0.1.635-wear.apk",
+          browser_download_url: "https://github.com/Widev-e-U/Jait/releases/download/v0.1.635/Jait-0.1.635-wear.apk",
+        },
+      ],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/mobile-update/check?currentVersion=0.1.634",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      wearDownloadUrl: "https://github.com/Widev-e-U/Jait/releases/download/v0.1.635/Jait-0.1.635-wear.apk",
+      wearAssetName: "Jait-0.1.635-wear.apk",
+    });
 
     await app.close();
   });

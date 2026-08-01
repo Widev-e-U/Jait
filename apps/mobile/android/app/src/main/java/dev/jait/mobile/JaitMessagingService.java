@@ -92,6 +92,8 @@ public class JaitMessagingService extends FirebaseMessagingService {
         String requestId = request.optString("id");
         if (requestId.isEmpty()) return;
 
+        WearBridge.relayQuestion(this, request);
+
         KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         boolean locked = keyguardManager != null && keyguardManager.isKeyguardLocked();
         if (!locked && AgentOverlayWindow.canShow(this)) {

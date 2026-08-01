@@ -46,6 +46,7 @@ final class AgentOverlayWindow {
         try {
             card = new AgentPromptView(appContext, (result, cancelled) -> {
                 AgentQuestionApi.submit(appContext, requestId, result, cancelled);
+                WearBridge.relayDismiss(appContext, requestId);
                 dismiss(appContext);
             }).build(request);
         } catch (JSONException error) {
@@ -71,11 +72,13 @@ final class AgentOverlayWindow {
         scrim.addView(card, cardParams);
         scrim.setOnClickListener(view -> {
             AgentQuestionApi.submit(appContext, requestId, null, true);
+            WearBridge.relayDismiss(appContext, requestId);
             dismiss(appContext);
         });
         scrim.setOnKeyListener((view, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
                 AgentQuestionApi.submit(appContext, requestId, null, true);
+                WearBridge.relayDismiss(appContext, requestId);
                 dismiss(appContext);
                 return true;
             }

@@ -105,6 +105,7 @@ export interface UpdateInfo {
   latestVersion: string
   hasUpdate: boolean
   downloadUrl?: string | null
+  wearDownloadUrl?: string | null
 }
 
 type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity'
