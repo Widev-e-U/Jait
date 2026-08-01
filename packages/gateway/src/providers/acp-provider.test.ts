@@ -298,6 +298,43 @@ describe("AcpProvider MCP startup events", () => {
 });
 
 describe("AcpProvider Codex ACP tool payloads", () => {
+  it("unwraps Codex code-mode Jait MCP calls", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+    const todoList = [{ id: 1, title: "Trace metadata", status: "in-progress" }];
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "core.todo",
+        kind: "other",
+        status: "in_progress",
+        rawInput: {
+          server: "jait_core",
+          tool: "todo",
+          title: "mcp",
+          arguments: { todoList },
+        },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "todo",
+      callId: "core.todo",
+      args: { todoList },
+    });
+  });
+
   it("emits read file paths from ACP locations instead of empty rawInput", () => {
     const provider = new AcpProvider({
       id: "codex",

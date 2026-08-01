@@ -15,6 +15,7 @@ let getCallSummary: typeof import('./tool-call-card')['getCallSummary']
 let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
 let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText']
 let getJaitMcpToolName: typeof import('./tool-call-card')['getJaitMcpToolName']
+let getJaitMcpToolArgs: typeof import('./tool-call-card')['getJaitMcpToolArgs']
 let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
@@ -44,6 +45,7 @@ beforeAll(async () => {
     getEditDiffCounts,
     formatMcpHeaderText,
     getJaitMcpToolName,
+    getJaitMcpToolArgs,
     getLatestSubAgentActivity,
     getToolInvocationLabels,
     shouldRenderToolCall,
@@ -83,6 +85,15 @@ describe('Jait MCP display metadata', () => {
     expect(getJaitMcpToolName('mcp.jait.jait_terminal')).toBe('jait.terminal')
     expect(getJaitMcpToolName('functions.mcp__jait__file_read')).toBe('file.read')
     expect(getJaitMcpToolName('functions.mcp__jait_core__tools_search')).toBe('tools.search')
+    expect(getJaitMcpToolName('mcp.__jait_core__todo')).toBe('todo')
+    const wrappedTodo = {
+      server: 'jait_core',
+      tool: 'todo',
+      title: 'mcp',
+      arguments: { todoList: [{ id: 1, title: 'Trace metadata', status: 'in-progress' }] },
+    }
+    expect(getJaitMcpToolName('core.todo', null, wrappedTodo)).toBe('todo')
+    expect(getJaitMcpToolArgs(wrappedTodo)).toEqual(wrappedTodo.arguments)
   })
 
   it('summarizes Jait MCP terminal calls as terminal activity', () => {
@@ -327,6 +338,24 @@ describe('formatOutput', () => {
 })
 
 describe('getCallSummary', () => {
+  it('shows only the file and method for wrapped Jait file tools', () => {
+    const wrappedFileTool = {
+      server: 'jait',
+      tool: 'file_write',
+      title: 'mcp.jait.file_write',
+      arguments: {
+        path: 'apps/web/src/components/chat/tool-call-card.tsx',
+        method: 'getCallSummary',
+      },
+    }
+
+    expect(getCallSummary('core.file_write', wrappedFileTool)).toBe('tool-call-card.tsx · getCallSummary')
+    expect(getToolInvocationLabels('core.file_write', wrappedFileTool)).toEqual({
+      running: 'Writing tool-call-card.tsx',
+      done: 'Created tool-call-card.tsx',
+    })
+  })
+
   it('uses ACP read result text as a file summary when args are empty', () => {
     expect(getCallSummary(
       'read_file',
@@ -341,7 +370,7 @@ describe('getCallSummary', () => {
         },
       ],
       'Read apps/web/src/App.tsx',
-    )).toBe('apps/web/src/App.tsx')
+    )).toBe('App.tsx')
   })
 
   it('uses ACP edit aliases as an edit filename with diff counts', () => {

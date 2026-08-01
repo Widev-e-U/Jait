@@ -145,11 +145,12 @@ export function getToolInvocationLabels(
   resultData?: unknown,
   resultMessage?: string | null,
 ): { running: string; done: string } {
-  const normalized = normalizeTool(tool)
+  const initialNormalized = normalizeTool(tool)
+  const normalized = getJaitMcpToolName(initialNormalized, null, args) ?? initialNormalized
   const resultRecord = resultData && typeof resultData === 'object' && !Array.isArray(resultData)
     ? resultData as Record<string, unknown>
     : undefined
-  const normalizedArgs = normalizeToolArgs(normalized, args, resultRecord)
+  const normalizedArgs = normalizeToolArgs(normalized, getJaitMcpToolArgs(args), resultRecord)
   const fileName = (() => {
     const p = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
       ?? displayStr(normalizedArgs.path ?? normalizedArgs.file)
@@ -334,12 +335,33 @@ export function formatMcpHeaderText(
   return invocationLabel
 }
 
-export function getJaitMcpToolName(toolName: string, title?: string | null): string | null {
+function getWrappedJaitMcpToolName(args?: Record<string, unknown>): string | null {
+  if (!args) return null
+  const server = typeof args.server === 'string' ? args.server.trim() : ''
+  if (server !== 'jait' && server !== 'jait_core') return null
+  const tool = typeof args.tool === 'string' ? args.tool.trim() : ''
+  return tool ? tool.replace(/_/g, '.') : null
+}
+
+export function getJaitMcpToolArgs(args: Record<string, unknown>): Record<string, unknown> {
+  if (!getWrappedJaitMcpToolName(args)) return args
+  return parseStructuredRecord(args.arguments) ?? {}
+}
+
+export function getJaitMcpToolName(
+  toolName: string,
+  title?: string | null,
+  args?: Record<string, unknown>,
+): string | null {
+  const wrappedTool = getWrappedJaitMcpToolName(args)
+  if (wrappedTool) return wrappedTool
+
   for (const candidate of [toolName, title]) {
     if (!candidate) continue
     const normalized = candidate
       .replace(/^functions[._]/, '')
       .replace(/__/g, '.')
+      .replace(/\.{2,}/g, '.')
     const match = normalized.match(/^mcp[._]jait(?:_core)?[._](.+)$/i)
     if (!match?.[1]) continue
     return match[1].replace(/_/g, '.')
@@ -642,6 +664,22 @@ function getFileSummaryActionLabel(tool: string, isActive: boolean): string {
   return isActive ? 'Working' : 'Done'
 }
 
+function getFileContextLabel(args: Record<string, unknown>): string | null {
+  return firstDisplayString(
+    args.symbol,
+    args.method,
+    args.methodName,
+    args.function,
+    args.functionName,
+  )
+}
+
+function formatFileNameAndContext(path: string, args: Record<string, unknown>): string {
+  const fileName = getBaseName(path)
+  const context = getFileContextLabel(args)
+  return context ? `${fileName} · ${context}` : fileName
+}
+
 export function getEditDiffCounts(tool: string, args: Record<string, unknown>): { insertions: number; deletions: number } | null {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
@@ -759,21 +797,25 @@ export function getCallSummary(
   resultData?: unknown,
   resultMessage?: string | null,
 ): string {
-  const normalized = normalizeTool(tool)
+  const initialNormalized = normalizeTool(tool)
+  const normalized = getJaitMcpToolName(initialNormalized, null, args) ?? initialNormalized
   const resultRecord = resultData && typeof resultData === 'object' && !Array.isArray(resultData)
     ? resultData as Record<string, unknown>
     : undefined
-  const normalizedArgs = normalizeToolArgs(normalized, args, resultRecord)
+  const normalizedArgs = normalizeToolArgs(normalized, getJaitMcpToolArgs(args), resultRecord)
   const filePath = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
   // ── Core tools ──────────────────────────────────────────
-  if (normalized === 'read' || normalized === 'file.read') return filePath ?? displayStr(normalizedArgs.path)
+  if (normalized === 'read' || normalized === 'file.read') {
+    const path = filePath ?? displayStr(normalizedArgs.path)
+    return formatFileNameAndContext(path, normalizedArgs)
+  }
   if (normalized === 'edit') {
     const path = filePath ?? displayStr(normalizedArgs.path)
-    const fileName = getBaseName(path)
+    const fileSummary = formatFileNameAndContext(path, normalizedArgs)
     const diffCount = formatEditDiffCounts(getEditDiffCounts(normalized, normalizedArgs))
-    if (normalizedArgs.search) return `${fileName}${diffCount ? ` (${diffCount})` : ' (patch)'}`
-    if (diffCount) return `${fileName} (${diffCount})`
-    return fileName
+    if (normalizedArgs.search) return `${fileSummary}${diffCount ? ` (${diffCount})` : ' (patch)'}`
+    if (diffCount) return `${fileSummary} (${diffCount})`
+    return fileSummary
   }
   if (normalized === 'execute' || normalized === 'jait.terminal') return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'search') {
@@ -839,10 +881,14 @@ export function getCallSummary(
   if (normalized.startsWith('terminal.')) return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'file.write' || normalized === 'file.patch') {
     const path = filePath ?? displayStr(normalizedArgs.path)
+    const fileSummary = formatFileNameAndContext(path, normalizedArgs)
     const diffCount = formatEditDiffCounts(getEditDiffCounts(normalized, normalizedArgs))
-    return diffCount ? `${path} (${diffCount})` : path
+    return diffCount ? `${fileSummary} (${diffCount})` : fileSummary
   }
-  if (normalized.startsWith('file.')) return filePath ?? displayStr(normalizedArgs.path)
+  if (normalized.startsWith('file.')) {
+    const path = filePath ?? displayStr(normalizedArgs.path)
+    return formatFileNameAndContext(path, normalizedArgs)
+  }
   if (normalized === 'memory.save') {
     const scope = displayStr(args.scope, 'memory')
     const content = displayStr(args.content).trim()
@@ -1946,7 +1992,15 @@ function extractStreamingWebTarget(streamingArgs: string | undefined): string | 
 }
 
 /** Header label shown while the tool call is being streamed (pending state) */
-function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs?: string }) {
+function PendingToolLabel({
+  tool,
+  args,
+  streamingArgs,
+}: {
+  tool: string
+  args: Record<string, unknown>
+  streamingArgs?: string
+}) {
   // Normalise OpenAI name (terminal_run → terminal.run) for meta lookup
   const normalized = normalizeTool(tool)
   const displayTool = getJaitMcpToolName(normalized) ?? normalized
@@ -1955,6 +2009,18 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
   const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
   const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
+  const isFileTool = isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read'
+  const filePath = isFileTool ? getToolFilePath(displayTool, args) : null
+
+  if (meta && filePath) {
+    return (
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-blue-400">
+        <span>{getFileSummaryActionLabel(displayTool, true)}:</span>
+        <code className="min-w-0 truncate text-xs font-mono text-foreground">{formatFileNameAndContext(filePath, args)}</code>
+        <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+      </span>
+    )
+  }
 
   if (meta && isTerminalTool && command) {
     // Terminal with partial command — show like the running state
@@ -2191,10 +2257,12 @@ export function isInlineToolCall(call: ToolCallInfo): boolean {
 
 function FileSummaryButton({
   path,
+  context,
   onOpenDiff,
   disabled,
 }: {
   path: string
+  context?: string | null
   onOpenDiff?: (filePath: string) => void
   disabled?: boolean
 }) {
@@ -2204,6 +2272,7 @@ function FileSummaryButton({
     <>
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
       <span className="whitespace-nowrap">{fileName}</span>
+      {context ? <span className="whitespace-nowrap text-muted-foreground">· {context}</span> : null}
     </>
   )
 
@@ -2339,9 +2408,9 @@ function ToolCallCardInner({
     ...(normalizedTool.startsWith('mcp.') && !initialNormalizedArgs.title ? { title: normalizedTool } : {}),
     ...initialNormalizedArgs,
   }, resultData) : null
-  const displayTool = getJaitMcpToolName(normalizedTool, initialMcpLabel?.title) ?? normalizedTool
+  const displayTool = getJaitMcpToolName(normalizedTool, initialMcpLabel?.title, call.args) ?? normalizedTool
   const isJaitMcpTool = displayTool !== normalizedTool
-  const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultData)
+  const normalizedArgs = normalizeToolArgs(displayTool, getJaitMcpToolArgs(call.args), resultData)
   const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel({
     ...(normalizedTool.startsWith('mcp.') && !normalizedArgs.title ? { title: normalizedTool } : {}),
     ...normalizedArgs,
@@ -2380,6 +2449,7 @@ function ToolCallCardInner({
     .map((path) => path.trim())
     .filter(Boolean)
   const filePath = filePaths[0] ?? getToolFilePath(displayTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
+  const fileContext = getFileContextLabel(normalizedArgs)
   const showFileSummary = !!filePath && (isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read')
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
@@ -2515,7 +2585,7 @@ function ToolCallCardInner({
       )} />
       <span className="flex-1 truncate text-[13px] font-medium text-muted-foreground">
         {isPending ? (
-          <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
+          <PendingToolLabel tool={displayTool} args={normalizedArgs} streamingArgs={call.streamingArgs} />
         ) : isAgentToolName(displayTool) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             <span className="shrink-0 font-semibold text-purple-600 dark:text-purple-400">Sub-agent</span>
@@ -2534,6 +2604,7 @@ function ToolCallCardInner({
                 <FileSummaryButton
                   key={`${p}-${i}`}
                   path={p}
+                  context={i === 0 ? fileContext : null}
                   onOpenDiff={isEditLikeTool(displayTool) ? onOpenDiff : undefined}
                   disabled={call.status !== 'success'}
                 />

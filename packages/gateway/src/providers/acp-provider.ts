@@ -41,7 +41,11 @@ import {
   unsupportedLogin,
   unsupportedLogout,
 } from "./provider-auth.js";
-import { mergeJaitCodexConfig } from "./jait-mcp.js";
+import {
+  JAIT_CORE_MCP_SERVER_NAME,
+  JAIT_DEFERRED_MCP_SERVER_NAME,
+  mergeJaitCodexConfig,
+} from "./jait-mcp.js";
 
 type AcpProviderAuthKind = "acp";
 
@@ -1099,7 +1103,38 @@ function hasToolCallMetadata(update: unknown): boolean {
   return false;
 }
 
+function getAcpJaitMcpCall(update: unknown): { tool: string; args: Record<string, unknown> } | null {
+  if (!update || typeof update !== "object") return null;
+  const record = update as Record<string, unknown>;
+  const rawInput = record["rawInput"];
+  if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return null;
+
+  const wrapper = rawInput as Record<string, unknown>;
+  const server = typeof wrapper["server"] === "string" ? wrapper["server"].trim() : "";
+  if (server !== JAIT_CORE_MCP_SERVER_NAME && server !== JAIT_DEFERRED_MCP_SERVER_NAME) return null;
+
+  const rawTool = typeof wrapper["tool"] === "string" ? wrapper["tool"].trim() : "";
+  if (!rawTool) return null;
+
+  const rawArgs = wrapper["arguments"];
+  if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
+    return { tool: rawTool.replace(/_/g, "."), args: rawArgs as Record<string, unknown> };
+  }
+  if (typeof rawArgs === "string") {
+    try {
+      const parsed = JSON.parse(rawArgs) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return { tool: rawTool.replace(/_/g, "."), args: parsed as Record<string, unknown> };
+      }
+    } catch {}
+  }
+
+  return { tool: rawTool.replace(/_/g, "."), args: {} };
+}
+
 function getAcpToolName(update: unknown): string {
+  const jaitMcpCall = getAcpJaitMcpCall(update);
+  if (jaitMcpCall) return jaitMcpCall.tool;
   if (!update || typeof update !== "object") return "tool";
   const record = update as Record<string, unknown>;
   const kind = typeof record["kind"] === "string" ? record["kind"] : null;
@@ -1112,6 +1147,8 @@ function getAcpToolName(update: unknown): string {
 }
 
 function getAcpToolArgs(update: unknown): unknown {
+  const jaitMcpCall = getAcpJaitMcpCall(update);
+  if (jaitMcpCall) return jaitMcpCall.args;
   if (!update || typeof update !== "object") return undefined;
   const record = update as Record<string, unknown>;
   const rawInput = record["rawInput"];

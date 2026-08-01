@@ -49,6 +49,7 @@ interface TodoInput {
 export function createTodoTool(): ToolDefinition<TodoInput> {
   return {
     name: "todo",
+    displayName: "Todo",
     description:
       "Manage a structured todo list for tracking multi-step tasks. " +
       "Provide the COMPLETE list each time. At most one item can be in-progress.",

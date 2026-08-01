@@ -224,6 +224,7 @@ describe("mcp-server", () => {
 
   it("advertises human-friendly tool titles to MCP clients", async () => {
     const registry = new ToolRegistry();
+    registry.register(createTodoTool());
     registry.register({
       name: "jait.terminal",
       displayName: "Terminal",
@@ -243,10 +244,10 @@ describe("mcp-server", () => {
       method: "tools/list",
     }, registry);
 
-    expect((response.result as { tools: Array<Record<string, unknown>> }).tools[0]).toMatchObject({
-      name: "jait_terminal",
-      title: "Terminal",
-    });
+    expect((response.result as { tools: Array<Record<string, unknown>> }).tools).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "todo", title: "Todo" }),
+      expect.objectContaining({ name: "jait_terminal", title: "Terminal" }),
+    ]));
   });
 
   it("builds the MCP callback base URL from forwarded headers", () => {
