@@ -68,6 +68,8 @@ describe('project-links', () => {
     expect(isPathWithinProject('E:/Jait/apps/web/src/App.tsx', 'E:/Jait')).toBe(true)
     expect(isPathWithinProject('E:/Other/App.tsx', 'E:/Jait')).toBe(false)
     expect(isPathWithinProject('/project/Jait/apps/web/src/App.tsx', '/project/Jait')).toBe(true)
+    expect(isPathWithinProject('apps/web/src/App.tsx', '/project/Jait')).toBe(true)
+    expect(isPathWithinProject('../Other/App.tsx', '/project/Jait')).toBe(false)
   })
 
   it('derives a fallback project root from a file path', () => {

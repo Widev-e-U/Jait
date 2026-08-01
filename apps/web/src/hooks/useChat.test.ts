@@ -7,6 +7,7 @@ import {
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
+  shouldForceMessageLifecycleRefresh,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
 } from '@/hooks/useChat'
@@ -183,6 +184,13 @@ describe('shouldOpenResumeStream', () => {
       directStreamSessionId: null,
       hasActiveDirectStream: false,
     })).toBe(true)
+  })
+})
+
+describe('shouldForceMessageLifecycleRefresh', () => {
+  it('forces reconciliation for both stream start and completion signals', () => {
+    expect(shouldForceMessageLifecycleRefresh('started')).toBe(true)
+    expect(shouldForceMessageLifecycleRefresh('complete')).toBe(true)
   })
 })
 

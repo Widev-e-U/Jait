@@ -128,6 +128,20 @@ export function isPathWithinProject(path: string, projectRoot?: string | null): 
   const normalizedRoot = normalizePath(projectRoot)
   if (!normalizedPath || !normalizedRoot) return false
 
+  if (!isAbsoluteProjectPath(normalizedPath)) {
+    let depth = 0
+    for (const segment of normalizedPath.split('/')) {
+      if (!segment || segment === '.') continue
+      if (segment === '..') {
+        if (depth === 0) return false
+        depth -= 1
+        continue
+      }
+      depth += 1
+    }
+    return depth > 0
+  }
+
   const comparablePath = WINDOWS_ABS_PATH_RE.test(normalizedPath)
     ? normalizedPath.toLowerCase()
     : normalizedPath

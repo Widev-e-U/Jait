@@ -129,6 +129,10 @@ export function shouldOpenResumeStream(params: {
   return true
 }
 
+export function shouldForceMessageLifecycleRefresh(event: 'started' | 'complete'): boolean {
+  return event === 'started' || event === 'complete'
+}
+
 export function shouldOwnDirectChatStream(params: {
   sessionId: string | null
   directStreamSessionId: string | null
