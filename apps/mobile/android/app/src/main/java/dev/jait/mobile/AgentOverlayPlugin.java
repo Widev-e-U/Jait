@@ -42,7 +42,6 @@ public class AgentOverlayPlugin extends Plugin {
     // time Android creates a channel with a given ID, so replacing the alarm-style ringtone
     // with silence required a new channel ID to actually take effect on existing installs.
     private static final String CHANNEL_ID = "jait-agent-questions-v2";
-    private static final long NOTIFICATION_TIMEOUT_MS = 300_000L;
 
     private PluginCall activeCall;
     private String activeRequestId;
@@ -69,16 +68,9 @@ public class AgentOverlayPlugin extends Plugin {
 
         activeCall = call;
         activeRequestId = requestId;
-
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            getPermissionState("notifications") != PermissionState.GRANTED
-        ) {
-            requestPermissionForAlias("notifications", call, "notificationPermissionResult");
-            return;
-        }
-
-        showPrompt(call);
+        // Called only while the web app is alive, so the app is always foreground here -
+        // launching the Activity directly is unrestricted and shows the modal immediately.
+        launchPromptActivity(call);
     }
 
     @PluginMethod
@@ -98,10 +90,36 @@ public class AgentOverlayPlugin extends Plugin {
         finishRequestPermissions(call);
     }
 
+    /**
+     * "Display over other apps" is what lets a backgrounded push draw the question card
+     * immediately instead of just posting a notification. There is no runtime dialog for it,
+     * so if it isn't granted yet this sends the user straight to the one settings screen that
+     * can grant it.
+     */
     private void finishRequestPermissions(PluginCall call) {
+        boolean overlayGranted = canDrawOverlays();
+        if (!overlayGranted) openOverlaySettings();
         JSObject result = new JSObject();
         result.put("notificationsGranted", getPermissionState("notifications") == PermissionState.GRANTED);
+        result.put("overlayGranted", overlayGranted);
         call.resolve(result);
+    }
+
+    private boolean canDrawOverlays() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return Settings.canDrawOverlays(getContext());
+    }
+
+    private void openOverlaySettings() {
+        try {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getContext().getPackageName())
+            );
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {
+        }
     }
 
     @PluginMethod
@@ -130,16 +148,6 @@ public class AgentOverlayPlugin extends Plugin {
                 call.resolve(result);
             })
             .addOnFailureListener(error -> call.reject("Unable to obtain Firebase push token", error));
-    }
-
-    @PermissionCallback
-    private void notificationPermissionResult(PluginCall call) {
-        if (call == null || activeCall != call) return;
-        if (getPermissionState("notifications") == PermissionState.GRANTED) {
-            showPrompt(call);
-            return;
-        }
-        launchPromptActivity(call);
     }
 
     @PluginMethod
@@ -217,54 +225,6 @@ public class AgentOverlayPlugin extends Plugin {
         call.resolve(result);
     }
 
-    private void showPrompt(PluginCall call) {
-        JSObject request = call.getObject("request");
-        if (request == null) {
-            rejectActive("Question request is missing");
-            return;
-        }
-
-        String requestId = request.getString("id");
-        String title = request.getString("title", "Jait needs your input");
-        String body = "Open Jait to answer this time-sensitive question.";
-        try {
-            if (request.has("questions") && request.getJSONArray("questions").length() > 0) {
-                body = request.getJSONArray("questions")
-                    .getJSONObject(0)
-                    .optString("question", body);
-            }
-        } catch (JSONException error) {
-        }
-
-        Context context = getContext();
-        Intent activityIntent = createActivityIntent(request);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-            context,
-            AgentPromptActivity.notificationId(requestId),
-            activityIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setTimeoutAfter(NOTIFICATION_TIMEOUT_MS);
-
-        NotificationManager notificationManager =
-            (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        notificationManager.notify(
-            AgentPromptActivity.notificationId(requestId),
-            builder.build()
-        );
-    }
-
     private void launchPromptActivity(PluginCall call) {
         JSObject request = call.getObject("request");
         if (request == null) {
@@ -275,7 +235,7 @@ public class AgentOverlayPlugin extends Plugin {
         try {
             getContext().startActivity(createActivityIntent(request));
         } catch (RuntimeException error) {
-            rejectActive("Notification permission is required for background questions", error);
+            rejectActive("Unable to open the question prompt", error);
         }
     }
 

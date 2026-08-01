@@ -1,5 +1,6 @@
 package dev.jait.mobile;
 
+import android.app.KeyguardManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -90,6 +91,14 @@ public class JaitMessagingService extends FirebaseMessagingService {
     private void showQuestion(JSONObject request) {
         String requestId = request.optString("id");
         if (requestId.isEmpty()) return;
+
+        KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        boolean locked = keyguardManager != null && keyguardManager.isKeyguardLocked();
+        if (!locked && AgentOverlayWindow.canShow(this)) {
+            AgentOverlayWindow.show(getApplicationContext(), request);
+            return;
+        }
+
         createChannel();
         Intent intent = new Intent(this, AgentPromptActivity.class);
         intent.putExtra(AgentPromptActivity.EXTRA_REQUEST, request.toString());
