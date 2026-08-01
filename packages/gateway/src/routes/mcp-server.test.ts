@@ -54,6 +54,24 @@ describe("mcp-server", () => {
       },
     });
     registry.register({
+      name: "user.ask",
+      description: "Ask the user one or more structured questions",
+      tier: "core",
+      category: "gateway",
+      source: "builtin",
+      risk: "low",
+      parameters: {
+        type: "object",
+        properties: {
+          questions: { type: "array" },
+        },
+        required: ["questions"],
+      },
+      async execute() {
+        return { ok: true, message: "ok" };
+      },
+    });
+    registry.register({
       name: "cron.add",
       description: "Create a cron job",
       tier: "standard",
@@ -82,7 +100,7 @@ describe("mcp-server", () => {
       },
     });
 
-    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["jait.todos", "cron.add"]);
+    expect(listToolsForMcp(registry).map((tool) => tool.name)).toEqual(["jait.todos", "user.ask", "cron.add"]);
 
     const response = await handleMcpRequest({
       jsonrpc: "2.0",
@@ -108,6 +126,21 @@ describe("mcp-server", () => {
             },
             annotations: {
               destructiveHint: true,
+              readOnlyHint: true,
+              idempotentHint: true,
+            },
+          },
+          {
+            name: "user_ask",
+            description: "Ask the user one or more structured questions",
+            inputSchema: {
+              type: "object",
+              properties: {
+                questions: { type: "array" },
+              },
+              required: ["questions"],
+            },
+            annotations: {
               readOnlyHint: true,
               idempotentHint: true,
             },
