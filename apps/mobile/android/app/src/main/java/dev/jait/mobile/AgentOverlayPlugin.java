@@ -81,13 +81,6 @@ public class AgentOverlayPlugin extends Plugin {
         showPrompt(call);
     }
 
-    /**
-     * Ask for the notification permission (Android 13+) and, if the "urgent" full-screen
-     * overlay can't fire, send the user to the one settings screen that can grant it.
-     * Android 14+ only auto-grants USE_FULL_SCREEN_INTENT to default dialer/alarm apps;
-     * everyone else is silently downgraded to a plain heads-up notification unless the
-     * user flips this toggle by hand, so there is no runtime dialog for it.
-     */
     @PluginMethod
     public void requestPermissions(PluginCall call) {
         if (
@@ -106,36 +99,9 @@ public class AgentOverlayPlugin extends Plugin {
     }
 
     private void finishRequestPermissions(PluginCall call) {
-        boolean fullScreenIntentGranted = canUseFullScreenIntent();
-        if (!fullScreenIntentGranted) openFullScreenIntentSettingsInternal();
         JSObject result = new JSObject();
         result.put("notificationsGranted", getPermissionState("notifications") == PermissionState.GRANTED);
-        result.put("fullScreenIntentGranted", fullScreenIntentGranted);
         call.resolve(result);
-    }
-
-    private boolean canUseFullScreenIntent() {
-        if (Build.VERSION.SDK_INT < 34) return true;
-        NotificationManager manager =
-            (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-        return manager.canUseFullScreenIntent();
-    }
-
-    @PluginMethod
-    public void openFullScreenIntentSettings(PluginCall call) {
-        openFullScreenIntentSettingsInternal();
-        call.resolve();
-    }
-
-    private void openFullScreenIntentSettingsInternal() {
-        if (Build.VERSION.SDK_INT < 34) return;
-        try {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
-            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(intent);
-        } catch (Exception ignored) {
-        }
     }
 
     @PluginMethod
@@ -289,12 +255,7 @@ public class AgentOverlayPlugin extends Plugin {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setOngoing(true)
             .setTimeoutAfter(NOTIFICATION_TIMEOUT_MS);
-
-        if ("urgent".equals(request.getString("attention", "normal"))) {
-            builder.setFullScreenIntent(pendingIntent, true);
-        }
 
         NotificationManager notificationManager =
             (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);

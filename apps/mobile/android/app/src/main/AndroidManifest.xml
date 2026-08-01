@@ -16,9 +16,7 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTop"
-            android:showWhenLocked="true"
-            android:theme="@style/AppTheme.AgentPrompt"
-            android:turnScreenOn="true" />
+            android:theme="@style/AppTheme.AgentPrompt" />
 
         <receiver
             android:name=".AgentOverlayPlugin$AlarmReceiver"

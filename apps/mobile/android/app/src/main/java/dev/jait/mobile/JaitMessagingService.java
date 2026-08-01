@@ -113,9 +113,7 @@ public class JaitMessagingService extends FirebaseMessagingService {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
-            .setOngoing(true)
             .setTimeoutAfter(300_000L);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
             .notify(AgentPromptActivity.notificationId(requestId), notification.build());
