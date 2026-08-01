@@ -27,6 +27,7 @@ import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
 import java.util.Objects;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 @CapacitorPlugin(
     name = "AgentOverlay",
@@ -69,8 +70,18 @@ public class AgentOverlayPlugin extends Plugin {
         activeCall = call;
         activeRequestId = requestId;
         WearBridge.relayQuestion(getContext(), request);
-        // Called only while the web app is alive, so the app is always foreground here -
-        // launching the Activity directly is unrestricted and shows the modal immediately.
+        if (
+            AgentQuestionPresentation.shouldUseSystemOverlay(
+                request.optString("attention", "normal"),
+                AgentOverlayWindow.canShow(getContext())
+            ) && AgentOverlayWindow.show(
+                getContext(),
+                request,
+                (result, cancelled) -> resolveOverlayResult(requestId, result)
+            )
+        ) {
+            return;
+        }
         launchPromptActivity(call);
     }
 
@@ -225,6 +236,21 @@ public class AgentOverlayPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("ok", true);
         call.resolve(result);
+    }
+
+    private void resolveOverlayResult(String requestId, JSONObject result) {
+        if (
+            activeCall == null ||
+            !requestId.equals(activeRequestId)
+        ) {
+            return;
+        }
+        try {
+            activeCall.resolve(new JSObject(result.toString()));
+            clearActiveRequest();
+        } catch (JSONException error) {
+            rejectActive("Question response was invalid", error);
+        }
     }
 
     private void launchPromptActivity(PluginCall call) {

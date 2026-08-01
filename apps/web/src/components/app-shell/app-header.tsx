@@ -382,30 +382,33 @@ export function AppHeader(props: AppHeaderProps) {
                         } else {
                           toast.error('Download failed')
                         }
-                      } else {
-                        window.open(
-                          'https://github.com/Widev-e-U/Jait/releases/latest',
-                          '_blank',
-                        )
+                      } else if (!updateApplying) {
+                        await handleApplyUpdate()
                       }
                     }}
                     variant="outline"
                     size="sm"
-                    disabled={appPlatform === 'web' && (updateApplying || updateAwaitingRestart)}
+                    disabled={
+                      (appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
+                      || (appPlatform === 'capacitor' && (updateApplying || !updateInfo.downloadUrl))
+                    }
                     className="h-8 shrink-0 border-amber-500/30 bg-amber-500/10 px-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300"
                   >
-                    {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                    {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
+                    || (appPlatform === 'capacitor' && updateApplying)
                       ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
                       : <ArrowUpCircle className="h-3.5 w-3.5" />}
                     <span className="hidden sm:inline">
-                      {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                      {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
+                      || (appPlatform === 'capacitor' && updateApplying)
                         ? 'Updating...'
                         : `v${updateInfo.latestVersion}`}
                     </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                  {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
+                  || (appPlatform === 'capacitor' && updateApplying)
                     ? 'Updating and refreshing...'
                     : `Update available — v${updateInfo.latestVersion}`}
                 </TooltipContent>

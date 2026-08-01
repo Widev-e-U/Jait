@@ -37,20 +37,31 @@ final class AgentOverlayWindow {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
     }
 
-    static synchronized void show(Context appContext, JSONObject request) {
+    static boolean show(Context appContext, JSONObject request) {
         String requestId = request.optString("id", "");
-        if (requestId.isEmpty()) return;
+        return show(appContext, request, (result, cancelled) ->
+            AgentQuestionApi.submit(appContext, requestId, result, cancelled)
+        );
+    }
+
+    static synchronized boolean show(
+        Context appContext,
+        JSONObject request,
+        AgentPromptView.Listener listener
+    ) {
+        String requestId = request.optString("id", "");
+        if (requestId.isEmpty()) return false;
         dismiss(appContext);
 
         View card;
         try {
             card = new AgentPromptView(appContext, (result, cancelled) -> {
-                AgentQuestionApi.submit(appContext, requestId, result, cancelled);
+                listener.onResult(result, cancelled);
                 WearBridge.relayDismiss(appContext, requestId);
                 dismiss(appContext);
             }).build(request);
         } catch (JSONException error) {
-            return;
+            return false;
         }
 
         float density = appContext.getResources().getDisplayMetrics().density;
@@ -102,7 +113,7 @@ final class AgentOverlayWindow {
         try {
             wm.addView(scrim, params);
         } catch (Exception error) {
-            return;
+            return false;
         }
         windowManager = wm;
         currentView = scrim;
@@ -124,6 +135,7 @@ final class AgentOverlayWindow {
             new IntentFilter(AgentPromptActivity.ACTION_DISMISS),
             ContextCompat.RECEIVER_NOT_EXPORTED
         );
+        return true;
     }
 
     private static synchronized void dismiss(Context context) {

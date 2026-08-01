@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { BackgroundSecretPrompt } from './input-prompts'
+import { BackgroundSecretPrompt, shouldPresentNativeUserQuestion } from './input-prompts'
 import type { SecretInputRequest } from '@/lib/secret-input'
 
 function backgroundRequest(overrides: Partial<SecretInputRequest> = {}): SecretInputRequest {
@@ -48,5 +48,36 @@ describe('BackgroundSecretPrompt', () => {
     )
 
     expect(markup).toContain('elevated.run')
+  })
+})
+
+describe('shouldPresentNativeUserQuestion', () => {
+  it('opens the native Android prompt while the Capacitor app is foregrounded', () => {
+    expect(shouldPresentNativeUserQuestion({
+      appIsBackgrounded: false,
+      attention: 'normal',
+      hasCapacitorOverlay: true,
+    })).toBe(true)
+  })
+
+  it('keeps foreground web and desktop prompts inline', () => {
+    expect(shouldPresentNativeUserQuestion({
+      appIsBackgrounded: false,
+      attention: 'normal',
+      hasCapacitorOverlay: false,
+    })).toBe(false)
+  })
+
+  it('only opens a background native prompt for urgent requests', () => {
+    expect(shouldPresentNativeUserQuestion({
+      appIsBackgrounded: true,
+      attention: 'normal',
+      hasCapacitorOverlay: true,
+    })).toBe(false)
+    expect(shouldPresentNativeUserQuestion({
+      appIsBackgrounded: true,
+      attention: 'urgent',
+      hasCapacitorOverlay: false,
+    })).toBe(true)
   })
 })

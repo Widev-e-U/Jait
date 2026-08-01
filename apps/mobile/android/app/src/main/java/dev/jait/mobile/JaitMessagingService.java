@@ -96,8 +96,11 @@ public class JaitMessagingService extends FirebaseMessagingService {
 
         KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         boolean locked = keyguardManager != null && keyguardManager.isKeyguardLocked();
-        if (!locked && AgentOverlayWindow.canShow(this)) {
-            AgentOverlayWindow.show(getApplicationContext(), request);
+        if (
+            !locked &&
+            AgentOverlayWindow.canShow(this) &&
+            AgentOverlayWindow.show(getApplicationContext(), request)
+        ) {
             return;
         }
 

@@ -411,6 +411,19 @@ interface UserQuestionAnswer {
   skipped: boolean
 }
 
+export function shouldPresentNativeUserQuestion({
+  appIsBackgrounded,
+  attention,
+  hasCapacitorOverlay,
+}: {
+  appIsBackgrounded: boolean
+  attention: UserQuestionRequest['attention']
+  hasCapacitorOverlay: boolean
+}) {
+  return (appIsBackgrounded && attention === 'urgent')
+    || (!appIsBackgrounded && hasCapacitorOverlay)
+}
+
 export function useUserQuestionPrompt({
   token,
   sessionId,
@@ -582,7 +595,14 @@ export function useUserQuestionPrompt({
           const request = msg.payload as UserQuestionRequest
           setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
           const appIsBackgrounded = document.visibilityState !== 'visible' || !document.hasFocus()
-          if (appIsBackgrounded && request.attention === 'urgent') {
+          const hasCapacitorOverlay = Boolean((window.Capacitor as {
+            Plugins?: { AgentOverlay?: unknown }
+          } | undefined)?.Plugins?.AgentOverlay)
+          if (shouldPresentNativeUserQuestion({
+            appIsBackgrounded,
+            attention: request.attention,
+            hasCapacitorOverlay,
+          })) {
             void presentNativeQuestion(request)
           } else if (appIsBackgrounded) {
             void triggerSystemNotification({
