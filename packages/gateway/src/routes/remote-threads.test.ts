@@ -377,9 +377,14 @@ describe("remote provider e2e flow", () => {
     expect(startCalls[0]!.params.providerId).toBe("codex");
     expect(startCalls[0]!.params.mcpServers).toEqual([
       expect.objectContaining({
+        name: "jait_core",
+        transport: "http",
+        url: expect.stringMatching(/\/mcp\?sessionId=.*projectRoot=.*toolSet=core/),
+      }),
+      expect.objectContaining({
         name: "jait",
         transport: "http",
-        url: expect.stringMatching(/\/mcp\?sessionId=.*projectRoot=/),
+        url: expect.stringMatching(/\/mcp\?sessionId=.*projectRoot=.*toolSet=deferred/),
       }),
     ]);
 

@@ -340,7 +340,7 @@ export function getJaitMcpToolName(toolName: string, title?: string | null): str
     const normalized = candidate
       .replace(/^functions[._]/, '')
       .replace(/__/g, '.')
-    const match = normalized.match(/^mcp[._]jait[._](.+)$/i)
+    const match = normalized.match(/^mcp[._]jait(?:_core)?[._](.+)$/i)
     if (!match?.[1]) continue
     return match[1].replace(/_/g, '.')
   }

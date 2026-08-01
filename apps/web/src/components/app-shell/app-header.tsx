@@ -163,8 +163,8 @@ export function AppHeader(props: AppHeaderProps) {
             )}
           </div>
 
-          {/* Nav — hidden on mobile, visible on md+ */}
-          <nav className="hidden md:flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          {/* Full nav only appears when it cannot collide with the centered mode selector. */}
+          <nav className="hidden min-[1700px]:flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -491,11 +491,11 @@ export function AppHeader(props: AppHeaderProps) {
               </div>
             ) : (
             <>
-            {/* Desktop: Mobile overflow menu */}
-            <div className="md:hidden shrink-0">
+            {/* Desktop navigation overflow menu */}
+            <div className="min-[1700px]:hidden shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" aria-label="Open navigation menu">
                     <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

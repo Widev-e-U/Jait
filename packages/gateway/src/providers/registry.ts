@@ -14,6 +14,10 @@ import type {
   ProviderInfo,
   McpServerRef,
 } from "./contracts.js";
+import {
+  JAIT_CORE_MCP_SERVER_NAME,
+  JAIT_DEFERRED_MCP_SERVER_NAME,
+} from "./jait-mcp.js";
 
 export class ProviderRegistry {
   private providers = new Map<ProviderId, CliProviderAdapter>();
@@ -100,10 +104,27 @@ export class ProviderRegistry {
     }
 
     return {
-      name: "jait",
+      name: JAIT_DEFERRED_MCP_SERVER_NAME,
       transport: "http",
       url: url.toString(),
     };
+  }
+
+  buildJaitMcpServerRefs(
+    config: { host: string; port: number },
+    baseUrl?: string,
+    context?: { sessionId?: string; projectRoot?: string },
+  ): McpServerRef[] {
+    const baseRef = this.buildJaitMcpServerRef(config, baseUrl, context);
+    const coreUrl = new URL(baseRef.url!);
+    const deferredUrl = new URL(baseRef.url!);
+    coreUrl.searchParams.set("toolSet", "core");
+    deferredUrl.searchParams.set("toolSet", "deferred");
+
+    return [
+      { ...baseRef, name: JAIT_CORE_MCP_SERVER_NAME, url: coreUrl.toString() },
+      { ...baseRef, name: JAIT_DEFERRED_MCP_SERVER_NAME, url: deferredUrl.toString() },
+    ];
   }
 }
 

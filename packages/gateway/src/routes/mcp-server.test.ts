@@ -22,6 +22,64 @@ afterEach(async () => {
 });
 
 describe("mcp-server", () => {
+  it("keeps essential tools in a dedicated core MCP catalog", async () => {
+    const registry = new ToolRegistry();
+    for (const [name, tier] of [
+      ["todo", "core"],
+      ["user.ask", "core"],
+      ["tools.search", "core"],
+      ["terminal.run", "standard"],
+    ] as const) {
+      registry.register({
+        name,
+        description: name,
+        tier,
+        category: tier === "core" ? "meta" : "terminal",
+        source: "builtin",
+        parameters: { type: "object", properties: {} },
+        async execute() {
+          return { ok: true, message: "ok" };
+        },
+      });
+    }
+
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: { host: "127.0.0.1", port: 3000 } as any,
+    });
+
+    const listTools = async (toolSet: string) => {
+      const response = await app.inject({
+        method: "POST",
+        url: `/mcp?toolSet=${toolSet}`,
+        payload: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+      });
+      return response.json().result.tools.map((tool: { name: string }) => tool.name);
+    };
+
+    expect(await listTools("core")).toEqual(["todo", "user_ask", "tools_search"]);
+    expect(await listTools("deferred")).toEqual(["terminal_run"]);
+
+    const crossCatalogCall = await app.inject({
+      method: "POST",
+      url: "/mcp?toolSet=core&sessionId=session-1",
+      payload: {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "terminal_run", arguments: {} },
+      },
+    });
+    expect(crossCatalogCall.json()).toMatchObject({
+      result: {
+        isError: true,
+        content: [{ text: "Unknown tool: terminal.run" }],
+      },
+    });
+  });
+
   it("exposes only non-core builtin tools and allowlisted core tools over MCP", async () => {
     const registry = new ToolRegistry();
     registry.register({

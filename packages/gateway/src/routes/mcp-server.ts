@@ -13,7 +13,7 @@ import type { SessionService } from "../services/sessions.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { UserService } from "../services/users.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
-import type { ToolRegistry } from "../tools/registry.js";
+import { MCP_EXPOSED_CORE_TOOL_NAMES, type ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "../tools/contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { ThreadService } from "../services/threads.js";
@@ -62,6 +62,13 @@ const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
   "2025-11-25",
 ]);
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-03-26";
+export type McpToolSet = "all" | "core" | "deferred";
+
+function resolveMcpToolSet(query: unknown): McpToolSet {
+  if (!query || typeof query !== "object" || Array.isArray(query)) return "all";
+  const value = (query as Record<string, unknown>)["toolSet"];
+  return value === "core" || value === "deferred" ? value : "all";
+}
 
 function normalizeMcpProtocolVersion(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -269,16 +276,28 @@ export function resolveMcpBaseUrl(
 function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>): string {
   const sessionId = readOptionalString(query?.["sessionId"]);
   const projectRoot = readOptionalString(query?.["projectRoot"]);
-  if (!sessionId && !projectRoot) return baseUrl;
+  const toolSet = resolveMcpToolSet(query);
+  if (!sessionId && !projectRoot && toolSet === "all") return baseUrl;
 
   const url = new URL(baseUrl);
   if (sessionId) url.searchParams.set("sessionId", sessionId);
   if (projectRoot) url.searchParams.set("projectRoot", projectRoot);
+  if (toolSet !== "all") url.searchParams.set("toolSet", toolSet);
   return url.toString();
 }
 
-export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
-  return toolRegistry.listForMcp();
+export function listToolsForMcp(
+  toolRegistry: ToolRegistry,
+  toolSet: McpToolSet = "all",
+): ToolDefinition[] {
+  const tools = toolRegistry.listForMcp();
+  if (toolSet === "core") {
+    return tools.filter((tool) => MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name));
+  }
+  if (toolSet === "deferred") {
+    return tools.filter((tool) => !MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name));
+  }
+  return tools;
 }
 
 // ── Route registration ───────────────────────────────────────────────
@@ -365,6 +384,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
     const negotiatedVersion = requestedVersion ?? DEFAULT_MCP_PROTOCOL_VERSION;
     applyMcpProtocolVersionHeader(reply, negotiatedVersion);
     const context = await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params);
+    const toolSet = resolveMcpToolSet(request.query);
     const progressToken = resolveMcpProgressToken(body);
     const acceptsEventStream = String(request.headers.accept ?? "").includes("text/event-stream");
 
@@ -389,6 +409,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
           const notification = createMcpProgressNotification(progressToken, progress, chunk);
           reply.raw.write(`event: message\ndata: ${JSON.stringify(notification)}\n\n`);
         },
+        toolSet,
       );
       reply.raw.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
       reply.raw.end();
@@ -401,6 +422,8 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       negotiatedVersion,
       context,
       onToolExecuted,
+      undefined,
+      toolSet,
     );
     if (body.id == null) {
       return reply.status(202).send();
@@ -501,6 +524,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
             client.write(`event: message\ndata: ${JSON.stringify(notification)}\n\n`);
           }
         : undefined,
+      resolveMcpToolSet(request.query),
     );
 
     // Also push the response via SSE to the connected client
@@ -526,6 +550,7 @@ export async function handleMcpRequest(
   contextOverrides: McpToolContextOverrides = {},
   onToolExecuted?: McpToolExecutedCallback,
   onProgress?: McpToolProgressCallback,
+  toolSet: McpToolSet = "all",
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
@@ -550,7 +575,7 @@ export async function handleMcpRequest(
         jsonrpc: "2.0",
         id: request.id ?? null,
         result: {
-          tools: listToolsForMcp(toolRegistry).map((tool) => {
+          tools: listToolsForMcp(toolRegistry, toolSet).map((tool) => {
               const hasProperties = Object.keys(tool.parameters.properties ?? {}).length > 0;
               const isReadOnly = tool.risk === "low" || tool.category === "gateway" || tool.name === "gateway.status";
               return {
@@ -579,6 +604,12 @@ export async function handleMcpRequest(
       let tool = toolRegistry.get(toolName);
       // Fallback: try the raw name as-is (in case a tool actually uses underscores)
       if (!tool && toolName !== rawToolName) tool = toolRegistry.get(rawToolName);
+      if (tool) {
+        const isCoreTool = MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name);
+        if ((toolSet === "core" && !isCoreTool) || (toolSet === "deferred" && isCoreTool)) {
+          tool = undefined;
+        }
+      }
       if (!tool) {
         return {
           jsonrpc: "2.0",

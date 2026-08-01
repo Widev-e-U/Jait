@@ -496,7 +496,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
 
     const mcpServers = deps.mcpConfig
-      ? [deps.providerRegistry.buildJaitMcpServerRef(deps.mcpConfig)]
+      ? deps.providerRegistry.buildJaitMcpServerRefs(deps.mcpConfig)
       : undefined;
 
     try {

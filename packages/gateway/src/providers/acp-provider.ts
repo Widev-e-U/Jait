@@ -41,6 +41,7 @@ import {
   unsupportedLogin,
   unsupportedLogout,
 } from "./provider-auth.js";
+import { mergeJaitCodexConfig } from "./jait-mcp.js";
 
 type AcpProviderAuthKind = "acp";
 
@@ -161,13 +162,21 @@ export class AcpProvider implements CliProviderAdapter {
   private activeLoginAuthProbeInFlight: Promise<ProviderAuthStatus> | null = null;
 
   constructor(config: AcpProviderConfig) {
+    const providerType = config.providerType ?? config.id;
+    const env = providerType === "codex"
+      ? {
+          ...config.env,
+          CODEX_CONFIG: mergeJaitCodexConfig(config.env?.["CODEX_CONFIG"] ?? process.env.CODEX_CONFIG),
+        }
+      : config.env;
     this.id = config.id;
-    this.providerType = config.providerType ?? config.id;
+    this.providerType = providerType;
     this.ownerUserId = config.ownerUserId;
     this.executionNodeId = config.executionNodeId;
     this.authKind = config.auth === false ? null : "acp";
     this.config = {
       ...config,
+      env,
       args: config.args ?? [],
       modes: config.modes ?? ["full-access", "supervised"],
       auth: config.auth ?? false,
@@ -1226,6 +1235,9 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       description: "OpenAI Codex via Agent Client Protocol",
       command: "npx",
       args: ["-y", "@agentclientprotocol/codex-acp"],
+      env: {
+        CODEX_CONFIG: mergeJaitCodexConfig(process.env.CODEX_CONFIG),
+      },
     },
     {
       id: "claude-code",

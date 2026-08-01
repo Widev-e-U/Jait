@@ -52,5 +52,13 @@ describe("extractTodoResultItems", () => {
     })).toEqual([
       { id: 1, title: "Patch bug", status: "completed" },
     ]);
+
+    expect(extractTodoResultItems("mcp__jait_core__todo", null, {
+      todoList: [
+        { id: 1, title: "Verify bug", status: "in-progress" },
+      ],
+    })).toEqual([
+      { id: 1, title: "Verify bug", status: "in-progress" },
+    ]);
   });
 });

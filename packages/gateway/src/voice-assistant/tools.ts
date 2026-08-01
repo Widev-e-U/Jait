@@ -464,13 +464,11 @@ const askAgentAboutRequest: VoiceTool = {
         workingDirectory,
         mode: providerResolution.runtimeMode,
         model: providerResolution.model,
-        mcpServers: [
-          deps.providerRegistry.buildJaitMcpServerRef(
-            { host: deps.config.host, port: deps.config.port },
-            undefined,
-            { sessionId: thread.id, projectRoot: workingDirectory },
-          ),
-        ],
+        mcpServers: deps.providerRegistry.buildJaitMcpServerRefs(
+          { host: deps.config.host, port: deps.config.port },
+          undefined,
+          { sessionId: thread.id, projectRoot: workingDirectory },
+        ),
       });
       sessionId = session.id;
       deps.threadService.markRunning(thread.id, session.id);

@@ -42,6 +42,8 @@ const require = createRequire(import.meta.url);
 // ── Configuration ─────────────────────────────────────────────────────
 const GATEWAY_URL = process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000";
 const DEV_SERVER_URL = process.env["JAIT_WEB_DEV_URL"] ?? "http://localhost:3000";
+const JAIT_CORE_MCP_SERVER_NAME = "jait_core";
+const JAIT_CORE_CODE_MODE_NAMESPACE = "mcp__jait_core";
 const IS_DEV = !app.isPackaged;
 
 // ── "Open with Jait" — extract folder path from CLI args ──────────────
@@ -1207,11 +1209,19 @@ interface DesktopMcpServerRef {
 
 function getDesktopJaitMcpServers(servers?: DesktopMcpServerRef[]): DesktopMcpServerRef[] {
   if (servers?.length) return servers;
-  return [{
-    name: "jait",
-    transport: "http",
-    url: new URL("/mcp", `${GATEWAY_URL.replace(/\/+$/, "")}/`).toString(),
-  }];
+  const baseUrl = new URL("/mcp", `${GATEWAY_URL.replace(/\/+$/, "")}/`);
+  const coreUrl = new URL(baseUrl);
+  const deferredUrl = new URL(baseUrl);
+  coreUrl.searchParams.set("toolSet", "core");
+  deferredUrl.searchParams.set("toolSet", "deferred");
+  return [
+    {
+      name: JAIT_CORE_MCP_SERVER_NAME,
+      transport: "http",
+      url: coreUrl.toString(),
+    },
+    { name: "jait", transport: "http", url: deferredUrl.toString() },
+  ];
 }
 
 function buildDesktopCodexMcpArgs(servers?: DesktopMcpServerRef[]): string[] {
@@ -1231,6 +1241,9 @@ function buildDesktopCodexMcpArgs(servers?: DesktopMcpServerRef[]): string[] {
         args.push("-c", `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
+  }
+  if (servers.some((server) => server.name === JAIT_CORE_MCP_SERVER_NAME)) {
+    args.push("-c", `features.code_mode.direct_only_tool_namespaces=["${JAIT_CORE_CODE_MODE_NAMESPACE}"]`);
   }
   return args;
 }

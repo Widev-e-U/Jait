@@ -82,6 +82,7 @@ describe('Jait MCP display metadata', () => {
   it('maps external-provider Jait MCP names back to native tools', () => {
     expect(getJaitMcpToolName('mcp.jait.jait_terminal')).toBe('jait.terminal')
     expect(getJaitMcpToolName('functions.mcp__jait__file_read')).toBe('file.read')
+    expect(getJaitMcpToolName('functions.mcp__jait_core__tools_search')).toBe('tools.search')
   })
 
   it('summarizes Jait MCP terminal calls as terminal activity', () => {

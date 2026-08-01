@@ -483,6 +483,13 @@ describe("AcpProvider Claude Code progressive tool updates", () => {
 });
 
 describe("AcpProvider auth", () => {
+  it("keeps the Jait core MCP namespace directly callable in Codex code mode", () => {
+    const codex = loadAcpProviderConfigs().find((config) => config.id === "codex");
+    const config = JSON.parse(codex?.env?.CODEX_CONFIG ?? "{}");
+
+    expect(config.features?.code_mode?.direct_only_tool_namespaces).toContain("mcp__jait_core");
+  });
+
   it("exposes ACP-managed login for default ACP providers", () => {
     const providers = loadAcpProviderConfigs().map((config) => new AcpProvider(config));
 
