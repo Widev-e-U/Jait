@@ -38,6 +38,32 @@ import type {
 import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
 
 const JAIT_SANDBOXED_COMMAND_TOOLS = new Set(["execute", "terminal.run", "jait.terminal"]);
+const MAX_ACTIVATED_TOOL_NAMES = 20;
+
+function rememberActivatedToolNames(activeNames: Set<string>, toolNames: Iterable<string>): void {
+  for (const toolName of toolNames) {
+    activeNames.delete(toolName);
+    activeNames.add(toolName);
+  }
+  while (activeNames.size > MAX_ACTIVATED_TOOL_NAMES) {
+    const oldestName = activeNames.values().next().value;
+    if (typeof oldestName !== "string") break;
+    activeNames.delete(oldestName);
+  }
+}
+
+function discoveredToolNames(result: { executedToolCalls: Array<{ tool: string; ok: boolean; data?: unknown }> }): string[] {
+  const names: string[] = [];
+  for (const call of result.executedToolCalls) {
+    if (call.tool !== "tools.search" || !call.ok || !call.data || typeof call.data !== "object") continue;
+    const matches = (call.data as { matches?: Array<{ name?: unknown }> }).matches;
+    if (!Array.isArray(matches)) continue;
+    for (const match of matches) {
+      if (typeof match.name === "string") names.push(match.name);
+    }
+  }
+  return names;
+}
 
 function shouldUseJaitThreadSandbox(toolName: string): boolean {
   return JAIT_SANDBOXED_COMMAND_TOOLS.has(toolName);
@@ -82,6 +108,7 @@ interface JaitSessionState {
   currentTurnAbort?: AbortController;
   currentTurn?: Promise<void>;
   contextRounds?: LlmContextFlowRound[];
+  activatedToolNames: Set<string>;
   sandboxContainerName?: string;
   sandboxStart?: Promise<string>;
 }
@@ -168,6 +195,7 @@ export class JaitProvider implements CliProviderAdapter {
       model: options.model,
       userId,
       history: [{ role: "system", content: prompt }],
+      activatedToolNames: new Set(),
     });
     this.emit({ type: "session.started", sessionId: session.id });
     return session;
@@ -203,8 +231,14 @@ export class JaitProvider implements CliProviderAdapter {
         const disabledTools = userSettings?.disabledTools?.length
           ? new Set(userSettings.disabledTools)
           : undefined;
+        if (this.deps.toolRegistry) {
+          const selected = this.deps.toolRegistry.selectForLLM(message, disabledTools);
+          rememberActivatedToolNames(state.activatedToolNames, selected.map((tool) => tool.name));
+        }
         const toolSchemas = this.deps.toolRegistry
-          ? buildTieredToolSchemas(this.deps.toolRegistry, disabledTools)
+          ? buildTieredToolSchemas(this.deps.toolRegistry, disabledTools, {
+              activatedToolNames: state.activatedToolNames,
+            })
           : [];
         const llm = this.buildLlmConfig(state.userId, state.model);
         const result = await runAgentLoop(
@@ -241,6 +275,8 @@ export class JaitProvider implements CliProviderAdapter {
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
         );
+
+        rememberActivatedToolNames(state.activatedToolNames, discoveredToolNames(result));
 
         // ── Post-turn history compaction ───────────────────────────────
         // After runAgentLoop mutates the shared history, compact it so the next turn

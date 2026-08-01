@@ -4,6 +4,7 @@ import type { ChatMessage } from '@/hooks/useChat'
 import {
   CHAT_HISTORY_CACHE_MESSAGE_LIMIT,
   CHAT_HISTORY_CACHE_RETENTION_MS,
+  INITIAL_CHAT_HISTORY_MESSAGE_LIMIT,
   STARTUP_CHAT_CACHE_MESSAGE_LIMIT,
   getChatCacheScope,
   isChatCacheFresh,
@@ -177,6 +178,25 @@ describe('startup chat cache', () => {
     expect(selectImmediateChatHistory(completedCache, '2026-07-23T10:01:00.000Z')).toBeNull()
     expect(selectImmediateChatHistory(streamingCache, '2026-07-23T10:01:00.000Z')).toBeNull()
     expect(selectImmediateChatHistory(completedCache, completedCache.sessionLastActiveAt)).toBe(completedCache)
+  })
+
+  it('restores only the initial window from an oversized legacy cache', () => {
+    const messages = Array.from(
+      { length: INITIAL_CHAT_HISTORY_MESSAGE_LIMIT + 3 },
+      (_, index) => message(String(index)),
+    )
+
+    const selected = selectImmediateChatHistory({
+      messages,
+      hasMore: false,
+      totalMessages: messages.length,
+      updatedAt: Date.UTC(2026, 6, 23, 10, 0, 0),
+    })
+
+    expect(selected?.messages).toHaveLength(INITIAL_CHAT_HISTORY_MESSAGE_LIMIT)
+    expect(selected?.messages[0]?.id).toBe('3')
+    expect(selected?.hasMore).toBe(true)
+    expect(selected?.totalMessages).toBe(messages.length)
   })
 })
 

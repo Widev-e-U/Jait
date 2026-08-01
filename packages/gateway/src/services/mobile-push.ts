@@ -16,6 +16,12 @@ export interface PushRegistration {
   token: string;
 }
 
+export function shouldDeliverQuestionPush(
+  request: Pick<UserQuestionRequest, "userId" | "attention">,
+): request is Pick<UserQuestionRequest, "userId" | "attention"> & { userId: string } {
+  return Boolean(request.userId);
+}
+
 export class MobilePushService {
   private accessToken: { value: string; expiresAt: number } | null = null;
 
@@ -73,8 +79,8 @@ export class MobilePushService {
     return targets.length;
   }
 
-  async sendUrgentQuestion(request: UserQuestionRequest): Promise<void> {
-    if (!this.serviceAccount || !request.userId || request.attention !== "urgent") return;
+  async sendQuestion(request: UserQuestionRequest): Promise<void> {
+    if (!this.serviceAccount || !shouldDeliverQuestionPush(request)) return;
     const targets = this.list(request.userId);
     await Promise.all(targets.map((entry) => this.send(entry, request)));
   }

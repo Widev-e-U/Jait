@@ -3,6 +3,7 @@ import {
   Boxes,
   Calendar,
   CalendarDays,
+  GitPullRequest,
   Mail,
   MessageSquare,
   Brain,
@@ -22,6 +23,7 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { view: 'chat', label: 'Chat', icon: MessageSquare },
+  { view: 'pulls', label: 'PRs', icon: GitPullRequest },
   { view: 'todo', label: 'Todo', icon: Boxes },
   { view: 'email', label: 'Email', icon: Mail },
   { view: 'calendar', label: 'Calendar', icon: CalendarDays },

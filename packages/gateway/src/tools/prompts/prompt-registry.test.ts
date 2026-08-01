@@ -46,6 +46,8 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("<jaitExternalProvider>");
     expect(prompt).not.toContain("You are operating inside Jait, a tool-centric coding project.");
     expect(prompt).toContain("Use Markdown in responses. Wrap filenames and symbols in backticks.");
+    expect(prompt).toContain("The todo and user.ask tools are always available");
+    expect(prompt).toContain("call tools.search once with a broad description");
     expect(prompt).toContain("Project: /tmp/project");
   });
 
@@ -167,7 +169,8 @@ describe("buildSystemPrompt", () => {
     // Shared sections — including the tools.search discovery mechanism so the
     // model can find the search tool and other Jait tools.
     expect(prompt).toContain("<toolUseInstructions>");
-    expect(prompt).toContain("Additional tools (browser, preview, memory, prior session search, cron, SSH, screen sharing, network scanning, and more) can be discovered at any time by calling tools.search with a keyword");
+    expect(prompt).toContain("The todo and user.ask tools are core tools and are always available");
+    expect(prompt).toContain("MUST call tools.search with one broad natural-language description");
     expect(prompt).toContain("<searchInstructions>");
     expect(prompt).toContain("<editingInstructions>");
     expect(prompt).toContain("<taskTracking>");
@@ -196,6 +199,6 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("<jaitExternalProvider>");
     expect(prompt).toContain("<toolCallFormat>");
     expect(prompt).toContain("keep going until the user's query is completely resolved");
-    expect(prompt).toContain("calling tools.search with a keyword");
+    expect(prompt).toContain("MUST call tools.search with one broad natural-language description");
   });
 });

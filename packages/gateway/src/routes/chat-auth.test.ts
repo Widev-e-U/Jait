@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
+import { openDatabase, migrateDatabase } from "../db/index.js";
+import { messages } from "../db/schema.js";
+import { SessionService } from "../services/sessions.js";
+import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
 
 const testConfig = {
@@ -71,6 +75,69 @@ describe("chat route auth guards", () => {
 
     expect(dataLines[0]).toMatchObject({ type: "snapshot", streaming: false, messages: [] });
     expect(dataLines[1]).toMatchObject({ type: "done", session_id: "new-session" });
+
+    await app.close();
+  });
+
+  it("loads five recent messages by default and keeps older history pageable", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("chat-history-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Progressive History" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const createdAt = (index: number) => new Date(Date.UTC(2026, 7, 1, 0, 0, index)).toISOString();
+
+    db.insert(messages).values(Array.from({ length: 8 }, (_, index) => ({
+      id: `message-${index}`,
+      sessionId: session.id,
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: `content-${index}`,
+      contextFlow: index === 7 ? JSON.stringify({ rounds: [], unused: "large-context-payload" }) : null,
+      createdAt: createdAt(index),
+    }))).run();
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+    const headers = { authorization: `Bearer ${token}` };
+
+    const initialResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers,
+    });
+    expect(initialResponse.statusCode).toBe(200);
+    expect(initialResponse.body).not.toContain("large-context-payload");
+    expect(initialResponse.json()).toMatchObject({
+      limit: 5,
+      total: 8,
+      hasMore: true,
+      messages: [
+        { content: "content-3" },
+        { content: "content-4" },
+        { content: "content-5" },
+        { content: "content-6" },
+        { content: "content-7", hasContextFlow: true },
+      ],
+    });
+
+    const olderResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages?limit=3&before=3`,
+      headers,
+    });
+    expect(olderResponse.statusCode).toBe(200);
+    expect(olderResponse.json()).toMatchObject({
+      limit: 3,
+      total: 8,
+      hasMore: false,
+      messages: [
+        { content: "content-0" },
+        { content: "content-1" },
+        { content: "content-2" },
+      ],
+    });
 
     await app.close();
   });

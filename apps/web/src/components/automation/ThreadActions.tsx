@@ -45,6 +45,21 @@ interface ThreadActionsProps {
   changeDeletions?: number | null
 }
 
+function canOpenPullRequestInJait(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.toLowerCase().includes('github') && /\/pull\/\d+/.test(parsed.pathname)
+  } catch {
+    return false
+  }
+}
+
+function openPullRequestInJait(url: string): void {
+  const target = `/pulls?url=${encodeURIComponent(url)}`
+  window.history.pushState(null, '', target)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 function DiffCountLabel({ insertions, deletions }: { insertions: number; deletions: number }) {
   return (
     <span className="inline-flex items-center gap-1 font-medium tabular-nums">
@@ -206,7 +221,11 @@ export function ThreadActions({
   const handlePushAndPR = useCallback(async () => {
     // If PR already exists, just open it
     if (existingPrLink) {
-      window.open(existingPrLink.url, '_blank')
+      if (existingPrLink.kind === 'created' && canOpenPullRequestInJait(existingPrLink.url)) {
+        openPullRequestInJait(existingPrLink.url)
+      } else {
+        window.open(existingPrLink.url, '_blank')
+      }
       return
     }
     if (threadStatus !== 'completed') {

@@ -19,7 +19,7 @@ describe("user.ask tool", () => {
     const tool = createUserAskTool(service);
 
     expect(tool.tier).toBe("core");
-    expect(tool.description).toContain("over other apps");
+    expect(tool.description).toContain("every connected Jait client");
   });
 
   it("asks structured questions and returns answers keyed by question id", async () => {

@@ -42,7 +42,7 @@ function normalizeQuestions(input: UserAskInput): UserQuestion[] {
 export function createUserAskTool(userQuestions: UserQuestionService): ToolDefinition<UserAskInput> {
   return {
     name: ToolName.UserAsk,
-    description: "Ask the user one or more structured questions and wait for their answers. Set attention to urgent for alarms, wake-up prompts, or other time-sensitive requests that should appear over other apps with sound.",
+    description: "Ask the user one or more structured questions and wait for their answers. Questions are surfaced on every connected Jait client; attention only controls notification emphasis.",
     parameters: {
       type: "object",
       properties: {
@@ -51,7 +51,7 @@ export function createUserAskTool(userQuestions: UserQuestionService): ToolDefin
         attention: {
           type: "string",
           enum: ["normal", "urgent"],
-          description: "Use urgent for time-sensitive prompts that should open a native overlay with sound.",
+          description: "Use urgent only for time-sensitive notification emphasis; it does not control where the question is displayed.",
         },
         questions: {
           type: "array",

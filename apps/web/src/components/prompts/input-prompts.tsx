@@ -411,17 +411,19 @@ interface UserQuestionAnswer {
   skipped: boolean
 }
 
+function hasNativeUserQuestionPresenter() {
+  const capacitorOverlay = (window.Capacitor as {
+    Plugins?: { AgentOverlay?: { present?: unknown } }
+  } | undefined)?.Plugins?.AgentOverlay
+  return Boolean(window.jaitDesktop?.presentAgentQuestion || capacitorOverlay?.present)
+}
+
 export function shouldPresentNativeUserQuestion({
-  appIsBackgrounded,
-  attention,
-  hasCapacitorOverlay,
+  hasNativePresenter,
 }: {
-  appIsBackgrounded: boolean
-  attention: UserQuestionRequest['attention']
-  hasCapacitorOverlay: boolean
+  hasNativePresenter: boolean
 }) {
-  return (appIsBackgrounded && attention === 'urgent')
-    || (!appIsBackgrounded && hasCapacitorOverlay)
+  return hasNativePresenter
 }
 
 export function useUserQuestionPrompt({
@@ -494,6 +496,7 @@ export function useUserQuestionPrompt({
   }, [authHeaders])
 
   const presentNativeQuestion = useCallback(async (request: UserQuestionRequest) => {
+    if (nativeQuestionStatesRef.current.has(request.id)) return
     nativeQuestionStatesRef.current.set(request.id, 'presenting')
     const nativeRequest = {
       id: request.id,
@@ -595,16 +598,7 @@ export function useUserQuestionPrompt({
           const request = msg.payload as UserQuestionRequest
           setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
           const appIsBackgrounded = document.visibilityState !== 'visible' || !document.hasFocus()
-          const hasCapacitorOverlay = Boolean((window.Capacitor as {
-            Plugins?: { AgentOverlay?: unknown }
-          } | undefined)?.Plugins?.AgentOverlay)
-          if (shouldPresentNativeUserQuestion({
-            appIsBackgrounded,
-            attention: request.attention,
-            hasCapacitorOverlay,
-          })) {
-            void presentNativeQuestion(request)
-          } else if (appIsBackgrounded) {
+          if (appIsBackgrounded && !hasNativeUserQuestionPresenter()) {
             void triggerSystemNotification({
               id: `user-question:${request.id}`,
               title: request.title,
@@ -630,7 +624,16 @@ export function useUserQuestionPrompt({
       }
     }
     return () => ws.close()
-  }, [dismissNativeQuestion, presentNativeQuestion, refresh, sessionId, token])
+  }, [dismissNativeQuestion, refresh, sessionId, token])
+
+  useEffect(() => {
+    if (!activeRequest) return
+    if (shouldPresentNativeUserQuestion({
+      hasNativePresenter: hasNativeUserQuestionPresenter(),
+    })) {
+      void presentNativeQuestion(activeRequest)
+    }
+  }, [activeRequest, presentNativeQuestion])
 
   useEffect(() => {
     if (!activeRequest) {

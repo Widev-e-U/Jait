@@ -277,18 +277,8 @@ function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>)
   return url.toString();
 }
 
-/** Core tools that should still be exposed to MCP clients (e.g. thread agents). */
-const MCP_EXPOSED_CORE_TOOLS = new Set(["todo", "jait.todos", "user.ask"]);
-
 export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
-  return toolRegistry.list().filter((tool) => {
-    const source = tool.source ?? "builtin";
-    const tier = tool.tier ?? "standard";
-    // Expose builtin non-core tools AND plugin-contributed tools
-    if (source.startsWith("plugin:")) return true;
-    if (MCP_EXPOSED_CORE_TOOLS.has(tool.name)) return true;
-    return source === "builtin" && tier !== "core";
-  });
+  return toolRegistry.listForMcp();
 }
 
 // ── Route registration ───────────────────────────────────────────────
@@ -551,6 +541,7 @@ export async function handleMcpRequest(
             name: "jait-gateway",
             version: "1.0.0",
           },
+          instructions: "Prefer Jait tools whenever they directly match the user request. The todo and user_ask tools are always available for multi-step tracking and real user decisions. Use tools_search with one broad natural-language query to find additional relevant Jait tools before claiming a capability is unavailable.",
         },
       };
 

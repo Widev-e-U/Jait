@@ -4027,6 +4027,7 @@ function App() {
             cliModel={cliModel}
             currentView={currentView}
             isMobile={isMobile}
+            repositories={automation.repositories}
             jaitBackend={settings.jait_backend ?? 'openai'}
             sttProvider={settings.stt_provider}
             token={token}

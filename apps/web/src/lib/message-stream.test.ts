@@ -127,6 +127,33 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('preserves a steering marker across a resume-stream hydrate', () => {
+    // Regression: hydrate() runs on every resume-stream reconnect (e.g. the
+    // routine handoff right after a direct POST stream finishes), and the
+    // server never echoes steering markers back in its snapshot. Without
+    // re-anchoring, that hydrate silently wiped a marker recorded moments
+    // earlier — the steered message would flash briefly, then disappear as
+    // soon as the next snapshot arrived.
+    const stream = createMessageStream()
+    stream.pushText('before the steer')
+    stream.pushSteering('do X instead', 'do X instead')
+    stream.pushText('after the steer')
+
+    stream.hydrate({
+      content: 'before the steerafter the steer and more',
+      segments: [
+        { type: 'text', content: 'before the steer' },
+        { type: 'text', content: 'after the steer and more' },
+      ],
+    })
+
+    expect(stream.snapshot().segments).toEqual([
+      { type: 'text', content: 'before the steer' },
+      { type: 'steering', content: 'do X instead', displayContent: 'do X instead' },
+      { type: 'text', content: 'after the steer and more' },
+    ])
+  })
+
   it('resets all state', () => {
     const stream = createMessageStream()
     stream.pushText('hello')

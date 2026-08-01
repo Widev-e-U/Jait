@@ -118,6 +118,11 @@ export function wrapMcpTool(
     tier: "external",
     category: "external",
     source: "mcp",
+    sourceMetadata: { kind: "mcp", serverId, serverName: serverId },
+    discovery: {
+      aliases: [descriptor.name, serverId],
+      capabilities: [descriptor.description],
+    },
     async execute(input: unknown, _context: ToolContext): Promise<ToolResult> {
       return callMcpTool(serverId, descriptor.name, input);
     },

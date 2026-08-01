@@ -95,7 +95,7 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
       ? body["message"].trim()
       : "This is a test push from Jait.";
     const now = new Date();
-    await deps.mobilePush.sendUrgentQuestion({
+    await deps.mobilePush.sendQuestion({
       id: uuidv7(),
       sessionId: "test",
       userId: authUser.id,

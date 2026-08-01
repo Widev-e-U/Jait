@@ -1036,7 +1036,7 @@ type SequencedStreamEvent = StreamEvent & { seq: number };
 type StreamSubscriber = (event: SequencedStreamEvent) => void;
 const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 
-const DEFAULT_UI_MESSAGE_LIMIT = 150;
+const DEFAULT_UI_MESSAGE_LIMIT = 5;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
@@ -1200,7 +1200,12 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
   };
 }
 
-function rowToUIMsg(sessionId: string, row: typeof messagesTable.$inferSelect, visibleIndex: number): UIMsg {
+type PersistedUIMessageRow = Pick<
+  typeof messagesTable.$inferSelect,
+  "role" | "content" | "toolCalls" | "segments" | "thinking"
+> & { contextFlowHead: string | null };
+
+function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex: number): UIMsg {
   const msg: UIMsg = {
     id: `${sessionId}-${visibleIndex}`,
     role: row.role as "user" | "assistant",
@@ -1215,12 +1220,12 @@ function rowToUIMsg(sessionId: string, row: typeof messagesTable.$inferSelect, v
   if (row.thinking) {
     msg.thinking = row.thinking;
   }
-  if (row.contextFlow) {
+  if (row.contextFlowHead) {
     // Lightweight badges instead of parsing the (potentially multi-MB)
     // context_flow JSON. The frontend lazy-loads the full payload on demand
     // via GET /api/sessions/:sessionId/messages/:index/context-flow.
     msg.hasContextFlow = true;
-    msg.hasMemoryProvenance = hasMemoryProvenanceInContextFlow(row.contextFlow);
+    msg.hasMemoryProvenance = hasMemoryProvenanceInContextFlow(row.contextFlowHead);
   }
   return msg;
 }
@@ -1255,7 +1260,14 @@ function persistedMessageWindow(
   const start = Math.max(end - limit, 0);
   const rows = start < end
     ? db
-      .select()
+      .select({
+        role: messagesTable.role,
+        content: messagesTable.content,
+        toolCalls: messagesTable.toolCalls,
+        segments: messagesTable.segments,
+        thinking: messagesTable.thinking,
+        contextFlowHead: sql<string | null>`substr(${messagesTable.contextFlow}, 1, 2048)`,
+      })
       .from(messagesTable)
       .where(eq(messagesTable.sessionId, sessionId))
       .orderBy(messagesTable.createdAt, messagesTable.id)
@@ -2794,7 +2806,10 @@ export function registerChatRoutes(
           : undefined;
         const isOllama = llmRuntime.backend === "ollama";
         const toolSchemas = toolRegistry
-          ? buildTieredToolSchemas(toolRegistry, disabledTools, { ollamaEssentials: isOllama })
+          ? buildTieredToolSchemas(toolRegistry, disabledTools, {
+              ollamaEssentials: isOllama,
+              query: content,
+            })
           : [];
 
         const onEvent = (event: AgentLoopEvent) => {

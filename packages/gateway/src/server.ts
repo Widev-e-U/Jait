@@ -37,6 +37,7 @@ import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
 import { registerThreadRoutes } from "./routes/threads.js";
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
+import { registerPullRequestRoutes } from "./routes/pull-requests.js";
 import { registerPlanRoutes } from "./routes/plans.js";
 import { registerRepoProposalRoutes } from "./routes/repo-proposals.js";
 import { registerReminderRoutes } from "./routes/reminders.js";
@@ -345,6 +346,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       projectService: deps.projectService,
       gitService: deps.gitService,
     });
+    registerPullRequestRoutes(app, config, { repoService: deps.repoService });
   }
 
   // Automation plan routes

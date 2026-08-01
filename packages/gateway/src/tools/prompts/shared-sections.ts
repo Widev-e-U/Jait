@@ -31,6 +31,8 @@ By default, implement changes rather than only suggesting them. If the user's in
 You can call tools repeatedly to take actions or gather as much context as needed until you have completed the task fully. Don't give up unless you are sure the request cannot be fulfilled with the tools you have. It's YOUR RESPONSIBILITY to make sure that you have done all you can to collect necessary context.
 Continue working until the user's request is completely resolved before ending your turn and yielding back to the user. Only terminate your turn when you are certain the task is complete. Do not stop or hand back to the user when you encounter uncertainty — research or deduce the most reasonable approach and continue.`;
 
+export const TOOL_DISCOVERY_INSTRUCTIONS = `The todo and user.ask tools are always available. Use todo for multi-step tracking and user.ask for real user decisions. Additional tools may be deferred. Before claiming a capability is unavailable, you MUST call tools.search once with a broad natural-language description. Search results become callable in later rounds.`;
+
 export const TOOL_USE_INSTRUCTIONS = `If the user is requesting a code sample, you can answer it directly without using any tools.
 When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.
 No need to ask permission before using a tool.
@@ -41,7 +43,8 @@ Don't call the execute tool multiple times in parallel. Instead, run one command
 When creating files, be intentional and avoid unnecessary file creation. Only create files that are essential to completing the user's request.
 NEVER try to edit a file by running terminal commands unless the user specifically asks for it.
 
-You have a core set of tools available in every request. Additional tools (browser, preview, memory, prior session search, cron, SSH, screen sharing, network scanning, and more) can be discovered at any time by calling tools.search with a keyword. For example, call tools.search with "browser" to get browser interaction tools, "memory" for memory tools, or "session" to search prior conversations. Use tools.list to see the full catalogue of available tools grouped by category.`;
+The todo and user.ask tools are core tools and are always available. Use todo to keep multi-step work organized and use user.ask when a real user decision is required.
+Additional tools (browser, preview, memory, prior session search, cron, SSH, screen sharing, network scanning, and more) may be deferred. When the request implies a capability that is not visible, you MUST call tools.search with one broad natural-language description before claiming the capability is unavailable. Search results are activated for later rounds. Do not repeat equivalent searches; use tools.list only when you need to inspect the whole catalogue.`;
 
 export const USER_QUESTION_INSTRUCTIONS = `You have access to the user.ask tool for asking the user structured questions and waiting for the answer. Use it instead of ending your turn with a plain-text question when the next step depends on the user's choice or missing information.
 

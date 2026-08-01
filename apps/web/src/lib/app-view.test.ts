@@ -16,6 +16,10 @@ describe('parseAppView', () => {
     expect(parseAppView('emails')).toBe('email')
   })
 
+  it('maps the descriptive pull request route to "pulls"', () => {
+    expect(parseAppView('pull-requests')).toBe('pulls')
+  })
+
   it('returns null for unknown segments', () => {
     expect(parseAppView('')).toBeNull()
     expect(parseAppView('bogus')).toBeNull()

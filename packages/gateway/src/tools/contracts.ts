@@ -91,6 +91,17 @@ export type ToolConsentLevel = "none" | "once" | "always" | "dangerous";
 
 export type ToolSource = "builtin" | "mcp" | `plugin:${string}`;
 
+export interface ToolDiscoveryMetadata {
+  /** Alternative user-facing terms that should retrieve this tool. */
+  aliases?: string[];
+  /** Short capability phrases, such as "inspect a live web app". */
+  capabilities?: string[];
+  /** Example user requests that should make this tool relevant. */
+  examples?: string[];
+  /** Additive ranking boost for especially important deferred tools. */
+  priority?: number;
+}
+
 export interface BuiltinToolSourceMetadata {
   kind: "builtin";
 }
@@ -126,6 +137,8 @@ export interface ToolDefinition<TInput = unknown> {
   source?: ToolSource;
   /** Structured source metadata for plugin/MCP/builtin provenance */
   sourceMetadata?: ToolSourceMetadata;
+  /** Metadata used by tool discovery without increasing every LLM schema. */
+  discovery?: ToolDiscoveryMetadata;
   /** Baseline risk level for policy defaults and consent UI */
   risk?: ToolRisk;
   /** Suggested consent level when no explicit policy exists yet */

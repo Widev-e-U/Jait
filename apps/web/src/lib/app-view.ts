@@ -1,6 +1,6 @@
-export type AppView = 'chat' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings'
+export type AppView = 'chat' | 'pulls' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings'
 
-export const APP_VIEWS: readonly AppView[] = ['chat', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings']
+export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings']
 
 /**
  * Normalize a raw path/host segment into an {@link AppView}.
@@ -9,7 +9,8 @@ export const APP_VIEWS: readonly AppView[] = ['chat', 'todo', 'email', 'calendar
 export function parseAppView(raw: string): AppView | null {
   const normalized = raw === 'reminders' ? 'memory'
     : raw === 'emails' ? 'email'
-      : raw
+      : raw === 'pull-requests' ? 'pulls'
+        : raw
   return (APP_VIEWS as readonly string[]).includes(normalized) ? (normalized as AppView) : null
 }
 

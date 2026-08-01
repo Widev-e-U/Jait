@@ -28,6 +28,7 @@ import org.json.JSONObject;
 final class AgentOverlayWindow {
     private static WindowManager windowManager;
     private static View currentView;
+    private static String currentRequestId;
     private static BroadcastReceiver dismissReceiver;
 
     private AgentOverlayWindow() {
@@ -51,15 +52,17 @@ final class AgentOverlayWindow {
     ) {
         String requestId = request.optString("id", "");
         if (requestId.isEmpty()) return false;
+        if (requestId.equals(currentRequestId) && currentView != null) return true;
         dismiss(appContext);
 
+        AgentPromptView promptView = new AgentPromptView(appContext, (result, cancelled) -> {
+            listener.onResult(result, cancelled);
+            WearBridge.relayDismiss(appContext, requestId);
+            dismiss(appContext);
+        });
         View card;
         try {
-            card = new AgentPromptView(appContext, (result, cancelled) -> {
-                listener.onResult(result, cancelled);
-                WearBridge.relayDismiss(appContext, requestId);
-                dismiss(appContext);
-            }).build(request);
+            card = promptView.build(request);
         } catch (JSONException error) {
             return false;
         }
@@ -81,16 +84,10 @@ final class AgentOverlayWindow {
             new FrameLayout.LayoutParams(cardWidth, FrameLayout.LayoutParams.WRAP_CONTENT);
         cardParams.gravity = Gravity.CENTER;
         scrim.addView(card, cardParams);
-        scrim.setOnClickListener(view -> {
-            AgentQuestionApi.submit(appContext, requestId, null, true);
-            WearBridge.relayDismiss(appContext, requestId);
-            dismiss(appContext);
-        });
+        scrim.setOnClickListener(view -> promptView.cancel());
         scrim.setOnKeyListener((view, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                AgentQuestionApi.submit(appContext, requestId, null, true);
-                WearBridge.relayDismiss(appContext, requestId);
-                dismiss(appContext);
+                promptView.cancel();
                 return true;
             }
             return false;
@@ -117,6 +114,7 @@ final class AgentOverlayWindow {
         }
         windowManager = wm;
         currentView = scrim;
+        currentRequestId = requestId;
 
         ((NotificationManager) appContext.getSystemService(Context.NOTIFICATION_SERVICE))
             .cancel(AgentPromptActivity.notificationId(requestId));
@@ -154,5 +152,6 @@ final class AgentOverlayWindow {
         }
         windowManager = null;
         currentView = null;
+        currentRequestId = null;
     }
 }

@@ -256,6 +256,7 @@ describe("mcp-server", () => {
           name: "jait-gateway",
           version: "1.0.0",
         },
+        instructions: expect.stringContaining("Use tools_search"),
       },
     });
   });

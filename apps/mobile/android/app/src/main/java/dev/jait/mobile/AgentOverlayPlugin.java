@@ -72,7 +72,6 @@ public class AgentOverlayPlugin extends Plugin {
         WearBridge.relayQuestion(getContext(), request);
         if (
             AgentQuestionPresentation.shouldUseSystemOverlay(
-                request.optString("attention", "normal"),
                 AgentOverlayWindow.canShow(getContext())
             ) && AgentOverlayWindow.show(
                 getContext(),

@@ -118,6 +118,31 @@ export interface MessageStreamWriter {
 }
 
 /**
+ * Re-insert any steering-marker segments from `previous` into `incoming` at
+ * the same position relative to non-steering content, so a hydrate from a
+ * fresh (marker-less) snapshot doesn't wipe markers recorded since the last
+ * hydrate. Anchor position is the count of non-steering segments that
+ * preceded the marker; inserting from the last marker backwards keeps
+ * earlier anchors valid and preserves relative order among markers that
+ * share the same anchor.
+ */
+function reanchorSteeringSegments(previous: MessageSegment[], incoming: MessageSegment[]): MessageSegment[] {
+  const markers: Array<{ anchor: number; segment: Extract<MessageSegment, { type: 'steering' }> }> = []
+  let nonSteeringCount = 0
+  for (const seg of previous) {
+    if (seg.type === 'steering') markers.push({ anchor: nonSteeringCount, segment: seg })
+    else nonSteeringCount++
+  }
+  if (markers.length === 0) return incoming
+  const merged = [...incoming]
+  for (let i = markers.length - 1; i >= 0; i--) {
+    const { anchor, segment } = markers[i]!
+    merged.splice(Math.min(anchor, merged.length), 0, segment)
+  }
+  return merged
+}
+
+/**
  * Create a writer that accumulates every component of an assistant answer.
  */
 export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): MessageStreamWriter {
@@ -343,7 +368,15 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
         toolCalls = [...snapshot.toolCalls]
       }
       if (snapshot.segments !== undefined) {
-        segments = normalizeMessageSegments(snapshot.segments)
+        const incoming = normalizeMessageSegments(snapshot.segments)
+        // Steering markers are inserted client-side only (the server never
+        // echoes them back in a resume-stream snapshot), so a hydrate from a
+        // fresh snapshot — which happens on every resume-stream reconnect,
+        // including the routine handoff right after a direct POST stream
+        // finishes — would otherwise silently drop any marker recorded since
+        // the last hydrate. Re-anchor each one at the same content-relative
+        // position it held before, rather than losing it.
+        segments = reanchorSteeringSegments(segments, incoming)
         seenToolCallIds.clear()
         for (const id of seedSeenToolCallIds(segments)) seenToolCallIds.add(id)
       }

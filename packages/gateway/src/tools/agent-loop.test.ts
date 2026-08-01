@@ -206,6 +206,8 @@ describe("buildTieredToolSchemas", () => {
     });
     register("read", "core");
     register("edit", "core");
+    register("todo", "core");
+    register("user.ask", "core");
     register("tools.list", "core");
     register("tools.search", "core");
     register("file.read", "standard");
@@ -215,9 +217,45 @@ describe("buildTieredToolSchemas", () => {
 
     expect(names).toContain("read");
     expect(names).toContain("edit");
+    expect(names).toContain("todo");
+    expect(names).toContain("user.ask");
     expect(names).toContain("tools.list");
     expect(names).toContain("tools.search");
     expect(names).not.toContain("file.read");
+  });
+
+  it("preloads request-relevant deferred tools and preserves activated tools", () => {
+    const registry = new ToolRegistry();
+    const register = (name: string, description: string, tier: "core" | "standard") => registry.register({
+      name,
+      description,
+      tier,
+      category: tier === "core" ? "meta" : "browser",
+      source: "builtin",
+      parameters: { type: "object", properties: {}, required: [] },
+      execute: async () => ({ ok: true, message: "completed" }),
+    });
+    register("todo", "Track multi-step work", "core");
+    register("user.ask", "Ask the user for a real decision", "core");
+    register("tools.search", "Search deferred tools", "core");
+    register("preview.open", "Open a live preview of the web application", "standard");
+    register("browser.click", "Click an element in an existing browser session", "standard");
+
+    const firstTurnNames = buildTieredToolSchemas(registry, undefined, { query: "show me the app", selectionLimit: 1 })
+      .map((schema) => fromOpenAIName(schema.function.name));
+    expect(firstTurnNames).toEqual(["todo", "user.ask", "tools.search", "preview.open"]);
+
+    const nextTurnNames = buildTieredToolSchemas(registry, undefined, {
+      activatedToolNames: new Set(["preview.open"]),
+      query: "continue with the work",
+      selectionLimit: 1,
+    }).map((schema) => fromOpenAIName(schema.function.name));
+    expect(nextTurnNames).toContain("preview.open");
+
+    const disabledNames = buildTieredToolSchemas(registry, new Set(["preview.open"]), {
+      activatedToolNames: new Set(["preview.open"]),
+    }).map((schema) => fromOpenAIName(schema.function.name));
+    expect(disabledNames).not.toContain("preview.open");
   });
 });
 

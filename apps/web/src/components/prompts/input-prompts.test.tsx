@@ -52,32 +52,15 @@ describe('BackgroundSecretPrompt', () => {
 })
 
 describe('shouldPresentNativeUserQuestion', () => {
-  it('opens the native Android prompt while the Capacitor app is foregrounded', () => {
+  it('always opens questions on a connected native presenter', () => {
     expect(shouldPresentNativeUserQuestion({
-      appIsBackgrounded: false,
-      attention: 'normal',
-      hasCapacitorOverlay: true,
+      hasNativePresenter: true,
     })).toBe(true)
   })
 
-  it('keeps foreground web and desktop prompts inline', () => {
+  it('keeps the inline prompt when no native presenter exists', () => {
     expect(shouldPresentNativeUserQuestion({
-      appIsBackgrounded: false,
-      attention: 'normal',
-      hasCapacitorOverlay: false,
+      hasNativePresenter: false,
     })).toBe(false)
-  })
-
-  it('only opens a background native prompt for urgent requests', () => {
-    expect(shouldPresentNativeUserQuestion({
-      appIsBackgrounded: true,
-      attention: 'normal',
-      hasCapacitorOverlay: true,
-    })).toBe(false)
-    expect(shouldPresentNativeUserQuestion({
-      appIsBackgrounded: true,
-      attention: 'urgent',
-      hasCapacitorOverlay: false,
-    })).toBe(true)
   })
 })

@@ -15,6 +15,7 @@ import type {
   ToolRisk,
   ToolSource,
   ToolSourceMetadata,
+  ToolDiscoveryMetadata,
 } from "./contracts.js";
 import { buildPluginToolSourceMetadata, toPluginToolDefinition } from "../plugins/contracts.js";
 import type { PluginDescriptor, PluginToolDeclaration } from "../plugins/contracts.js";
@@ -33,6 +34,86 @@ export interface ToolInfo {
   risk: ToolRisk;
   defaultConsentLevel: ToolConsentLevel;
   parameterCount: number;
+  discovery?: ToolDiscoveryMetadata;
+}
+
+export interface RankedToolMatch {
+  tool: ToolDefinition;
+  score: number;
+  matchedTerms: string[];
+}
+
+export interface ToolSearchOptions {
+  candidates?: ToolDefinition[];
+  disabledTools?: Set<string>;
+  limit?: number;
+}
+
+export const MCP_EXPOSED_CORE_TOOL_NAMES = new Set([
+  "todo",
+  "jait.todos",
+  "user.ask",
+  "tools.list",
+  "tools.search",
+]);
+
+const SEARCH_STOP_WORDS = new Set([
+  "a", "an", "and", "can", "could", "do", "for", "from", "i", "in", "me", "my",
+  "of", "on", "please", "the", "to", "use", "want", "with", "you",
+]);
+
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  app: ["application", "web", "preview"],
+  ask: ["question", "clarify", "choice", "decision"],
+  conversation: ["chat", "session", "history", "message"],
+  deploy: ["release", "publish", "redeploy"],
+  machine: ["host", "server", "remote", "ssh"],
+  open: ["show", "view", "preview", "display"],
+  previous: ["prior", "history", "session", "chat"],
+  remember: ["memory", "preference", "recall"],
+  show: ["open", "view", "preview", "display"],
+  site: ["web", "browser", "preview", "application"],
+};
+
+function normalizeSearchText(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[._:/-]+/g, " ")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function tokenizeSearchText(value: string): string[] {
+  return normalizeSearchText(value)
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && !SEARCH_STOP_WORDS.has(token));
+}
+
+function diceCoefficient(left: string, right: string): number {
+  if (left === right) return 1;
+  if (left.length < 3 || right.length < 3) return 0;
+  const leftPairs = new Map<string, number>();
+  for (let index = 0; index < left.length - 1; index++) {
+    const pair = left.slice(index, index + 2);
+    leftPairs.set(pair, (leftPairs.get(pair) ?? 0) + 1);
+  }
+  let overlap = 0;
+  for (let index = 0; index < right.length - 1; index++) {
+    const pair = right.slice(index, index + 2);
+    const remaining = leftPairs.get(pair) ?? 0;
+    if (remaining > 0) {
+      overlap++;
+      leftPairs.set(pair, remaining - 1);
+    }
+  }
+  return (2 * overlap) / (left.length + right.length - 2);
+}
+
+function bestFuzzyScore(term: string, tokens: Set<string>): number {
+  let best = 0;
+  for (const token of tokens) best = Math.max(best, diceCoefficient(term, token));
+  return best;
 }
 
 function inferSourceMetadata(tool: Pick<ToolDefinition, "source" | "sourceMetadata">): ToolSourceMetadata {
@@ -194,13 +275,91 @@ export class ToolRegistry {
     return this.list().filter((t) => (t.category ?? "external") === category);
   }
 
-  /** Search tools by name, description, or category (fuzzy keyword match) */
-  search(query: string): ToolDefinition[] {
-    const lower = query.toLowerCase();
-    const keywords = lower.split(/\s+/).filter(Boolean);
-    return this.list().filter((t) => {
-      const haystack = `${t.name} ${t.description} ${t.category ?? ""} ${t.tier ?? ""}`.toLowerCase();
-      return keywords.every((kw) => haystack.includes(kw));
+  /** Rank tools using weighted lexical, synonym, and fuzzy matching. */
+  rankSearch(query: string, options: ToolSearchOptions = {}): RankedToolMatch[] {
+    const originalTerms = [...new Set(tokenizeSearchText(query))];
+    if (originalTerms.length === 0) return [];
+
+    const candidates = options.candidates ?? this.list();
+    const matches: RankedToolMatch[] = [];
+    for (const tool of candidates) {
+      if (options.disabledTools?.has(tool.name)) continue;
+
+      const nameTokens = new Set(tokenizeSearchText(tool.name));
+      const metadataText = [
+        tool.displayName,
+        tool.category,
+        tool.tier,
+        tool.sourceMetadata?.kind === "mcp" ? tool.sourceMetadata.serverName : undefined,
+        ...(tool.discovery?.aliases ?? []),
+        ...(tool.discovery?.capabilities ?? []),
+      ].filter((value): value is string => Boolean(value)).join(" ");
+      const metadataTokens = new Set(tokenizeSearchText(metadataText));
+      const descriptionText = [tool.description, ...(tool.discovery?.examples ?? [])].join(" ");
+      const descriptionTokens = new Set(tokenizeSearchText(descriptionText));
+      const normalizedCorpus = normalizeSearchText(`${tool.name} ${metadataText} ${descriptionText}`);
+      const matchedTerms: string[] = [];
+      let score = tool.discovery?.priority ?? 0;
+
+      for (const originalTerm of originalTerms) {
+        const expandedTerms = [originalTerm, ...(SEARCH_SYNONYMS[originalTerm] ?? [])];
+        let termScore = 0;
+        for (let index = 0; index < expandedTerms.length; index++) {
+          const term = expandedTerms[index]!;
+          const weight = index === 0 ? 1 : 0.55;
+          if (nameTokens.has(term)) termScore = Math.max(termScore, 24 * weight);
+          else if (metadataTokens.has(term)) termScore = Math.max(termScore, 14 * weight);
+          else if (descriptionTokens.has(term)) termScore = Math.max(termScore, 7 * weight);
+          else if (normalizedCorpus.includes(term)) termScore = Math.max(termScore, 4 * weight);
+          else {
+            const fuzzy = Math.max(
+              bestFuzzyScore(term, nameTokens),
+              bestFuzzyScore(term, metadataTokens),
+              bestFuzzyScore(term, descriptionTokens),
+            );
+            if (fuzzy >= 0.72) termScore = Math.max(termScore, fuzzy * 3 * weight);
+          }
+        }
+        if (termScore > 0) {
+          score += termScore;
+          matchedTerms.push(originalTerm);
+        }
+      }
+
+      if (matchedTerms.length === 0) continue;
+      score += (matchedTerms.length / originalTerms.length) * 12;
+      const normalizedQuery = normalizeSearchText(query);
+      if (normalizedQuery.length > 2 && normalizedCorpus.includes(normalizedQuery)) score += 30;
+      matches.push({ tool, score, matchedTerms });
+    }
+
+    matches.sort((left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name));
+    return options.limit ? matches.slice(0, options.limit) : matches;
+  }
+
+  /** Search tools in ranked relevance order. */
+  search(query: string, options: ToolSearchOptions = {}): ToolDefinition[] {
+    return this.rankSearch(query, options).map((match) => match.tool);
+  }
+
+  /** Select deferred tools that are relevant to the current user request. */
+  selectForLLM(query: string, disabledTools?: Set<string>, limit = 10): ToolDefinition[] {
+    return this.search(query, {
+      disabledTools,
+      limit,
+      candidates: this.list().filter((tool) => (tool.tier ?? "standard") !== "core"),
+    });
+  }
+
+  /** Tools intentionally exposed to external MCP clients. */
+  listForMcp(disabledTools?: Set<string>): ToolDefinition[] {
+    return this.list().filter((tool) => {
+      if (disabledTools?.has(tool.name)) return false;
+      const source = tool.source ?? "builtin";
+      const tier = tool.tier ?? "standard";
+      if (source.startsWith("plugin:")) return true;
+      if (MCP_EXPOSED_CORE_TOOL_NAMES.has(tool.name)) return true;
+      return source === "builtin" && tier !== "core";
     });
   }
 
@@ -216,6 +375,7 @@ export class ToolRegistry {
       risk: t.risk ?? "medium",
       defaultConsentLevel: t.defaultConsentLevel ?? "once",
       parameterCount: Object.keys(t.parameters.properties ?? {}).length,
+      discovery: t.discovery,
     }));
   }
 

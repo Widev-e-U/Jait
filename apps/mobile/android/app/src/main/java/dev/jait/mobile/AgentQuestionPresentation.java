@@ -4,7 +4,7 @@ final class AgentQuestionPresentation {
     private AgentQuestionPresentation() {
     }
 
-    static boolean shouldUseSystemOverlay(String attention, boolean overlayAvailable) {
-        return "urgent".equals(attention) && overlayAvailable;
+    static boolean shouldUseSystemOverlay(boolean overlayAvailable) {
+        return overlayAvailable;
     }
 }

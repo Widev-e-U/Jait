@@ -6,10 +6,12 @@ import { MemoryPage } from '@/components/reminders'
 import { NetworkPanel } from '@/components/network'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { TodoPage } from '@/components/todo'
+import { PullRequestsPage } from '@/components/pull-requests'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { JaitBackend, SttProvider } from '@/hooks/useAuth'
 import type { AppView } from '@/lib/app-view'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import type { AutomationRepository } from '@/lib/automation-repositories'
 
 interface AppPageOutletProps {
   activeSessionId: string | null
@@ -21,6 +23,7 @@ interface AppPageOutletProps {
   cliModel: string | null
   currentView: AppView
   isMobile: boolean
+  repositories: AutomationRepository[]
   jaitBackend: JaitBackend
   sttProvider: SttProvider
   token: string | null
@@ -58,6 +61,7 @@ export function AppPageOutlet({
   cliModel,
   currentView,
   isMobile,
+  repositories,
   jaitBackend,
   sttProvider,
   token,
@@ -80,6 +84,16 @@ export function AppPageOutlet({
   voiceRecording,
   voiceTranscribing,
 }: AppPageOutletProps) {
+  if (currentView === 'pulls') {
+    return (
+      <PageFrame isMobile={isMobile}>
+        <ErrorBoundary name="Pull Requests" variant="section" className="h-full" resetKeys={[currentView, token, repositories.length]}>
+          <PullRequestsPage repositories={repositories} />
+        </ErrorBoundary>
+      </PageFrame>
+    )
+  }
+
   if (currentView === 'todo') {
     return (
       <PageFrame isMobile={isMobile}>

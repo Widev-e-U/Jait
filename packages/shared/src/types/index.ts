@@ -132,6 +132,23 @@ export type {
 } from "./automation.js";
 
 export type {
+  PullRequestListState,
+  PullRequestState,
+  PullRequestActor,
+  PullRequestLabel,
+  PullRequestCheck,
+  PullRequestSummary,
+  PullRequestComment,
+  PullRequestReview,
+  PullRequestCommit,
+  PullRequestFile,
+  PullRequestDetail,
+  PullRequestDiff,
+  PullRequestReviewEvent,
+  PullRequestMergeMethod,
+} from "./pull-request.js";
+
+export type {
   AssistantProfile,
   CreateAssistantProfileParams,
   UpdateAssistantProfileParams,

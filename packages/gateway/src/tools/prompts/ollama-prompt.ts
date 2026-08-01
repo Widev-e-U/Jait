@@ -23,8 +23,7 @@ CRITICAL — Tool Usage Format:
 - NEVER write tool names, function calls, or JSON arguments as plain text in your response.
 - If you want to call a tool, emit it as a tool_call — do NOT type it out.
 - One tool call at a time. Wait for the result before deciding next steps.
-- If a tool fails, try a different approach instead of repeating the same call.
-${modeBlock ? `${modeBlock}\n` : ""}`.trim();
+- If a tool fails, try a different approach instead of repeating the same call.\n- The todo and user.ask tools are always available; use them for multi-step tracking and real user decisions.\n- Other tools may be deferred. Before saying a capability is unavailable, call tools.search once with a broad description of what you need.\n${modeBlock ? `${modeBlock}\n` : ""}`.trim();
 }
 
 const OllamaPromptResolver: IAgentPrompt = {

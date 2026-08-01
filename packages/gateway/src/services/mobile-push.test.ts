@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
-import { MobilePushService } from "./mobile-push.js";
+import { MobilePushService, shouldDeliverQuestionPush } from "./mobile-push.js";
 
 describe("MobilePushService", () => {
+  it("delivers every question regardless of attention", () => {
+    expect(shouldDeliverQuestionPush({ userId: "user-a", attention: "normal" })).toBe(true);
+    expect(shouldDeliverQuestionPush({ userId: "user-a", attention: "urgent" })).toBe(true);
+    expect(shouldDeliverQuestionPush({ userId: null, attention: "normal" })).toBe(false);
+  });
+
   it("persists registrations across service instances", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

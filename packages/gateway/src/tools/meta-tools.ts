@@ -56,8 +56,11 @@ export function createToolsListTool(registry: ToolRegistry): ToolDefinition<Tool
     tier: "core",
     category: "meta",
     source: "builtin",
-    async execute(input) {
-      let tools = registry.listInfo();
+    async execute(input, context) {
+      const visibleNames = context.requestedBy === "mcp-client"
+        ? new Set(registry.listForMcp().map((tool) => tool.name))
+        : undefined;
+      let tools = registry.listInfo().filter((tool) => !visibleNames || visibleNames.has(tool.name));
 
       if (input.category) {
         tools = tools.filter((t) => t.category === input.category);
@@ -98,19 +101,24 @@ export function createToolsListTool(registry: ToolRegistry): ToolDefinition<Tool
 
 interface ToolsSearchInput {
   query: string;
+  limit?: number;
 }
 
 export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<ToolsSearchInput> {
   return {
     name: "tools.search",
     description:
-      "Search tools by keyword and return their full schemas. Use when you need a tool not in your current set.",
+      "Search deferred tools by describing the capability you need. Returns the most relevant full schemas so they can be called in subsequent rounds. Use one broad natural-language query.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "Search keyword(s) matching tool names, descriptions, categories.",
+          description: "Broad natural-language description of the capability you need.",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum matches to return. Defaults to 8 and is capped at 20.",
         },
       },
       required: ["query"],
@@ -118,10 +126,12 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
     tier: "core",
     category: "meta",
     source: "builtin",
-    async execute(input) {
-      const results = registry.search(input.query);
+    async execute(input, context) {
+      const limit = Math.max(1, Math.min(20, Math.floor(input.limit ?? 8)));
+      const candidates = context.requestedBy === "mcp-client" ? registry.listForMcp() : undefined;
+      const ranked = registry.rankSearch(input.query, { candidates, limit });
 
-      if (results.length === 0) {
+      if (ranked.length === 0) {
         return {
           ok: true,
           message: `No tools found matching "${input.query}". Try broader keywords or use tools.list to see all available tools.`,
@@ -130,18 +140,20 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
       }
 
       // Return full schemas so the LLM can use them
-      const schemas = results.map((t) => ({
-        name: t.name,
-        openai_name: toOpenAIName(t.name),
-        description: t.description,
-        tier: t.tier ?? "standard",
-        category: t.category ?? "external",
-        parameters: t.parameters,
+      const schemas = ranked.map(({ tool, score, matchedTerms }) => ({
+        name: tool.name,
+        openai_name: toOpenAIName(tool.name),
+        description: tool.description,
+        tier: tool.tier ?? "standard",
+        category: tool.category ?? "external",
+        score: Math.round(score * 100) / 100,
+        matched_terms: matchedTerms,
+        parameters: tool.parameters,
       }));
 
       return {
         ok: true,
-        message: `Found ${results.length} tool(s) matching "${input.query}". You can now call these tools directly.`,
+        message: `Found ${ranked.length} tool(s) matching "${input.query}". You can now call these tools directly.`,
         data: { matches: schemas },
       };
     },

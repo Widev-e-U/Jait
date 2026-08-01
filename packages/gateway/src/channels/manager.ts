@@ -491,8 +491,12 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     // when non-empty, narrows further; empty/undefined → full access.
     const restrictTo = ctx.allowedTools.size > 0 ? ctx.allowedTools : undefined;
     const isOllama = (auth?.jaitBackend ?? "") === "ollama";
+    const latestUserQuery = [...history].reverse().find((message) => message.role === "user")?.content ?? "";
     let toolSchemas = toolRegistry
-      ? buildTieredToolSchemas(toolRegistry, disabledTools, { ollamaEssentials: isOllama })
+      ? buildTieredToolSchemas(toolRegistry, disabledTools, {
+          ollamaEssentials: isOllama,
+          query: latestUserQuery,
+        })
       : [];
     if (restrictTo) {
       const allowedOpenAiNames = new Set([...restrictTo].map(toOpenAIName));

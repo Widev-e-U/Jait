@@ -13,6 +13,24 @@ function context() {
   };
 }
 
+function registerDiscoveryTool(
+  registry: ToolRegistry,
+  name: string,
+  description: string,
+  options: { tier?: "core" | "standard" | "external"; source?: "builtin" | "mcp" | `plugin:${string}`; priority?: number } = {},
+): void {
+  registry.register({
+    name,
+    description,
+    tier: options.tier ?? "standard",
+    category: options.source === "mcp" ? "external" : "meta",
+    source: options.source ?? "builtin",
+    discovery: options.priority == null ? undefined : { priority: options.priority },
+    parameters: { type: "object", properties: {} },
+    execute: async () => ({ ok: true, message: "completed" }),
+  });
+}
+
 describe("ToolRegistry audit and validation behavior", () => {
   it("registers project tools and does not expose any workspace.* alias", () => {
     const registry = createToolRegistry(new SurfaceRegistry(), {
@@ -173,5 +191,55 @@ describe("ToolRegistry audit and validation behavior", () => {
     expect((audit.write as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
     expect(writes[0]).toMatchObject({ actionType: "tool.execute", status: "executing", toolName: "boom.tool" });
     expect(writes[1]).toMatchObject({ actionType: "tool.error", status: "failed", toolName: "boom.tool" });
+  });
+});
+
+describe("ToolRegistry discovery ranking", () => {
+  it("retrieves natural-language capability matches without requiring every word", () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "preview.open", "Open a live preview of the web application");
+    registerDiscoveryTool(registry, "browser.click", "Click an interactive browser element");
+    registerDiscoveryTool(registry, "network.scan", "Scan the local network for reachable hosts");
+    registerDiscoveryTool(registry, "ssh.run", "Run a command on a remote server over SSH");
+    registerDiscoveryTool(registry, "memory.search", "Search remembered preferences and durable facts");
+
+    expect(registry.search("show app")[0]?.name).toBe("preview.open");
+    expect(registry.search("control browser").map((tool) => tool.name)).toContain("browser.click");
+    expect(registry.search("scan my network")[0]?.name).toBe("network.scan");
+    expect(registry.search("ssh machine")[0]?.name).toBe("ssh.run");
+    expect(registry.search("what do you remember about my preferences")[0]?.name).toBe("memory.search");
+  });
+
+  it("supports fuzzy matching, priority boosts, limits, and disabled tools", () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "preview.open", "Open the application preview");
+    registerDiscoveryTool(registry, "deploy.basic", "Deploy the current application");
+    registerDiscoveryTool(registry, "deploy.preferred", "Deploy the current application safely", { priority: 50 });
+
+    expect(registry.search("prevew")[0]?.name).toBe("preview.open");
+    expect(registry.search("deploy")[0]?.name).toBe("deploy.preferred");
+    expect(registry.search("deploy", { limit: 1 })).toHaveLength(1);
+    expect(registry.search("deploy", { disabledTools: new Set(["deploy.preferred"]) })[0]?.name).toBe("deploy.basic");
+  });
+
+  it("keeps critical helpers and discovery tools visible to MCP clients", () => {
+    const registry = new ToolRegistry();
+    registerDiscoveryTool(registry, "todo", "Track multi-step work", { tier: "core" });
+    registerDiscoveryTool(registry, "user.ask", "Ask the user for a decision", { tier: "core" });
+    registerDiscoveryTool(registry, "tools.list", "List tools", { tier: "core" });
+    registerDiscoveryTool(registry, "tools.search", "Search tools", { tier: "core" });
+    registerDiscoveryTool(registry, "read", "Read project files", { tier: "core" });
+    registerDiscoveryTool(registry, "preview.open", "Open a preview");
+    registerDiscoveryTool(registry, "plugin.deploy", "Deploy through a plugin", { tier: "external", source: "plugin:deploy" });
+    registerDiscoveryTool(registry, "mcp.github.issue", "Create a GitHub issue", { tier: "external", source: "mcp" });
+
+    expect(registry.listForMcp().map((tool) => tool.name)).toEqual([
+      "todo",
+      "user.ask",
+      "tools.list",
+      "tools.search",
+      "preview.open",
+      "plugin.deploy",
+    ]);
   });
 });

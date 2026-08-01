@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Cast,
   EllipsisVertical,
+  GitPullRequest,
   Menu,
   ListChecks,
   LogOut,
@@ -178,6 +179,21 @@ export function AppHeader(props: AppHeaderProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Chat</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'pulls' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
+                  onClick={() => setCurrentView('pulls')}
+                  aria-label="Pull Requests"
+                >
+                  <GitPullRequest className="h-3.5 w-3.5" />
+                  <span>PRs</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Pull Requests</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -488,6 +504,10 @@ export function AppHeader(props: AppHeaderProps) {
                   <DropdownMenuItem onSelect={() => setCurrentView('chat')}>
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Chat
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('pulls')}>
+                    <GitPullRequest className="h-4 w-4 mr-2" />
+                    Pull Requests
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
                     <Calendar className="h-4 w-4 mr-2" />

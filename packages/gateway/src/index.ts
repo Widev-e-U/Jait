@@ -477,8 +477,8 @@ async function main() {
         payload: request,
       });
       console.log(`User question requested: ${request.title} (${request.id})`);
-      void mobilePush.sendUrgentQuestion(request).catch((error) => {
-        console.warn("[mobile-push] Failed to deliver urgent question", error);
+      void mobilePush.sendQuestion(request).catch((error) => {
+        console.warn("[mobile-push] Failed to deliver question", error);
       });
     },
     onResolved: (request) => {

@@ -1,14 +1,16 @@
 import type { ChatMessage } from '@/hooks/useChat'
 
 export const CHAT_HISTORY_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
-export const CHAT_HISTORY_CACHE_MESSAGE_LIMIT = 500
+export const INITIAL_CHAT_HISTORY_MESSAGE_LIMIT = 5
+export const CHAT_HISTORY_CACHE_MESSAGE_LIMIT = INITIAL_CHAT_HISTORY_MESSAGE_LIMIT
 
 const CHAT_HISTORY_DATABASE_NAME = 'jait-chat-history-cache'
-const CHAT_HISTORY_DATABASE_VERSION = 1
+const CHAT_HISTORY_DATABASE_VERSION = 2
 const CHAT_HISTORY_STORE_NAME = 'chat-history'
 const PROJECT_INDEX_STORAGE_PREFIX = 'jait:project-index:v1:'
-const STARTUP_CHAT_STORAGE_PREFIX = 'jait:startup-chat:v1:'
-export const STARTUP_CHAT_CACHE_MESSAGE_LIMIT = 120
+const STARTUP_CHAT_STORAGE_PREFIX = 'jait:startup-chat:v2:'
+const LEGACY_STARTUP_CHAT_STORAGE_PREFIXES = ['jait:startup-chat:v1:']
+export const STARTUP_CHAT_CACHE_MESSAGE_LIMIT = INITIAL_CHAT_HISTORY_MESSAGE_LIMIT
 const CHAT_HISTORY_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 let lastChatHistoryPruneAt = 0
@@ -20,7 +22,13 @@ function collectStartupChatKeys(storage: PruneableLocalStorage): string[] {
   const keys: string[] = []
   for (let i = 0; i < storage.length; i++) {
     const key = storage.key(i)
-    if (key && key.startsWith(STARTUP_CHAT_STORAGE_PREFIX)) keys.push(key)
+    if (
+      key
+      && (
+        key.startsWith(STARTUP_CHAT_STORAGE_PREFIX)
+        || LEGACY_STARTUP_CHAT_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))
+      )
+    ) keys.push(key)
   }
   return keys
 }
@@ -34,6 +42,10 @@ function collectStartupChatKeys(storage: PruneableLocalStorage): string[] {
 // was hit.
 function pruneExpiredStartupChatEntries(storage: PruneableLocalStorage, now: number): void {
   for (const key of collectStartupChatKeys(storage)) {
+    if (!key.startsWith(STARTUP_CHAT_STORAGE_PREFIX)) {
+      storage.removeItem(key)
+      continue
+    }
     try {
       const cached = JSON.parse(storage.getItem(key) ?? 'null') as CachedChatHistory | null
       if (!cached || !isChatCacheFresh(cached.updatedAt, now)) storage.removeItem(key)
@@ -152,7 +164,12 @@ export function selectImmediateChatHistory(
 ): CachedChatHistory | null {
   if (!cached || cached.streaming === true) return null
   if (sessionLastActiveAt && cached.sessionLastActiveAt !== sessionLastActiveAt) return null
-  return cached
+  if (cached.messages.length <= INITIAL_CHAT_HISTORY_MESSAGE_LIMIT) return cached
+  return {
+    ...cached,
+    messages: cached.messages.slice(-INITIAL_CHAT_HISTORY_MESSAGE_LIMIT),
+    hasMore: true,
+  }
 }
 
 export function prepareChatHistoryForCache(
@@ -337,8 +354,11 @@ async function openChatHistoryDatabase(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return null
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(CHAT_HISTORY_DATABASE_NAME, CHAT_HISTORY_DATABASE_VERSION)
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const database = request.result
+      if (event.oldVersion < CHAT_HISTORY_DATABASE_VERSION && database.objectStoreNames.contains(CHAT_HISTORY_STORE_NAME)) {
+        database.deleteObjectStore(CHAT_HISTORY_STORE_NAME)
+      }
       if (!database.objectStoreNames.contains(CHAT_HISTORY_STORE_NAME)) {
         const store = database.createObjectStore(CHAT_HISTORY_STORE_NAME, { keyPath: 'key' })
         store.createIndex('updatedAt', 'updatedAt')

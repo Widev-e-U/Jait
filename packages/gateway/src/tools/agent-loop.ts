@@ -11,7 +11,7 @@
  * Both the main chat route and the agent.spawn sub-agent tool use this.
  */
 
-import type { ToolResult } from "./contracts.js";
+import type { ToolDefinition, ToolResult } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
@@ -645,15 +645,33 @@ export function buildToolSchemas(
 export function buildTieredToolSchemas(
   registry: ToolRegistry,
   disabledTools?: Set<string>,
-  options?: { ollamaEssentials?: boolean },
+  options?: {
+    ollamaEssentials?: boolean;
+    query?: string;
+    activatedToolNames?: Iterable<string>;
+    selectionLimit?: number;
+  },
 ): OpenAIToolSchema[] {
   let tools = registry.listForLLM(disabledTools);
   if (options?.ollamaEssentials) {
-    // `listForLLM` already returns the compact core set. Do not prune it
-    // further for Ollama: tools.search/tools.list are core discovery tools,
-    // and removing them prevents local models from loading standard/MCP tools.
-    tools = tools.filter((t) => (t.tier ?? "standard") === "core");
+    // Keep the compact core set for local models, then add only the small
+    // request-relevant selection below.
+    tools = tools.filter((tool) => (tool.tier ?? "standard") === "core");
   }
+
+  const includedNames = new Set(tools.map((tool) => tool.name));
+  const includeTool = (tool: ToolDefinition | undefined) => {
+    if (!tool || includedNames.has(tool.name) || disabledTools?.has(tool.name)) return;
+    tools.push(tool);
+    includedNames.add(tool.name);
+  };
+
+  for (const name of options?.activatedToolNames ?? []) includeTool(registry.get(name));
+  if (options?.query?.trim()) {
+    const selectionLimit = options.selectionLimit ?? (options.ollamaEssentials ? 5 : 10);
+    for (const tool of registry.selectForLLM(options.query, disabledTools, selectionLimit)) includeTool(tool);
+  }
+
   return tools.map((t) => ({
     type: "function" as const,
     function: {
