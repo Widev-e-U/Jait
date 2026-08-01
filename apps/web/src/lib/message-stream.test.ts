@@ -154,6 +154,27 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('does not duplicate a steering marker echoed by a persisted snapshot', () => {
+    const stream = createMessageStream()
+    stream.pushText('before')
+    stream.pushSteering('do X instead', 'do X instead')
+
+    stream.hydrate({
+      content: 'beforeafter',
+      segments: [
+        { type: 'text', content: 'before' },
+        { type: 'steering', content: 'do X instead' },
+        { type: 'text', content: 'after' },
+      ],
+    })
+
+    expect(stream.snapshot().segments).toEqual([
+      { type: 'text', content: 'before' },
+      { type: 'steering', content: 'do X instead' },
+      { type: 'text', content: 'after' },
+    ])
+  })
+
   it('resets all state', () => {
     const stream = createMessageStream()
     stream.pushText('hello')

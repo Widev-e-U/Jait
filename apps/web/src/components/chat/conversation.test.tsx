@@ -1,10 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Conversation, INITIAL_CONVERSATION_SCROLL_OFFSET } from './conversation'
+import { Conversation, INITIAL_CONVERSATION_SCROLL_OFFSET, positionConversationAtBottom } from './conversation'
 
 describe('Conversation', () => {
   it('starts at the lowest available scroll position before the chat paints', () => {
     expect(INITIAL_CONVERSATION_SCROLL_OFFSET).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('positions the scroll element at the bottom synchronously', () => {
+    const scrollElement = { scrollHeight: 640, scrollTop: 0 }
+
+    positionConversationAtBottom(scrollElement)
+
+    expect(scrollElement.scrollTop).toBe(640)
+  })
+
+  it('shows a chat skeleton until bottom positioning completes', () => {
+    const markup = renderToStaticMarkup(
+      <Conversation messageContents={['Latest message']}>
+        <div>Latest message</div>
+      </Conversation>,
+    )
+
+    expect(markup).toContain('data-testid="conversation-positioning-skeleton"')
+    expect(markup).toContain('Preparing conversation')
+    expect(markup).toContain('animate-pulse')
+    expect(markup).toContain('visibility:hidden')
   })
 
   it('renders a scroll container that keeps mobile pull-to-refresh out of the chat surface', () => {

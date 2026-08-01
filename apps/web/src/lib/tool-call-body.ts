@@ -517,6 +517,15 @@ export function normalizeToolArgs(
     ) ?? merged.url
   }
 
+  if (normalizedTool === 'tools.search') {
+    merged.query = firstNonEmptyString(
+      merged.query,
+      merged.q,
+      nested?.query,
+      nested?.q,
+    ) ?? merged.query
+  }
+
   return merged
 }
 

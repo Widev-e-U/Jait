@@ -16,6 +16,8 @@ let getEditDiffCounts: typeof import('./tool-call-card')['getEditDiffCounts']
 let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText']
 let getJaitMcpToolName: typeof import('./tool-call-card')['getJaitMcpToolName']
 let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
+let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
+let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -43,6 +45,8 @@ beforeAll(async () => {
     formatMcpHeaderText,
     getJaitMcpToolName,
     getLatestSubAgentActivity,
+    getToolInvocationLabels,
+    shouldRenderToolCall,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -95,6 +99,60 @@ describe('Jait MCP display metadata', () => {
     expect(getCallSummary('jait.terminal', {
       arguments: JSON.stringify({ command: 'bun run test' }),
     })).toBe('bun run test')
+  })
+
+  it('gives tools.search a friendly label and query summary', () => {
+    expect(getToolInvocationLabels('tools.search', { query: 'preview browser' })).toEqual({
+      running: 'Searching tools',
+      done: 'Searched tools',
+    })
+    expect(getCallSummary('tools.search', {
+      recipient_name: 'functions.mcp__jait__tools_search',
+      arguments: JSON.stringify({ query: 'preview browser' }),
+    })).toBe('preview browser')
+  })
+})
+
+describe('synthetic context tool visibility', () => {
+  it('hides empty memory searches and keeps searches that found memories', () => {
+    expect(shouldRenderToolCall({
+      callId: 'memory-empty',
+      tool: 'memory.search',
+      args: { query: 'anything' },
+      status: 'success',
+      result: { ok: true, message: 'No relevant memories found', data: { retrieved: [] } },
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(false)
+
+    expect(shouldRenderToolCall({
+      callId: 'memory-found',
+      tool: 'memory.search',
+      args: { query: 'anything' },
+      status: 'success',
+      result: { ok: true, message: 'Loaded 1 relevant memories', data: { retrieved: [{ id: 'memory-1' }] } },
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(true)
+  })
+
+  it('only shows skill activity when a skill is present', () => {
+    expect(shouldRenderToolCall({
+      callId: 'skill-empty',
+      tool: 'skill',
+      args: {},
+      status: 'success',
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(false)
+    expect(shouldRenderToolCall({
+      callId: 'skill-sag',
+      tool: 'skill',
+      args: { skills: 'sag' },
+      status: 'success',
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(true)
   })
 })
 
@@ -233,6 +291,37 @@ describe('formatOutput', () => {
         },
       ],
     }, 'read_file')).toBe('Updated packages/gateway/src/providers/acp-provider.ts')
+  })
+
+  it('formats tools.search MCP output as a concise tool list', () => {
+    const output = formatOutput({
+      ok: true,
+      message: 'Tool completed',
+      data: {
+        result: {
+          content: [{
+            type: 'text',
+            text: 'Found 2 tool(s) matching the request.\n' + JSON.stringify({
+              matches: [
+                {
+                  name: 'file.read',
+                  description: 'Prefer Jait tools whenever possible.\n\nRead the contents of a project file.',
+                  parameters: { type: 'object' },
+                },
+                {
+                  name: 'preview.open',
+                  description: 'Open the live web preview.',
+                  parameters: { type: 'object' },
+                },
+              ],
+            }),
+          }],
+        },
+      },
+    }, 'tools.search')
+
+    expect(output).toBe('• file.read — Read the contents of a project file.\n• preview.open — Open the live web preview.')
+    expect(output).not.toContain('parameters')
   })
 })
 

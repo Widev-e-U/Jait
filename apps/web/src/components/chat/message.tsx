@@ -32,7 +32,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
 import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
@@ -471,7 +471,7 @@ function MessageInner({
   // these as non-array values. Several render paths call .filter/.map/.some on
   // them, which throws "h.filter is not a function". Coerce to arrays once.
   const segments = Array.isArray(segmentsProp) ? segmentsProp : []
-  const toolCalls = Array.isArray(toolCallsProp) ? toolCallsProp : []
+  const toolCalls = Array.isArray(toolCallsProp) ? toolCallsProp.filter(shouldRenderToolCall) : []
 
   // ── Lazy-loaded contextFlow ──────────────────────────────────────────
   // Snapshots only carry lightweight `hasContextFlow` / `hasMemoryProvenance`
@@ -931,6 +931,7 @@ function MessageInner({
 
   const assistantActions = !isUser ? renderActions() : null
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
+  const hasSteeringSegment = !isUser && segments?.some((segment) => segment.type === 'steering')
   const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(effectiveContextFlow) : []
   const showMemoryBadge = !isUser && (memoryProvenanceEntries.length > 0 || (hasMemoryProvenance && !effectiveContextFlow))
   const memoryProvenance = showMemoryBadge ? (
@@ -989,7 +990,11 @@ function MessageInner({
   return (
     <>
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
-      <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
+      <div className={cn(
+        'min-w-0 space-y-2',
+        hasSteeringSegment ? 'w-full max-w-full' : 'max-w-[85%]',
+        isUser && 'order-1',
+      )}>
         {!isUser && thinking && !hasThinkingSegment && (
           <Reasoning
             content={thinking}
@@ -999,7 +1004,10 @@ function MessageInner({
         )}
 
         {!isUser && segments && segments.length > 0 ? (
-          <div className="relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]">
+          <div className={cn(
+            'relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]',
+            hasSteeringSegment && '[&>*]:max-w-[85%]',
+          )}>
             {(() => {
               return segments.map((seg, i) => {
                 if (seg.type === 'toolGroup') {
@@ -1057,7 +1065,7 @@ function MessageInner({
 
                 if (seg.type === 'steering') {
                   return (
-                    <div key={`sg-${i}`} className="relative w-fit max-w-full">
+                    <div key={`sg-${i}`} className="relative ml-auto flex w-fit max-w-full flex-col items-end">
                       <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
                         <ArrowRight className="h-3 w-3" />
                         Steered into running turn

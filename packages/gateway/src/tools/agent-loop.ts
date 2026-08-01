@@ -48,7 +48,8 @@ export type MessageSegment =
   | { type: "text"; content: string }
   | { type: "thinking"; content: string }
   | { type: "toolGroup"; callIds: string[] }
-  | { type: "error"; content: string };
+  | { type: "error"; content: string }
+  | { type: "steering"; content: string; displayContent?: string };
 
 /** OpenAI function-calling tool schema */
 export interface OpenAIToolSchema {
@@ -1766,6 +1767,7 @@ export async function runAgentLoop(
       const steered = steering.drain();
       for (const msg of steered) {
         history.push({ role: "system", content: `[STEERING] ${msg}` });
+        segments.push({ type: "steering", content: msg });
         onEvent?.({ type: "steering", message: msg });
         log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}`);
       }
@@ -2336,6 +2338,7 @@ export async function runAgentLoop(
       }
       for (const msg of steered) {
         history.push({ role: "system", content: "[STEERING] " + msg });
+        segments.push({ type: "steering", content: msg });
         onEvent?.({ type: "steering", message: msg });
         log.info("Steering injected for session " + sessionId + ": " + msg.slice(0, 100));
       }

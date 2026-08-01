@@ -25,10 +25,54 @@ const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
 const ESTIMATE_TEXT_LIMIT = 12_000
 export const INITIAL_CONVERSATION_SCROLL_OFFSET = Number.MAX_SAFE_INTEGER
+
+export function positionConversationAtBottom(
+  element: Pick<HTMLElement, 'scrollHeight' | 'scrollTop'>,
+): void {
+  element.scrollTop = element.scrollHeight
+}
+
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
   touchAction: 'pan-y',
+}
+
+function ConversationPositioningSkeleton({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-label={label}
+      data-testid="conversation-positioning-skeleton"
+      className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
+    >
+      <span className="sr-only">{label}</span>
+      <div className="mx-auto flex h-full max-w-3xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
+        <div className="flex animate-pulse items-start gap-3">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
+          <div className="w-full max-w-xl space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
+            <div className="h-2.5 w-4/5 rounded-full bg-muted-foreground/15" />
+            <div className="h-2.5 w-3/5 rounded-full bg-muted-foreground/10" />
+            <div className="h-2.5 w-2/5 rounded-full bg-muted-foreground/10" />
+          </div>
+        </div>
+        <div className="flex animate-pulse justify-end [animation-delay:120ms]">
+          <div className="w-3/5 max-w-md space-y-2 rounded-2xl rounded-tr-md bg-primary/10 p-4">
+            <div className="ml-auto h-2.5 w-5/6 rounded-full bg-primary/15" />
+            <div className="ml-auto h-2.5 w-1/2 rounded-full bg-primary/10" />
+          </div>
+        </div>
+        <div className="flex animate-pulse items-start gap-3 [animation-delay:240ms]">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
+          <div className="w-4/5 max-w-lg space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
+            <div className="h-2.5 w-full rounded-full bg-muted-foreground/15" />
+            <div className="h-2.5 w-2/3 rounded-full bg-muted-foreground/10" />
+          </div>
+        </div>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background to-transparent" />
+    </div>
+  )
 }
 
 export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, hasMore, onLoadMore }: ConversationProps) {
@@ -38,6 +82,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const hasContent = childItems.length > 0
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
+  const [initialScrollReady, setInitialScrollReady] = useState(false)
   const prevChildCount = useRef(0)
   const prevLoadingRef = useRef(loading)
   const prevScrollTopRef = useRef(0)
@@ -45,6 +90,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
+  const initialRevealFrameRef = useRef<number | null>(null)
   // Set briefly after a click inside the conversation (e.g. expanding a tool
   // call or reasoning block) so the resize this causes doesn't get treated
   // as new streamed content and yank the view down to the bottom.
@@ -247,9 +293,33 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
       setStickToBottom(true)
       stickToBottomRef.current = true
-      scrollToBottom('auto')
+      const el = scrollRef.current
+      if (!el) return
+
+      positionConversationAtBottom(el)
+      setIsAtBottom(true)
+
+      if (initialRevealFrameRef.current !== null) {
+        cancelAnimationFrame(initialRevealFrameRef.current)
+      }
+      initialRevealFrameRef.current = requestAnimationFrame(() => {
+        initialRevealFrameRef.current = null
+        const currentEl = scrollRef.current
+        if (!currentEl) return
+        positionConversationAtBottom(currentEl)
+        setIsAtBottom(true)
+        setInitialScrollReady(true)
+      })
     }
-  }, [childItems.length, loading, scrollToBottom])
+  }, [childItems.length, loading])
+
+  useEffect(() => {
+    return () => {
+      if (initialRevealFrameRef.current !== null) {
+        cancelAnimationFrame(initialRevealFrameRef.current)
+      }
+    }
+  }, [])
 
   // Lightweight safety net: ResizeObserver handles normal height changes.
   // This slower poll catches browser/layout misses without doing scroll math
@@ -298,7 +368,10 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           ref={scrollRef}
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
-          style={MOBILE_SCROLL_CONTAINMENT_STYLE}
+          style={{
+            ...MOBILE_SCROLL_CONTAINMENT_STYLE,
+            visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
+          }}
         >
           {loading && (
             <div className="sticky top-3 z-10 flex justify-center">
@@ -350,7 +423,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         </div>
       )}
 
-      {!loading && !isAtBottom && (
+      {hasContent && !initialScrollReady && (
+        <ConversationPositioningSkeleton label={loading ? loadingLabel : 'Preparing conversation'} />
+      )}
+
+      {initialScrollReady && !loading && !isAtBottom && (
         <ConversationScrollButton
           className="bottom-5"
           onClick={() => {

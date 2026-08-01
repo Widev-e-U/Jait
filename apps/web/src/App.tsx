@@ -483,6 +483,7 @@ function App() {
     assignProjectRepository,
     switchProject,
     switchSession,
+    archiveSession,
     fetchArchivedSessions,
     removeProject,
     clearArchivedProjects,
@@ -3251,7 +3252,7 @@ function App() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: item.content }),
+        body: JSON.stringify({ message: item.content, displayContent: item.displayContent }),
       })
       if (!response.ok) {
         const err = await response.json().catch(() => ({})) as Record<string, unknown>
@@ -4079,6 +4080,7 @@ function App() {
                   streamingSessionIds={streamingSessionIds}
                   sidebarRef={sidebarRef}
                   onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
+                  onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
                   onBlur={handleSidebarBlur}
                   onChangeDirectory={handleChangeDirectory}
                   onCreateProject={handleCreateProject}
@@ -4403,6 +4405,7 @@ function App() {
                       onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
                       onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
                       onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSelectPersonalSession(sessionId) }}
+                      onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}

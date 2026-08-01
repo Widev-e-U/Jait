@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { SessionSelector } from './session-selector'
+import { getSessionContextMenuPosition, SessionSelector } from './session-selector'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
 function createProject(): ProjectRecord {
@@ -43,5 +43,39 @@ describe('SessionSelector', () => {
     expect(markup).toContain('Chat 5')
     expect(markup).not.toContain('Chat 6')
     expect(markup).toContain('Show older')
+  })
+
+  it('renders personal chats with the compact project-chat sizing', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[]}
+        personalSessions={[{
+          id: 'personal-1',
+          projectId: null,
+          name: 'Personal chat',
+          projectPath: null,
+          status: 'active',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastActiveAt: '2026-07-06T00:00:00.000Z',
+          metadata: null,
+        }]}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('h-3.5 w-3.5')
+    expect(markup).toContain('truncate text-xs font-medium')
+    expect(markup).not.toContain('h-4 w-4 shrink-0')
+    expect(markup).not.toContain('truncate text-sm font-medium')
+  })
+
+  it('keeps the chat context menu inside the viewport', () => {
+    expect(getSessionContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100 })
+    expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 216, top: 352 })
+    expect(getSessionContextMenuPosition(-10, -10, 400, 400)).toEqual({ left: 8, top: 8 })
   })
 })

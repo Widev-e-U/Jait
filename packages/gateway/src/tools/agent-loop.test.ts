@@ -853,6 +853,11 @@ describe("runAgentLoop persistence", () => {
 
     expect(fetchCalls).toBe(2);
     expect(result.content).toBe("Initial answer. Steered follow-up.");
+    expect(result.segments).toEqual([
+      { type: "text", content: "Initial answer." },
+      { type: "steering", content: "Adjust the answer now" },
+      { type: "text", content: " Steered follow-up." },
+    ]);
     expect(events).toContainEqual({ type: "steering", message: "Adjust the answer now" });
   });
 

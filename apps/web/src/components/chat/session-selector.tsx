@@ -31,6 +31,7 @@ interface SessionSelectorProps {
   onSelectProject: (projectId: string) => void
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
+  onArchiveSession?: (sessionId: string) => void
   onNewPersonalSession?: () => void
   onCreateProject: () => void
   onRemoveProject: (projectId: string) => void
@@ -48,6 +49,16 @@ interface SessionSelectorProps {
 }
 
 const RECENT_SESSIONS_LIMIT = 5
+const SESSION_CONTEXT_MENU_WIDTH = 176
+const SESSION_CONTEXT_MENU_HEIGHT = 40
+const SESSION_CONTEXT_MENU_MARGIN = 8
+
+export function getSessionContextMenuPosition(x: number, y: number, viewportWidth: number, viewportHeight: number) {
+  return {
+    left: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(x, viewportWidth - SESSION_CONTEXT_MENU_WIDTH - SESSION_CONTEXT_MENU_MARGIN)),
+    top: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(y, viewportHeight - SESSION_CONTEXT_MENU_HEIGHT - SESSION_CONTEXT_MENU_MARGIN)),
+  }
+}
 
 function isNodeOffline(nodeId: string | null, onlineNodeIds: Set<string>): boolean {
   if (!nodeId || nodeId === 'gateway') return false
@@ -92,6 +103,7 @@ export function SessionSelector({
   onSelectProject,
   onSelectProjectSession,
   onSelectPersonalSession,
+  onArchiveSession,
   onNewPersonalSession,
   onCreateProject,
   onRemoveProject,
@@ -112,6 +124,7 @@ export function SessionSelector({
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
+  const [sessionContextMenu, setSessionContextMenu] = useState<{ sessionId: string; left: number; top: number } | null>(null)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
   const displayedProjects = normalizedSearchQuery && onSearch
     ? searchResults?.projects ?? []
@@ -370,6 +383,13 @@ export function SessionSelector({
                                 onDismiss?.()
                                 if (!isActiveSession) onSelectProjectSession?.(project.id, session.id)
                               }}
+                              onContextMenu={(event) => {
+                                if (!onArchiveSession) return
+                                event.preventDefault()
+                                event.stopPropagation()
+                                const position = getSessionContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
+                                setSessionContextMenu({ sessionId: session.id, ...position })
+                              }}
                             >
                               {isStreaming ? (
                                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
@@ -474,26 +494,65 @@ export function SessionSelector({
                         onDismiss?.()
                         if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id)
                       }}
+                      onContextMenu={(event) => {
+                        if (!onArchiveSession) return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const position = getSessionContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
+                        setSessionContextMenu({ sessionId: session.id, ...position })
+                      }}
                     >
                       {isStreaming ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
                       ) : (
-                        <MessageSquare className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">
+                        <div className="truncate text-xs font-medium">
                           {session.name || 'Personal chat'}
                         </div>
-                        <div className="text-2xs text-muted-foreground">
-                          {formatTime(session.lastActiveAt ?? session.createdAt)}
-                        </div>
                       </div>
+                      <span className="shrink-0 text-2xs text-muted-foreground">
+                        {formatTime(session.lastActiveAt ?? session.createdAt)}
+                      </span>
                     </div>
                   )
                 })}
               </div>
             </ScrollArea>
           </div>
+
+          {sessionContextMenu && onArchiveSession && (
+            <div
+              className="fixed inset-0 z-50"
+              onPointerDown={() => setSessionContextMenu(null)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setSessionContextMenu(null)
+              }}
+            >
+              <div
+                role="menu"
+                aria-label="Chat actions"
+                className="fixed w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                style={{ left: sessionContextMenu.left, top: sessionContextMenu.top }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+                  onClick={() => {
+                    onArchiveSession(sessionContextMenu.sessionId)
+                    setSessionContextMenu(null)
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span>Archive chat</span>
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

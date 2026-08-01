@@ -5,9 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.provider.Settings;
 import android.view.Gravity;
@@ -67,12 +65,9 @@ final class AgentOverlayWindow {
             return false;
         }
 
-        float density = appContext.getResources().getDisplayMetrics().density;
-        GradientDrawable cardBackground = new GradientDrawable();
-        cardBackground.setColor(Color.rgb(8, 16, 29));
-        cardBackground.setCornerRadius(density * 20);
-        cardBackground.setStroke(Math.round(density), Color.rgb(51, 65, 85));
-        card.setBackground(cardBackground);
+        card.setBackground(
+            ContextCompat.getDrawable(appContext, R.drawable.agent_prompt_card_background)
+        );
         // Absorb taps anywhere on the card so they don't fall through to the scrim's
         // tap-outside-to-cancel handler below - only non-interactive children otherwise.
         card.setClickable(true);
@@ -103,7 +98,7 @@ final class AgentOverlayWindow {
             WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             PixelFormat.TRANSLUCENT
         );
-        params.dimAmount = 0.55f;
+        params.dimAmount = 0.62f;
         params.gravity = Gravity.CENTER;
 
         WindowManager wm = (WindowManager) appContext.getSystemService(Context.WINDOW_SERVICE);

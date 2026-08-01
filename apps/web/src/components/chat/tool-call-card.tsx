@@ -76,6 +76,8 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'thread.control':  { icon: Network,   label: 'Threads',     color: 'text-purple-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
   'skill':           { icon: BookOpen,  label: 'Skill',      color: 'text-violet-500' },
+  'tools.search':    { icon: Search,    label: 'Search Tools', color: 'text-purple-500' },
+  'tools.list':      { icon: ListTodo,  label: 'List Tools',   color: 'text-purple-500' },
   // ── SSH tools ───────────────────────────────────────────
   'ssh.run':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'run.ssh':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
@@ -137,7 +139,7 @@ function getToolMeta(tool: string) {
  *
  * Falls back to the static `meta.label` when no specific mapping exists.
  */
-function getToolInvocationLabels(
+export function getToolInvocationLabels(
   tool: string,
   args: Record<string, unknown>,
   resultData?: unknown,
@@ -223,6 +225,12 @@ function getToolInvocationLabels(
   }
   if (normalized === 'browser.select') {
     return { running: 'Selecting', done: 'Selected' }
+  }
+  if (normalized === 'tools.search') {
+    return { running: 'Searching tools', done: 'Searched tools' }
+  }
+  if (normalized === 'tools.list') {
+    return { running: 'Listing tools', done: 'Listed tools' }
   }
   if (isAgentToolName(normalized)) {
     const desc = truncate(displayStr(args.description ?? args.prompt ?? args.message), 60)
@@ -337,6 +345,51 @@ export function getJaitMcpToolName(toolName: string, title?: string | null): str
     return match[1].replace(/_/g, '.')
   }
   return null
+}
+
+function getMemoryResultCount(value: unknown, depth = 0): number | null {
+  if (depth > 5 || value == null) return null
+  if (typeof value === 'string') {
+    return getMemoryResultCount(parseStructuredOrEmbeddedRecord(value), depth + 1)
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const count = getMemoryResultCount(entry, depth + 1)
+      if (count != null) return count
+    }
+    return null
+  }
+  if (typeof value !== 'object') return null
+
+  const record = value as Record<string, unknown>
+  for (const key of ['retrieved', 'entries']) {
+    if (Array.isArray(record[key])) return record[key].length
+  }
+  for (const key of ['result', 'data', 'flow', 'structuredContent', 'content']) {
+    const count = getMemoryResultCount(record[key], depth + 1)
+    if (count != null) return count
+  }
+  return null
+}
+
+export function shouldRenderToolCall(call: ToolCallInfo): boolean {
+  const normalizedTool = normalizeTool(call.tool)
+  const resultData = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
+    ? call.result.data as Record<string, unknown>
+    : undefined
+  const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel(call.args, resultData) : null
+  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title) ?? normalizedTool
+
+  if (displayTool === 'skill') {
+    const skills = call.args.skills ?? resultData?.names ?? resultData?.skills
+    return (typeof skills === 'string' && skills.trim().length > 0)
+      || (Array.isArray(skills) && skills.length > 0)
+  }
+
+  if (displayTool !== 'memory.search' || call.status === 'running' || call.status === 'pending') return true
+  const retrievedCount = getMemoryResultCount(call.result?.data)
+  if (retrievedCount != null) return retrievedCount > 0
+  return !/no relevant memories found|0 relevant memories/i.test(call.result?.message ?? '')
 }
 
 /**
@@ -744,6 +797,9 @@ export function getCallSummary(
     if (resultSite) return resultSite
     return displayStr(normalizedArgs.query)
   }
+  if (normalized === 'tools.search') {
+    return displayStr(normalizedArgs.query)
+  }
   if (isAgentToolName(normalized)) {
     if (normalized === 'agent.wait') return displayStr(args.targets, 'waiting')
     return truncate(displayStr(args.description ?? args.prompt ?? args.message), 80)
@@ -1042,6 +1098,66 @@ function parseEmbeddedJsonRecord(value: string): Record<string, unknown> | null 
   }
 }
 
+interface ToolSearchMatch {
+  name?: unknown
+  displayName?: unknown
+  display_name?: unknown
+  description?: unknown
+}
+
+function findToolSearchMatches(value: unknown, depth = 0): ToolSearchMatch[] | null {
+  if (depth > 6 || value == null) return null
+  if (typeof value === 'string') {
+    return findToolSearchMatches(parseStructuredOrEmbeddedRecord(value), depth + 1)
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const matches = findToolSearchMatches(entry, depth + 1)
+      if (matches) return matches
+    }
+    return null
+  }
+  if (typeof value !== 'object') return null
+
+  const record = value as Record<string, unknown>
+  if (Array.isArray(record.matches)) {
+    return record.matches.filter((entry): entry is ToolSearchMatch => Boolean(entry && typeof entry === 'object'))
+  }
+
+  for (const key of ['result', 'data', 'structuredContent', 'content', 'message', 'text', 'output']) {
+    const matches = findToolSearchMatches(record[key], depth + 1)
+    if (matches) return matches
+  }
+  return null
+}
+
+function conciseToolDescription(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const paragraphs = value
+    .split(/\n\s*\n/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  const specific = [...paragraphs].reverse().find((part) => !part.startsWith('Prefer Jait tools'))
+    ?? paragraphs[paragraphs.length - 1]
+    ?? ''
+  return truncate(specific, 140)
+}
+
+function formatToolSearchResults(...values: unknown[]): string | null {
+  for (const value of values) {
+    const matches = findToolSearchMatches(value)
+    if (!matches) continue
+    const lines = matches.slice(0, 20).map((match) => {
+      const name = displayStr(match.displayName ?? match.display_name ?? match.name, 'Unnamed tool')
+      const description = conciseToolDescription(match.description)
+      return `• ${name}${description ? ` — ${description}` : ''}`
+    })
+    if (matches.length > 20) lines.push(`• …and ${matches.length - 20} more`)
+    return lines.join('\n')
+  }
+  return null
+}
+
 function formatMcpContentText(value: string): string {
   const parsed = parseEmbeddedJsonRecord(value)
   if (!parsed) return value
@@ -1166,6 +1282,10 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
     ? result.data as Record<string, unknown>
     : undefined
   const normalizedTool = normalizeTool(tool ?? '')
+  if (normalizedTool === 'tools.search') {
+    const toolsOutput = formatToolSearchResults(result.data, result.message)
+    if (toolsOutput) return toolsOutput
+  }
   const rawDataOutput = formatStructuredValue(result.data)
   const mcpOutput = formatMcpResultEnvelope(data?.result) ?? formatMcpResultEnvelope(data) ?? formatMcpResultEnvelope(parseStructuredRecord(result.message))
   if (mcpOutput) return mcpOutput
@@ -2232,7 +2352,7 @@ function ToolCallCardInner({
   const effectiveColor = mcpMeta?.color ?? meta.color
   const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const editDiffCounts = getEditDiffCounts(displayTool, normalizedArgs)
-  const finalOutput = formatOutput(call.result, normalizedTool)
+  const finalOutput = formatOutput(call.result, displayTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)

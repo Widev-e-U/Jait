@@ -96,12 +96,13 @@ public class JaitMessagingService extends FirebaseMessagingService {
 
         KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         boolean locked = keyguardManager != null && keyguardManager.isKeyguardLocked();
-        if (
-            !locked &&
-            AgentOverlayWindow.canShow(this) &&
-            AgentOverlayWindow.show(getApplicationContext(), request)
-        ) {
-            return;
+        boolean overlayAvailable = AgentOverlayWindow.canShow(this);
+        AgentQuestionPresentation.Mode mode =
+            AgentQuestionPresentation.modeFor(locked, overlayAvailable);
+        boolean launchActivityFallback = false;
+        if (mode == AgentQuestionPresentation.Mode.SYSTEM_OVERLAY) {
+            if (AgentOverlayWindow.show(getApplicationContext(), request)) return;
+            launchActivityFallback = true;
         }
 
         createChannel();
@@ -113,7 +114,7 @@ public class JaitMessagingService extends FirebaseMessagingService {
             this, AgentPromptActivity.notificationId(requestId), intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
-        String body = "Open Jait to answer this time-sensitive question.";
+        String body = "Jait needs your input to continue.";
         if (request.optJSONArray("questions") != null && request.optJSONArray("questions").length() > 0) {
             JSONObject first = request.optJSONArray("questions").optJSONObject(0);
             if (first != null) body = first.optString("question", body);
@@ -127,10 +128,18 @@ public class JaitMessagingService extends FirebaseMessagingService {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
             .setTimeoutAfter(300_000L);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
             .notify(AgentPromptActivity.notificationId(requestId), notification.build());
+
+        if (launchActivityFallback) {
+            try {
+                startActivity(intent);
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     private void createChannel() {
@@ -138,7 +147,7 @@ public class JaitMessagingService extends FirebaseMessagingService {
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID, "Agent questions", NotificationManager.IMPORTANCE_HIGH
         );
-        channel.setDescription("Time-sensitive questions from your Jait agents");
+        channel.setDescription("Questions from your Jait agents");
         channel.enableVibration(true);
         channel.setSound(null, null);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);

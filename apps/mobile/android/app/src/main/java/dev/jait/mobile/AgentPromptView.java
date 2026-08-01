@@ -15,6 +15,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -52,42 +53,34 @@ public class AgentPromptView {
 
         ScrollView scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
+        scrollView.setBackground(
+            ContextCompat.getDrawable(context, R.drawable.agent_prompt_card_background)
+        );
 
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(26), dp(22), dp(24));
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(20), dp(20), dp(20), dp(18));
+        root.setGravity(Gravity.START);
         scrollView.addView(root, new ScrollView.LayoutParams(
             ScrollView.LayoutParams.MATCH_PARENT,
             ScrollView.LayoutParams.WRAP_CONTENT
         ));
 
-        TextView badge = new TextView(context);
-        badge.setText("J");
-        badge.setTextColor(Color.rgb(8, 47, 73));
-        badge.setTextSize(22);
-        badge.setTypeface(Typeface.DEFAULT_BOLD);
-        badge.setGravity(Gravity.CENTER);
-        badge.setBackground(rounded(Color.rgb(103, 232, 249), 16, Color.TRANSPARENT));
-        root.addView(badge, layout(dp(52), dp(52), 0, 0, 0, 14));
-
         TextView title = text(
             request.optString("title", "Jait needs your input"),
-            22,
-            Color.rgb(248, 250, 252),
+            18,
+            Color.rgb(244, 244, 245),
             true
         );
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, layoutMatch(0, 0, 0, 4));
+        root.addView(title, layoutMatch(0, 0, 0, 3));
 
         TextView subtitle = text(
-            "Time-sensitive agent question",
+            AgentQuestionPresentation.subtitleFor(request.optString("attention", "normal")),
             13,
-            Color.rgb(148, 163, 184),
+            Color.rgb(148, 155, 165),
             false
         );
-        subtitle.setGravity(Gravity.CENTER);
-        root.addView(subtitle, layoutMatch(0, 0, 0, 18));
+        root.addView(subtitle, layoutMatch(0, 0, 0, 16));
 
         JSONArray questions = request.optJSONArray("questions");
         if (questions == null || questions.length() == 0) {
@@ -104,11 +97,11 @@ public class AgentPromptView {
         actions.setGravity(Gravity.END);
         root.addView(actions, layoutMatch(0, 10, 0, 0));
 
-        Button cancel = button("Cancel", Color.rgb(51, 65, 85), Color.rgb(226, 232, 240));
+        Button cancel = button("Cancel", Color.rgb(39, 42, 48), Color.rgb(228, 228, 231));
         cancel.setOnClickListener(view -> dispatch(true));
         actions.addView(cancel, weightedLayout(1f, 0, 0, 5, 0));
 
-        Button submit = button("Send answer", Color.rgb(103, 232, 249), Color.rgb(8, 51, 68));
+        Button submit = button("Submit", Color.rgb(59, 130, 246), Color.WHITE);
         submit.setOnClickListener(view -> dispatch(false));
         actions.addView(submit, weightedLayout(1f, 5, 0, 0, 0));
 
@@ -125,20 +118,20 @@ public class AgentPromptView {
 
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(15), dp(15), dp(15), dp(15));
-        card.setBackground(rounded(Color.rgb(15, 23, 42), 14, Color.rgb(51, 65, 85)));
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        card.setBackground(rounded(Color.rgb(31, 34, 40), 10, Color.rgb(58, 63, 71)));
 
         card.addView(text(
             question.optString("header", "Question"),
             15,
-            Color.rgb(248, 250, 252),
+            Color.rgb(244, 244, 245),
             true
         ));
 
         TextView questionText = text(
             question.optString("question", ""),
             14,
-            Color.rgb(203, 213, 225),
+            Color.rgb(185, 190, 198),
             false
         );
         questionText.setLineSpacing(0, 1.15f);
@@ -171,13 +164,13 @@ public class AgentPromptView {
         if (question.optBoolean("allowFreeformInput", true)) {
             EditText freeText = new EditText(context);
             freeText.setHint("Type an answer...");
-            freeText.setHintTextColor(Color.rgb(100, 116, 139));
-            freeText.setTextColor(Color.rgb(248, 250, 252));
+            freeText.setHintTextColor(Color.rgb(113, 120, 130));
+            freeText.setTextColor(Color.rgb(244, 244, 245));
             freeText.setTextSize(14);
             freeText.setMinLines(2);
             freeText.setGravity(Gravity.TOP);
             freeText.setPadding(dp(11), dp(9), dp(11), dp(9));
-            freeText.setBackground(rounded(Color.rgb(8, 16, 29), 10, Color.rgb(51, 65, 85)));
+            freeText.setBackground(rounded(Color.rgb(17, 19, 23), 8, Color.rgb(58, 63, 71)));
             card.addView(freeText, layoutMatch(0, 9, 0, 0));
             freeTextInputs.put(questionId, freeText);
         }
@@ -194,11 +187,11 @@ public class AgentPromptView {
             : label + recommended + "\n" + description;
         control.setText(visibleText);
         control.setTag(label);
-        control.setTextColor(Color.rgb(226, 232, 240));
+        control.setTextColor(Color.rgb(228, 228, 231));
         control.setTextSize(14);
         control.setPadding(dp(8), dp(8), dp(8), dp(8));
-        control.setButtonTintList(android.content.res.ColorStateList.valueOf(Color.rgb(34, 211, 238)));
-        control.setBackground(rounded(Color.rgb(17, 28, 48), 10, Color.rgb(51, 65, 85)));
+        control.setButtonTintList(android.content.res.ColorStateList.valueOf(Color.rgb(59, 130, 246)));
+        control.setBackground(rounded(Color.rgb(27, 30, 35), 8, Color.rgb(58, 63, 71)));
     }
 
     private void dispatch(boolean cancelled) {

@@ -128,10 +128,20 @@ export interface MessageStreamWriter {
  */
 function reanchorSteeringSegments(previous: MessageSegment[], incoming: MessageSegment[]): MessageSegment[] {
   const markers: Array<{ anchor: number; segment: Extract<MessageSegment, { type: 'steering' }> }> = []
+  const incomingMarkerCounts = new Map<string, number>()
+  for (const segment of incoming) {
+    if (segment.type !== 'steering') continue
+    const key = segment.content
+    incomingMarkerCounts.set(key, (incomingMarkerCounts.get(key) ?? 0) + 1)
+  }
   let nonSteeringCount = 0
   for (const seg of previous) {
-    if (seg.type === 'steering') markers.push({ anchor: nonSteeringCount, segment: seg })
-    else nonSteeringCount++
+    if (seg.type === 'steering') {
+      const key = seg.content
+      const incomingCount = incomingMarkerCounts.get(key) ?? 0
+      if (incomingCount > 0) incomingMarkerCounts.set(key, incomingCount - 1)
+      else markers.push({ anchor: nonSteeringCount, segment: seg })
+    } else nonSteeringCount++
   }
   if (markers.length === 0) return incoming
   const merged = [...incoming]

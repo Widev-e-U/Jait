@@ -35,6 +35,7 @@ interface DeveloperSidebarsProps {
   streamingSessionIds: Set<string>
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
+  onArchiveSession: (sessionId: string) => void
   onBlur: (event: FocusEvent<HTMLElement>) => void
   onChangeDirectory: (projectId: string) => void
   onCreateProject: () => void
@@ -79,6 +80,7 @@ export function DeveloperSidebars({
   streamingSessionIds,
   sidebarRef,
   onAssignRepository,
+  onArchiveSession,
   onBlur,
   onChangeDirectory,
   onCreateProject,
@@ -206,6 +208,7 @@ export function DeveloperSidebars({
               onSelectProject={onSelectProject}
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
+              onArchiveSession={onArchiveSession}
               onNewPersonalSession={onCreatePersonalSession}
               onCreateProject={onCreateProject}
               onRemoveProject={onRemoveProject}

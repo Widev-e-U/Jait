@@ -791,7 +791,12 @@ const drainingQueuedSessions = new Set<string>();
 interface StreamingAccumulator {
   content: string;
   toolCalls: PersistedToolCall[];
-  segments: Array<{ type: "text"; content: string } | { type: "thinking"; content: string } | { type: "toolGroup"; callIds: string[] }>;
+  segments: Array<
+    | { type: "text"; content: string }
+    | { type: "thinking"; content: string }
+    | { type: "toolGroup"; callIds: string[] }
+    | { type: "steering"; content: string; displayContent?: string }
+  >;
   thinking: string;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
@@ -907,6 +912,16 @@ function accumulateThinking(sessionId: string, content: string): void {
   } else {
     acc.segments.push({ type: "thinking", content });
   }
+}
+
+/** Record user guidance at its live position so reload snapshots retain it. */
+function accumulateSteering(sessionId: string, content: string, displayContent?: string): void {
+  const acc = getOrCreateAccumulator(sessionId);
+  acc.segments.push({
+    type: "steering",
+    content,
+    ...(displayContent ? { displayContent } : {}),
+  });
 }
 
 /** Record a tool call start in the streaming accumulator */
@@ -2159,34 +2174,22 @@ export function registerChatRoutes(
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
-    const memoryToolCall = buildSyntheticMemoryToolCall(content, memoryService);
-    emitSyntheticToolStart(sessionId, memoryToolCall, safeWrite, emitToSubscribers);
-    let relevantMemory: Awaited<ReturnType<typeof retrieveRelevantMemoryContext>>;
-    try {
-      relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
-    } catch (err) {
+    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
+    const memoryToolCall = relevantMemory?.flow.retrieved.length
+      ? buildSyntheticMemoryToolCall(content, memoryService)
+      : null;
+    if (relevantMemory && memoryToolCall) {
+      emitSyntheticToolStart(sessionId, memoryToolCall, safeWrite, emitToSubscribers);
       emitSyntheticToolResult(
         sessionId,
         memoryToolCall,
-        false,
-        err instanceof Error ? err.message : "Memory search failed",
-        undefined,
+        true,
+        `Loaded ${relevantMemory.flow.retrieved.length} relevant memories`,
+        relevantMemory.flow,
         safeWrite,
         emitToSubscribers,
       );
-      throw err;
     }
-    emitSyntheticToolResult(
-      sessionId,
-      memoryToolCall,
-      true,
-      relevantMemory?.flow.retrieved.length
-        ? `Loaded ${relevantMemory.flow.retrieved.length} relevant memories`
-        : "No relevant memories found",
-      relevantMemory?.flow ?? null,
-      safeWrite,
-      emitToSubscribers,
-    );
     const memoryFlow = relevantMemory?.flow;
     const memoryBlock = relevantMemory?.block;
     const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
@@ -2365,7 +2368,12 @@ export function registerChatRoutes(
 
         // ── Accumulate tool calls + segments for persistence ──
         const cliToolCalls: PersistedToolCall[] = syntheticToolCalls.map((call) => ({ ...call }));
-        const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] } | { type: "error"; content: string }> = [];
+        const cliSegments: Array<
+          | { type: "text"; content: string }
+          | { type: "toolGroup"; callIds: string[] }
+          | { type: "error"; content: string }
+          | { type: "steering"; content: string }
+        > = [];
         /** Error message from a session.error event — persisted instead of normal content. */
         let sessionError: string | null = null;
         /** Track the current pending tool-group callIds (batched between text tokens) */
@@ -2708,6 +2716,13 @@ export function registerChatRoutes(
           const steered = steering.drain();
           if (steered.length === 0) break;
 
+          flushToolGroup();
+          flushTextSegment();
+          for (const message of steered) {
+            cliSegments.push({ type: "steering", content: message });
+          }
+          lastSegmentWasText = false;
+
           const steerContent = steered.map(m => `[STEERING] ${m}`).join("\n\n");
           app.log.info(`[chat/cli] Steering follow-up for session ${sessionId}: ${steerContent.slice(0, 100)}`);
 
@@ -2744,8 +2759,12 @@ export function registerChatRoutes(
         flushTextSegment();
 
         // Build persistence JSON
+        const accumulatedCliSegments = sessionStreamingState.get(sessionId)?.segments;
+        const finalCliSegments = accumulatedCliSegments && accumulatedCliSegments.length > 0
+          ? [...accumulatedCliSegments]
+          : cliSegments;
         const cliTcJson = cliToolCalls.length > 0 ? JSON.stringify(cliToolCalls) : undefined;
-        const cliSegJson = cliSegments.length > 0 ? JSON.stringify(cliSegments) : undefined;
+        const cliSegJson = finalCliSegments.length > 0 ? JSON.stringify(finalCliSegments) : undefined;
 
         // Also stash on the outer scope so the done handler can emit them
         partialToolCalls = cliToolCalls;
@@ -2753,10 +2772,10 @@ export function registerChatRoutes(
 
         // Persist assistant message with tool calls and segments
         if (sessionError) {
-          const hasPartialOutput = fullContent.length > 0 || cliToolCalls.length > 0 || cliSegments.length > 0;
+          const hasPartialOutput = fullContent.length > 0 || cliToolCalls.length > 0 || finalCliSegments.length > 0;
           const persistedContent = hasPartialOutput ? fullContent : sessionError;
           const persistedSegments = hasPartialOutput
-            ? [...cliSegments, { type: "error" as const, content: sessionError }]
+            ? [...finalCliSegments, { type: "error" as const, content: sessionError }]
             : [{ type: "error" as const, content: sessionError }];
           const persistedToolCalls = hasPartialOutput && cliToolCalls.length > 0 ? cliToolCalls : undefined;
           history.push({
@@ -2780,7 +2799,7 @@ export function registerChatRoutes(
             role: "assistant",
             content: fullContent,
             uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
-            segments: cliSegments.length > 0 ? cliSegments : undefined,
+            segments: finalCliSegments.length > 0 ? finalCliSegments : undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
           persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
@@ -2914,8 +2933,18 @@ export function registerChatRoutes(
                 } satisfies LlmContextFlow & { truncatedRounds?: number });
               },
               onPersist: (sid, role, content, tc, seg, thinking) => {
-                persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking);
-                if (sid === sessionId && role === "assistant") assistantTurnPersisted = true;
+                const acc = sid === sessionId ? sessionStreamingState.get(sid) : undefined;
+                const persistedToolCalls = acc?.toolCalls.length ? JSON.stringify(acc.toolCalls) : tc;
+                const persistedSegments = acc?.segments.length ? JSON.stringify(acc.segments) : seg;
+                persistMessage(sid, role, content, persistedToolCalls, persistedSegments, contextFlowJson, thinking);
+                if (sid === sessionId && role === "assistant") {
+                  const lastAssistant = [...history].reverse().find((message) => message.role === "assistant");
+                  if (lastAssistant && acc) {
+                    if (acc.toolCalls.length > 0) lastAssistant.uiToolCalls = acc.toolCalls.map((call) => ({ ...call }));
+                    if (acc.segments.length > 0) lastAssistant.segments = acc.segments.map((segment) => ({ ...segment }));
+                  }
+                  assistantTurnPersisted = true;
+                }
               },
               priorFingerprints: sessionFingerprints.get(sessionId),
               log: app.log,
@@ -3616,6 +3645,7 @@ export function registerChatRoutes(
 
     const body = (request.body as Record<string, unknown>) ?? {};
     const message = typeof body["message"] === "string" ? body["message"] : "";
+    const displayContent = typeof body["displayContent"] === "string" ? body["displayContent"] : undefined;
     if (!message.trim()) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
     }
@@ -3630,6 +3660,7 @@ export function registerChatRoutes(
     }
 
     controller.steer(message);
+    accumulateSteering(sessionId, message, displayContent);
     return { ok: true, steered: true };
   });
 

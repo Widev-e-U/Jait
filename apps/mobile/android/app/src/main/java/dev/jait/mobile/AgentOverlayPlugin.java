@@ -109,10 +109,16 @@ public class AgentOverlayPlugin extends Plugin {
      */
     private void finishRequestPermissions(PluginCall call) {
         boolean overlayGranted = canDrawOverlays();
-        if (!overlayGranted) openOverlaySettings();
+        boolean fullScreenGranted = canUseFullScreenIntent();
+        if (!overlayGranted) {
+            openOverlaySettings();
+        } else if (!fullScreenGranted) {
+            openFullScreenIntentSettings();
+        }
         JSObject result = new JSObject();
         result.put("notificationsGranted", getPermissionState("notifications") == PermissionState.GRANTED);
         result.put("overlayGranted", overlayGranted);
+        result.put("fullScreenGranted", fullScreenGranted);
         call.resolve(result);
     }
 
@@ -125,6 +131,26 @@ public class AgentOverlayPlugin extends Plugin {
         try {
             Intent intent = new Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getContext().getPackageName())
+            );
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean canUseFullScreenIntent() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true;
+        NotificationManager manager =
+            (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        return manager.canUseFullScreenIntent();
+    }
+
+    private void openFullScreenIntentSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return;
+        try {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
                 Uri.parse("package:" + getContext().getPackageName())
             );
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -288,7 +314,7 @@ public class AgentOverlayPlugin extends Plugin {
             "Agent questions",
             NotificationManager.IMPORTANCE_HIGH
         );
-        channel.setDescription("Time-sensitive questions from your Jait agents");
+        channel.setDescription("Questions from your Jait agents");
         channel.enableVibration(true);
         channel.setSound(null, null);
         manager.createNotificationChannel(channel);
