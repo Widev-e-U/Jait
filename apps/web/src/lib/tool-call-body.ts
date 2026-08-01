@@ -17,6 +17,7 @@ export type ToolCallBodyKind =
   | 'editDiff'
   | 'subagent'
   | 'threadList'
+  | 'todoList'
   | 'output'
   | 'runningHint'
   | 'none'
@@ -283,6 +284,10 @@ export function getToolFilePaths(
     firstPathFromChanges(normalizedArgs.changes),
   )
   push(directPath)
+
+  if ((normalizedTool === 'read' || normalizedTool === 'file.read') && directPath) {
+    return paths
+  }
 
   const nested = getInvocationObject(args, resultRecord)
   const nestedPath = firstNonEmptyString(
@@ -560,6 +565,13 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (normalizedTool === 'image.view' && input.imageDataUri) return 'imageView'
   if (isAgentToolName(normalizedTool)) return 'subagent'
   if (normalizedTool === 'thread.control' && (input.args.action === 'create_many' || input.args.action === 'create')) return 'threadList'
+  if (
+    normalizedTool === 'todo'
+    && (
+      Array.isArray(input.args.todoList)
+      || Array.isArray(firstObject(input.args.todoList)?.items)
+    )
+  ) return 'todoList'
   if (input.status === 'success' && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'
   if (input.displayOutput) return 'output'
   if (input.status === 'running') return 'runningHint'

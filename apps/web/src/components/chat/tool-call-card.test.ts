@@ -8,6 +8,7 @@ let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCol
 let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
 let formatOutput: typeof import('./tool-call-card')['formatOutput']
 let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
+let getTodoToolListItems: typeof import('./tool-call-card')['getTodoToolListItems']
 let formatElapsedDuration: typeof import('./tool-call-card')['formatElapsedDuration']
 let hasInlineSecretPromptForCalls: typeof import('./tool-call-card')['hasInlineSecretPromptForCalls']
 let getRunningHint: typeof import('./tool-call-card')['getRunningHint']
@@ -38,6 +39,7 @@ beforeAll(async () => {
     computeAgentNesting,
     formatOutput,
     getThreadControlListItems,
+    getTodoToolListItems,
     formatElapsedDuration,
     hasInlineSecretPromptForCalls,
     getRunningHint,
@@ -394,6 +396,22 @@ describe('getCallSummary', () => {
       old_str: oldBlock,
       new_str: newBlock,
     })).toBe('app.ts (+1 -1)')
+  })
+})
+
+describe('getTodoToolListItems', () => {
+  it('normalizes task arguments for the native todo card', () => {
+    expect(getTodoToolListItems({
+      todoList: [
+        { id: 1, title: 'Trace rendering', status: 'completed' },
+        { id: 2, title: 'Build task card', status: 'in_progress' },
+        { id: 3, title: 'Run verification', status: 'pending' },
+      ],
+    })).toEqual([
+      { id: 1, title: 'Trace rendering', status: 'completed' },
+      { id: 2, title: 'Build task card', status: 'in-progress' },
+      { id: 3, title: 'Run verification', status: 'not-started' },
+    ])
   })
 })
 

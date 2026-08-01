@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -492,6 +492,54 @@ function getThreadListStatus(value: unknown, fallback: ThreadListStatus): Thread
 
 function getThreadListString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+type TodoToolStatus = 'not-started' | 'in-progress' | 'completed'
+
+interface TodoToolListItem {
+  id: number
+  title: string
+  status: TodoToolStatus
+}
+
+function getTodoToolStatus(value: unknown): TodoToolStatus {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase().replace(/_/g, '-') : ''
+  if (normalized === 'completed' || normalized === 'done') return 'completed'
+  if (normalized === 'in-progress' || normalized === 'running' || normalized === 'active') return 'in-progress'
+  return 'not-started'
+}
+
+export function getTodoToolListItems(
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): TodoToolListItem[] {
+  const argsTodoRecord = toRecord(args.todoList)
+  const resultTodoRecord = toRecord(resultData?.todoList)
+  const rawItems = Array.isArray(args.todoList)
+    ? args.todoList
+    : Array.isArray(argsTodoRecord?.items)
+      ? argsTodoRecord.items
+      : Array.isArray(resultData?.items)
+        ? resultData.items
+        : Array.isArray(resultData?.todoList)
+          ? resultData.todoList
+          : Array.isArray(resultTodoRecord?.items)
+            ? resultTodoRecord.items
+            : []
+
+  return rawItems.flatMap((entry, index) => {
+    const record = toRecord(entry)
+    if (!record) return []
+    const title = getThreadListString(record.title)
+      ?? getThreadListString(record.step)
+      ?? getThreadListString(record.task)
+    if (!title) return []
+    return [{
+      id: typeof record.id === 'number' ? record.id : index + 1,
+      title,
+      status: getTodoToolStatus(record.status),
+    }]
+  })
 }
 
 function threadItemFromRecord(record: Record<string, unknown>, fallbackStatus: ThreadListStatus): ThreadListItem {
@@ -2382,6 +2430,57 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
   )
 }
 
+function TodoToolListView({
+  items,
+  errorMessage,
+}: {
+  items: TodoToolListItem[]
+  errorMessage?: string
+}) {
+  const completedCount = items.filter((item) => item.status === 'completed').length
+  const progress = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0
+
+  return (
+    <div className="overflow-hidden rounded-md border border-orange-500/20 bg-orange-500/[0.025] text-xs">
+      <div className="flex items-center gap-3 border-b border-orange-500/15 px-3 py-2">
+        <span className="font-medium text-foreground">Tasks</span>
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all duration-300',
+              completedCount === items.length && items.length > 0 ? 'bg-green-500' : 'bg-orange-500',
+            )}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <span className="tabular-nums text-muted-foreground">{completedCount}/{items.length}</span>
+      </div>
+      <div className="divide-y divide-border/35">
+        {items.map((item) => (
+          <div key={item.id} className="flex items-start gap-2 px-3 py-2">
+            {item.status === 'completed' ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-500" />
+            ) : item.status === 'in-progress' ? (
+              <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-orange-500" />
+            ) : (
+              <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+            )}
+            <span className={cn(
+              'min-w-0 flex-1 text-foreground',
+              item.status === 'completed' && 'text-muted-foreground line-through',
+            )}>
+              {item.title}
+            </span>
+          </div>
+        ))}
+      </div>
+      {errorMessage ? (
+        <div className="border-t border-red-500/15 px-3 py-2 text-red-500">{errorMessage}</div>
+      ) : null}
+    </div>
+  )
+}
+
 function ToolCallCardInner({
   call,
   childCalls,
@@ -2468,6 +2567,9 @@ function ToolCallCardInner({
     : bodyKind !== 'none' && !inlineBody
   const threadListItems = bodyKind === 'threadList'
     ? getThreadControlListItems(normalizedArgs, resultData, call.status, threadControlThreads)
+    : []
+  const todoListItems = bodyKind === 'todoList'
+    ? getTodoToolListItems(normalizedArgs, resultData)
     : []
   const effectiveOpen = hasInlineSecretPrompt ? true : open
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -2717,6 +2819,11 @@ function ToolCallCardInner({
     )
   ) : bodyKind === 'threadList' ? (
     <ThreadListView items={threadListItems} resultMessage={call.result?.message} />
+  ) : bodyKind === 'todoList' ? (
+    <TodoToolListView
+      items={todoListItems}
+      errorMessage={call.status === 'error' ? call.result?.message : undefined}
+    />
   ) : bodyKind === 'editDiff' ? (
      <EditDiffView
       filePath={String(normalizedArgs.path ?? '')}

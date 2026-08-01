@@ -72,6 +72,22 @@ describe('tool call body helpers', () => {
     ).toBe('threadList')
   })
 
+  it('renders todo calls as native task lists instead of JSON output', () => {
+    expect(getToolCallBodyKind({
+      tool: 'todo',
+      args: {
+        todoList: [
+          { id: 1, title: 'Trace rendering', status: 'completed' },
+          { id: 2, title: 'Build task card', status: 'in-progress' },
+        ],
+      },
+      status: 'success',
+      displayOutput: '{"items":[{"id":1,"title":"Trace rendering","status":"completed"}]}',
+      snapshotText: null,
+      screenshotPath: null,
+    })).toBe('todoList')
+  })
+
   it('renders provider-native agent calls as subagent cards', () => {
     expect(
       getToolCallBodyKind({
@@ -344,6 +360,17 @@ describe('tool call body helpers', () => {
       'apps/web/src/App.tsx',
       'packages/gateway/src/routes/threads.ts',
     ])
+  })
+
+  it('keeps a single explicit read target when result metadata repeats the file', () => {
+    expect(
+      getToolFilePaths(
+        'file.read',
+        { path: 'apps/web/src/components/chat/tool-call-card.tsx' },
+        { path: '/home/jakob/jait/apps/web/src/components/chat/tool-call-card.tsx' },
+        'Read tool-call-card.tsx',
+      ),
+    ).toEqual(['apps/web/src/components/chat/tool-call-card.tsx'])
   })
 
   it('extracts screenshot paths from structured result payloads', () => {
