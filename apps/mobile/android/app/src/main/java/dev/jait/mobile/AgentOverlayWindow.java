@@ -19,9 +19,9 @@ import org.json.JSONObject;
 
 /**
  * Draws the agent-question card as a system overlay so it appears immediately over whatever
- * app is in the foreground, without requiring a notification tap first. Only usable when the
- * screen is unlocked and "display over other apps" is granted; callers fall back to a plain
- * notification otherwise.
+ * app is in the foreground, without requiring a notification tap first. Only usable while the
+ * display is interactive, the screen is unlocked, and "display over other apps" is granted;
+ * callers fall back to a plain notification otherwise.
  */
 final class AgentOverlayWindow {
     private static WindowManager windowManager;
@@ -49,7 +49,7 @@ final class AgentOverlayWindow {
         AgentPromptView.Listener listener
     ) {
         String requestId = request.optString("id", "");
-        if (requestId.isEmpty()) return false;
+        if (requestId.isEmpty() || !AgentDeviceState.isActive(appContext)) return false;
         if (requestId.equals(currentRequestId) && currentView != null) return true;
         dismiss(appContext);
 

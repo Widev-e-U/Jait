@@ -38,6 +38,9 @@ describe("agent question overlay", () => {
     expect(html).toContain("&lt;b&gt;Unsafe choice&lt;/b&gt;");
     expect(html).not.toContain('<img src=x onerror="alert(1)">');
     expect(html).not.toContain("<script>window.pwned = true</script>");
+    expect(html).toContain('<p class="brand">Jait</p>');
+    expect(html).toContain('viewBox="0 0 1024 1024"');
+    expect(html).not.toContain('<div class="mark">J</div>');
   });
 
   it("parses submitted option and free-text answers", () => {

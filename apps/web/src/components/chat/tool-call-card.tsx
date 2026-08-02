@@ -1197,6 +1197,15 @@ interface ToolSearchMatch {
   displayName?: unknown
   display_name?: unknown
   description?: unknown
+  category?: unknown
+  tier?: unknown
+}
+
+export interface ToolSearchListItem {
+  name: string
+  description: string
+  category: string
+  tier: string
 }
 
 function findToolSearchMatches(value: unknown, depth = 0): ToolSearchMatch[] | null {
@@ -1237,19 +1246,26 @@ function conciseToolDescription(value: unknown): string {
   return truncate(specific, 140)
 }
 
-function formatToolSearchResults(...values: unknown[]): string | null {
+export function getToolSearchResultItems(...values: unknown[]): ToolSearchListItem[] {
   for (const value of values) {
     const matches = findToolSearchMatches(value)
     if (!matches) continue
-    const lines = matches.slice(0, 20).map((match) => {
-      const name = displayStr(match.displayName ?? match.display_name ?? match.name, 'Unnamed tool')
-      const description = conciseToolDescription(match.description)
-      return `• ${name}${description ? ` — ${description}` : ''}`
-    })
-    if (matches.length > 20) lines.push(`• …and ${matches.length - 20} more`)
-    return lines.join('\n')
+    return matches.slice(0, 40).map((match) => ({
+      name: displayStr(match.displayName ?? match.display_name ?? match.name, 'Unnamed tool'),
+      description: conciseToolDescription(match.description),
+      category: displayStr(match.category),
+      tier: displayStr(match.tier),
+    }))
   }
-  return null
+  return []
+}
+
+function formatToolSearchResults(...values: unknown[]): string | null {
+  const items = getToolSearchResultItems(...values)
+  if (items.length === 0) return null
+  return items
+    .map((item) => `• ${item.name}${item.description ? ` — ${item.description}` : ''}`)
+    .join('\n')
 }
 
 function formatMcpContentText(value: string): string {
@@ -1578,65 +1594,137 @@ function parseJsonOutput(output: string): unknown | null {
   }
 }
 
-function getJsonOutputMeta(tool: string): { label: string; accent: string } {
+function getStructuredOutputMeta(tool: string): { label: string; accent: string } {
   const normalized = normalizeTool(tool)
-  if (normalized.startsWith('browser.') || normalized.startsWith('web.')) return { label: 'Web result', accent: 'bg-cyan-500' }
-  if (normalized.startsWith('file.') || normalized === 'read' || normalized === 'edit') return { label: 'File result', accent: 'bg-blue-500' }
-  if (normalized.startsWith('memory.')) return { label: 'Memory result', accent: 'bg-amber-500' }
-  if (normalized.startsWith('cron.')) return { label: 'Schedule result', accent: 'bg-violet-500' }
-  if (normalized.startsWith('surfaces.')) return { label: 'Surface result', accent: 'bg-purple-500' }
-  if (isMcpToolName(normalized)) return { label: 'Tool result', accent: 'bg-purple-500' }
-  return { label: `${getToolMeta(normalized).label} result`, accent: 'bg-primary' }
+  if (normalized.startsWith('browser.') || normalized.startsWith('web.')) return { label: 'Web details', accent: 'bg-cyan-500' }
+  if (normalized.startsWith('file.') || normalized === 'read' || normalized === 'edit') return { label: 'File details', accent: 'bg-blue-500' }
+  if (normalized.startsWith('memory.')) return { label: 'Memory details', accent: 'bg-amber-500' }
+  if (normalized.startsWith('cron.')) return { label: 'Schedule details', accent: 'bg-violet-500' }
+  if (normalized.startsWith('surfaces.')) return { label: 'Surface details', accent: 'bg-purple-500' }
+  if (isMcpToolName(normalized)) return { label: 'Details', accent: 'bg-purple-500' }
+  return { label: `${getToolMeta(normalized).label} details`, accent: 'bg-primary' }
 }
 
-function JsonScalar({ value }: { value: unknown }) {
-  if (value === null) return <span className="text-muted-foreground">null</span>
-  if (typeof value === 'string') return <span className="text-emerald-500">"{value}"</span>
-  if (typeof value === 'number') return <span className="text-blue-500">{value}</span>
-  if (typeof value === 'boolean') return <span className="text-violet-500">{String(value)}</span>
+export function humanizeStructuredKey(key: string): string {
+  return key
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .trim()
+}
+
+function StructuredScalar({ value }: { value: unknown }) {
+  if (value === null) return <span className="text-muted-foreground/70">Not set</span>
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    const isUrl = /^https?:\/\/\S+$/i.test(trimmed)
+    if (isUrl) {
+      return (
+        <a href={trimmed} target="_blank" rel="noopener noreferrer" className="break-all text-sky-500 hover:underline">
+          {trimmed}
+        </a>
+      )
+    }
+    return <span className="whitespace-pre-wrap break-words text-foreground/90">{value || 'Empty'}</span>
+  }
+  if (typeof value === 'number') return <span className="font-medium tabular-nums text-foreground">{value}</span>
+  if (typeof value === 'boolean') {
+    return (
+      <span className={cn(
+        'inline-flex rounded-full px-2 py-0.5 text-2xs font-medium',
+        value ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground',
+      )}>
+        {value ? 'Yes' : 'No'}
+      </span>
+    )
+  }
   return <span>{safeStringify(value)}</span>
 }
 
-function JsonTree({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value == null || typeof value !== 'object') return <JsonScalar value={value} />
+export function StructuredDataView({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value == null || typeof value !== 'object') return <StructuredScalar value={value} />
 
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-muted-foreground">[]</span>
+    if (value.length === 0) return <span className="text-muted-foreground">No items</span>
     return (
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {value.slice(0, 40).map((entry, index) => (
-          <div key={index} className="grid grid-cols-[auto_1fr] gap-2">
-            <span className="font-mono text-muted-foreground">[{index}]</span>
-            <div className={cn(depth < 3 && 'rounded bg-background/45 px-2 py-1')}>
-              <JsonTree value={entry} depth={depth + 1} />
+          <div key={index} className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[9px] font-medium tabular-nums text-muted-foreground">
+              {index + 1}
+            </span>
+            <div className={cn('min-w-0 flex-1', depth < 3 && 'rounded-md border border-border/40 bg-background/45 px-2.5 py-1.5')}>
+              <StructuredDataView value={entry} depth={depth + 1} />
             </div>
           </div>
         ))}
-        {value.length > 40 && <div className="text-muted-foreground">...{value.length - 40} more items</div>}
+        {value.length > 40 && <div className="pl-6 text-muted-foreground">{value.length - 40} more items</div>}
       </div>
     )
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
-  if (entries.length === 0) return <span className="text-muted-foreground">{'{}'}</span>
+  if (entries.length === 0) return <span className="text-muted-foreground">No details</span>
   return (
-    <div className="space-y-1">
+    <div className="divide-y divide-border/35">
       {entries.slice(0, 60).map(([key, entry]) => (
-        <div key={key} className="grid grid-cols-[minmax(80px,180px)_1fr] gap-2">
-          <span className="truncate font-mono text-sky-500" title={key}>{key}</span>
+        <div key={key} className="grid grid-cols-[minmax(88px,0.34fr)_minmax(0,1fr)] gap-3 py-1.5 first:pt-0 last:pb-0">
+          <span className="truncate text-2xs font-medium text-muted-foreground" title={humanizeStructuredKey(key)}>
+            {humanizeStructuredKey(key)}
+          </span>
           <div className="min-w-0 break-words">
-            <JsonTree value={entry} depth={depth + 1} />
+            <StructuredDataView value={entry} depth={depth + 1} />
           </div>
         </div>
       ))}
-      {entries.length > 60 && <div className="text-muted-foreground">...{entries.length - 60} more fields</div>}
+      {entries.length > 60 && <div className="pt-1.5 text-muted-foreground">{entries.length - 60} more fields</div>}
+    </div>
+  )
+}
+
+export function ToolSearchResultsView({ items }: { items: ToolSearchListItem[] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/55 bg-card/55 text-xs shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border/45 bg-muted/25 px-3 py-2">
+        <Search className="h-3.5 w-3.5 text-purple-500" />
+        <span className="font-medium text-foreground">Available tools</span>
+        <span className="ml-auto rounded-full bg-purple-500/10 px-2 py-0.5 text-2xs font-medium text-purple-600 dark:text-purple-400">
+          {items.length} found
+        </span>
+      </div>
+      <div className="max-h-80 divide-y divide-border/40 overflow-y-auto">
+        {items.map((item) => (
+          <div key={item.name} className="px-3 py-2.5 hover:bg-muted/25">
+            <div className="flex min-w-0 items-center gap-2">
+              <code className="min-w-0 truncate text-[11px] font-semibold text-purple-600 dark:text-purple-400" title={item.name}>
+                {item.name}
+              </code>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                {item.category && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                    {humanizeStructuredKey(item.category)}
+                  </span>
+                )}
+                {item.tier && (
+                  <span className="rounded bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-600 dark:text-purple-400">
+                    {humanizeStructuredKey(item.tier)}
+                  </span>
+                )}
+              </div>
+            </div>
+            {item.description && (
+              <p className="mt-1 leading-4 text-muted-foreground">{item.description}</p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
 function ToolOutputView({ output, tool, isError, isRunning }: { output: string; tool: string; isError?: boolean; isRunning?: boolean }) {
   const parsed = useMemo(() => parseJsonOutput(output), [output])
-  const meta = getJsonOutputMeta(tool)
+  const meta = getStructuredOutputMeta(tool)
 
   if (parsed == null) {
     return (
@@ -1663,8 +1751,8 @@ function ToolOutputView({ output, tool, isError, isRunning }: { output: string; 
         <span className="font-medium">{meta.label}</span>
         {isRunning && <span className="ml-auto h-3 w-1.5 animate-pulse rounded-sm bg-foreground/70" />}
       </div>
-      <div className="max-h-72 overflow-auto px-3 py-2 font-mono leading-5">
-        <JsonTree value={parsed} />
+      <div className="max-h-72 overflow-auto px-3 py-2.5 leading-5">
+        <StructuredDataView value={parsed} />
       </div>
     </div>
   )
@@ -2522,6 +2610,9 @@ function ToolCallCardInner({
   const editDiffCounts = getEditDiffCounts(displayTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, displayTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
+  const toolSearchItems = displayTool === 'tools.search'
+    ? getToolSearchResultItems(call.result?.data, call.result?.message)
+    : []
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)
   const imageDataUri = getToolImageDataUri(displayTool, normalizedArgs, resultData)
@@ -2833,12 +2924,16 @@ function ToolCallCardInner({
       isNewFile={normalizedTool === 'file.write'}
     />
   ) : bodyKind === 'output' ? (
-    <ToolOutputView
-      output={displayOutput}
-      tool={normalizedTool}
-      isError={!!call.result && !call.result.ok}
-      isRunning={call.status === 'running'}
-    />
+    toolSearchItems.length > 0 ? (
+      <ToolSearchResultsView items={toolSearchItems} />
+    ) : (
+      <ToolOutputView
+        output={displayOutput}
+        tool={displayTool}
+        isError={!!call.result && !call.result.ok}
+        isRunning={call.status === 'running'}
+      />
+    )
   ) : bodyKind === 'runningHint' ? (
     <div
       className={cn(

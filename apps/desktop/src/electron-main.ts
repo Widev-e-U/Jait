@@ -919,7 +919,7 @@ function presentAgentQuestion(
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      backgroundColor: "#0b1220",
+      backgroundColor: "#0d0f12",
       icon: path.join(__dirname, "..", "assets", "icon.png"),
       webPreferences: {
         contextIsolation: true,
@@ -2223,6 +2223,7 @@ const MAX_FS_OP_READ_BINARY_BYTES = 30 * 1024 * 1024;
 // project made every diff request inflate main and the renderer to ~2 GB and
 // OOM-crash the window (deterministically, on every client reconnect).
 const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
+const COMMITTABLE_PATHSPEC = '-- . ":(exclude).jait/release-checkout-*"';
 
 /** Read a working-tree file for diff display; oversized files get a short placeholder instead. */
 async function readDiffFileCapped(absPath: string): Promise<string> {
@@ -2712,10 +2713,10 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         pr: { status: "skipped_not_requested" },
       };
 
-      const porcelain = await gitExecLocal("status --porcelain -- .").catch(() => "");
+      const porcelain = await gitExecLocal(`status --porcelain ${COMMITTABLE_PATHSPEC}`).catch(() => "");
       if (porcelain.length > 0) {
-        await gitExecLocal("add -A -- .");
-        await gitExecLocal(`commit -m "${commitMessage.replace(/"/g, '\\"')}" -- .`);
+        await gitExecLocal(`add -A ${COMMITTABLE_PATHSPEC}`);
+        await gitExecLocal(`commit -m "${commitMessage.replace(/"/g, '\\"')}" ${COMMITTABLE_PATHSPEC}`);
         const sha = await gitExecLocal("rev-parse HEAD");
         git.commit = { status: "created", commitSha: sha, subject: commitMessage };
       }
@@ -2887,17 +2888,17 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       }
 
       // Commit step
-      const porcelain = await gitExecLocal("status --porcelain -- .").catch(() => "");
+      const porcelain = await gitExecLocal(`status --porcelain ${COMMITTABLE_PATHSPEC}`).catch(() => "");
       if (porcelain.length > 0) {
-        await gitExecLocal("add -A -- .");
+        await gitExecLocal(`add -A ${COMMITTABLE_PATHSPEC}`);
         let msg = commitMessage?.trim();
         if (!msg) {
           try {
-            const diffSummary = await gitExecLocal("diff --cached --stat -- .");
+            const diffSummary = await gitExecLocal(`diff --cached --stat ${COMMITTABLE_PATHSPEC}`);
             msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
           } catch { msg = "chore: auto-commit changes"; }
         }
-        await gitExecLocal(`commit -m "${msg.replace(/"/g, '\\"')}" -- .`);
+        await gitExecLocal(`commit -m "${msg.replace(/"/g, '\\"')}" ${COMMITTABLE_PATHSPEC}`);
         const sha = await gitExecLocal("rev-parse HEAD");
         result.commit = { status: "created", commitSha: sha, subject: msg };
       }

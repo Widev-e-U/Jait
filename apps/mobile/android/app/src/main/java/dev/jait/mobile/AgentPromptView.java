@@ -4,12 +4,15 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -66,18 +69,39 @@ public class AgentPromptView {
             ScrollView.LayoutParams.WRAP_CONTENT
         ));
 
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(header, layoutMatch(0, 0, 0, 6));
+
+        FrameLayout mark = new FrameLayout(context);
+        mark.setBackground(rounded(Color.WHITE, 10, Color.rgb(228, 231, 235)));
+        ImageView markIcon = new ImageView(context);
+        markIcon.setImageResource(R.drawable.ic_jait_mark_dark);
+        markIcon.setPadding(dp(8), dp(8), dp(8), dp(8));
+        mark.addView(markIcon, new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.CENTER));
+        header.addView(mark, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        LinearLayout heading = new LinearLayout(context);
+        heading.setOrientation(LinearLayout.VERTICAL);
+        header.addView(heading, weightedLayoutWrap(1f, 12, 0, 0, 0));
+
+        TextView brand = text("JAIT", 10, Color.rgb(96, 165, 250), true);
+        brand.setLetterSpacing(0.14f);
+        heading.addView(brand);
+
         TextView title = text(
-            request.optString("title", "Jait needs your input"),
+            AgentQuestionPresentation.titleFor(request.optString("title")),
             18,
-            Color.rgb(244, 244, 245),
+            Color.rgb(242, 244, 247),
             true
         );
-        root.addView(title, layoutMatch(0, 0, 0, 3));
+        heading.addView(title, layoutMatch(0, 2, 0, 0));
 
         TextView subtitle = text(
             AgentQuestionPresentation.subtitleFor(request.optString("attention", "normal")),
-            13,
-            Color.rgb(148, 155, 165),
+            12,
+            Color.rgb(133, 139, 149),
             false
         );
         root.addView(subtitle, layoutMatch(0, 0, 0, 16));
@@ -97,7 +121,7 @@ public class AgentPromptView {
         actions.setGravity(Gravity.END);
         root.addView(actions, layoutMatch(0, 10, 0, 0));
 
-        Button cancel = button("Cancel", Color.rgb(39, 42, 48), Color.rgb(228, 228, 231));
+        Button cancel = button("Dismiss", Color.rgb(34, 38, 44), Color.rgb(228, 231, 235));
         cancel.setOnClickListener(view -> dispatch(true));
         actions.addView(cancel, weightedLayout(1f, 0, 0, 5, 0));
 
@@ -119,19 +143,19 @@ public class AgentPromptView {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14), dp(14), dp(14), dp(14));
-        card.setBackground(rounded(Color.rgb(31, 34, 40), 10, Color.rgb(58, 63, 71)));
+        card.setBackground(rounded(Color.rgb(24, 26, 31), 10, Color.rgb(52, 57, 66)));
 
         card.addView(text(
             question.optString("header", "Question"),
-            15,
-            Color.rgb(244, 244, 245),
+            11,
+            Color.rgb(174, 180, 189),
             true
         ));
 
         TextView questionText = text(
             question.optString("question", ""),
             14,
-            Color.rgb(185, 190, 198),
+            Color.rgb(242, 244, 247),
             false
         );
         questionText.setLineSpacing(0, 1.15f);
@@ -164,13 +188,13 @@ public class AgentPromptView {
         if (question.optBoolean("allowFreeformInput", true)) {
             EditText freeText = new EditText(context);
             freeText.setHint("Type an answer...");
-            freeText.setHintTextColor(Color.rgb(113, 120, 130));
-            freeText.setTextColor(Color.rgb(244, 244, 245));
+            freeText.setHintTextColor(Color.rgb(104, 111, 121));
+            freeText.setTextColor(Color.rgb(242, 244, 247));
             freeText.setTextSize(14);
             freeText.setMinLines(2);
             freeText.setGravity(Gravity.TOP);
             freeText.setPadding(dp(11), dp(9), dp(11), dp(9));
-            freeText.setBackground(rounded(Color.rgb(17, 19, 23), 8, Color.rgb(58, 63, 71)));
+            freeText.setBackground(rounded(Color.rgb(16, 18, 22), 8, Color.rgb(52, 57, 66)));
             card.addView(freeText, layoutMatch(0, 9, 0, 0));
             freeTextInputs.put(questionId, freeText);
         }
@@ -187,11 +211,11 @@ public class AgentPromptView {
             : label + recommended + "\n" + description;
         control.setText(visibleText);
         control.setTag(label);
-        control.setTextColor(Color.rgb(228, 228, 231));
+        control.setTextColor(Color.rgb(228, 231, 235));
         control.setTextSize(14);
         control.setPadding(dp(8), dp(8), dp(8), dp(8));
         control.setButtonTintList(android.content.res.ColorStateList.valueOf(Color.rgb(59, 130, 246)));
-        control.setBackground(rounded(Color.rgb(27, 30, 35), 8, Color.rgb(58, 63, 71)));
+        control.setBackground(optionBackground());
     }
 
     private void dispatch(boolean cancelled) {
@@ -245,6 +269,19 @@ public class AgentPromptView {
         return drawable;
     }
 
+    private StateListDrawable optionBackground() {
+        StateListDrawable drawable = new StateListDrawable();
+        drawable.addState(
+            new int[] { android.R.attr.state_checked },
+            rounded(Color.rgb(20, 33, 58), 8, Color.rgb(59, 130, 246))
+        );
+        drawable.addState(
+            new int[] {},
+            rounded(Color.rgb(19, 21, 25), 8, Color.rgb(52, 57, 66))
+        );
+        return drawable;
+    }
+
     private LinearLayout.LayoutParams layout(
         int width,
         int height,
@@ -282,6 +319,25 @@ public class AgentPromptView {
         int marginBottom
     ) {
         LinearLayout.LayoutParams params = layout(0, dp(48), marginStart, marginTop, marginEnd, marginBottom);
+        params.weight = weight;
+        return params;
+    }
+
+    private LinearLayout.LayoutParams weightedLayoutWrap(
+        float weight,
+        int marginStart,
+        int marginTop,
+        int marginEnd,
+        int marginBottom
+    ) {
+        LinearLayout.LayoutParams params = layout(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            marginStart,
+            marginTop,
+            marginEnd,
+            marginBottom
+        );
         params.weight = weight;
         return params;
     }

@@ -19,10 +19,12 @@ import org.json.JSONObject;
  * notification path.
  */
 public class WearQuestionListenerService extends WearableListenerService {
+    public static final String ACTION_SNAPSHOT_UPDATED = "dev.jait.mobile.wear.SNAPSHOT_UPDATED";
     private static final String CHANNEL_ID = "jait-wear-questions";
     private static final String QUESTION_PATH = "/jait/question";
     private static final String DISMISS_PATH = "/jait/dismiss";
     private static final String UPDATE_PATH = "/jait/update";
+    private static final String SNAPSHOT_PATH = "/jait/snapshot";
 
     @Override
     public void onMessageReceived(MessageEvent event) {
@@ -33,6 +35,11 @@ public class WearQuestionListenerService extends WearableListenerService {
             dismiss(payload);
         } else if (UPDATE_PATH.equals(event.getPath())) {
             WearUpdater.download(getApplicationContext(), payload);
+        } else if (SNAPSHOT_PATH.equals(event.getPath())) {
+            WearSnapshotStore.save(this, payload);
+            Intent refreshIntent = new Intent(ACTION_SNAPSHOT_UPDATED);
+            refreshIntent.setPackage(getPackageName());
+            sendBroadcast(refreshIntent);
         }
     }
 
@@ -42,6 +49,7 @@ public class WearQuestionListenerService extends WearableListenerService {
             String requestId = request.optString("id", "");
             if (requestId.isEmpty()) return;
 
+            WearRequestStore.save(this, request);
             createChannel();
             Intent intent = new Intent(this, WearQuestionActivity.class);
             intent.putExtra(WearQuestionActivity.EXTRA_REQUEST, rawRequest);
@@ -79,6 +87,7 @@ public class WearQuestionListenerService extends WearableListenerService {
 
     private void dismiss(String requestId) {
         if (requestId == null || requestId.isEmpty()) return;
+        WearRequestStore.markState(this, requestId, WearRequestStore.STATE_DISMISSED);
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(notificationId(requestId));
         Intent dismissIntent = new Intent(WearQuestionActivity.ACTION_DISMISS);
         dismissIntent.setPackage(getPackageName());

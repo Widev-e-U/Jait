@@ -82,6 +82,7 @@ function renderQuestion(requestId: string, question: AgentQuestionItem): string 
 export function createAgentQuestionOverlayHtml(request: AgentQuestionRequest): string {
   const questionsJson = JSON.stringify(request.questions.map((question) => question.id))
     .replaceAll("<", "\\u003c");
+  const attentionLabel = request.attention === "urgent" ? "Urgent input" : "Input requested";
 
   return `<!doctype html>
 <html>
@@ -93,38 +94,48 @@ export function createAgentQuestionOverlayHtml(request: AgentQuestionRequest): s
   <style>
     :root { color-scheme: dark; font-family: Inter, "Segoe UI", system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; color: #f8fafc; background: #0b1220; }
-    main { min-height: 100vh; padding: 24px; background: radial-gradient(circle at top right, #164e63 0, #0b1220 42%); }
-    header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
-    .mark { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 13px; color: #082f49; background: #67e8f9; font-size: 20px; font-weight: 800; }
-    h1 { margin: 0; font-size: 20px; line-height: 1.25; }
-    .eyebrow { margin: 4px 0 0; color: #94a3b8; font-size: 12px; }
-    section { margin-top: 12px; padding: 15px; border: 1px solid #334155; border-radius: 14px; background: rgb(15 23 42 / 88%); }
-    h2 { margin: 0; font-size: 14px; }
-    section > p { margin: 5px 0 12px; color: #cbd5e1; font-size: 13px; line-height: 1.45; }
+    body { margin: 0; color: #f2f4f7; background: #0d0f12; }
+    main { min-height: 100vh; padding: 22px; background: #0d0f12; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid #343942; }
+    .mark { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(59 130 246 / 55%); border-radius: 10px; color: #fff; background: rgb(59 130 246 / 18%); }
+    .mark svg { width: 27px; height: 27px; }
+    .brand { margin: 0 0 3px; color: #60a5fa; font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 19px; font-weight: 650; line-height: 1.28; letter-spacing: -.015em; }
+    .eyebrow { margin: 4px 0 0; color: #858b95; font-size: 12px; }
+    section { margin-top: 12px; padding: 15px; border: 1px solid #343942; border-radius: 10px; background: #181a1f; }
+    h2 { margin: 0; color: #aeb4bd; font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+    section > p { margin: 6px 0 12px; color: #f2f4f7; font-size: 14px; line-height: 1.48; }
     .options { display: grid; gap: 7px; }
-    .option { display: flex; gap: 10px; padding: 10px; border: 1px solid #334155; border-radius: 10px; cursor: pointer; background: #111c30; }
-    .option:hover { border-color: #22d3ee; }
-    .option input { margin-top: 3px; accent-color: #22d3ee; }
+    .option { display: flex; gap: 10px; padding: 10px; border: 1px solid #343942; border-radius: 8px; cursor: pointer; background: #131519; transition: border-color 120ms ease, background 120ms ease; }
+    .option:hover { border-color: #4b5563; background: #171a1f; }
+    .option:has(input:checked) { border-color: #3b82f6; background: rgb(59 130 246 / 10%); }
+    .option input { margin-top: 3px; accent-color: #3b82f6; }
     .option span { min-width: 0; }
     .option strong { display: inline; font-size: 13px; }
-    .option em { margin-left: 7px; color: #67e8f9; font-size: 11px; font-style: normal; }
-    .option small { display: block; margin-top: 2px; color: #94a3b8; line-height: 1.35; }
-    textarea { width: 100%; margin-top: 9px; padding: 10px; resize: vertical; border: 1px solid #334155; border-radius: 10px; outline: none; color: #f8fafc; background: #08101d; font: inherit; font-size: 13px; }
-    textarea:focus { border-color: #22d3ee; box-shadow: 0 0 0 1px #22d3ee; }
+    .option em { margin-left: 7px; color: #60a5fa; font-size: 11px; font-style: normal; }
+    .option small { display: block; margin-top: 3px; color: #858b95; line-height: 1.4; }
+    textarea { width: 100%; margin-top: 9px; padding: 10px; resize: vertical; border: 1px solid #343942; border-radius: 8px; outline: none; color: #f2f4f7; background: #101216; font: inherit; font-size: 13px; }
+    textarea::placeholder { color: #686f79; }
+    textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }
     footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-    button { min-width: 90px; padding: 9px 14px; border: 0; border-radius: 10px; color: #e2e8f0; background: #334155; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
-    button.primary { color: #083344; background: #67e8f9; }
+    button { min-width: 96px; padding: 9px 14px; border: 1px solid #343942; border-radius: 8px; color: #e4e7eb; background: #22262c; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+    button.primary { border-color: #3b82f6; color: #fff; background: #3b82f6; }
     button:hover { filter: brightness(1.08); }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <div class="mark">J</div>
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 1024 1024" fill="none">
+          <path d="M318 372 L430 486 L318 600" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
       <div>
+        <p class="brand">Jait</p>
         <h1>${escapeHtml(request.title)}</h1>
-        <p class="eyebrow">Jait needs your input</p>
+        <p class="eyebrow">${attentionLabel}</p>
       </div>
     </header>
     <form id="question-form">

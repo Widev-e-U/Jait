@@ -41,6 +41,7 @@ function trimCommandOutput(stdout: string): string {
 // this process and every client that receives the diff payload — desktop
 // renderers hit V8's ~2 GB heap ceiling and OOM-crash on every reconnect.
 const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
+const COMMITTABLE_PATHSPEC = '-- . ":(exclude).jait/release-checkout-*"';
 
 /** Read a working-tree file for diff display; oversized files get a short placeholder instead. */
 async function readDiffFileCapped(absPath: string): Promise<string> {
@@ -1071,28 +1072,28 @@ export class GitService {
     }
 
     // Commit step
-    const porcelain = await gitExec(cwd, "status --porcelain -- .").catch(() => "");
+    const porcelain = await gitExec(cwd, `status --porcelain ${COMMITTABLE_PATHSPEC}`).catch(() => "");
     if (porcelain.length > 0) {
-      await gitExec(cwd, "add -A -- .");
+      await gitExec(cwd, `add -A ${COMMITTABLE_PATHSPEC}`);
 
       try {
         let msg = commitMessage?.trim();
         if (!msg) {
           // Auto-generate a commit message from the diff summary
           try {
-            const diffSummary = await gitExec(cwd, "diff --cached --stat -- .");
+            const diffSummary = await gitExec(cwd, `diff --cached --stat ${COMMITTABLE_PATHSPEC}`);
             msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
           } catch {
             msg = "chore: auto-commit changes";
           }
         }
 
-        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}" -- .`);
+        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}" ${COMMITTABLE_PATHSPEC}`);
         const sha = await gitExec(cwd, "rev-parse HEAD");
         result.commit = { status: "created", commitSha: sha, subject: msg };
       } catch (err) {
         // Unstage so we don't leave stale staged files behind
-        await gitExec(cwd, "reset HEAD -- .").catch(() => {});
+        await gitExec(cwd, `reset HEAD ${COMMITTABLE_PATHSPEC}`).catch(() => {});
         throw err;
       }
     }

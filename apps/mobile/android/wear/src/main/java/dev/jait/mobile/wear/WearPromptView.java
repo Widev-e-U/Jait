@@ -11,6 +11,8 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -37,6 +39,10 @@ final class WearPromptView {
         void onResult(JSONObject result, boolean cancelled);
     }
 
+    interface OpenListener {
+        void onOpen(WearRequestStore.Entry entry);
+    }
+
     private final Context context;
     private final Listener listener;
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
@@ -46,6 +52,144 @@ final class WearPromptView {
     WearPromptView(Context context, Listener listener) {
         this.context = context;
         this.listener = listener;
+    }
+
+    View buildHome(List<WearRequestStore.Entry> entries, OpenListener openListener) {
+        int pendingCount = 0;
+        for (WearRequestStore.Entry entry : entries) {
+            if (entry.isPending()) pendingCount++;
+        }
+
+        LinearLayout content = new LinearLayout(context);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(34), dp(28), dp(34), dp(32));
+
+        LinearLayout brand = new LinearLayout(context);
+        brand.setOrientation(LinearLayout.HORIZONTAL);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout mark = new FrameLayout(context);
+        mark.setBackground(rounded(Color.rgb(29, 65, 119), 9, Color.rgb(59, 130, 246)));
+        ImageView markIcon = new ImageView(context);
+        markIcon.setImageResource(R.drawable.ic_jait_mark);
+        markIcon.setPadding(dp(7), dp(7), dp(7), dp(7));
+        mark.addView(markIcon, new FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER));
+        brand.addView(mark, new LinearLayout.LayoutParams(dp(34), dp(34)));
+
+        LinearLayout heading = new LinearLayout(context);
+        heading.setOrientation(LinearLayout.VERTICAL);
+        TextView title = text("Jait", 18, Color.rgb(242, 244, 247), true);
+        heading.addView(title);
+        TextView subtitle = text("Agent inbox", 10, Color.rgb(133, 139, 149), false);
+        heading.addView(subtitle);
+        brand.addView(heading, weightedLayoutWrap(1f, 10, 0, 0, 0));
+
+        if (pendingCount > 0) {
+            TextView badge = text(String.valueOf(pendingCount), 10, Color.WHITE, true);
+            badge.setGravity(Gravity.CENTER);
+            badge.setBackground(rounded(Color.rgb(37, 99, 235), 10, Color.TRANSPARENT));
+            brand.addView(badge, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        }
+        content.addView(brand, layoutMatch(0, 0, 0, 18));
+
+        if (entries.isEmpty()) {
+            LinearLayout empty = new LinearLayout(context);
+            empty.setOrientation(LinearLayout.VERTICAL);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(dp(14), dp(34), dp(14), dp(34));
+            empty.setBackground(rounded(Color.rgb(21, 24, 29), 18, Color.rgb(42, 47, 55)));
+
+            TextView emptyTitle = text("All quiet", 15, Color.rgb(226, 232, 240), true);
+            emptyTitle.setGravity(Gravity.CENTER);
+            empty.addView(emptyTitle);
+            TextView emptyDetail = text(
+                "Questions from your agents will collect here.",
+                11,
+                Color.rgb(133, 139, 149),
+                false
+            );
+            emptyDetail.setGravity(Gravity.CENTER);
+            emptyDetail.setLineSpacing(0, 1.15f);
+            empty.addView(emptyDetail, layoutMatch(8, 8, 8, 0));
+            content.addView(empty);
+        } else {
+            for (WearRequestStore.Entry entry : entries) {
+                content.addView(buildInboxCard(entry, openListener), layoutMatch(0, 0, 0, 10));
+            }
+        }
+
+        ScrollView scrollView = new ScrollView(context);
+        scrollView.setFillViewport(true);
+        scrollView.setClipToPadding(false);
+        scrollView.setBackgroundColor(Color.rgb(13, 15, 18));
+        scrollView.addView(content, new ScrollView.LayoutParams(
+            ScrollView.LayoutParams.MATCH_PARENT,
+            ScrollView.LayoutParams.WRAP_CONTENT
+        ));
+
+        FrameLayout background = new FrameLayout(context);
+        background.setBackgroundColor(Color.rgb(13, 15, 18));
+        background.addView(scrollView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        return background;
+    }
+
+    private View buildInboxCard(WearRequestStore.Entry entry, OpenListener openListener) {
+        LinearLayout card = new LinearLayout(context);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+        card.setBackground(rounded(Color.rgb(21, 24, 29), 14, Color.rgb(42, 47, 55)));
+
+        LinearLayout metadata = new LinearLayout(context);
+        metadata.setOrientation(LinearLayout.HORIZONTAL);
+        metadata.setGravity(Gravity.CENTER_VERTICAL);
+
+        int stateColor = Color.rgb(133, 139, 149);
+        String stateLabel = "Dismissed";
+        if (WearRequestStore.STATE_PENDING.equals(entry.state)) {
+            stateColor = Color.rgb(96, 165, 250);
+            stateLabel = "Needs reply";
+        } else if (WearRequestStore.STATE_ANSWERED.equals(entry.state)) {
+            stateColor = Color.rgb(74, 222, 128);
+            stateLabel = "Answered";
+        }
+
+        TextView state = text(stateLabel, 10, stateColor, true);
+        metadata.addView(state, weightedLayoutWrap(1f, 0, 0, 0, 0));
+        TextView age = text(ageLabel(entry.receivedAt, System.currentTimeMillis()), 9, Color.rgb(100, 106, 116), false);
+        metadata.addView(age);
+        card.addView(metadata, layoutMatch(0, 0, 0, 7));
+
+        TextView cardTitle = text(entry.title, 13, Color.rgb(242, 244, 247), true);
+        cardTitle.setMaxLines(1);
+        card.addView(cardTitle);
+
+        TextView question = text(entry.question, 11, Color.rgb(177, 183, 193), false);
+        question.setMaxLines(3);
+        question.setLineSpacing(0, 1.12f);
+        card.addView(question, layoutMatch(0, 5, 0, 0));
+
+        if (entry.isPending()) {
+            TextView action = text("Tap to answer  →", 10, Color.rgb(96, 165, 250), true);
+            card.addView(action, layoutMatch(0, 9, 0, 0));
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setOnClickListener(view -> openListener.onOpen(entry));
+        }
+        return card;
+    }
+
+    static String ageLabel(long receivedAt, long now) {
+        if (receivedAt <= 0L || now <= receivedAt) return "now";
+        long minutes = (now - receivedAt) / 60_000L;
+        if (minutes < 1L) return "now";
+        if (minutes < 60L) return minutes + "m";
+        long hours = minutes / 60L;
+        if (hours < 24L) return hours + "h";
+        long days = hours / 24L;
+        return days + "d";
     }
 
     View build(JSONObject request) throws JSONException {
@@ -229,6 +373,17 @@ final class WearPromptView {
         float weight, int marginStart, int marginTop, int marginEnd, int marginBottom
     ) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(32));
+        params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
+        params.weight = weight;
+        return params;
+    }
+
+    private LinearLayout.LayoutParams weightedLayoutWrap(
+        float weight, int marginStart, int marginTop, int marginEnd, int marginBottom
+    ) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
         params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
         params.weight = weight;
         return params;

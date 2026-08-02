@@ -1,3 +1,5 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredValue']
@@ -20,6 +22,10 @@ let getJaitMcpToolArgs: typeof import('./tool-call-card')['getJaitMcpToolArgs']
 let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
+let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
+let humanizeStructuredKey: typeof import('./tool-call-card')['humanizeStructuredKey']
+let StructuredDataView: typeof import('./tool-call-card')['StructuredDataView']
+let ToolSearchResultsView: typeof import('./tool-call-card')['ToolSearchResultsView']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -51,6 +57,10 @@ beforeAll(async () => {
     getLatestSubAgentActivity,
     getToolInvocationLabels,
     shouldRenderToolCall,
+    getToolSearchResultItems,
+    humanizeStructuredKey,
+    StructuredDataView,
+    ToolSearchResultsView,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -336,6 +346,88 @@ describe('formatOutput', () => {
 
     expect(output).toBe('• file.read — Read the contents of a project file.\n• preview.open — Open the live web preview.')
     expect(output).not.toContain('parameters')
+  })
+})
+
+describe('structured tool result views', () => {
+  const toolSearchPayload = {
+    result: {
+      content: [{
+        type: 'text',
+        text: 'Found 2 tool(s) matching the request.\n' + JSON.stringify({
+          matches: [
+            {
+              name: 'file.read',
+              description: 'Prefer Jait tools whenever possible.\n\nRead the contents of a project file.',
+              category: 'filesystem',
+              tier: 'standard',
+              parameters: { type: 'object', properties: { path: { type: 'string' } } },
+            },
+            {
+              name: 'preview.open',
+              description: 'Open the live web preview.',
+              category: 'surfaces',
+              tier: 'standard',
+              parameters: { type: 'object' },
+            },
+          ],
+        }),
+      }],
+    },
+  }
+
+  it('extracts concise search rows from nested MCP envelopes', () => {
+    expect(getToolSearchResultItems(toolSearchPayload)).toEqual([
+      {
+        name: 'file.read',
+        description: 'Read the contents of a project file.',
+        category: 'filesystem',
+        tier: 'standard',
+      },
+      {
+        name: 'preview.open',
+        description: 'Open the live web preview.',
+        category: 'surfaces',
+        tier: 'standard',
+      },
+    ])
+  })
+
+  it('renders tool search results as readable rows without schema JSON', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ToolSearchResultsView, { items: getToolSearchResultItems(toolSearchPayload) }),
+    )
+
+    expect(markup).toContain('Available tools')
+    expect(markup).toContain('2 found')
+    expect(markup).toContain('file.read')
+    expect(markup).toContain('Filesystem')
+    expect(markup).not.toContain('parameters')
+    expect(markup).not.toContain('&quot;')
+  })
+
+  it('renders generic structured data with human labels and values', () => {
+    expect(humanizeStructuredKey('exit_code')).toBe('Exit Code')
+    expect(humanizeStructuredKey('terminalId')).toBe('Terminal Id')
+
+    const markup = renderToStaticMarkup(
+      createElement(StructuredDataView, {
+        value: {
+          exit_code: 0,
+          timedOut: false,
+          targets: [{ display_name: 'Gateway', connected: true }],
+        },
+      }),
+    )
+
+    expect(markup).toContain('Exit Code')
+    expect(markup).toContain('Timed Out')
+    expect(markup).toContain('Display Name')
+    expect(markup).toContain('Gateway')
+    expect(markup).toContain('Yes')
+    expect(markup).toContain('No')
+    expect(markup).not.toContain('&quot;Gateway&quot;')
+    expect(markup).not.toContain('[0]')
   })
 })
 

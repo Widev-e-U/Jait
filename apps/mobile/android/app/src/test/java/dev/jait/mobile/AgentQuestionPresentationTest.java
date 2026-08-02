@@ -18,25 +18,41 @@ public class AgentQuestionPresentationTest {
     }
 
     @Test
-    public void lockedScreenUsesImmediateFullScreenPresentation() {
+    public void screenOffUsesNotificationOnlyEvenWhenUnlocked() {
         assertEquals(
-            AgentQuestionPresentation.Mode.FULL_SCREEN_ACTIVITY,
-            AgentQuestionPresentation.modeFor(true, true)
+            AgentQuestionPresentation.Mode.NOTIFICATION_ONLY,
+            AgentQuestionPresentation.modeFor(false, false, true)
         );
     }
 
     @Test
-    public void unavailableOverlayUsesImmediateFullScreenPresentation() {
+    public void lockedInteractiveScreenUsesNotificationOnly() {
         assertEquals(
-            AgentQuestionPresentation.Mode.FULL_SCREEN_ACTIVITY,
-            AgentQuestionPresentation.modeFor(false, false)
+            AgentQuestionPresentation.Mode.NOTIFICATION_ONLY,
+            AgentQuestionPresentation.modeFor(true, true, true)
         );
     }
 
     @Test
-    public void normalQuestionUsesJaitContinuationCopy() {
+    public void activeUnlockedScreenUsesAvailableOverlay() {
         assertEquals(
-            "Jait needs your input to continue.",
+            AgentQuestionPresentation.Mode.SYSTEM_OVERLAY,
+            AgentQuestionPresentation.modeFor(true, false, true)
+        );
+    }
+
+    @Test
+    public void activeScreenWithoutOverlayPermissionUsesDirectActivity() {
+        assertEquals(
+            AgentQuestionPresentation.Mode.DIRECT_ACTIVITY,
+            AgentQuestionPresentation.modeFor(true, false, false)
+        );
+    }
+
+    @Test
+    public void normalQuestionUsesContinuationCopy() {
+        assertEquals(
+            "Input needed to continue.",
             AgentQuestionPresentation.subtitleFor("normal")
         );
     }
@@ -46,6 +62,22 @@ public class AgentQuestionPresentationTest {
         assertEquals(
             "Urgent input needed to continue.",
             AgentQuestionPresentation.subtitleFor("urgent")
+        );
+    }
+
+    @Test
+    public void defaultJaitHeadingDoesNotDuplicateBrandLockup() {
+        assertEquals(
+            "Input requested",
+            AgentQuestionPresentation.titleFor("Jait needs your input")
+        );
+    }
+
+    @Test
+    public void customQuestionTitleIsPreserved() {
+        assertEquals(
+            "Morning check-in",
+            AgentQuestionPresentation.titleFor("  Morning check-in  ")
         );
     }
 }

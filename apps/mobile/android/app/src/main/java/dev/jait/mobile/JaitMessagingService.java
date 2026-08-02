@@ -1,10 +1,10 @@
 package dev.jait.mobile;
 
-import android.app.KeyguardManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -94,15 +94,19 @@ public class JaitMessagingService extends FirebaseMessagingService {
 
         WearBridge.relayQuestion(this, request);
 
-        KeyguardManager keyguardManager = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-        boolean locked = keyguardManager != null && keyguardManager.isKeyguardLocked();
+        AgentDeviceState.Snapshot deviceState = AgentDeviceState.read(this);
         boolean overlayAvailable = AgentOverlayWindow.canShow(this);
-        AgentQuestionPresentation.Mode mode =
-            AgentQuestionPresentation.modeFor(locked, overlayAvailable);
-        boolean launchActivityFallback = false;
+        AgentQuestionPresentation.Mode mode = AgentQuestionPresentation.modeFor(
+            deviceState.interactive,
+            deviceState.locked,
+            overlayAvailable
+        );
+        boolean launchActivityFallback = mode == AgentQuestionPresentation.Mode.DIRECT_ACTIVITY;
+        boolean allowFullScreenIntent = launchActivityFallback;
         if (mode == AgentQuestionPresentation.Mode.SYSTEM_OVERLAY) {
             if (AgentOverlayWindow.show(getApplicationContext(), request)) return;
-            launchActivityFallback = true;
+            launchActivityFallback = AgentDeviceState.isActive(this);
+            allowFullScreenIntent = launchActivityFallback;
         }
 
         createChannel();
@@ -120,17 +124,24 @@ public class JaitMessagingService extends FirebaseMessagingService {
             if (first != null) body = first.optString("question", body);
         }
         NotificationCompat.Builder notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(request.optString("title", "Jait needs your input"))
+            .setSmallIcon(R.drawable.ic_jait_notification)
+            .setColor(Color.rgb(59, 130, 246))
+            .setContentTitle(AgentQuestionPresentation.titleFor(request.optString("title")))
             .setContentText(body)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(
+                mode == AgentQuestionPresentation.Mode.NOTIFICATION_ONLY
+                    ? NotificationCompat.CATEGORY_MESSAGE
+                    : NotificationCompat.CATEGORY_ALARM
+            )
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
             .setTimeoutAfter(300_000L);
+        if (allowFullScreenIntent) {
+            notification.setFullScreenIntent(pendingIntent, true);
+        }
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
             .notify(AgentPromptActivity.notificationId(requestId), notification.build());
 

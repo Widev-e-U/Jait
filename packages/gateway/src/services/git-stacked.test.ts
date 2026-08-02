@@ -87,6 +87,40 @@ describe("runStackedAction – unstage on commit failure", () => {
     expect(status).toBe("");
   });
 
+  it("ignores untracked local release checkouts when committing", { timeout: 15_000 }, async () => {
+    const releaseCheckoutDir = join(repoDir, ".jait", "release-checkout-20260729");
+    await mkdir(releaseCheckoutDir, { recursive: true });
+    git(releaseCheckoutDir, "init");
+    await writeFile(join(repoDir, "file.txt"), "hello");
+
+    const result = await svc.runStackedAction(repoDir, "commit", "test: ignore local checkout");
+
+    expect(result.commit.status).toBe("created");
+    expect(git(repoDir, "show --name-only --format= HEAD")).toBe("file.txt");
+  });
+
+  it("ignores stale local release checkout gitlinks when committing", { timeout: 15_000 }, async () => {
+    const releaseCheckoutDir = join(repoDir, ".jait", "release-checkout-20260729");
+    await mkdir(releaseCheckoutDir, { recursive: true });
+    git(releaseCheckoutDir, "init");
+    git(releaseCheckoutDir, "config user.email test@test.com");
+    git(releaseCheckoutDir, "config user.name Test");
+    await writeFile(join(releaseCheckoutDir, "release.txt"), "release");
+    git(releaseCheckoutDir, "add release.txt");
+    git(releaseCheckoutDir, "commit -m release");
+    git(repoDir, "add .jait/release-checkout-20260729");
+    git(repoDir, "commit -m \"track local release checkout\"");
+
+    git(releaseCheckoutDir, "checkout --orphan empty");
+    git(releaseCheckoutDir, "rm -rf .");
+    await writeFile(join(repoDir, "file.txt"), "hello");
+
+    const result = await svc.runStackedAction(repoDir, "commit", "test: ignore stale checkout");
+
+    expect(result.commit.status).toBe("created");
+    expect(git(repoDir, "show --name-only --format= HEAD")).toBe("file.txt");
+  });
+
   it("commits only changes under the requested working directory", { timeout: 15_000 }, async () => {
     const packageDir = join(repoDir, "packages", "one");
     await mkdir(packageDir, { recursive: true });
