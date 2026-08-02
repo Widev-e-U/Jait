@@ -541,7 +541,7 @@ describe('ToolCallGroup', () => {
 
   it('treats run.ssh as an SSH terminal tool', () => {
     expect(summarizeCollapsedToolCalls([
-      { callId: '1', tool: 'run.ssh', args: { host: '192.168.178.53' }, status: 'running', startedAt: 1 },
+      { callId: '1', tool: 'run.ssh', args: { host: '192.0.2.10' }, status: 'running', startedAt: 1 },
     ])).toBe('1 ssh tool call')
   })
 })

@@ -540,7 +540,7 @@ describe("chat route OpenRouter backend selection", () => {
     });
     await memoryService.save({
       scope: "contact",
-      content: "Jakob prefers concise progress updates that mention test evidence.",
+      content: "Alice prefers concise progress updates that mention test evidence.",
       source: { type: "chat", id: "prior-session-progress", surface: "chat" },
     });
     await memoryService.save({

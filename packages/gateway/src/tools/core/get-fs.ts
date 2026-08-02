@@ -7,7 +7,7 @@
  *    another device, e.g. a Windows desktop while the gateway runs on
  *    Linux), route file ops to it. We never resolve a foreign-platform path
  *    against the gateway's local filesystem — that produced broken paths
- *    like `/home/jakob/E:\Zinsrechner/E:\Zinsrechner`.
+ *    like `/home/alice/E:\Zinsrechner/E:\Zinsrechner`.
  * 2. If `targetPath` is absolute and outside the current project boundary,
  *    find or create a local surface scoped to contain that path.
  * 3. Look for an existing surface with the conventional ID `fs-{sessionId}`

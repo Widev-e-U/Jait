@@ -413,13 +413,13 @@ describe("POST /api/project/open", () => {
     const project = projects.create({
       userId: user.id,
       title: "jait",
-      rootPath: "/home/jakob/jait",
+      rootPath: "/home/alice/jait",
       nodeId: "gateway",
     });
     const session = sessions.create({
       userId: user.id,
       projectId: project.id,
-      projectPath: "/home/jakob/jait",
+      projectPath: "/home/alice/jait",
       name: "Current chat",
     });
 
@@ -435,7 +435,7 @@ describe("POST /api/project/open", () => {
     expect(updatedSession?.projectPath).toBe(writableTestRoot);
 
     const updatedProject = projects.getById(project.id, user.id);
-    expect(updatedProject?.rootPath).toBe("/home/jakob/jait");
+    expect(updatedProject?.rootPath).toBe("/home/alice/jait");
   });
 
   it("should read from the surface that allows the path when the requested surface is stale", async () => {

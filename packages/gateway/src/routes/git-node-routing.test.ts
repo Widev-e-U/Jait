@@ -28,6 +28,6 @@ describe("resolveRemoteGitNodeId", () => {
   });
 
   it("keeps gateway projects local", () => {
-    expect(resolveRemoteGitNodeId(nodes, "/home/jakob/jait", "gateway", true)).toBeNull();
+    expect(resolveRemoteGitNodeId(nodes, "/home/alice/jait", "gateway", true)).toBeNull();
   });
 });

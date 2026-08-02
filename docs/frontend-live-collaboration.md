@@ -555,7 +555,7 @@ Suggested events:
 ```json
 {
   "name": "isolated-jait-live-test",
-  "workspaceRoot": "/home/jakob/jait",
+  "workspaceRoot": "/home/alice/jait",
   "targetUrl": "http://127.0.0.1:8217",
   "mode": "isolated",
   "origin": "attached",

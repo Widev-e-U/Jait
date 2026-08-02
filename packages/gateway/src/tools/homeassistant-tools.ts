@@ -5,7 +5,7 @@ import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 //
 // Credentials are resolved (in priority order) from the per-request API keys
 // or the gateway environment:
-//   - HA_URL / HASS_URL       base URL, e.g. http://192.168.178.53:8123
+//   - HA_URL / HASS_URL       base URL, e.g. http://192.0.2.10:8123
 //   - HA_TOKEN / HASS_TOKEN   a long-lived access token (HA → Profile → Security)
 // ---------------------------------------------------------------------------
 

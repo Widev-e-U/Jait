@@ -78,11 +78,11 @@ function makeSecretPromptTool(secret = "remote-password") {
     },
     write(data: string) {
       writes.push(data);
-      if (data === "ssh jakob@host\r") {
-        queueMicrotask(() => listener?.("jakob@host's password: "));
+      if (data === "ssh alice@host\r") {
+        queueMicrotask(() => listener?.("alice@host's password: "));
       }
       if (data === "sudo whoami\r") {
-        queueMicrotask(() => listener?.("[sudo] password for jakob: "));
+        queueMicrotask(() => listener?.("[sudo] password for alice: "));
       }
       if (data === `${secret}\r`) {
         queueMicrotask(() => listener?.("\r\nconnected\r\n\x1b]633;D;0\x07\x1b]633;B\x07"));
@@ -118,25 +118,25 @@ describe("terminal.run tool status reporting", () => {
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), projectRoot: "/home/jakob/jait" };
+    const context = { ...makeContext(), projectRoot: "/tmp/alice/jait" };
 
-    await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
+    await tool.execute({ command: "cd /tmp/alice/jait && bun test", sandbox: true }, context);
 
     expect(commands[0]).toContain("cd /project && bun test");
   });
 
   it("rewrites quoted project file paths to the sandbox mount path", () => {
-    const command = "cat '/home/jakob/jait/packages/gateway/src/tools/terminal-tools.ts'";
+    const command = "cat '/tmp/alice/jait/packages/gateway/src/tools/terminal-tools.ts'";
 
-    const rewritten = rewriteProjectPathForSandboxCommand(command, "/home/jakob/jait");
+    const rewritten = rewriteProjectPathForSandboxCommand(command, "/tmp/alice/jait");
 
     expect(rewritten).toBe("cat '/project/packages/gateway/src/tools/terminal-tools.ts'");
   });
 
   it("does not rewrite path prefixes that only partially match the project root", () => {
-    const command = "echo /home/jakob/jait-backup && cat /tmp/home/jakob/jait";
+    const command = "echo /tmp/alice/jait-backup && cat /tmp/tmp/alice/jait";
 
-    const rewritten = rewriteProjectPathForSandboxCommand(command, "/home/jakob/jait");
+    const rewritten = rewriteProjectPathForSandboxCommand(command, "/tmp/alice/jait");
 
     expect(rewritten).toBe(command);
   });
@@ -148,7 +148,7 @@ describe("terminal.run tool status reporting", () => {
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), projectRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+    const context = { ...makeContext(), projectRoot: "/tmp/alice/jait", sandboxContainerName: "jait-agent-sb-test" };
 
     const result = await tool.execute({ command: "pwd", sandbox: true }, context);
 
@@ -166,9 +166,9 @@ describe("terminal.run tool status reporting", () => {
       return { output: "done", exitCode: 0, timedOut: false };
     });
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
-    const context = { ...makeContext(), projectRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+    const context = { ...makeContext(), projectRoot: "/tmp/alice/jait", sandboxContainerName: "jait-agent-sb-test" };
 
-    await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
+    await tool.execute({ command: "cd /tmp/alice/jait && bun test", sandbox: true }, context);
 
     expect(commands[0]).toContain("cd /project && bun test");
   });
@@ -228,7 +228,7 @@ describe("terminal.run tool status reporting", () => {
 
   it("completes when a non-OSC shell prompt returns", async () => {
     const { tool } = makePromptFallbackTool([
-      "rg\r\nCommand 'rg' not found, but can be installed with:\r\nsudo apt install ripgrep\r\njakob@movable-base:~/jait$ ",
+      "rg\r\nCommand 'rg' not found, but can be installed with:\r\nsudo apt install ripgrep\r\nalice@dev-host:~/jait$ ",
     ]);
 
     const result = await tool.execute({ command: "rg", terminalId: "term-existing", timeout: 1000 }, makeContext());
@@ -241,7 +241,7 @@ describe("terminal.run tool status reporting", () => {
 
   it("completes when a zsh-style path prompt returns", async () => {
     const { tool } = makePromptFallbackTool([
-      "pwd\r\n/home/jakob/jait\r\n~/jait % ",
+      "pwd\r\n/tmp/alice/jait\r\n~/jait % ",
     ], "/bin/zsh");
 
     const result = await tool.execute({ command: "pwd", terminalId: "term-existing", timeout: 1000 }, makeContext());
@@ -249,13 +249,13 @@ describe("terminal.run tool status reporting", () => {
     expect(result.ok).toBe(true);
     expect(result.message).toContain("exit code 0");
     expect((result.data as any).timedOut).toBe(false);
-    expect((result.data as any).output).toContain("/home/jakob/jait");
+    expect((result.data as any).output).toContain("/tmp/alice/jait");
     expect((result.data as any).output).not.toContain("~/jait %");
   });
 
   it("captures late output that arrives after prompt fallback starts settling", async () => {
     const { tool } = makePromptFallbackTool([
-      "echo hi\r\nhi\r\njakob@movable-base:~/jait$ ",
+      "echo hi\r\nhi\r\nalice@dev-host:~/jait$ ",
       "\r\nlate formatter output",
     ]);
 
@@ -265,7 +265,7 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).timedOut).toBe(false);
     expect((result.data as any).output).toContain("hi");
     expect((result.data as any).output).toContain("late formatter output");
-    expect((result.data as any).output).not.toContain("jakob@movable-base");
+    expect((result.data as any).output).not.toContain("alice@dev-host");
   });
 
   it("still times out when no OSC marker or shell prompt returns", async () => {
@@ -292,7 +292,7 @@ describe("terminal.run tool status reporting", () => {
     expect(writes).toContain("remote-password\r");
     expect(requests).toEqual([{
       title: "Terminal input required",
-      prompt: "[sudo] password for jakob:",
+      prompt: "[sudo] password for alice:",
       requestedBy: "terminal.run",
     }]);
   });
@@ -300,7 +300,7 @@ describe("terminal.run tool status reporting", () => {
   it("requests an inline secret when an SSH terminal command asks for a password", async () => {
     const { tool, writes, requests } = makeSecretPromptTool();
 
-    const result = await tool.execute({ command: "ssh jakob@host", terminalId: "term-existing", timeout: 1000 }, {
+    const result = await tool.execute({ command: "ssh alice@host", terminalId: "term-existing", timeout: 1000 }, {
       ...makeContext(),
       userId: "user-1",
     });
@@ -310,7 +310,7 @@ describe("terminal.run tool status reporting", () => {
     expect(writes).toContain("remote-password\r");
     expect(requests).toEqual([{
       title: "SSH password",
-      prompt: "jakob@host's password:",
+      prompt: "alice@host's password:",
       requestedBy: "terminal.run",
     }]);
   });

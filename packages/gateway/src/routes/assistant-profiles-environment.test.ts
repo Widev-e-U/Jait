@@ -209,7 +209,7 @@ describe("assistant profile and environment routes", () => {
     const project = projectService.create({
       userId: user.id,
       title: "Jait",
-      rootPath: "/home/jakob/jait",
+      rootPath: "/home/alice/jait",
       nodeId: "gateway",
     });
 
@@ -223,7 +223,7 @@ describe("assistant profile and environment routes", () => {
     repoService.create({
       userId: user.id,
       name: "Jait",
-      localPath: "/home/jakob/jait",
+      localPath: "/home/alice/jait",
       defaultBranch: "main",
     });
 

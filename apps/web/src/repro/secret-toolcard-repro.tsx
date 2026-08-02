@@ -14,7 +14,7 @@ function SecretToolcardRepro() {
     id: 'secret-e2e',
     sessionId: 'session-e2e',
     title: 'SSH password',
-    prompt: "Password for jakob@host",
+    prompt: "Password for alice@host",
     requestedBy: 'terminal.run',
     expiresAt: new Date(Date.now() + 120_000).toISOString(),
     status: 'pending',
@@ -23,9 +23,9 @@ function SecretToolcardRepro() {
   const toolCalls = useMemo<ToolCallInfo[]>(() => [{
     callId: 'terminal-ssh-e2e',
     tool: 'terminal.run',
-    args: { command: 'ssh jakob@host', timeout: 120_000 },
+    args: { command: 'ssh alice@host', timeout: 120_000 },
     status: 'running',
-    streamingOutput: "jakob@host's password: ",
+    streamingOutput: "alice@host's password: ",
     startedAt: Date.now(),
   }], [])
 

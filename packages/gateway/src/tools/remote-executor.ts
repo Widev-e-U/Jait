@@ -92,7 +92,7 @@ export function resolveRemoteNodeForSession(
 ): string | null {
   // If the project is explicitly bound to a non-gateway node, use that directly.
   // This avoids the existsSync ambiguity when both the gateway and a remote node
-  // share the same path prefix (e.g. both have /home/jakob).
+  // share the same path prefix (e.g. both have /home/alice).
   if (projectNodeId && projectNodeId !== "gateway") {
     // Verify the node is still connected
     const node = ws.findNodeByDeviceId(projectNodeId);

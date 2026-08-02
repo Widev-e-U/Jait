@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const PROJECT_ROOT = process.env.PROJECT_ROOT || '/home/jakob/jait'
+const PROJECT_ROOT = process.env.PROJECT_ROOT || '/home/alice/jait'
 const DOCS_SITE_ROOT = process.env.DOCS_SITE_ROOT || `${PROJECT_ROOT}/docs/site`
 
 async function registerUser(request: Parameters<typeof test>[0]['request']) {

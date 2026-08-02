@@ -367,7 +367,7 @@ describe('tool call body helpers', () => {
       getToolFilePaths(
         'file.read',
         { path: 'apps/web/src/components/chat/tool-call-card.tsx' },
-        { path: '/home/jakob/jait/apps/web/src/components/chat/tool-call-card.tsx' },
+        { path: '/home/alice/jait/apps/web/src/components/chat/tool-call-card.tsx' },
         'Read tool-call-card.tsx',
       ),
     ).toEqual(['apps/web/src/components/chat/tool-call-card.tsx'])

@@ -22,20 +22,20 @@ afterEach(() => {
 describe("Home Assistant tools", () => {
   it("uses the HA_URL and HA_TOKEN names exposed by Settings", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      entity_id: "person.jakob",
+      entity_id: "person.alice",
       state: "home",
-      attributes: { friendly_name: "Jakob" },
+      attributes: { friendly_name: "Alice" },
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createHomeAssistantStatesTool().execute(
-      { entity_id: "person.jakob" },
+      { entity_id: "person.alice" },
       context({ HA_URL: "http://homeassistant.local:8123/", HA_TOKEN: "secret-token" }),
     );
 
-    expect(result).toEqual(expect.objectContaining({ ok: true, message: "person.jakob = home" }));
+    expect(result).toEqual(expect.objectContaining({ ok: true, message: "person.alice = home" }));
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://homeassistant.local:8123/api/states/person.jakob",
+      "http://homeassistant.local:8123/api/states/person.alice",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer secret-token" }),
       }),

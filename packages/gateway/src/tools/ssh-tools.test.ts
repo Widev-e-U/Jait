@@ -122,7 +122,7 @@ describe("ssh tools for external providers", () => {
       "ssh.run",
       {
         host: "linux-box.local",
-        username: "jakob",
+        username: "alice",
         command: "printf codex-remote",
         authMethod: "password",
         strictHostKeyChecking: false,
@@ -135,7 +135,7 @@ describe("ssh tools for external providers", () => {
     expect((result.data as { output: string }).output).toContain("codex-remote");
     expect(requests).toEqual([{
       title: "SSH password",
-      prompt: "Password for jakob@linux-box.local",
+      prompt: "Password for alice@linux-box.local",
       requestedBy: "ssh.run",
     }]);
     expect(JSON.stringify(auditEntries)).not.toContain(secret);
@@ -153,8 +153,8 @@ describe("ssh tools for external providers", () => {
     userSecrets.save({
       userId: "user-1",
       type: "ssh-password",
-      key: "jakob@linux-box.local:22",
-      label: "SSH password for jakob@linux-box.local",
+      key: "alice@linux-box.local:22",
+      label: "SSH password for alice@linux-box.local",
       value: "remembered-password",
     });
     const secretInput = new SecretInputService({
@@ -167,7 +167,7 @@ describe("ssh tools for external providers", () => {
 
     const result = await tool.execute({
       host: "linux-box.local",
-      username: "jakob",
+      username: "alice",
       command: "printf codex-remote",
       authMethod: "password",
       strictHostKeyChecking: false,
@@ -249,7 +249,7 @@ describe("ssh.run sudo elevation", () => {
       "ssh.run",
       {
         host: "linux-box.local",
-        username: "jakob",
+        username: "alice",
         command: "apt-get install -y cups",
         sudo: true,
         strictHostKeyChecking: false,
@@ -264,7 +264,7 @@ describe("ssh.run sudo elevation", () => {
     expect(output).not.toMatch(/__JAIT_SUDO_/);
     expect(requests).toEqual([{
       title: "sudo password",
-      prompt: "sudo password for jakob@linux-box.local",
+      prompt: "sudo password for alice@linux-box.local",
       requestedBy: "ssh.run",
     }]);
     // The password was fed to the remote sudo prompt over the PTY...
@@ -284,8 +284,8 @@ describe("ssh.run sudo elevation", () => {
     userSecrets.save({
       userId: "user-1",
       type: "ssh-sudo-password",
-      key: "jakob@linux-box.local:22",
-      label: "sudo password for jakob@linux-box.local",
+      key: "alice@linux-box.local:22",
+      label: "sudo password for alice@linux-box.local",
       value: "remembered-sudo-pw",
     });
     const secretInput = new SecretInputService({
@@ -298,7 +298,7 @@ describe("ssh.run sudo elevation", () => {
 
     const result = await tool.execute({
       host: "linux-box.local",
-      username: "jakob",
+      username: "alice",
       command: "systemctl enable --now cups",
       sudo: true,
       strictHostKeyChecking: false,
@@ -337,7 +337,7 @@ describe("persistent ssh sessions", () => {
 
     const startPromise = startTool.execute({
       host: "linux-box.local",
-      username: "jakob",
+      username: "alice",
       authMethod: "password",
       strictHostKeyChecking: false,
     }, context({ providerId: "jait" }));

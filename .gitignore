@@ -8,6 +8,7 @@ venv/
 # Environment
 .env
 *.env
+.env.*
 !*.env.example
 
 # Build outputs
@@ -47,6 +48,11 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Local agent transcripts
+/flow.txt
+/contextflow.txt
+/ollama flow.txt
 
 # Testing
 .coverage

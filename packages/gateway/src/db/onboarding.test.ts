@@ -206,7 +206,7 @@ describe("migration runner reliability", () => {
       "workspace-upgrade",
       "user-upgrade",
       "Upgrade Workspace",
-      "/home/jakob/jait",
+      "/home/alice/jait",
       "gateway",
       now,
       now,
@@ -220,7 +220,7 @@ describe("migration runner reliability", () => {
       "session-upgrade",
       "user-upgrade",
       "Upgrade Session",
-      "/home/jakob/jait",
+      "/home/alice/jait",
       "workspace-upgrade",
       now,
       now,
@@ -277,7 +277,7 @@ describe("migration runner reliability", () => {
     `).get("session-upgrade") as { projectId: string; projectPath: string; metadata: string };
     expect(session).toEqual({
       projectId: "workspace-upgrade",
-      projectPath: "/home/jakob/jait",
+      projectPath: "/home/alice/jait",
       metadata: JSON.stringify({ source: "upgrade-test" }),
     });
 
@@ -288,7 +288,7 @@ describe("migration runner reliability", () => {
     `).get("workspace-upgrade") as { id: string; rootPath: string; metadata: string };
     expect(project).toEqual({
       id: "workspace-upgrade",
-      rootPath: "/home/jakob/jait",
+      rootPath: "/home/alice/jait",
       metadata: JSON.stringify({ pinned: true }),
     });
 

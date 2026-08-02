@@ -145,11 +145,11 @@ describe('automation selection storage', () => {
 
   it('matches persisted Windows local paths case-insensitively', () => {
     expect(resolvePersistedSelectedRepoId([
-      { id: 'repo-1', localPath: 'C:/Users/Jakob/Projects/Jait' },
+      { id: 'repo-1', localPath: 'C:/Users/Alice/Projects/Jait' },
       { id: 'repo-9', localPath: 'D:/Other/repo' },
     ], {
       repoId: 'repo-2',
-      localPath: 'c:\\users\\jakob\\projects\\jait\\',
+      localPath: 'c:\\users\\alice\\projects\\jait\\',
     })).toBe('repo-1')
   })
 

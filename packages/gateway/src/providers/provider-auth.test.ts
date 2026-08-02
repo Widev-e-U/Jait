@@ -25,9 +25,9 @@ describe("provider auth helpers", () => {
   });
 
   it("preserves Windows path separators in unquoted arguments", () => {
-    expect(parseCommandLine(`codex login --config C:\\Users\\Jakob\\.codex\\auth.json`)).toEqual({
+    expect(parseCommandLine(`codex login --config C:\\Users\\Alice\\.codex\\auth.json`)).toEqual({
       command: "codex",
-      args: ["login", "--config", "C:\\Users\\Jakob\\.codex\\auth.json"],
+      args: ["login", "--config", "C:\\Users\\Alice\\.codex\\auth.json"],
     });
   });
 

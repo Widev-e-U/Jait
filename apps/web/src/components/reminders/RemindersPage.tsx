@@ -481,7 +481,7 @@ export function MemoryPage() {
                     <Input
                       value={secretKey}
                       onChange={(event) => setSecretKey(event.target.value)}
-                      placeholder="SSH key, for example jakob@192.168.178.53:22"
+                      placeholder="SSH key, for example alice@192.0.2.10:22"
                     />
                     <Input
                       type="password"

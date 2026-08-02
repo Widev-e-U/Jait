@@ -15,7 +15,7 @@ function secret(overrides: Partial<SecretInputRequest> = {}): SecretInputRequest
     id: 'secret-1',
     sessionId: 'session-1',
     title: 'SSH password',
-    prompt: 'Password for jakob@192.168.178.53',
+    prompt: 'Password for alice@192.0.2.10',
     requestedBy: 'ssh.run',
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     status: 'pending',
@@ -74,16 +74,16 @@ describe('secret input tool matching', () => {
   it('matches MCP SSH tool names normalized from mcp__jait__ssh_run', () => {
     expect(secretRequestMatchesTool(secret(), 'mcp-tool', {
       recipient_name: 'mcp__jait__ssh_run',
-      host: '192.168.178.53',
-      username: 'jakob',
+      host: '192.0.2.10',
+      username: 'alice',
     })).toBe(true)
   })
 
   it('matches MCP SSH tool names with functions prefix', () => {
     expect(secretRequestMatchesTool(secret(), 'mcp-tool', {
       recipient_name: 'functions.mcp__jait__ssh_run',
-      host: '192.168.178.53',
-      username: 'jakob',
+      host: '192.0.2.10',
+      username: 'alice',
     })).toBe(true)
   })
 
@@ -118,8 +118,8 @@ describe('secret input tool matching', () => {
       server: 'jait',
       tool: 'ssh.run',
       arguments: {
-        host: '192.168.178.53',
-        username: 'jakob',
+        host: '192.0.2.10',
+        username: 'alice',
         authMethod: 'password',
       },
     })).toBe(true)

@@ -597,7 +597,7 @@ describe("mcp-server", () => {
       name: "Active Session",
       projectPath: "/tmp/current-project",
     });
-    const token = await signAuthToken({ id: userId, username: "jakob" }, "test-secret");
+    const token = await signAuthToken({ id: userId, username: "alice" }, "test-secret");
     let capturedContext: { sessionId: string; projectRoot: string; userId?: string } | null = null;
 
     registry.register({
@@ -738,7 +738,7 @@ describe("mcp-server", () => {
 
   it("passes the authenticated user into MCP tool context when a session override is provided", async () => {
     const registry = new ToolRegistry();
-    const token = await signAuthToken({ id: "user-456", username: "jakob" }, "test-secret");
+    const token = await signAuthToken({ id: "user-456", username: "alice" }, "test-secret");
     let capturedContext: { sessionId: string; projectRoot: string; userId?: string } | null = null;
 
     registry.register({

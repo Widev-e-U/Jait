@@ -14,10 +14,10 @@ describe("VoiceAssistantService", () => {
   it("tells the voice model to default to the normal agent for real questions", () => {
     const service = new VoiceAssistantService({
       config: loadConfig(),
-      verifyToken: async () => ({ id: "u1", username: "Jakob" }),
+      verifyToken: async () => ({ id: "u1", username: "Alice" }),
     });
 
-    const instructions = (service as any).buildInstructions("Jakob") as string;
+    const instructions = (service as any).buildInstructions("Alice") as string;
 
     expect(instructions).toContain("Default to ask_agent_about_request for almost every real question from the user.");
     expect(instructions).toContain("you MUST call ask_agent_about_request before answering.");
@@ -26,10 +26,10 @@ describe("VoiceAssistantService", () => {
   it("configures Realtime voice and low-latency server VAD defaults", () => {
     const service = new VoiceAssistantService({
       config: { ...loadConfig(), realtimeVoice: "shimmer" },
-      verifyToken: async () => ({ id: "u1", username: "Jakob" }),
+      verifyToken: async () => ({ id: "u1", username: "Alice" }),
     });
 
-    const update = (service as any).buildSessionUpdate("Jakob");
+    const update = (service as any).buildSessionUpdate("Alice");
 
     expect(update.session.voice).toBe("shimmer");
     expect(update.session.turn_detection).toEqual({
@@ -47,10 +47,10 @@ describe("VoiceAssistantService", () => {
     process.env["OPENAI_REALTIME_SEMANTIC_EAGERNESS"] = "low";
     const service = new VoiceAssistantService({
       config: loadConfig(),
-      verifyToken: async () => ({ id: "u1", username: "Jakob" }),
+      verifyToken: async () => ({ id: "u1", username: "Alice" }),
     });
 
-    const update = (service as any).buildSessionUpdate("Jakob");
+    const update = (service as any).buildSessionUpdate("Alice");
 
     expect(update.session.turn_detection).toEqual({
       type: "semantic_vad",
@@ -64,10 +64,10 @@ describe("VoiceAssistantService", () => {
     process.env["OPENAI_REALTIME_TURN_DETECTION"] = "disabled";
     const service = new VoiceAssistantService({
       config: loadConfig(),
-      verifyToken: async () => ({ id: "u1", username: "Jakob" }),
+      verifyToken: async () => ({ id: "u1", username: "Alice" }),
     });
 
-    const update = (service as any).buildSessionUpdate("Jakob");
+    const update = (service as any).buildSessionUpdate("Alice");
 
     expect(update.session.turn_detection).toBeNull();
   });

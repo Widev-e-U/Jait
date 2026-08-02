@@ -14,7 +14,7 @@ async function createUpdateServer() {
   await app.ready();
 
   const token = await signAuthToken(
-    { id: "android-owner", username: "jakob" },
+    { id: "android-owner", username: "alice" },
     config.jwtSecret,
   );
 

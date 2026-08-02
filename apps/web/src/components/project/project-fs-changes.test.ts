@@ -17,16 +17,16 @@ describe('fsChangesIncludeFile', () => {
   it('matches project-relative watcher paths to the active file', () => {
     expect(fsChangesIncludeFile(
       { surfaceId: 'fs-1', changes: [{ path: 'AGENTS.md', type: 'updated' }] },
-      '/home/jakob/jait',
-      '/home/jakob/jait/AGENTS.md',
+      '/home/alice/jait',
+      '/home/alice/jait/AGENTS.md',
     )).toBe(true)
   })
 
   it('ignores unrelated watcher paths', () => {
     expect(fsChangesIncludeFile(
       { surfaceId: 'fs-1', changes: [{ path: 'packages/gateway/package.json', type: 'updated' }] },
-      '/home/jakob/jait',
-      '/home/jakob/jait/AGENTS.md',
+      '/home/alice/jait',
+      '/home/alice/jait/AGENTS.md',
     )).toBe(false)
   })
 
@@ -43,31 +43,31 @@ describe('getFsWatcherRefreshDirs', () => {
   it('refreshes the nearest expanded parent for changed files', () => {
     expect(getFsWatcherRefreshDirs(
       { surfaceId: 'fs-1', changes: [{ path: 'packages/gateway/src/ws.ts', type: 'updated' }] },
-      '/home/jakob/jait',
+      '/home/alice/jait',
       new Set([
-        '/home/jakob/jait/packages',
-        '/home/jakob/jait/packages/gateway',
-        '/home/jakob/jait/apps/web',
+        '/home/alice/jait/packages',
+        '/home/alice/jait/packages/gateway',
+        '/home/alice/jait/apps/web',
       ]),
-    )).toEqual(['/home/jakob/jait/packages/gateway'])
+    )).toEqual(['/home/alice/jait/packages/gateway'])
   })
 
   it('refreshes the parent instead of a deleted expanded directory itself', () => {
     expect(getFsWatcherRefreshDirs(
       { surfaceId: 'fs-1', changes: [{ path: 'packages/gateway', type: 'deleted' }] },
-      '/home/jakob/jait',
+      '/home/alice/jait',
       new Set([
-        '/home/jakob/jait/packages',
-        '/home/jakob/jait/packages/gateway',
+        '/home/alice/jait/packages',
+        '/home/alice/jait/packages/gateway',
       ]),
-    )).toEqual(['/home/jakob/jait/packages'])
+    )).toEqual(['/home/alice/jait/packages'])
   })
 
   it('falls back to the root for root-level changes', () => {
     expect(getFsWatcherRefreshDirs(
       { surfaceId: 'fs-1', changes: [{ path: 'package.json', type: 'updated' }] },
-      '/home/jakob/jait',
-      new Set(['/home/jakob/jait/packages']),
-    )).toEqual(['/home/jakob/jait'])
+      '/home/alice/jait',
+      new Set(['/home/alice/jait/packages']),
+    )).toEqual(['/home/alice/jait'])
   })
 })

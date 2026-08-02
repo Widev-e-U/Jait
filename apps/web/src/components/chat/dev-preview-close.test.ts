@@ -23,7 +23,7 @@ describe('close preview clears persisted state', () => {
     const showProjectEditorPanel = vi.fn()
     const setProjectPreviewRequest = vi.fn()
     const showProjectRef = { current: false }
-    const activeProject = { surfaceId: 'fs-root', projectRoot: '/home/jakob/jait', nodeId: 'gateway' }
+    const activeProject = { surfaceId: 'fs-root', projectRoot: '/home/alice/jait', nodeId: 'gateway' }
 
     const routePreviewToProject = (target?: string | null, projectRoot?: string | null) => {
       const trimmed = target?.trim() || null
@@ -46,16 +46,16 @@ describe('close preview clears persisted state', () => {
       return true
     }
 
-    routePreviewToProject('http://127.0.0.1:4173/', '/home/jakob/jait/apps/web')
+    routePreviewToProject('http://127.0.0.1:4173/', '/home/alice/jait/apps/web')
 
     expect(setProjectPreviewState).toHaveBeenCalledWith({
       open: true,
       target: 'http://127.0.0.1:4173/',
-      projectRoot: '/home/jakob/jait/apps/web',
+      projectRoot: '/home/alice/jait/apps/web',
       displayState: 'connected',
       displayTarget: 'http://127.0.0.1:4173/',
     })
-    expect(activeProject.projectRoot).toBe('/home/jakob/jait')
+    expect(activeProject.projectRoot).toBe('/home/alice/jait')
   })
 
   it('closeDevPreviewPanel clears project preview tab AND all local + saved state', () => {
