@@ -558,7 +558,54 @@ describe("context pruning summary", () => {
     expect(reinjected).toBeDefined();
   });
 
-  it("compacts tool output from the current turn without dropping protocol pairs", () => {
+  it("compacts older tool output while leaving recent results untouched", () => {
+    // One old, oversized tool result plus 12 small "recent" ones (the protected window).
+    // Crushing the old one alone should be enough to hit budget, so the 12 recent results —
+    // content the model just fetched — must come out byte-for-byte unchanged.
+    const history: AgentMessage[] = [
+      { role: "system", content: "system prompt" },
+      { role: "user", content: "Inspect the repository and finish the task." },
+      { role: "assistant", content: "", tool_calls: [toolCall("call-old", "file_read")] },
+      {
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "a".repeat(50_000) }),
+        tool_call_id: "call-old",
+        name: "file_read",
+      },
+    ];
+    for (let i = 0; i < 12; i++) {
+      history.push({ role: "assistant", content: "", tool_calls: [toolCall(`call-${i}`, "file_read")] });
+      history.push({
+        role: "tool",
+        content: JSON.stringify({ ok: true, message: "b".repeat(1_000) }),
+        tool_call_id: `call-${i}`,
+        name: "file_read",
+      });
+    }
+    const recentContentsBefore = history.filter((m) => m.role === "tool").slice(1).map((m) => m.content);
+    const contextWindow = 30_000;
+
+    expect(__testUtils.pruneHistory(history, contextWindow, [])).toBe(false);
+    expect(__testUtils.compactToolResultsToBudget(history, [], contextWindow)).toBe(true);
+    __testUtils.repairToolCallHistory(history);
+
+    const toolMessages = history.filter((message) => message.role === "tool");
+    expect(toolMessages).toHaveLength(13);
+    expect(toolMessages[0]!.content).toContain("older tool result compacted");
+    const recentContentsAfter = toolMessages.slice(1).map((m) => m.content);
+    expect(recentContentsAfter).toEqual(recentContentsBefore);
+    expect(history[1]).toMatchObject({
+      role: "user",
+      content: "Inspect the repository and finish the task.",
+    });
+    expect(history.filter((message) => message.role === "assistant" && message.tool_calls)).toHaveLength(13);
+  });
+
+  it("only reaches into recent tool results as a last resort, and keeps a higher floor", () => {
+    // Every tool result here is within the protected "recent" window (no older tier exists),
+    // and the budget is small enough that compacting all of them still can't hit target.
+    // They should still shrink — but only down to the higher recent-tier floor, never to the
+    // near-nothing floor used for genuinely old results.
     const history: AgentMessage[] = [
       { role: "system", content: "system prompt" },
       { role: "user", content: "Inspect the repository and finish the task." },
@@ -579,20 +626,17 @@ describe("context pruning summary", () => {
     ];
     const contextWindow = 2_000;
 
-    expect(__testUtils.pruneHistory(history, contextWindow, [])).toBe(false);
     expect(__testUtils.compactToolResultsToBudget(history, [], contextWindow)).toBe(true);
     __testUtils.repairToolCallHistory(history);
 
-    expect(computeContextUsage(history, [], contextWindow).total).toBeLessThanOrEqual(
-      Math.floor(contextWindow * 0.45),
-    );
-    expect(history[1]).toMatchObject({
-      role: "user",
-      content: "Inspect the repository and finish the task.",
-    });
-    expect(history.filter((message) => message.role === "assistant" && message.tool_calls)).toHaveLength(2);
-    expect(history.filter((message) => message.role === "tool")).toHaveLength(2);
-    expect(history.some((message) => message.content.includes("older tool result compacted"))).toBe(true);
+    const toolMessages = history.filter((message) => message.role === "tool");
+    expect(toolMessages).toHaveLength(2);
+    for (const message of toolMessages) {
+      expect(message.content).toContain("older tool result compacted");
+      // Shrunk from the original ~6000 chars, but not below the recent-tier floor.
+      expect(message.content.length).toBeLessThan(6_000);
+      expect(message.content.length).toBeGreaterThanOrEqual(3_900);
+    }
   });
 
   it("does not re-inject when the tail user message is already substantive", () => {

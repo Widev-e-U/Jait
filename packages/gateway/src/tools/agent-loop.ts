@@ -1087,7 +1087,7 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
         message: result.message.length > TOOL_RESULT_MAX_CHARS
           ? result.message.slice(0, TOOL_RESULT_MAX_CHARS) + `\n\n[truncated — ${result.message.length} chars total, showing first ${TOOL_RESULT_MAX_CHARS}]`
           : result.message,
-        data: result.data,
+        data: capToolResultData(result.data),
       }),
       tool_call_id: tc.id,
       name: tc.function.name,
@@ -1142,6 +1142,27 @@ const DEFAULT_MAX_RETRIES = 2;
 const DUPLICATE_CALL_THRESHOLD = 2;
 /** Max characters for a single tool result message before truncation (~8k tokens). */
 const TOOL_RESULT_MAX_CHARS = 30_000;
+
+/**
+ * Caps a tool result's structured `data` payload the same way `message` is capped above.
+ * Without this, a single call whose bulk content lives in `data` (e.g. `chat.traces` on a
+ * large session, or any tool returning megabytes of structured output) can inject an
+ * uncapped multi-megabyte blob straight into the model's conversation history — `message`
+ * stays a short summary, so the truncation above never fires. That single oversized entry
+ * then forces `compactToolResultsToBudget` to crush every other tool result (including ones
+ * read moments ago) just to claw back budget, which is what causes the model to "forget"
+ * file contents it just read and re-fetch them in a loop.
+ */
+function capToolResultData(data: unknown): unknown {
+  if (data === undefined || data === null) return data;
+  const serialized = JSON.stringify(data);
+  if (serialized === undefined || serialized.length <= TOOL_RESULT_MAX_CHARS) return data;
+  return {
+    truncated: true,
+    originalChars: serialized.length,
+    preview: serialized.slice(0, TOOL_RESULT_MAX_CHARS),
+  };
+}
 /** Consecutive rounds with zero successful tool calls before the loop bails out. */
 const MAX_UNPRODUCTIVE_ROUNDS = 4;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
@@ -1596,7 +1617,19 @@ export function pruneHistory(
 }
 
 const COMPACTED_TOOL_RESULT_MIN_CHARS = 800;
-const RECENT_TOOL_RESULTS_TO_KEEP_FULL = 2;
+/**
+ * Higher floor used for the protected "recent" tier (~1k tokens) — big enough that a file
+ * the model just read still has usable content, instead of being crushed to a stub.
+ */
+const RECENT_TOOL_RESULT_MIN_CHARS = 4_000;
+/**
+ * How many of the most recent tool results are protected from the first compaction pass.
+ * A tool-heavy turn can produce many calls per round, so this needs enough headroom to
+ * survive more than a round or two — a window of 2 (the previous value) meant a file read
+ * this round was already "old" by the next round and got crushed again, forcing the model
+ * to keep re-reading the same content it had just fetched instead of acting on it.
+ */
+const RECENT_TOOL_RESULTS_TO_KEEP_FULL = 12;
 
 function compactToolResultContent(content: string, targetChars: number): string {
   if (content.length <= targetChars) return content;
@@ -1607,26 +1640,16 @@ function compactToolResultContent(content: string, targetChars: number): string 
   return `${content.slice(0, headChars)}${marker}${tailChars > 0 ? content.slice(-tailChars) : ""}`;
 }
 
-/**
- * Tool-heavy work can exceed the model context entirely within the current user
- * turn. Preserve every assistant/tool protocol pair, but progressively compact
- * older tool payloads until the next request has enough response headroom.
- */
-function compactToolResultsToBudget(
+/** Compacts `candidates` (oldest first) down to `floorChars` each until `targetTokens` is met. */
+function compactCandidatesToTarget(
   history: AgentMessage[],
+  candidates: number[],
   toolSchemas: unknown[],
   contextWindow: number,
-): boolean {
-  const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
+  targetTokens: number,
+  floorChars: number,
+): { total: number; compacted: boolean } {
   let usage = computeContextUsage(history, toolSchemas, contextWindow);
-  if (usage.total <= targetTokens) return false;
-
-  const toolIndices = history
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.role === "tool" && message.content.length > COMPACTED_TOOL_RESULT_MIN_CHARS)
-    .map(({ index }) => index);
-  const recentStart = Math.max(0, toolIndices.length - RECENT_TOOL_RESULTS_TO_KEEP_FULL);
-  const candidates = [...toolIndices.slice(0, recentStart), ...toolIndices.slice(recentStart)];
   let compacted = false;
 
   for (const index of candidates) {
@@ -1634,10 +1657,7 @@ function compactToolResultsToBudget(
     const message = history[index]!;
     const tokensToFree = usage.total - targetTokens;
     const charsToFree = Math.ceil(tokensToFree * 3.7) + 256;
-    const targetChars = Math.max(
-      COMPACTED_TOOL_RESULT_MIN_CHARS,
-      message.content.length - charsToFree,
-    );
+    const targetChars = Math.max(floorChars, message.content.length - charsToFree);
     if (targetChars >= message.content.length) continue;
 
     message.content = compactToolResultContent(message.content, targetChars);
@@ -1645,7 +1665,48 @@ function compactToolResultsToBudget(
     usage = computeContextUsage(history, toolSchemas, contextWindow);
   }
 
-  return compacted;
+  return { total: usage.total, compacted };
+}
+
+/**
+ * Tool-heavy work can exceed the model context entirely within the current user
+ * turn. Preserve every assistant/tool protocol pair, but progressively compact
+ * older tool payloads until the next request has enough response headroom.
+ *
+ * Compaction runs in two tiers: older tool results are crushed all the way down
+ * to `COMPACTED_TOOL_RESULT_MIN_CHARS` first. Only if that alone isn't enough to
+ * reach budget does the most recent `RECENT_TOOL_RESULTS_TO_KEEP_FULL` results
+ * get touched — and even then only down to the much larger `RECENT_TOOL_RESULT_MIN_CHARS`
+ * floor, so content the model just fetched stays useful instead of being erased.
+ */
+function compactToolResultsToBudget(
+  history: AgentMessage[],
+  toolSchemas: unknown[],
+  contextWindow: number,
+): boolean {
+  const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
+  const usage = computeContextUsage(history, toolSchemas, contextWindow);
+  if (usage.total <= targetTokens) return false;
+
+  const toolIndices = history
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => message.role === "tool" && message.content.length > COMPACTED_TOOL_RESULT_MIN_CHARS)
+    .map(({ index }) => index);
+  const recentStart = Math.max(0, toolIndices.length - RECENT_TOOL_RESULTS_TO_KEEP_FULL);
+  const olderCandidates = toolIndices.slice(0, recentStart);
+  const recentCandidates = toolIndices.slice(recentStart);
+
+  const older = compactCandidatesToTarget(
+    history, olderCandidates, toolSchemas, contextWindow, targetTokens, COMPACTED_TOOL_RESULT_MIN_CHARS,
+  );
+  if (older.total <= targetTokens) return older.compacted;
+
+  // Compacting every older result wasn't enough — let the protected recent tier give
+  // some room too, but only down to its much higher floor.
+  const recent = compactCandidatesToTarget(
+    history, recentCandidates, toolSchemas, contextWindow, targetTokens, RECENT_TOOL_RESULT_MIN_CHARS,
+  );
+  return older.compacted || recent.compacted;
 }
 
 export async function runAgentLoop(
