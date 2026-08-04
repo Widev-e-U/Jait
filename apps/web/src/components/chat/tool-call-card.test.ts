@@ -347,6 +347,47 @@ describe('formatOutput', () => {
     expect(output).toBe('• file.read — Read the contents of a project file.\n• preview.open — Open the live web preview.')
     expect(output).not.toContain('parameters')
   })
+
+  it('displays the retrieved memories themselves for memory.search', () => {
+    const output = formatOutput({
+      ok: true,
+      message: 'Found 2 memories and 0 reminders',
+      data: {
+        memories: [
+          {
+            id: 'm1',
+            scope: 'project',
+            source: { type: 'chat', id: 'chat:watch-base-deploy', surface: 'chat' },
+            createdAt: '2026-06-30T20:10:23.647Z',
+            updatedAt: '2026-06-30T20:10:23.647Z',
+            content: 'WATCH BASE APP — deployed live on watch.basenetwork.net, root cause: three local code fixes.',
+          },
+          {
+            id: 'm2',
+            scope: 'project',
+            source: { type: 'agent', id: 'abc', surface: 'chat' },
+            createdAt: '2026-07-18T22:51:55.506Z',
+            updatedAt: '2026-07-18T22:51:55.506Z',
+            content: 'BASE DOCKER STORAGE MIGRATION COMPLETED on base.',
+          },
+        ],
+        reminders: [],
+      },
+    }, 'memory.search')
+
+    expect(output).toContain('1. WATCH BASE APP')
+    expect(output).toContain('(project • chat:chat:watch-base-deploy@chat)')
+    expect(output).toContain('2. BASE DOCKER STORAGE MIGRATION COMPLETED')
+    expect(output).not.toContain('Found 2 memories and 0 reminders')
+  })
+
+  it('falls back to the message when memory.search has no memories', () => {
+    expect(formatOutput({
+      ok: true,
+      message: 'Found 0 memories and 0 reminders',
+      data: { memories: [], reminders: [] },
+    }, 'memory.search')).toBe('Found 0 memories and 0 reminders')
+  })
 })
 
 describe('structured tool result views', () => {

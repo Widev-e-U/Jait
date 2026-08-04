@@ -75,6 +75,22 @@ function formatTime(iso: string) {
   return d.toLocaleDateString()
 }
 
+/** True when a session has activity newer than when the user last opened it. */
+function isSessionUnread(session: { lastActiveAt: string; viewedAt: string | null }): boolean {
+  if (!session.viewedAt) return true
+  return Date.parse(session.lastActiveAt) > Date.parse(session.viewedAt)
+}
+
+function UnreadDot() {
+  return (
+    <span
+      className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500"
+      aria-label="Unread"
+      title="Unread"
+    />
+  )
+}
+
 function NodeIcon({ platform }: { platform: string }) {
   switch (platform) {
     case 'windows':
@@ -401,6 +417,7 @@ export function SessionSelector({
                                   {session.name || 'Untitled session'}
                                 </div>
                               </div>
+                              {!isActiveSession && isSessionUnread(session) && <UnreadDot />}
                               <span className="shrink-0 text-2xs text-muted-foreground">
                                 {formatTime(session.lastActiveAt || session.createdAt)}
                               </span>
@@ -512,6 +529,7 @@ export function SessionSelector({
                           {session.name || 'Personal chat'}
                         </div>
                       </div>
+                      {!isActive && isSessionUnread(session) && <UnreadDot />}
                       <span className="shrink-0 text-2xs text-muted-foreground">
                         {formatTime(session.lastActiveAt ?? session.createdAt)}
                       </span>

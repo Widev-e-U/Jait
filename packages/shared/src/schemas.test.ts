@@ -101,6 +101,7 @@ describe("@jait/shared schemas", () => {
         status: "active",
         createdAt: "2026-01-01T00:00:00.000Z",
         lastActiveAt: "2026-01-01T00:05:00.000Z",
+        viewedAt: null,
         metadata: null,
       });
       expect(result.status).toBe("active");
@@ -116,6 +117,7 @@ describe("@jait/shared schemas", () => {
           status,
           createdAt: "2026-01-01T00:00:00.000Z",
           lastActiveAt: "2026-01-01T00:00:00.000Z",
+          viewedAt: null,
           metadata: null,
         });
         expect(result.status).toBe(status);

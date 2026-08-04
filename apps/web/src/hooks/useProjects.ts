@@ -19,6 +19,7 @@ export interface ProjectSession {
   status: 'active' | 'archived' | 'deleted'
   createdAt: string
   lastActiveAt: string
+  viewedAt: string | null
   metadata: string | null
 }
 
@@ -480,12 +481,43 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     persistActiveSelectionToCache(projectId, sessionId)
   }, [persistActiveSelectionToCache, persistSelection, projects])
 
+  /**
+   * Mark a session as read on the gateway (clears its unread dot) and reflect
+   * the new viewedAt locally so the indicator disappears without a refetch.
+   */
+  const markSessionViewed = useCallback(async (sessionId: string) => {
+    if (!token) return
+    const now = new Date().toISOString()
+    // Optimistically clear the dot immediately.
+    setPersonalSessions((prev) => prev.map((s) =>
+      s.id === sessionId ? { ...s, viewedAt: now } : s,
+    ))
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      sessions: p.sessions.map((s) => s.id === sessionId ? { ...s, viewedAt: now } : s),
+    })))
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}/viewed`, {
+        method: 'POST',
+        headers: authHeaders(token),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return
+      }
+    } catch (err) {
+      console.error('Failed to mark session viewed:', err)
+    }
+  }, [onLoginRequired, token])
+
   const switchSession = useCallback((projectId: string | null, sessionId: string) => {
     setActiveProjectId(projectId)
     setActiveSessionId(sessionId)
     persistSelection(projectId, sessionId)
     persistActiveSelectionToCache(projectId, sessionId)
-  }, [persistActiveSelectionToCache, persistSelection])
+    // Opening a session counts as viewing it — clear its unread indicator.
+    void markSessionViewed(sessionId)
+  }, [persistActiveSelectionToCache, persistSelection, markSessionViewed])
 
   const archiveSession = useCallback(async (sessionId: string) => {
     if (!token) {

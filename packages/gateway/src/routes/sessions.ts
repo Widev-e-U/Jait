@@ -165,6 +165,19 @@ export function registerSessionRoutes(
     return updated;
   });
 
+  // Mark a session as read/viewed by the user (used for the unread indicator)
+  app.post("/api/sessions/:id/viewed", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const session = sessionService.getById(id, authUser.id);
+    if (!session) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+    sessionService.markViewed(id, authUser.id);
+    return { ok: true, session: sessionService.getById(id, authUser.id) };
+  });
+
   app.post("/api/sessions/:id/generate-title", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

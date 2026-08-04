@@ -37,6 +37,7 @@ export const sessions = sqliteTable("sessions", {
   lastActiveAt: text("last_active_at").notNull(),
   status: text("status").default("active"), // 'active' | 'archived' | 'deleted'
   metadata: text("metadata"), // JSON
+  viewedAt: text("viewed_at"), // last time the user opened/read this session
 });
 
 // ─── Users ───────────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ export const sessionInfoSchema = z.object({
   status: z.enum(["active", "archived", "deleted"]),
   createdAt: z.string(),
   lastActiveAt: z.string(),
+  viewedAt: z.string().nullable(),
   metadata: z.string().nullable(),
 });
 

@@ -1124,6 +1124,44 @@ function formatMemorySaveResult(data: Record<string, unknown>): string | null {
   return lines.length > 0 ? lines.join('\n') : null
 }
 
+function formatMemorySearchResult(data: Record<string, unknown>): string | null {
+  // memory.search returns `data.memories` (MemoryEntry[]) plus optional reminders.
+  const rawMemories = data.memories
+  if (!Array.isArray(rawMemories) || rawMemories.length === 0) return null
+
+  const entries = rawMemories
+    .filter((value): value is Record<string, unknown> => typeof value === 'object' && value !== null)
+    .slice(0, 10)
+
+  if (entries.length === 0) return null
+
+  const lines: string[] = []
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!
+    const scope = typeof entry.scope === 'string' ? entry.scope : ''
+    const content = typeof entry.content === 'string' ? entry.content.trim() : ''
+    const source = entry.source && typeof entry.source === 'object'
+      ? entry.source as Record<string, unknown>
+      : undefined
+    const sourceType = typeof source?.type === 'string' ? source.type.trim() : ''
+    const sourceId = typeof source?.id === 'string' ? source.id.trim() : ''
+    const sourceSurface = typeof source?.surface === 'string' ? source.surface.trim() : ''
+
+    lines.push(`${i + 1}. ${truncate(content, 280) || '(no content)'}`)
+    const meta: string[] = []
+    if (scope) meta.push(scope)
+    let sourceLabel = ''
+    if (sourceType) sourceLabel += sourceType
+    if (sourceId) sourceLabel += sourceLabel ? `:${sourceId}` : sourceId
+    if (sourceSurface) sourceLabel += `@${sourceSurface}`
+    if (sourceLabel) meta.push(sourceLabel)
+    if (meta.length > 0) lines.push(`   (${meta.join(' • ')})`)
+    if (i < entries.length - 1) lines.push('')
+  }
+
+  return lines.join('\n').trim()
+}
+
 function formatCronAddResult(data: Record<string, unknown>): string | null {
   const id = typeof data.id === 'string' ? data.id : ''
   const name = typeof data.name === 'string' ? data.name : ''
@@ -1453,6 +1491,10 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
   }
   if (normalizedTool === 'memory.save' && data) {
     const formatted = formatMemorySaveResult(data)
+    if (formatted) return formatted
+  }
+  if (normalizedTool === 'memory.search' && data) {
+    const formatted = formatMemorySearchResult(data)
     if (formatted) return formatted
   }
   if (normalizedTool === 'cron.add' && data) {

@@ -1211,10 +1211,9 @@ const LOOP_DETECTION_MIN_REPEATS = 3;
  */
 /** A read must add at least this many previously-unseen lines to count as real progress. */
 const NARROW_READ_MIN_NEW_LINES = 15;
-/** Consecutive low-novelty reads of the same file before we warn. */
-const NARROW_READ_WARN_THRESHOLD = 3;
-/** ...before we hard-stop. */
-const NARROW_READ_STOP_THRESHOLD = 6;
+/** Consecutive low-novelty reads of the same file before we warn (warn-only, pi-style — never
+ *  force-terminates the turn; the model decides whether/when to change strategy). */
+const NARROW_READ_WARN_THRESHOLD = 5;
 
 /**
  * Merges `[start, end]` (1-based, inclusive) into a sorted list of
@@ -2402,10 +2401,11 @@ export async function runAgentLoop(
         }
       }
 
-      // ── Stuck-loop detection ──
-      // If every tool call in this round failed, increment the unproductive counter.
-      // At threshold - 1, inject a warning so the model can self-correct.
-      // At threshold, hard-stop.
+      // ── Stuck-loop detection (nudge on behavior, pi-style: the model decides) ──
+      // If every tool call in this round failed, increment the unproductive counter
+      // and warn once. Never force-terminates the turn — maxRounds (if the caller
+      // sets one) remains the only hard backstop, matching pi's philosophy of
+      // trusting the model to recognize and correct a dead end itself.
       const roundStart = executedToolCalls.length - toolCalls.length;
       const roundCalls = executedToolCalls.slice(roundStart < 0 ? 0 : roundStart);
       const anySuccess = roundCalls.some(c => c.ok);
@@ -2416,29 +2416,17 @@ export async function runAgentLoop(
         // chance to orient before starting the unproductive counter.
         if (round > 0) consecutiveUnproductiveRounds++;
         if (consecutiveUnproductiveRounds === MAX_UNPRODUCTIVE_ROUNDS - 1) {
-          // Warn the model before hard-stopping — give it one more chance
-          const warnMsg = `[WARNING: ${consecutiveUnproductiveRounds} consecutive rounds have failed. Your current approach is not working. You MUST try a fundamentally different strategy on the next round or the loop will be terminated. Consider: using a different tool, simplifying the command, asking the user for help, or abandoning this subtask.]`;
+          const warnMsg = `[WARNING: ${consecutiveUnproductiveRounds} consecutive rounds have failed. Your current approach is not working. You MUST try a fundamentally different strategy. Consider: using a different tool, simplifying the command, asking the user for help, or abandoning this subtask.]`;
           history.push({ role: "system", content: warnMsg });
           log.info(`Unproductive warning injected for session ${sessionId} (${consecutiveUnproductiveRounds} rounds)`);
-        } else if (consecutiveUnproductiveRounds >= MAX_UNPRODUCTIVE_ROUNDS) {
-          log.warn(`${MAX_UNPRODUCTIVE_ROUNDS} consecutive unproductive rounds — stopping loop for session ${sessionId}`);
-          const bailMsg = "\n\n[Stopped: multiple consecutive rounds produced no successful results. The current approach isn't working — please try a different strategy.]";
-          onEvent?.({ type: "token", content: bailMsg });
-          fullContent += bailMsg;
-          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
-          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
-          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
-          persisted = true;
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
         }
       }
 
-      // ── Tool-loop pattern detection (stop on behavior, before maxRounds) ──
+      // ── Tool-loop pattern detection (nudge on behavior, pi-style) ──
       // Beyond "unproductive rounds" (which only fires when calls *fail*), catch
       // agents that are *successfully* spinning — calling the exact same tool
-      // with the exact same args in a repeating cycle. Warn once, then hard-stop
-      // if the cycle persists, so a stuck agent is cut off within a few rounds
-      // instead of burning all maxRounds. maxRounds remains the backstop.
+      // with the exact same args in a repeating cycle. Warn once; never
+      // force-terminates the turn.
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
         recentToolCallSignatures.push(`${internalName}:${tc.function.arguments}`);
@@ -2448,21 +2436,12 @@ export async function runAgentLoop(
       }
       const cycle = detectToolLoop(recentToolCallSignatures);
       if (cycle !== null) {
-        if (loopPatternWarned) {
-          log.warn(`Tool-loop detected (cycle=${cycle}) and persisted — stopping loop for session ${sessionId}`);
-          const bailMsg = `\n\n[Stopped: the agent repeated the same tool-call pattern (cycle=${cycle}) without progress. Please try a different strategy.]`;
-          onEvent?.({ type: "token", content: bailMsg });
-          fullContent += bailMsg;
-          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
-          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
-          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
-          persisted = true;
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        if (!loopPatternWarned) {
+          loopPatternWarned = true;
+          const warnMsg = `[WARNING: the agent is repeating the same tool-call pattern (cycle length ${cycle}) without making progress. You MUST try a fundamentally different approach or end your turn.]`;
+          history.push({ role: "system", content: warnMsg });
+          log.info(`Tool-loop warning injected for session ${sessionId} (cycle=${cycle})`);
         }
-        loopPatternWarned = true;
-        const warnMsg = `[WARNING: the agent is repeating the same tool-call pattern (cycle length ${cycle}) without making progress. You MUST try a fundamentally different approach or end your turn.]`;
-        history.push({ role: "system", content: warnMsg });
-        log.info(`Tool-loop warning injected for session ${sessionId} (cycle=${cycle})`);
       } else if (loopPatternWarned) {
         // The cycle broke — reset so a fresh loop later gets its own warning.
         loopPatternWarned = false;
@@ -2493,17 +2472,6 @@ export async function runAgentLoop(
         }
       }
       for (const [path, streak] of readNarrowStreakByPath) {
-        if (streak >= NARROW_READ_STOP_THRESHOLD) {
-          log.warn(`Narrow overlapping reads of "${path}" (${streak}x) — stopping loop for session ${sessionId}`);
-          const bailMsg = `\n\n[Stopped: the agent kept re-reading small overlapping slices of "${path}" without covering meaningful new content. Please try a different strategy.]`;
-          onEvent?.({ type: "token", content: bailMsg });
-          fullContent += bailMsg;
-          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
-          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
-          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
-          persisted = true;
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
-        }
         if (streak === NARROW_READ_WARN_THRESHOLD && !readNarrowWarnedPaths.has(path)) {
           readNarrowWarnedPaths.add(path);
           const warnMsg = `[WARNING: you've re-read overlapping slices of "${path}" ${streak} times in a row without covering meaningful new content. Read a wider range in one call, or use search to jump straight to what you need, instead of repeatedly narrowing the range.]`;

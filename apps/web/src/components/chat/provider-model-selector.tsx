@@ -33,25 +33,16 @@ const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} 
 const CursorIcon = ({ className }: { className?: string }) => <Cursor size={16} className={className} />
 const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
 
-// Pi (Greek letter π) — pi coding agent has no bundled brand icon, so inline it.
+// Pi (pi.dev) — official pixel-art "pi" wordmark, sourced from pi.dev/logo.svg
 const PiIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className={className}>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 800 800" fill="none" className={className}>
+    <rect width="800" height="800" rx="150" fill="#09090b" />
     <path
-      d="M5 8h9a3 3 0 0 1 3 3v1"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="#fff"
+      fillRule="evenodd"
+      d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
     />
-    <path
-      d="M5 8h14M5 12h12M5 8v8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path fill="#fff" d="M517.36 400H634.72V634.72H517.36Z" />
   </svg>
 )
 

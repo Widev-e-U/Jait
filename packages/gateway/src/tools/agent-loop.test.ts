@@ -715,22 +715,26 @@ describe("detectToolLoop", () => {
   });
 
   it("detects an identical-call cycle (cycle length 1)", () => {
-    const sig = ["file_read:{}", "file_read:{}", "file_read:{}", "file_read:{}"];
+    const sig = Array(6).fill("file_read:{}");
     expect(detectToolLoop(sig)).toBe(1);
   });
 
   it("detects an A-B-A-B ping-pong cycle (cycle length 2)", () => {
-    const sig = ["a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
+    const sig = ["a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
     expect(detectToolLoop(sig)).toBe(2);
   });
 
   it("detects a 3-tool cycle (cycle length 3)", () => {
-    const sig = ["a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}"];
+    const sig = ["a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}"];
     expect(detectToolLoop(sig)).toBe(3);
   });
 
   it("ignores a non-repeating prefix and only needs the tail to cycle", () => {
-    const sig = ["grep:x", "edit:x", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
+    const sig = [
+      "grep:x", "edit:x",
+      "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}",
+      "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}",
+    ];
     expect(detectToolLoop(sig)).toBe(2);
   });
 
@@ -1386,9 +1390,11 @@ describe("runAgentLoop tool-loop detection", () => {
     // One broad first read, then repeated small overlapping ranges of the
     // *same* file — a different line range each call, so neither the
     // duplicate-call check nor detectToolLoop (exact-args cycles) fire.
+    // 14 narrow reads comfortably exceeds NARROW_READ_STOP_THRESHOLD (12).
     const ranges: Array<[number, number]> = [
       [1, 200], // broad first read — seeds coverage, no streak
       [50, 60], [55, 62], [52, 58], [51, 61], [53, 59], [50, 60], [54, 60],
+      [56, 61], [50, 59], [52, 60], [55, 60], [51, 58], [53, 61], [50, 62],
     ];
     let callIdx = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -1439,9 +1445,72 @@ describe("runAgentLoop tool-loop detection", () => {
     );
 
     expect(result.hitMaxRounds).toBe(false);
-    // Stopped well before exhausting all 7 scripted narrow reads + maxRounds.
+    // Stopped well before exhausting all 14 scripted narrow reads + maxRounds.
     expect(callIdx).toBeLessThan(ranges.length);
     expect(result.content).toMatch(/\[Stopped: the agent kept re-reading small overlapping slices of "big\.ts"/);
+  });
+
+  it("tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)", async () => {
+    // Mirrors a real incident: an agent verifying which of two byte-identical
+    // code blocks an edit landed in re-read the same file 7 times (1 broad +
+    // 6 narrow) and was cut off before it could finish. NARROW_READ_STOP_THRESHOLD
+    // was raised from 6 to 12 specifically so this no longer happens.
+    const ranges: Array<[number, number]> = [
+      [1, 613], // broad first read
+      [300, 360], [335, 349], [140, 160], [154, 163], [335, 350], [336, 351],
+    ];
+    let callIdx = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (callIdx < ranges.length) {
+        const [startLine, endLine] = ranges[callIdx]!;
+        const response = toolCallSSE(`call-${callIdx + 1}`, "read", { path: "app-header.tsx", startLine, endLine });
+        callIdx++;
+        return response;
+      }
+      return textResponse("Verified both handlers are patched.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the manager-mode switch and verify both handlers." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-defensive-reread",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+      },
+      async (name, args) => {
+        if (name === "read") {
+          const { startLine, endLine } = args as { startLine: number; endLine: number };
+          return { ok: true, message: "read ok", data: { startLine, endLine } };
+        }
+        return { ok: true, message: "ok" };
+      },
+    );
+
+    expect(result.hitMaxRounds).toBe(false);
+    expect(callIdx).toBe(ranges.length);
+    expect(result.content).not.toMatch(/Stopped/);
+    expect(result.content).toBe("Verified both handlers are patched.");
   });
 
   it("does not flag sequential non-overlapping reads that grow through a file", async () => {

@@ -1248,4 +1248,13 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 51: Session read tracking (unread indicator) ────────────────
+  {
+    id: 51,
+    name: "sessions_viewed_at",
+    run(db) {
+      try { db.exec(`ALTER TABLE sessions ADD COLUMN viewed_at TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

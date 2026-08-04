@@ -7,6 +7,7 @@ export interface SessionInfo {
   status: "active" | "archived" | "deleted";
   createdAt: string;
   lastActiveAt: string;
+  viewedAt: string | null;
   metadata: string | null; // JSON string
 }
 

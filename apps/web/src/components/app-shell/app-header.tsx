@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { providerTypeFromId } from '@jait/shared'
 import {
   ArrowUpCircle,
@@ -6,7 +7,6 @@ import {
   Calendar,
   CalendarDays,
   Cast,
-  EllipsisVertical,
   GitPullRequest,
   Menu,
   ListChecks,
@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
+import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
 import { ModelIcon, formatModelDisplayLabel, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -128,6 +129,62 @@ export function AppHeader(props: AppHeaderProps) {
     voiceOverlayOpen,
   } = props
 
+  // ── Dynamic nav: measure how much horizontal room is available for the
+  // inline nav buttons so items can overflow into the ⋯ menu progressively. ──
+  const navRef = useRef<HTMLElement>(null)
+  const rightRef = useRef<HTMLDivElement>(null)
+  const selectorRef = useRef<HTMLDivElement>(null)
+  const [navAvailableWidth, setNavAvailableWidth] = useState(0)
+
+  const hasCentered = currentView === 'chat' && !voiceOverlayOpen
+
+  useEffect(() => {
+    const update = () => {
+      const nav = navRef.current
+      const right = rightRef.current
+      if (!nav || !right) return
+      const navLeft = nav.getBoundingClientRect().left
+      let boundary = right.getBoundingClientRect().left
+      // Keep the nav from sliding underneath the centered view-mode selector.
+      if (hasCentered && selectorRef.current) {
+        const sel = selectorRef.current.getBoundingClientRect()
+        boundary = Math.min(boundary, sel.left - 16)
+      }
+      setNavAvailableWidth(Math.max(0, boundary - navLeft))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    if (navRef.current) ro.observe(navRef.current)
+    if (rightRef.current) ro.observe(rightRef.current)
+    if (selectorRef.current) ro.observe(selectorRef.current)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [hasCentered])
+
+  // Nav items in display order (leftmost first). Items overflow right-to-left.
+  const navItems: ProgressiveNavItem[] = [
+    { id: 'chat', label: 'Chat', icon: MessageSquare, active: currentView === 'chat', onSelect: () => setCurrentView('chat') },
+    { id: 'pulls', label: 'Pull Requests', shortLabel: 'PRs', icon: GitPullRequest, active: currentView === 'pulls', onSelect: () => setCurrentView('pulls') },
+    { id: 'todo', label: 'Todo', icon: ListChecks, active: currentView === 'todo', onSelect: () => setCurrentView('todo') },
+    { id: 'email', label: 'Email', icon: Mail, active: currentView === 'email', onSelect: () => setCurrentView('email') },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDays, active: currentView === 'calendar', onSelect: () => setCurrentView('calendar') },
+    { id: 'memory', label: 'Memory', icon: Brain, active: currentView === 'memory', onSelect: () => setCurrentView('memory') },
+    { id: 'jobs', label: 'Jobs', icon: Calendar, active: currentView === 'jobs', onSelect: () => setCurrentView('jobs') },
+    { id: 'network', label: 'Network', icon: Wifi, active: currentView === 'network', onSelect: () => setCurrentView('network') },
+    ...(viewMode === 'developer' && !isMobile
+      ? [{
+          id: 'screenShare',
+          label: 'Screen Share',
+          icon: Cast,
+          active: showScreenShare,
+          onSelect: () => (showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()),
+        }]
+      : []),
+  ]
+
   return (
             <header
               className={
@@ -153,6 +210,7 @@ export function AppHeader(props: AppHeaderProps) {
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
                   setCurrentView('chat')
+                  setViewMode('manager')
                   automation.setSelectedThreadId(threadId)
                   setSendTarget('thread')
                   setShowProject(false)
@@ -164,145 +222,16 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
 
           {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          <nav className="hidden min-[1700px]:flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'chat' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('chat')}
-                  aria-label="Chat"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Chat</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Chat</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'pulls' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('pulls')}
-                  aria-label="Pull Requests"
-                >
-                  <GitPullRequest className="h-3.5 w-3.5" />
-                  <span>PRs</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Pull Requests</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'todo' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('todo')}
-                  aria-label="Todo"
-                >
-                  <ListChecks className="h-3.5 w-3.5" />
-                  <span>Todo</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Todo</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'email' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('email')}
-                  aria-label="Email"
-                >
-                  <Mail className="h-3.5 w-3.5" />
-                  <span>Email</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Email</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'calendar' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('calendar')}
-                  aria-label="Calendar"
-                >
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  <span>Calendar</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Calendar</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'memory' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('memory')}
-                  aria-label="Memory"
-                >
-                  <Brain className="h-3.5 w-3.5" />
-                  <span>Memory</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Memory</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('jobs')}
-                  aria-label="Jobs"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>Jobs</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Jobs</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={currentView === 'network' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                  onClick={() => setCurrentView('network')}
-                  aria-label="Network"
-                >
-                  <Wifi className="h-3.5 w-3.5" />
-                  <span>Network</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Network</TooltipContent>
-            </Tooltip>
-            {viewMode === 'developer' && !isMobile && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showScreenShare ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
-                    onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
-                    aria-label="Screen sharing"
-                  >
-                    <Cast className="h-3.5 w-3.5" />
-                    <span>Screen Share</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Screen sharing</TooltipContent>
-              </Tooltip>
-            )}
-          </nav>
+          {!isMobile && (
+            <ProgressiveNav
+              items={navItems}
+              availableWidth={navAvailableWidth}
+              onOpenSettings={() => setCurrentView('settings')}
+              navRef={navRef}
+              className="flex-1"
+              style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+            />
+          )}
 
           {/* Center: ViewModeSelector OR voice controls when voice active */}
           {voiceOverlayOpen ? (
@@ -313,16 +242,16 @@ export function AppHeader(props: AppHeaderProps) {
               isElectron={isElectron}
             />
           ) : currentView === 'chat' ? (
-            <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
           ) : null}
 
           {/* Spacer */}
-          <div className="flex-1 min-w-0" />
+          <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
 
           {/* Right: Context + Model + Account */}
-          <div className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div ref={rightRef} className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
             {screenShare.isActive && (
@@ -340,6 +269,7 @@ export function AppHeader(props: AppHeaderProps) {
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
                   setCurrentView('chat')
+                  setViewMode('manager')
                   automation.setSelectedThreadId(threadId)
                   setSendTarget('thread')
                   setShowProject(false)
@@ -491,63 +421,6 @@ export function AppHeader(props: AppHeaderProps) {
               </div>
             ) : (
             <>
-            {/* Desktop navigation overflow menu */}
-            <div className="min-[1700px]:hidden shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" aria-label="Open navigation menu">
-                    <EllipsisVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => setCurrentView('chat')}>
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Chat
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('pulls')}>
-                    <GitPullRequest className="h-4 w-4 mr-2" />
-                    Pull Requests
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Jobs
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('todo')}>
-                    <ListChecks className="h-4 w-4 mr-2" />
-                    Todo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('email')}>
-                    <Mail className="h-4 w-4 mr-2" />
-                    Email
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('calendar')}>
-                    <CalendarDays className="h-4 w-4 mr-2" />
-                    Calendar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('memory')}>
-                    <Brain className="h-4 w-4 mr-2" />
-                    Memory
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCurrentView('network')}>
-                    <Wifi className="h-4 w-4 mr-2" />
-                    Network
-                  </DropdownMenuItem>
-                  {viewMode === 'developer' && (
-                    <DropdownMenuItem onSelect={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}>
-                      <Cast className="h-4 w-4 mr-2" />
-                      {showScreenShare ? 'Hide Share' : 'Screen Share'}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
