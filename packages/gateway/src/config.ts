@@ -44,9 +44,10 @@ export interface AppConfig {
   contextWindow: number;
   /**
    * Max autonomous tool-calling rounds per turn for the Jait provider.
-   * Local models in particular make many small tool calls and need a higher
-   * ceiling than cloud models. Override with env JAIT_MAX_ROUNDS; per-user
-   * overrides come from the JAIT_MAX_ROUNDS settings key.
+   * pi-style: `0` means NO cap — the model decides when it is done, guarded by
+   * the loop detectors. Local models in particular make many small tool calls
+   * and need a high ceiling. Override with env JAIT_MAX_ROUNDS (clamped to a
+   * sane ceiling); per-user overrides come from the JAIT_MAX_ROUNDS settings key.
    */
   agentMaxRounds: number;
   /**
@@ -141,7 +142,7 @@ export function loadConfig(): AppConfig {
       process.env["CONTEXT_WINDOW"] ?? "0",
       10,
     ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
-    agentMaxRounds: parseInt(process.env["JAIT_MAX_ROUNDS"] ?? "0", 10) || 40,
+    agentMaxRounds: parseInt(process.env["JAIT_MAX_ROUNDS"] ?? "0", 10) || 0,
     ollamaContextWindow: parseInt(process.env["OLLAMA_CONTEXT_LENGTH"] ?? "0", 10) || 32768,
     hookSecret,
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",

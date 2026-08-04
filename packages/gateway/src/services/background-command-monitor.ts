@@ -122,6 +122,48 @@ class BackgroundCommandMonitor {
     return this.active.size;
   }
 
+  private invokeHandler(result: BackgroundCommandResult): void {
+    const handler = this.handler;
+    if (!handler) return;
+    void Promise.resolve()
+      .then(() => handler(result))
+      .catch(() => {
+        /* handler errors must not crash the caller */
+      });
+  }
+
+  /**
+   * Track a background command that isn't backed by a `MonitorableSurface`
+   * (e.g. a process spawned directly for an ACP agent's native `terminal/create`
+   * request) via an exit promise instead of output-scanning.
+   */
+  trackExternal(options: {
+    sessionId: string;
+    terminalId: string;
+    command: string;
+    startedAt: number;
+    exitPromise: Promise<{ exitCode: number | null; output: string }>;
+  }): void {
+    if (this.active.size >= MAX_CONCURRENT_WATCHERS) return;
+
+    const entry: ActiveWatcher = { sessionId: options.sessionId, cancel: () => this.active.delete(entry) };
+    this.active.add(entry);
+
+    void options.exitPromise
+      .then(({ exitCode, output }) => {
+        entry.cancel();
+        this.invokeHandler({
+          sessionId: options.sessionId,
+          terminalId: options.terminalId,
+          command: options.command,
+          exitCode,
+          output,
+          durationMs: Date.now() - options.startedAt,
+        });
+      })
+      .catch(() => entry.cancel());
+  }
+
   /**
    * Begin watching a background command for completion. Non-blocking: attaches
    * an output listener to the terminal surface and returns immediately.
@@ -157,22 +199,14 @@ class BackgroundCommandMonitor {
       const output = extractCompletionOutput(raw, options.command);
       cleanup();
 
-      const result: BackgroundCommandResult = {
+      this.invokeHandler({
         sessionId: options.sessionId,
         terminalId: options.terminalId,
         command: options.command,
         exitCode: Number.isNaN(exitCode) ? null : exitCode,
         output,
         durationMs: Date.now() - startedAt,
-      };
-      const handler = this.handler;
-      if (handler) {
-        void Promise.resolve()
-          .then(() => handler(result))
-          .catch(() => {
-            /* handler errors must not crash the terminal output pump */
-          });
-      }
+      });
     };
 
     const timer = setTimeout(cleanup, options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS);

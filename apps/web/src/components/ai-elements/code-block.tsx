@@ -65,7 +65,7 @@ export function CodeBlockHeader({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex min-h-6 items-center justify-between gap-1.5 border-b border-border/60 px-2 py-0.5', className)}
+      className={cn('flex min-h-5 items-center justify-between gap-1.5 border-b border-border/60 px-1.5 py-0', className)}
       {...props}
     />
   )
@@ -104,7 +104,7 @@ export function CodeBlockCopyButton({
       type="button"
       variant="ghost"
       size="icon"
-      className={cn('h-5 w-5 rounded', className)}
+      className={cn('h-4 w-4 rounded', className)}
       onClick={async () => {
         await navigator.clipboard.writeText(code)
         setCopied(true)

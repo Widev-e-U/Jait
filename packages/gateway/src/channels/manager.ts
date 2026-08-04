@@ -113,12 +113,13 @@ const CHANNEL_STYLE_NOTE =
 
 const DEFAULT_MAX_HISTORY = 20;
 
-/** Default max tool-calling rounds for a channel reply. */
-const CHANNEL_DEFAULT_MAX_ROUNDS = 15;
 /** Hard ceiling on per-user max rounds to avoid runaway loops. */
 const CHANNEL_MAX_ROUNDS_CEILING = 200;
 
-/** Resolve per-user JAIT_MAX_ROUNDS (clamped), else the channel default. */
+/** pi-style default max rounds: `0` = NO cap — the model decides when done. */
+const CHANNEL_DEFAULT_MAX_ROUNDS = 0;
+
+/** Resolve per-user JAIT_MAX_ROUNDS (clamped), else the channel default (no cap). */
 function resolveChannelMaxRounds(apiKeys?: Record<string, string>): number {
   const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();
   const parsed = raw ? parseInt(raw, 10) : NaN;

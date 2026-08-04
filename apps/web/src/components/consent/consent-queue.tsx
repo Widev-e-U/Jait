@@ -82,17 +82,17 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
   }
 
   return (
-    <div className={`${merged ? 'px-3.5 py-2.5 border-t bg-background dark:bg-card' : 'space-y-2'} ${className}`}>
+    <div className={`${merged ? 'px-3.5 py-3 border-t bg-background dark:bg-card' : 'space-y-2'} ${className}`}>
       {/* Queue header */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <StatusBadge status="awaiting-approval" />
           <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs font-medium text-foreground">
               {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
             </span>
             {policy && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground truncate">
                 Profile: <span className="font-medium text-foreground">{policy.activeProfileName ?? 'custom'}</span>
                 {' '}• {policy.toolCount} configured tools • unknown tools require dangerous consent
               </span>
@@ -103,9 +103,10 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
           <button
             onClick={handleApproveAllInSession}
             disabled={approvingAll}
-            className="text-xs text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
           >
-            {approvingAll ? 'Approving...' : 'Approve all in this session'}
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {approvingAll ? 'Approving...' : 'Approve all'}
           </button>
         )}
       </div>

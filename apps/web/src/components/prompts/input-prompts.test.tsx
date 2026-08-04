@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { BackgroundSecretPrompt, shouldPresentNativeUserQuestion } from './input-prompts'
+import {
+  BackgroundSecretPrompt,
+  getActiveUserQuestion,
+  shouldNotifyForUserQuestion,
+  shouldPresentNativeUserQuestion,
+} from './input-prompts'
 import type { SecretInputRequest } from '@/lib/secret-input'
 
 function backgroundRequest(overrides: Partial<SecretInputRequest> = {}): SecretInputRequest {
@@ -52,15 +57,43 @@ describe('BackgroundSecretPrompt', () => {
 })
 
 describe('shouldPresentNativeUserQuestion', () => {
-  it('always opens questions on a connected native presenter', () => {
+  it('opens questions in the Android presenter', () => {
     expect(shouldPresentNativeUserQuestion({
-      hasNativePresenter: true,
+      hasAndroidPresenter: true,
     })).toBe(true)
   })
 
-  it('keeps the inline prompt when no native presenter exists', () => {
+  it('keeps the inline prompt when no Android presenter exists', () => {
     expect(shouldPresentNativeUserQuestion({
-      hasNativePresenter: false,
+      hasAndroidPresenter: false,
+    })).toBe(false)
+  })
+})
+
+describe('user question chat scoping', () => {
+  const requests = [
+    { id: 'question-other', sessionId: 'chat-other' },
+    { id: 'question-active', sessionId: 'chat-active' },
+  ]
+
+  it('renders only the question belonging to the active chat', () => {
+    expect(getActiveUserQuestion(requests, 'chat-active')?.id).toBe('question-active')
+    expect(getActiveUserQuestion(requests, 'chat-missing')).toBeNull()
+  })
+
+  it('notifies for another chat even while the app is focused', () => {
+    expect(shouldNotifyForUserQuestion({
+      requestSessionId: 'chat-other',
+      activeSessionId: 'chat-active',
+      appIsBackgrounded: false,
+    })).toBe(true)
+  })
+
+  it('avoids duplicate notification for the visible active chat', () => {
+    expect(shouldNotifyForUserQuestion({
+      requestSessionId: 'chat-active',
+      activeSessionId: 'chat-active',
+      appIsBackgrounded: false,
     })).toBe(false)
   })
 })

@@ -84,5 +84,7 @@ describe("sprint9 desktop app", () => {
     expect(allowedIpcChannels.invoke).toContain("browser:navigate");
     expect(allowedIpcChannels.invoke).toContain("browser:home");
     expect(allowedIpcChannels.on).toContain("browser:navigation-state");
+    expect(allowedIpcChannels.invoke).not.toContain("desktop:present-agent-question");
+    expect(allowedIpcChannels.invoke).not.toContain("desktop:dismiss-agent-question");
   });
 });

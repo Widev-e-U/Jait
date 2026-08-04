@@ -364,6 +364,11 @@ function buildMarkdownComponents(
 
       return <ProjectPathLink href={href} target={target} onOpenPath={onOpenPath} />
     },
+    table: ({ children, ref: _ref, node: _node, ...props }) => (
+      <div className="my-0 w-full max-w-full overflow-x-auto">
+        <table {...props}>{children}</table>
+      </div>
+    ),
     img: ({ src, alt, ref: _ref, ...props }) => {
       const resolvedSrc = typeof src === 'string' ? resolveChatImageUrl(src) : null
       if (!resolvedSrc) {

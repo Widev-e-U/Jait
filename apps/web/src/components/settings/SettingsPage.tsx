@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -106,6 +106,17 @@ export interface UpdateInfo {
   hasUpdate: boolean
   downloadUrl?: string | null
   wearDownloadUrl?: string | null
+}
+
+interface WearStatus {
+  connected: boolean
+  directTransferSupported: boolean
+  watches: Array<{
+    id: string
+    name: string
+    nearby: boolean
+    directTransferSupported: boolean
+  }>
 }
 
 type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity'
@@ -216,6 +227,9 @@ export function SettingsPage({
   // ── Desktop close-to-tray setting ───────────────────────────────
   const [closeOnWindowClose, setCloseOnWindowClose] = useState(false)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [wearStatus, setWearStatus] = useState<WearStatus | null>(null)
+  const [wearStatusLoading, setWearStatusLoading] = useState(false)
+  const [wearUpdating, setWearUpdating] = useState(false)
   // ── Desktop launch-on-startup setting ───────────────────────────
   const [launchAtLogin, setLaunchAtLogin] = useState(false)
   const [launchAtLoginSupported, setLaunchAtLoginSupported] = useState(true)
@@ -225,6 +239,56 @@ export function SettingsPage({
       if (info.appVersion) setAppVersion(info.appVersion)
     })
   }, [platform])
+  const refreshWearStatus = useCallback(async () => {
+    if (platform !== 'capacitor') return
+    const appUpdater = (window as any).Capacitor?.Plugins?.AppUpdater
+    if (!appUpdater?.getWearStatus) return
+    setWearStatusLoading(true)
+    try {
+      setWearStatus(await appUpdater.getWearStatus() as WearStatus)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not check the connected watch')
+    } finally {
+      setWearStatusLoading(false)
+    }
+  }, [platform])
+  useEffect(() => {
+    void refreshWearStatus()
+  }, [refreshWearStatus])
+  const handleWearUpdate = useCallback(async () => {
+    const wearDownloadUrl = updateInfo?.wearDownloadUrl
+    const appUpdater = (window as any).Capacitor?.Plugins?.AppUpdater
+    if (!wearDownloadUrl) {
+      toast.error('No signed Wear OS APK found on the latest release')
+      return
+    }
+    if (!appUpdater?.updateWearApp) {
+      toast.error('Watch updates require a newer Android app')
+      return
+    }
+    setWearUpdating(true)
+    try {
+      toast.info('Downloading the watch update to your phone...')
+      const result = await appUpdater.updateWearApp({ url: wearDownloadUrl }) as {
+        directTransfers?: number
+        legacyTransfers?: number
+      }
+      const directTransfers = result.directTransfers ?? 0
+      const legacyTransfers = result.legacyTransfers ?? 0
+      if (directTransfers > 0) {
+        toast.success('Watch update sent. Finish the installation on your watch.')
+      } else if (legacyTransfers > 0) {
+        toast.success('Watch update started. Follow the installation prompt on your watch.')
+      } else {
+        toast.error('No connected watch received the update')
+      }
+      await refreshWearStatus()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the watch app')
+    } finally {
+      setWearUpdating(false)
+    }
+  }, [refreshWearStatus, updateInfo?.wearDownloadUrl])
   useEffect(() => {
     if (platform !== 'electron' || !window.jaitDesktop?.getSetting) return
     void window.jaitDesktop.getSetting('closeOnWindowClose', false).then((v) => {
@@ -622,6 +686,10 @@ export function SettingsPage({
     'desktop tray close window quit minimize app',
     appVersion,
   )
+  const showWatchSection = platform === 'capacitor' && matchesSearch(
+    'watch wear os companion connected paired update apk transfer channel',
+    ...((wearStatus?.watches ?? []).map((watch) => watch.name)),
+  )
   const showGatewaySection = platform !== 'web' && matchesSearch(
     'gateway connection url domain ip server host network',
     getApiUrl(),
@@ -797,6 +865,64 @@ export function SettingsPage({
                 <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
                   <AlertCircle className="h-3.5 w-3.5" />
                   Version {updateInfo?.latestVersion} has no signed Android APK yet.
+                </p>
+              )}
+            </Card>
+          )}
+
+          {showWatchSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-medium">
+                  <Watch className="h-4 w-4" />
+                  {highlight('Wear OS Watch')}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Update the Jait watch app from this phone over the Wear OS Data Layer.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {wearStatusLoading && !wearStatus ? (
+                  <Badge variant="outline"><Loader2 className="mr-1 h-3 w-3 animate-spin" />Checking...</Badge>
+                ) : wearStatus?.connected ? (
+                  wearStatus.watches.map((watch) => (
+                    <Badge key={watch.id} variant={watch.nearby ? 'success' : 'outline'}>
+                      {watch.name}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="outline">No connected watch</Badge>
+                )}
+              </div>
+              {wearStatus?.connected && (
+                <p className="text-sm text-muted-foreground">
+                  {wearStatus.directTransferSupported
+                    ? 'Direct phone-to-watch APK transfer is ready.'
+                    : 'This watch uses the one-time legacy updater; future updates transfer directly from the phone.'}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={() => { void handleWearUpdate() }}
+                  disabled={wearUpdating || wearStatusLoading || !wearStatus?.connected || !updateInfo?.wearDownloadUrl}
+                >
+                  {wearUpdating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                  {wearUpdating
+                    ? 'Sending update...'
+                    : updateInfo?.latestVersion
+                      ? `Update watch to v${updateInfo.latestVersion}`
+                      : 'Update watch app'}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { void refreshWearStatus() }} disabled={wearStatusLoading || wearUpdating}>
+                  <RefreshCw className={`mr-1.5 h-4 w-4 ${wearStatusLoading ? 'animate-spin' : ''}`} />
+                  Refresh watch
+                </Button>
+              </div>
+              {!updateInfo?.wearDownloadUrl && (
+                <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  The latest release has no signed Wear OS APK.
                 </p>
               )}
             </Card>

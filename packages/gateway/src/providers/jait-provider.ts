@@ -379,8 +379,10 @@ export class JaitProvider implements CliProviderAdapter {
 
   /**
    * Resolve the max autonomous tool-calling rounds for a turn.
-   * Per-user `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway
-   * config default. Clamped to a sane ceiling to avoid runaway loops.
+   * pi-style: when no explicit value is configured, returns `0` = NO cap — the
+   * model decides when it is done (guarded by the loop detectors). A per-user
+   * `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway config default.
+   * Positive values are clamped to a sane ceiling to avoid runaway loops.
    */
   private resolveMaxRounds(apiKeys?: Record<string, string>): number {
     const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();

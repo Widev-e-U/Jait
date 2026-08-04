@@ -1,32 +1,8 @@
-interface NativeAgentQuestionRequest {
-  id: string
-  title: string
-  attention: 'normal' | 'urgent'
-  questions: Array<{
-    id: string
-    header: string
-    question: string
-    multiSelect?: boolean
-    allowFreeformInput?: boolean
-    options?: Array<{ label: string; description?: string; recommended?: boolean }>
-  }>
-}
-
-interface NativeAgentQuestionResult {
-  answers: Record<string, {
-    selected: string[]
-    freeText: string | null
-    skipped: boolean
-  }>
-}
-
 interface JaitDesktop {
   gatewayUrl?: string
   getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
   notify: (opts: { title: string; body: string }) => Promise<void>
-  presentAgentQuestion: (request: NativeAgentQuestionRequest) => Promise<NativeAgentQuestionResult | null>
-  dismissAgentQuestion: (requestId: string) => Promise<{ ok: boolean }>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>
   pickDirectory: () => Promise<{ path: string } | null>
   browsePath: (dirPath: string) => Promise<{

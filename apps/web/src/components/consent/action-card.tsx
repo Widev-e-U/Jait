@@ -266,9 +266,15 @@ function TimeRemaining({ expiresAt }: { expiresAt: string }) {
 // ── ToolIcon ─────────────────────────────────────────────────────────
 
 function ToolIcon({ toolName }: { toolName: string }) {
-  if (toolName.startsWith('terminal.')) return <Terminal className="h-4 w-4" />
-  if (toolName.startsWith('file.')) return <FileText className="h-4 w-4" />
-  return <Info className="h-4 w-4" />
+  let icon = <Info className="h-3.5 w-3.5" />
+  if (toolName.startsWith('terminal.')) icon = <Terminal className="h-3.5 w-3.5" />
+  else if (toolName.startsWith('file.')) icon = <FileText className="h-3.5 w-3.5" />
+
+  return (
+    <span className="inline-flex items-center justify-center h-7 w-7 rounded-md bg-muted text-muted-foreground shrink-0 mt-0.5">
+      {icon}
+    </span>
+  )
 }
 
 // ── PreviewBlock ─────────────────────────────────────────────────────
@@ -332,34 +338,36 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
 
   if (compact) {
     return (
-      <div className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-card">
+      <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-card">
         <ToolIcon toolName={request.toolName} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium truncate">{request.toolName}</span>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span className="text-xs font-semibold truncate text-foreground">{request.toolName}</span>
             <RiskBadge risk={request.risk} />
             <ConsentLevelBadge level={request.policy.consentLevel} />
-            <TimeRemaining expiresAt={request.expiresAt} />
           </div>
-          <p className="text-xs text-muted-foreground truncate">{request.summary}</p>
+          <p className="text-xs text-muted-foreground truncate mt-1 leading-relaxed">{request.summary}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={handleApprove}
-            disabled={deciding}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 transition-colors"
-          >
-            <ShieldCheck className="h-3 w-3" />
-            Approve
-          </button>
-          <button
-            onClick={handleReject}
-            disabled={deciding}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
-          >
-            <ShieldX className="h-3 w-3" />
-            Reject
-          </button>
+        <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+          <TimeRemaining expiresAt={request.expiresAt} />
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleApprove}
+              disabled={deciding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Approve
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={deciding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ShieldX className="h-3.5 w-3.5" />
+              Reject
+            </button>
+          </div>
         </div>
       </div>
     )

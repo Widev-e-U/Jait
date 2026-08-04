@@ -5,6 +5,7 @@ import {
   parseOllamaStream,
   serializeMessagesForOllama,
   buildTieredToolSchemas,
+  detectToolLoop,
   fromOpenAIName,
   runAgentLoop,
   SteeringController,
@@ -699,6 +700,51 @@ describe("executeOneToolCall retry accounting", () => {
   });
 });
 
+describe("detectToolLoop", () => {
+  it("returns null for short or non-repeating sequences", () => {
+    expect(detectToolLoop([])).toBeNull();
+    expect(detectToolLoop(["a:1", "b:2", "a:1"])).toBeNull();
+    // Same tool, but different args each time (legitimate: reading many files).
+    expect(detectToolLoop([
+      "file_read:file-a",
+      "file_read:file-b",
+      "file_read:file-c",
+      "file_read:file-d",
+    ])).toBeNull();
+  });
+
+  it("detects an identical-call cycle (cycle length 1)", () => {
+    const sig = ["file_read:{}", "file_read:{}", "file_read:{}", "file_read:{}"];
+    expect(detectToolLoop(sig)).toBe(1);
+  });
+
+  it("detects an A-B-A-B ping-pong cycle (cycle length 2)", () => {
+    const sig = ["a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
+    expect(detectToolLoop(sig)).toBe(2);
+  });
+
+  it("detects a 3-tool cycle (cycle length 3)", () => {
+    const sig = ["a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}"];
+    expect(detectToolLoop(sig)).toBe(3);
+  });
+
+  it("ignores a non-repeating prefix and only needs the tail to cycle", () => {
+    const sig = ["grep:x", "edit:x", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
+    expect(detectToolLoop(sig)).toBe(2);
+  });
+
+  it("returns null for a productive back-and-forth that changes arguments", () => {
+    // read file-a, edit it with new content, read file-b, edit it — args differ.
+    const sig = [
+      "file_read:a",
+      "file_write:{content:1}",
+      "file_read:b",
+      "file_write:{content:2}",
+    ];
+    expect(detectToolLoop(sig)).toBeNull();
+  });
+});
+
 describe("runAgentLoop persistence", () => {
   it("recovers when the provider returns an empty completion after a successful tool", async () => {
     const responses = [
@@ -1088,6 +1134,223 @@ describe("runAgentLoop truncation recovery", () => {
         (e) => e.type === "steering" && /output token limit/i.test(e.message),
       ),
     ).toBe(true);
+  });
+});
+
+describe("runAgentLoop tool-loop detection", () => {
+  // Build a valid SSE tool-call response via JSON.stringify so embedded JSON
+  // (tool-call arguments) is escaped correctly.
+  function toolCallSSE(id: string, name: string, args: unknown = {}): Response {
+    const payload = JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id,
+                type: "function",
+                function: { name, arguments: JSON.stringify(args) },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const finish = JSON.stringify({
+      choices: [{ delta: {}, finish_reason: "tool_calls" }],
+    });
+    return sseResponse([`data: ${payload}\n\n`, `data: ${finish}\n\n`, "data: [DONE]\n\n"]);
+  }
+
+  function sseResponse(chunks: string[]): Response {
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }),
+      { status: 200 },
+    );
+  }
+
+  function textResponse(text: string): Response {
+    return sseResponse([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  }
+
+  it("stops a successful A-B-A-B ping-pong loop long before maxRounds", async () => {
+    // The model alternates between two tools with identical empty args each
+    // round. Every call *succeeds*, so the unproductive-rounds guard never
+    // fires; the duplicate-check only nags (it does not terminate the loop).
+    // Only the cycle detector stops it.
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
+      const response = toolCallSSE(`call-${fetchCalls}`, name, {});
+      fetchCalls++;
+      return response;
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Iterate until done." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "file_read",
+              description: "Read",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "file_write",
+              description: "Write",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-ping-pong",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+        onEvent: () => {},
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    // Stopped by loop detection, not by hitting maxRounds.
+    expect(result.hitMaxRounds).toBe(false);
+    // Far fewer than the 40-round backstop.
+    expect(fetchCalls).toBeGreaterThan(0);
+    expect(fetchCalls).toBeLessThan(15);
+    expect(result.content).toMatch(/\[Stopped: the agent repeated the same tool-call pattern/);
+  });
+
+  it("with no maxRounds, the model decides when done yet the detector still stops loops", async () => {
+    // pi-style: omit maxRounds entirely (no cap). A stuck A-B-A-B ping-pong
+    // must still be terminated by the loop detector — no cap must not mean
+    // an infinite loop.
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
+      const response = toolCallSSE(`call-${fetchCalls}`, name, {});
+      fetchCalls++;
+      return response;
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Go." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "file_read",
+              description: "Read",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "file_write",
+              description: "Write",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-no-cap-pingpong",
+        abort: new AbortController(),
+        // NOTE: no maxRounds passed — the model decides when done.
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    expect(result.hitMaxRounds).toBe(false);
+    expect(fetchCalls).toBeGreaterThan(0);
+    expect(fetchCalls).toBeLessThan(15);
+    expect(result.content).toMatch(/\[Stopped: the agent repeated the same tool-call pattern/);
+  });
+
+  it("does not flag a legitimate multi-file read sequence", async () => {
+    // Model reads four different files in a row (different args) then answers.
+    const reads = ["file-a", "file-b", "file-c", "file-d"];
+    let callIdx = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (callIdx < reads.length) {
+        const file = reads[callIdx];
+        const response = toolCallSSE(`call-${callIdx + 1}`, "file_read", { path: file });
+        callIdx++;
+        return response;
+      }
+      return textResponse("Read all files.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Read all four files." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "file_read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-multi-read",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toBe("Read all files.");
+    expect(result.content).not.toMatch(/Stopped/);
   });
 });
 

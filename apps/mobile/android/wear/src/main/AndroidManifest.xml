@@ -26,6 +26,12 @@
             android:required="false" />
 
         <activity
+            android:name=".WearUpdateActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault" />
+
+        <activity
             android:name=".WearQuestionActivity"
             android:exported="true"
             android:excludeFromRecents="true"
@@ -43,6 +49,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
             </intent-filter>
         </service>
 

@@ -100,7 +100,18 @@ export function MessageResponse({
       )}
       {...props}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{String(children ?? '')}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          table: ({ children, ref: _ref, node: _node, ...props }) => (
+            <div className="my-0 w-full max-w-full overflow-x-auto">
+              <table {...props}>{children}</table>
+            </div>
+          ),
+        }}
+      >
+        {String(children ?? '')}
+      </ReactMarkdown>
     </div>
   )
 }

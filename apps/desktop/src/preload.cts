@@ -224,23 +224,6 @@ if (isJaitRenderer()) {
   notify: (opts: { title: string; body: string }) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[2], opts),
 
-  presentAgentQuestion: (request: {
-    id: string;
-    title: string;
-    attention: "normal" | "urgent";
-    questions: Array<{
-      id: string;
-      header: string;
-      question: string;
-      multiSelect?: boolean;
-      allowFreeformInput?: boolean;
-      options?: Array<{ label: string; description?: string; recommended?: boolean }>;
-    }>;
-  }) => ipcRenderer.invoke(allowedIpcChannels.invoke[33], request),
-
-  dismissAgentQuestion: (requestId: string) =>
-    ipcRenderer.invoke(allowedIpcChannels.invoke[34], requestId),
-
   /** Show a native confirmation dialog for screen-share approval */
   confirmShare: (opts: { title: string; message: string }) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[3], opts) as Promise<{ accepted: boolean }>,

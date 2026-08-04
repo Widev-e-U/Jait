@@ -4,10 +4,14 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
+import com.google.android.gms.wearable.ChannelClient;
 import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -25,6 +29,34 @@ public class WearQuestionListenerService extends WearableListenerService {
     private static final String DISMISS_PATH = "/jait/dismiss";
     private static final String UPDATE_PATH = "/jait/update";
     private static final String SNAPSHOT_PATH = "/jait/snapshot";
+    private static final String UPDATE_CHANNEL_PATH = "/jait/update/apk";
+
+    @Override
+    public void onChannelOpened(ChannelClient.Channel channel) {
+        if (!UPDATE_CHANNEL_PATH.equals(channel.getPath())) return;
+        File apkFile = WearUpdater.prepareApkFile(this);
+        if (apkFile == null) {
+            Wearable.getChannelClient(this).close(channel);
+            return;
+        }
+        Wearable.getChannelClient(this)
+            .receiveFile(channel, Uri.fromFile(apkFile), false)
+            .addOnFailureListener(error -> {
+                apkFile.delete();
+                Wearable.getChannelClient(this).close(channel);
+            });
+    }
+
+    @Override
+    public void onInputClosed(ChannelClient.Channel channel, int closeReason, int appSpecificErrorCode) {
+        if (!UPDATE_CHANNEL_PATH.equals(channel.getPath())) return;
+        if (closeReason != ChannelClient.ChannelCallback.CLOSE_REASON_NORMAL) {
+            File apkFile = WearUpdater.getApkFile(this);
+            if (apkFile != null) apkFile.delete();
+            return;
+        }
+        WearUpdater.launchInstallFlow(this);
+    }
 
     @Override
     public void onMessageReceived(MessageEvent event) {

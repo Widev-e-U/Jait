@@ -17,7 +17,6 @@ import org.json.JSONObject;
 final class WearBridge {
     private static final String QUESTION_PATH = "/jait/question";
     private static final String DISMISS_PATH = "/jait/dismiss";
-    private static final String UPDATE_PATH = "/jait/update";
     private static final String SNAPSHOT_PATH = "/jait/snapshot";
 
     private WearBridge() {
@@ -30,11 +29,6 @@ final class WearBridge {
     static void relayDismiss(Context context, String requestId) {
         if (requestId == null || requestId.isEmpty()) return;
         sendToAll(context, DISMISS_PATH, requestId);
-    }
-
-    static void relayUpdate(Context context, String downloadUrl) {
-        if (downloadUrl == null || downloadUrl.isEmpty()) return;
-        sendToAll(context, UPDATE_PATH, downloadUrl);
     }
 
     static void relaySnapshot(Context context, String nodeId, JSONObject snapshot) {

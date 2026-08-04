@@ -19,6 +19,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
@@ -27,6 +29,7 @@ public class AppUpdaterPlugin extends Plugin {
 
     private long activeDownloadId = -1;
     private boolean waitingForInstallPermission = false;
+    private volatile boolean wearUpdateInProgress = false;
     private BroadcastReceiver downloadReceiver;
 
     @PluginMethod
@@ -46,11 +49,10 @@ public class AppUpdaterPlugin extends Plugin {
             return;
         }
 
-        // Both builds are cut from the same release, so kick off the watch's own
-        // download/install the moment the phone starts applying its update - independent of
-        // whether the phone's own install succeeds, and not blocking on it either.
         String wearUrl = call.getString("wearUrl");
-        if (wearUrl != null) WearBridge.relayUpdate(getContext(), wearUrl);
+        if (wearUrl != null && !wearUpdateInProgress) {
+            startWearUpdate(wearUrl, null);
+        }
 
         Context context = getContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
@@ -64,6 +66,72 @@ public class AppUpdaterPlugin extends Plugin {
         }
 
         startDownload(call, downloadUri);
+    }
+
+    @PluginMethod
+    public void getWearStatus(PluginCall call) {
+        WearUpdateManager.queryStatus(getContext(), new WearUpdateManager.StatusCallback() {
+            @Override
+            public void onSuccess(WearUpdateManager.Status status) {
+                JSObject result = new JSObject();
+                List<JSObject> watches = new ArrayList<>();
+                for (WearUpdateManager.WatchStatus watch : status.watches) {
+                    JSObject item = new JSObject();
+                    item.put("id", watch.id);
+                    item.put("name", watch.name);
+                    item.put("nearby", watch.nearby);
+                    item.put("directTransferSupported", watch.directTransferSupported);
+                    watches.add(item);
+                }
+                result.put("connected", !status.watches.isEmpty());
+                result.put("directTransferSupported", status.directTransferSupported);
+                result.put("watches", watches);
+                call.resolve(result);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                call.reject("Could not check the connected Wear OS watch", error);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void updateWearApp(PluginCall call) {
+        String url = call.getString("url");
+        if (!WearUpdateManager.isAllowedDownloadUri(url)) {
+            call.reject("Only HTTPS GitHub release URLs are allowed");
+            return;
+        }
+        if (wearUpdateInProgress) {
+            call.reject("A watch update is already in progress");
+            return;
+        }
+        startWearUpdate(url, call);
+    }
+
+    private void startWearUpdate(String url, PluginCall call) {
+        wearUpdateInProgress = true;
+        WearUpdateManager.update(getContext(), url, new WearUpdateManager.UpdateCallback() {
+            @Override
+            public void onSuccess(WearUpdateManager.UpdateResult updateResult) {
+                wearUpdateInProgress = false;
+                if (call == null) return;
+                JSObject result = new JSObject();
+                result.put("ok", true);
+                result.put("directTransfers", updateResult.directTransfers);
+                result.put("legacyTransfers", updateResult.legacyTransfers);
+                call.resolve(result);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                wearUpdateInProgress = false;
+                if (call != null) {
+                    call.reject(error.getMessage() == null ? "Could not update the watch app" : error.getMessage(), error);
+                }
+            }
+        });
     }
 
     @ActivityCallback
@@ -216,6 +284,7 @@ public class AppUpdaterPlugin extends Plugin {
     protected void handleOnDestroy() {
         activeDownloadId = -1;
         waitingForInstallPermission = false;
+        wearUpdateInProgress = false;
         unregisterDownloadReceiver();
         super.handleOnDestroy();
     }

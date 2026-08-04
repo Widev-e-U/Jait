@@ -4,7 +4,6 @@
  * Inspired by VS Code Copilot's manage_todo_list:
  * - Full array-based update (provide ALL items each time)
  * - Status tracking: not-started → in-progress → completed
- * - At most one item can be in-progress at a time
  * - Per-session state stored in memory
  *
  * The tool emits a `todo_list` SSE event via the agent loop
@@ -52,7 +51,7 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
     displayName: "Todo",
     description:
       "Manage a structured todo list for tracking multi-step tasks. " +
-      "Provide the COMPLETE list each time. At most one item can be in-progress.",
+      "Provide the COMPLETE list each time.",
     tier: "core",
     category: "meta",
     source: "builtin",
@@ -88,17 +87,6 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
       try {
         const items = input.todoList;
 
-        // Validate: at most one in-progress
-        const inProgress = items.filter((t) => t.status === "in-progress");
-        if (inProgress.length > 1) {
-          return {
-            ok: false,
-            message:
-              `Only one todo can be in-progress at a time. Found ${inProgress.length}: ` +
-              inProgress.map((t) => `"${t.title}"`).join(", "),
-          };
-        }
-
         // Normalize and store
         const normalized: TodoItem[] = items.map((t) => ({
           id: t.id,
@@ -110,13 +98,15 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
 
         const completed = normalized.filter((t) => t.status === "completed").length;
         const total = normalized.length;
-        const current = inProgress[0]?.title;
+        const inProgress = normalized.filter((t) => t.status === "in-progress");
+        const inProgressTitles = inProgress.map((t) => `"${t.title}"`).join(", ");
 
         return {
           ok: true,
-          message: current
-            ? `Todo list updated (${completed}/${total} done). Working on: ${current}`
-            : `Todo list updated (${completed}/${total} done).`,
+          message:
+            inProgressTitles.length > 0
+              ? `Todo list updated (${completed}/${total} done). Working on: ${inProgressTitles}`
+              : `Todo list updated (${completed}/${total} done).`,
           data: { items: normalized },
         };
       } catch (err) {

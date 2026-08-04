@@ -204,7 +204,13 @@ export interface AgentLoopOptions {
   auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string; reasoningEffort?: string | null };
   /** Abort controller — abort to cancel the loop */
   abort: AbortController;
-  /** Max tool-calling rounds before stopping */
+  /**
+   * Max tool-calling rounds before stopping. pi-style default: when omitted or
+   * `0`, there is NO round cap — the loop runs until the model itself decides
+   * it is done (returns a non-tool-call answer) or a behavioral guard stops it
+   * (loop detection, consecutive unproductive rounds, duplicate calls, abort).
+   * Pass a positive number to impose a hard backstop.
+   */
   maxRounds?: number;
   /** Max retries per individual tool call failure (0 = no retry) */
   maxRetries?: number;
@@ -1135,7 +1141,6 @@ export type ToolExecutor = (
 
 // ── Main agent loop ──────────────────────────────────────────────────
 
-const DEFAULT_MAX_ROUNDS = 40;
 const DEFAULT_MAX_RETRIES = 2;
 
 /** Max times the same tool+args signature can be called before being rejected as a duplicate. */
@@ -1176,6 +1181,58 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
  * full answer instead of a truncated fragment.
  */
 const MAX_LENGTH_CONTINUATIONS = 3;
+
+// ── Tool-loop detection ──────────────────────────────────────────────
+
+/** Rolling window of recent tool-call signatures examined for repeating cycles. */
+const LOOP_DETECTION_MAX_HISTORY = 12;
+/** Shortest cycle length treated as a loop (1 = identical call, 2 = ping-pong, 3 = trio). */
+const LOOP_DETECTION_MAX_CYCLE = 3;
+/** A repeating cycle must appear at least this many times to be conclusive. */
+const LOOP_DETECTION_MIN_REPEATS = 3;
+
+/**
+ * Detect whether a sequence of tool-call signatures has settled into a
+ * repeating cycle. Each signature is `${toolName}:${serializedArgs}`, so a
+ * genuine loop requires the *identical* tool call with *identical* arguments
+ * to repeat — productive work that changes arguments (reading many files,
+ * issuing different queries) won't match.
+ *
+ * This catches loops the existing guards miss: the duplicate-check rejects
+ * the same call 3x, and `MAX_UNPRODUCTIVE_ROUNDS` only fires when calls
+ * *fail*. A successful A→B→A→B ping-pong (each tool used only twice, all
+ * succeeding) would otherwise burn the whole `maxRounds` budget. Mirrors
+ * pi's philosophy (stop on the model's behavior — pi has no round counter
+ * and simply ends when the model stops calling tools) and OpenClaw's
+ * genericRepeat / pingPong loop detectors.
+ *
+ * @returns The detected cycle length (1, 2, or 3), or `null` if the tail is
+ *          not a pure repetition of a short cycle.
+ */
+export function detectToolLoop(signatures: string[]): number | null {
+  const n = signatures.length;
+  if (n < 4) return null;
+
+  for (let cycle = 1; cycle <= LOOP_DETECTION_MAX_CYCLE; cycle++) {
+    const minLen = cycle * LOOP_DETECTION_MIN_REPEATS;
+    // Find any whole-cycle suffix (starting at `start`) that is a pure
+    // repetition of a short cycle — so an unrelated prefix of tool calls
+    // (e.g. the model orienting first) does not defeat detection.
+    for (let start = 0; start <= n - minLen; start++) {
+      const len = n - start;
+      if (len % cycle !== 0 || len < minLen) continue;
+      let ok = true;
+      for (let i = start; i < n; i++) {
+        if (signatures[i] !== signatures[start + ((i - start) % cycle)]) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return cycle;
+    }
+  }
+  return null;
+}
 
 /**
  * Detect if the model emitted a tool call as plain text instead of structured format.
@@ -1722,7 +1779,7 @@ export async function runAgentLoop(
     sessionId,
     auth,
     abort,
-    maxRounds = DEFAULT_MAX_ROUNDS,
+    maxRounds,
     maxRetries = DEFAULT_MAX_RETRIES,
     parallel = true,
     toolRegistry,
@@ -1733,6 +1790,10 @@ export async function runAgentLoop(
     onPersist,
     log = console,
   } = options;
+
+  // pi-style: no round cap by default — the model decides when it's done.
+  // A positive maxRounds acts only as a hard backstop.
+  const roundLimit = maxRounds && maxRounds > 0 ? maxRounds : Number.MAX_SAFE_INTEGER;
 
   let fullContent = "";
   const executedToolCalls: ExecutedToolCall[] = [];
@@ -1760,6 +1821,12 @@ export async function runAgentLoop(
   };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
+
+  // ── Tool-loop cycle tracking ──
+  /** Tool-call signatures (tool:args) from recent rounds, capped for cycle detection. */
+  const recentToolCallSignatures: string[] = [];
+  /** Set after we've warned about a loop pattern once; a persisted loop then hard-stops. */
+  let loopPatternWarned = false;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1816,7 +1883,7 @@ export async function runAgentLoop(
     history.push(historyEntry);
   }
 
-  for (let round = 0; round < maxRounds; round++) {
+  for (let round = 0; round < roundLimit; round++) {
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
@@ -2312,6 +2379,41 @@ export async function runAgentLoop(
         }
       }
 
+      // ── Tool-loop pattern detection (stop on behavior, before maxRounds) ──
+      // Beyond "unproductive rounds" (which only fires when calls *fail*), catch
+      // agents that are *successfully* spinning — calling the exact same tool
+      // with the exact same args in a repeating cycle. Warn once, then hard-stop
+      // if the cycle persists, so a stuck agent is cut off within a few rounds
+      // instead of burning all maxRounds. maxRounds remains the backstop.
+      for (const tc of toolCalls) {
+        const internalName = fromOpenAIName(tc.function.name);
+        recentToolCallSignatures.push(`${internalName}:${tc.function.arguments}`);
+      }
+      if (recentToolCallSignatures.length > LOOP_DETECTION_MAX_HISTORY) {
+        recentToolCallSignatures.splice(0, recentToolCallSignatures.length - LOOP_DETECTION_MAX_HISTORY);
+      }
+      const cycle = detectToolLoop(recentToolCallSignatures);
+      if (cycle !== null) {
+        if (loopPatternWarned) {
+          log.warn(`Tool-loop detected (cycle=${cycle}) and persisted — stopping loop for session ${sessionId}`);
+          const bailMsg = `\n\n[Stopped: the agent repeated the same tool-call pattern (cycle=${cycle}) without progress. Please try a different strategy.]`;
+          onEvent?.({ type: "token", content: bailMsg });
+          fullContent += bailMsg;
+          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
+          persisted = true;
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        }
+        loopPatternWarned = true;
+        const warnMsg = `[WARNING: the agent is repeating the same tool-call pattern (cycle length ${cycle}) without making progress. You MUST try a fundamentally different approach or end your turn.]`;
+        history.push({ role: "system", content: warnMsg });
+        log.info(`Tool-loop warning injected for session ${sessionId} (cycle=${cycle})`);
+      } else if (loopPatternWarned) {
+        // The cycle broke — reset so a fresh loop later gets its own warning.
+        loopPatternWarned = false;
+      }
+
       // Loop continues — LLM sees results and decides next
       continue;
     }
@@ -2366,7 +2468,7 @@ export async function runAgentLoop(
     }
 
     if (!contentText.trim() && toolCalls.length === 0) {
-      const canRetry = emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < maxRounds;
+      const canRetry = emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < roundLimit;
       if (canRetry) {
         emptyResponseRetries++;
         const afterTools = executedToolCalls.length > 0;
@@ -2433,8 +2535,8 @@ export async function runAgentLoop(
     return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints, plan: planResult };
   }
 
-  // Hit max rounds
-  log.warn(`Agent loop hit max rounds (${maxRounds}) for session ${sessionId}`);
+  // Hit max rounds (only reachable when a positive maxRounds was supplied).
+  log.warn(`Agent loop hit max rounds (${roundLimit}) for session ${sessionId}`);
   const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
   onEvent?.({ type: "token", content: msg });
   fullContent += msg;
@@ -2449,7 +2551,7 @@ export async function runAgentLoop(
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, persisted, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, segments, rounds: roundLimit, aborted: false, hitMaxRounds: true, persisted, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────

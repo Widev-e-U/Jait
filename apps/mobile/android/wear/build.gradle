@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+import groovy.json.JsonSlurper
+
+def releasePackageJson = new JsonSlurper().parse(file('../../../../packages/gateway/package.json'))
+def releaseVersionName = releasePackageJson.version as String
+def releaseVersionParts = releaseVersionName.tokenize('.').collect { it.toInteger() }
+def releaseVersionCode = (releaseVersionParts[0] * 1000000) +
+    (releaseVersionParts[1] * 1000) +
+    releaseVersionParts[2]
+
 android {
     namespace "dev.jait.mobile.wear"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +16,8 @@ android {
         applicationId "dev.jait.mobile.wear"
         minSdkVersion 28
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode
+        versionName releaseVersionName
     }
     signingConfigs {
         release {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
 import type { ProviderAuthStatus, ProviderEvent } from "./contracts.js";
+import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -865,5 +866,90 @@ describe("AcpProvider auth", () => {
       logout: false,
       deviceCode: false,
     });
+  });
+});
+
+const fakeAcpBackgroundTerminalScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let sessionId = null;
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      sessionId = "acp-session-1";
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId } }) + "\\n");
+    } else if (request.method === "session/set_mode") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    } else if (request.method === "session/prompt") {
+      // Delegate to the client's native terminal instead of spawning our own
+      // subprocess, then end the turn immediately without waiting for exit —
+      // mirroring an agent that runs a command "in the background".
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: 9001,
+        method: "terminal/create",
+        params: {
+          sessionId,
+          command: process.execPath,
+          args: ["-e", "setTimeout(() => process.exit(3), 200)"],
+        },
+      }) + "\\n");
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { stopReason: "end_turn" } }) + "\\n");
+    }
+  }
+});
+`;
+
+describe("AcpProvider native terminal capability", () => {
+  afterEach(() => {
+    backgroundCommandMonitor.clearForTests();
+  });
+
+  it("wakes the agent up when a command run via the ACP terminal finishes after the turn ends", async () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpBackgroundTerminalScript],
+    });
+
+    const completion = new Promise<BackgroundCommandResult>((resolve) => {
+      backgroundCommandMonitor.setCompletionHandler((result) => {
+        resolve(result);
+      });
+    });
+
+    try {
+      const session = await provider.startSession({
+        threadId: "thread-1",
+        workingDirectory: process.cwd(),
+        mode: "full-access",
+      });
+
+      await provider.sendTurn(session.id, "run a background command");
+
+      const result = await Promise.race([
+        completion,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for completion")), 5000)),
+      ]);
+
+      expect(result.sessionId).toBe("thread-1");
+      expect(result.exitCode).toBe(3);
+    } finally {
+      await provider.dispose();
+    }
   });
 });

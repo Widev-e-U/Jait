@@ -12,13 +12,26 @@ import {
   type Agent,
   type AuthMethod,
   type Client,
+  type CreateTerminalRequest,
+  type CreateTerminalResponse,
   type InitializeResponse,
+  type KillTerminalRequest,
+  type KillTerminalResponse,
   type McpServer,
+  type ReleaseTerminalRequest,
+  type ReleaseTerminalResponse,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
+  type TerminalOutputRequest,
+  type TerminalOutputResponse,
+  type WaitForTerminalExitRequest,
+  type WaitForTerminalExitResponse,
 } from "@agentclientprotocol/sdk";
 import { uuidv7 } from "../db/uuidv7.js";
+import { AcpTerminal } from "./acp-terminal.js";
+import { isPiBasedProvider, provisionPiMcp } from "./pi-mcp-provision.js";
+import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import type {
   CliProviderAdapter,
   McpServerRef,
@@ -96,6 +109,7 @@ interface AcpSessionState {
   child: ChildProcess;
   connection: ClientSideConnection;
   agent: Agent;
+  client: JaitAcpClient;
   acpSessionId: string;
   approvals: Map<string, PendingApproval>;
   initialized: InitializeResponse;
@@ -107,15 +121,60 @@ interface AcpSessionState {
    * cadence (Codex front-loads everything; Claude Code streams it in updates).
    */
   toolCalls: Map<string, Record<string, unknown>>;
+  /** Removes the per-session pi MCP config + wrapper when the session ends. */
+  piProvisionCleanup?: () => void;
 }
 
 class JaitAcpClient implements Client {
+  /** Terminals created via `createTerminal`, keyed by the id we hand back to the agent. */
+  readonly terminals = new Map<string, AcpTerminal>();
+
   constructor(
     private readonly provider: AcpProvider,
     private readonly sessionId: string,
     private readonly approvals: Map<string, PendingApproval>,
     private readonly runtimeMode?: string,
   ) {}
+
+  private requireTerminal(terminalId: string): AcpTerminal {
+    const terminal = this.terminals.get(terminalId);
+    if (!terminal) throw new Error(`Unknown terminal: ${terminalId}`);
+    return terminal;
+  }
+
+  async createTerminal(params: CreateTerminalRequest): Promise<CreateTerminalResponse> {
+    const terminalId = uuidv7();
+    this.terminals.set(terminalId, new AcpTerminal({
+      command: params.command,
+      args: params.args,
+      cwd: params.cwd,
+      env: params.env,
+      outputByteLimit: params.outputByteLimit,
+    }));
+    return { terminalId };
+  }
+
+  async terminalOutput(params: TerminalOutputRequest): Promise<TerminalOutputResponse> {
+    return this.requireTerminal(params.terminalId).currentOutput();
+  }
+
+  async waitForTerminalExit(params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> {
+    return this.requireTerminal(params.terminalId).waitForExit();
+  }
+
+  async killTerminal(params: KillTerminalRequest): Promise<KillTerminalResponse> {
+    this.requireTerminal(params.terminalId).kill();
+    return {};
+  }
+
+  async releaseTerminal(params: ReleaseTerminalRequest): Promise<ReleaseTerminalResponse> {
+    const terminal = this.terminals.get(params.terminalId);
+    if (terminal) {
+      terminal.release();
+      this.terminals.delete(params.terminalId);
+    }
+    return {};
+  }
 
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     const allowOptionId = params.options.find((option) => option.kind.startsWith("allow"))?.optionId ?? params.options[0]?.optionId ?? "allow";
@@ -592,10 +651,26 @@ export class AcpProvider implements CliProviderAdapter {
       startedAt: new Date().toISOString(),
     };
 
+    const env = { ...process.env, ...this.config.env, ...options.env };
+    let piProvisionCleanup: (() => void) | undefined;
+    // pi-acp stores the ACP mcpServers but never wires them through to pi, and
+    // pi needs the pi-mcp-adapter extension to expose MCP tools. Inject a
+    // per-session `--mcp-config` so pi can reach Jait's MCP servers.
+    if (isPiBasedProvider(this.providerType)) {
+      const provision = provisionPiMcp(this.providerType, options.mcpServers, {
+        sessionId,
+        realPiCommand: env["PI_ACP_PI_COMMAND"] ?? "pi",
+      });
+      if (provision) {
+        Object.assign(env, provision.env);
+        piProvisionCleanup = provision.cleanup;
+      }
+    }
+
     const child = spawn(this.config.command, this.config.args, {
       cwd: options.workingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...this.config.env, ...options.env },
+      env,
       shell: needsShell(this.config.command),
     });
 
@@ -610,13 +685,14 @@ export class AcpProvider implements CliProviderAdapter {
 
     const approvals = new Map<string, PendingApproval>();
     let capturedAgent: Agent | null = null;
+    const client = new JaitAcpClient(this, sessionId, approvals, options.mode);
     const stream = ndJsonStream(
       Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>,
       Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>,
     );
     const connection = new ClientSideConnection((agent) => {
       capturedAgent = agent;
-      return new JaitAcpClient(this, sessionId, approvals, options.mode);
+      return client;
     }, stream);
 
     child.once("exit", (code, signal) => {
@@ -632,6 +708,7 @@ export class AcpProvider implements CliProviderAdapter {
           : { error: `ACP provider exited (${signal ?? code ?? "unknown"})` }),
       } as ProviderEvent);
       this.sessions.delete(sessionId);
+      current.piProvisionCleanup?.();
     });
 
     let initialized: InitializeResponse;
@@ -642,7 +719,12 @@ export class AcpProvider implements CliProviderAdapter {
         clientInfo: { name: "Jait", version: "0.1" },
         clientCapabilities: {
           fs: { readTextFile: false, writeTextFile: false },
-          terminal: false,
+          // Backed by JaitAcpClient's createTerminal/terminalOutput/waitForTerminalExit/
+          // killTerminal/releaseTerminal so agents delegate shell execution to Jait
+          // instead of spawning their own subprocess — without this, commands the
+          // agent runs "in the background" finish invisibly to Jait and it can
+          // never wake the agent back up when they complete.
+          terminal: true,
         },
       });
 
@@ -668,10 +750,12 @@ export class AcpProvider implements CliProviderAdapter {
       child,
       connection,
       agent: capturedAgent ?? connection,
+      client,
       acpSessionId: newSession.sessionId,
       approvals,
       initialized,
       toolCalls: new Map(),
+      piProvisionCleanup,
     };
     this.sessions.set(sessionId, state);
     this.emitEvent({ type: "session.started", sessionId });
@@ -698,6 +782,7 @@ export class AcpProvider implements CliProviderAdapter {
       if (result.stopReason === "cancelled") {
         this.emitEvent({ type: "session.error", sessionId, error: "Turn cancelled" });
       }
+      this.trackDanglingTerminals(state);
       this.emitEvent({ type: "turn.completed", sessionId });
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "ACP prompt failed";
@@ -705,6 +790,28 @@ export class AcpProvider implements CliProviderAdapter {
       state.session.error = messageText;
       this.emitEvent({ type: "session.error", sessionId, error: messageText });
       throw error;
+    }
+  }
+
+  /**
+   * Hand any terminal still running when the agent's turn ends off to
+   * `backgroundCommandMonitor`, so the same completion → resume flow used for
+   * Jait's native `terminal.run` "background" mode also wakes the agent back
+   * up here (the terminal.run OSC-marker watcher never sees these commands —
+   * they're spawned directly for the agent's `terminal/create` requests, not
+   * run inside Jait's own PTY).
+   */
+  private trackDanglingTerminals(state: AcpSessionState): void {
+    const threadId = state.session.threadId;
+    for (const [terminalId, terminal] of state.client.terminals) {
+      if (!terminal.isRunning) continue;
+      backgroundCommandMonitor.trackExternal({
+        sessionId: threadId,
+        terminalId,
+        command: terminal.command,
+        startedAt: terminal.startedAt,
+        exitPromise: terminal.waitForCompletion(),
+      });
     }
   }
 
@@ -745,6 +852,7 @@ export class AcpProvider implements CliProviderAdapter {
     state.session.completedAt = new Date().toISOString();
     state.child.kill();
     this.sessions.delete(sessionId);
+    state.piProvisionCleanup?.();
     this.emitEvent({ type: "session.completed", sessionId });
   }
 

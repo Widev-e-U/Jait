@@ -22,8 +22,13 @@ export interface CollapsedTodoDisplay {
   showHeaderCompleted: boolean
 }
 
+export function getActiveTodoItems(items: TodoItem[]): TodoItem[] {
+  return items.filter((item) => item.status === 'in-progress')
+}
+
+/** @deprecated Use getActiveTodoItems — multiple items may be in-progress. */
 export function getActiveTodoItem(items: TodoItem[]): TodoItem | null {
-  return items.find((item) => item.status === 'in-progress') ?? null
+  return getActiveTodoItems(items)[0] ?? null
 }
 
 export function areAllTodoItemsCompleted(items: TodoItem[]): boolean {
@@ -31,13 +36,22 @@ export function areAllTodoItemsCompleted(items: TodoItem[]): boolean {
 }
 
 export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay {
-  const activeItem = getActiveTodoItem(items)
+  const activeItems = getActiveTodoItems(items)
   const allCompleted = areAllTodoItemsCompleted(items)
 
+  const headerLabel =
+    activeItems.length === 1
+      ? activeItems[0].title
+      : activeItems.length > 1
+        ? `${activeItems.length} tasks in progress`
+        : allCompleted
+          ? 'All tasks completed'
+          : 'Tasks'
+
   return {
-    headerLabel: activeItem ? activeItem.title : allCompleted ? 'All tasks completed' : 'Tasks',
-    showHeaderSpinner: Boolean(activeItem),
-    showHeaderCompleted: !activeItem && allCompleted,
+    headerLabel,
+    showHeaderSpinner: activeItems.length > 0,
+    showHeaderCompleted: activeItems.length === 0 && allCompleted,
   }
 }
 

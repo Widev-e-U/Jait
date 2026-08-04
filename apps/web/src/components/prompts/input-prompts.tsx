@@ -411,19 +411,39 @@ interface UserQuestionAnswer {
   skipped: boolean
 }
 
-function hasNativeUserQuestionPresenter() {
+function hasAndroidUserQuestionPresenter() {
   const capacitorOverlay = (window.Capacitor as {
     Plugins?: { AgentOverlay?: { present?: unknown } }
   } | undefined)?.Plugins?.AgentOverlay
-  return Boolean(window.jaitDesktop?.presentAgentQuestion || capacitorOverlay?.present)
+  return Boolean(capacitorOverlay?.present)
 }
 
 export function shouldPresentNativeUserQuestion({
-  hasNativePresenter,
+  hasAndroidPresenter,
 }: {
-  hasNativePresenter: boolean
+  hasAndroidPresenter: boolean
 }) {
-  return hasNativePresenter
+  return hasAndroidPresenter
+}
+
+export function getActiveUserQuestion<T extends { sessionId: string }>(
+  requests: T[],
+  sessionId: string | null,
+): T | null {
+  if (!sessionId) return null
+  return requests.find((request) => request.sessionId === sessionId) ?? null
+}
+
+export function shouldNotifyForUserQuestion({
+  requestSessionId,
+  activeSessionId,
+  appIsBackgrounded,
+}: {
+  requestSessionId: string
+  activeSessionId: string | null
+  appIsBackgrounded: boolean
+}) {
+  return requestSessionId !== activeSessionId || appIsBackgrounded
 }
 
 export function useUserQuestionPrompt({
@@ -437,7 +457,8 @@ export function useUserQuestionPrompt({
   const [answers, setAnswers] = useState<Record<string, UserQuestionAnswer>>({})
   const [submitting, setSubmitting] = useState(false)
   const nativeQuestionStatesRef = useRef(new Map<string, 'presenting' | 'resolved'>())
-  const activeRequest = requests[0] ?? null
+  const activeRequest = getActiveUserQuestion(requests, sessionId)
+  const nativeRequest = requests[0] ?? null
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -487,7 +508,6 @@ export function useUserQuestionPrompt({
       })
       if (!res.ok) throw new Error('Failed to submit answers')
       setRequests((prev) => prev.filter((item) => item.id !== request.id))
-      setAnswers({})
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to submit answers')
     } finally {
@@ -506,19 +526,14 @@ export function useUserQuestionPrompt({
     }
 
     try {
-      let result: { answers?: Record<string, UserQuestionAnswer>; dismissed?: boolean } | null = null
-      if (window.jaitDesktop?.presentAgentQuestion) {
-        result = await window.jaitDesktop.presentAgentQuestion(nativeRequest)
-      } else {
-        const agentOverlay = (window.Capacitor as {
-          Plugins?: {
-            AgentOverlay?: {
-              present: (options: { request: typeof nativeRequest }) => Promise<{ answers?: Record<string, UserQuestionAnswer>; dismissed?: boolean } | null>
-            }
+      const agentOverlay = (window.Capacitor as {
+        Plugins?: {
+          AgentOverlay?: {
+            present: (options: { request: typeof nativeRequest }) => Promise<{ answers?: Record<string, UserQuestionAnswer>; dismissed?: boolean } | null>
           }
-        } | undefined)?.Plugins?.AgentOverlay
-        if (agentOverlay) result = await agentOverlay.present({ request: nativeRequest })
-      }
+        }
+      } | undefined)?.Plugins?.AgentOverlay
+      const result = agentOverlay ? await agentOverlay.present({ request: nativeRequest }) : null
 
       if (result?.answers) {
         await submitRequestAnswers(request, result.answers)
@@ -560,9 +575,6 @@ export function useUserQuestionPrompt({
   }, [submitRequestAnswers])
 
   const dismissNativeQuestion = useCallback((requestId: string) => {
-    if (window.jaitDesktop?.dismissAgentQuestion) {
-      void window.jaitDesktop.dismissAgentQuestion(requestId)
-    }
     const agentOverlay = (window.Capacitor as {
       Plugins?: { AgentOverlay?: { dismiss: (options: { requestId: string }) => Promise<unknown> } }
     } | undefined)?.Plugins?.AgentOverlay
@@ -578,9 +590,8 @@ export function useUserQuestionPrompt({
       })
       if (!res.ok) return
       const data = await res.json() as { requests: UserQuestionRequest[] }
-      // Surface every pending question for the authenticated user (the API already
-      // scopes by user). Gating on the active session silently swallowed prompts
-      // raised from a different session — leaving the agent blocked with no form.
+      // Keep all pending requests so Android can present them natively and other
+      // clients can notify for background chats. Inline rendering is scoped below.
       setRequests(data.requests)
     } catch {
       // gateway down or reconnecting
@@ -598,7 +609,11 @@ export function useUserQuestionPrompt({
           const request = msg.payload as UserQuestionRequest
           setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
           const appIsBackgrounded = document.visibilityState !== 'visible' || !document.hasFocus()
-          if (appIsBackgrounded && !hasNativeUserQuestionPresenter()) {
+          if (shouldNotifyForUserQuestion({
+            requestSessionId: request.sessionId,
+            activeSessionId: sessionId,
+            appIsBackgrounded,
+          }) && !hasAndroidUserQuestionPresenter()) {
             void triggerSystemNotification({
               id: `user-question:${request.id}`,
               title: request.title,
@@ -616,7 +631,6 @@ export function useUserQuestionPrompt({
             }
             dismissNativeQuestion(resolved.id)
             setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
-            setAnswers({})
           }
         }
       } catch {
@@ -627,13 +641,13 @@ export function useUserQuestionPrompt({
   }, [dismissNativeQuestion, refresh, sessionId, token])
 
   useEffect(() => {
-    if (!activeRequest) return
+    if (!nativeRequest) return
     if (shouldPresentNativeUserQuestion({
-      hasNativePresenter: hasNativeUserQuestionPresenter(),
+      hasAndroidPresenter: hasAndroidUserQuestionPresenter(),
     })) {
-      void presentNativeQuestion(activeRequest)
+      void presentNativeQuestion(nativeRequest)
     }
-  }, [activeRequest, presentNativeQuestion])
+  }, [nativeRequest, presentNativeQuestion])
 
   useEffect(() => {
     if (!activeRequest) {
