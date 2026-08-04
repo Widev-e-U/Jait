@@ -206,10 +206,9 @@ export interface AgentLoopOptions {
   abort: AbortController;
   /**
    * Max tool-calling rounds before stopping. pi-style default: when omitted or
-   * `0`, there is NO round cap — the loop runs until the model itself decides
-   * it is done (returns a non-tool-call answer) or a behavioral guard stops it
-   * (loop detection, consecutive unproductive rounds, duplicate calls, abort).
-   * Pass a positive number to impose a hard backstop.
+   * `0`, there is NO round cap — the loop is purely data-driven and runs until
+   * the model itself decides it is done (returns a non-tool-call answer) or the
+   * turn is aborted. Pass a positive number to impose a hard backstop.
    */
   maxRounds?: number;
   /** Max retries per individual tool call failure (0 = no retry) */
@@ -232,8 +231,6 @@ export interface AgentLoopOptions {
   onContext?: (round: LlmContextFlowRound) => void;
   /** Persistence callback — called when a final assistant message should be saved */
   onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, thinking?: string) => void;
-  /** Prior tool-call fingerprints from a previous run (e.g. Continue) — prevents re-issuing identical calls */
-  priorFingerprints?: Map<string, number>;
 }
 
 export interface AgentLoopResult {
@@ -253,8 +250,6 @@ export interface AgentLoopResult {
    * should check this to avoid writing a duplicate row.
    */
   persisted: boolean;
-  /** Tool-call fingerprints accumulated during this run (for persistence across Continue) */
-  fingerprints: Map<string, number>;
   /** Plan data — only populated in plan mode */
   plan?: {
     id: string;
@@ -1142,9 +1137,6 @@ export type ToolExecutor = (
 // ── Main agent loop ──────────────────────────────────────────────────
 
 const DEFAULT_MAX_RETRIES = 2;
-
-/** Max times the same tool+args signature can be called before being rejected as a duplicate. */
-const DUPLICATE_CALL_THRESHOLD = 2;
 /** Max characters for a single tool result message before truncation (~8k tokens). */
 const TOOL_RESULT_MAX_CHARS = 30_000;
 
@@ -1168,8 +1160,6 @@ function capToolResultData(data: unknown): unknown {
     preview: serialized.slice(0, TOOL_RESULT_MAX_CHARS),
   };
 }
-/** Consecutive rounds with zero successful tool calls before the loop bails out. */
-const MAX_UNPRODUCTIVE_ROUNDS = 4;
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
 /** Max times we re-prompt when a provider ends a round without text or tool calls. */
@@ -1182,104 +1172,6 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
  */
 const MAX_LENGTH_CONTINUATIONS = 3;
 
-// ── Tool-loop detection ──────────────────────────────────────────────
-
-/** Rolling window of recent tool-call signatures examined for repeating cycles. */
-const LOOP_DETECTION_MAX_HISTORY = 12;
-/** Shortest cycle length treated as a loop (1 = identical call, 2 = ping-pong, 3 = trio). */
-const LOOP_DETECTION_MAX_CYCLE = 3;
-/** A repeating cycle must appear at least this many times to be conclusive. */
-const LOOP_DETECTION_MIN_REPEATS = 3;
-
-/**
- * Detect whether a sequence of tool-call signatures has settled into a
- * repeating cycle. Each signature is `${toolName}:${serializedArgs}`, so a
- * genuine loop requires the *identical* tool call with *identical* arguments
- * to repeat — productive work that changes arguments (reading many files,
- * issuing different queries) won't match.
- *
- * This catches loops the existing guards miss: the duplicate-check rejects
- * the same call 3x, and `MAX_UNPRODUCTIVE_ROUNDS` only fires when calls
- * *fail*. A successful A→B→A→B ping-pong (each tool used only twice, all
- * succeeding) would otherwise burn the whole `maxRounds` budget. Mirrors
- * pi's philosophy (stop on the model's behavior — pi has no round counter
- * and simply ends when the model stops calling tools) and OpenClaw's
- * genericRepeat / pingPong loop detectors.
- *
- * @returns The detected cycle length (1, 2, or 3), or `null` if the tail is
- *          not a pure repetition of a short cycle.
- */
-/** A read must add at least this many previously-unseen lines to count as real progress. */
-const NARROW_READ_MIN_NEW_LINES = 15;
-/** Consecutive low-novelty reads of the same file before we warn (warn-only, pi-style — never
- *  force-terminates the turn; the model decides whether/when to change strategy). */
-const NARROW_READ_WARN_THRESHOLD = 5;
-
-/**
- * Merges `[start, end]` (1-based, inclusive) into a sorted list of
- * non-overlapping/adjacent ranges and reports how many lines in `[start,
- * end]` were not already covered by an earlier range.
- *
- * Used to detect narrow-range read thrash: an agent that keeps re-reading
- * small, overlapping slices of the same file (e.g. lines 59-126, then
- * 62-110, then 89-100) with each call using a *different* line range. That
- * pattern defeats `detectToolLoop` above (which requires byte-identical
- * args) even though it's just as wasteful — the model already has that
- * content in context and is gaining almost nothing per round.
- */
-export function mergeReadRange(
-  ranges: Array<[number, number]>,
-  start: number,
-  end: number,
-): { newLines: number; merged: Array<[number, number]> } {
-  if (end < start) return { newLines: 0, merged: ranges };
-
-  let newLines = 0;
-  let cursor = start;
-  for (const [rangeStart, rangeEnd] of [...ranges].sort((a, b) => a[0] - b[0])) {
-    if (rangeEnd < cursor || rangeStart > end) continue;
-    if (rangeStart > cursor) newLines += Math.min(rangeStart, end + 1) - cursor;
-    cursor = Math.max(cursor, rangeEnd + 1);
-    if (cursor > end) break;
-  }
-  if (cursor <= end) newLines += end - cursor + 1;
-
-  const merged: Array<[number, number]> = [];
-  for (const [rangeStart, rangeEnd] of [...ranges, [start, end] as [number, number]].sort((a, b) => a[0] - b[0])) {
-    const last = merged[merged.length - 1];
-    if (last && rangeStart <= last[1] + 1) {
-      last[1] = Math.max(last[1], rangeEnd);
-    } else {
-      merged.push([rangeStart, rangeEnd]);
-    }
-  }
-  return { newLines, merged };
-}
-
-export function detectToolLoop(signatures: string[]): number | null {
-  const n = signatures.length;
-  if (n < 4) return null;
-
-  for (let cycle = 1; cycle <= LOOP_DETECTION_MAX_CYCLE; cycle++) {
-    const minLen = cycle * LOOP_DETECTION_MIN_REPEATS;
-    // Find any whole-cycle suffix (starting at `start`) that is a pure
-    // repetition of a short cycle — so an unrelated prefix of tool calls
-    // (e.g. the model orienting first) does not defeat detection.
-    for (let start = 0; start <= n - minLen; start++) {
-      const len = n - start;
-      if (len % cycle !== 0 || len < minLen) continue;
-      let ok = true;
-      for (let i = start; i < n; i++) {
-        if (signatures[i] !== signatures[start + ((i - start) % cycle)]) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) return cycle;
-    }
-  }
-  return null;
-}
 
 /**
  * Detect if the model emitted a tool call as plain text instead of structured format.
@@ -1850,10 +1742,6 @@ export async function runAgentLoop(
   let persisted = false;
 
   // ── Loop health tracking ──
-  /** Fingerprint → call count. Detects the model calling the same tool with identical args. */
-  const toolCallFingerprints = new Map<string, number>(options.priorFingerprints ?? []);
-  /** Consecutive rounds where no tool call succeeded — triggers early bail-out. */
-  let consecutiveUnproductiveRounds = 0;
   /** Times we've re-prompted for plain-text tool calls in this loop run. */
   let plainTextRetries = 0;
   /** Consecutive terminal provider responses with no visible text or tool call. */
@@ -1868,18 +1756,6 @@ export async function runAgentLoop(
   };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
-
-  // ── Tool-loop cycle tracking ──
-  /** Tool-call signatures (tool:args) from recent rounds, capped for cycle detection. */
-  const recentToolCallSignatures: string[] = [];
-  /** Set after we've warned about a loop pattern once; a persisted loop then hard-stops. */
-  let loopPatternWarned = false;
-
-  // ── Narrow-range read thrash tracking (per file, across the whole run — ──
-  // ── these reads are often interleaved with other tool calls). ──
-  const readCoverageByPath = new Map<string, Array<[number, number]>>();
-  const readNarrowStreakByPath = new Map<string, number>();
-  const readNarrowWarnedPaths = new Set<string>();
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1940,7 +1816,7 @@ export async function runAgentLoop(
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, persisted };
     }
 
     // ── Apply steering messages ──
@@ -2075,13 +1951,13 @@ export async function runAgentLoop(
         log.error(`LLM error ${response.status}: ${errText}`);
         const friendlyMessage = formatLLMError(response.status, errText);
         onEvent?.({ type: "error", message: friendlyMessage });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
       }
 
       const parsed = isOllama
@@ -2118,7 +1994,7 @@ export async function runAgentLoop(
       clearEmptyResponseRecoveryPrompts();
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
       }
       throw fetchErr;
     }
@@ -2156,7 +2032,6 @@ export async function runAgentLoop(
         aborted: true,
         hitMaxRounds: false,
         persisted,
-        fingerprints: toolCallFingerprints,
       };
     }
 
@@ -2176,34 +2051,12 @@ export async function runAgentLoop(
         tool_calls: toolCalls,
       });
 
-      // Enqueue tool calls, rejecting duplicates
+      // Enqueue all tool calls (pi-style, data-driven: no duplicate-counting —
+      // the loop simply feeds every call the model emits and trusts the model
+      // to decide when to stop; a repeated call with identical args is executed
+      // again rather than refused by a counter).
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
-        const fingerprint = `${internalName}:${tc.function.arguments}`;
-        const prevCount = toolCallFingerprints.get(fingerprint) ?? 0;
-        toolCallFingerprints.set(fingerprint, prevCount + 1);
-
-        if (prevCount >= DUPLICATE_CALL_THRESHOLD) {
-          // Duplicate detected — skip execution, tell the model to try something else
-          log.warn(`Duplicate tool call detected: ${internalName} (${prevCount + 1}x) — skipping`);
-          const dupMsg = `DUPLICATE CALL: You have already called "${internalName}" with these exact arguments ${prevCount + 1} times. The result will not change. Try a different approach or tool.`;
-          history.push({
-            role: "tool",
-            content: JSON.stringify({ ok: false, message: dupMsg }),
-            tool_call_id: tc.id,
-            name: tc.function.name,
-          });
-          executedToolCalls.push({
-            callId: tc.id,
-            tool: internalName,
-            args: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
-            ok: false,
-            message: dupMsg,
-            startedAt: Date.now(),
-            completedAt: Date.now(),
-          });
-          continue;
-        }
         queue.enqueue(tc, ToolCallPriority.Normal, isParallelSafe(internalName));
       }
 
@@ -2327,7 +2180,7 @@ export async function runAgentLoop(
               });
             }
           }
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
         }
 
         const batch = queue.dequeueBatch(parallel);
@@ -2398,85 +2251,6 @@ export async function runAgentLoop(
               }
             }
           }
-        }
-      }
-
-      // ── Stuck-loop detection (nudge on behavior, pi-style: the model decides) ──
-      // If every tool call in this round failed, increment the unproductive counter
-      // and warn once. Never force-terminates the turn — maxRounds (if the caller
-      // sets one) remains the only hard backstop, matching pi's philosophy of
-      // trusting the model to recognize and correct a dead end itself.
-      const roundStart = executedToolCalls.length - toolCalls.length;
-      const roundCalls = executedToolCalls.slice(roundStart < 0 ? 0 : roundStart);
-      const anySuccess = roundCalls.some(c => c.ok);
-      if (anySuccess) {
-        consecutiveUnproductiveRounds = 0;
-      } else {
-        // Don't count the very first round — give the agent at least one
-        // chance to orient before starting the unproductive counter.
-        if (round > 0) consecutiveUnproductiveRounds++;
-        if (consecutiveUnproductiveRounds === MAX_UNPRODUCTIVE_ROUNDS - 1) {
-          const warnMsg = `[WARNING: ${consecutiveUnproductiveRounds} consecutive rounds have failed. Your current approach is not working. You MUST try a fundamentally different strategy. Consider: using a different tool, simplifying the command, asking the user for help, or abandoning this subtask.]`;
-          history.push({ role: "system", content: warnMsg });
-          log.info(`Unproductive warning injected for session ${sessionId} (${consecutiveUnproductiveRounds} rounds)`);
-        }
-      }
-
-      // ── Tool-loop pattern detection (nudge on behavior, pi-style) ──
-      // Beyond "unproductive rounds" (which only fires when calls *fail*), catch
-      // agents that are *successfully* spinning — calling the exact same tool
-      // with the exact same args in a repeating cycle. Warn once; never
-      // force-terminates the turn.
-      for (const tc of toolCalls) {
-        const internalName = fromOpenAIName(tc.function.name);
-        recentToolCallSignatures.push(`${internalName}:${tc.function.arguments}`);
-      }
-      if (recentToolCallSignatures.length > LOOP_DETECTION_MAX_HISTORY) {
-        recentToolCallSignatures.splice(0, recentToolCallSignatures.length - LOOP_DETECTION_MAX_HISTORY);
-      }
-      const cycle = detectToolLoop(recentToolCallSignatures);
-      if (cycle !== null) {
-        if (!loopPatternWarned) {
-          loopPatternWarned = true;
-          const warnMsg = `[WARNING: the agent is repeating the same tool-call pattern (cycle length ${cycle}) without making progress. You MUST try a fundamentally different approach or end your turn.]`;
-          history.push({ role: "system", content: warnMsg });
-          log.info(`Tool-loop warning injected for session ${sessionId} (cycle=${cycle})`);
-        }
-      } else if (loopPatternWarned) {
-        // The cycle broke — reset so a fresh loop later gets its own warning.
-        loopPatternWarned = false;
-      }
-
-      // ── Narrow-range read thrash detection ──
-      // Catches an agent that keeps re-reading small, overlapping slices of
-      // the same file with a *different* line range each call — every call
-      // looks distinct (so the duplicate-call check and the cycle detector
-      // above both miss it) yet contributes almost nothing new.
-      for (const call of roundCalls) {
-        if (call.tool !== "read" || !call.ok) continue;
-        const args = call.args as Record<string, unknown> | undefined;
-        const path = typeof args?.["path"] === "string" ? args["path"] as string : null;
-        const data = call.data as { startLine?: number; endLine?: number } | undefined;
-        if (!path || typeof data?.startLine !== "number" || typeof data?.endLine !== "number") continue;
-
-        const coverage = readCoverageByPath.get(path) ?? [];
-        const isFirstRead = coverage.length === 0;
-        const { newLines, merged } = mergeReadRange(coverage, data.startLine, data.endLine);
-        readCoverageByPath.set(path, merged);
-
-        if (!isFirstRead && newLines < NARROW_READ_MIN_NEW_LINES) {
-          readNarrowStreakByPath.set(path, (readNarrowStreakByPath.get(path) ?? 0) + 1);
-        } else {
-          readNarrowStreakByPath.set(path, 0);
-          readNarrowWarnedPaths.delete(path);
-        }
-      }
-      for (const [path, streak] of readNarrowStreakByPath) {
-        if (streak === NARROW_READ_WARN_THRESHOLD && !readNarrowWarnedPaths.has(path)) {
-          readNarrowWarnedPaths.add(path);
-          const warnMsg = `[WARNING: you've re-read overlapping slices of "${path}" ${streak} times in a row without covering meaningful new content. Read a wider range in one call, or use search to jump straight to what you need, instead of repeatedly narrowing the range.]`;
-          history.push({ role: "system", content: warnMsg });
-          log.info(`Narrow-read warning injected for session ${sessionId} (path=${path})`);
         }
       }
 
@@ -2598,7 +2372,7 @@ export async function runAgentLoop(
     const planResult = mode === "plan" && plannedActions.length > 0
       ? { id: planId, summary: contentText || "Plan ready for review.", actions: plannedActions }
       : undefined;
-    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints, plan: planResult };
+    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, plan: planResult };
   }
 
   // Hit max rounds (only reachable when a positive maxRounds was supplied).
@@ -2617,7 +2391,7 @@ export async function runAgentLoop(
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, segments, rounds: roundLimit, aborted: false, hitMaxRounds: true, persisted, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, segments, rounds: roundLimit, aborted: false, hitMaxRounds: true, persisted, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────

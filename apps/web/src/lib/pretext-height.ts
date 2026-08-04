@@ -47,3 +47,73 @@ export function estimateMessageHeight(text: string, maxWidth: number): number {
 
   return height + BASE_PADDING + codeBlockExtra
 }
+
+// Height of a single collapsed reasoning/thinking block (the trigger row only;
+// the body is closed until the user expands it). Mirrors `Reasoning` in
+// components/chat/reasoning.tsx (text-sm trigger + py-1 + px-2 + rounded).
+const THINKING_BLOCK_COLLAPSED_HEIGHT = 32
+// Approximate collapsed height of a tool-call card (header row with icon,
+// tool name, status, duration and chevron). measureElement corrects after
+// first render, so this only needs to be close for off-screen history items.
+const TOOL_GROUP_COLLAPSED_HEIGHT = 44
+
+type EstimateMessageInput = {
+  content?: unknown
+  thinking?: unknown
+  toolCalls?: unknown
+  segments?: unknown
+}
+
+/**
+ * Estimate a chat message's rendered height from its actual structure rather
+ * than just `content`. Assistant messages render as an interleaved stack of
+ * collapsed reasoning blocks, text blocks and tool-call cards, and thinking-
+ * only messages (empty `content`, non-empty `thinking`/`segments`) can be
+ * grossly over-estimated when only text is considered — which made the
+ * virtualized chat leave large gaps between items when scrolling through
+ * history. Counting the render-relevant parts keeps off-screen estimates close
+ * to the real height (measureElement still corrects in-view items).
+ */
+export function estimateMessageHeightFromMessage(
+  message: EstimateMessageInput | null | undefined,
+  maxWidth: number,
+): number {
+  const text = typeof message?.content === 'string' ? message.content : ''
+  const segments = Array.isArray(message?.segments) ? message.segments : undefined
+
+  // Base: visible markdown text. estimateMessageHeight() already includes the
+  // container padding, so only add padding below when no text is rendered.
+  let height = text ? estimateMessageHeight(text, maxWidth) : 0
+
+  // Collapsed reasoning blocks (one per interleaved thinking segment).
+  let thinkingBlocks = 0
+  if (segments) {
+    for (const seg of segments) {
+      if (seg && typeof seg === 'object' && (seg as { type?: unknown }).type === 'thinking') {
+        const content = (seg as { content?: unknown }).content
+        if (typeof content === 'string' && content.trim()) thinkingBlocks++
+      }
+    }
+  } else if (typeof message?.thinking === 'string' && message.thinking.trim()) {
+    thinkingBlocks = 1
+  }
+  height += thinkingBlocks * THINKING_BLOCK_COLLAPSED_HEIGHT
+
+  // Tool-call groups.
+  let toolGroups = 0
+  if (segments) {
+    for (const seg of segments) {
+      if (seg && typeof seg === 'object' && (seg as { type?: unknown }).type === 'toolGroup') toolGroups++
+    }
+  } else if (Array.isArray(message?.toolCalls) && message.toolCalls.length > 0) {
+    toolGroups = 1
+  }
+  height += toolGroups * TOOL_GROUP_COLLAPSED_HEIGHT
+
+  // Container padding for messages that render no markdown text (e.g. a
+  // thinking-only or tool-only assistant turn).
+  if (!text) height += BASE_PADDING
+
+  return Math.max(height, 48)
+}
+

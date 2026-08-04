@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
+import { agentsApi } from '@/lib/agents-api'
+import type { ThreadActivity } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes. */
@@ -470,6 +472,8 @@ interface ThreadListItem {
   branch: string | null
   workingDirectory: string | null
   error: string | null
+  /** Short mission/prompt snippet from the create_many spec, when available. */
+  mission: string | null
 }
 
 type ThreadListRecord = Record<string, unknown>
@@ -552,6 +556,10 @@ function threadItemFromRecord(record: Record<string, unknown>, fallbackStatus: T
     branch: getThreadListString(record.branch),
     workingDirectory: getThreadListString(record.workingDirectory),
     error: getThreadListString(record.error),
+    mission: getThreadListString(record.prompt)
+      ?? getThreadListString(record.message)
+      ?? getThreadListString(record.task)
+      ?? getThreadListString(record.description),
   }
 }
 
@@ -2466,23 +2474,34 @@ export function isInlineToolCall(call: ToolCallInfo): boolean {
   }))
 }
 
+function formatLineRangeLabel(lineRange: { start: number; end: number } | null | undefined): string | null {
+  if (!lineRange) return null
+  return lineRange.start === lineRange.end
+    ? `:${lineRange.start}`
+    : `:${lineRange.start}-${lineRange.end}`
+}
+
 function FileSummaryButton({
   path,
   context,
+  lineRange,
   onOpenDiff,
   disabled,
 }: {
   path: string
   context?: string | null
+  lineRange?: { start: number; end: number } | null
   onOpenDiff?: (filePath: string) => void
   disabled?: boolean
 }) {
   const fileName = getBaseName(path)
   const interactive = !!onOpenDiff && !disabled
+  const lineRangeLabel = formatLineRangeLabel(lineRange)
   const content = (
     <>
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
       <span className="whitespace-nowrap">{fileName}</span>
+      {lineRangeLabel ? <span className="whitespace-nowrap text-muted-foreground tabular-nums">{lineRangeLabel}</span> : null}
       {context ? <span className="whitespace-nowrap text-muted-foreground">· {context}</span> : null}
     </>
   )
@@ -2546,6 +2565,149 @@ function ThreadStatusBadge({ status }: { status: ThreadListStatus }) {
   )
 }
 
+function ThreadListItemActivity({ threadId }: { threadId: string }) {
+  const [activities, setActivities] = useState<ThreadActivity[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setActivities(null)
+    if (!threadId) return
+    agentsApi.getActivities(threadId, 50).then((acts) => {
+      if (!cancelled) setActivities(acts)
+    }).catch(() => {
+      if (!cancelled) setActivities([])
+    })
+    return () => { cancelled = true }
+  }, [threadId])
+
+  if (activities === null) {
+    return (
+      <div className="flex items-center gap-1.5 py-1.5 text-2xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading activity…
+      </div>
+    )
+  }
+  if (activities.length === 0) {
+    return (
+      <div className="py-1.5 text-2xs text-muted-foreground">No activity yet.</div>
+    )
+  }
+  return (
+    <div className="space-y-1.5 py-1.5">
+      {activities.map((activity) => (
+        <ThreadActivityRow key={activity.id} activity={activity} />
+      ))}
+    </div>
+  )
+}
+
+function summarizeThreadArgs(args: Record<string, unknown> | null): string | null {
+  if (!args) return null
+  const candidateKeys = ['command', 'path', 'url', 'query', 'pattern', 'selector', 'name', 'toolName']
+  for (const key of candidateKeys) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim()) {
+      const trimmed = value.trim()
+      return `${key}: ${trimmed.length > 120 ? `${trimmed.slice(0, 119)}…` : trimmed}`
+    }
+  }
+  try {
+    return JSON.stringify(args)
+  } catch {
+    return null
+  }
+}
+
+function ThreadActivityRow({ activity }: { activity: ThreadActivity }) {
+  const payload = activity.payload && typeof activity.payload === 'object' && !Array.isArray(activity.payload)
+    ? activity.payload as Record<string, unknown>
+    : null
+  const role = typeof payload?.role === 'string' ? payload.role : undefined
+  const tool = typeof payload?.tool === 'string' ? payload.tool : undefined
+  const args = payload?.args && typeof payload.args === 'object' && !Array.isArray(payload.args)
+    ? payload.args as Record<string, unknown>
+    : null
+  const message = typeof payload?.message === 'string' ? payload.message : undefined
+  const summary = (message || activity.summary || '').trim()
+  const argsPreview = summarizeThreadArgs(args)
+
+  const isToolStart = activity.kind === 'tool.start'
+  const isToolResult = activity.kind === 'tool.result'
+  const isError = activity.kind === 'tool.error' || activity.kind === 'error'
+  const Icon = isToolResult
+    ? CheckCircle2
+    : isError
+      ? XCircle
+      : isToolStart
+        ? Loader2
+        : Network
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border/40 bg-card/40 px-2 py-1.5">
+      <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', isToolStart && 'animate-spin', isToolResult ? 'text-green-500' : isError ? 'text-red-500' : 'text-muted-foreground')} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+          {tool && <code className="rounded bg-muted px-1 py-0.5 font-mono">{tool}</code>}
+          {role && <span>{role}</span>}
+          <span className="ml-auto shrink-0">{new Date(activity.createdAt).toLocaleTimeString()}</span>
+        </div>
+        {summary && (
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground/90">{summary}</p>
+        )}
+        {argsPreview && (
+          <p className="mt-0.5 text-2xs text-muted-foreground">{argsPreview}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ThreadListItemCard({ item }: { item: ThreadListItem }) {
+  const [open, setOpen] = useState(false)
+  const shortId = item.id ? item.id.slice(-8) : null
+  const location = item.branch ?? (item.workingDirectory ? getBaseName(item.workingDirectory) : null)
+  const isActive = item.status === 'running' || item.status === 'starting'
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/25"
+        >
+          <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium text-foreground" title={item.title}>{item.title}</div>
+            {item.mission && (
+              <div className="mt-0.5 line-clamp-1 text-2xs text-muted-foreground">{item.mission}</div>
+            )}
+            {!item.mission && (
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+                {shortId && <code className="rounded bg-background/70 px-1 py-0.5 font-mono">{shortId}</code>}
+                {item.providerId && <span>{item.providerId}</span>}
+                {item.kind && <span>{item.kind}</span>}
+                {location && <span className="min-w-0 truncate">{location}</span>}
+              </div>
+            )}
+            {item.error && <div className="mt-1 truncate text-2xs text-red-500" title={item.error}>{item.error}</div>}
+          </div>
+          <ThreadStatusBadge status={item.status} />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="border-t border-border/40 bg-background/30 px-3 pb-2">
+          {isActive && !item.id ? (
+            <div className="py-1.5 text-2xs text-muted-foreground">Awaiting thread start…</div>
+          ) : item.id ? (
+            <ThreadListItemActivity threadId={item.id} />
+          ) : (
+            <div className="py-1.5 text-2xs text-muted-foreground">No live activity available.</div>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; resultMessage?: string }) {
   if (items.length === 0) {
     return (
@@ -2555,34 +2717,20 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
     )
   }
 
+  const completedCount = items.filter((item) => item.status === 'completed').length
+
   return (
-    <div className="rounded-md border border-purple-500/20 bg-purple-500/[0.025] text-xs">
+    <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
       <div className="flex items-center justify-between gap-2 border-b border-purple-500/15 px-3 py-2">
-        <span className="font-medium text-foreground">{items.length} thread{items.length === 1 ? '' : 's'}</span>
+        <span className="font-medium text-foreground">{items.length} sub-agent{items.length === 1 ? '' : 's'}</span>
         <span className="text-muted-foreground">
-          {items.filter((item) => item.status === 'completed').length} completed
+          {completedCount}/{items.length} complete
         </span>
       </div>
       <div className="divide-y divide-border/35">
-        {items.map((item, index) => {
-          const shortId = item.id ? item.id.slice(-8) : null
-          const location = item.branch ?? (item.workingDirectory ? getBaseName(item.workingDirectory) : null)
-          return (
-            <div key={item.id ?? `${item.title}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-3 py-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium text-foreground" title={item.title}>{item.title}</div>
-                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
-                  {shortId && <code className="rounded bg-background/70 px-1 py-0.5 font-mono">{shortId}</code>}
-                  {item.providerId && <span>{item.providerId}</span>}
-                  {item.kind && <span>{item.kind}</span>}
-                  {location && <span className="min-w-0 truncate">{location}</span>}
-                </div>
-                {item.error && <div className="mt-1 truncate text-2xs text-red-500" title={item.error}>{item.error}</div>}
-              </div>
-              <ThreadStatusBadge status={item.status} />
-            </div>
-          )
-        })}
+        {items.map((item, index) => (
+          <ThreadListItemCard key={item.id ?? `${item.title}-${index}`} item={item} />
+        ))}
       </div>
       {resultMessage && (
         <div className="border-t border-purple-500/15 px-3 py-2 text-2xs text-muted-foreground">
@@ -2715,6 +2863,7 @@ function ToolCallCardInner({
     .filter(Boolean)
   const filePath = filePaths[0] ?? getToolFilePath(displayTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
   const fileContext = getFileContextLabel(normalizedArgs)
+  const fileLineRange = getReadLineRange(normalizedArgs, resultData)
   const showFileSummary = !!filePath && (isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read')
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
@@ -2873,6 +3022,7 @@ function ToolCallCardInner({
                   key={`${p}-${i}`}
                   path={p}
                   context={i === 0 ? fileContext : null}
+                  lineRange={i === 0 ? fileLineRange : null}
                   onOpenDiff={isEditLikeTool(displayTool) ? onOpenDiff : undefined}
                   disabled={call.status !== 'success'}
                 />

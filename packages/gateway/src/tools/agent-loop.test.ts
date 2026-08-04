@@ -5,8 +5,6 @@ import {
   parseOllamaStream,
   serializeMessagesForOllama,
   buildTieredToolSchemas,
-  detectToolLoop,
-  mergeReadRange,
   fromOpenAIName,
   runAgentLoop,
   SteeringController,
@@ -701,83 +699,6 @@ describe("executeOneToolCall retry accounting", () => {
   });
 });
 
-describe("detectToolLoop", () => {
-  it("returns null for short or non-repeating sequences", () => {
-    expect(detectToolLoop([])).toBeNull();
-    expect(detectToolLoop(["a:1", "b:2", "a:1"])).toBeNull();
-    // Same tool, but different args each time (legitimate: reading many files).
-    expect(detectToolLoop([
-      "file_read:file-a",
-      "file_read:file-b",
-      "file_read:file-c",
-      "file_read:file-d",
-    ])).toBeNull();
-  });
-
-  it("detects an identical-call cycle (cycle length 1)", () => {
-    const sig = Array(6).fill("file_read:{}");
-    expect(detectToolLoop(sig)).toBe(1);
-  });
-
-  it("detects an A-B-A-B ping-pong cycle (cycle length 2)", () => {
-    const sig = ["a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}"];
-    expect(detectToolLoop(sig)).toBe(2);
-  });
-
-  it("detects a 3-tool cycle (cycle length 3)", () => {
-    const sig = ["a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}", "a:{}", "b:{}", "c:{}"];
-    expect(detectToolLoop(sig)).toBe(3);
-  });
-
-  it("ignores a non-repeating prefix and only needs the tail to cycle", () => {
-    const sig = [
-      "grep:x", "edit:x",
-      "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}",
-      "a:{}", "b:{}", "a:{}", "b:{}", "a:{}", "b:{}",
-    ];
-    expect(detectToolLoop(sig)).toBe(2);
-  });
-
-  it("returns null for a productive back-and-forth that changes arguments", () => {
-    // read file-a, edit it with new content, read file-b, edit it — args differ.
-    const sig = [
-      "file_read:a",
-      "file_write:{content:1}",
-      "file_read:b",
-      "file_write:{content:2}",
-    ];
-    expect(detectToolLoop(sig)).toBeNull();
-  });
-});
-
-describe("mergeReadRange", () => {
-  it("counts the full range as new when there is no prior coverage", () => {
-    const { newLines, merged } = mergeReadRange([], 10, 20);
-    expect(newLines).toBe(11);
-    expect(merged).toEqual([[10, 20]]);
-  });
-
-  it("counts zero new lines for a range fully inside prior coverage", () => {
-    const { newLines, merged } = mergeReadRange([[1, 100]], 50, 60);
-    expect(newLines).toBe(0);
-    expect(merged).toEqual([[1, 100]]);
-  });
-
-  it("counts only the non-overlapping portion of a partially overlapping range", () => {
-    const { newLines, merged } = mergeReadRange([[50, 100]], 40, 60);
-    // Lines 40-49 are new (10 lines); 50-60 already covered.
-    expect(newLines).toBe(10);
-    expect(merged).toEqual([[40, 100]]);
-  });
-
-  it("merges adjacent and disjoint ranges correctly", () => {
-    let state = mergeReadRange([], 1, 10).merged;
-    state = mergeReadRange(state, 11, 20).merged; // adjacent — should merge
-    state = mergeReadRange(state, 100, 110).merged; // disjoint — separate range
-    expect(state).toEqual([[1, 20], [100, 110]]);
-  });
-});
-
 describe("runAgentLoop persistence", () => {
   it("recovers when the provider returns an empty completion after a successful tool", async () => {
     const responses = [
@@ -1217,11 +1138,11 @@ describe("runAgentLoop tool-loop detection", () => {
     ]);
   }
 
-  it("stops a successful A-B-A-B ping-pong loop long before maxRounds", async () => {
-    // The model alternates between two tools with identical empty args each
-    // round. Every call *succeeds*, so the unproductive-rounds guard never
-    // fires; the duplicate-check only nags (it does not terminate the loop).
-    // Only the cycle detector stops it.
+  it("keeps calling tools while the model emits them, stopping only at the caller-set maxRounds backstop", async () => {
+    // pi-style, data-driven: the loop has no behavioral counters. A model that
+    // keeps emitting tool calls is trusted and fed round after round; the only
+    // hard stop is the caller's maxRounds backstop (analogous to pi's
+    // shouldStopAfterTurn hook).
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
@@ -1271,24 +1192,25 @@ describe("runAgentLoop tool-loop detection", () => {
       async () => ({ ok: true, message: "ok" }),
     );
 
-    // Stopped by loop detection, not by hitting maxRounds.
-    expect(result.hitMaxRounds).toBe(false);
-    // Far fewer than the 40-round backstop.
-    expect(fetchCalls).toBeGreaterThan(0);
-    expect(fetchCalls).toBeLessThan(15);
-    expect(result.content).toMatch(/\[Stopped: the agent repeated the same tool-call pattern/);
+    // No behavioral detector fired — only the caller-set 40-round backstop stopped it.
+    expect(result.hitMaxRounds).toBe(true);
+    expect(fetchCalls).toBe(40);
   });
 
-  it("with no maxRounds, the model decides when done yet the detector still stops loops", async () => {
-    // pi-style: omit maxRounds entirely (no cap). A stuck A-B-A-B ping-pong
-    // must still be terminated by the loop detector — no cap must not mean
-    // an infinite loop.
-    let fetchCalls = 0;
+  it("with no maxRounds, the loop is data-driven: it runs while the model calls tools and ends when the model returns an answer", async () => {
+    // pi-style: omit maxRounds entirely (no cap). The loop must simply keep
+    // executing whatever tool calls the model emits and stop the moment the
+    // model returns a non-tool-call answer — no round counter required.
+    const calls = ["file_read", "file_write"];
+    let callIdx = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
-      const response = toolCallSSE(`call-${fetchCalls}`, name, {});
-      fetchCalls++;
-      return response;
+      if (callIdx < calls.length) {
+        const name = calls[callIdx]!;
+        const response = toolCallSSE(`call-${callIdx + 1}`, name, {});
+        callIdx++;
+        return response;
+      }
+      return textResponse("All done.");
     });
 
     const result = await runAgentLoop(
@@ -1322,7 +1244,7 @@ describe("runAgentLoop tool-loop detection", () => {
           },
         ],
         hasTools: true,
-        sessionId: "session-no-cap-pingpong",
+        sessionId: "session-no-cap-data-driven",
         abort: new AbortController(),
         // NOTE: no maxRounds passed — the model decides when done.
         mode: "agent",
@@ -1331,9 +1253,9 @@ describe("runAgentLoop tool-loop detection", () => {
     );
 
     expect(result.hitMaxRounds).toBe(false);
-    expect(fetchCalls).toBeGreaterThan(0);
-    expect(fetchCalls).toBeLessThan(15);
-    expect(result.content).toMatch(/\[Stopped: the agent repeated the same tool-call pattern/);
+    // Ran both scripted tool rounds, then the model's final answer ended it.
+    expect(callIdx).toBe(2);
+    expect(result.content).toBe("All done.");
   });
 
   it("does not flag a legitimate multi-file read sequence", async () => {
@@ -1386,11 +1308,10 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).not.toMatch(/Stopped/);
   });
 
-  it("stops narrow overlapping re-reads of the same file before maxRounds", async () => {
-    // One broad first read, then repeated small overlapping ranges of the
-    // *same* file — a different line range each call, so neither the
-    // duplicate-call check nor detectToolLoop (exact-args cycles) fire.
-    // 14 narrow reads comfortably exceeds NARROW_READ_STOP_THRESHOLD (12).
+  it("tolerates repeated narrow overlapping re-reads of the same file (trust the model)", async () => {
+    // pi-style, data-driven: no narrow-read counter exists. The model is
+    // trusted to decide how it reads; repeated small overlapping slices of
+    // the same file are executed and fed back, never flagged or stopped.
     const ranges: Array<[number, number]> = [
       [1, 200], // broad first read — seeds coverage, no streak
       [50, 60], [55, 62], [52, 58], [51, 61], [53, 59], [50, 60], [54, 60],
@@ -1445,16 +1366,16 @@ describe("runAgentLoop tool-loop detection", () => {
     );
 
     expect(result.hitMaxRounds).toBe(false);
-    // Stopped well before exhausting all 14 scripted narrow reads + maxRounds.
-    expect(callIdx).toBeLessThan(ranges.length);
-    expect(result.content).toMatch(/\[Stopped: the agent kept re-reading small overlapping slices of "big\.ts"/);
+    // All 14 scripted narrow reads ran to completion; the model's answer ended the turn.
+    expect(callIdx).toBe(ranges.length);
+    expect(result.content).toBe("Done.");
   });
 
   it("tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)", async () => {
     // Mirrors a real incident: an agent verifying which of two byte-identical
     // code blocks an edit landed in re-read the same file 7 times (1 broad +
-    // 6 narrow) and was cut off before it could finish. NARROW_READ_STOP_THRESHOLD
-    // was raised from 6 to 12 specifically so this no longer happens.
+    // 6 narrow) and was cut off before it could finish. With the behavioral
+    // guardrails removed (pi-style), this runs to completion untouched.
     const ranges: Array<[number, number]> = [
       [1, 613], // broad first read
       [300, 360], [335, 349], [140, 160], [154, 163], [335, 350], [336, 351],

@@ -1677,8 +1677,6 @@ export function registerChatRoutes(
   const sessionExecutedToolCalls = new Map<string, ExecutedToolCall[]>();
   /** Plans produced by plan mode — keyed by session ID */
   const sessionPlans = new Map<string, { id: string; summary: string; actions: PlannedAction[] }>();
-  /** Tool-call fingerprints persisted across Continue turns — prevents identical re-calls */
-  const sessionFingerprints = new Map<string, Map<string, number>>();
 
   const steerActiveSession = async (sessionId: string, message: string): Promise<{ ok: boolean; reason?: string }> => {
     if (!message.trim()) return { ok: false, reason: "empty-message" };
@@ -2953,7 +2951,6 @@ export function registerChatRoutes(
                   assistantTurnPersisted = true;
                 }
               },
-              priorFingerprints: sessionFingerprints.get(sessionId),
               log: app.log,
             },
             executeTool,
@@ -2977,8 +2974,6 @@ export function registerChatRoutes(
         resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
         loopPersisted = result.persisted === true;
-        // Persist fingerprints so a Continue turn reuses them
-        sessionFingerprints.set(sessionId, result.fingerprints);
 
         // Re-serialize contextFlow now that round metrics have been attached
         if (contextRounds.length > 0) {

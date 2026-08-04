@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { cn } from '@/lib/utils'
-import { estimateMessageHeight } from '@/lib/pretext-height'
+import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 
 interface ConversationProps {
   children: React.ReactNode
@@ -13,6 +13,20 @@ interface ConversationProps {
   loadingLabel?: string
   /** Raw text per child item for pretext-based virtual item height estimation. */
   messageContents?: string[]
+  /**
+   * Optional per-item message structure (index-aligned with children) used for
+   * structure-aware height estimation. When provided for an index, the estimate
+   * accounts for collapsed thinking blocks and tool-call cards as well as the
+   * rendered markdown text, which is far closer to the real height than text
+   * alone — otherwise thinking-only / tool-heavy assistant turns are estimated
+   * at a flat default, leaving big gaps when scrolling through history.
+   */
+  messageEstimateInputs?: Array<{
+    content?: unknown
+    thinking?: unknown
+    toolCalls?: unknown
+    segments?: unknown
+  }>
   /** Whether there are older messages available to load. */
   hasMore?: boolean
   /** Callback to load older messages (scroll-up lazy loading). */
@@ -47,7 +61,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
     >
       <span className="sr-only">{label}</span>
-      <div className="mx-auto flex h-full max-w-5xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
+      <div className="mx-auto flex h-full max-w-4xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
         <div className="flex animate-pulse items-start gap-3">
           <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
           <div className="w-full max-w-xl space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
@@ -75,7 +89,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, hasMore, onLoadMore }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
@@ -118,11 +132,20 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const messageContentsRef = useRef(messageContents)
   messageContentsRef.current = messageContents
 
+  // Keep structure-aware estimate inputs in a ref so estimateSize stays stable.
+  const messageEstimateInputsRef = useRef(messageEstimateInputs)
+  messageEstimateInputsRef.current = messageEstimateInputs
+
   const virtualizer = useVirtualizer({
     count: childItems.length,
     getScrollElement: () => scrollRef.current,
     initialOffset: INITIAL_CONVERSATION_SCROLL_OFFSET,
     estimateSize: (index) => {
+      const inputs = messageEstimateInputsRef.current
+      const input = inputs?.[index]
+      if (input && typeof input === 'object') {
+        return estimateMessageHeightFromMessage(input, containerWidthRef.current)
+      }
       const text = messageContentsRef.current?.[index]
       if (!text) return DEFAULT_ITEM_HEIGHT
       const estimateText = text.length > ESTIMATE_TEXT_LIMIT ? text.slice(0, ESTIMATE_TEXT_LIMIT) : text
@@ -381,7 +404,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
               </div>
             </div>
           )}
-          <div ref={innerRef} className="mx-auto max-w-5xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
+          <div ref={innerRef} className="mx-auto max-w-4xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
             {hasMore && (
               <div className="flex justify-center py-3">
                 <button

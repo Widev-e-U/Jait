@@ -577,6 +577,7 @@ describe('getThreadControlListItems', () => {
         branch: null,
         workingDirectory: null,
         error: null,
+        mission: null,
       },
     ])
   })

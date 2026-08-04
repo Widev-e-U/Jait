@@ -237,6 +237,7 @@ export function ManagerWorkspace({
                 loading={automation.loadingActivities}
                 loadingLabel="Loading activity"
                 messageContents={automationMessages.map((msg) => msg.content)}
+                messageEstimateInputs={automationMessages}
               >
                 {automationMessages.length === 0 && !automation.loadingActivities && (
                   <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
@@ -245,7 +246,7 @@ export function ManagerWorkspace({
               </Conversation>
             </ErrorBoundary>
             <div className="shrink-0 py-3 px-4">
-              <div className="mx-auto max-w-5xl">
+              <div className="mx-auto max-w-4xl">
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -263,45 +264,58 @@ export function ManagerWorkspace({
                     className="mb-2"
                   />
                 )}
-                {automation.selectedThreadTodos.length > 0 && (
-                  <TodoList items={automation.selectedThreadTodos} className="mb-2" />
-                )}
-                {inlinePrompts}
-                <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
-                  <PromptInput
-                    ref={promptInputRef}
-                    availableSkills={availableSkills}
-                    draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
-                    value={inputValueRef.current}
-                    syncKey={inputVersion}
-                    onChange={onHandleInputChange}
-                    onSubmit={onSubmit}
-                    onQueue={onManagerQueue}
-                    onStop={() => { if (automation.selectedThread) onStopThread(automation.selectedThread.id) }}
-                    isLoading={automation.selectedThread?.status === 'running'}
-                    disabled={automation.creating}
-                    placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
-                    onVoiceInput={onVoiceInput}
-                    voiceRecording={voiceRecording}
-                    voiceLevels={voiceLevels}
-                    voiceTranscribing={voiceTranscribing}
-                    onVoiceStop={onStopRecording}
-                    responseStyle={chatResponseStyle}
-                    onResponseStyleChange={onResponseStyleChange}
-                    provider={chatProvider}
-                    onProviderChange={onProviderChange}
-                    providerRuntimeMode={chatProviderRuntimeMode}
-                    onProviderRuntimeModeChange={onProviderRuntimeModeChange}
-                    cliModel={cliModel}
-                    onCliModelChange={onCliModelChange}
-                    repoRuntime={selectedThreadRepoRuntime}
-                    onMoveToGateway={onMoveRepoToGateway}
-                    availableFiles={availableFiles}
-                    onSearchFiles={onSearchFiles}
-                    projectOpen={showProject}
-                    chatId={automation.selectedThread?.id ?? undefined}
-                  />
-                </ErrorBoundary>
+                <div className="overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+                  <div className="max-h-[40vh] overflow-y-auto">
+                    {automation.selectedThreadTodos.length > 0 && (
+                      <TodoList items={automation.selectedThreadTodos} merged />
+                    )}
+                    {inlinePrompts}
+                  </div>
+                  {(() => {
+                    const hasItemsAboveComposer =
+                      automation.selectedThreadTodos.length > 0 ||
+                      Boolean(inlinePrompts)
+                    return (
+                      <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
+                        <PromptInput
+                          ref={promptInputRef}
+                          availableSkills={availableSkills}
+                          draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
+                          value={inputValueRef.current}
+                          syncKey={inputVersion}
+                          onChange={onHandleInputChange}
+                          onSubmit={onSubmit}
+                          onQueue={onManagerQueue}
+                          onStop={() => { if (automation.selectedThread) onStopThread(automation.selectedThread.id) }}
+                          isLoading={automation.selectedThread?.status === 'running'}
+                          disabled={automation.creating}
+                          placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                          onVoiceInput={onVoiceInput}
+                          voiceRecording={voiceRecording}
+                          voiceLevels={voiceLevels}
+                          voiceTranscribing={voiceTranscribing}
+                          onVoiceStop={onStopRecording}
+                          responseStyle={chatResponseStyle}
+                          onResponseStyleChange={onResponseStyleChange}
+                          provider={chatProvider}
+                          onProviderChange={onProviderChange}
+                          providerRuntimeMode={chatProviderRuntimeMode}
+                          onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                          cliModel={cliModel}
+                          onCliModelChange={onCliModelChange}
+                          repoRuntime={selectedThreadRepoRuntime}
+                          onMoveToGateway={onMoveRepoToGateway}
+                          availableFiles={availableFiles}
+                          onSearchFiles={onSearchFiles}
+                          projectOpen={showProject}
+                          chatId={automation.selectedThread?.id ?? undefined}
+                          merged
+                          mergedShowTopDivider={hasItemsAboveComposer}
+                        />
+                      </ErrorBoundary>
+                    )
+                  })()}
+                </div>
                 <div className="flex items-center gap-2 px-1 mt-1.5">
                   {selectedThreadRepoRuntime && <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />}
                   {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
@@ -331,7 +345,7 @@ export function ManagerWorkspace({
           )}
           <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-8' : ''}`}>
             <div className="relative z-10 flex flex-col items-center px-3 pb-8 pt-8 sm:px-4 sm:pb-2 sm:pt-4">
-              <div className="w-full max-w-5xl">
+              <div className="w-full max-w-4xl">
                 <h1 className="mb-3 text-center text-xl font-semibold tracking-tight sm:mb-4 sm:text-2xl">What do you want to build?</h1>
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-3">
@@ -386,7 +400,7 @@ export function ManagerWorkspace({
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto w-full max-w-5xl">
+              <div className="mx-auto w-full max-w-4xl">
                 <div className="sticky top-0 z-10 flex h-[35px] items-center justify-between border-b bg-background px-2.5 sm:px-3">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium">Threads</span>
