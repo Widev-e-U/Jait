@@ -245,7 +245,7 @@ export function ManagerWorkspace({
               </Conversation>
             </ErrorBoundary>
             <div className="shrink-0 py-3 px-4">
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto max-w-5xl">
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -331,7 +331,7 @@ export function ManagerWorkspace({
           )}
           <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-8' : ''}`}>
             <div className="relative z-10 flex flex-col items-center px-3 pb-8 pt-8 sm:px-4 sm:pb-2 sm:pt-4">
-              <div className="w-full max-w-3xl">
+              <div className="w-full max-w-5xl">
                 <h1 className="mb-3 text-center text-xl font-semibold tracking-tight sm:mb-4 sm:text-2xl">What do you want to build?</h1>
                 {automation.error && (
                   <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-3">
@@ -386,7 +386,7 @@ export function ManagerWorkspace({
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto w-full max-w-3xl">
+              <div className="mx-auto w-full max-w-5xl">
                 <div className="sticky top-0 z-10 flex h-[35px] items-center justify-between border-b bg-background px-2.5 sm:px-3">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium">Threads</span>

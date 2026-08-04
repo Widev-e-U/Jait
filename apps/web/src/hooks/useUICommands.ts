@@ -16,6 +16,7 @@ import {
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getWsUrl } from '@/lib/gateway-url'
 import { detectPlatform, initDeviceId } from '@/lib/device-id'
 import { triggerSystemNotification } from '@/lib/system-notifications'
@@ -339,8 +340,6 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
   /** Browse a local directory using Capacitor Filesystem API */
   const capacitorBrowse = useCallback(async (dirPath: string) => {
-    const capFsMod = '@capacitor/filesystem'
-    const { Filesystem, Directory } = await import(capFsMod)
     // Determine the base directory and relative path
     let directory: typeof Directory[keyof typeof Directory] | undefined
     let path = dirPath

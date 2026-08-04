@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Shield, ShieldAlert, ShieldCheck, ShieldX, Clock, Terminal, FileText, Info } from 'lucide-react'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import { getAuthToken } from '@/lib/auth-token'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -74,12 +75,13 @@ export function useConsentQueue(sessionId?: string | null) {
     void refresh()
   }, [refresh])
 
-  // Listen for WS events
+  // Listen for WS events (authenticated so consent.required reaches the UI in real time)
   useEffect(() => {
     let disposed = false
-    const ws = new WebSocket(WS_URL)
+    let ws: WebSocket | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    ws.onmessage = (event) => {
+    const handleMessage = (event: MessageEvent) => {
       if (disposed) return
       try {
         const msg = JSON.parse(event.data) as { type: string; payload: unknown }
@@ -101,23 +103,39 @@ export function useConsentQueue(sessionId?: string | null) {
       }
     }
 
-    ws.onopen = () => {
-      if (!disposed) void refreshRef.current()
+    const connect = () => {
+      if (disposed) return
+      const token = getAuthToken()
+      const socket = new WebSocket(token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL)
+      ws = socket
+
+      socket.onmessage = handleMessage
+
+      socket.onopen = () => {
+        if (disposed) return
+        void refreshRef.current()
+      }
+
+      socket.onclose = () => {
+        ws = null
+        if (disposed) return
+        reconnectTimer = setTimeout(connect, 1000)
+      }
+
+      socket.onerror = () => {
+        // onclose will fire after onerror and trigger reconnect
+      }
     }
+
+    connect()
 
     return () => {
       disposed = true
-      ws.onopen = () => {
-        try {
-          ws.close()
-        } catch {
-          // ignore close races during React dev remounts
-        }
-      }
-      ws.onmessage = null
-      ws.onerror = null
-      ws.onclose = null
-      if (ws.readyState === WebSocket.OPEN) {
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (ws) {
+        ws.onmessage = null
+        ws.onerror = null
+        ws.onclose = null
         try {
           ws.close()
         } catch {
@@ -338,9 +356,9 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
 
   if (compact) {
     return (
-      <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border bg-card">
+      <div className="flex flex-wrap items-start gap-3 px-3 py-2.5 rounded-lg border bg-card">
         <ToolIcon toolName={request.toolName} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-0">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
             <span className="text-xs font-semibold truncate text-foreground">{request.toolName}</span>
             <RiskBadge risk={request.risk} />
@@ -348,7 +366,7 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
           </div>
           <p className="text-xs text-muted-foreground truncate mt-1 leading-relaxed">{request.summary}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+        <div className="flex flex-col items-start gap-1.5 shrink-0 sm:items-end sm:pl-2">
           <TimeRemaining expiresAt={request.expiresAt} />
           <div className="flex items-center gap-1.5">
             <button

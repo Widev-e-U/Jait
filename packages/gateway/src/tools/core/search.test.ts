@@ -81,4 +81,28 @@ describe("search core tool retry behavior", () => {
       ],
     });
   });
+
+  it("truncates matches on very long single lines instead of overflowing the buffer", async () => {
+    const longLine = "needle-" + "x".repeat(100_000);
+    const projectRoot = await createTempProject("bundle.js", `${longLine}\n`);
+    const tool = createSearchTool(createRegistryStub() as any);
+
+    const result = await tool.execute(
+      { pattern: "needle", isRegexp: false, limit: 5 },
+      {
+        sessionId: "session-3",
+        actionId: "action-3",
+        projectRoot,
+        requestedBy: "user",
+      } as any,
+    );
+
+    expect(result.ok).toBe(true);
+    const matches = (result.data as any).matches;
+    expect(matches).toHaveLength(1);
+    expect(matches[0].content).toContain("needle-");
+    expect(matches[0].content).toContain("(truncated,");
+    // A truncated match must never be anywhere near 100k chars.
+    expect(matches[0].content.length).toBeLessThan(1_000);
+  });
 });

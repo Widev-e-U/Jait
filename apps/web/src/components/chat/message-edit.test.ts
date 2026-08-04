@@ -99,7 +99,7 @@ describe('message edit mobile layout', () => {
 
     expect(classes).toContain('md:static')
     expect(classes).toContain('md:w-full')
-    expect(classes).toContain('md:max-w-3xl')
+    expect(classes).toContain('md:max-w-5xl')
     expect(classes).toContain('md:translate-x-0')
   })
 })

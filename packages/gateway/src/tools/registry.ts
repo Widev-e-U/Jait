@@ -26,6 +26,8 @@ import { validateToolInput } from "./validate.js";
 /** Summary of a tool for the settings UI and discovery endpoints */
 export interface ToolInfo {
   name: string;
+  /** Human-friendly display name advertised by the tool (falls back to `name`). */
+  displayName?: string;
   description: string;
   tier: ToolTier;
   category: ToolCategory;
@@ -367,6 +369,7 @@ export class ToolRegistry {
   listInfo(): ToolInfo[] {
     return this.list().map((t) => ({
       name: t.name,
+      displayName: t.displayName,
       description: t.description,
       tier: t.tier ?? "standard",
       category: t.category ?? "external",

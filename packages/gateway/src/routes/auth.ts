@@ -321,6 +321,7 @@ export function registerAuthRoutes(
 
     const toolList = tools.map((t) => ({
       name: t.name,
+      displayName: t.displayName ?? t.name,
       description: t.description,
       tier: t.tier,
       category: t.category,

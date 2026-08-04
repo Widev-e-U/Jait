@@ -12,6 +12,7 @@ const API_URL = getApiUrl()
 
 interface ToolInfo {
   name: string
+  displayName?: string
   description: string
   tier: 'core' | 'standard' | 'external'
   category: string
@@ -132,7 +133,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
   const filtered = filter.trim().toLowerCase()
   for (const tool of tools) {
     if (filtered) {
-      const haystack = `${tool.name} ${tool.description} ${tool.category}`.toLowerCase()
+      const haystack = `${tool.name} ${tool.displayName ?? ''} ${tool.description} ${tool.category}`.toLowerCase()
       if (!haystack.includes(filtered)) continue
     }
     const cat = tool.category
@@ -230,7 +231,8 @@ export function ToolSettings({ token }: ToolSettingsProps) {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium">{tool.name}</span>
+                          <span className="text-sm font-medium">{tool.displayName ?? tool.name}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{tool.name}</span>
                           <Badge
                             variant={tierInfo.variant}
                             className="text-2xs px-1.5 py-0"

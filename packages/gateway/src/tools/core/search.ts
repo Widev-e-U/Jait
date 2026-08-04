@@ -25,6 +25,11 @@ const MAX_RESULTS_CAP = 200;
 const DEFAULT_MAX_RESULTS = 20;
 /** Search timeout in ms. */
 const SEARCH_TIMEOUT = 20_000;
+/** Child-process stdout buffer cap. Raised above the old 2MB so a single
+ *  very long matched line (e.g. in a minified `.map`/bundle) doesn't overflow. */
+const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+/** Cap each matched line's content so a huge one-line file can't blow up context. */
+const MAX_LINE_CONTENT = 500;
 
 function isNoMatchesExit(err: unknown): err is { code?: number | string; stdout?: string } {
   if (!err || typeof err !== "object") return false;
@@ -32,13 +37,30 @@ function isNoMatchesExit(err: unknown): err is { code?: number | string; stdout?
   return code === 1 || code === "1";
 }
 
+/** Normalize a matched line: strip trailing newline and cap its length so
+ *  minified/bundled files (single huge line) don't flood the context. */
+function truncateLine(line: string): string {
+  const trimmed = line.replace(/\r?$/, "").trim();
+  if (trimmed.length <= MAX_LINE_CONTENT) return trimmed;
+  return trimmed.slice(0, MAX_LINE_CONTENT) + `… (truncated, ${trimmed.length - MAX_LINE_CONTENT} more chars)`;
+}
+
 async function runSearchCommand(cmd: string): Promise<string> {
   try {
-    const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: 2 * 1024 * 1024 });
+    const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: MAX_BUFFER_BYTES });
     return stdout;
   } catch (err) {
     if (isNoMatchesExit(err)) {
       return err.stdout ?? "";
+    }
+    // A match on a single line larger than MAX_BUFFER_BYTES overflows exec's
+    // buffer. Surface a clear message instead of the raw "maxBuffer exceeded".
+    const code = (err as { code?: string })?.code;
+    if (code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+      throw new Error(
+        `Search produced too much output (a matching line exceeded the ${MAX_BUFFER_BYTES / 1024 / 1024}MB buffer). ` +
+          `Try narrowing the pattern or path, or adding an include glob (e.g. "*.ts") to skip minified files.`,
+      );
     }
     throw err;
   }
@@ -196,9 +218,9 @@ async function searchContent(
     // Parse "file:line:content" format
     const m = line.match(/^(.+?):(\d+):(.*)$/);
     if (m) {
-      return { file: m[1]!, line: parseInt(m[2]!, 10), content: m[3]!.trim() };
+      return { file: m[1]!, line: parseInt(m[2]!, 10), content: truncateLine(m[3]!) };
     }
-    return { file: "", line: 0, content: line.trim() };
+    return { file: "", line: 0, content: truncateLine(line) };
   });
 
   return {

@@ -213,7 +213,7 @@ export function DeveloperChatWorkspace({
         className={`relative flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
         style={developerChatPanelStyle}
       >
-        <div className="w-full max-w-3xl space-y-8">
+        <div className="w-full max-w-5xl space-y-8">
           <div className="text-center">
             <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
             <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
@@ -472,7 +472,7 @@ export function DeveloperChatWorkspace({
           </ErrorBoundary>
 
           <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
-            <div className="mx-auto w-full max-w-3xl space-y-1.5">
+            <div className="mx-auto w-full max-w-5xl space-y-1.5">
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
                   <AlertTriangle className="h-4 w-4 shrink-0" />

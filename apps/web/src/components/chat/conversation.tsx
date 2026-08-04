@@ -47,7 +47,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
     >
       <span className="sr-only">{label}</span>
-      <div className="mx-auto flex h-full max-w-3xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
+      <div className="mx-auto flex h-full max-w-5xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
         <div className="flex animate-pulse items-start gap-3">
           <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
           <div className="w-full max-w-xl space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
@@ -381,7 +381,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
               </div>
             </div>
           )}
-          <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
+          <div ref={innerRef} className="mx-auto max-w-5xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
             {hasMore && (
               <div className="flex justify-center py-3">
                 <button
