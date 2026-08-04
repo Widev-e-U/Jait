@@ -229,7 +229,6 @@ export function AppHeader(props: AppHeaderProps) {
             <ProgressiveNav
               items={navItems}
               availableWidth={navAvailableWidth}
-              onOpenSettings={() => setCurrentView('settings')}
               navRef={navRef}
               className="flex-1"
               style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}

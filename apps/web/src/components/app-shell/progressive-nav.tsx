@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { EllipsisVertical, Settings } from 'lucide-react'
+import { EllipsisVertical } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -8,7 +8,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -28,7 +27,6 @@ interface ProgressiveNavProps {
   items: ProgressiveNavItem[]
   /** Available width (px) for the inline nav buttons, measured by the parent. */
   availableWidth: number
-  onOpenSettings: () => void
   /** Ref attached to the live nav element so the parent can measure its start position. */
   navRef?: React.RefObject<HTMLElement | null>
   className?: string
@@ -70,7 +68,7 @@ export function computeVisibleCount(itemEnds: number[], availableWidth: number):
  * visible; items are moved into the menu one at a time instead of collapsing
  * all at once.
  */
-export function ProgressiveNav({ items, availableWidth, onOpenSettings, navRef, className, style }: ProgressiveNavProps) {
+export function ProgressiveNav({ items, availableWidth, navRef, className, style }: ProgressiveNavProps) {
   // Hidden off-screen container that lays out every item so we can measure each
   // button's end position (accounting for the same gap as the live nav).
   const measureRef = useRef<HTMLDivElement>(null)
@@ -120,11 +118,6 @@ export function ProgressiveNav({ items, availableWidth, onOpenSettings, navRef, 
                 {item.label}
               </DropdownMenuItem>
             ))}
-            {overflowItems.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onSelect={onOpenSettings}>
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
