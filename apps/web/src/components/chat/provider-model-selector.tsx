@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
+import Cursor from '@lobehub/icons/es/Cursor'
+import Gemini from '@lobehub/icons/es/Gemini'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -28,6 +30,41 @@ const JaitIcon = ({ className }: { className?: string }) => (
 
 const OpenAIIcon = ({ className }: { className?: string }) => <OpenAI size={16} className={className} />
 const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} className={className} />
+const CursorIcon = ({ className }: { className?: string }) => <Cursor size={16} className={className} />
+const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
+
+// Pi (Greek letter π) — pi coding agent has no bundled brand icon, so inline it.
+const PiIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className={className}>
+    <path
+      d="M5 8h9a3 3 0 0 1 3 3v1"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M5 8h14M5 12h12M5 8v8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+// DeepAgents (multi-agent framework) has no dedicated brand icon — use a
+// stack-of-agents glyph so it is distinct from the generic network fallback.
+const DeepAgentsIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className={className}>
+    <rect x="4" y="3" width="16" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
+    <path d="M8 6h8M8 9h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M5 17h6a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
+    <path d="M14 19h5a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
+  </svg>
+)
 
 interface ModelDef {
   id: string
@@ -64,6 +101,10 @@ const PROVIDER_DEFS: ProviderDef[] = [
   { value: 'jait', label: 'Jait', icon: JaitIcon, description: 'Native Jait agent loop with full tool access' },
   { value: 'codex', label: 'Codex', icon: OpenAIIcon, description: 'OpenAI Codex CLI — coding agent with MCP tools' },
   { value: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, description: 'Anthropic Claude Code CLI — coding agent with MCP tools' },
+  { value: 'cursor', label: 'Cursor', icon: CursorIcon, description: 'Cursor agent via Agent Client Protocol' },
+  { value: 'pi', label: 'Pi', icon: PiIcon, description: 'Pi coding agent via Agent Client Protocol' },
+  { value: 'pi-gemini', label: 'Pi Gemini', icon: GeminiIcon, description: 'Gemini-backed Pi ACP provider' },
+  { value: 'deepagents', label: 'DeepAgents', icon: DeepAgentsIcon, description: 'DeepAgents multi-agent framework via Agent Client Protocol' },
 ]
 
 const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
