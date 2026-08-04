@@ -722,10 +722,43 @@ function getFileContextLabel(args: Record<string, unknown>): string | null {
   )
 }
 
-function formatFileNameAndContext(path: string, args: Record<string, unknown>): string {
+/** Extract a 1-based line range from read-tool args or its result data, tolerating provider naming variants. */
+function getReadLineRange(
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): { start: number; end: number } | null {
+  const toNum = (v: unknown): number | undefined => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+    return Number.isFinite(n) ? n : undefined
+  }
+  const resultStart = toNum(resultData?.startLine)
+  const resultEnd = toNum(resultData?.endLine)
+  if (resultStart != null && resultEnd != null) return { start: resultStart, end: resultEnd }
+
+  const start = toNum(args.startLine ?? args.start_line ?? args.offset ?? args.line)
+  const explicitEnd = toNum(args.endLine ?? args.end_line)
+  if (start != null && explicitEnd != null) return { start, end: explicitEnd }
+  const limit = toNum(args.limit ?? args.lineCount ?? args.line_count)
+  if (start != null && limit != null && limit > 0) return { start, end: start + limit - 1 }
+  if (start != null) return { start, end: start }
+  return null
+}
+
+function formatFileNameAndContext(
+  path: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): string {
   const fileName = getBaseName(path)
+  const lineRange = getReadLineRange(args, resultData)
+  const rangeLabel = lineRange
+    ? lineRange.start === lineRange.end
+      ? `:${lineRange.start}`
+      : `:${lineRange.start}-${lineRange.end}`
+    : ''
+  const base = `${fileName}${rangeLabel}`
   const context = getFileContextLabel(args)
-  return context ? `${fileName} · ${context}` : fileName
+  return context ? `${base} · ${context}` : base
 }
 
 export function getEditDiffCounts(tool: string, args: Record<string, unknown>): { insertions: number; deletions: number } | null {
@@ -855,7 +888,7 @@ export function getCallSummary(
   // ── Core tools ──────────────────────────────────────────
   if (normalized === 'read' || normalized === 'file.read') {
     const path = filePath ?? displayStr(normalizedArgs.path)
-    return formatFileNameAndContext(path, normalizedArgs)
+    return formatFileNameAndContext(path, normalizedArgs, resultRecord)
   }
   if (normalized === 'edit') {
     const path = filePath ?? displayStr(normalizedArgs.path)

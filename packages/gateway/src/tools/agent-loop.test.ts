@@ -6,6 +6,7 @@ import {
   serializeMessagesForOllama,
   buildTieredToolSchemas,
   detectToolLoop,
+  mergeReadRange,
   fromOpenAIName,
   runAgentLoop,
   SteeringController,
@@ -745,6 +746,34 @@ describe("detectToolLoop", () => {
   });
 });
 
+describe("mergeReadRange", () => {
+  it("counts the full range as new when there is no prior coverage", () => {
+    const { newLines, merged } = mergeReadRange([], 10, 20);
+    expect(newLines).toBe(11);
+    expect(merged).toEqual([[10, 20]]);
+  });
+
+  it("counts zero new lines for a range fully inside prior coverage", () => {
+    const { newLines, merged } = mergeReadRange([[1, 100]], 50, 60);
+    expect(newLines).toBe(0);
+    expect(merged).toEqual([[1, 100]]);
+  });
+
+  it("counts only the non-overlapping portion of a partially overlapping range", () => {
+    const { newLines, merged } = mergeReadRange([[50, 100]], 40, 60);
+    // Lines 40-49 are new (10 lines); 50-60 already covered.
+    expect(newLines).toBe(10);
+    expect(merged).toEqual([[40, 100]]);
+  });
+
+  it("merges adjacent and disjoint ranges correctly", () => {
+    let state = mergeReadRange([], 1, 10).merged;
+    state = mergeReadRange(state, 11, 20).merged; // adjacent — should merge
+    state = mergeReadRange(state, 100, 110).merged; // disjoint — separate range
+    expect(state).toEqual([[1, 20], [100, 110]]);
+  });
+});
+
 describe("runAgentLoop persistence", () => {
   it("recovers when the provider returns an empty completion after a successful tool", async () => {
     const responses = [
@@ -1350,6 +1379,126 @@ describe("runAgentLoop tool-loop detection", () => {
 
     expect(result.hitMaxRounds).toBe(false);
     expect(result.content).toBe("Read all files.");
+    expect(result.content).not.toMatch(/Stopped/);
+  });
+
+  it("stops narrow overlapping re-reads of the same file before maxRounds", async () => {
+    // One broad first read, then repeated small overlapping ranges of the
+    // *same* file — a different line range each call, so neither the
+    // duplicate-call check nor detectToolLoop (exact-args cycles) fire.
+    const ranges: Array<[number, number]> = [
+      [1, 200], // broad first read — seeds coverage, no streak
+      [50, 60], [55, 62], [52, 58], [51, 61], [53, 59], [50, 60], [54, 60],
+    ];
+    let callIdx = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (callIdx < ranges.length) {
+        const [startLine, endLine] = ranges[callIdx]!;
+        const response = toolCallSSE(`call-${callIdx + 1}`, "read", { path: "big.ts", startLine, endLine });
+        callIdx++;
+        return response;
+      }
+      return textResponse("Done.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Find the thing in big.ts." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-narrow-read",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+      },
+      async (name, args) => {
+        if (name === "read") {
+          const { startLine, endLine } = args as { startLine: number; endLine: number };
+          return { ok: true, message: "read ok", data: { startLine, endLine } };
+        }
+        return { ok: true, message: "ok" };
+      },
+    );
+
+    expect(result.hitMaxRounds).toBe(false);
+    // Stopped well before exhausting all 7 scripted narrow reads + maxRounds.
+    expect(callIdx).toBeLessThan(ranges.length);
+    expect(result.content).toMatch(/\[Stopped: the agent kept re-reading small overlapping slices of "big\.ts"/);
+  });
+
+  it("does not flag sequential non-overlapping reads that grow through a file", async () => {
+    // Each read covers a fresh, non-overlapping chunk of the same file —
+    // genuine progress, must not be mistaken for narrow-read thrash.
+    const ranges: Array<[number, number]> = [[1, 100], [101, 200], [201, 300], [301, 400]];
+    let callIdx = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (callIdx < ranges.length) {
+        const [startLine, endLine] = ranges[callIdx]!;
+        const response = toolCallSSE(`call-${callIdx + 1}`, "read", { path: "big.ts", startLine, endLine });
+        callIdx++;
+        return response;
+      }
+      return textResponse("Read the whole file.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Read all of big.ts." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-growing-read",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+      },
+      async (name, args) => {
+        if (name === "read") {
+          const { startLine, endLine } = args as { startLine: number; endLine: number };
+          return { ok: true, message: "read ok", data: { startLine, endLine } };
+        }
+        return { ok: true, message: "ok" };
+      },
+    );
+
+    expect(result.hitMaxRounds).toBe(false);
+    expect(callIdx).toBe(ranges.length);
+    expect(result.content).toBe("Read the whole file.");
     expect(result.content).not.toMatch(/Stopped/);
   });
 });

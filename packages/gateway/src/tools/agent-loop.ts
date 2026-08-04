@@ -1209,6 +1209,54 @@ const LOOP_DETECTION_MIN_REPEATS = 3;
  * @returns The detected cycle length (1, 2, or 3), or `null` if the tail is
  *          not a pure repetition of a short cycle.
  */
+/** A read must add at least this many previously-unseen lines to count as real progress. */
+const NARROW_READ_MIN_NEW_LINES = 15;
+/** Consecutive low-novelty reads of the same file before we warn. */
+const NARROW_READ_WARN_THRESHOLD = 3;
+/** ...before we hard-stop. */
+const NARROW_READ_STOP_THRESHOLD = 6;
+
+/**
+ * Merges `[start, end]` (1-based, inclusive) into a sorted list of
+ * non-overlapping/adjacent ranges and reports how many lines in `[start,
+ * end]` were not already covered by an earlier range.
+ *
+ * Used to detect narrow-range read thrash: an agent that keeps re-reading
+ * small, overlapping slices of the same file (e.g. lines 59-126, then
+ * 62-110, then 89-100) with each call using a *different* line range. That
+ * pattern defeats `detectToolLoop` above (which requires byte-identical
+ * args) even though it's just as wasteful — the model already has that
+ * content in context and is gaining almost nothing per round.
+ */
+export function mergeReadRange(
+  ranges: Array<[number, number]>,
+  start: number,
+  end: number,
+): { newLines: number; merged: Array<[number, number]> } {
+  if (end < start) return { newLines: 0, merged: ranges };
+
+  let newLines = 0;
+  let cursor = start;
+  for (const [rangeStart, rangeEnd] of [...ranges].sort((a, b) => a[0] - b[0])) {
+    if (rangeEnd < cursor || rangeStart > end) continue;
+    if (rangeStart > cursor) newLines += Math.min(rangeStart, end + 1) - cursor;
+    cursor = Math.max(cursor, rangeEnd + 1);
+    if (cursor > end) break;
+  }
+  if (cursor <= end) newLines += end - cursor + 1;
+
+  const merged: Array<[number, number]> = [];
+  for (const [rangeStart, rangeEnd] of [...ranges, [start, end] as [number, number]].sort((a, b) => a[0] - b[0])) {
+    const last = merged[merged.length - 1];
+    if (last && rangeStart <= last[1] + 1) {
+      last[1] = Math.max(last[1], rangeEnd);
+    } else {
+      merged.push([rangeStart, rangeEnd]);
+    }
+  }
+  return { newLines, merged };
+}
+
 export function detectToolLoop(signatures: string[]): number | null {
   const n = signatures.length;
   if (n < 4) return null;
@@ -1828,6 +1876,12 @@ export async function runAgentLoop(
   /** Set after we've warned about a loop pattern once; a persisted loop then hard-stops. */
   let loopPatternWarned = false;
 
+  // ── Narrow-range read thrash tracking (per file, across the whole run — ──
+  // ── these reads are often interleaved with other tool calls). ──
+  const readCoverageByPath = new Map<string, Array<[number, number]>>();
+  const readNarrowStreakByPath = new Map<string, number>();
+  const readNarrowWarnedPaths = new Set<string>();
+
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
   const planId = mode === "plan" ? `plan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : "";
@@ -2412,6 +2466,50 @@ export async function runAgentLoop(
       } else if (loopPatternWarned) {
         // The cycle broke — reset so a fresh loop later gets its own warning.
         loopPatternWarned = false;
+      }
+
+      // ── Narrow-range read thrash detection ──
+      // Catches an agent that keeps re-reading small, overlapping slices of
+      // the same file with a *different* line range each call — every call
+      // looks distinct (so the duplicate-call check and the cycle detector
+      // above both miss it) yet contributes almost nothing new.
+      for (const call of roundCalls) {
+        if (call.tool !== "read" || !call.ok) continue;
+        const args = call.args as Record<string, unknown> | undefined;
+        const path = typeof args?.["path"] === "string" ? args["path"] as string : null;
+        const data = call.data as { startLine?: number; endLine?: number } | undefined;
+        if (!path || typeof data?.startLine !== "number" || typeof data?.endLine !== "number") continue;
+
+        const coverage = readCoverageByPath.get(path) ?? [];
+        const isFirstRead = coverage.length === 0;
+        const { newLines, merged } = mergeReadRange(coverage, data.startLine, data.endLine);
+        readCoverageByPath.set(path, merged);
+
+        if (!isFirstRead && newLines < NARROW_READ_MIN_NEW_LINES) {
+          readNarrowStreakByPath.set(path, (readNarrowStreakByPath.get(path) ?? 0) + 1);
+        } else {
+          readNarrowStreakByPath.set(path, 0);
+          readNarrowWarnedPaths.delete(path);
+        }
+      }
+      for (const [path, streak] of readNarrowStreakByPath) {
+        if (streak >= NARROW_READ_STOP_THRESHOLD) {
+          log.warn(`Narrow overlapping reads of "${path}" (${streak}x) — stopping loop for session ${sessionId}`);
+          const bailMsg = `\n\n[Stopped: the agent kept re-reading small overlapping slices of "${path}" without covering meaningful new content. Please try a different strategy.]`;
+          onEvent?.({ type: "token", content: bailMsg });
+          fullContent += bailMsg;
+          const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+          const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+          onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, undefined);
+          persisted = true;
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, fingerprints: toolCallFingerprints };
+        }
+        if (streak === NARROW_READ_WARN_THRESHOLD && !readNarrowWarnedPaths.has(path)) {
+          readNarrowWarnedPaths.add(path);
+          const warnMsg = `[WARNING: you've re-read overlapping slices of "${path}" ${streak} times in a row without covering meaningful new content. Read a wider range in one call, or use search to jump straight to what you need, instead of repeatedly narrowing the range.]`;
+          history.push({ role: "system", content: warnMsg });
+          log.info(`Narrow-read warning injected for session ${sessionId} (path=${path})`);
+        }
       }
 
       // Loop continues — LLM sees results and decides next
