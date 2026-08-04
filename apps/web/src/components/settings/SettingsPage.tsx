@@ -13,6 +13,7 @@ import { ChannelSettings } from './ChannelSettings'
 import { EmailSettings } from './EmailSettings'
 import { CalendarSettings } from './CalendarSettings'
 import { UsageSettings } from './UsageSettings'
+import { PatchNotesTooltip } from './PatchNotesTooltip'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -108,6 +109,16 @@ export interface UpdateInfo {
   wearDownloadUrl?: string | null
 }
 
+/** Patch notes for a single GitHub release (commit diff since the prior release). */
+export interface ReleaseNote {
+  version: string
+  name: string
+  publishedAt: string
+  url: string
+  previousVersion: string
+  commits: Array<{ message: string; sha: string; date: string }>
+}
+
 interface WearStatus {
   connected: boolean
   directTransferSupported: boolean
@@ -119,7 +130,7 @@ interface WearStatus {
   }>
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity' | 'changelog'
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   general: 'General',
@@ -131,6 +142,7 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   channels: 'Channels',
   usage: 'Usage',
   activity: 'Activity',
+  changelog: 'Changelog',
 }
 
 interface SettingsPageProps {
@@ -152,6 +164,9 @@ interface SettingsPageProps {
   onCheckUpdate: () => void
   onApplyUpdate: () => void
   updateApplying: boolean
+  releases: ReleaseNote[] | null
+  releasesLoading: boolean
+  onCheckChangelog: () => void
   platform: 'web' | 'electron' | 'capacitor'
 }
 
@@ -174,6 +189,9 @@ export function SettingsPage({
   onCheckUpdate,
   onApplyUpdate,
   updateApplying,
+  releases,
+  releasesLoading,
+  onCheckChangelog,
   platform,
 }: SettingsPageProps) {
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
@@ -793,6 +811,7 @@ export function SettingsPage({
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
+          <TabsTrigger value="changelog" className="flex-1 sm:flex-none">Changelog</TabsTrigger>
 
         </TabsList>
 
@@ -819,7 +838,11 @@ export function SettingsPage({
                   {updateChecking ? 'Checking...' : 'Check for updates'}
                 </Button>
                 {updateInfo?.hasUpdate && (
-                  <>
+                  <PatchNotesTooltip
+                    targetVersion={updateInfo.latestVersion}
+                    notes={releases}
+                    align="left"
+                  >
                     {platform === 'web' ? (
                       <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying}>
                         {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
@@ -846,7 +869,7 @@ export function SettingsPage({
                         {updateApplying ? 'Downloading...' : `Update to v${updateInfo.latestVersion}`}
                       </Button>
                     )}
-                  </>
+                  </PatchNotesTooltip>
                 )}
               </div>
               {updateInfo && !updateInfo.hasUpdate && !androidPackageUnavailable && (
@@ -1616,6 +1639,80 @@ export function SettingsPage({
         </Card>
       )}
       {!showActivitySection && emptyState}
+        </TabsContent>
+
+        <TabsContent value="changelog" className="space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-medium">
+                <ArrowUpCircle className="h-4 w-4" />
+                What&apos;s new
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Release notes for every version since the one you&apos;re running.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onCheckChangelog} disabled={releasesLoading} className="w-fit">
+              {releasesLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              Refresh
+            </Button>
+          </div>
+
+          {releasesLoading && !releases ? (
+            <Card className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Fetching release notes…
+            </Card>
+          ) : releases && releases.length > 0 ? (
+            <div className="space-y-4">
+              {releases.map((release) => (
+                <Card key={release.version} className="space-y-3 p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold">v{release.version}</h3>
+                    <Badge variant={release.version === updateInfo?.latestVersion ? 'default' : 'outline'} className="text-2xs">
+                      {release.version === updateInfo?.latestVersion ? 'latest' : 'new'}
+                    </Badge>
+                    {release.url && (
+                      <a
+                        href={release.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        GitHub release
+                      </a>
+                    )}
+                  </div>
+                  {release.publishedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Released {new Date(release.publishedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                  {release.commits.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {release.commits.map((commit) => (
+                        <li key={commit.sha || commit.message} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                          <span className="[overflow-wrap:anywhere]">{commit.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No change details available for this release.</p>
+                  )}
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="p-5">
+              <p className="text-sm text-muted-foreground">
+                {updateInfo
+                  ? <>No newer releases. You&apos;re on the latest version ({updateInfo.currentVersion}).</>
+                  : 'No release notes available. Check for updates first.'}
+              </p>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

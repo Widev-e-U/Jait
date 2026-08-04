@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { PatchNotesTooltip } from '@/components/settings/PatchNotesTooltip'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -77,6 +78,7 @@ interface AppHeaderProps {
   updateApplying: any
   updateAwaitingRestart: any
   updateInfo: any
+  releases: any
   user: any
   userInitial: any
   viewMode: any
@@ -121,6 +123,7 @@ export function AppHeader(props: AppHeaderProps) {
     updateApplying,
     updateAwaitingRestart,
     updateInfo,
+    releases,
     user,
     userInitial,
     viewMode,
@@ -310,10 +313,13 @@ export function AppHeader(props: AppHeaderProps) {
             </div>
 
             {updateInfo?.hasUpdate && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={async () => {
+              <PatchNotesTooltip
+                targetVersion={updateInfo.latestVersion}
+                notes={releases}
+                align="right"
+              >
+                <Button
+                  onClick={async () => {
                       if (appPlatform === 'web') {
                         if (!updateApplying && !updateAwaitingRestart) {
                           await handleApplyUpdate()
@@ -351,14 +357,7 @@ export function AppHeader(props: AppHeaderProps) {
                         : `v${updateInfo.latestVersion}`}
                     </span>
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
-                  || (appPlatform === 'capacitor' && updateApplying)
-                    ? 'Updating and refreshing...'
-                    : `Update available — v${updateInfo.latestVersion}`}
-                </TooltipContent>
-              </Tooltip>
+              </PatchNotesTooltip>
             )}
 
             {/* Mobile avatar + menu group */}

@@ -30,9 +30,12 @@ interface AppPageOutletProps {
   updateApplying: boolean
   updateChecking: boolean
   updateInfo: any
+  releases: any
+  releasesLoading: boolean
   username: string
   onApplyUpdate: () => void
   onCheckUpdate: () => void
+  onCheckChangelog: () => void
   onClearArchive: () => Promise<number>
   onClearArchivedProjects: () => Promise<number>
   onFetchArchivedProjects: () => Promise<any>
@@ -68,9 +71,12 @@ export function AppPageOutlet({
   updateApplying,
   updateChecking,
   updateInfo,
+  releases,
+  releasesLoading,
   username,
   onApplyUpdate,
   onCheckUpdate,
+  onCheckChangelog,
   onClearArchive,
   onClearArchivedProjects,
   onFetchArchivedProjects,
@@ -187,6 +193,9 @@ export function AppPageOutlet({
           onCheckUpdate={onCheckUpdate}
           onApplyUpdate={onApplyUpdate}
           updateApplying={updateApplying}
+          releases={releases}
+          releasesLoading={releasesLoading}
+          onCheckChangelog={onCheckChangelog}
           platform={appPlatform}
         />
       </ErrorBoundary>

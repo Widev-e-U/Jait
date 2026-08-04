@@ -429,7 +429,10 @@ function App() {
     updateChecking,
     updateApplying,
     updateAwaitingRestart,
+    releases,
+    releasesLoading,
     handleCheckUpdate,
+    handleCheckChangelog,
     handleApplyUpdate,
     handleConnectionRestart,
   } = useUpdateChecker({ token, isElectron, appPlatform, apiUrl: API_URL })
@@ -3951,6 +3954,7 @@ function App() {
               updateApplying={updateApplying}
               updateAwaitingRestart={updateAwaitingRestart}
               updateInfo={updateInfo}
+              releases={releases}
               user={user}
               userInitial={userInitial}
               viewMode={viewMode}
@@ -4035,9 +4039,12 @@ function App() {
             updateApplying={updateApplying}
             updateChecking={updateChecking}
             updateInfo={updateInfo}
+            releases={releases}
+            releasesLoading={releasesLoading}
             username={user?.username ?? ''}
             onApplyUpdate={() => { void handleApplyUpdate() }}
             onCheckUpdate={() => { void handleCheckUpdate() }}
+            onCheckChangelog={() => { void handleCheckChangelog() }}
             onClearArchive={handleClearArchive}
             onClearArchivedProjects={handleClearArchivedProjects}
             onFetchArchivedProjects={fetchArchivedProjects}

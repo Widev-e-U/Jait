@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
-import { type UpdateInfo } from '@/components/settings/SettingsPage'
+import { type UpdateInfo, type ReleaseNote } from '@/components/settings/SettingsPage'
 import { getNonEmptyMessage } from '@/lib/values'
 
-export type { UpdateInfo }
+export type { UpdateInfo, ReleaseNote }
 
 export interface UseUpdateCheckerOptions {
   token: string | null
@@ -25,8 +25,34 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateApplying, setUpdateApplying] = useState(false)
   const [updateAwaitingRestart, setUpdateAwaitingRestart] = useState(false)
+  const [releases, setReleases] = useState<ReleaseNote[] | null>(null)
+  const [releasesLoading, setReleasesLoading] = useState(false)
   const pendingGatewayRestartVersionRef = useRef<string | null>(null)
   const gatewayRestartSawDisconnectRef = useRef(false)
+
+  /** Fetch per-release patch notes for every version newer than the running one. */
+  const loadChangelog = useCallback(async (fromVersion: string) => {
+    if (!token) return
+    setReleasesLoading(true)
+    try {
+      const params = fromVersion ? `?from=${encodeURIComponent(fromVersion)}` : ''
+      const res = await fetch(`${apiUrl}/api/update/changelog${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json() as { releases: ReleaseNote[] }
+        setReleases(data.releases)
+      }
+    } catch {
+      /* keep the previous releases */
+    } finally {
+      setReleasesLoading(false)
+    }
+  }, [token, apiUrl])
+
+  const handleCheckChangelog = useCallback(() => {
+    void loadChangelog(updateInfo?.currentVersion ?? '')
+  }, [loadChangelog, updateInfo?.currentVersion])
 
   const handleCheckUpdate = useCallback(async () => {
     if (!token) return
@@ -57,6 +83,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           latestVersion,
           hasUpdate,
         })
+        void loadChangelog(gatewayVersion || appVersion)
       } else if (appPlatform === 'capacitor') {
         let currentVersion = ''
         try {
@@ -73,19 +100,23 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         )
         if (res.ok) {
           const data = await res.json() as UpdateInfo
-          setUpdateInfo({ ...data, currentVersion: currentVersion || data.currentVersion })
+          const resolvedCurrent = currentVersion || data.currentVersion
+          setUpdateInfo({ ...data, currentVersion: resolvedCurrent })
+          void loadChangelog(resolvedCurrent)
         }
       } else {
         const res = await fetch(`${apiUrl}/api/update/check`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.ok) {
-          setUpdateInfo(await res.json() as UpdateInfo)
+          const data = await res.json() as UpdateInfo
+          setUpdateInfo(data)
+          void loadChangelog(data.currentVersion)
         }
       }
     } catch { /* ignore */ }
     setUpdateChecking(false)
-  }, [token, isElectron, appPlatform, apiUrl])
+  }, [token, isElectron, appPlatform, apiUrl, loadChangelog])
 
   const handleApplyUpdate = useCallback(async () => {
     if (!token || !updateInfo?.hasUpdate) return
@@ -229,7 +260,10 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
     updateChecking,
     updateApplying,
     updateAwaitingRestart,
+    releases,
+    releasesLoading,
     handleCheckUpdate,
+    handleCheckChangelog,
     handleApplyUpdate,
     handleConnectionRestart,
   }

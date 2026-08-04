@@ -46,17 +46,22 @@ Run from repository root unless noted.
 The monorepo uses an automated release pipeline driven by a single version bump.
 Everything lives in `.github/workflows/release.yml`:
 
-1. Bump `"version"` in `packages/gateway/package.json` (and sub-packages if their code changed) and push to `main`.
-2. The `auto-tag` job in `release.yml` detects the version change and creates a `v<version>` git tag.
-3. In the same workflow run, downstream jobs execute:
+1. **Regenerate the changelog.** When doing a "version up", update `CHANGELOG.md` with the new release's entry by deriving it from git history:
+   ```
+   git log --oneline --no-merges v<previous>..v<new>
+   ```
+   Add a `## [v<new>](<release-url>) — <date>` section (newest-first) listing each commit subject + short hash, and commit `CHANGELOG.md` in the same change as the version bump.
+2. Bump `"version"` in `packages/gateway/package.json` (and sub-packages if their code changed) and push to `main`.
+3. The `auto-tag` job in `release.yml` detects the version change and creates a `v<version>` git tag.
+4. In the same workflow run, downstream jobs execute:
    - npm publish for `@jait/shared`, `@jait/screen-share`, `@jait/web`, `@jait/gateway` (in dependency order, skipping already-published versions).
    - Desktop builds (Windows, macOS, Linux) and Android APK.
    - GitHub Release with all artifacts attached.
-4. `.github/workflows/ci.yml` runs lint, typecheck, test, and Docker builds on every push/PR.
+5. `.github/workflows/ci.yml` runs lint, typecheck, test, and Docker builds on every push/PR.
 
 The workflow can also be triggered by pushing a `v*` tag directly or via `workflow_dispatch`.
 
-**No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions.
+**No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions. The changelog is the one thing you *do* update by hand on every version up.
 
 To deploy to a server after publish: `npm install -g @jait/gateway@<version>` and restart the service.
 

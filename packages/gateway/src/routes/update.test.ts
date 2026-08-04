@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { signAuthToken } from "../security/http-auth.js";
-import { registerUpdateRoutes } from "./update.js";
+import { registerUpdateRoutes, __resetUpdateCaches } from "./update.js";
 
 async function createUpdateServer() {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
@@ -26,6 +26,100 @@ async function createUpdateServer() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  __resetUpdateCaches();
+});
+
+describe("changelog route", () => {
+  it("returns per-release patch notes derived from the commit diff", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { tag_name: "v0.1.666", name: "Jait v0.1.666", published_at: "2026-08-04T10:50:04Z", html_url: "https://github.com/Widev-e-U/Jait/releases/tag/v0.1.666" },
+        { tag_name: "v0.1.665", name: "Jait v0.1.665", published_at: "2026-08-04T08:31:40Z", html_url: "https://github.com/Widev-e-U/Jait/releases/tag/v0.1.665" },
+      ]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        commits: [{ sha: "abc123", commit: { message: "feat: swarm sub-agent cards", author: { date: "2026-08-04T09:00:00Z" } } }],
+      }), { status: 200 })));
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/update/changelog?from=0.1.665",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      from: "0.1.665",
+      releases: [{
+        version: "0.1.666",
+        name: "Jait v0.1.666",
+        previousVersion: "0.1.665",
+        commits: [{ message: "feat: swarm sub-agent cards", sha: "abc123" }],
+      }],
+    });
+
+    await app.close();
+  });
+
+  it("returns an empty list when the installed version is already the latest", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { tag_name: "v0.1.666", name: "Jait v0.1.666", published_at: "2026-08-04T10:50:04Z", html_url: "" },
+    ]), { status: 200 })));
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/update/changelog?from=0.1.666",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().releases).toEqual([]);
+
+    await app.close();
+  });
+
+  it("filters down to a single target release when to is provided", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { tag_name: "v0.1.666", name: "Jait v0.1.666", published_at: "", html_url: "" },
+        { tag_name: "v0.1.665", name: "Jait v0.1.665", published_at: "", html_url: "" },
+      ]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ commits: [] }), { status: 200 })));
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/update/changelog?from=0.1.665&to=0.1.666",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.releases).toHaveLength(1);
+    expect(body.releases[0].version).toBe("0.1.666");
+
+    await app.close();
+  });
+
+  it("returns a gateway error when GitHub rejects the request", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 403 })));
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/update/changelog?from=0.1.665",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({
+      error: "Failed to fetch release notes",
+      detail: "GitHub responded 403",
+    });
+
+    await app.close();
+  });
 });
 
 describe("mobile update route", () => {
