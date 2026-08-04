@@ -35,6 +35,13 @@ export interface AgentMessage {
   tool_call_id?: string;
   name?: string;
   /**
+   * Hidden reasoning emitted alongside the visible content (e.g. reasoning
+   * models, or <thinking> blocks). Persisted to history so the model keeps
+   * reasoning continuity across tool rounds instead of re-thinking from
+   * scratch each round. Never rendered as user-visible text.
+   */
+  thinking?: string;
+  /**
    * True for messages injected into the working context by the agent loop
    * itself (e.g. a task re-injected after pruning) rather than sent by the
    * user. Stripped by `serializeMessages`, so it never reaches the model, is
@@ -298,7 +305,6 @@ export class SteeringController {
  */
 export class ToolCallQueue {
   private items: QueuedToolCall[] = [];
-  private static readonly MIN_PARALLEL_BATCH_SIZE = 3;
 
   /** Enqueue a tool call with optional priority and parallelism hint */
   enqueue(
@@ -323,10 +329,10 @@ export class ToolCallQueue {
   }
 
   /**
-   * Dequeue the next batch. If parallel execution is enabled, returns
-   * all contiguous parallel-safe items at the same priority level, but
-   * only when there are more than 2 consecutive calls to batch.
-   * Otherwise returns one at a time.
+   * Dequeue the next batch. If parallel execution is enabled, returns all
+   * contiguous independent (non-sequential) items at the same priority level
+   * as a single batch, so they run concurrently. Otherwise (or when the head
+   * is a sequential tool) returns one at a time.
    */
   dequeueBatch(allowParallel: boolean): QueuedToolCall[] {
     if (this.items.length === 0) return [];
@@ -347,10 +353,6 @@ export class ToolCallQueue {
       this.items[contiguousParallelSafeCount]!.parallelSafe
     ) {
       contiguousParallelSafeCount++;
-    }
-
-    if (contiguousParallelSafeCount < ToolCallQueue.MIN_PARALLEL_BATCH_SIZE) {
-      return [this.items.shift()!];
     }
 
     const batch: QueuedToolCall[] = [];
@@ -386,28 +388,70 @@ export function fromOpenAIName(name: string): string {
   return name.slice(0, idx) + "." + name.slice(idx + 1);
 }
 
-// ── Tools that are safe to run in parallel ───────────────────────────
+// ── Tools that must run sequentially ─────────────────────────────────
 
 /**
- * Read-only / side-effect-free tools that can safely execute concurrently.
- * Tools NOT in this set run sequentially to preserve ordering guarantees.
+ * Tools that mutate shared state or depend on execution ordering and must
+ * therefore run one-at-a-time. Every other tool is treated as independent and
+ * runs concurrently with its peers, matching pi / Claude Code behaviour where
+ * read-only and independent calls batch together in a single round.
+ *
+ * Names use the canonical internal form (dotted, or underscore for legacy
+ * aliases) which is what `isParallelSafe` receives after `fromOpenAIName`.
  */
-const PARALLEL_SAFE_TOOLS = new Set([
-  "file.read",
-  "file.list",
-  "file.stat",
-  "os.query",
-  "memory.search",
-  "session.search",
-  "web.fetch",
-  "web.search",
-  "gateway.status",
-  "browser.snapshot",
-  "browser.inspect",
+const SEQUENTIAL_TOOLS = new Set([
+  // Shell / terminal — stateful, side-effect heavy
+  "execute",
+  "terminal.run",
+  "terminal.exec",
+  "terminal.stream",
+  "jait.terminal",
+  "elevated.run",
+  "os.install",
+  "os.tool",
+  // File mutations — ordering matters
+  "file.write",
+  "file.patch",
+  "edit",
+  // Service / project / surface state changes
+  "gateway.redeploy",
+  "project.create",
+  "project.move",
+  "project.assign_repository",
+  "surfaces.start",
+  "surfaces.stop",
+  "screen.share",
+  "screen.capture",
+  "screen.record",
+  "browser.navigate",
+  "browser.sandbox.start",
+  "ssh.run",
+  "ssh.session.start",
+  "ssh.session.run",
+  "ssh.session.close",
+  "cron.add",
+  "cron.remove",
+  "cron.update",
+  "skills.manage",
+  "extensions.manage",
+  "homeassistant.call_service",
+  "email.send",
+  "email.delete",
+  "email.tag",
+  "memory.save",
+  "memory.update",
+  "memory.forget",
+  "todo",
+  "jait.todos",
+  "voice.speak",
+  "maintenance.run",
+  "preview.open",
+  "preview.restart",
+  "preview.stop",
 ]);
 
 function isParallelSafe(toolName: string): boolean {
-  return PARALLEL_SAFE_TOOLS.has(toolName);
+  return !SEQUENTIAL_TOOLS.has(toolName);
 }
 
 // ── Serialize messages for OpenAI API ────────────────────────────────
@@ -470,6 +514,7 @@ export function serializeMessages(messages: AgentMessage[]) {
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     if (m.name) msg.name = m.name;
+    if (m.thinking) msg.thinking = m.thinking;
     return msg;
   });
 }
@@ -498,6 +543,8 @@ export function serializeMessagesForOllama(messages: AgentMessage[]) {
     if (m.role === "tool" && m.name) {
       msg.tool_name = m.name;
     }
+    // Ollama's native /api/chat format supports message.thinking.
+    if (m.thinking) msg.thinking = m.thinking;
     return msg;
   });
 }
@@ -2044,11 +2091,13 @@ export async function runAgentLoop(
         );
       }
 
-      // Push assistant message with tool_calls to history
+      // Push assistant message with tool_calls to history (persist thinking so
+      // the model keeps reasoning continuity across tool rounds).
       history.push({
         role: "assistant",
         content: contentText || "",
         tool_calls: toolCalls,
+        thinking: thinkingText || undefined,
       });
 
       // Enqueue all tool calls (pi-style, data-driven: no duplicate-counting —
@@ -2350,7 +2399,7 @@ export async function runAgentLoop(
 
     // ── Normal text response — done ──
     if (contentText) {
-      history.push({ role: "assistant", content: contentText });
+      history.push({ role: "assistant", content: contentText, thinking: thinkingText || undefined });
     }
     if (fullContent || thinkingText || segments.length > 0 || executedToolCalls.length > 0) {
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;

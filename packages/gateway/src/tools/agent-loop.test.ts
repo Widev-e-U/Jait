@@ -260,9 +260,20 @@ describe("buildTieredToolSchemas", () => {
 });
 
 describe("ToolCallQueue.dequeueBatch", () => {
-  it("keeps two consecutive parallel-safe calls sequential", () => {
+  it("batches two consecutive independent calls together (parallel by default)", () => {
     const queue = new ToolCallQueue();
     queue.enqueue(toolCall("a"), ToolCallPriority.Normal, true);
+    queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
+
+    const batch = queue.dequeueBatch(true);
+
+    expect(batch.map((item) => item.toolCall.id)).toEqual(["a", "b"]);
+    expect(queue.isEmpty).toBe(true);
+  });
+
+  it("runs a sequential (non-parallel-safe) call on its own", () => {
+    const queue = new ToolCallQueue();
+    queue.enqueue(toolCall("a", "terminal_exec"), ToolCallPriority.Normal, false);
     queue.enqueue(toolCall("b"), ToolCallPriority.Normal, true);
 
     const batch = queue.dequeueBatch(true);
