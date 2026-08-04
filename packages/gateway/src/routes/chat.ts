@@ -69,6 +69,8 @@ interface ChatMessage {
   thinking?: string;
   /** True for agent-loop-injected context (e.g. task re-injected after pruning); never persisted or shown. */
   synthetic?: boolean;
+  /** Short human display text for a visible system notice (e.g. a background terminal command finishing). */
+  systemNotice?: string;
 }
 
 interface LlmContextFlow {
@@ -138,6 +140,22 @@ function formatBackgroundCommandNotification(result: BackgroundCommandResult): s
     "",
     "Continue the task: check whether this result completes what the user asked for, then proceed or report back. If nothing remains to be done, end your turn.",
   ].join("\n");
+}
+
+/**
+ * Short human display line shown as a gray system notice in the chat when a
+ * background terminal command finishes (e.g. "Background terminal #tty1
+ * finished in ~5s (exit 0)"). Kept separate from the full notification, which
+ * is only fed to the agent.
+ */
+function formatBackgroundCommandNotice(result: BackgroundCommandResult): string {
+  const status = result.exitCode === 0 || result.exitCode == null
+    ? "finished"
+    : "failed";
+  const seconds = Math.max(1, Math.round(result.durationMs / 1000));
+  const terminal = result.terminalId ? ` #${result.terminalId}` : "";
+  const exit = result.exitCode == null ? "" : ` (exit ${result.exitCode})`;
+  return `Background terminal${terminal} ${status} in ~${seconds}s${exit}`;
 }
 
 const SSE_HEADERS = {
@@ -1056,8 +1074,10 @@ const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
+  /** Marker for a visible system notice (e.g. a background terminal command finishing). */
+  systemNotice?: boolean;
   toolCalls?: unknown;
   segments?: unknown;
   contextFlow?: LlmContextFlow;
@@ -1221,10 +1241,21 @@ type PersistedUIMessageRow = Pick<
 > & { contextFlowHead: string | null };
 
 function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex: number): UIMsg {
+  const content = typeof row.content === "string" ? row.content : String(row.content ?? "");
+  // Persisted system-notice rows (background terminal commands) render as a
+  // small gray line, not a user/assistant bubble.
+  if (row.role === "system") {
+    return {
+      id: `${sessionId}-${visibleIndex}`,
+      role: "system",
+      content,
+      systemNotice: true,
+    };
+  }
   const msg: UIMsg = {
     id: `${sessionId}-${visibleIndex}`,
     role: row.role as "user" | "assistant",
-    content: typeof row.content === "string" ? row.content : String(row.content ?? ""),
+    content,
   };
   if (row.toolCalls) {
     try { msg.toolCalls = JSON.parse(row.toolCalls); } catch { /* ignore */ }
@@ -1314,7 +1345,24 @@ function buildVisibleHistoryEntries(
     : undefined;
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
-    if (m.role === "system" || m.role === "tool") continue;
+    if (m.role === "tool") continue;
+
+    // Synthetic system messages are visible, lightweight notices (e.g. a
+    // background terminal command finishing) rendered as a small gray line where
+    // a user message would be. Everything else system/tool is hidden from the UI.
+    if (m.role === "system") {
+      if (m.synthetic && m.systemNotice) {
+        out.push({
+          id: `${sessionId}-sys-${visibleIndex}`,
+          role: "system",
+          content: m.systemNotice,
+          systemNotice: true,
+          historyIndex: i,
+        });
+        visibleIndex++;
+      }
+      continue;
+    }
 
     let uiToolCalls: Array<Record<string, unknown>> | undefined;
     if (m.role === "assistant") {
@@ -1349,10 +1397,11 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments, contextFlow, thinking }) => ({
+  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, systemNotice, toolCalls, segments, contextFlow, thinking }) => ({
     id,
     role,
     content,
+    ...(systemNotice ? { systemNotice: true } : {}),
     toolCalls,
     segments,
     // Strip the (potentially multi-MB) contextFlow from the snapshot. The
@@ -1662,6 +1711,7 @@ export function registerChatRoutes(
         payload: buildBackgroundCommandContinuationPayload({
           sessionId: result.sessionId,
           notification: note,
+          notice: formatBackgroundCommandNotice(result),
           userId: user.id,
           userService,
           sessionState: sessionStateService,
@@ -1708,7 +1758,10 @@ export function registerChatRoutes(
     if (rows.length > 0) {
       sessionHistory.set(sessionId, [
         { role: "system", content: SYSTEM_PROMPT },
-        ...rows.map((r) => {
+        // System-notice rows (background terminal commands) are UI-only gray
+        // lines — skip them when rebuilding LLM history so the short notice is
+        // not injected into the model's context.
+        ...rows.filter((r) => r.role !== "system").map((r) => {
           let uiToolCalls: PersistedToolCall[] | undefined;
           let segments: unknown[] | undefined;
           let contextFlow: LlmContextFlow | undefined;
@@ -1893,6 +1946,12 @@ export function registerChatRoutes(
     const systemNotification = typeof body["_systemNotification"] === "string" && (body["_systemNotification"] as string).trim()
       ? (body["_systemNotification"] as string)
       : undefined;
+    // Internal-only: a short human display line for the system notification
+    // above (e.g. "Background terminal #tty1 finished in ~5s"). Rendered as a
+    // small gray system-notice line in the chat. Set alongside `_systemNotification`.
+    const systemNotice = typeof body["_systemNotice"] === "string" && (body["_systemNotice"] as string).trim()
+      ? (body["_systemNotice"] as string).trim()
+      : undefined;
 
     // Parse file attachments (images / files sent as base64 from the client)
     const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
@@ -2075,7 +2134,11 @@ export function registerChatRoutes(
     // command notification is injected as a hidden system message (never
     // persisted, never shown as a user bubble) so the agent reacts to it.
     if (systemNotification) {
-      history.push({ role: "system", content: systemNotification, synthetic: true });
+      history.push({ role: "system", content: systemNotification, synthetic: true, systemNotice });
+      // Persist the short display line as a system-notice row so the gray line
+      // survives reloads. The full notification (with output) is only kept in
+      // in-memory history for the live turn.
+      if (systemNotice) persistMessage(sessionId, "system", systemNotice);
     } else if (attachments.length > 0) {
       const contentParts: unknown[] = [];
       if (content.trim()) {
@@ -2144,12 +2207,18 @@ export function registerChatRoutes(
     // buildVisibleHistoryMessages emits no assistant bubble.
     getOrCreateAccumulator(sessionId);
     sessionStreamSeq.set(sessionId, 0);
-    if (isQueuedDrainRequest && ws) {
+    // Notify WS clients that an assistant turn began *outside* their own direct
+    // request so they attach to the live stream. This covers both queued-drain
+    // turns and hidden system-notification turns (a background terminal command
+    // finishing). Without this, a client sitting in the session only sees the
+    // injected turn's result once `message.complete` fires — it never streams
+    // live and the chat appears frozen until then.
+    if ((isQueuedDrainRequest || systemNotification) && ws) {
       ws.broadcast(sessionId, {
         type: "message.started" as const,
         sessionId,
         timestamp: new Date().toISOString(),
-        payload: { source: "queued_messages" },
+        payload: { source: systemNotification ? "system_notification" : "queued_messages" },
       });
     }
 
@@ -2427,6 +2496,16 @@ export function registerChatRoutes(
               accumulateToken(sessionId, event.content);
               safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
               emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
+              break;
+            case "thinking":
+              // ACP providers stream reasoning via agent_thought_chunk. Forward it
+              // as a thinking event (matching the native agent-loop) so the web UI
+              // shows the collapsible "Thinking…" block instead of appearing stuck
+              // while the agent reasons. It is also accumulated so reload snapshots
+              // and the persisted message retain the reasoning in order.
+              accumulateThinking(sessionId, event.content);
+              safeWrite(`data: ${JSON.stringify({ type: "thinking", content: event.content })}\n\n`);
+              emitToSubscribers(sessionId, { type: "thinking", content: event.content } as StreamEvent);
               break;
             case "tool.start": {
               // Reset token counter — any subsequent message event for a NEW
@@ -2765,6 +2844,7 @@ export function registerChatRoutes(
 
         // Build persistence JSON
         const accumulatedCliSegments = sessionStreamingState.get(sessionId)?.segments;
+        const cliThinking = sessionStreamingState.get(sessionId)?.thinking;
         const finalCliSegments = accumulatedCliSegments && accumulatedCliSegments.length > 0
           ? [...accumulatedCliSegments]
           : cliSegments;
@@ -2788,6 +2868,7 @@ export function registerChatRoutes(
             content: persistedContent,
             uiToolCalls: persistedToolCalls,
             segments: persistedSegments,
+            thinking: cliThinking || undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
           persistMessage(
@@ -2797,6 +2878,7 @@ export function registerChatRoutes(
             persistedToolCalls ? JSON.stringify(persistedToolCalls) : undefined,
             JSON.stringify(persistedSegments),
             contextFlowJson,
+            cliThinking || undefined,
           );
           assistantTurnPersisted = true;
         } else {
@@ -2805,9 +2887,10 @@ export function registerChatRoutes(
             content: fullContent,
             uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
             segments: finalCliSegments.length > 0 ? finalCliSegments : undefined,
+            thinking: cliThinking || undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
-          persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
+          persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson, cliThinking || undefined);
           assistantTurnPersisted = true;
         }
 

@@ -193,6 +193,7 @@ export function ManagerWorkspace({
           messageIndex={idx}
           messageFromEnd={automationMessages.length - 1 - idx}
           role={msg.role}
+          kind={msg.kind}
           content={msg.content}
           contextFlow={msg.contextFlow}
           toolCalls={msg.toolCalls}

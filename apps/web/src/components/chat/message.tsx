@@ -76,6 +76,8 @@ interface MessageProps {
   messageIndex?: number
   messageFromEnd?: number
   role: 'user' | 'assistant'
+  /** Visible system notice (e.g. a background terminal command finishing) — rendered as a small gray line. */
+  kind?: 'system-notice'
   content: string
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
   steered?: boolean
@@ -438,6 +440,7 @@ function MessageInner({
   messageIndex,
   messageFromEnd,
   role,
+  kind,
   content,
   steered,
   contextFlow,
@@ -991,6 +994,18 @@ function MessageInner({
       })}
     </div>
   ) : null
+
+  // Visible system notices (e.g. a background terminal command finishing) are
+  // rendered as a small right-aligned gray line, not a full message bubble.
+  if (kind === 'system-notice') {
+    return (
+      <div className="flex w-full justify-end px-3 py-1">
+        <span className="select-text text-[11px] leading-relaxed text-muted-foreground/70">
+          {content}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <>

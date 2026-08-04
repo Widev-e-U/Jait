@@ -62,6 +62,7 @@ type EstimateMessageInput = {
   thinking?: unknown
   toolCalls?: unknown
   segments?: unknown
+  kind?: 'system-notice'
 }
 
 /**
@@ -80,6 +81,9 @@ export function estimateMessageHeightFromMessage(
 ): number {
   const text = typeof message?.content === 'string' ? message.content : ''
   const segments = Array.isArray(message?.segments) ? message.segments : undefined
+
+  // Visible system notices render as a single small gray line (~26px).
+  if (message?.kind === 'system-notice') return 26
 
   // Base: visible markdown text. estimateMessageHeight() already includes the
   // container padding, so only add padding below when no text is rendered.

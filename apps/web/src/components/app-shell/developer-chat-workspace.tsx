@@ -381,6 +381,7 @@ export function DeveloperChatWorkspace({
           messageIndex={idx}
           messageFromEnd={messages.length - 1 - idx}
           role={msg.role}
+          kind={msg.kind}
           content={msg.content}
           steered={msg.steered}
           contextFlow={msg.contextFlow}

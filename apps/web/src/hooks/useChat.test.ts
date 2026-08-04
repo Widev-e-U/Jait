@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyResumeSnapshotSeq,
   formatChatHttpError,
   getVisibleChangedFiles,
   shouldFlushStreamTextImmediately,
@@ -140,6 +141,29 @@ describe('shouldProcessResumeStreamEvent', () => {
 
     expect(shouldProcessResumeStreamEvent(seen, 'session-2', { seq: 1 })).toBe(true)
     expect(shouldProcessResumeStreamEvent(seen, 'session-1', {})).toBe(true)
+  })
+})
+
+describe('applyResumeSnapshotSeq', () => {
+  it('resets a stale high baseline so a newer turn\'s lower-seq events are accepted', () => {
+    // The gateway resets its per-session seq counter to 0 when a new turn
+    // (e.g. a hidden background-command notification) starts. The client had
+    // last seen seq 42 from the previous turn.
+    const seen = new Map<string, number>([['session-1', 42]])
+
+    applyResumeSnapshotSeq(seen, 'session-1', 0)
+
+    // The new turn's live events must now pass the dedup gate.
+    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 1 })).toBe(true)
+    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 2 })).toBe(true)
+  })
+
+  it('ignores a non-numeric snapshot seq', () => {
+    const seen = new Map<string, number>([['session-1', 7]])
+
+    applyResumeSnapshotSeq(seen, 'session-1', undefined)
+
+    expect(seen.get('session-1')).toBe(7)
   })
 })
 

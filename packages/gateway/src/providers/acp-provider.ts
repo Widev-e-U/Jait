@@ -954,7 +954,17 @@ export class AcpProvider implements CliProviderAdapter {
           payload: update.entries,
         });
         break;
-      case "agent_thought_chunk":
+      case "agent_thought_chunk": {
+        // Reasoning is streamed as `agent_thought_chunk`. Forward the actual
+        // text so the web UI renders the collapsible "Thinking…" block. Without
+        // this the live stream shows no feedback while the agent reasons, which
+        // makes an in-progress tool card look stuck until the next token/tool.
+        const thinking = getAcpContentText(update.content);
+        if (thinking) {
+          this.emitEvent({ type: "thinking", sessionId, content: thinking });
+        }
+        break;
+      }
       case "user_message_chunk":
       case "available_commands_update":
       case "current_mode_update":
@@ -1186,6 +1196,25 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
 function stringifyToolContent(content: unknown): string {
   if (!Array.isArray(content)) return stringifyUnknown(content);
   return content.map((item) => stringifyToolContentItem(item)).join("\n");
+}
+
+/**
+ * Extract the text payload from an ACP content block (used for
+ * `agent_thought_chunk` reasoning). Handles both a plain `{ type: "text",
+ * text }` block and the wrapped `{ type: "content", content }` form some
+ * agents emit.
+ */
+function getAcpContentText(content: unknown): string {
+  if (!content || typeof content !== "object") return "";
+  const record = content as Record<string, unknown>;
+  const type = record["type"];
+  if (type === "text" && typeof record["text"] === "string") {
+    return record["text"].trim();
+  }
+  if (type === "content" && record["content"]) {
+    return getAcpContentText(record["content"]);
+  }
+  return "";
 }
 
 function readUpdateStatus(update: unknown): string | null {

@@ -63,4 +63,15 @@ describe('estimateMessageHeightFromMessage', () => {
     const height = estimateMessageHeightFromMessage({ content: '' }, WIDTH)
     expect(height).toBeGreaterThanOrEqual(48)
   })
+
+  it('estimates a system-notice as a single small gray line', () => {
+    const height = estimateMessageHeightFromMessage(
+      {
+        content: 'Background terminal #tty1 finished in ~5s (exit 0)',
+        kind: 'system-notice',
+      },
+      WIDTH,
+    )
+    expect(height).toBe(26)
+  })
 })

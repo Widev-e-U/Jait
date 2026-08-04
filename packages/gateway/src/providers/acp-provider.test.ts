@@ -298,6 +298,86 @@ describe("AcpProvider MCP startup events", () => {
   });
 });
 
+describe("AcpProvider thinking forwarding", () => {
+  it("emits a thinking event for agent_thought_chunk text blocks", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "agent_thought_chunk",
+        messageId: "msg-1",
+        content: { type: "text", text: "Let me inspect the request handler" },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "thinking",
+      sessionId: "provider-session-1",
+      content: "Let me inspect the request handler",
+    });
+  });
+
+  it("unwraps nested content blocks from agent_thought_chunk", () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "agent_thought_chunk",
+        content: {
+          type: "content",
+          content: { type: "text", text: "Nested reasoning here" },
+        },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "thinking",
+      sessionId: "provider-session-1",
+      content: "Nested reasoning here",
+    });
+  });
+
+  it("drops non-text agent_thought_chunk content without crashing", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "agent_thought_chunk",
+        content: { type: "image", image: {} },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events.filter((event) => event.type === "thinking")).toHaveLength(0);
+  });
+});
+
 describe("AcpProvider Codex ACP tool payloads", () => {
   it("unwraps Codex code-mode Jait MCP calls", () => {
     const provider = new AcpProvider({

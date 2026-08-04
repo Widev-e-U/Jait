@@ -6,6 +6,8 @@ import type { UserService } from "./users.js";
 export interface BackgroundCommandContinuationPayload {
   sessionId: string;
   _systemNotification: string;
+  /** Short human display line rendered as a gray system notice in the chat. */
+  _systemNotice?: string;
   provider?: Exclude<ProviderId, "jait">;
   runtimeMode?: RuntimeMode;
   model?: string;
@@ -14,6 +16,8 @@ export interface BackgroundCommandContinuationPayload {
 export function buildBackgroundCommandContinuationPayload(options: {
   sessionId: string;
   notification: string;
+  /** Optional short display line for the chat UI. */
+  notice?: string;
   userId: string;
   userService: UserService;
   sessionState?: SessionStateService;
@@ -29,6 +33,7 @@ export function buildBackgroundCommandContinuationPayload(options: {
   return {
     sessionId: options.sessionId,
     _systemNotification: options.notification,
+    ...(options.notice ? { _systemNotice: options.notice } : {}),
     ...(provider !== "jait"
       ? {
           provider,

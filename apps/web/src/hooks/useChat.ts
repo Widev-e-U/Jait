@@ -111,6 +111,30 @@ export function shouldProcessResumeStreamEvent(
   return true
 }
 
+/**
+ * Reset a session's last-seen resume seq baseline from a fresh snapshot.
+ *
+ * Unlike `shouldProcessResumeStreamEvent` (which only ever raises the baseline
+ * to dedup live events), a snapshot must *overwrite* the baseline with the
+ * gateway's current per-session counter. The gateway resets that counter to 0
+ * whenever a NEW turn starts — e.g. a hidden background-command system
+ * notification. If we only ever raised the baseline, a client reconnecting to
+ * that newer turn would keep the previous turn's higher value and mistake every
+ * live event of the new turn for a stale duplicate, dropping them all and
+ * leaving the chat frozen. The gateway gates a fresh connection by
+ * minSeqExclusive = snapshot.seq, so events after this snapshot are always
+ * strictly greater than this baseline.
+ */
+export function applyResumeSnapshotSeq(
+  lastSeqBySession: Map<string, number>,
+  sessionId: string,
+  seq: unknown,
+): void {
+  if (typeof seq === 'number' && Number.isFinite(seq)) {
+    lastSeqBySession.set(sessionId, seq)
+  }
+}
+
 export function shouldOpenResumeStream(params: {
   sessionId: string | null
   activeResumeSessionId: string | null
@@ -245,6 +269,11 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /**
+   * Visible system notice (e.g. a background terminal command finishing) —
+   * rendered as a small gray line where a user message would be.
+   */
+  kind?: 'system-notice'
   /** Local-only user message awaiting confirmation from a server snapshot. */
   optimistic?: boolean
   /** Injected into a running agent turn via steering rather than sent as a normal turn. */
@@ -631,11 +660,14 @@ export function useChat(
       readCachedStartupChat(cacheScope, sessionId),
       sessionLastActiveAt,
     )
+    // Show a skeleton (never cached messages) until the fresh server snapshot
+    // is received, evaluated and merged. Rendering cached messages immediately
+    // caused a stale-then-sudden-update flash once the snapshot arrived.
     setState(prev => ({
       ...prev,
-      messages: preserveExistingMessages ? prev.messages : startupCache?.messages ?? [],
+      messages: preserveExistingMessages ? prev.messages : [],
       isLoading: startupCache?.streaming === true,
-      isLoadingHistory: !startupCache,
+      isLoadingHistory: preserveExistingMessages ? false : true,
       error: null,
       hasMore: startupCache?.hasMore ?? false,
       totalMessages: startupCache?.totalMessages ?? 0,
@@ -652,9 +684,15 @@ export function useChat(
     const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
     let serverSnapshotReceived = false
 
-    void readCachedChatHistory(cacheScope, sessionId).then((stored) => {
+    // Offline/snapshot-failure fallback: only surfaces cached history when the
+    // server snapshot could not be fetched, so it never preempts fresh data and
+    // never causes the cached-then-updated flash.
+    const applyCachedFallback = async () => {
+      if (!isCurrentResumeRun() || serverSnapshotReceived) return
+      const stored = await readCachedChatHistory(cacheScope, sessionId)
+      if (!isCurrentResumeRun() || serverSnapshotReceived) return
       const cached = selectImmediateChatHistory(stored, sessionLastActiveAt)
-      if (!cached || startupCache || serverSnapshotReceived || !isCurrentResumeRun()) return
+      if (!cached || cached.messages.length === 0) return
       setState(prev => ({
         ...prev,
         messages: cached.messages,
@@ -662,7 +700,7 @@ export function useChat(
         hasMore: cached.hasMore,
         totalMessages: cached.totalMessages,
       }))
-    })
+    }
 
     ;(async () => {
       let cancelPendingSubscribeFlush: (() => void) | null = null
@@ -695,7 +733,10 @@ export function useChat(
           return
         }
         if (!res.ok || !isCurrentResumeRun()) {
-          if (isCurrentResumeRun()) setState(prev => ({ ...prev, isLoadingHistory: false }))
+          if (isCurrentResumeRun()) {
+            setState(prev => ({ ...prev, isLoadingHistory: false }))
+            void applyCachedFallback()
+          }
           return
         }
         const reader = res.body?.getReader()
@@ -812,8 +853,9 @@ export function useChat(
                 textPacer.flushNow()
                 const rawMsgs = data.messages as Array<{
                   id: string;
-                  role: 'user' | 'assistant';
+                  role: 'user' | 'assistant' | 'system';
                   content: string;
+                  systemNotice?: boolean;
                   contextFlow?: LlmContextFlow;
                   hasContextFlow?: boolean;
                   hasMemoryProvenance?: boolean;
@@ -836,12 +878,14 @@ export function useChat(
                   }>;
                 }>
                 const snapshotStreaming = data.streaming as boolean
-                if (typeof data.seq === 'number' && Number.isFinite(data.seq)) {
-                  const lastSeq = lastResumeSeqBySessionRef.current.get(sessionId) ?? 0
-                  if (data.seq > lastSeq) lastResumeSeqBySessionRef.current.set(sessionId, data.seq)
-                }
+                applyResumeSnapshotSeq(lastResumeSeqBySessionRef.current, sessionId, data.seq)
                 let msgs: ChatMessage[] = rawMsgs.map(m => {
                   const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
+                  // Visible system notices (e.g. background terminal commands) are
+                  // surfaced as a right-aligned gray line rather than a bubble.
+                  if (m.role === 'system') {
+                    return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
+                  }
                   const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
                   if (m.hasContextFlow) msg.hasContextFlow = true
                   if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
@@ -1128,6 +1172,7 @@ export function useChat(
           // Auto-reconnect after a transient drop so the chat keeps streaming
           // without the user having to reload or switch sessions.
           if (transient) scheduleResumeReconnect()
+          else void applyCachedFallback()
         }
       } finally {
         textPacer?.cancel()

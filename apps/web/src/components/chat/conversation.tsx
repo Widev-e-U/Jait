@@ -380,12 +380,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   return (
     <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
       {loading && !hasContent ? (
-        <div className="flex h-full items-center justify-center">
-          <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background px-4 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span>{loadingLabel}</span>
-          </div>
-        </div>
+        <ConversationPositioningSkeleton label={loadingLabel} />
       ) : (
         <div
           ref={scrollRef}
@@ -399,7 +394,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           {loading && (
             <div className="sticky top-3 z-10 flex justify-center">
               <div className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
-                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-primary/50" />
                 <span>{loadingLabel}</span>
               </div>
             </div>

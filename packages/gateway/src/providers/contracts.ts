@@ -60,6 +60,7 @@ export type ProviderEvent =
   | { type: "turn.started"; sessionId: string }
   | { type: "turn.completed"; sessionId: string }
   | { type: "token"; sessionId: string; content: string }
+  | { type: "thinking"; sessionId: string; content: string }
   | { type: "tool.start"; sessionId: string; tool: string; args: unknown; callId?: string; parentCallId?: string }
   | { type: "tool.output"; sessionId: string; callId: string; content: string }
   | { type: "tool.result"; sessionId: string; tool: string; ok: boolean; message: string; callId?: string; parentCallId?: string; data?: unknown }
