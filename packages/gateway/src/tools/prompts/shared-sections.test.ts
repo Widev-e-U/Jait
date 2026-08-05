@@ -2,14 +2,17 @@ import { describe, expect, it } from "vitest";
 import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, getSwarmModeInstructions } from "./shared-sections.js";
 
 describe("shared prompt sections", () => {
-  it("makes swarm mode recommend and delegate through the agent tool as parallel sub-agents", () => {
+  it("makes swarm mode deploy a task-appropriate team of specialist sub-agents", () => {
     const instructions = getSwarmModeInstructions();
 
     expect(instructions).toContain("agent tool");
     expect(instructions).toContain("concurrently");
     expect(instructions).toContain("independent sub-agents");
     expect(instructions).toContain("allowedTools");
-    expect(instructions).toContain("recommend");
+    expect(instructions).toContain("Research Specialist");
+    expect(instructions).toContain("Testing Specialist");
+    expect(instructions).toContain("Validation Specialist");
+    expect(instructions).toContain("generic lineup");
   });
 
   it("defines explicit memory-save heuristics", () => {

@@ -12,6 +12,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
 import type { ThreadActivity } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
+import { MessageResponse } from '@/components/ai-elements/message'
 
 /** Auto-scroll a container to the bottom when content changes. */
 function useAutoScroll(dep: unknown) {
@@ -1879,18 +1880,17 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   if (!prompt && !allowedTools) return null
 
   // The delegation prompt is, from the sub-agent's perspective, the message it
-  // received — but we keep it inside a bordered panel so it clearly reads as
-  // part of the sub-agent rather than a bare, un-bordered chat bubble.
+  // received — shown collapsed to a single line so it reads as a lightweight
+  // header for the sub-agent, with the full prompt available on hover.
   return (
     <div className="space-y-2 px-3 py-2.5">
       {prompt && (
-        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
-          <div className="border-b border-border/40 bg-muted/40 px-3 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Delegated task
-          </div>
-          <div className="whitespace-pre-wrap break-words px-3 py-2.5 text-xs leading-5 text-foreground/90 [overflow-wrap:anywhere]">
-            {prompt}
-          </div>
+        <div
+          className="truncate rounded-md border border-border/60 bg-muted/25 px-3 py-2 text-xs leading-5 text-foreground/90"
+          title={prompt}
+        >
+          <span className="mr-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
+          {prompt}
         </div>
       )}
       {allowedTools && (
@@ -2006,11 +2006,11 @@ function SubAgentHistoryView({
         </div>
       )}
 
-      {/* Final output — rendered as plain flowing text, like an assistant reply */}
+      {/* Final output — rendered as markdown, like a normal assistant reply */}
       {content && (
         <div className="px-3 py-2.5">
-          <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
-            {content}
+          <div className="max-h-64 overflow-auto">
+            <MessageResponse>{content}</MessageResponse>
           </div>
         </div>
       )}
@@ -2018,8 +2018,8 @@ function SubAgentHistoryView({
       {/* Fallback to message if no content */}
       {!content && message && (
         <div className="px-3 py-2">
-          <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
-            {message}
+          <div className="max-h-64 overflow-auto">
+            <MessageResponse>{message}</MessageResponse>
           </div>
         </div>
       )}
@@ -3234,8 +3234,8 @@ function ToolCallCardInner({
         </div>
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
           <div className="px-3 py-2.5">
-            <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
-              {call.result.message}
+            <div className="max-h-64 overflow-auto">
+              <MessageResponse>{call.result.message}</MessageResponse>
             </div>
           </div>
         )}
