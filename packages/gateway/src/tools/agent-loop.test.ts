@@ -964,10 +964,10 @@ describe("runAgentLoop persistence", () => {
 });
 
 describe("runAgentLoop swarm mode", () => {
-  it("forces a visible thread.control create_many swarm before model synthesis", async () => {
+  it("emits a swarm mode notice without forcing any tool call", async () => {
     const chunks = [
-      'data: {"choices":[{"delta":{"content":"Swarm complete."}}]}\n\n',
-      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+      'data: {"choices":[{"delta":{"content":"No specialists needed for this."}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
       "data: [DONE]\n\n",
     ];
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -979,6 +979,63 @@ describe("runAgentLoop swarm mode", () => {
         },
       }), { status: 200 }),
     );
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Just say hi." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-1",
+        abort: new AbortController(),
+        maxRounds: 1,
+        mode: "swarm",
+        onEvent: (event) => events.push(event),
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(events[0]).toMatchObject({ type: "mode_notice", mode: "swarm" });
+    expect(result.content).toBe("No specialists needed for this.");
+    expect(result.executedToolCalls).toHaveLength(0);
+  });
+
+  it("runs specialist agent.spawn calls the model recommends concurrently", async () => {
+    const responses = [
+      [
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"agent_spawn","arguments":"{\\"prompt\\":\\"Implement the fix\\",\\"description\\":\\"Implementation Specialist\\"}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call-2","type":"function","function":{"name":"agent_spawn","arguments":"{\\"prompt\\":\\"Verify the fix\\",\\"description\\":\\"Verification Specialist\\"}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Swarm complete."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
     const toolCalls: Array<{ name: string; args: unknown }> = [];
     const events: AgentLoopEvent[] = [];
 
@@ -994,45 +1051,35 @@ describe("runAgentLoop swarm mode", () => {
           { role: "system", content: "system" },
           { role: "user", content: "Fix the broken mobile notification UI and verify it." },
         ],
-        toolSchemas: [],
-        hasTools: false,
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "agent_spawn",
+            description: "Spawn a sub-agent",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
         sessionId: "session-1",
         abort: new AbortController(),
-        maxRounds: 1,
+        maxRounds: 2,
         mode: "swarm",
         onEvent: (event) => events.push(event),
       },
       async (name, args) => {
         toolCalls.push({ name, args });
-        return {
-          ok: true,
-          message: "Created 3 thread(s) and waited for 3 to finish.",
-          data: { threads: [{ title: "Implementation" }, { title: "Verification" }, { title: "Review" }] },
-        };
+        return { ok: true, message: "Sub-agent completed", data: { content: "done" } };
       },
     );
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(toolCalls[0]?.name).toBe("thread.control");
-    expect(toolCalls[0]?.args).toMatchObject({
-      action: "create_many",
-      start: true,
-      kind: "delegation",
-      detach: false,
-      autoStopAfterTurn: true,
-    });
-    expect(((toolCalls[0]?.args as Record<string, unknown>).threads as unknown[])).toHaveLength(3);
     expect(events[0]).toMatchObject({ type: "mode_notice", mode: "swarm" });
-    expect(events.some((event) => event.type === "tool_start" && event.tool === "thread.control")).toBe(true);
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls.every((call) => call.name === "agent.spawn")).toBe(true);
     expect(result.content).toBe("Swarm complete.");
-    expect(result.executedToolCalls[0]).toMatchObject({
-      tool: "thread.control",
-      ok: true,
-    });
-    expect(result.segments[0]).toMatchObject({
-      type: "toolGroup",
-      callIds: [result.executedToolCalls[0]!.callId],
-    });
+    expect(result.executedToolCalls).toHaveLength(2);
+    for (const executed of result.executedToolCalls) {
+      expect(executed).toMatchObject({ tool: "agent.spawn", ok: true });
+    }
   });
 });
 

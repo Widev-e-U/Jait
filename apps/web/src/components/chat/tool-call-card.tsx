@@ -1878,10 +1878,15 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   const allowedTools = displayStr(args.allowedTools).trim()
   if (!prompt && !allowedTools) return null
 
+  // Styled like the app's own user-message bubble (rounded-lg bg-muted) — the
+  // delegation prompt is, from the sub-agent's perspective, the message it received.
   return (
-    <div className="border-b border-purple-500/15 bg-background/35 px-3 py-2.5">
-      <div className="text-2xs font-semibold uppercase tracking-wider text-purple-600/80 dark:text-purple-300/80">Mission</div>
-      {prompt && <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-foreground/90">{prompt}</div>}
+    <div className="border-b border-purple-500/15 px-3 py-2.5">
+      {prompt && (
+        <div className="w-fit max-w-full rounded-lg bg-muted px-4 py-3 text-xs leading-5 text-foreground/90 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          {prompt}
+        </div>
+      )}
       {allowedTools && (
         <div className="mt-2 flex flex-wrap gap-1">
           {allowedTools.split(',').map((tool) => tool.trim()).filter(Boolean).map((tool) => (
@@ -1920,6 +1925,26 @@ function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunnin
   )
 }
 
+/** Labels/colors for the FIPA-ACL-inspired communicative act a sub-agent tags its final answer with. */
+const PERFORMATIVE_BADGES: Record<string, { label: string; className: string }> = {
+  propose: { label: 'Proposed options', className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+  refuse: { label: 'Declined', className: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400' },
+  failure: { label: 'Failed', className: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400' },
+  query: { label: 'Needs clarification', className: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+  agree: { label: 'Accepted', className: 'border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400' },
+}
+
+function PerformativeBadge({ performative }: { performative?: string }) {
+  if (!performative) return null
+  const info = PERFORMATIVE_BADGES[performative]
+  if (!info) return null
+  return (
+    <span className={cn('inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 text-2xs font-medium', info.className)}>
+      {info.label}
+    </span>
+  )
+}
+
 function SubAgentHistoryView({
   args,
   data,
@@ -1937,6 +1962,7 @@ function SubAgentHistoryView({
   const content = typeof data.content === 'string' ? data.content.trim() : ''
   const rounds = typeof data.rounds === 'number' ? data.rounds : null
   const durationMs = typeof data.durationMs === 'number' ? data.durationMs : null
+  const performative = typeof data.performative === 'string' ? data.performative : undefined
   const isRunning = status === 'running' || status === 'pending'
 
   const nestedCalls: ToolCallInfo[] = toolCalls.map((tc, i) => ({
@@ -1957,6 +1983,7 @@ function SubAgentHistoryView({
         <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
           <Network className="h-3.5 w-3.5 text-purple-500" />
           <span className="font-medium text-foreground">Sub-agent workspace</span>
+          <PerformativeBadge performative={performative} />
           <span className="ml-auto" />
           {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
           {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
@@ -1978,11 +2005,10 @@ function SubAgentHistoryView({
         </div>
       )}
 
-      {/* Final output */}
+      {/* Final output — rendered as plain flowing text, like an assistant reply, not a boxed card */}
       {content && (
-        <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
-          <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
+        <div className="border-t border-purple-500/15 px-3 py-2.5">
+          <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
             {content}
           </div>
         </div>
@@ -2570,19 +2596,106 @@ function ThreadStatusBadge({ status }: { status: ThreadListStatus }) {
   )
 }
 
-function ThreadListItemActivity({ threadId }: { threadId: string }) {
+type ThreadActivityTimelineEntry =
+  | { kind: 'tool'; key: string; call: ToolCallInfo }
+  | { kind: 'note'; key: string; activity: ThreadActivity }
+
+/**
+ * Pairs tool.start/tool.result(.error) activities by callId into single
+ * ToolCallInfo entries so they can render through the same ToolCallCard
+ * used for top-level and sub-agent tool calls, instead of a flat log line.
+ */
+function buildThreadActivityTimeline(activities: ThreadActivity[]): ThreadActivityTimelineEntry[] {
+  const timeline: ThreadActivityTimelineEntry[] = []
+  const callIndex = new Map<string, number>()
+
+  for (const activity of activities) {
+    const payload = activity.payload && typeof activity.payload === 'object' && !Array.isArray(activity.payload)
+      ? activity.payload as Record<string, unknown>
+      : null
+    const callId = typeof payload?.callId === 'string' ? payload.callId : undefined
+    const tool = typeof payload?.tool === 'string' ? payload.tool : undefined
+    const createdAtMs = new Date(activity.createdAt).getTime()
+
+    if (activity.kind === 'tool.start' && callId && tool) {
+      const call: ToolCallInfo = {
+        callId,
+        tool,
+        args: (payload?.args && typeof payload.args === 'object' && !Array.isArray(payload.args))
+          ? payload.args as Record<string, unknown>
+          : {},
+        status: 'running',
+        startedAt: createdAtMs,
+      }
+      callIndex.set(callId, timeline.length)
+      timeline.push({ kind: 'tool', key: callId, call })
+      continue
+    }
+
+    if ((activity.kind === 'tool.result' || activity.kind === 'tool.error') && callId) {
+      const ok = activity.kind === 'tool.result' && payload?.ok !== false
+      const message = typeof payload?.message === 'string' ? payload.message : activity.summary
+      const idx = callIndex.get(callId)
+      const existing = idx !== undefined ? timeline[idx] : undefined
+      if (idx !== undefined && existing && existing.kind === 'tool') {
+        timeline[idx] = {
+          ...existing,
+          call: {
+            ...existing.call,
+            status: ok ? 'success' : 'error',
+            result: { ok, message, data: payload?.data },
+            completedAt: createdAtMs,
+          },
+        }
+      } else {
+        const call: ToolCallInfo = {
+          callId,
+          tool: tool ?? 'tool',
+          args: {},
+          status: ok ? 'success' : 'error',
+          result: { ok, message, data: payload?.data },
+          startedAt: createdAtMs,
+          completedAt: createdAtMs,
+        }
+        callIndex.set(callId, timeline.length)
+        timeline.push({ kind: 'tool', key: callId, call })
+      }
+      continue
+    }
+
+    timeline.push({ kind: 'note', key: activity.id, activity })
+  }
+
+  return timeline
+}
+
+function ThreadListItemActivity({ threadId, isActive }: { threadId: string; isActive: boolean }) {
   const [activities, setActivities] = useState<ThreadActivity[] | null>(null)
+
   useEffect(() => {
     let cancelled = false
     setActivities(null)
     if (!threadId) return
-    agentsApi.getActivities(threadId, 50).then((acts) => {
-      if (!cancelled) setActivities(acts)
-    }).catch(() => {
-      if (!cancelled) setActivities([])
-    })
-    return () => { cancelled = true }
-  }, [threadId])
+
+    const fetchActivities = () => {
+      agentsApi.getActivities(threadId, 50).then((acts) => {
+        if (!cancelled) setActivities(acts)
+      }).catch(() => {
+        if (!cancelled) setActivities((prev) => prev ?? [])
+      })
+    }
+
+    fetchActivities()
+    if (!isActive) return () => { cancelled = true }
+
+    // Poll while the swarm agent's thread is still running, mirroring the
+    // live-updating activity view a sub-agent tool call gets for free from
+    // its streamed output.
+    const interval = setInterval(fetchActivities, 1500)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [threadId, isActive])
+
+  const timeline = useMemo(() => activities ? buildThreadActivityTimeline(activities) : [], [activities])
 
   if (activities === null) {
     return (
@@ -2593,13 +2706,17 @@ function ThreadListItemActivity({ threadId }: { threadId: string }) {
   }
   if (activities.length === 0) {
     return (
-      <div className="py-1.5 text-2xs text-muted-foreground">No activity yet.</div>
+      <div className="py-1.5 text-2xs text-muted-foreground">
+        {isActive ? 'Starting…' : 'No activity yet.'}
+      </div>
     )
   }
   return (
-    <div className="space-y-1.5 py-1.5">
-      {activities.map((activity) => (
-        <ThreadActivityRow key={activity.id} activity={activity} />
+    <div className="space-y-1 py-1">
+      {timeline.map((entry) => (
+        entry.kind === 'tool'
+          ? <ToolCallCard key={entry.key} call={entry.call} />
+          : <ThreadActivityRow key={entry.key} activity={entry.activity} />
       ))}
     </div>
   )
@@ -2703,7 +2820,7 @@ function ThreadListItemCard({ item }: { item: ThreadListItem }) {
           {isActive && !item.id ? (
             <div className="py-1.5 text-2xs text-muted-foreground">Awaiting thread start…</div>
           ) : item.id ? (
-            <ThreadListItemActivity threadId={item.id} />
+            <ThreadListItemActivity threadId={item.id} isActive={isActive} />
           ) : (
             <div className="py-1.5 text-2xs text-muted-foreground">No live activity available.</div>
           )}

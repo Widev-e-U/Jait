@@ -24,6 +24,7 @@ import {
 } from "./agent-loop.js";
 import { ToolName } from "./tool-names.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { isSuccessfulPerformative, parsePerformative } from "./agent-communication.js";
 
 // ── Input type ───────────────────────────────────────────────────────
 
@@ -74,7 +75,15 @@ function buildSubAgentSystemPrompt(description: string, details?: string): strin
     `- Use your available tools to gather information and complete the task.`,
     `- Be thorough but concise in your final response.`,
     `- When done, provide a clear, structured answer that your parent agent can use.`,
-    `- Do not ask the user questions — work autonomously with the tools you have.`,
+    `- Do not ask the user questions — work autonomously with the tools you have. If you genuinely need something from your parent before you can proceed, use [QUERY] (see below) instead of stalling.`,
+    ``,
+    `Tag your final answer with exactly one of these markers as the very first thing you write, so your parent knows how to treat the result:`,
+    `- [INFORM] — you completed the task; what follows is the result.`,
+    `- [PROPOSE] — you found multiple viable options and want your parent to choose between them.`,
+    `- [REFUSE] — the task is out of scope, ambiguous, or you lack the access to do it; explain why.`,
+    `- [FAILURE] — you attempted the task but could not complete it; explain what went wrong.`,
+    `- [QUERY] — you need clarification or missing information before you can proceed; ask exactly what you need.`,
+    `Default to [INFORM] once you're actually done.`,
   ].join("\n");
 }
 
@@ -304,12 +313,20 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           };
         }
 
+        // ── Interpret the communicative-act tag the sub-agent reported back with ──
+        // [REFUSE]/[FAILURE]/[QUERY] mean the delegated task did NOT complete
+        // successfully, even though the sub-agent loop itself ran fine — the
+        // parent should see that as ok:false instead of a silent success.
+        const { performative, content } = parsePerformative(result.content);
+        const ok = isSuccessfulPerformative(performative);
+
         return {
-          ok: true,
-          message: result.content || "Sub-agent completed with no output",
+          ok,
+          message: content || (ok ? "Sub-agent completed with no output" : `Sub-agent ${performative}: no details given`),
           data: {
             subAgentId,
-            content: result.content,
+            content,
+            performative,
             rounds: result.rounds,
             toolCalls: result.executedToolCalls.map((tc) => ({
               callId: tc.callId,

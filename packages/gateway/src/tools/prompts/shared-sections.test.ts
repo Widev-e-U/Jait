@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, getSwarmModeInstructions } from "./shared-sections.js";
 
 describe("shared prompt sections", () => {
-  it("makes swarm mode use visible thread swarms", () => {
+  it("makes swarm mode recommend and delegate through the agent tool as parallel sub-agents", () => {
     const instructions = getSwarmModeInstructions();
 
-    expect(instructions).toContain("thread.control");
-    expect(instructions).toContain("create_many");
-    expect(instructions).toContain("start: true");
-    expect(instructions).toContain("kind: \"delegation\"");
-    expect(instructions).toContain("UI shows a concrete thread swarm");
+    expect(instructions).toContain("agent tool");
+    expect(instructions).toContain("concurrently");
+    expect(instructions).toContain("independent sub-agents");
+    expect(instructions).toContain("allowedTools");
+    expect(instructions).toContain("recommend");
   });
 
   it("defines explicit memory-save heuristics", () => {
