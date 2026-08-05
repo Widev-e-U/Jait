@@ -16,8 +16,13 @@ import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import { getFs } from "./get-fs.js";
 
-/** Hard cap on lines returned in a single read (matches Copilot's limit). */
-const MAX_LINES_PER_READ = 2000;
+/**
+ * Hard cap on lines returned in a single read. Raised well above Copilot's
+ * 2000-line default — most source files fit comfortably under this, so a
+ * single read returns the whole file instead of forcing needless follow-up
+ * reads for anything moderately large.
+ */
+const MAX_LINES_PER_READ = 6000;
 
 interface ReadInput {
   /** File or directory path (relative to project root, or absolute) */
