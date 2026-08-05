@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.675](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.675) — 2026-08-05
+- feat(gateway + web): task-appropriate swarm specialists + markdown sub-agent output (`9924415c`)
+  - Swarm prompts (live `getSwarmModeInstructions` and legacy `SYSTEM_PROMPT_SWARM`) now deploy a small curated specialist roster — Research, Implementation, Testing, and Validation — tailored to the specific task rather than a fixed full developer team. The coordinator states the chosen lineup and why, then delegates each specialist concurrently via the `agent` tool, sequencing dependent roles (e.g. Implementation first, then Testing + Validation against its output).
+  - Sub-agent and tool results now render as markdown via `MessageResponse` instead of plain pre-wrapped text, with the delegated prompt collapsed to a single hover-revealed line.
+- feat(calendar): month-grid view + copyable OAuth redirect URI (`6ac03a7c`)
+  - Calendar page gains a List/Month view toggle with a navigable month grid (prev/next month, Today) that fetches events scoped to the viewed month.
+  - Settings now surfaces the exact authorized redirect URI with a copy button and a link to the Google Cloud OAuth credentials console; the `config` and `connect` endpoints return the `redirectUri` so the UI can display it.
+
 ## [v0.1.674](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.674) — 2026-08-05
 - feat(web): neutralize sub-agent cards + simplify consent UI (`57de617a`)
   - Removed the purple gradient "workspace" cards from swarm/sub-agent tool-call cards. The delegated prompt now renders inside a neutral bordered "Delegated task" panel (instead of a bare, un-bordered chat bubble) so it reads as contained within the sub-agent; the performative badge (Declined / Failed / Proposed options / etc.) moved up into the compact metadata line next to rounds / tools / duration.
