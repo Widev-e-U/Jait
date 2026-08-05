@@ -1878,17 +1878,23 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   const allowedTools = displayStr(args.allowedTools).trim()
   if (!prompt && !allowedTools) return null
 
-  // Styled like the app's own user-message bubble (rounded-lg bg-muted) — the
-  // delegation prompt is, from the sub-agent's perspective, the message it received.
+  // The delegation prompt is, from the sub-agent's perspective, the message it
+  // received — but we keep it inside a bordered panel so it clearly reads as
+  // part of the sub-agent rather than a bare, un-bordered chat bubble.
   return (
-    <div className="border-b border-purple-500/15 px-3 py-2.5">
+    <div className="space-y-2 px-3 py-2.5">
       {prompt && (
-        <div className="w-fit max-w-full rounded-lg bg-muted px-4 py-3 text-xs leading-5 text-foreground/90 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-          {prompt}
+        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+          <div className="border-b border-border/40 bg-muted/40 px-3 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Delegated task
+          </div>
+          <div className="whitespace-pre-wrap break-words px-3 py-2.5 text-xs leading-5 text-foreground/90 [overflow-wrap:anywhere]">
+            {prompt}
+          </div>
         </div>
       )}
       {allowedTools && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           {allowedTools.split(',').map((tool) => tool.trim()).filter(Boolean).map((tool) => (
             <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
           ))}
@@ -1904,20 +1910,20 @@ function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunnin
   if (!output && !isRunning) return null
 
   return (
-    <div className="border-b border-purple-500/15 px-3 py-2.5">
+    <div className="px-3 py-2.5">
       <div className="mb-2 flex min-w-0 items-center gap-2">
-        {isRunning ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-purple-500" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />}
+        {isRunning ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />}
         <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Activity</span>
         {latest && <span className="truncate text-xs text-foreground" title={latest}>{latest}</span>}
-        {isRunning && <span className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-purple-500" />}
+        {isRunning && <span className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />}
       </div>
       {output ? (
         <pre ref={scrollRef} className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-zinc-950 px-3 py-2 font-mono text-[11px] leading-5 text-zinc-200 shadow-inner">
           {output}
-          {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-purple-300 align-text-bottom" />}
+          {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-zinc-300 align-text-bottom" />}
         </pre>
       ) : (
-        <div className="rounded-md border border-dashed border-purple-500/25 bg-purple-500/[0.025] px-3 py-2 text-xs text-muted-foreground">
+        <div className="rounded-md border border-dashed border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           Preparing the delegated task...
         </div>
       )}
@@ -1978,36 +1984,31 @@ function SubAgentHistoryView({
   }))
 
   return (
-    <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
-      {(isRunning || rounds != null || toolCalls.length > 0 || durationMs != null) && (
-        <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
-          <Network className="h-3.5 w-3.5 text-purple-500" />
-          <span className="font-medium text-foreground">Sub-agent workspace</span>
-          <PerformativeBadge performative={performative} />
-          <span className="ml-auto" />
-          {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
-          {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
-          {durationMs != null && (
-            <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
-          )}
-        </div>
-      )}
+    <div className="text-xs">
+      <div className="flex items-center gap-2 px-3 pt-2.5">
+        <PerformativeBadge performative={performative} />
+        {rounds != null && <span className="text-muted-foreground">{rounds} round{rounds !== 1 ? 's' : ''}</span>}
+        {toolCalls.length > 0 && <span className="text-muted-foreground">{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
+        {durationMs != null && (
+          <span className="text-muted-foreground">{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
+        )}
+      </div>
 
       <SubAgentMission args={args} />
       <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
       {/* Nested tool calls rendered as full ToolCallCards */}
       {nestedCalls.length > 0 && (
-        <div className="border-b border-purple-500/15 bg-background/25 py-1">
+        <div className="py-1">
           {nestedCalls.map((call) => (
             <ToolCallCard key={call.callId} call={call} />
           ))}
         </div>
       )}
 
-      {/* Final output — rendered as plain flowing text, like an assistant reply, not a boxed card */}
+      {/* Final output — rendered as plain flowing text, like an assistant reply */}
       {content && (
-        <div className="border-t border-purple-500/15 px-3 py-2.5">
+        <div className="px-3 py-2.5">
           <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
             {content}
           </div>
@@ -2016,9 +2017,8 @@ function SubAgentHistoryView({
 
       {/* Fallback to message if no content */}
       {!content && message && (
-        <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
-          <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
+        <div className="px-3 py-2">
+          <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
             {message}
           </div>
         </div>
@@ -2842,8 +2842,8 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
   const completedCount = items.filter((item) => item.status === 'completed').length
 
   return (
-    <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b border-purple-500/15 px-3 py-2">
+    <div className="overflow-hidden rounded-lg border border-border/60 bg-card/40 text-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
         <span className="font-medium text-foreground">{items.length} sub-agent{items.length === 1 ? '' : 's'}</span>
         <span className="text-muted-foreground">
           {completedCount}/{items.length} complete
@@ -2855,7 +2855,7 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
         ))}
       </div>
       {resultMessage && (
-        <div className="border-t border-purple-500/15 px-3 py-2 text-2xs text-muted-foreground">
+        <div className="border-t border-border/40 px-3 py-2 text-2xs text-muted-foreground">
           {resultMessage}
         </div>
       )}
@@ -3127,7 +3127,7 @@ function ToolCallCardInner({
           <PendingToolLabel tool={displayTool} args={normalizedArgs} streamingArgs={call.streamingArgs} />
         ) : isAgentToolName(displayTool) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span className="shrink-0 font-semibold text-purple-600 dark:text-purple-400">Sub-agent</span>
+            <span className="shrink-0 font-semibold text-foreground">Sub-agent</span>
             <span className="truncate text-foreground" title={summary}>{summary || (isActive ? 'Working' : 'Completed')}</span>
           </span>
         ) : isTerminal ? (
@@ -3213,18 +3213,13 @@ function ToolCallCardInner({
     <ImageView src={imageDataUri} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
-      <div className="overflow-hidden rounded-lg border border-purple-500/25 bg-gradient-to-br from-purple-500/[0.065] via-card/80 to-card/55 text-xs shadow-sm">
-        <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2 text-muted-foreground">
-          <Network className="h-3.5 w-3.5 text-purple-500" />
-          <span className="font-medium text-foreground">Sub-agent workspace</span>
-          <span className="ml-auto">{childCalls.length} tool{childCalls.length !== 1 ? 's' : ''}</span>
-        </div>
+      <div className="text-xs">
         <SubAgentMission args={normalizedArgs} />
         <SubAgentLiveActivity
           output={call.streamingOutput}
           isRunning={call.status === 'running' || call.status === 'pending'}
         />
-        <div className="border-b border-purple-500/15 bg-background/25 py-1">
+        <div className="py-1">
           {childCalls.map((child) => (
             <ToolCallCard
               key={child.callId}
@@ -3239,8 +3234,7 @@ function ToolCallCardInner({
         </div>
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
           <div className="px-3 py-2.5">
-            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Final response</div>
-            <div className="max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-background/60 px-3 py-2 text-xs leading-5 text-foreground/90">
+            <div className="max-h-52 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs leading-5 text-foreground/90">
               {call.result.message}
             </div>
           </div>

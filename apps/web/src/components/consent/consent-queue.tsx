@@ -1,4 +1,4 @@
-import { ActionCard, useConsentPolicy, useConsentQueue, type ConsentRequestInfo } from './action-card'
+import { ActionCard, useConsentQueue, type ConsentRequestInfo } from './action-card'
 import { ShieldAlert, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
@@ -61,7 +61,6 @@ export interface ConsentQueueProps {
 
 export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled, merged }: ConsentQueueProps) {
   const { queue, approve, reject, approveAllForSession } = useConsentQueue(sessionId)
-  const { policy } = useConsentPolicy()
   const [approvingAll, setApprovingAll] = useState(false)
 
   const visibleQueue = useMemo(
@@ -84,20 +83,12 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
   return (
     <div className={`${merged ? 'px-3.5 py-3 border-t bg-background dark:bg-card' : 'space-y-2'} ${className}`}>
       {/* Queue header */}
-      <div className="flex items-center justify-between gap-3 mb-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div className="flex items-center gap-2 min-w-0">
           <StatusBadge status="awaiting-approval" />
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-foreground">
-              {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
-            </span>
-            {policy && (
-              <span className="text-xs text-muted-foreground truncate">
-                Profile: <span className="font-medium text-foreground">{policy.activeProfileName ?? 'custom'}</span>
-                {' '}• {policy.toolCount} configured tools • unknown tools require dangerous consent
-              </span>
-            )}
-          </div>
+          <span className="text-xs font-medium text-foreground truncate">
+            {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
+          </span>
         </div>
         {sessionId && visibleQueue.length > 0 && (
           <button

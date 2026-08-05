@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Shield, ShieldAlert, ShieldCheck, ShieldX, Clock, Terminal, FileText, Info } from 'lucide-react'
+import { ShieldCheck, ShieldX, Clock, Terminal, FileText, Info } from 'lucide-react'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
 
@@ -214,36 +214,31 @@ export function useConsentPolicy() {
 // ── RiskBadge ────────────────────────────────────────────────────────
 
 function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
-  const colors = {
-    low: 'bg-green-500/10 text-green-600 dark:text-green-400',
-    medium: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-    high: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  const dots = {
+    low: 'bg-emerald-500',
+    medium: 'bg-amber-500',
+    high: 'bg-red-500',
   }
-  const icons = {
-    low: Shield,
-    medium: ShieldAlert,
-    high: ShieldX,
-  }
-  const Icon = icons[risk]
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[risk]}`}>
-      <Icon className="h-3 w-3" />
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground capitalize">
+      <span className={`h-1.5 w-1.5 rounded-full ${dots[risk]}`} />
       {risk}
     </span>
   )
 }
 
 function ConsentLevelBadge({ level }: { level: ConsentRequestInfo['policy']['consentLevel'] }) {
-  const config = {
-    none: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    once: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    always: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    dangerous: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  const dots = {
+    none: 'bg-emerald-500',
+    once: 'bg-blue-500',
+    always: 'bg-amber-500',
+    dangerous: 'bg-red-500',
   }
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config[level]}`}>
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground capitalize">
+      <span className={`h-1.5 w-1.5 rounded-full ${dots[level]}`} />
       {level}
     </span>
   )
@@ -356,27 +351,17 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
 
   if (compact) {
     return (
-      <div className="flex flex-wrap items-start gap-3 px-3 py-2.5 rounded-lg border bg-card">
-        <ToolIcon toolName={request.toolName} />
-        <div className="flex-1 min-w-0 basis-0">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-            <span className="text-xs font-semibold truncate text-foreground">{request.toolName}</span>
-            <RiskBadge risk={request.risk} />
-            <ConsentLevelBadge level={request.policy.consentLevel} />
-          </div>
-          <p className="text-xs text-muted-foreground truncate mt-1 leading-relaxed">{request.summary}</p>
-        </div>
-        <div className="flex flex-col items-start gap-1.5 shrink-0 sm:items-end sm:pl-2">
+      <div className="px-3 py-2.5 rounded-lg border bg-card">
+        <div className="flex items-center gap-2">
+          <ToolIcon toolName={request.toolName} />
+          <span className="flex-1 min-w-0 text-xs font-semibold truncate text-foreground">{request.toolName}</span>
           <TimeRemaining expiresAt={request.expiresAt} />
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleApprove}
-              disabled={deciding}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Approve
-            </button>
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground line-clamp-2">{request.summary}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <RiskBadge risk={request.risk} />
+          <ConsentLevelBadge level={request.policy.consentLevel} />
+          <div className="ml-auto flex items-center gap-1.5">
             <button
               onClick={handleReject}
               disabled={deciding}
@@ -384,6 +369,14 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
             >
               <ShieldX className="h-3.5 w-3.5" />
               Reject
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={deciding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Approve
             </button>
           </div>
         </div>
