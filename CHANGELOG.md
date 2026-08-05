@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.673](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.673) — 2026-08-05
+- feat(gateway + web): agent-to-agent communicative acts + swarm delegation rework (`546188e3`)
+  - Sub-agents now tag their final answer with a FIPA-ACL-inspired performative — `[INFORM]`, `[PROPOSE]`, `[REFUSE]`, `[FAILURE]`, `[QUERY]`, or `[AGREE]` — which the parent parses so a refused/failed/querying sub-agent is treated as `ok:false` (unresolved) instead of a silent success.
+  - Swarm mode reworked: the coordinator now recommends a tailored specialist lineup, then delegates one `agent` tool call per specialist (run concurrently as visible sub-agents) instead of forcing a `thread.control create_many` first call; prompts updated.
+  - Sub-agent cards restyled as a two-line exchange: the delegation prompt renders as a muted chat bubble (matching Jait's own user-message bubble) and the specialist's reply as plain flowing text, with a performative badge (Declined / Failed / Proposed options / etc.) in the card header.
+  - Thread-list activity now pairs `tool.start`/`tool.result` into `ToolCallCard` entries and polls while the swarm thread is active.
+
 ## [v0.1.672](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.672) — 2026-08-05
 - fix(gateway): fall back to ACP tool kind for tool names — community ACP wrappers (pi-acp, cursor-agent-acp, deepagents-acp) often skip `title` on `tool_call` updates, so names fell back to an opaque toolCallId; now prefer `kind` (`execute`/`fetch`/`delete`/etc.) before the ID, and add tool-card meta for the new kinds (`a489c534`)
 - feat(gateway + web): general changelog for the Settings page — `/api/update/changelog` now accepts a `limit` param returning the N most-recent releases (ignoring `from`), so the Settings changelog page shows recent notes even when already on the latest version, with a current/latest badge (`486ca04e`)
