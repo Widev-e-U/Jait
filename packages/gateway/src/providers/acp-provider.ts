@@ -1279,8 +1279,12 @@ function getAcpToolName(update: unknown): string {
   const title = typeof record["title"] === "string" && record["title"].trim()
     ? record["title"]
     : null;
-  if (kind === "execute" && title) return title;
-  return title ?? (typeof record["toolCallId"] === "string" ? record["toolCallId"] : "tool");
+  if (title) return title;
+  // ACP servers that skip `title` (common with third-party wrappers like pi-acp,
+  // cursor-agent-acp, deepagents-acp) still set `kind` — prefer it over the raw
+  // toolCallId, which is an opaque UUID/counter with no naming value.
+  if (kind) return kind;
+  return typeof record["toolCallId"] === "string" ? record["toolCallId"] : "tool";
 }
 
 function getAcpToolArgs(update: unknown): unknown {
