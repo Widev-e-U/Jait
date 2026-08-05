@@ -79,6 +79,34 @@ describe("changelog route", () => {
     await app.close();
   });
 
+  it("returns recent releases with a limit even when already on the latest version", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        { tag_name: "v0.1.666", name: "Jait v0.1.666", published_at: "2026-08-04T10:50:04Z", html_url: "https://github.com/Widev-e-U/Jait/releases/tag/v0.1.666" },
+        { tag_name: "v0.1.665", name: "Jait v0.1.665", published_at: "2026-08-04T08:31:40Z", html_url: "https://github.com/Widev-e-U/Jait/releases/tag/v0.1.665" },
+      ]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        commits: [{ sha: "def456", commit: { message: "fix: refine chat loading skeleton", author: { date: "2026-08-04T09:00:00Z" } } }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        commits: [{ sha: "abc123", commit: { message: "feat: swarm sub-agent cards", author: { date: "2026-08-04T09:00:00Z" } } }],
+      }), { status: 200 })));
+
+    const { app, headers } = await createUpdateServer();
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/update/changelog?from=0.1.666&limit=5",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.releases.map((r: { version: string }) => r.version)).toEqual(["0.1.666", "0.1.665"]);
+    expect(body.releases[0].commits[0].message).toBe("fix: refine chat loading skeleton");
+
+    await app.close();
+  });
+
   it("filters down to a single target release when to is provided", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([

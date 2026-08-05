@@ -91,11 +91,15 @@ async function fetchCommitsBetween(base: string, head: string): Promise<Array<{ 
 }
 
 /**
- * Build per-release patch notes for every release newer than `from` (inclusive
- * of `to` when given). Notes are derived from the commit diff between each
- * release and the one immediately before it.
+ * Build per-release patch notes. Notes are derived from the commit diff between
+ * each release and the one immediately before it.
+ *
+ * By default only releases strictly newer than `from` are returned (the
+ * "what's new" view). When `limit` is given, `from` is ignored and the `limit`
+ * most-recent releases are returned instead, so a general changelog can be
+ * shown even when the running version is already the latest.
  */
-async function buildChangelog(from: string, to?: string): Promise<ReleaseNote[]> {
+async function buildChangelog(from: string, to?: string, limit?: number): Promise<ReleaseNote[]> {
   const releases = await fetchGitHubReleases();
   const semverReleases = releases
     .filter((r) => r.tag_name && /^v?\d+\.\d+\.\d+$/.test((r.tag_name ?? "").replace(/^v/, "")))
@@ -106,8 +110,9 @@ async function buildChangelog(from: string, to?: string): Promise<ReleaseNote[]>
     const release = semverReleases[i];
     if (!release?.tag_name) continue;
     const version = release.tag_name.replace(/^v/, "");
-    if (from && compareVersions(version, from) <= 0) break; // list is newest-first; stop at current
     if (to && compareVersions(version, to) > 0) continue;
+    // Without a limit, stop once we reach the running version (what's new view).
+    if (!limit && from && compareVersions(version, from) <= 0) break;
     const previous = semverReleases[i + 1];
     const previousVersion = previous?.tag_name ? previous.tag_name.replace(/^v/, "") : "";
     let commits: Array<{ message: string; sha: string; date: string }> = [];
@@ -126,6 +131,7 @@ async function buildChangelog(from: string, to?: string): Promise<ReleaseNote[]>
       previousVersion,
       commits,
     });
+    if (limit && notes.length >= limit) break;
   }
   return notes;
 }
@@ -213,11 +219,14 @@ export function registerUpdateRoutes(
   });
 
   /**
-   * Fetch patch notes (per-release commit changelog) for the versions newer than
-   * the running one. Used by the Settings changelog page and the hover tooltip
-   * on the update button.
+   * Fetch patch notes (per-release commit changelog). Without `limit`, only
+   * releases newer than the running version are returned (used by the hover
+   * tooltip on the update button). With `limit`, the most recent `limit`
+   * releases are returned so the Settings changelog page still has content even
+   * when the running version is already the latest.
    *
    *   GET /api/update/changelog?from=0.1.660&to=0.1.666
+   *   GET /api/update/changelog?limit=15
    */
   app.get("/api/update/changelog", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
@@ -226,9 +235,11 @@ export function registerUpdateRoutes(
     const query = (request.query as Record<string, unknown>) ?? {};
     const from = typeof query["from"] === "string" ? query["from"] : "";
     const to = typeof query["to"] === "string" ? query["to"] : "";
+    const rawLimit = typeof query["limit"] === "string" ? query["limit"] : "";
+    const limit = /^\d+$/.test(rawLimit) ? parseInt(rawLimit, 10) : undefined;
 
     try {
-      const releases = await buildChangelog(from, to || undefined);
+      const releases = await buildChangelog(from, to || undefined, limit);
       return { from, to, releases };
     } catch (err) {
       return reply.status(502).send({

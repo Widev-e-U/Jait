@@ -1649,7 +1649,7 @@ export function SettingsPage({
                 What&apos;s new
               </h2>
               <p className="text-sm text-muted-foreground">
-                Release notes for every version since the one you&apos;re running.
+                Release notes and changes for recent versions.
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={onCheckChangelog} disabled={releasesLoading} className="w-fit">
@@ -1669,9 +1669,12 @@ export function SettingsPage({
                 <Card key={release.version} className="space-y-3 p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-semibold">v{release.version}</h3>
-                    <Badge variant={release.version === updateInfo?.latestVersion ? 'default' : 'outline'} className="text-2xs">
-                      {release.version === updateInfo?.latestVersion ? 'latest' : 'new'}
-                    </Badge>
+                    {release.version === updateInfo?.latestVersion && (
+                      <Badge variant="default" className="text-2xs">latest</Badge>
+                    )}
+                    {release.version !== updateInfo?.latestVersion && release.version === updateInfo?.currentVersion && (
+                      <Badge variant="outline" className="text-2xs">current</Badge>
+                    )}
                     {release.url && (
                       <a
                         href={release.url}
@@ -1707,9 +1710,7 @@ export function SettingsPage({
           ) : (
             <Card className="p-5">
               <p className="text-sm text-muted-foreground">
-                {updateInfo
-                  ? <>No newer releases. You&apos;re on the latest version ({updateInfo.currentVersion}).</>
-                  : 'No release notes available. Check for updates first.'}
+                No release notes available{updateInfo ? ` for v${updateInfo.currentVersion}` : ''}. Check for updates or refresh to try again.
               </p>
             </Card>
           )}

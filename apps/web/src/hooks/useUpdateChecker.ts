@@ -13,6 +13,8 @@ export interface UseUpdateCheckerOptions {
   apiUrl: string
 }
 
+const CHANGELOG_LIMIT = 15
+
 /**
  * Owns the self-update flow: checking for an available update, applying it, and
  * detecting the gateway restart that follows (via WebSocket connection events).
@@ -30,13 +32,14 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
   const pendingGatewayRestartVersionRef = useRef<string | null>(null)
   const gatewayRestartSawDisconnectRef = useRef(false)
 
-  /** Fetch per-release patch notes for every version newer than the running one. */
-  const loadChangelog = useCallback(async (fromVersion: string) => {
+  /** Fetch patch notes for the most recent releases (a general changelog, so the
+   *  Settings changelog page has content even when already up to date). */
+  const loadChangelog = useCallback(async () => {
     if (!token) return
     setReleasesLoading(true)
     try {
-      const params = fromVersion ? `?from=${encodeURIComponent(fromVersion)}` : ''
-      const res = await fetch(`${apiUrl}/api/update/changelog${params}`, {
+      const params = new URLSearchParams({ limit: String(CHANGELOG_LIMIT) })
+      const res = await fetch(`${apiUrl}/api/update/changelog?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
@@ -51,8 +54,8 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
   }, [token, apiUrl])
 
   const handleCheckChangelog = useCallback(() => {
-    void loadChangelog(updateInfo?.currentVersion ?? '')
-  }, [loadChangelog, updateInfo?.currentVersion])
+    void loadChangelog()
+  }, [loadChangelog])
 
   const handleCheckUpdate = useCallback(async () => {
     if (!token) return
@@ -83,7 +86,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           latestVersion,
           hasUpdate,
         })
-        void loadChangelog(gatewayVersion || appVersion)
+        void loadChangelog()
       } else if (appPlatform === 'capacitor') {
         let currentVersion = ''
         try {
@@ -102,7 +105,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
           const data = await res.json() as UpdateInfo
           const resolvedCurrent = currentVersion || data.currentVersion
           setUpdateInfo({ ...data, currentVersion: resolvedCurrent })
-          void loadChangelog(resolvedCurrent)
+          void loadChangelog()
         }
       } else {
         const res = await fetch(`${apiUrl}/api/update/check`, {
@@ -111,7 +114,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         if (res.ok) {
           const data = await res.json() as UpdateInfo
           setUpdateInfo(data)
-          void loadChangelog(data.currentVersion)
+          void loadChangelog()
         }
       }
     } catch { /* ignore */ }
