@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, CheckCircle2, Eye, EyeOff, Loader2, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Copy, Eye, EyeOff, ExternalLink, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,12 +14,15 @@ export function CalendarSettings({ token }: { token: string | null }) {
   const [clientSecret, setClientSecret] = useState('')
   const [showSecret, setShowSecret] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [redirectUri, setRedirectUri] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
     if (!token) return
     try {
       const [config, connectedAccounts] = await Promise.all([calendarApi.config(), calendarApi.accounts()])
       setConfigured(config.google)
+      setRedirectUri(config.redirectUri || '')
       setAccounts(connectedAccounts)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to load calendar settings')
@@ -61,7 +64,8 @@ export function CalendarSettings({ token }: { token: string | null }) {
   const connect = useCallback(async () => {
     setBusy(true)
     try {
-      const authUrl = await calendarApi.connectUrl()
+      const { authUrl, redirectUri: nextRedirect } = await calendarApi.connectUrl()
+      if (nextRedirect) setRedirectUri(nextRedirect)
       const popup = window.open(authUrl, 'jait-calendar-oauth', 'width=560,height=720,noopener=false')
       if (!popup) window.location.assign(authUrl)
     } catch (error) {
@@ -70,6 +74,17 @@ export function CalendarSettings({ token }: { token: string | null }) {
       setBusy(false)
     }
   }, [])
+
+  const copyRedirect = useCallback(async () => {
+    if (!redirectUri) return
+    try {
+      await navigator.clipboard.writeText(redirectUri)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast.error('Failed to copy redirect URI')
+    }
+  }, [redirectUri])
 
   const disconnect = useCallback(async (account: CalendarAccount) => {
     setBusy(true)
@@ -131,8 +146,33 @@ export function CalendarSettings({ token }: { token: string | null }) {
         <div>
           <h3 className="text-sm font-medium">OAuth credentials</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Jait automatically reuses Gmail OAuth credentials when present. Only fill this in if Calendar should use a different Google OAuth app. Add <code>/api/calendar/oauth/callback</code> as an authorized redirect URI and enable the Google Calendar API.
+            Jait automatically reuses Gmail OAuth credentials when present. Only fill this in if Calendar should use a different Google OAuth app. Add the authorized redirect URI below and enable the Google Calendar API.
           </p>
+          <div className="rounded-md border bg-muted/40 p-3">
+            <p className="text-xs font-medium">Authorized redirect URI</p>
+            <p className="mt-0.5 break-all text-xs text-muted-foreground">
+              If Google shows &ldquo;redirect_uri not valid&rdquo;, copy the exact URI below into your Google Cloud OAuth client&apos;s <span className="font-medium">Authorized redirect URIs</span>.
+            </p>
+            {redirectUri ? (
+              <div className="mt-2 flex items-center gap-2">
+                <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1.5 text-xs">{redirectUri}</code>
+                <Button size="sm" variant="outline" onClick={() => void copyRedirect()} aria-label="Copy redirect URI">
+                  {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">Sign in to load the redirect URI.</p>
+            )}
+            <a
+              href="https://console.cloud.google.com/apis/credentials"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              Open Google Cloud OAuth credentials <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">

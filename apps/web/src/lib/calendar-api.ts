@@ -49,10 +49,10 @@ async function asJson<T>(response: Response): Promise<T> {
 }
 
 export const calendarApi = {
-  async config(): Promise<{ google: boolean }> {
+  async config(): Promise<{ google: boolean; redirectUri: string }> {
     const response = await apiFetch(`${API_URL}/api/calendar/config`)
-    const data = await asJson<{ providers: { google: boolean } }>(response)
-    return data.providers
+    const data = await asJson<{ providers: { google: boolean }; redirectUri: string }>(response)
+    return { ...data.providers, redirectUri: data.redirectUri }
   },
 
   async saveAppCredentials(clientId: string, clientSecret: string): Promise<void> {
@@ -70,10 +70,10 @@ export const calendarApi = {
     return data.accounts
   },
 
-  async connectUrl(): Promise<string> {
+  async connectUrl(): Promise<{ authUrl: string; redirectUri: string }> {
     const response = await apiFetch(`${API_URL}/api/calendar/connect/google`)
-    const data = await asJson<{ authUrl: string }>(response)
-    return data.authUrl
+    const data = await asJson<{ authUrl: string; redirectUri: string }>(response)
+    return data
   },
 
   async disconnect(accountId: string): Promise<void> {

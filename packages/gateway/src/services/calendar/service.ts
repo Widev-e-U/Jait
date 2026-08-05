@@ -74,7 +74,7 @@ export class CalendarService {
     });
   }
 
-  startConnect(params: { userId: string | null; redirectUri: string }): { authUrl: string } {
+  startConnect(params: { userId: string | null; redirectUri: string }): { authUrl: string; redirectUri: string } {
     const credentials = this.resolveCredentials(params.userId);
     if (!credentials) {
       throw new Error(
@@ -91,6 +91,7 @@ export class CalendarService {
     });
     this.gcPending();
     return {
+      redirectUri: params.redirectUri,
       authUrl: buildCalendarAuthorizeUrl({
         credentials,
         redirectUri: params.redirectUri,

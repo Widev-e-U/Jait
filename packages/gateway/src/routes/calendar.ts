@@ -37,7 +37,7 @@ export function registerCalendarRoutes(
   app.get("/api/calendar/config", async (request, reply) => {
     const user = await auth(request, reply);
     if (!user) return;
-    return { providers: { google: calendar.isConfigured(user.id) } };
+    return { providers: { google: calendar.isConfigured(user.id) }, redirectUri: redirectUri(request) };
   });
 
   app.post("/api/calendar/config/google", async (request, reply) => {
