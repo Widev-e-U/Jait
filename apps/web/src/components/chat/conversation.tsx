@@ -62,25 +62,28 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
     >
       <span className="sr-only">{label}</span>
       <div className="mx-auto flex h-full max-w-4xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
+        {/* Assistant turn — transparent, text-only lines like the real layout. */}
         <div className="flex animate-pulse items-start gap-3">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
-          <div className="w-full max-w-xl space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
-            <div className="h-2.5 w-4/5 rounded-full bg-muted-foreground/15" />
-            <div className="h-2.5 w-3/5 rounded-full bg-muted-foreground/10" />
-            <div className="h-2.5 w-2/5 rounded-full bg-muted-foreground/10" />
+          <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
+          <div className="w-full max-w-xl space-y-2.5 pt-1.5">
+            <div className="h-3 w-4/5 rounded-md bg-muted-foreground/10" />
+            <div className="h-3 w-3/5 rounded-md bg-muted-foreground/10" />
+            <div className="h-3 w-2/5 rounded-md bg-muted-foreground/10" />
           </div>
         </div>
+        {/* User turn — right-aligned primary-tinted bubble matching MessageContent. */}
         <div className="flex animate-pulse justify-end [animation-delay:120ms]">
-          <div className="w-3/5 max-w-md space-y-2 rounded-2xl rounded-tr-md bg-primary/10 p-4">
-            <div className="ml-auto h-2.5 w-5/6 rounded-full bg-primary/15" />
-            <div className="ml-auto h-2.5 w-1/2 rounded-full bg-primary/10" />
+          <div className="w-3/5 max-w-md space-y-2.5 rounded-lg border border-primary/20 bg-primary/[0.08] p-4">
+            <div className="ml-auto h-3 w-5/6 rounded-md bg-primary/15" />
+            <div className="ml-auto h-3 w-1/2 rounded-md bg-primary/15" />
           </div>
         </div>
+        {/* Assistant turn — text-only lines. */}
         <div className="flex animate-pulse items-start gap-3 [animation-delay:240ms]">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15" />
-          <div className="w-4/5 max-w-lg space-y-2 rounded-2xl rounded-tl-md border border-border/40 bg-muted/35 p-4">
-            <div className="h-2.5 w-full rounded-full bg-muted-foreground/15" />
-            <div className="h-2.5 w-2/3 rounded-full bg-muted-foreground/10" />
+          <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
+          <div className="w-4/5 max-w-lg space-y-2.5 pt-1.5">
+            <div className="h-3 w-full rounded-md bg-muted-foreground/10" />
+            <div className="h-3 w-2/3 rounded-md bg-muted-foreground/10" />
           </div>
         </div>
       </div>
