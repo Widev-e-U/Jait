@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.677](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.677) — 2026-08-06
+- fix(gateway): never re-send a queued chat message after a WebSocket drop
+  - When a message was queued server-side but the client delivered it directly via `POST /api/chat` while the WebSocket was down, the end-of-turn drain (or a stale client re-push after reconnect) could re-send it — the "already sent but still queued" duplicate. The direct send now removes the matching queued entry and tracks its id as consumed, so the drain filters re-introductions and the message is sent exactly once.
+
 ## [v0.1.676](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.676) — 2026-08-06
 - feat(gateway + web): CLI provider turns now capture estimated metrics in the LLM context-flow trace
   - Codex / Claude Code / Pi turns previously produced a context-flow with no numbers, so "View LLM context" opened to just round headers. Now, once each turn completes (never during streaming), Jait estimates prompt tokens from the setup messages actually sent and completion tokens from the response + tool calls, derives latency and tokens/sec from real timing, and estimates a context-window breakdown. Metrics are persisted with the message and lazy-loaded on demand.

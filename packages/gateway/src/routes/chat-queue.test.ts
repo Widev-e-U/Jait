@@ -153,6 +153,84 @@ describe("server-side queued chat processing", () => {
     expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
   });
 
+  it("removes a stale queued entry at direct-send time and ignores a later stale re-push (client direct-send during a WS drop)", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-wsdrop-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue WS Drop" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+
+    const readUserMessages = async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = response.json() as { messages: Array<{ role: string; content: string }> };
+      return body.messages.filter((message) => message.role === "user").map((message) => message.content);
+    };
+
+    // Simulate the WS-drop race in its real order: the message was queued
+    // server-side (while WS was up), then the client delivered it directly via
+    // POST because the WS dropped before the server could drain it. The stale
+    // queue entry is still persisted, so the direct send MUST remove it at send
+    // time and track its id — otherwise the end-of-turn drain (and any later
+    // stale re-push) would re-send it ("already sent but still queued").
+    sessionState.set(session.id, {
+      queued_messages: [{ id: "q-ws-drop", content: "sent directly while ws down" }],
+    });
+
+    const sentDirectly = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "sent directly while ws down" },
+    });
+    expect(sentDirectly.statusCode).toBe(200);
+
+    // The direct send removed the matching entry, so the queue is already empty
+    // and the end-of-turn drain had nothing to re-send.
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+    expect(await readUserMessages()).toEqual(["sent directly while ws down"]);
+
+    // A stale client re-push of the SAME id (e.g. after a WS reconnect, before
+    // the client learns the entry was consumed) must not resurrect it: the drain
+    // filters the already-consumed id and clears the ghost entry.
+    sessionState.set(session.id, {
+      queued_messages: [{ id: "q-ws-drop", content: "sent directly while ws down" }],
+    });
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+    expect(await readUserMessages()).toEqual(["sent directly while ws down"]);
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
   it("drains persisted queued_messages without any connected client", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

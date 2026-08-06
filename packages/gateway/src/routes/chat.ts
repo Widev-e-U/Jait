@@ -906,6 +906,8 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
   return queue;
 }
 
+
+
 // ── In-memory state ──────────────────────────────────────────────────
 
 const sessionHistory = new Map<string, ChatMessage[]>();
@@ -913,18 +915,17 @@ const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 const drainingQueuedSessions = new Set<string>();
 
-// ── Drained queued-message id tracking ────────────────────────────────
-// Tracks the ids of queued chat messages that have already been handed to the
-// agent for processing (per session). The server drain pops a message from
-// `queued_messages`, then processes it via an injected /api/chat call. The
-// client also writes `queued_messages` as a full-snapshot UI sync, so a stale
-// client push can re-introduce an entry the drain already popped. Without this
-// guard the drain would send the same message twice — leaving it both in the
-// chat (already sent) and in the queue (the "queued but also already sent"
-// reload bug). Filtering re-introductions out here keeps the drain idempotent.
-// Bounded per session to avoid unbounded growth.
-const drainedQueuedMessageIds = new Map<string, Set<string>>();
-const MAX_TRACKED_DRAINED_IDS = 100;
+// ── Consumed queued-message id tracking ───────────────────────────────
+// Tracks the ids of queued chat messages that have already been consumed —
+// either popped-and-sent by the server drain, or removed at direct-send time
+// (per session). The client also writes `queued_messages` as a full-snapshot UI
+// sync, so a stale client push can re-introduce an entry that was already
+// consumed. Without this guard the drain would send the same message twice —
+// leaving it both in the chat (already sent) and in the queue (the "queued but
+// also already sent" reload bug). Filtering re-introductions out here keeps the
+// drain idempotent. Bounded per session to avoid unbounded growth.
+const consumedQueuedMessageIds = new Map<string, Set<string>>();
+const MAX_TRACKED_CONSUMED_IDS = 100;
 
 /**
  * Live streaming accumulator — holds the current assistant message's partial
@@ -1752,6 +1753,36 @@ export function registerChatRoutes(
     });
   };
 
+  // Remove any queued_messages entry whose content matches `content`, and mark
+  // the removed ids as consumed. Called the instant a message is sent directly
+  // (not via the queue drain), so the invariant "a message being sent is not in
+  // the queue" holds at the source — the end-of-turn drain can then never
+  // re-send a message the client already delivered directly (e.g. during a
+  // WebSocket drop). Tracking the ids here also means a stale client re-push of
+  // the same id (after a WS reconnect) is filtered out by the drain rather than
+  // re-sent.
+  const removeQueuedMessageByContent = (sessionId: string, content: string): void => {
+    if (!sessionStateService) return;
+    const normalized = content.trim();
+    if (!normalized) return;
+    const state = sessionStateService.get(sessionId, ["queued_messages"]);
+    const queue = parseQueuedChatMessages(state["queued_messages"]);
+    if (queue.length === 0) return;
+    const removed = queue.filter((entry) => entry.content.trim() === normalized);
+    const filtered = queue.filter((entry) => entry.content.trim() !== normalized);
+    if (removed.length === 0) return; // nothing matched
+    let tracked = consumedQueuedMessageIds.get(sessionId);
+    if (!tracked) {
+      tracked = new Set();
+      consumedQueuedMessageIds.set(sessionId, tracked);
+    }
+    for (const entry of removed) {
+      if (entry.id) tracked.add(entry.id);
+    }
+    sessionStateService.set(sessionId, { queued_messages: filtered.length > 0 ? filtered : null });
+    broadcastQueuedMessagesState(sessionId, filtered.length > 0 ? filtered : null);
+  };
+
   const drainQueuedChatMessages = async (sessionId: string): Promise<void> => {
     if (!sessionStateService || !sessionService || !userService) return;
     if (!sessionId || drainingQueuedSessions.has(sessionId) || activeStreams.has(sessionId)) return;
@@ -1766,18 +1797,20 @@ export function registerChatRoutes(
         const queue = parseQueuedChatMessages(state["queued_messages"]);
         if (queue.length === 0) return;
 
-        // Drop entries that were already handed to the agent. A stale client
-        // full-snapshot sync can re-introduce a message the drain already
-        // popped (its id is still tracked here), which would otherwise be sent
-        // a second time — the "queued but also already sent" reload bug.
-        let tracked = drainedQueuedMessageIds.get(sessionId);
+        // Drop entries that were already consumed — either drained here or sent
+        // directly (removeQueuedMessageByContent tracks those ids too). A stale
+        // client full-snapshot sync can re-introduce a consumed message (its id
+        // is still tracked here); re-sending it would produce the "queued but
+        // also already sent" reload bug. This is the id-based guarantee that the
+        // same queued message is never sent twice.
+        let tracked = consumedQueuedMessageIds.get(sessionId);
         if (!tracked) {
           tracked = new Set();
-          drainedQueuedMessageIds.set(sessionId, tracked);
+          consumedQueuedMessageIds.set(sessionId, tracked);
         }
         const freshQueue = queue.filter((message) => !message.id || !tracked.has(message.id));
         if (freshQueue.length === 0) {
-          // The persisted queue only held already-drained duplicates — drop
+          // The persisted queue only held already-consumed duplicates — drop
           // them instead of leaving a ghost entry behind on reload.
           sessionStateService.set(sessionId, { queued_messages: null });
           broadcastQueuedMessagesState(sessionId, null);
@@ -1788,7 +1821,7 @@ export function registerChatRoutes(
         if (!nextMessage) return;
         if (nextMessage.id) {
           tracked.add(nextMessage.id);
-          if (tracked.size > MAX_TRACKED_DRAINED_IDS) {
+          if (tracked.size > MAX_TRACKED_CONSUMED_IDS) {
             // Bound memory: forget the single oldest tracked id when over cap.
             const oldest = tracked.values().next().value as string | undefined;
             if (oldest !== undefined && oldest !== nextMessage.id) tracked.delete(oldest);
@@ -2209,6 +2242,16 @@ export function registerChatRoutes(
       reply.raw.write(`data: ${JSON.stringify({ type: "done", session_id: sessionId, prompt_count: null, remaining_prompts: null })}\n\n`);
       reply.raw.end();
       return;
+    }
+
+    // This message is being sent directly now (not a queued-drain, not a system
+    // notification), so it must not also remain in the persisted queue. If a
+    // stale copy is still queued — e.g. the client delivered it directly while
+    // the WebSocket was down but the server still had it queued — remove it
+    // before the turn starts. This is the single invariant that prevents the
+    // end-of-turn drain from re-sending it ("already sent but still queued").
+    if (!isQueuedDrainRequest && !systemNotification) {
+      removeQueuedMessageByContent(sessionId, content);
     }
 
     const userSettings = userService?.getSettings(authUser.id);
