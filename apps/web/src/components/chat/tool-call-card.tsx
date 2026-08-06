@@ -12,7 +12,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
 import type { ThreadActivity } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
-import { MessageResponse } from '@/components/ai-elements/message'
+import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 
 /** Auto-scroll a container to the bottom when content changes. */
 function useAutoScroll<T extends HTMLElement = HTMLPreElement>(dep: unknown) {
@@ -1929,7 +1929,7 @@ function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunnin
       </div>
       {output ? (
         <div ref={scrollRef} className="max-h-44 overflow-auto rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-sm leading-relaxed">
-          <MessageResponse>{output}</MessageResponse>
+          <AssistantMarkdown content={output} isStreaming={isRunning} />
           {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-foreground/50 align-text-bottom" />}
         </div>
       ) : (
@@ -2020,7 +2020,7 @@ function SubAgentHistoryView({
       {content && (
         <div className="px-3 py-2.5">
           <div className="max-h-64 overflow-auto">
-            <MessageResponse>{content}</MessageResponse>
+            <AssistantMarkdown content={content} />
           </div>
         </div>
       )}
@@ -2029,7 +2029,7 @@ function SubAgentHistoryView({
       {!content && message && (
         <div className="px-3 py-2">
           <div className="max-h-64 overflow-auto">
-            <MessageResponse>{message}</MessageResponse>
+            <AssistantMarkdown content={message} />
           </div>
         </div>
       )}
@@ -3245,7 +3245,7 @@ function ToolCallCardInner({
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
           <div className="px-3 py-2.5">
             <div className="max-h-64 overflow-auto">
-              <MessageResponse>{call.result.message}</MessageResponse>
+              <AssistantMarkdown content={call.result.message} />
             </div>
           </div>
         )}
@@ -3497,10 +3497,10 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
 
 /**
  * Swarm specialist block. Renders one spawned sub-agent as a slim, collapsed
- * tool-call row ("Sub-agent" + one-line mission summary with ellipsis and a
- * show-more toggle) with the specialist's *actual* work — its tool calls and
- * final markdown answer — rendered below it at the SAME depth as normal chat,
- * not nested inside an indented card.
+ * tool-call row ("Sub-agent" + one-line mission description, ellipsed, with
+ * an explicit "Show more" toggle on the right) with the specialist's *actual*
+ * work — its tool calls and final markdown answer — rendered below it at the
+ * SAME depth as normal chat, not nested inside an indented card.
  */
 function SwarmSpecialistBlock({
   call,
@@ -3530,6 +3530,11 @@ function SwarmSpecialistBlock({
   const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const Icon = meta.icon
 
+  const missionText = displayStr(normalizedArgs.prompt ?? normalizedArgs.message ?? normalizedArgs.description).trim()
+  const description = summary || missionText || meta.label
+  const canExpandMission = missionText.length > 0 && missionText.length > description.length
+  const allowedTools = displayStr(normalizedArgs.allowedTools).trim().split(',').map((tool) => tool.trim()).filter(Boolean)
+
   // The specialist's own children may themselves contain nested agents
   const { childMap: innerChildMap } = useMemo(() => computeAgentNesting(childCalls ?? []), [childCalls])
 
@@ -3546,14 +3551,18 @@ function SwarmSpecialistBlock({
         <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Sub-agent
         </span>
-        <button
-          type="button"
-          onClick={() => setMissionOpen((o) => !o)}
-          className="min-w-0 flex-1 text-left"
-          title={summary}
-        >
-          <span className="block truncate text-xs text-foreground">{summary || meta.label}</span>
-        </button>
+        <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={description}>
+          {description}
+        </span>
+        {canExpandMission && (
+          <button
+            type="button"
+            onClick={() => setMissionOpen((o) => !o)}
+            className="shrink-0 text-2xs font-medium text-primary hover:underline"
+          >
+            {missionOpen ? 'Show less' : 'Show more'}
+          </button>
+        )}
         {isRunning ? (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
         ) : call.status === 'success' ? (
@@ -3561,13 +3570,23 @@ function SwarmSpecialistBlock({
         ) : call.status === 'error' ? (
           <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
         ) : null}
-        <ChevronRight
-          className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', missionOpen && 'rotate-90')}
-        />
       </div>
 
-      {/* Expanded mission detail (show-more target) */}
-      {missionOpen && <SubAgentMission args={normalizedArgs} />}
+      {/* Expanded mission detail (show-more target) — full text, no re-truncation */}
+      {missionOpen && (missionText || allowedTools.length > 0) && (
+        <div className="space-y-2 px-3 py-2">
+          {missionText && (
+            <div className="whitespace-pre-wrap break-words text-xs leading-5 text-foreground/90">{missionText}</div>
+          )}
+          {allowedTools.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {allowedTools.map((tool) => (
+                <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* The specialist's actual work — rendered as a normal chat at the same depth */}
       <div className="mt-1 space-y-1">
@@ -3592,7 +3611,7 @@ function SwarmSpecialistBlock({
         )}
         {!isRunning && content && (
           <div className="px-0.5 py-1">
-            <MessageResponse>{content}</MessageResponse>
+            <AssistantMarkdown content={content} />
           </div>
         )}
       </div>

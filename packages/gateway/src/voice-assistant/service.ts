@@ -13,7 +13,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import type { VoiceClientMessage, VoiceServerMessage } from "@jait/shared";
-import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps } from "./tools.js";
+import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps, type BackgroundTask, BackgroundTaskManager } from "./tools.js";
 import { VoiceService } from "../voice/service.js";
 
 type RuntimeVoiceClientMessage =
@@ -148,6 +148,20 @@ export class VoiceAssistantService {
       openaiWs.send(JSON.stringify({ type: "response.create" }));
     };
 
+    // ── Background delegation wiring ────────────────────────
+    const backgroundTasks = new BackgroundTaskManager();
+    const onBackgroundTaskComplete = (task: BackgroundTask) => {
+      if (openaiWs.readyState !== WebSocket.OPEN || !openaiReady) return;
+      const summary =
+        task.status === "completed"
+          ? `Background task "${task.title}" finished. Tell the user the result in 1-2 short sentences: ${(task.result ?? "").slice(0, 1500)}`
+          : task.status === "error"
+            ? `Background task "${task.title}" failed. Tell the user it failed and briefly why: ${(task.error ?? "").slice(0, 500)}`
+            : `Background task "${task.title}" was cancelled.`;
+      pendingAnnouncements.push(summary);
+      flushNextAnnouncement();
+    };
+
     // ── OpenAI → Gateway → Browser ───────────────────────────
     openaiWs.on("open", () => {
       openaiReady = true;
@@ -250,6 +264,8 @@ export class VoiceAssistantService {
             actionId: `voice-${Date.now()}`,
             projectContext,
             projectRoot,
+            backgroundTasks,
+            onBackgroundTaskComplete,
           };
           const result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
 
@@ -442,6 +458,11 @@ export class VoiceAssistantService {
     // ── Cleanup ──────────────────────────────────────────────
     clientWs.on("close", () => {
       console.log(`[voice-assistant] ${user.username} disconnected`);
+      const running = backgroundTasks.list().filter((t) => t.status === "running");
+      if (running.length > 0) {
+        console.log(`[voice-assistant] Cancelling ${running.length} running background task(s) on disconnect`);
+      }
+      void backgroundTasks.clear();
       if (openaiWs.readyState === WebSocket.OPEN || openaiWs.readyState === WebSocket.CONNECTING) {
         openaiWs.close(1000, "Client disconnected");
       }
@@ -537,6 +558,8 @@ You have direct access to the Jait system through function calls:
 - get_weather — weather by city
 - get_time_and_date — current time
 - get_system_info — host computer resources
+- list_background_tasks — see what background tasks are running or recently finished
+- cancel_background_task — stop a running background task by id
 - stop_voice — end this voice session (when user says goodbye or asks you to stop)
 
 # Tool Usage Rules
@@ -550,6 +573,8 @@ You have direct access to the Jait system through function calls:
 - When the user asks what something is, how something works, why something happened, what a tool/result means, or asks for a deeper explanation about Jait, code, threads, tools, providers, sessions, errors, or project state, you MUST call ask_agent_about_request before answering.
 - Use ask_agent_about_request whenever the normal agent is likely to know materially more than you do, which is most non-trivial questions.
 - After ask_agent_about_request returns, speak a short natural summary of the answer instead of reading raw structured output.
+- For tasks that may take a while (research, analysis, complex lookups), call ask_agent_about_request with background set to true so you can keep talking and be notified when Jait finishes. Then acknowledge to the user that you've started working on it.
+- When the user asks what's running in the background, call list_background_tasks; to stop one, call cancel_background_task with its id.
 - When the user asks you to code or fix something, use send_to_agent.`;
   }
 }

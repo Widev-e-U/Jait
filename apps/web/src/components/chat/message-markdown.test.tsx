@@ -1,9 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-vi.mock('./prompt-input', () => ({ PromptInput: () => null }))
-
-import { AssistantMarkdown } from './message'
+import { AssistantMarkdown } from './assistant-markdown'
 
 describe('AssistantMarkdown', () => {
   it('keeps streaming assistant content formatted as Markdown', () => {

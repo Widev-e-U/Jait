@@ -19,6 +19,77 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { AppConfig } from "../config.js";
 import { hostname, platform, cpus, totalmem, freemem } from "node:os";
 
+export interface BackgroundTask {
+  id: string;
+  title: string;
+  threadId: string;
+  sessionId?: string;
+  providerId: string;
+  status: "running" | "completed" | "error" | "cancelled";
+  cancelled?: boolean;
+  result?: string;
+  error?: string;
+  startedAt: number;
+}
+
+export class BackgroundTaskManager {
+  private tasks = new Map<string, BackgroundTask>();
+  private cancels = new Map<string, () => Promise<void>>();
+
+  list(): BackgroundTask[] {
+    return [...this.tasks.values()];
+  }
+
+  get(id: string): BackgroundTask | undefined {
+    return this.tasks.get(id);
+  }
+
+  register(task: BackgroundTask, cancelFn?: () => Promise<void>): void {
+    this.tasks.set(task.id, task);
+    if (cancelFn) this.cancels.set(task.id, cancelFn);
+  }
+
+  update(id: string, patch: Partial<BackgroundTask>): void {
+    const existing = this.tasks.get(id);
+    if (!existing) return;
+    Object.assign(existing, patch);
+  }
+
+  remove(id: string): void {
+    this.tasks.delete(id);
+    this.cancels.delete(id);
+  }
+
+  async cancel(id: string): Promise<boolean> {
+    const task = this.tasks.get(id);
+    if (!task || task.status !== "running") return false;
+    task.status = "cancelled";
+    task.cancelled = true;
+    const cancelFn = this.cancels.get(id);
+    if (cancelFn) {
+      try {
+        await cancelFn();
+      } catch {
+        // Best-effort cancel.
+      }
+    }
+    return true;
+  }
+
+  clear(): void {
+    for (const task of this.tasks.values()) {
+      if (task.status === "running") {
+        task.status = "cancelled";
+        task.cancelled = true;
+        const cancelFn = this.cancels.get(task.id);
+        if (cancelFn) void cancelFn().catch(() => {});
+      }
+    }
+    this.tasks.clear();
+    this.cancels.clear();
+  }
+}
+
 export interface VoiceToolDeps {
   config: AppConfig;
   userId?: string;
@@ -42,6 +113,10 @@ export interface VoiceToolDeps {
   projectRoot?: string;
   /** Mutable per-connection holder so `select_project` persists across tool calls. */
   projectContext?: { activeProjectId?: string };
+  /** Per-connection manager for non-blocking background delegations. */
+  backgroundTasks?: BackgroundTaskManager;
+  /** Called when a background task finishes (completed/error/cancelled). */
+  onBackgroundTaskComplete?: (task: BackgroundTask) => void;
 }
 
 /** OpenAI function-calling tool schema */
@@ -425,6 +500,11 @@ const askAgentAboutRequest: VoiceTool = {
           type: "number",
           description: "Optional timeout in milliseconds for waiting on the agent answer. Defaults to 45000.",
         },
+        background: {
+          type: "boolean",
+          description:
+            "Set true to run this in the background and be notified when it finishes, so you can keep talking while Jait works. Use for research, analysis, or any task likely to take a while. Defaults to false.",
+        },
       },
       required: ["question"],
     },
@@ -465,6 +545,7 @@ const askAgentAboutRequest: VoiceTool = {
     });
 
     let sessionId: string | null = null;
+    let backgroundDispatched = false;
     try {
       const session = await provider.startSession({
         threadId: thread.id,
@@ -484,6 +565,24 @@ const askAgentAboutRequest: VoiceTool = {
         content: question,
       });
 
+      // ── Background (non-blocking) delegation ──
+      if (
+        args["background"] === true &&
+        deps.backgroundTasks &&
+        deps.onBackgroundTaskComplete
+      ) {
+        backgroundDispatched = true;
+        return runBackgroundDelegation(
+          deps,
+          provider,
+          providerResolution.providerId,
+          thread,
+          session.id,
+          question,
+          timeoutMs,
+        );
+      }
+
       const answerPromise = waitForDelegatedAgentAnswer(provider, session.id, timeoutMs);
       await provider.sendTurn(session.id, formatAgentQuestion(question));
       const answer = await answerPromise;
@@ -499,17 +598,97 @@ const askAgentAboutRequest: VoiceTool = {
       deps.threadService.markError(thread.id, message);
       return `Agent handoff failed: ${message}`;
     } finally {
-      if (sessionId) {
-        try {
-          await provider.stopSession(sessionId);
-        } catch {
-          // Best effort cleanup for a temporary helper session.
+      // The background path owns its own cleanup (it runs fire-and-forget and
+      // would otherwise be killed by this synchronous finally).
+      if (!backgroundDispatched) {
+        if (sessionId) {
+          try {
+            await provider.stopSession(sessionId);
+          } catch {
+            // Best effort cleanup for a temporary helper session.
+          }
         }
+        deps.threadService.delete(thread.id);
       }
-      deps.threadService.delete(thread.id);
     }
   },
 };
+
+/**
+ * Kick off a delegated agent answer as a fire-and-forget background task.
+ *
+ * Returns immediately with a short acknowledgment string; the actual
+ * delegation runs in an un-awaited IIFE and reports back via
+ * `deps.onBackgroundTaskComplete` when it finishes (or fails). Cleanup of the
+ * temporary thread/session is owned by this background path.
+ */
+async function runBackgroundDelegation(
+  deps: VoiceToolDeps,
+  provider: CliProviderAdapter,
+  providerId: ProviderId,
+  thread: { id: string },
+  sessionId: string,
+  question: string,
+  timeoutMs: number,
+): Promise<string> {
+  const manager = deps.backgroundTasks!;
+  const onBackgroundTaskComplete = deps.onBackgroundTaskComplete!;
+  const threadService = deps.threadService!;
+
+  const task: BackgroundTask = {
+    id: `voice-task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: "Voice: " + question.slice(0, 40),
+    threadId: thread.id,
+    sessionId,
+    providerId,
+    status: "running",
+    startedAt: Date.now(),
+  };
+
+  manager.register(task, async () => {
+    try {
+      await provider.stopSession(sessionId);
+    } catch {
+      // Best-effort cancel.
+    }
+  });
+
+  // Fire-and-forget: do NOT await — return immediately so the voice turn
+  // is not blocked.
+  void (async () => {
+    try {
+      const answerPromise = waitForDelegatedAgentAnswer(provider, sessionId, timeoutMs);
+      await provider.sendTurn(sessionId, formatAgentQuestion(question));
+      const answer = await answerPromise;
+      if (!task.cancelled) {
+        threadService.addActivity(thread.id, "message", answer.slice(0, 500), {
+          role: "assistant",
+          content: answer,
+        });
+        threadService.markCompletedAndClearSession(thread.id);
+        manager.update(task.id, { status: "completed", result: answer });
+        onBackgroundTaskComplete({ ...task, status: "completed", result: answer });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!task.cancelled) {
+        threadService.markError(thread.id, message);
+        manager.update(task.id, { status: "error", error: message });
+        onBackgroundTaskComplete({ ...task, status: "error", error: message });
+      }
+    } finally {
+      try {
+        await provider.stopSession(sessionId);
+      } catch {
+        // Best-effort session cleanup.
+      }
+      threadService.delete(thread.id);
+      setTimeout(() => manager.remove(task.id), 60_000);
+    }
+  })();
+
+  return `Started a background task (${task.id}) for: "${question.slice(0, 120)}". I'll update you when it's done.`;
+}
 
 const sendToThread: VoiceTool = {
   schema: {
@@ -675,6 +854,57 @@ const selectProject: VoiceTool = {
   },
 };
 
+const listBackgroundTasks: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "list_background_tasks",
+    description:
+      "List background tasks that are running or recently finished. Use when the user asks what's running in the background or about ongoing work.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  execute: async (_args, deps) => {
+    if (!deps.backgroundTasks) return "Background tasks not available.";
+    const tasks = deps.backgroundTasks.list();
+    if (tasks.length === 0) return "No background tasks running.";
+    return tasks
+      .map((t) => {
+        const tail = t.status === "completed"
+          ? ` — ${(t.result ?? "").slice(0, 120)}`
+          : t.status === "error"
+            ? ` — error: ${(t.error ?? "").slice(0, 120)}`
+            : "";
+        return `- [${t.status}] ${t.title} (id: ${t.id}, provider: ${t.providerId})${tail}`;
+      })
+      .join("\n");
+  },
+};
+
+const cancelBackgroundTask: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "cancel_background_task",
+    description:
+      "Cancel a running background task by id. Use when the user asks to stop or cancel a background task.",
+    parameters: {
+      type: "object",
+      properties: {
+        taskId: { type: "string", description: "The id of the background task to cancel" },
+      },
+      required: ["taskId"],
+    },
+  },
+  execute: async (args, deps) => {
+    if (!deps.backgroundTasks) return "Background tasks not available.";
+    const taskId = String(args["taskId"] ?? "").trim();
+    const task = deps.backgroundTasks.get(taskId);
+    if (!task) return "No background task with that id.";
+    const cancelled = await deps.backgroundTasks.cancel(taskId);
+    return cancelled
+      ? `Cancelled background task "${task.title}" (${taskId}).`
+      : `Background task "${task.title}" (${taskId}) is not running (status: ${task.status}).`;
+  },
+};
+
 // ── Registry ────────────────────────────────────────────────────
 
 const ALL_TOOLS: VoiceTool[] = [
@@ -693,6 +923,8 @@ const ALL_TOOLS: VoiceTool[] = [
   getWeather,
   stopVoice,
   selectProject,
+  listBackgroundTasks,
+  cancelBackgroundTask,
 ];
 
 const toolMap = new Map<string, VoiceTool>(ALL_TOOLS.map((t) => [t.schema.name, t]));

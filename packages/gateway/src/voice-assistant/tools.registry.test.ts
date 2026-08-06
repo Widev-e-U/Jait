@@ -32,6 +32,8 @@ describe("getVoiceToolSchemas registry merge", () => {
     expect(names).toContain("get_time_and_date");
     expect(names).toContain("select_project");
     expect(names).toContain("stop_voice");
+    expect(names).toContain("list_background_tasks");
+    expect(names).toContain("cancel_background_task");
 
     // Registry tools present (non-external)
     expect(names).toContain("file.read");
@@ -52,6 +54,9 @@ describe("getVoiceToolSchemas registry merge", () => {
     const schemas = getVoiceToolSchemas();
     expect(schemas.length).toBeGreaterThan(0);
     expect(schemas.every((s) => s.type === "function")).toBe(true);
+    const names = schemas.map((s) => s.name);
+    expect(names).toContain("list_background_tasks");
+    expect(names).toContain("cancel_background_task");
   });
 });
 
