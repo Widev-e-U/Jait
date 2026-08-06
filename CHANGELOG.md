@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.685](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.685) — 2026-08-06
+- feat(gateway): real duplicate tool-call loop detection in the agent loop — if the model emits the exact same tool call(s) (same name + args) for `MAX_DUPLICATE_CALL_STREAK` (3) consecutive rounds, the loop now nudges the model to break out (up to `MAX_DUPLICATE_CALL_INTERVENTIONS` (2) times) and, if the nudge is ignored, ends the turn with an explanatory stop message instead of looping forever. This is the actual backstop for the repeated-call failure mode; the previous comments/prompts referenced "loop detectors" that didn't exist.
+- feat(gateway): swarm mode now forces delegation — the coordinator is nudged to hand off work to a specialist once it has made `SWARM_MAX_UNDELEGATED_READS` (6) direct read/search-style calls without ever calling the agent tool, since the orchestration allowlist blocks mutating tools but not reads (so a coordinator could previously stay "compliant" while never delegating).
+
 ## [v0.1.684](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.684) — 2026-08-06
 - feat(gateway): Swarm mode is now hard-enforced — the coordinator is restricted to a fixed set of orchestration tools (read, search, web, todo, jait, agent, agent.spawn, agent.message, thread.control, etc.); any attempt to use an implementation tool (edit, execute, terminal.run, browser.*, cron.add, ...) is blocked at the loop level and returned as an error telling it to delegate to a specialist sub-agent via the `agent` tool instead of merely being instructed to.
 - feat(gateway): Swarm mode picks from named specialist teams (Developer, Research, Content, Security, Ops) instead of one flat roster, and can invent a new named team on the spot when none fit — both the full swarm system prompt and the per-provider mode block now render from a shared `SWARM_TEAMS` registry.

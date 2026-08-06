@@ -1235,7 +1235,23 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
  * full answer instead of a truncated fragment.
  */
 const MAX_LENGTH_CONTINUATIONS = 3;
-
+/**
+ * Max consecutive rounds the model may emit the exact same tool call (name +
+ * args) before we intervene. Nothing upstream stops the model from
+ * re-issuing an already-answered call verbatim — this is the actual
+ * backstop for that failure mode (e.g. a coordinator re-reading the same
+ * file chunk over and over with no new information arriving).
+ */
+const MAX_DUPLICATE_CALL_STREAK = 3;
+/** Max times we nudge a duplicate-call loop before giving up and ending the turn. */
+const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
+/**
+ * Swarm mode only: max direct read/search-style calls the coordinator may
+ * make before it has delegated anything to a specialist, before we force
+ * the issue. Swarm's tool allowlist blocks mutating tools but not reads, so
+ * without this a coordinator can "stay compliant" while never delegating.
+ */
+const SWARM_MAX_UNDELEGATED_READS = 6;
 
 /**
  * Detect if the model emitted a tool call as plain text instead of structured format.
@@ -1706,6 +1722,18 @@ export async function runAgentLoop(
   };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
+  /** Signature of the most recent round's tool call(s), for duplicate-loop detection. */
+  let lastToolCallSignature: string | null = null;
+  /** Consecutive rounds with the exact same tool call signature. */
+  let duplicateCallStreak = 0;
+  /** Times we've nudged the model to break out of a duplicate-call loop. */
+  let duplicateCallInterventions = 0;
+  /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
+  let swarmHasDelegated = false;
+  /** Swarm mode: direct read/search-style tool calls made before any delegation. */
+  let swarmUndelegatedReadCount = 0;
+  /** Swarm mode: has the forced-delegation nudge already been sent? */
+  let swarmDelegationNudged = false;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1962,6 +1990,65 @@ export async function runAgentLoop(
         );
       }
 
+      // ── Duplicate tool-call loop detection ──
+      // If the model emits the exact same tool call(s) — same name(s), same
+      // args — round after round, it's stuck: no new information is arriving
+      // to change its decision, so letting it repeat indefinitely just burns
+      // rounds/context until the provider degenerates into garbage output.
+      // Nudge it to break out; if it ignores the nudge, end the turn rather
+      // than loop forever (there is no round cap by default).
+      {
+        const callSignature = JSON.stringify(
+          toolCalls
+            .map((tc) => ({ name: fromOpenAIName(tc.function.name), args: tc.function.arguments }))
+            .sort((a, b) => (a.name === b.name ? a.args.localeCompare(b.args) : a.name.localeCompare(b.name))),
+        );
+        if (callSignature === lastToolCallSignature) {
+          duplicateCallStreak++;
+        } else {
+          lastToolCallSignature = callSignature;
+          duplicateCallStreak = 0;
+        }
+
+        if (duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK) {
+          const names = [...new Set(toolCalls.map((tc) => fromOpenAIName(tc.function.name)))].join(", ");
+
+          if (duplicateCallInterventions >= MAX_DUPLICATE_CALL_INTERVENTIONS) {
+            log.warn(
+              `Agent loop stuck: identical tool call (${names}) repeated ${duplicateCallStreak}+ rounds in a row, ` +
+                `${duplicateCallInterventions} nudge(s) ignored — ending turn for session ${sessionId}`,
+            );
+            const msg = `\n\n[Stopped: repeated the same tool call (${names}) with no new progress, even after being asked to change approach. Try narrowing or rephrasing the request.]`;
+            if (contentText) history.push({ role: "assistant", content: contentText });
+            history.push({ role: "assistant", content: msg });
+            fullContent += msg;
+            segments.push({ type: "text", content: msg });
+            onEvent?.({ type: "token", content: msg });
+            if (fullContent || segments.length > 0) {
+              onPersist?.(sessionId, "assistant", fullContent, undefined, JSON.stringify(segments), thinkingText || undefined);
+              persisted = true;
+            }
+            return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
+          }
+
+          duplicateCallInterventions++;
+          duplicateCallStreak = 0;
+          log.warn(
+            `Detected repeated identical tool call (${names}) for session ${sessionId} — nudging model to break the loop ` +
+              `(intervention ${duplicateCallInterventions}/${MAX_DUPLICATE_CALL_INTERVENTIONS})`,
+          );
+          onEvent?.({ type: "steering", message: `Detected a repeated tool call (${names}) — redirecting` });
+          if (contentText) history.push({ role: "assistant", content: contentText });
+          history.push({
+            role: "system",
+            content:
+              `You just called the same tool with the exact same arguments again (${names}) — you already have that result from a previous round; repeating it will not give you new information. ` +
+              `Stop repeating this call. Either take a different action to make progress, delegate the work if you can't proceed directly yourself, or give the user a final answer using what you already know.`,
+          });
+          continue;
+        }
+      }
+
       // Push assistant message with tool_calls to history (persist thinking so
       // the model keeps reasoning continuity across tool rounds).
       history.push({
@@ -1971,13 +2058,41 @@ export async function runAgentLoop(
         thinking: thinkingText || undefined,
       });
 
-      // Enqueue all tool calls (pi-style, data-driven: no duplicate-counting —
-      // the loop simply feeds every call the model emits and trusts the model
-      // to decide when to stop; a repeated call with identical args is executed
-      // again rather than refused by a counter).
+      // Enqueue all tool calls (pi-style, data-driven within a round: the loop
+      // feeds every call the model emits in a single round and trusts the
+      // model to decide when to stop *within* that round; repeated calls
+      // *across* rounds are caught by the duplicate-loop detection above).
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
         queue.enqueue(tc, ToolCallPriority.Normal, isParallelSafe(internalName));
+      }
+
+      // ── Swarm mode: force delegation if the coordinator only ever reads ──
+      // The orchestration allowlist blocks mutating tools but not reads, so a
+      // coordinator can stay "compliant" while never calling the agent tool
+      // and just investigating everything itself. Nudge it once it's made
+      // several direct calls with nothing delegated yet.
+      if (mode === "swarm") {
+        if (toolCalls.some((tc) => isAgentSpawnToolName(fromOpenAIName(tc.function.name)))) {
+          swarmHasDelegated = true;
+        }
+        if (!swarmHasDelegated) {
+          swarmUndelegatedReadCount += toolCalls.length;
+          if (swarmUndelegatedReadCount >= SWARM_MAX_UNDELEGATED_READS && !swarmDelegationNudged) {
+            swarmDelegationNudged = true;
+            log.warn(
+              `Swarm coordinator made ${swarmUndelegatedReadCount} direct call(s) without delegating any work — forcing delegation for session ${sessionId}`,
+            );
+            onEvent?.({ type: "steering", message: "Coordinator hasn't delegated yet — prompting it to hand off work to a specialist" });
+            history.push({
+              role: "system",
+              content:
+                `You've made ${swarmUndelegatedReadCount} direct read/search calls in this turn without delegating any work to a specialist. ` +
+                `Swarm mode exists to hand implementation and deep investigation work to a team — reading everything yourself defeats the point. ` +
+                `On your next turn, either delegate the remaining work with the agent tool (name the team/roles you're using), or, if you already have enough context, give the user a final answer now instead of continuing to read.`,
+            });
+          }
+        }
       }
 
       // Track tool calls as a segment group for interleaved rendering

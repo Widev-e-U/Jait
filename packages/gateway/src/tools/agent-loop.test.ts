@@ -1273,6 +1273,93 @@ describe("runAgentLoop swarm mode", () => {
     expect(soloArgs).toHaveLength(1);
     expect(soloArgs[0]!.__swarmRoundId).toBeUndefined();
   });
+
+  it("forces delegation once the coordinator has made several direct reads without ever calling agent", async () => {
+    // The orchestration allowlist lets the coordinator call "read" directly —
+    // only mutating tools are blocked — so a coordinator that only reads and
+    // never delegates stays technically "compliant" while doing none of the
+    // team work Swarm mode promises. Reproduces the real incident where a
+    // coordinator read files repeatedly and never once called agent.spawn.
+    function readChunk(id: string, path: string): string {
+      return `data: ${JSON.stringify({
+        choices: [{ delta: { tool_calls: [{ index: 0, id, type: "function", function: { name: "read", arguments: JSON.stringify({ path }) } }] } }],
+      })}\n\n`;
+    }
+    const finishToolCalls = 'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n';
+    const done = "data: [DONE]\n\n";
+
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      if (fetchCalls <= 7) {
+        const chunks = [readChunk(`call-${fetchCalls}`, `file-${fetchCalls}.ts`), finishToolCalls, done];
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder();
+            for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+            controller.close();
+          },
+        }), { status: 200 });
+      }
+      const chunks = [
+        'data: {"choices":[{"delta":{"content":"Investigation done."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        done,
+      ];
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Investigate playback errors across the codebase." },
+    ];
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [
+          {
+            type: "function",
+            function: { name: "read", description: "Read", parameters: { type: "object", properties: { path: { type: "string" } } } },
+          },
+          {
+            type: "function",
+            function: { name: "agent_spawn", description: "Spawn a sub-agent", parameters: { type: "object", properties: {} } },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-undelegated-reads",
+        abort: new AbortController(),
+        maxRounds: 10,
+        mode: "swarm",
+        onEvent: (event) => events.push(event),
+      },
+      async () => ({ ok: true, message: "read ok" }),
+    );
+
+    expect(result.content).toBe("Investigation done.");
+    // A forced-delegation nudge landed in history once the coordinator crossed
+    // the undelegated-read threshold, and was surfaced as a steering event.
+    expect(
+      history.some((m) => m.role === "system" && /without delegating any work/.test(String(m.content))),
+    ).toBe(true);
+    expect(
+      events.some((e) => e.type === "steering" && /hasn't delegated/.test(e.message ?? "")),
+    ).toBe(true);
+  });
 });
 
 describe("runAgentLoop truncation recovery", () => {
@@ -1740,6 +1827,65 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(callIdx).toBe(ranges.length);
     expect(result.content).toBe("Read the whole file.");
     expect(result.content).not.toMatch(/Stopped/);
+  });
+
+  it("stops a stuck loop that keeps re-issuing the exact same tool call (name + args)", async () => {
+    // Reproduces a real incident: a coordinator re-read the identical
+    // line range of the same file 20 rounds in a row with no new information
+    // arriving, until the underlying model degenerated into garbage output.
+    // Unlike the narrow-read/near-identical tests above, this call is
+    // byte-identical every round — the one signal safe enough to act on.
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      return toolCallSSE("call-stuck", "read", { path: "server.js", startLine: 1600, endLine: 1944 });
+    });
+
+    let executedCount = 0;
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Investigate server.js." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-stuck-loop",
+        abort: new AbortController(),
+        maxRounds: 40, // generous backstop — detection should fire well before this
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => {
+        executedCount++;
+        return { ok: true, message: "read ok" };
+      },
+    );
+
+    // Detection fires (nudged twice, then hard-stops) long before the 40-round backstop.
+    expect(fetchCalls).toBeLessThan(40);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
+    // Only the rounds before each nudge actually executed the duplicate call.
+    expect(executedCount).toBeLessThan(fetchCalls);
+    expect(events.some((e) => e.type === "steering" && /repeated tool call/.test(e.message ?? ""))).toBe(true);
   });
 });
 

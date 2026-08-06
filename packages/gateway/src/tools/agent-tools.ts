@@ -69,9 +69,10 @@ const DEFAULT_SUBAGENT_TOOLS = new Set([
 ]);
 
 // pi-style: no round cap by default — the sub-agent runs until the model
-// decides it's done or a behavioral guard (tool-loop / duplicate / unproductive
-// detection) stops it, matching the main agent loop. A positive maxRounds still
-// acts as a hard backstop.
+// decides it's done or runAgentLoop's duplicate-call detection stops it
+// (identical tool call repeated MAX_DUPLICATE_CALL_STREAK rounds in a row),
+// matching the main agent loop since sub-agents share the same loop. A
+// positive maxRounds still acts as a hard backstop.
 const SUBAGENT_MAX_ROUNDS_DEFAULT = 0;
 
 // ── System prompt for sub-agents ─────────────────────────────────────
