@@ -2256,7 +2256,13 @@ export function registerChatRoutes(
 
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
-    const jaitCoordinatorModel = swarmWorkerProvider ? "" : requestBodyModel;
+    // When the request targets a CLI/ACP provider (Claude Code, Codex, …),
+    // the model alias (e.g. "opus") is consumed by the CLI subprocess, not
+    // by Jait's HTTP backend. Passing it to resolveJaitLlmConfig would trip
+    // the ACP_ONLY_MODEL_ALIASES guard and return an instant HTTP 400 before
+    // the request ever reaches the CLI provider path.
+    const isCliProviderRequest = Boolean(requestProvider && requestProvider !== "jait");
+    const jaitCoordinatorModel = (swarmWorkerProvider || isCliProviderRequest) ? "" : requestBodyModel;
     // Use the user's preferred backend, but fall back to the server-level config
     // when the user still has the initial default ("openai") and the server is
     // configured for a different provider (e.g. ollama-only deployments).

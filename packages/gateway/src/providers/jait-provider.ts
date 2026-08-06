@@ -527,7 +527,7 @@ const JAIT_MODELS: ProviderModelInfo[] = [
 export const OPENROUTER_MODELS: ProviderModelInfo[] = [
   { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Anthropic's latest Sonnet" },
   { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", description: "Fast and capable" },
-  { id: "anthropic/claude-3-opus", name: "Claude 3 Opus", description: "Most powerful Claude" },
+  { id: "anthropic/claude-opus-4", name: "Claude Opus 4", description: "Anthropic's most capable model" },
   { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku", description: "Fast and affordable" },
   { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", description: "Google's latest" },
   { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", description: "Fast Google model" },
