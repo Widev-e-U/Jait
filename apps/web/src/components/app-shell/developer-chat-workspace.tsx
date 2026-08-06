@@ -1,11 +1,14 @@
 import { AlertTriangle, FolderOpen } from 'lucide-react'
-import { useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
+import { ContextIndicator } from '@/components/chat/context-indicator'
+import { GitDiffIndicator } from '@/components/chat/git-diff-indicator'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
+import type { ContextUsage } from '@/hooks/useChat'
 
 interface DeveloperChatWorkspaceProps {
   activeProject: any
@@ -23,6 +26,7 @@ interface DeveloperChatWorkspaceProps {
   chatProviderRuntimeMode: any
   chatResponseStyle: any
   cliModel: string | null
+  contextUsage: ContextUsage | null
   developerChatPanelStyle: CSSProperties
   developerChatSubmitLoading: boolean
   developerChatUiState: { showTodoList: boolean }
@@ -85,6 +89,7 @@ interface DeveloperChatWorkspaceProps {
   onMoveRepoToGateway?: (...args: any[]) => void
   onOpenAddProject: () => void
   onOpenMessagePath: (path: string) => void
+  onOpenSourceControl: () => void
   onOpenTerminalFromToolCall: (...args: any[]) => void
   onApprovalResponse: (requestId: string, approved: boolean) => Promise<void> | void
   onProviderChange: (provider: any) => void
@@ -123,6 +128,7 @@ export function DeveloperChatWorkspace({
   chatProviderRuntimeMode,
   chatResponseStyle,
   cliModel,
+  contextUsage,
   developerChatPanelStyle,
   developerChatSubmitLoading,
   developerChatUiState,
@@ -185,6 +191,7 @@ export function DeveloperChatWorkspace({
   onMoveRepoToGateway,
   onOpenAddProject,
   onOpenMessagePath,
+  onOpenSourceControl,
   onOpenTerminalFromToolCall,
   onApprovalResponse,
   onProviderChange,
@@ -440,6 +447,16 @@ export function DeveloperChatWorkspace({
     }
   }
 
+  const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
+  const gitDiffCounts = useMemo(() => {
+    const items = Array.isArray(changedFiles) ? changedFiles : []
+    return {
+      count: items.length,
+      insertions: items.reduce((sum, f) => sum + (typeof (f as { insertions?: number }).insertions === 'number' ? (f as { insertions: number }).insertions : 0), 0),
+      deletions: items.reduce((sum, f) => sum + (typeof (f as { deletions?: number }).deletions === 'number' ? (f as { deletions: number }).deletions : 0), 0),
+    }
+  }, [changedFiles])
+
   return (
     <div
       ref={setChatPanelElement}
@@ -448,6 +465,22 @@ export function DeveloperChatWorkspace({
     >
       {!chatCollapsed && (
         <>
+          {isProjectChat && (
+            <div className="absolute top-2 left-2 z-10">
+              <GitDiffIndicator
+                count={gitDiffCounts.count}
+                insertions={gitDiffCounts.insertions}
+                deletions={gitDiffCounts.deletions}
+                onOpen={onOpenSourceControl}
+                compact={isMobile}
+              />
+            </div>
+          )}
+          {contextUsage && (
+            <div className="absolute top-2 right-2 z-10">
+              <ContextIndicator usage={contextUsage} compact={isMobile} />
+            </div>
+          )}
           <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
             <Conversation
               key={activeSessionId ?? 'developer-empty'}

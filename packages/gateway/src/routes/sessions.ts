@@ -160,6 +160,13 @@ export function registerSessionRoutes(
     sessionService.update(id, {
       name: typeof body["name"] === "string" ? body["name"] : undefined,
     }, authUser.id);
+    if ("provider" in body || "model" in body || "reasoningEffort" in body) {
+      sessionService.updateChatSelection(id, {
+        provider: typeof body["provider"] === "string" || body["provider"] === null ? body["provider"] as string | null : undefined,
+        model: typeof body["model"] === "string" || body["model"] === null ? body["model"] as string | null : undefined,
+        reasoningEffort: typeof body["reasoningEffort"] === "string" || body["reasoningEffort"] === null ? body["reasoningEffort"] as string | null : undefined,
+      }, authUser.id);
+    }
     const updated = sessionService.getById(id, authUser.id);
     broadcastChatEvent(authUser.id, "updated", { projectId: session.projectId ?? null, session: updated });
     return updated;

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProjectSession } from '@/hooks/useProjects'
+import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 
 interface SessionSwitcherProps {
   sessions: ProjectSession[]
@@ -132,6 +133,7 @@ export function SessionSwitcher({
                           <span className="truncate text-xs font-medium">
                             {session.name || 'Untitled'}
                           </span>
+                          <SessionChatIcon metadata={session.metadata} />
                           {session.status === 'archived' && (
                             <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-2xs text-muted-foreground">
                               <Archive className="h-2.5 w-2.5" />

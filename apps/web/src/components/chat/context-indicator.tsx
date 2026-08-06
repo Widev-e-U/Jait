@@ -15,13 +15,15 @@ import {
 
 interface ContextIndicatorProps {
   usage: ContextUsage | null
+  /** Compact (mobile) sizing so the chat header stays uncluttered. */
+  compact?: boolean
 }
 
 /**
  * Small donut chart showing context window usage with a tooltip
  * breakdown. Clicking opens a detail dialog.
  */
-export function ContextIndicator({ usage }: ContextIndicatorProps) {
+export function ContextIndicator({ usage, compact }: ContextIndicatorProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const pct = usage && usage.limit > 0 ? Math.round(usage.ratio * 100) : 0
 
@@ -38,8 +40,10 @@ export function ContextIndicator({ usage }: ContextIndicatorProps) {
   }, [usage])
 
   // SVG donut arcs
-  const size = 22
-  const strokeWidth = 3
+  const iconSize = compact ? 18 : 22
+  const iconStroke = compact ? 2.5 : 3
+  const size = iconSize
+  const strokeWidth = iconStroke
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 

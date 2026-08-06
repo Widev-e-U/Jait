@@ -278,7 +278,7 @@ function TimeRemaining({ expiresAt }: { expiresAt: string }) {
 
 // ── ToolIcon ─────────────────────────────────────────────────────────
 
-function ToolIcon({ toolName }: { toolName: string }) {
+export function ToolIcon({ toolName }: { toolName: string }) {
   let icon = <Info className="h-3.5 w-3.5" />
   if (toolName.startsWith('terminal.')) icon = <Terminal className="h-3.5 w-3.5" />
   else if (toolName.startsWith('file.')) icon = <FileText className="h-3.5 w-3.5" />

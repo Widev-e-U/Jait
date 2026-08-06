@@ -89,6 +89,70 @@ describe("server-side queued chat processing", () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   });
 
+  it("does not re-send a queued message re-introduced by a stale client push after it was already drained", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-resend-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Re-send" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+
+    const readUserMessages = async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = response.json() as { messages: Array<{ role: string; content: string }> };
+      return body.messages.filter((message) => message.role === "user").map((message) => message.content);
+    };
+
+    // Queue one message and drain it — it should be sent exactly once.
+    sessionState.set(session.id, {
+      queued_messages: [{ id: "q-stale", content: "already drained message" }],
+    });
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+    expect(await readUserMessages()).toEqual(["already drained message"]);
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+
+    // Simulate a stale client full-snapshot push re-introducing the SAME entry
+    // (same id) after the drain already handed it to the agent. The drain must
+    // drop it rather than send it a second time and leave a ghost queue entry.
+    sessionState.set(session.id, {
+      queued_messages: [{ id: "q-stale", content: "already drained message" }],
+    });
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+
+    expect(await readUserMessages()).toEqual(["already drained message"]);
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
   it("drains persisted queued_messages without any connected client", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

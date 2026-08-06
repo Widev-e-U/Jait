@@ -759,4 +759,71 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
     sqlite.close();
   });
+
+  it("captures estimated metrics for external-provider turns and serves them via the context-flow endpoint", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("cli-metrics-chat-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "CLI Metrics Chat" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      providerRegistry,
+      sessionService,
+      userService,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "say ok",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+
+    // Locate the assistant message's visible index, then lazy-load its flow.
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers,
+    });
+    expect(messagesResponse.statusCode).toBe(200);
+    const messages = messagesResponse.json() as { messages: Array<{ role: string; hasContextFlow?: boolean }> };
+    const assistantIndex = messages.messages.findIndex((message) => message.role === "assistant");
+    expect(assistantIndex).toBeGreaterThanOrEqual(0);
+    expect(messages.messages[assistantIndex]?.hasContextFlow).toBe(true);
+
+    const flowResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages/${assistantIndex}/context-flow`,
+      headers,
+    });
+    expect(flowResponse.statusCode).toBe(200);
+    const flow = flowResponse.json() as { contextFlow: { provider: string; rounds: Array<{ metrics?: Record<string, unknown> }> } };
+    expect(flow.contextFlow.provider).toBe("codex");
+    const metrics = flow.contextFlow.rounds[0]?.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(metrics?.promptTokens).toBeGreaterThan(0);
+    expect(metrics?.completionTokens).toBeGreaterThan(0);
+    expect(metrics?.totalTokens).toBeGreaterThan(0);
+    expect(metrics?.tokensPerSecond).toBeGreaterThan(0);
+    expect(metrics?.contextUsage).toMatchObject({ limit: expect.any(Number), ratio: expect.any(Number) });
+
+    await app.close();
+    sqlite.close();
+  });
 });

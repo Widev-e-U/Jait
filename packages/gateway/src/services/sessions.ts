@@ -209,4 +209,33 @@ export class SessionService {
         .run();
     }
   }
+
+  /**
+   * Record which provider/model/reasoning-effort a chat was last used with,
+   * merged into the session's `metadata.chat` field. This lets the chat/project
+   * list render a provider icon per session without subscribing to its
+   * (live, WS-only) session state.
+   */
+  updateChatSelection(
+    id: string,
+    selection: { provider?: string | null; model?: string | null; reasoningEffort?: string | null },
+    userId?: string,
+  ) {
+    const existing = this.getById(id, userId);
+    if (!existing) return;
+    let metadata: Record<string, unknown> = {};
+    if (existing.metadata) {
+      try {
+        metadata = JSON.parse(existing.metadata) as Record<string, unknown>;
+      } catch {
+        metadata = {};
+      }
+    }
+    const chat = { ...(metadata["chat"] as Record<string, unknown> | undefined) };
+    if (selection.provider !== undefined) chat["provider"] = selection.provider;
+    if (selection.model !== undefined) chat["model"] = selection.model;
+    if (selection.reasoningEffort !== undefined) chat["reasoningEffort"] = selection.reasoningEffort;
+    metadata["chat"] = chat;
+    this.update(id, { metadata }, userId);
+  }
 }

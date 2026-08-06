@@ -4,6 +4,31 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.676](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.676) — 2026-08-06
+- feat(gateway + web): CLI provider turns now capture estimated metrics in the LLM context-flow trace
+  - Codex / Claude Code / Pi turns previously produced a context-flow with no numbers, so "View LLM context" opened to just round headers. Now, once each turn completes (never during streaming), Jait estimates prompt tokens from the setup messages actually sent and completion tokens from the response + tool calls, derives latency and tokens/sec from real timing, and estimates a context-window breakdown. Metrics are persisted with the message and lazy-loaded on demand.
+  - CLI turns now also emit a `context_usage` event, so the context-window indicator shows in the chat region for CLI providers too.
+  - Historical flows persisted without metrics are enriched lazily (tokens + context; latency is unavailable retroactively) when the trace dialog is opened — no load-time cost.
+  - The trace dialog renders "—" for latency instead of a misleading "0ms" when no timing data exists.
+- feat(web): git-diff indicator in project chats
+  - A small up/down diff pill (insertions/deletions) now sits in the top-left of a project chat, mirroring the context-window indicator on the top-right. Clicking it opens the project editor with the source-control (Git) tab focused.
+  - The context-window and git indicators shrink on mobile so they don't get in the way.
+- feat(web): move the context-window indicator from the app header into the chat region (top-right)
+- feat(gateway): task-appropriate swarm specialists + sub-agent communicative acts
+  - Swarm mode assembles a small task-specific specialist lineup (Research / Implementation / Testing / Validation) and delegates each concurrently via the `agent` tool, sequencing dependent roles; sub-agent prompts and results render as markdown.
+  - Sub-agents tag final answers with a FIPA-ACL performative (`[INFORM]` / `[PROPOSE]` / `[REFUSE]` / `[FAILURE]` / `[QUERY]` / `[AGREE]`) so a refused/failed/querying sub-agent is treated as unresolved instead of a silent success.
+  - Fail fast with an actionable message when a Claude Code CLI model alias leaks into HTTP-based swarm/sub-agent delegation.
+- feat(gateway + web): per-chat provider/model persistence
+  - Each chat remembers its own last-picked provider/model/reasoning-effort (`chat.provider` UI-state key, persisted onto the session row via `PATCH /api/sessions`), and the session/project list shows a provider icon per chat without subscribing to live session state.
+- feat(web): conversation scroll detachment
+  - Once the user scrolls up away from the bottom, the chat stops following newly streamed content until they scroll back down to the bottom edge.
+- feat(web): consent queue cleanup
+  - Single-row pending-request summary in the merged composer surface and neutral risk/level badges.
+- fix(gateway): reconnect snapshots keep real tool-call elapsed time
+  - Tool-call start times are tracked live so a reload mid-tool-call no longer resets the elapsed-time display to ~0ms even after the tool ran for minutes.
+- fix(gateway): cap read-tool output by bytes
+  - A single read is capped at 50KB in addition to the line cap, so huge files can't silently balloon conversation context.
+
 ## [v0.1.675](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.675) — 2026-08-05
 - feat(gateway + web): task-appropriate swarm specialists + markdown sub-agent output (`9924415c`)
   - Swarm prompts (live `getSwarmModeInstructions` and legacy `SYSTEM_PROMPT_SWARM`) now deploy a small curated specialist roster — Research, Implementation, Testing, and Validation — tailored to the specific task rather than a fixed full developer team. The coordinator states the chosen lineup and why, then delegates each specialist concurrently via the `agent` tool, sequencing dependent roles (e.g. Implementation first, then Testing + Validation against its output).

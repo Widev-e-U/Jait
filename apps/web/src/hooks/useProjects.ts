@@ -756,6 +756,35 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [onLoginRequired, token])
 
+  /**
+   * Record which provider/model/reasoning-effort a chat was last used with.
+   * Pass `undefined` to leave a field untouched, or `null` to clear it.
+   */
+  const updateSessionChatSelection = useCallback(async (
+    sessionId: string,
+    selection: { provider?: string | null; model?: string | null; reasoningEffort?: string | null },
+  ) => {
+    if (!token) return null
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(selection),
+      })
+      if (!response.ok) return null
+      const session = await response.json() as ProjectSession
+      setProjects((prev) => prev.map((project) => ({
+        ...project,
+        sessions: project.sessions.map((entry) => entry.id === sessionId ? { ...entry, metadata: session.metadata } : entry),
+      })))
+      setPersonalSessions((prev) => prev.map((entry) => entry.id === sessionId ? { ...entry, metadata: session.metadata } : entry))
+      return session
+    } catch (err) {
+      console.error('Failed to update session chat selection:', err)
+      return null
+    }
+  }, [token])
+
   const generateSessionTitle = useCallback(async (sessionId: string, prompt: string, model?: string) => {
     if (!token || !prompt.trim()) return null
     try {
@@ -941,6 +970,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     fetchArchivedProjects,
     restoreProject,
     renameSession,
+    updateSessionChatSelection,
     generateSessionTitle,
     showMoreProjects,
     showFewerProjects,

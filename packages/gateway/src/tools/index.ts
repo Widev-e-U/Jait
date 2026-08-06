@@ -560,6 +560,11 @@ export function createToolRegistry(
         }
         return llm;
       },
+      // Lets sub-agents route through an ACP CLI provider (Claude Code,
+      // Codex, ...) when the delegating context picked one as its chat
+      // provider, instead of always falling through to the HTTP LLM path.
+      providerRegistry: deps.providerRegistry,
+      gatewayAddress: { host: deps.config.host, port: deps.config.port },
     };
     // Core: simplified "agent" tool
     tools.register(createAgentTool(agentDeps));

@@ -116,6 +116,20 @@ export function normalizeOpenRouterModelId(model: string): string {
   return OPENROUTER_MODEL_ALIASES[trimmed] ?? trimmed;
 }
 
+/**
+ * Bare Claude Code CLI model aliases (see CLAUDE_CODE_FALLBACK_MODELS in
+ * acp-provider.ts). These only resolve inside the Claude Code ACP subprocess
+ * — they are not real model ids for any HTTP /chat/completions backend
+ * (OpenAI-compatible, Ollama, OpenRouter). If one of these leaks through to
+ * resolveJaitLlmConfig — e.g. a swarm specialist inheriting the parent
+ * session's ACP model name while sub-agent delegation only supports HTTP
+ * backends — sending it straight to Ollama/OpenAI/OpenRouter 404s with a
+ * cryptic "model not found" deep inside the LLM call, after which the
+ * sub-agent (and often the whole swarm turn) silently produces nothing.
+ * Fail fast with an actionable message instead.
+ */
+const ACP_ONLY_MODEL_ALIASES = new Set(["default", "fable", "sonnet", "opus", "haiku", "opusplan"]);
+
 export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJaitLlmConfig {
   const apiKeys = options.apiKeys ?? {};
   const configuredBaseUrl = apiKeys["OPENAI_BASE_URL"]?.trim() || options.config.openaiBaseUrl;
@@ -123,6 +137,12 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
   const requestedModel = options.requestedModel?.trim()
     || apiKeys["OPENAI_MODEL"]?.trim()
     || options.config.openaiModel;
+
+  if (ACP_ONLY_MODEL_ALIASES.has(requestedModel.toLowerCase())) {
+    throw new JaitConfigError(
+      `Model "${requestedModel}" is a Claude Code CLI alias and only resolves inside the Claude Code app — it can't be used for sub-agent/swarm delegation, which calls models over HTTP. Pick a concrete API model (not a CLI provider) for swarm work, or run this task without swarm mode.`,
+    );
+  }
 
   // ── Ollama backend ───────────────────────────────────────────────
   if (backend === "ollama") {

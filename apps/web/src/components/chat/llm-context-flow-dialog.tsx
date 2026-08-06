@@ -178,6 +178,7 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
   if (!hasMetrics) return null
 
   let totalDuration = 0
+  let hasDurationData = false
   let totalPromptTokens = 0
   let totalCompletionTokens = 0
   let totalTokens = 0
@@ -188,7 +189,10 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
   for (const r of rounds) {
     const m = r.metrics
     if (!m) continue
-    totalDuration += m.durationMs
+    if (m.durationMs > 0) {
+      totalDuration += m.durationMs
+      hasDurationData = true
+    }
     if (m.promptTokens) totalPromptTokens += m.promptTokens
     if (m.completionTokens) totalCompletionTokens += m.completionTokens
     if (m.totalTokens) totalTokens += m.totalTokens
@@ -208,8 +212,8 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
           <Clock className="h-3 w-3" />
           Total Duration
         </div>
-        <div className="mt-0.5 text-sm font-semibold text-foreground">{formatDuration(totalDuration)}</div>
-        <div className="text-xs text-muted-foreground">{rounds.length} round{rounds.length !== 1 ? 's' : ''}</div>
+        <div className="mt-0.5 text-sm font-semibold text-foreground">{hasDurationData ? formatDuration(totalDuration) : '—'}</div>
+        <div className="text-xs text-muted-foreground">{hasDurationData ? `${rounds.length} round${rounds.length !== 1 ? 's' : ''}` : 'no latency data'}</div>
       </div>
       <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -264,7 +268,7 @@ function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
   if (!metrics) return null
   return (
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span title="LLM request duration">{formatDuration(metrics.durationMs)}</span>
+      <span title="LLM request duration">{metrics.durationMs > 0 ? formatDuration(metrics.durationMs) : '—'}</span>
       {metrics.promptTokens != null && <span title="Prompt tokens">{formatNumber(metrics.promptTokens)} prompt</span>}
       {metrics.completionTokens != null && <span title="Completion tokens">{formatNumber(metrics.completionTokens)} completion</span>}
       {metrics.tokensPerSecond != null && (

@@ -25,6 +25,8 @@ import {
 import { ToolName } from "./tool-names.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { isSuccessfulPerformative, parsePerformative } from "./agent-communication.js";
+import { runAcpSpecialistTurn } from "./agent-acp-runner.js";
+import type { ProviderRegistry } from "../providers/registry.js";
 
 // ── Input type ───────────────────────────────────────────────────────
 
@@ -94,10 +96,18 @@ export interface AgentSpawnDeps {
   audit?: AuditWriter;
   /** LLM config resolver — gets config per request (supports per-user API keys) */
   getLLMConfig: (context: ToolContext) => LLMConfig;
+  /**
+   * When the delegating context carries a non-"jait" providerId (the user
+   * picked a CLI/ACP provider like Claude Code or Codex as their chat
+   * provider), sub-agents route through this instead of getLLMConfig — Jait's
+   * HTTP LLM path has no way to reach an ACP provider's model aliases.
+   */
+  providerRegistry?: ProviderRegistry;
+  gatewayAddress?: { host: string; port: number };
 }
 
 export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<AgentSpawnInput> {
-  const { toolRegistry, audit, getLLMConfig } = deps;
+  const { toolRegistry, audit, getLLMConfig, providerRegistry, gatewayAddress } = deps;
 
   return {
     name: ToolName.AgentSpawn,
@@ -142,6 +152,85 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
     async execute(input, context): Promise<ToolResult> {
       const subAgentId = uuidv7();
       const startedAt = Date.now();
+
+      // ── ACP provider path ──
+      // The delegating context picked a CLI/ACP provider (Claude Code, Codex,
+      // ...) as its chat provider rather than Jait's own HTTP backend.
+      // resolveJaitLlmConfig can only reach OpenAI-compatible/Ollama/OpenRouter
+      // endpoints — sending it the ACP provider's bare model alias (e.g.
+      // "opus") would hit the wrong backend and 404. Route the specialist
+      // through the actual provider instead.
+      if (context.providerId && context.providerId !== "jait") {
+        if (!providerRegistry || !gatewayAddress || !context.userId) {
+          return {
+            ok: false,
+            message: `Sub-agent delegation isn't available for provider "${context.providerId}" in this context (missing provider registry, gateway address, or user).`,
+          };
+        }
+
+        audit?.write({
+          sessionId: context.sessionId,
+          actionId: subAgentId,
+          actionType: "subagent.start",
+          toolName: ToolName.AgentSpawn,
+          inputs: {
+            prompt: input.prompt,
+            description: input.description,
+            provider: context.providerId,
+          },
+          status: "executing",
+          parentActionId: context.actionId,
+        });
+
+        const acpPrompt = [
+          buildSubAgentSystemPrompt(input.description, input.details),
+          "",
+          "── Delegated task ──",
+          input.prompt,
+        ].join("\n");
+
+        const acpResult = await runAcpSpecialistTurn({
+          providerRegistry,
+          config: gatewayAddress,
+          providerId: context.providerId,
+          userId: context.userId,
+          sessionId: context.sessionId,
+          subAgentId,
+          projectRoot: context.projectRoot,
+          runtimeMode: context.runtimeMode,
+          model: context.model,
+          prompt: acpPrompt,
+          abortSignal: context.signal,
+        });
+
+        const durationMs = Date.now() - startedAt;
+        audit?.write({
+          sessionId: context.sessionId,
+          actionId: uuidv7(),
+          actionType: "subagent.complete",
+          toolName: ToolName.AgentSpawn,
+          inputs: { subAgentId },
+          outputs: { content: acpResult.message.slice(0, 2000), durationMs, provider: context.providerId },
+          status: acpResult.ok ? "completed" : "failed",
+          parentActionId: context.actionId,
+        });
+
+        if (!acpResult.ok) {
+          return {
+            ok: false,
+            message: acpResult.message,
+            data: { subAgentId, provider: context.providerId, durationMs },
+          };
+        }
+
+        const { performative, content } = parsePerformative(acpResult.message);
+        const ok = isSuccessfulPerformative(performative);
+        return {
+          ok,
+          message: content || (ok ? "Sub-agent completed with no output" : `Sub-agent ${performative}: no details given`),
+          data: { subAgentId, provider: context.providerId, performative, durationMs },
+        };
+      }
 
       // ── Resolve allowed tools ──
       let allowedTools: Set<string>;

@@ -1,6 +1,5 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { providerTypeFromId } from '@jait/shared'
 import {
   ArrowUpCircle,
   Brain,
@@ -23,10 +22,9 @@ import {
 import { toast } from 'sonner'
 
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
-import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
-import { ModelIcon, formatModelDisplayLabel, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
+import { JaitIcon } from '@/components/icons/model-icons'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -47,10 +45,7 @@ interface AppHeaderProps {
   activeManagerThreads: any
   appPlatform: any
   automation: any
-  chatProvider: any
-  cliModel: any
   closeScreenSharePanel: any
-  contextUsage: any
   currentView: any
   desktopPlatform: any
   handleApplyUpdate: any
@@ -60,10 +55,8 @@ interface AppHeaderProps {
   isElectron: any
   isMaximized: any
   isMobile: any
-  model: any
   onOpenMobileNav: any
   openScreenSharePanel: any
-  provider: any
   remainingPrompts: any
   screenShare: any
   setCurrentView: any
@@ -92,10 +85,7 @@ export function AppHeader(props: AppHeaderProps) {
     activeManagerThreads,
     appPlatform,
     automation,
-    chatProvider,
-    cliModel,
     closeScreenSharePanel,
-    contextUsage,
     currentView,
     desktopPlatform,
     handleApplyUpdate,
@@ -105,10 +95,8 @@ export function AppHeader(props: AppHeaderProps) {
     isElectron,
     isMaximized,
     isMobile,
-    model,
     onOpenMobileNav,
     openScreenSharePanel,
-    provider,
     remainingPrompts,
     screenShare,
     setCurrentView,
@@ -280,31 +268,6 @@ export function AppHeader(props: AppHeaderProps) {
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
             )}
-            <ContextIndicator usage={contextUsage} />
-            {(() => {
-              const effectiveModel = cliModel ?? model
-              const chatProviderType = providerTypeFromId(chatProvider)
-              const displayProvider = chatProviderType === 'codex' ? 'openai'
-                : chatProviderType === 'claude-code' ? 'anthropic'
-                : provider ?? 'ollama'
-              const displayModel = chatProviderType === 'codex' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Codex')
-                : chatProviderType === 'claude-code' ? (cliModel ? formatModelDisplayLabel(cliModel) : 'Claude Code')
-                : effectiveModel ? getModelDisplayName(effectiveModel) : null
-              const tooltipText = chatProviderType === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
-                : chatProviderType === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
-                : effectiveModel ?? ''
-              return displayModel ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="ui-pill cursor-default sm:mr-2">
-                      <ModelIcon provider={displayProvider} model={chatProviderType === 'codex' ? 'codex' : chatProviderType === 'claude-code' ? 'claude-3' : effectiveModel ?? undefined} size={16} />
-                      <span className="text-xs text-muted-foreground hidden sm:inline">{displayModel}</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{tooltipText}</TooltipContent>
-                </Tooltip>
-              ) : null
-            })()}
             {remainingPrompts !== null && remainingPrompts <= 5 && (
               <span className="text-xs text-muted-foreground mr-1 sm:mr-2 hidden sm:inline">{remainingPrompts} remaining</span>
             )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeOpenRouterModelId, resolveJaitLlmConfig } from "./jait-llm.js";
+import { JaitConfigError, normalizeOpenRouterModelId, resolveJaitLlmConfig } from "./jait-llm.js";
 
 const config = {
   port: 0,
@@ -51,5 +51,29 @@ describe("resolveJaitLlmConfig", () => {
     expect(normalizeOpenRouterModelId("MiMo V3 Pro")).toBe("xiaomi/mimo-v2-pro");
     expect(normalizeOpenRouterModelId("hunter-alpha")).toBe("xiaomi/mimo-v2-pro");
     expect(normalizeOpenRouterModelId("xiaomi/mimo-v2-flash")).toBe("xiaomi/mimo-v2-flash");
+  });
+
+  it("rejects bare Claude Code CLI aliases instead of sending them to Ollama", () => {
+    // Regression: a swarm specialist inheriting the parent session's ACP
+    // model name ("opus") while routed through the user's Ollama backend
+    // used to reach Ollama's /v1/chat/completions with model="opus", which
+    // 404s ("model 'opus' not found") deep inside the LLM call — the
+    // specialist (and often the whole swarm turn) then silently produced
+    // nothing. This must fail fast and clearly instead.
+    expect(() =>
+      resolveJaitLlmConfig({
+        config,
+        requestedModel: "opus",
+        jaitBackend: "ollama",
+      }),
+    ).toThrow(JaitConfigError);
+  });
+
+  it("rejects bare Claude Code CLI aliases for non-Ollama backends too", () => {
+    for (const alias of ["default", "fable", "sonnet", "opus", "haiku", "opusplan"]) {
+      expect(() =>
+        resolveJaitLlmConfig({ config, requestedModel: alias, jaitBackend: "openai" }),
+      ).toThrow(JaitConfigError);
+    }
   });
 });

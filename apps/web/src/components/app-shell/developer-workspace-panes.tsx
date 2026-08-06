@@ -185,8 +185,8 @@ export function DeveloperWorkspacePanes({
         showEditor={showProjectEditor}
         onToggleTree={onToggleProjectTree}
         onToggleEditor={onToggleProjectEditor}
-        treeTab={mobile ? mobileTreeTab : undefined}
-        onTreeTabChange={mobile ? onSetMobileTreeTab : undefined}
+        treeTab={mobileTreeTab}
+        onTreeTabChange={onSetMobileTreeTab}
         changedPaths={changedPaths}
         fsWatcherVersion={fsWatcherVersion}
         fsWatcherPayload={fsWatcherPayload as any}

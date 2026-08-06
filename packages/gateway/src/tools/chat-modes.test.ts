@@ -14,4 +14,13 @@ describe("chat mode prompts", () => {
     expect(prompt).toContain("Validation Specialist");
     expect(prompt).toContain("tailor the lineup");
   });
+
+  it("has agent mode honor an explicit request to solve the task as a team, without requiring a mode switch", () => {
+    const prompt = getSystemPromptForMode("agent");
+
+    expect(prompt).toContain("as a team");
+    expect(prompt).toContain("agent tool");
+    expect(prompt).toContain("concurrently");
+    expect(prompt).toContain("Don't wait for the user to switch to Swarm mode");
+  });
 });

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { type AppConfig } from "../config.js";
+import { inferContextWindow, type AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { UserService } from "../services/users.js";
@@ -27,6 +27,12 @@ import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
 import {
+  estimateJsonTokens,
+  estimateMessageTokens,
+  estimateTokens,
+  computeContextUsage,
+} from "../tools/token-estimator.js";
+import {
   runAgentLoop,
   repairToolCallHistory,
   retryToolCall,
@@ -37,6 +43,7 @@ import {
   type ExecutedToolCall,
   type LlmContextFlowRound,
   type OpenAIToolCall,
+  type RoundMetrics,
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
@@ -336,6 +343,114 @@ function buildExternalProviderContextFlow(
       messages,
     }],
   } satisfies LlmContextFlow;
+}
+
+/**
+ * Attach estimated per-round metrics to a CLI-provider context flow at turn
+ * completion. CLI providers (Codex, Claude Code, Pi) don't report token usage,
+ * so we estimate prompt tokens from the Jait setup messages we actually sent
+ * and completion tokens from the assembled response + tool calls.
+ *
+ * This runs exactly once, after the turn finishes — never during streaming — so
+ * it adds no load/streaming cost. The metrics are then persisted with the
+ * message and lazy-loaded on demand when the user opens the LLM context trace.
+ */
+function attachCliTurnMetrics(
+  flow: LlmContextFlow,
+  responseContent: string,
+  toolCalls: PersistedToolCall[],
+  durationMs: number,
+): void {
+  const round = flow.rounds[0];
+  if (!round) return;
+  if (round.metrics) return; // already captured
+
+  const requestMessages = round.messages;
+  let promptTokens = 0;
+  for (const m of requestMessages) {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    promptTokens += estimateMessageTokens({ role: String(m.role ?? "message"), content });
+  }
+  let completionTokens = estimateTokens(responseContent || "");
+  if (toolCalls.length > 0) {
+    completionTokens += estimateJsonTokens(toolCalls.map((tc) => tc.args ?? {}));
+  }
+  const totalTokens = promptTokens + completionTokens;
+
+  const metrics: RoundMetrics = {
+    durationMs,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    tokensPerSecond: durationMs > 0 ? Math.round((completionTokens / (durationMs / 1000)) * 10) / 10 : undefined,
+  };
+
+  const model = flow.model ?? round.model;
+  const contextWindow = inferContextWindow(model);
+  if (contextWindow > 0) {
+    metrics.contextUsage = computeContextUsage(
+      requestMessages.map((m) => ({
+        role: String(m.role ?? "message"),
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      })),
+      [],
+      contextWindow,
+    );
+  }
+
+  round.metrics = metrics;
+}
+
+/**
+ * Best-effort, on-demand enrichment for context flows persisted before CLI
+ * turns captured metrics (or streams opened mid-turn). Runs only inside the
+ * lazy context-flow endpoint — never during streaming or snapshot load — so it
+ * adds no performance cost to normal chat usage. Latency can't be recovered
+ * retroactively, so durationMs is left at 0 and the UI renders it as "—".
+ */
+function enrichLazyContextFlowMetrics(
+  flow: LlmContextFlow,
+  responseContent: string,
+  toolCallsRaw: unknown,
+): void {
+  const round = flow.rounds[0];
+  if (!round || round.metrics) return;
+
+  const messages = Array.isArray(round.messages) ? round.messages : [];
+  let promptTokens = 0;
+  for (const m of messages) {
+    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    promptTokens += estimateMessageTokens({ role: String(m.role ?? "message"), content });
+  }
+
+  let completionTokens = estimateTokens(responseContent || "");
+  if (toolCallsRaw) {
+    try {
+      const calls = typeof toolCallsRaw === "string" ? JSON.parse(toolCallsRaw) : toolCallsRaw;
+      if (Array.isArray(calls) && calls.length > 0) {
+        completionTokens += estimateJsonTokens(calls.map((c) => c?.args ?? {}));
+      }
+    } catch { /* ignore malformed tool calls */ }
+  }
+
+  const metrics: RoundMetrics = {
+    durationMs: 0,
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+  };
+  const contextWindow = inferContextWindow(flow.model ?? round.model);
+  if (contextWindow > 0) {
+    metrics.contextUsage = computeContextUsage(
+      messages.map((m) => ({
+        role: String(m.role ?? "message"),
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      })),
+      [],
+      contextWindow,
+    );
+  }
+  round.metrics = metrics;
 }
 
 function truncateForMemoryBlock(value: string, max = 220): string {
@@ -798,6 +913,19 @@ const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 const drainingQueuedSessions = new Set<string>();
 
+// ── Drained queued-message id tracking ────────────────────────────────
+// Tracks the ids of queued chat messages that have already been handed to the
+// agent for processing (per session). The server drain pops a message from
+// `queued_messages`, then processes it via an injected /api/chat call. The
+// client also writes `queued_messages` as a full-snapshot UI sync, so a stale
+// client push can re-introduce an entry the drain already popped. Without this
+// guard the drain would send the same message twice — leaving it both in the
+// chat (already sent) and in the queue (the "queued but also already sent"
+// reload bug). Filtering re-introductions out here keeps the drain idempotent.
+// Bounded per session to avoid unbounded growth.
+const drainedQueuedMessageIds = new Map<string, Set<string>>();
+const MAX_TRACKED_DRAINED_IDS = 100;
+
 /**
  * Live streaming accumulator — holds the current assistant message's partial
  * content, tool calls, and segments while the stream is active.
@@ -1110,6 +1238,7 @@ type ToolCallResultState = {
 function mapPendingToolCallsForUI(
   toolCalls: OpenAIToolCall[],
   resultStateByCallId?: Map<string, ToolCallResultState>,
+  realStartedAtByCallId?: Map<string, number>,
 ): Array<Record<string, unknown>> {
   const now = Date.now();
   return toolCalls.map((tc) => ({
@@ -1126,7 +1255,12 @@ function mapPendingToolCallsForUI(
         }
       : {
           status: "running",
-          startedAt: now,
+          // Use the real execution-start time recorded by accumulateToolStart
+          // when available. Falling back to `now` on every reconnect snapshot
+          // reset the elapsed-time display to ~0ms each time a client
+          // reloaded mid-tool-call, even after the tool had been running for
+          // minutes — no feedback that anything was actually happening.
+          startedAt: realStartedAtByCallId?.get(tc.id) ?? now,
         }),
   }));
 }
@@ -1343,6 +1477,16 @@ function buildVisibleHistoryEntries(
   const toolResultStateByCallId = includePendingAssistantToolCalls
     ? buildToolResultStateMap(history)
     : undefined;
+  // Real per-call execution-start times, tracked live by accumulateToolStart.
+  // Used so a reconnect snapshot reports how long a still-running tool call
+  // has actually been executing instead of resetting to "now".
+  const realStartedAtByCallId = includePendingAssistantToolCalls
+    ? new Map(
+        (sessionStreamingState.get(sessionId)?.toolCalls ?? [])
+          .filter((tc): tc is PersistedToolCall & { startedAt: number } => typeof tc.startedAt === "number")
+          .map((tc) => [tc.callId, tc.startedAt] as const),
+      )
+    : undefined;
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "tool") continue;
@@ -1369,7 +1513,7 @@ function buildVisibleHistoryEntries(
       if (Array.isArray(m.uiToolCalls) && m.uiToolCalls.length > 0) {
         uiToolCalls = mapPersistedToolCallsForUI(m.uiToolCalls);
       } else if (m.tool_calls && includePendingAssistantToolCalls) {
-        uiToolCalls = mapPendingToolCallsForUI(m.tool_calls, toolResultStateByCallId);
+        uiToolCalls = mapPendingToolCallsForUI(m.tool_calls, toolResultStateByCallId, realStartedAtByCallId);
       }
     }
 
@@ -1622,8 +1766,34 @@ export function registerChatRoutes(
         const queue = parseQueuedChatMessages(state["queued_messages"]);
         if (queue.length === 0) return;
 
-        const [nextMessage, ...rest] = queue;
+        // Drop entries that were already handed to the agent. A stale client
+        // full-snapshot sync can re-introduce a message the drain already
+        // popped (its id is still tracked here), which would otherwise be sent
+        // a second time — the "queued but also already sent" reload bug.
+        let tracked = drainedQueuedMessageIds.get(sessionId);
+        if (!tracked) {
+          tracked = new Set();
+          drainedQueuedMessageIds.set(sessionId, tracked);
+        }
+        const freshQueue = queue.filter((message) => !message.id || !tracked.has(message.id));
+        if (freshQueue.length === 0) {
+          // The persisted queue only held already-drained duplicates — drop
+          // them instead of leaving a ghost entry behind on reload.
+          sessionStateService.set(sessionId, { queued_messages: null });
+          broadcastQueuedMessagesState(sessionId, null);
+          return;
+        }
+
+        const [nextMessage, ...rest] = freshQueue;
         if (!nextMessage) return;
+        if (nextMessage.id) {
+          tracked.add(nextMessage.id);
+          if (tracked.size > MAX_TRACKED_DRAINED_IDS) {
+            // Bound memory: forget the single oldest tracked id when over cap.
+            const oldest = tracked.values().next().value as string | undefined;
+            if (oldest !== undefined && oldest !== nextMessage.id) tracked.delete(oldest);
+          }
+        }
 
         const user = userService.findById(session.userId);
         if (!user) return;
@@ -1651,6 +1821,9 @@ export function registerChatRoutes(
         });
 
         if (response.statusCode >= 400) {
+          // The message was restored to the queue, so it can be retried — forget
+          // its id so a later drain attempt does not treat it as already sent.
+          if (nextMessage.id) tracked.delete(nextMessage.id);
           const restoredQueue = [nextMessage, ...rest];
           sessionStateService.set(sessionId, { queued_messages: restoredQueue });
           broadcastQueuedMessagesState(sessionId, restoredQueue);
@@ -2686,6 +2859,7 @@ export function registerChatRoutes(
         });
 
         // Send the turn — with recovery if the cached session died between messages
+        const turnStartedAt = Date.now();
         try {
           const sentAt = new Date().toISOString();
           const setupContent = [
@@ -2837,6 +3011,23 @@ export function registerChatRoutes(
 
         unsubscribe();
         fullContent = contentChunks.join("");
+
+        // Attach estimated metrics to the CLI turn's context flow now that the
+        // response is complete. Computed once, after the turn — CLI providers
+        // don't report usage, and we deliberately avoid taxing streaming.
+        if (contextFlowJson) {
+          try {
+            const flow = JSON.parse(contextFlowJson) as LlmContextFlow;
+            attachCliTurnMetrics(flow, fullContent, cliToolCalls, Date.now() - turnStartedAt);
+            contextFlowJson = JSON.stringify(flow);
+            const usage = flow.rounds[0]?.metrics?.contextUsage;
+            if (usage) {
+              const event = { type: "context_usage", ...usage } as StreamEvent;
+              safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+              emitToSubscribers(sessionId, event);
+            }
+          } catch { /* keep the original flow on malformed JSON */ }
+        }
 
         // Flush any remaining tool group / trailing text into segments
         flushToolGroup();
@@ -3494,6 +3685,9 @@ export function registerChatRoutes(
       const visible = buildVisibleHistoryEntries(sessionId, history, { includePendingAssistantToolCalls: isStreaming });
       const entry = visible[index];
       if (!entry) return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
+      if (entry.contextFlow) {
+        enrichLazyContextFlowMetrics(entry.contextFlow, entry.content ?? "", entry.toolCalls ?? null);
+      }
       return { contextFlow: entry.contextFlow ?? null };
     }
 
@@ -3510,9 +3704,10 @@ export function registerChatRoutes(
     if (!row) return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
     if (!row.contextFlow) return { contextFlow: null };
     try {
-      const parsed = JSON.parse(row.contextFlow) as unknown;
-      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
-        return { contextFlow: parsed as LlmContextFlow };
+      const parsed = JSON.parse(row.contextFlow) as LlmContextFlow;
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.rounds)) {
+        enrichLazyContextFlowMetrics(parsed, row.content ?? "", row.toolCalls ?? null);
+        return { contextFlow: parsed };
       }
     } catch { /* fall through to null */ }
     return { contextFlow: null };

@@ -16,6 +16,7 @@ import { buildProjectDragPayload, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
+import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 
 interface SessionSelectorProps {
   projects: ProjectRecord[]
@@ -417,6 +418,7 @@ export function SessionSelector({
                                   {session.name || 'Untitled session'}
                                 </div>
                               </div>
+                              <SessionChatIcon metadata={session.metadata} />
                               {!isActiveSession && isSessionUnread(session) && <UnreadDot />}
                               <span className="shrink-0 text-2xs text-muted-foreground">
                                 {formatTime(session.lastActiveAt || session.createdAt)}
@@ -529,6 +531,7 @@ export function SessionSelector({
                           {session.name || 'Personal chat'}
                         </div>
                       </div>
+                      <SessionChatIcon metadata={session.metadata} />
                       {!isActive && isSessionUnread(session) && <UnreadDot />}
                       <span className="shrink-0 text-2xs text-muted-foreground">
                         {formatTime(session.lastActiveAt ?? session.createdAt)}

@@ -22,6 +22,16 @@ export default defineConfig({
       "apps/*/src/**/*.test.ts",
       "apps/*/src/**/*.test.tsx",
     ],
+    server: {
+      // @lobehub/icons pulls in @lobehub/ui (for its Avatar variant), which
+      // transitively imports @emoji-mart/data's JSON without an import
+      // attribute. Node's native ESM loader (used for externalized deps)
+      // rejects that; routing these through Vite's transform pipeline
+      // instead handles the bare JSON import correctly.
+      deps: {
+        inline: [/@lobehub\//, /@emoji-mart\//],
+      },
+    },
     coverage: {
       provider: "v8",
       include: ["packages/*/src/**/*.ts", "apps/*/src/**/*.tsx", "apps/*/src/**/*.ts"],

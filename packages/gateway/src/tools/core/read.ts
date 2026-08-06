@@ -24,6 +24,16 @@ import { getFs } from "./get-fs.js";
  */
 const MAX_LINES_PER_READ = 6000;
 
+/**
+ * Hard cap on bytes returned in a single read, independent of the line cap.
+ * A file well under MAX_LINES_PER_READ can still be huge (long lines, dense
+ * source) — without this, a handful of full-file reads can silently stuff
+ * hundreds of KB into the conversation history, ballooning context and
+ * slowing every subsequent LLM round. Matches the byte side of Copilot/pi's
+ * read-tool default (50KB).
+ */
+const MAX_BYTES_PER_READ = 50 * 1024;
+
 interface ReadInput {
   /** File or directory path (relative to project root, or absolute) */
   path: string;
@@ -38,7 +48,8 @@ export function createReadTool(registry: SurfaceRegistry): ToolDefinition<ReadIn
     name: "read",
     description:
       "Read a file or list a directory. Returns file content (with optional line range) or directory entries. " +
-      "Truncates at " + MAX_LINES_PER_READ + " lines; call again with startLine/endLine for more.",
+      "Truncates at " + MAX_LINES_PER_READ + " lines or " + (MAX_BYTES_PER_READ / 1024) +
+      "KB, whichever is hit first; call again with startLine/endLine for more.",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -94,20 +105,43 @@ export function createReadTool(registry: SurfaceRegistry): ToolDefinition<ReadIn
         const allLines = content.split("\n");
         const totalLines = allLines.length;
 
-        // Compute effective range
+        // Compute effective range. `available` is what actually exists to
+        // return (clamped to the file's real length, so an endLine beyond
+        // EOF doesn't get misreported as truncated below).
         const start = Math.max(1, input.startLine ?? 1) - 1; // 0-indexed
         const requestedEnd = input.endLine ?? totalLines;
-        const cappedEnd = Math.min(totalLines, start + MAX_LINES_PER_READ, requestedEnd);
+        const available = Math.min(totalLines, requestedEnd);
+        const lineCappedEnd = Math.min(available, start + MAX_LINES_PER_READ);
+
+        // Walk forward from `start`, accumulating bytes, stopping at
+        // lineCappedEnd or once the next line would exceed the byte budget
+        // (always emit at least one line so a single huge line still returns
+        // something rather than nothing). Applies even when the caller gave
+        // an explicit endLine — a big enough explicit range can still blow
+        // the byte budget.
+        let cappedEnd = start;
+        let byteCount = 0;
+        while (cappedEnd < lineCappedEnd) {
+          const currentLine = allLines[cappedEnd] ?? "";
+          const lineBytes = Buffer.byteLength(currentLine, "utf-8") + 1; // +1 for newline
+          if (byteCount + lineBytes > MAX_BYTES_PER_READ && cappedEnd > start) break;
+          byteCount += lineBytes;
+          cappedEnd++;
+        }
+
+        const hitByteCap = cappedEnd < lineCappedEnd;
+        const hitLineCap = !hitByteCap && lineCappedEnd < available;
+        const truncated = hitByteCap || hitLineCap;
         const slice = allLines.slice(start, cappedEnd);
-        const truncated = cappedEnd < totalLines && !input.endLine;
 
         // Build line-numbered content
         const numbered = slice
           .map((line, i) => `${start + i + 1}\t${line}`)
           .join("\n");
 
+        const limitLabel = hitByteCap ? `${MAX_BYTES_PER_READ / 1024}KB limit` : `${MAX_LINES_PER_READ} line limit`;
         const suffix = truncated
-          ? `\n\n[File content truncated. Showing lines ${start + 1}-${cappedEnd} of ${totalLines}. Use startLine/endLine to read more.]`
+          ? `\n\n[File content truncated (${limitLabel}). Showing lines ${start + 1}-${cappedEnd} of ${totalLines}. Use startLine=${cappedEnd + 1} to continue.]`
           : "";
 
         return {

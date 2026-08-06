@@ -104,6 +104,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const prevLoadingRef = useRef(loading)
   const prevScrollTopRef = useRef(0)
   const stickToBottomRef = useRef(true)
+  // Once the user scrolls up away from the bottom, stay detached (don't follow
+  // new streamed content) until they scroll back down to the bottom edge.
+  const detachedRef = useRef(false)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
@@ -184,6 +187,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       if (e.deltaY < 0 && stickToBottomRef.current) {
         setStickToBottom(false)
         stickToBottomRef.current = false
+        detachedRef.current = true
       }
     }
 
@@ -281,21 +285,43 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     const nextIsAtBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
+    const atVeryBottom = distanceFromBottom < 4
     const scrollingUp = el.scrollTop < prevScrollTopRef.current
     prevScrollTopRef.current = el.scrollTop
 
     setIsAtBottom(nextIsAtBottom)
-    setStickToBottom((prev) => {
-      // If the user is actively scrolling up, never re-enable stick-to-bottom
-      // even if we're still near the bottom edge.
-      if (scrollingUp && userScrollingRef.current) {
+
+    // If the user is actively scrolling up, detach so streamed content doesn't
+    // yank the view down to the bottom.
+    if (scrollingUp && userScrollingRef.current) {
+      detachedRef.current = true
+      if (stickToBottomRef.current) {
         stickToBottomRef.current = false
-        return false
+        setStickToBottom(false)
       }
-      const next = nextIsAtBottom ? true : prev
-      stickToBottomRef.current = next
-      return next
-    })
+      return
+    }
+
+    // Detached: stay put. Re-attach only when the user scrolls back down to the
+    // very bottom edge (not merely near it), so new content arriving while the
+    // user is scrolled up never re-enables stick-to-bottom.
+    if (detachedRef.current) {
+      if (atVeryBottom && !scrollingUp) {
+        detachedRef.current = false
+        stickToBottomRef.current = true
+        setStickToBottom(true)
+      } else if (stickToBottomRef.current) {
+        stickToBottomRef.current = false
+        setStickToBottom(false)
+      }
+      return
+    }
+
+    // Not detached: keep following the bottom.
+    if (!stickToBottomRef.current) {
+      stickToBottomRef.current = true
+      setStickToBottom(true)
+    }
   }, [])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -317,6 +343,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     prevLoadingRef.current = loading
 
     if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
+      detachedRef.current = false
       setStickToBottom(true)
       stickToBottomRef.current = true
       const el = scrollRef.current
@@ -452,6 +479,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <ConversationScrollButton
           className="bottom-5"
           onClick={() => {
+            detachedRef.current = false
             setStickToBottom(true)
             stickToBottomRef.current = true
             scrollToBottom()

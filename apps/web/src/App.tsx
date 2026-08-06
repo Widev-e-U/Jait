@@ -49,7 +49,6 @@ import { FloatingScreenShareWindow } from '@/components/screen-share/floating-sc
 import { MobileBottomNav } from '@/components/mobile/mobile-bottom-nav'
 import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { shouldForceMessageLifecycleRefresh, useChat, type ChatMode } from '@/hooks/useChat'
-import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSkills } from '@/hooks/useSkills'
 import { useProjects } from '@/hooks/useProjects'
 import { useUICommands } from '@/hooks/useUICommands'
@@ -493,6 +492,7 @@ function App() {
     fetchArchivedProjects,
     restoreProject,
     generateSessionTitle,
+    updateSessionChatSelection,
     fetchProjects,
     loadProject,
     loadSession,
@@ -677,8 +677,6 @@ function App() {
       return () => clearTimeout(id)
     }
   }, [showTerminal, activeTerminalId])
-
-  const { provider, model } = useModelInfo()
 
   // ── Screen share (always active so Electron auto-registers) ───────
   const screenShare = useScreenShare({ token })
@@ -986,6 +984,9 @@ function App() {
   )
   const [, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
     activeSessionId, 'chat.providerRuntimeMode', token,
+  )
+  const [, setSavedChatProvider, loadingChatProvider] = useSessionState<ProviderId>(
+    activeSessionId, 'chat.provider', token,
   )
   const [, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
     activeSessionId, 'chat.cliModels', token,
@@ -1510,6 +1511,11 @@ function App() {
           setChatProviderRuntimeMode('full-access')
         }
         break
+      case 'chat.provider':
+        if (typeof value === 'string' && value.trim()) {
+          setChatProvider(value as ProviderId)
+        }
+        break
       case 'chat.cliModels':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           setCliModelsByProvider(value as Partial<Record<CliProviderId, string | null>>)
@@ -1613,6 +1619,11 @@ function App() {
       setChatProviderRuntimeMode(cprm)
     } else {
       setChatProviderRuntimeMode('full-access')
+    }
+
+    const cp = state['chat.provider']
+    if (typeof cp === 'string' && cp.trim()) {
+      setChatProvider(cp as ProviderId)
     }
 
     const ccm = state['chat.cliModels']
@@ -2027,6 +2038,41 @@ function App() {
     localStorage.removeItem('cliModel')
   }, [activeProjectId, cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token, consumeSuppressedUiSync])
 
+  // ── Pin the chosen provider to this chat ──────────────────────────
+  // Mirrors the chat.cliModels persistence above: each session remembers its
+  // own last-picked provider, so switching between chats never leaks the
+  // provider selected in a different chat.
+  const prevChatProviderPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && loadingChatProvider) return
+    const serialized = JSON.stringify(chatProvider)
+    if (serialized === prevChatProviderPayloadRef.current) return
+    prevChatProviderPayloadRef.current = serialized
+    setSavedChatProvider(chatProvider)
+    if (consumeSuppressedUiSync('chat.provider')) return
+    sendUIState('chat.provider', chatProvider, activeSessionId)
+  }, [chatProvider, activeSessionId, loadingChatProvider, sendUIState, setSavedChatProvider, token, consumeSuppressedUiSync])
+
+  // ── Denormalize the chat's provider/model/mode onto the session row ──
+  // The session-state sync above only restores the *currently open* chat's
+  // provider. The chat/project list needs to show a provider icon for every
+  // chat, including ones that aren't open — so also stash a summary on the
+  // session's `metadata.chat`, fetched for free with the session list.
+  const prevChatSelectionPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeSessionId || !token) return
+    if (loadingChatProvider || loadingCliModels) return
+    const model = cliModelsByProvider[chatProvider] ?? null
+    const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model })
+    if (payload === prevChatSelectionPayloadRef.current) return
+    prevChatSelectionPayloadRef.current = payload
+    void updateSessionChatSelection(activeSessionId, {
+      provider: chatProvider,
+      model,
+      reasoningEffort: settings?.reasoning_effort ?? null,
+    })
+  }, [activeSessionId, token, loadingChatProvider, loadingCliModels, chatProvider, cliModelsByProvider, settings?.reasoning_effort, updateSessionChatSelection])
+
   // ── Restore the Jait provider's selected model across new chats ──
   // The model picked in the provider/model selector is persisted to the user
   // `selected_model` setting (provider-model-selector.tsx handleModelSelect).
@@ -2263,6 +2309,15 @@ function App() {
     if (projectId === activeProjectId) {
       if (sessionId === activeSessionId) return
       if (isMobile) setShowSidebar(false)
+      // If the project's editor surface isn't open yet (e.g. right after a
+      // page load where only the project id was restored), open it so the
+      // editor / preview / architecture controls are available. Otherwise
+      // selecting a chat of an already-active project looks like a plain
+      // chat with no project controls.
+      if (!activeProjectRef.current) {
+        void handleSwitchProject(projectId, sessionId)
+        return
+      }
       switchSession(projectId, sessionId)
       return
     }
@@ -2918,10 +2973,54 @@ function App() {
     token,
   })
 
+  // Open the project editor with the source-control (Git) tab focused. Triggered
+  // from the git-diff indicator in the chat region's top-left corner.
+  const handleOpenSourceControl = useCallback(() => {
+    setCurrentView('chat')
+    if (isMobile) {
+      void handleMobileProjectTargetAction('git')
+      return
+    }
+    const project = activeProjectRef.current
+    if (project) {
+      showProjectRef.current = true
+      setShowProject(true)
+      applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
+      const state = {
+        open: true,
+        remotePath: project.projectRoot,
+        surfaceId: project.surfaceId,
+        nodeId: project.nodeId,
+      }
+      setSavedProject(state)
+      setMobileTreeTab('git')
+      return
+    }
+    const record = activeProjectRecordRef.current
+    if (record?.rootPath) {
+      void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current, { mobileTarget: 'editor' })
+        .then(() => setMobileTreeTab('git'))
+        .catch(() => {})
+    }
+  }, [
+    activeProjectRef,
+    activeProjectRecordRef,
+    activeSessionIdRef,
+    applyProjectLayout,
+    handleMobileProjectTargetAction,
+    isMobile,
+    reopenPersistedProject,
+    setCurrentView,
+    setMobileTreeTab,
+    setSavedProject,
+    setShowProject,
+    showProjectRef,
+  ])
+
   const preparePromptSubmission = useCallback(async (
     rawValue: string,
     chipFiles?: ReferencedFile[],
-    displaySegments?: UserMessageSegment[],
+    displaySegments?: UserMessageSegment[]
   ) => {
     const normalizedSegments = displaySegments?.length ? displaySegments : undefined
     const text = (normalizedSegments ? userMessageTextFromSegments(normalizedSegments) : rawValue).trim()
@@ -3923,10 +4022,7 @@ function App() {
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
-              chatProvider={chatProvider}
-              cliModel={cliModel}
               closeScreenSharePanel={closeScreenSharePanel}
-              contextUsage={contextUsage}
               currentView={currentView}
               desktopPlatform={desktopPlatform}
               handleApplyUpdate={handleApplyUpdate}
@@ -3936,10 +4032,8 @@ function App() {
               isElectron={isElectron}
               isMaximized={isMaximized}
               isMobile={isMobile}
-              model={model}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
-              provider={provider}
               remainingPrompts={remainingPrompts}
               screenShare={screenShare}
               setCurrentView={setCurrentView}
@@ -4275,6 +4369,7 @@ function App() {
                 chatProviderRuntimeMode={chatProviderRuntimeMode}
                 chatResponseStyle={chatResponseStyle}
                 cliModel={cliModel}
+                contextUsage={contextUsage}
                 developerChatPanelStyle={developerChatPanelStyle}
                 developerChatSubmitLoading={developerChatSubmitLoading}
                 developerChatUiState={developerChatUiState}
@@ -4337,6 +4432,7 @@ function App() {
                 onMoveRepoToGateway={handleMoveRepoToGateway}
                 onOpenAddProject={() => { setProjectPickerMode('project'); setFolderPickerOpen(true) }}
                 onOpenMessagePath={handleOpenMessagePath}
+                onOpenSourceControl={handleOpenSourceControl}
                 onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
                 onApprovalResponse={respondToApproval}
                 onProviderChange={handleChatProviderChange}

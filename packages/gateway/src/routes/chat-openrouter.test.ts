@@ -365,6 +365,138 @@ describe("chat route OpenRouter backend selection", () => {
     }
   });
 
+  it("reports the real tool-call start time on repeated snapshot polls instead of resetting to 'now' each time", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("slow-tool-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Slow Tool Session" });
+    const toolRegistry = new ToolRegistry();
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: {
+        OPENROUTER_API_KEY: "openrouter-test-key",
+      },
+    });
+
+    let resolveTool: (() => void) | undefined;
+    toolRegistry.register({
+      name: "proof.cancel",
+      description: "Proof tool that stays running until the test resolves it.",
+      tier: "core",
+      category: "meta",
+      parameters: { type: "object", properties: {} },
+      execute: () => new Promise((resolve) => {
+        resolveTool = () => resolve({ ok: true, message: "Done" });
+      }),
+    });
+
+    let openrouterCallCount = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("http://127.0.0.1:")) {
+        return originalFetch(input, init);
+      }
+      expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+      openrouterCallCount++;
+      // First round: request the slow tool call. Once its result comes back,
+      // the agent loop makes a second round — return a plain final answer so
+      // the turn actually ends instead of looping on the same tool forever.
+      return openrouterCallCount === 1 ? createToolCallStreamResponse() : createOpenAIStreamResponse();
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+      toolRegistry,
+    });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+
+    try {
+      const address = app.server.address() as AddressInfo;
+      const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+      const headers = {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      };
+      const response = await originalFetch(`http://127.0.0.1:${address.port}/api/chat`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          content: "start a slow tool",
+          sessionId: session.id,
+          model: "gpt-4o",
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const reader = response.body?.getReader();
+      expect(reader).toBeTruthy();
+      const decoder = new TextDecoder();
+      let streamBody = "";
+      const waitStartedAt = Date.now();
+      while (!streamBody.includes('"type":"tool_start"')) {
+        const { done, value } = await reader!.read();
+        expect(done).toBe(false);
+        streamBody += decoder.decode(value, { stream: true });
+        if (Date.now() - waitStartedAt > 5000) throw new Error("Timed out waiting for tool_start");
+      }
+
+      type ToolCallSnapshot = { callId: string; status?: string; startedAt?: number };
+      const pollRunningToolCall = async (): Promise<ToolCallSnapshot> => {
+        const messagesResponse = await app.inject({
+          method: "GET",
+          url: `/api/sessions/${session.id}/messages`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+        expect(messagesResponse.statusCode).toBe(200);
+        const body = messagesResponse.json() as {
+          messages: Array<{ role: string; toolCalls?: ToolCallSnapshot[] }>;
+        };
+        const assistantMessage = body.messages.find((m) => m.role === "assistant");
+        const toolCall = assistantMessage?.toolCalls?.find((tc) => tc.callId === "call_cancel_proof");
+        expect(toolCall?.status).toBe("running");
+        return toolCall!;
+      };
+
+      // Reconnecting mid-execution must report a real, in-the-past start time —
+      // not "now" — so the client can show meaningful elapsed time immediately.
+      const firstPoll = await pollRunningToolCall();
+      expect(firstPoll.startedAt).toBeDefined();
+      expect(Date.now() - firstPoll.startedAt!).toBeGreaterThanOrEqual(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      // A second reconnect while the tool is STILL running must report the
+      // SAME startedAt as the first poll — this is the regression this test
+      // guards: before the fix, every snapshot re-stamped startedAt to the
+      // poll's own Date.now(), so two polls 120ms apart each showed ~0ms
+      // elapsed and disagreed with each other.
+      const secondPoll = await pollRunningToolCall();
+      expect(secondPoll.startedAt).toBe(firstPoll.startedAt);
+      expect(Date.now() - secondPoll.startedAt!).toBeGreaterThanOrEqual(100);
+
+      resolveTool?.();
+      const drainStartedAt = Date.now();
+      while (!streamBody.includes('"type":"done"')) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+        streamBody += decoder.decode(value, { stream: true });
+        if (Date.now() - drainStartedAt > 10000) throw new Error("Timed out waiting for done");
+      }
+      await reader?.cancel().catch(() => {});
+    } finally {
+      resolveTool?.();
+      await app.close();
+    }
+  });
+
   it("streams a simple ok reply for the Jait provider with mimo v2 pro selected", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
