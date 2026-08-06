@@ -98,10 +98,14 @@ const PROVIDER_DEFS: ProviderDef[] = [
   { value: 'deepagents', label: 'DeepAgents', icon: DeepAgentsIcon, description: 'DeepAgents multi-agent framework via Agent Client Protocol' },
 ]
 
-const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
+export const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
 
-function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
+export function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
   return PROVIDER_DEF_BY_ID.get(providerType ?? id)?.icon ?? Network
+}
+
+export function providerLabelFor(providerType: string | undefined, id: string): string {
+  return PROVIDER_DEF_BY_ID.get(providerType ?? id)?.label ?? id
 }
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
