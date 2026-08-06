@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
 import { MessageResponse } from '@/components/ai-elements/message'
 
 /** Auto-scroll a container to the bottom when content changes. */
-function useAutoScroll(dep: unknown) {
-  const ref = useRef<HTMLPreElement>(null)
+function useAutoScroll<T extends HTMLElement = HTMLPreElement>(dep: unknown) {
+  const ref = useRef<T>(null)
   const rafRef = useRef<number | null>(null)
   useEffect(() => {
     if (rafRef.current !== null) return
@@ -1905,9 +1905,11 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
 }
 
 function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunning: boolean }) {
-  const scrollRef = useAutoScroll(output)
+  const scrollRef = useAutoScroll<HTMLDivElement>(output)
   const latest = getLatestSubAgentActivity(output)
-  if (!output && !isRunning) return null
+  // Live streaming only — once done, the rendered tool calls + final markdown
+  // answer take over so the card reads like a normal chat message.
+  if (!isRunning) return null
 
   return (
     <div className="px-3 py-2.5">
@@ -1918,10 +1920,10 @@ function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunnin
         {isRunning && <span className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />}
       </div>
       {output ? (
-        <pre ref={scrollRef} className="max-h-44 overflow-auto whitespace-pre-wrap rounded-md border border-border/50 bg-zinc-950 px-3 py-2 font-mono text-[11px] leading-5 text-zinc-200 shadow-inner">
-          {output}
-          {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-zinc-300 align-text-bottom" />}
-        </pre>
+        <div ref={scrollRef} className="max-h-44 overflow-auto rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-sm leading-relaxed">
+          <MessageResponse>{output}</MessageResponse>
+          {isRunning && <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-foreground/50 align-text-bottom" />}
+        </div>
       ) : (
         <div className="rounded-md border border-dashed border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           Preparing the delegated task...
@@ -3485,6 +3487,111 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
   return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
 }
 
+/**
+ * Swarm specialist block. Renders one spawned sub-agent as a slim, collapsed
+ * tool-call row ("Sub-agent" + one-line mission summary with ellipsis and a
+ * show-more toggle) with the specialist's *actual* work — its tool calls and
+ * final markdown answer — rendered below it at the SAME depth as normal chat,
+ * not nested inside an indented card.
+ */
+function SwarmSpecialistBlock({
+  call,
+  childCalls,
+  threadControlThreads,
+  onOpenTerminal,
+  onOpenDiff,
+  renderInlineSecretPrompt,
+  onApprovalResponse,
+}: {
+  call: ToolCallInfo
+  childCalls?: ToolCallInfo[]
+  threadControlThreads?: ThreadListRecord[]
+  onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (path: string) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (callId: string, approve: boolean) => void
+}) {
+  const [missionOpen, setMissionOpen] = useState(false)
+  const displayTool = normalizeTool(call.tool)
+  const meta = getToolMeta(displayTool)
+  const resultRecord = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
+    ? call.result.data as Record<string, unknown>
+    : undefined
+  const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultRecord)
+  const isRunning = call.status === 'running' || call.status === 'pending'
+  const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
+  const Icon = meta.icon
+
+  // The specialist's own children may themselves contain nested agents
+  const { childMap: innerChildMap } = useMemo(() => computeAgentNesting(childCalls ?? []), [childCalls])
+
+  // Final markdown answer (prefer structured content, fall back to the message)
+  const content = (typeof resultRecord?.content === 'string' ? resultRecord.content.trim() : '')
+    || (call.result?.message ? call.result.message.trim() : '')
+    || ''
+
+  return (
+    <div className="my-1.5">
+      {/* Slim collapsed "sub-agent" row */}
+      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-2 py-1.5">
+        <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
+        <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Sub-agent
+        </span>
+        <button
+          type="button"
+          onClick={() => setMissionOpen((o) => !o)}
+          className="min-w-0 flex-1 text-left"
+          title={summary}
+        >
+          <span className="block truncate text-xs text-foreground">{summary || meta.label}</span>
+        </button>
+        {isRunning ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+        ) : call.status === 'success' ? (
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+        ) : call.status === 'error' ? (
+          <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+        ) : null}
+        <ChevronRight
+          className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', missionOpen && 'rotate-90')}
+        />
+      </div>
+
+      {/* Expanded mission detail (show-more target) */}
+      {missionOpen && <SubAgentMission args={normalizedArgs} />}
+
+      {/* The specialist's actual work — rendered as a normal chat at the same depth */}
+      <div className="mt-1 space-y-1">
+        <SubAgentLiveActivity output={call.streamingOutput} isRunning={isRunning} />
+        {childCalls && childCalls.length > 0 && (
+          <>
+            {childCalls.map((child, index) => (
+              <ToolCallCard
+                key={child.callId}
+                call={child}
+                childCalls={innerChildMap.get(child.callId)}
+                threadControlThreads={threadControlThreads}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
+                hideTopConnector={index === 0}
+                hideBottomConnector={index === childCalls.length - 1 && !content}
+              />
+            ))}
+          </>
+        )}
+        {!isRunning && content && (
+          <div className="px-0.5 py-1">
+            <MessageResponse>{content}</MessageResponse>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
@@ -3493,6 +3600,11 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
   // Compute agent nesting so inner-agent tool calls render inside the agent card
   const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
   const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
+
+  // Swarm mode: a single turn spawns several specialist sub-agents in parallel.
+  // Each specialist renders as a slim collapsed "Sub-agent" row followed by its
+  // actual tool calls + final answer as a normal chat at the same depth.
+  const isSwarmLayout = topLevelCalls.length >= 2 && topLevelCalls.every(c => isAgentToolName(c.tool))
 
   const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
   const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
@@ -3516,6 +3628,25 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
   const totalSuccessCount = completedCalls.filter(c => c.status === 'success').length
   const totalErrorCount = completedCalls.filter(c => c.status === 'error').length
   const SummaryIcon = getToolCallWrapperIcon(completedCalls)
+
+  if (isSwarmLayout) {
+    return (
+      <div className="my-1">
+        {topLevelCalls.map((call) => (
+          <SwarmSpecialistBlock
+            key={call.callId}
+            call={call}
+            childCalls={childMap.get(call.callId)}
+            threadControlThreads={threadControlThreads}
+            onOpenTerminal={onOpenTerminal}
+            onOpenDiff={onOpenDiff}
+            renderInlineSecretPrompt={renderInlineSecretPrompt}
+            onApprovalResponse={onApprovalResponse}
+          />
+        ))}
+      </div>
+    )
+  }
 
   if (shouldCollapseGroup && !groupOpen) {
     return (

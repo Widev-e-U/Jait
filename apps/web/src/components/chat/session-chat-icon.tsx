@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { providerTypeFromId } from '@jait/shared'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatModelDisplayLabel, getModelDisplayName } from '@/components/icons/model-icons'
 import { providerIconFor, providerLabelFor } from '@/components/chat/provider-model-selector'
 import { parseSessionChatSelection } from '@/lib/session-chat-selection'
@@ -25,13 +24,11 @@ export function SessionChatIcon({ metadata }: { metadata: string | null }) {
   const tooltipText = [providerLabel, modelLabel, modeLabel].filter(Boolean).join(' · ')
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex size-3 shrink-0 items-center justify-center text-muted-foreground">
-          <Icon className="size-3" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{tooltipText}</TooltipContent>
-    </Tooltip>
+    <span
+      title={tooltipText}
+      className="inline-flex size-3 shrink-0 items-center justify-center text-muted-foreground"
+    >
+      <Icon className="size-3" />
+    </span>
   )
 }
