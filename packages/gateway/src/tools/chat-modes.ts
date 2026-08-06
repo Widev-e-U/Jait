@@ -9,9 +9,10 @@
  *             questions, explanations, and code review.
  * - `agent` — Full agentic mode (default). All tools available, full
  *             execution. The agent acts autonomously with tool calling.
- * - `swarm` — Multi-agent mode. The top-level agent runs a fixed developer-team
- *             roster (Tech Lead, Engineers, QA, Code Reviewer) as sub-agents
- *             and synthesizes their results.
+ * - `swarm` — Multi-agent mode. The top-level agent picks a task-appropriate
+ *             team (Developer, Research, Content, Security, Ops, or a custom
+ *             one it invents) from `SWARM_TEAMS`, delegates each role in it
+ *             to a sub-agent, and synthesizes their results.
  * - `plan`  — Planning mode. The agent reads and analyzes, then produces
  *             a structured plan of proposed actions. Mutating tool calls
  *             are collected but NOT executed until the user approves the
@@ -103,6 +104,130 @@ export const MUTATING_TOOLS = new Set([
   "agent.spawn",
   "thread.control",
 ]);
+
+// ── Orchestration tools allowed for the Swarm coordinator ─────────────
+
+/**
+ * Tools the Swarm-mode coordinator may use DIRECTLY. Everything else is
+ * treated as implementation work and is BLOCKED at the loop level — the
+ * coordinator must delegate it to a specialist sub-agent via the agent tool.
+ *
+ * This is what makes Swarm mode actually enforce a team of agents instead of
+ * merely recommending one: the coordinator can read, research, coordinate,
+ * and delegate, but it cannot edit files, run commands, or mutate state
+ * itself. Those capabilities live only inside sub-agents.
+ */
+export const SWARM_ORCHESTRATION_TOOLS = new Set([
+  // Core orchestration / delegation
+  "read",
+  "search",
+  "web",
+  "todo",
+  "jait",
+  "agent",
+  "agent.spawn",
+  "agent.message",
+  "thread.control",
+  "jait.todos",
+  "user.ask",
+  // Read-only exploration & research
+  "file.read",
+  "file.list",
+  "file.stat",
+  "os.query",
+  "memory.search",
+  "memory.list",
+  "session.search",
+  "chat.traces",
+  "web.fetch",
+  "web.search",
+  "gateway.status",
+  "surfaces.list",
+  "cron.list",
+  "tools.list",
+  "tools.search",
+]);
+
+// ── Swarm teams ──────────────────────────────────────────────────────
+
+/** A single role within a swarm team — maps to one delegated `agent` call. */
+export interface SwarmTeamRole {
+  /** Role name, shown to the user and used in delegation prompts. */
+  name: string;
+  /** One-line description of what this role does. */
+  description: string;
+}
+
+/** A named, reusable roster of specialist roles the Swarm coordinator can pick. */
+export interface SwarmTeam {
+  /** Team name, e.g. "Developer Team". */
+  name: string;
+  /** When the coordinator should pick this team. */
+  useWhen: string;
+  roles: SwarmTeamRole[];
+}
+
+/**
+ * Built-in swarm teams. The coordinator picks whichever team best fits the
+ * request (using only the roles that task actually needs), or invents a new
+ * named team on the spot — following the same {name, useWhen, roles} shape —
+ * when none of these fit. Built-in teams are not persisted; a coordinator
+ * that invents a custom team defines it fresh each time it's needed.
+ */
+export const SWARM_TEAMS: SwarmTeam[] = [
+  {
+    name: "Developer Team",
+    useWhen: "building, fixing, or refactoring code",
+    roles: [
+      { name: "Developer (Implementation Specialist)", description: "implements the deliverable — reads/writes code, runs commands, produces the actual result" },
+      { name: "Tester (Testing Specialist)", description: "writes and runs tests, verifies the behavior actually works, and hunts edge cases" },
+      { name: "Validator (Validation Specialist)", description: "checks the final output against the original requirements and completion criteria, flags gaps and inconsistencies, and confirms it's ready to present as done" },
+    ],
+  },
+  {
+    name: "Research Team",
+    useWhen: "research, comparisons, investigations, or open questions",
+    roles: [
+      { name: "Research Specialist", description: "source-backed research, comparisons, documentation, and evidence synthesis" },
+      { name: "Fact-Checker", description: "cross-references and verifies claims against multiple sources, flags contradictions" },
+      { name: "Synthesist", description: "turns raw findings into one coherent, structured answer" },
+    ],
+  },
+  {
+    name: "Content Team",
+    useWhen: "writing, documentation, or copy",
+    roles: [
+      { name: "Writer", description: "drafts the content" },
+      { name: "Editor", description: "tightens structure, tone, and clarity" },
+      { name: "Fact-Checker", description: "verifies technical or factual claims made in the draft" },
+    ],
+  },
+  {
+    name: "Security Team",
+    useWhen: "security audits, pentests, or vulnerability review (authorized contexts only)",
+    roles: [
+      { name: "Threat Analyst", description: "maps the attack surface and prioritizes risks" },
+      { name: "Exploit/PoC Specialist", description: "builds proof-of-concept exploits or reproduction steps" },
+      { name: "Remediation Specialist", description: "proposes and/or implements fixes for confirmed findings" },
+    ],
+  },
+  {
+    name: "Ops Team",
+    useWhen: "infrastructure, deployment, or reliability work",
+    roles: [
+      { name: "Infra Specialist", description: "implements the infrastructure or deployment change" },
+      { name: "Reliability Specialist", description: "verifies monitoring, rollback paths, and failure modes" },
+      { name: "Safety Reviewer", description: "checks blast radius and confirms the change is safe to ship" },
+    ],
+  },
+];
+
+/** Renders {@link SWARM_TEAMS} as a compact bullet list for embedding in prompts. */
+export function formatSwarmTeamsRoster(teams: SwarmTeam[] = SWARM_TEAMS): string {
+  return teams
+    .map((team) => `- ${team.name} (use for ${team.useWhen}): ${team.roles.map((r) => `${r.name} — ${r.description}`).join("; ")}`)
+    .join("\n");
+}
 
 // ── Plan types ───────────────────────────────────────────────────────
 
@@ -247,23 +372,22 @@ Your final message should read like a concise update from a teammate. For simple
 
 export const SYSTEM_PROMPT_SWARM = `You are Jait — Just Another Intelligent Tool, running in Swarm mode.
 
-In this mode you act as a visible multi-agent coordinator that deploys a small, task-appropriate team of specialist sub-agents rather than doing the work solo. Pick the specialists that genuinely fit this specific request from the roster below — don't reuse a generic lineup for every task, and don't assemble a full team when the job only needs one or two.
+In this mode you act as a visible multi-agent coordinator that deploys a small, task-appropriate TEAM of specialist sub-agents rather than doing the work solo. This is ENFORCED, not optional: as the coordinator you are restricted to orchestration tools (read, search, web, todo, jait, agent, agent.spawn, agent.message, thread.control, tools.list, tools.search, session.search, chat.traces, memory.search, memory.list, gateway.status, user.ask). You CANNOT edit files, run commands, or mutate state directly — any attempt to use an implementation tool (edit, file.write, file.patch, execute, terminal.run, browser.*, cron.add, etc.) is blocked and returned to you as an error. All implementation work must be delegated to specialist sub-agents.
 
-Specialist roster:
-- Research Specialist: source-backed research, comparisons, documentation, and evidence synthesis.
-- Implementation Specialist: directly implements the deliverable — reads/writes code, runs commands, produces the actual result.
-- Testing Specialist: writes and runs tests, verifies the behavior actually works, and hunts edge cases.
-- Validation Specialist: checks the final output against the original requirements and completion criteria, flags gaps and inconsistencies, and confirms it's ready to present as done.
+Teams available — pick the one that best fits this request:
+${formatSwarmTeamsRoster()}
+
+Custom teams: if none of the built-in teams fit, invent a new one on the spot — give it a short descriptive name (e.g. "Data Pipeline Team", "Design Team"), define 2-4 roles the same way (name + one-line job), say why the built-in teams don't fit, and use it exactly like a built-in team for this request. You are not limited to the roster above, and a custom team is scoped to this task only — it isn't saved for future requests.
 
 Routing rules:
 1. Start by understanding the objective, constraints, and deliverables.
-2. Recommend the specific lineup you'll use — a short bulleted list naming each specialist's role and why it's needed for this particular objective. Pick from the roster above where it fits; tailor the lineup to the actual task, not a generic default.
-3. Delegate every specialist you recommended with the agent tool. Call it once per specialist, all within the same reply — independent agent calls in the same turn run concurrently, so N specialist calls means N specialists working at once, each as its own visible sub-agent.
-4. Sequence dependent roles: if a later specialist builds on an earlier one's output (e.g. Testing/Validation after Implementation), run the producer first, wait for it, then delegate the consumers.
-5. Each agent call's prompt/description must name the specialist role, the concrete task, expected output, relevant files/context, allowed scope, and completion criteria.
-6. Set allowedTools on every specialist call to whatever that specialist genuinely needs — the agent tool defaults to a read-only subset, so a specialist that must write code, patch files, or run commands needs those tools listed explicitly (e.g. "file.read,file.list,file.write,file.patch,edit,terminal.run,search,web.search,web.fetch"). Specialists run with no round cap by default (they stop when done or when a behavioral guard catches a loop); only pass maxRounds if you want a hard backstop.
-7. Wait for the specialists to finish, then reconcile contradictions and produce one concise final response.
-8. Use direct tools yourself only for orchestration, gap-filling, or verifying specialist output after the swarm returns.
+2. Recommend the specific lineup you'll use — the team (built-in or custom) plus a short bulleted list naming each role and why it's needed for this particular objective. Pick from the roster above where it fits; tailor the lineup to the actual task, not a generic default. Use only the roles the task actually needs — don't assemble a full team when the job only needs one or two.
+3. Delegate every role you recommended with the agent tool. Call it once per role, all within the same reply — independent agent calls in the same turn run concurrently, so N role calls means N specialists working at once, each as its own visible sub-agent.
+4. Sequence dependent roles: if a later role builds on an earlier one's output (e.g. Tester/Validator after Developer), run the producer first, wait for it, then delegate the consumers.
+5. Each agent call's prompt/description must name the role, the concrete task, expected output, relevant files/context, allowed scope, and completion criteria.
+6. Set allowedTools on every call to whatever that role genuinely needs — the agent tool defaults to a read-only subset, so a role that must write code, patch files, or run commands needs those tools listed explicitly (e.g. "file.read,file.list,file.write,file.patch,edit,terminal.run,search,web.search,web.fetch"). Specialists run with no round cap by default (they stop when done or when a behavioral guard catches a loop); only pass maxRounds if you want a hard backstop.
+7. Wait for the team to finish, then reconcile contradictions and produce one concise final response.
+8. Use direct tools yourself only for orchestration, gap-filling, or verifying results after the team returns.
 
 Reading specialist results:
 - Every specialist result is tagged with a communicative act: [INFORM] (result reported), [PROPOSE] (multiple viable options — surface them to the user for a decision instead of silently picking one), [REFUSE] (declined — out of scope, ambiguous, or missing access), [FAILURE] (attempted but couldn't complete), or [QUERY] (needs clarification before it could proceed).
@@ -279,7 +403,7 @@ Tool guidance:
 
 Output style:
 - Keep orchestration visible but brief.
-- Mention the specialists used when it helps the user understand the result.
+- Name the team and the roles used when it helps the user understand the result.
 - Do not dump raw specialist transcripts unless the user asks.`;
 
 export const SYSTEM_PROMPT_PLAN = `You are Jait — Just Another Intelligent Tool, running in Plan mode.

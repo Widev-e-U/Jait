@@ -1627,11 +1627,26 @@ function App() {
     }
 
     const ccm = state['chat.cliModels']
+    const sessionModels = ccm && typeof ccm === 'object' && !Array.isArray(ccm)
+      ? ccm as Partial<Record<CliProviderId, string | null>>
+      : null
     const cachedProjectModels = readProjectModelSelections(activeProjectId)
-    if (cachedProjectModels) {
+    if (sessionModels && Object.keys(sessionModels).length > 0) {
+      // This chat's own saved model selections are authoritative for THIS
+      // chat. Open it and the provider/model you last used here is restored —
+      // not whatever another chat or a manual pick elsewhere stamped into the
+      // shared project cache. Merge the project cache in only for providers
+      // this chat never pinned, so "remember my last model per provider"
+      // still works for fresh chats, without clobbering this one's selection.
+      const merged: Partial<Record<CliProviderId, string | null>> = {
+        ...cachedProjectModels,
+        ...sessionModels,
+      }
+      setCliModelsByProvider(merged)
+      writeProjectModelSelections(activeProjectId, merged)
+    } else if (cachedProjectModels) {
       setCliModelsByProvider(cachedProjectModels as Partial<Record<CliProviderId, string | null>>)
-    } else if (ccm && typeof ccm === 'object' && !Array.isArray(ccm)) {
-      const sessionModels = ccm as Partial<Record<CliProviderId, string | null>>
+    } else if (sessionModels) {
       setCliModelsByProvider(sessionModels)
       writeProjectModelSelections(activeProjectId, sessionModels)
     } else {
@@ -2248,6 +2263,18 @@ function App() {
     const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
     const cachedProjectProvider = readProjectProviderSelection(projectId)
+    // These eager sets give the switch immediate feedback (no flash of the
+    // default) and seed fresh chats, but they MUST NOT be written back to the
+    // server yet. Persisting the project-cache value here — before the newly
+    // active chat's authoritative full-state push arrives — overwrites that
+    // chat's own saved provider/model (e.g. Claude Code "opus") with whatever
+    // the shared project cache holds at this instant, so the chat "resets to
+    // default" the next time it's reopened. Suppress the WS sync for just this
+    // transition: the full-state push restores the chat's real selection, and
+    // the project cache is still applied locally as the fallback for fresh
+    // chats that never pinned their own provider/model.
+    suppressNextUiSync('chat.cliModels')
+    suppressNextUiSync('chat.provider')
     setCliModelsByProvider(cachedProjectModels ?? (
       settings?.selected_model ? { jait: settings.selected_model } : {}
     ))
@@ -2299,7 +2326,7 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model])
+  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync])
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     const knownSession = personalSessions.find((session) => session.id === sessionId)

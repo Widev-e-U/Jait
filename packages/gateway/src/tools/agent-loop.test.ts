@@ -1082,6 +1082,72 @@ describe("runAgentLoop swarm mode", () => {
     }
   });
 
+  it("blocks implementation tools the coordinator tries to use directly, forcing delegation", async () => {
+    const chunks = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"edit","arguments":"{\\"path\\":\\"src/a.ts\\",\\"content\\":\\"x\\"}"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+      "data: [DONE]\n\n",
+      'data: {"choices":[{"delta":{"content":"Delegating to Implementation Specialist."}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const batch = chunks.slice(fetchCalls * 3, fetchCalls * 3 + 3);
+      fetchCalls++;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of batch) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const toolCalls: Array<{ name: string; args: unknown }> = [];
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the bug." },
+        ],
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "edit",
+            description: "Edit a file",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-1",
+        abort: new AbortController(),
+        maxRounds: 2,
+        mode: "swarm",
+        onEvent: (event) => events.push(event),
+      },
+      async (name, args) => {
+        toolCalls.push({ name, args });
+        return { ok: true, message: "unused" };
+      },
+    );
+
+    // The edit tool must NOT have been executed by the coordinator.
+    expect(toolCalls).toHaveLength(0);
+    expect(result.executedToolCalls).toHaveLength(1);
+    expect(result.executedToolCalls[0]).toMatchObject({ tool: "edit", ok: false });
+    expect(result.executedToolCalls[0]!.message).toContain("not available to the Swarm coordinator");
+    expect(result.executedToolCalls[0]!.message).toContain("agent tool");
+  });
+
   it("gives concurrent agent.spawn calls a shared swarm round id, but not a solo call", async () => {
     const concurrentResponses = [
       [

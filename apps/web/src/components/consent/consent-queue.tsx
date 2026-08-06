@@ -85,10 +85,10 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
     const first = visibleQueue[0]
     const extra = visibleQueue.length - 1
     return (
-      <div className={`flex items-center gap-2 px-3.5 py-2 border-t bg-background dark:bg-card ${className}`}>
+      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2 border-t bg-background dark:bg-card ${className}`}>
         <ToolIcon toolName={first.toolName} />
-        <span className="text-xs font-semibold text-foreground truncate shrink-0">{first.toolName}</span>
-        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{first.summary}</span>
+        <span className="text-xs font-semibold text-foreground truncate shrink-0 max-w-[40%]">{first.toolName}</span>
+        <span className="text-xs text-muted-foreground truncate flex-1 min-w-[60px]">{first.summary}</span>
         {extra > 0 && (
           <span
             title={`${extra} more pending ${extra === 1 ? 'request' : 'requests'}`}
@@ -97,7 +97,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
             +{extra}
           </span>
         )}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           <button
             type="button"
             title="Reject this request"
@@ -125,7 +125,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {approvingAll ? 'Approving...' : 'Approve all'}
+              <span className="hidden sm:inline">{approvingAll ? 'Approving...' : 'Approve all'}</span>
             </button>
           )}
         </div>

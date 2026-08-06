@@ -12,7 +12,18 @@ describe("shared prompt sections", () => {
     expect(instructions).toContain("Research Specialist");
     expect(instructions).toContain("Testing Specialist");
     expect(instructions).toContain("Validation Specialist");
-    expect(instructions).toContain("generic lineup");
+    expect(instructions).toContain("reuse the same lineup for every task");
+  });
+
+  it("offers a named roster of built-in teams and allows inventing a custom one", () => {
+    const instructions = getSwarmModeInstructions();
+
+    expect(instructions).toContain("Developer Team");
+    expect(instructions).toContain("Research Team");
+    expect(instructions).toContain("Content Team");
+    expect(instructions).toContain("Security Team");
+    expect(instructions).toContain("Ops Team");
+    expect(instructions).toContain("invent a new named team");
   });
 
   it("defines explicit memory-save heuristics", () => {

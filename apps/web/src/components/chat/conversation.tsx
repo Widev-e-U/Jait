@@ -37,6 +37,7 @@ const STICKY_BOTTOM_THRESHOLD_PX = 24
 const DEFAULT_ITEM_HEIGHT = 120
 const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
+const TOUCH_DETACH_THRESHOLD_PX = 4
 const ESTIMATE_TEXT_LIMIT = 12_000
 export const INITIAL_CONVERSATION_SCROLL_OFFSET = Number.MAX_SAFE_INTEGER
 
@@ -218,6 +219,20 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
       if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
         e.preventDefault()
+      }
+
+      // Finger moving down drags earlier content into view (scrollTop
+      // decreases) — mirror the wheel handler's immediate detach so this
+      // doesn't rely on the scroll-event heuristic below, which only fires
+      // (and only recognizes "user scrolling") while touchmove events are
+      // still landing. Native momentum scrolling after the finger lifts
+      // keeps moving scrollTop for a while with no further touchmove events,
+      // so without this the streaming auto-scroll re-engages mid-flick and
+      // fights the momentum, producing a flicker instead of staying put.
+      if (deltaY > TOUCH_DETACH_THRESHOLD_PX && stickToBottomRef.current) {
+        setStickToBottom(false)
+        stickToBottomRef.current = false
+        detachedRef.current = true
       }
     }
 

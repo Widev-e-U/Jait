@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.684](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.684) — 2026-08-06
+- feat(gateway): Swarm mode is now hard-enforced — the coordinator is restricted to a fixed set of orchestration tools (read, search, web, todo, jait, agent, agent.spawn, agent.message, thread.control, etc.); any attempt to use an implementation tool (edit, execute, terminal.run, browser.*, cron.add, ...) is blocked at the loop level and returned as an error telling it to delegate to a specialist sub-agent via the `agent` tool instead of merely being instructed to.
+- feat(gateway): Swarm mode picks from named specialist teams (Developer, Research, Content, Security, Ops) instead of one flat roster, and can invent a new named team on the spot when none fit — both the full swarm system prompt and the per-provider mode block now render from a shared `SWARM_TEAMS` registry.
+- fix(web): per-chat provider/model selection no longer resets to the project default when switching projects or chats — a chat's own saved `chat.cliModels`/`chat.provider` selection is now merged over (and takes priority over) the shared project-level cache, and the eager project-cache value used for instant switch feedback no longer gets written back to the server and clobbering the real per-chat selection.
+- fix(web): mobile chat scroll no longer flickers when scrolling up during a streaming message — a touch drag in the "reveal earlier content" direction now detaches from the bottom immediately (mirroring the existing wheel behavior), instead of waiting on a scroll-event heuristic that missed native momentum scrolling after the finger lifts.
+- fix(web): the merged consent/approve row shown above the chat composer no longer overflows on narrow mobile widths — added `flex-wrap` (matching the sibling compact action card), right-aligned the button group, and collapsed the "Approve all" button to icon-only below the `sm` breakpoint.
+
 ## [v0.1.680](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.680) — 2026-08-06
 - feat(gateway + web): voice assistant gets full Jait tool access
   - The Realtime voice assistant now exposes the full tool registry (minus external/MCP tools) to the model and routes calls through the consent-aware executor, so it can read files, run commands, search memory, and more — gated by the same consent rules as the main agent (the voice-assistant consent bypass was removed).

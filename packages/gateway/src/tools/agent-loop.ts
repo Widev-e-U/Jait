@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
-import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
+import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, SWARM_ORCHESTRATION_TOOLS, type PlannedAction } from "./chat-modes.js";
 import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js";
 import { computeContextUsage, estimateMessageTokens, estimateTokens } from "./token-estimator.js";
 import { ToolName } from "./tool-names.js";
@@ -1722,7 +1722,7 @@ export async function runAgentLoop(
   } else if (mode === "plan") {
     onEvent?.({ type: "mode_notice", mode: "plan", message: "Running in Plan mode — mutating actions will be proposed, not executed." });
   } else if (mode === "swarm") {
-    onEvent?.({ type: "mode_notice", mode: "swarm", message: "Running in Swarm mode — recommending and delegating to specialist sub-agents for this task." });
+    onEvent?.({ type: "mode_notice", mode: "swarm", message: "Running in Swarm mode — the coordinator is restricted to orchestration tools and must delegate all implementation work (edits, commands, state changes) to specialist sub-agents." });
   }
 
   // Dynamic schema set — starts with filtered schemas, grows when tools.search
@@ -1991,10 +1991,12 @@ export async function runAgentLoop(
         segments.push({ type: "toolGroup", callIds });
       }
 
-      // ── Plan-mode & Ask-mode interception ──
+      // ── Plan-mode, Ask-mode & Swarm-mode interception ──
       // In plan mode, mutating tools are captured as plan actions.
       // In ask mode, any tool that slipped through is blocked.
-      if (mode === "plan" || mode === "ask") {
+      // In swarm mode, any non-orchestration tool is blocked so the
+      // coordinator is forced to delegate implementation work to sub-agents.
+      if (mode === "plan" || mode === "ask" || mode === "swarm") {
         const intercepted: QueuedToolCall[] = [];
         const passthrough: QueuedToolCall[] = [];
 
@@ -2006,6 +2008,9 @@ export async function runAgentLoop(
 
             if (mode === "ask" && !ASK_MODE_TOOLS.has(name)) {
               // Ask mode: block non-read tools, return error to LLM
+              intercepted.push(item);
+            } else if (mode === "swarm" && !SWARM_ORCHESTRATION_TOOLS.has(name)) {
+              // Swarm mode: block implementation tools, force delegation
               intercepted.push(item);
             } else if (mode === "plan" && isMutating) {
               // Plan mode: capture mutating tools as planned actions
@@ -2026,6 +2031,25 @@ export async function runAgentLoop(
           if (mode === "ask") {
             // Return an error to the LLM
             const msg = `Tool "${name}" is not available in Ask mode. Only read-only tools can be used. Suggest the user switch to Agent or Plan mode for this action.`;
+            history.push({
+              role: "tool",
+              content: JSON.stringify({ ok: false, message: msg }),
+              tool_call_id: tc.id,
+              name: tc.function.name,
+            });
+            executedToolCalls.push({
+              callId: tc.id,
+              tool: name,
+              args,
+              ok: false,
+              message: msg,
+              startedAt: Date.now(),
+              completedAt: Date.now(),
+            });
+          } else if (mode === "swarm") {
+            // Swarm mode: block implementation tools and force delegation.
+            // The coordinator must hand this work to a specialist sub-agent.
+            const msg = `Tool "${name}" is not available to the Swarm coordinator. In Swarm mode the coordinator only orchestrates — it cannot edit files, run commands, or mutate state directly. Delegate this work to a specialist sub-agent with the agent tool, granting it the tools it needs via allowedTools (e.g. "file.read,file.list,file.write,file.patch,edit,terminal.run,search,web.search,web.fetch").`;
             history.push({
               role: "tool",
               content: JSON.stringify({ ok: false, message: msg }),
