@@ -1081,6 +1081,132 @@ describe("runAgentLoop swarm mode", () => {
       expect(executed).toMatchObject({ tool: "agent.spawn", ok: true });
     }
   });
+
+  it("gives concurrent agent.spawn calls a shared swarm round id, but not a solo call", async () => {
+    const concurrentResponses = [
+      [
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"agent_spawn","arguments":"{\\"prompt\\":\\"Implement the fix\\",\\"description\\":\\"Implementation Specialist\\"}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call-2","type":"function","function":{"name":"agent_spawn","arguments":"{\\"prompt\\":\\"Verify the fix\\",\\"description\\":\\"Verification Specialist\\"}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Swarm complete."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = concurrentResponses[fetchCalls++] ?? concurrentResponses[concurrentResponses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const receivedArgs: Array<Record<string, unknown>> = [];
+
+    await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the broken mobile notification UI and verify it." },
+        ],
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "agent_spawn",
+            description: "Spawn a sub-agent",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-1",
+        abort: new AbortController(),
+        maxRounds: 2,
+        mode: "swarm",
+      },
+      async (name, args) => {
+        receivedArgs.push(args as Record<string, unknown>);
+        return { ok: true, message: "Sub-agent completed", data: { content: "done" } };
+      },
+    );
+
+    expect(receivedArgs).toHaveLength(2);
+    const roundIds = receivedArgs.map((a) => a.__swarmRoundId);
+    expect(roundIds[0]).toBeTruthy();
+    expect(roundIds[0]).toBe(roundIds[1]);
+
+    // A solo agent.spawn call (no sibling in the same batch) must not get a round id.
+    let fetchCalls2 = 0;
+    const soloResponses = [
+      [
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"agent_spawn","arguments":"{\\"prompt\\":\\"Do it\\",\\"description\\":\\"Solo Specialist\\"}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Done."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = soloResponses[fetchCalls2++] ?? soloResponses[soloResponses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const soloArgs: Array<Record<string, unknown>> = [];
+    await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Do one thing." },
+        ],
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "agent_spawn",
+            description: "Spawn a sub-agent",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-2",
+        abort: new AbortController(),
+        maxRounds: 2,
+      },
+      async (name, args) => {
+        soloArgs.push(args as Record<string, unknown>);
+        return { ok: true, message: "Sub-agent completed", data: { content: "done" } };
+      },
+    );
+
+    expect(soloArgs).toHaveLength(1);
+    expect(soloArgs[0]!.__swarmRoundId).toBeUndefined();
+  });
 });
 
 describe("runAgentLoop truncation recovery", () => {

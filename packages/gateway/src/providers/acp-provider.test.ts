@@ -416,6 +416,84 @@ describe("AcpProvider Codex ACP tool payloads", () => {
     });
   });
 
+  it("unwraps Claude Code's Jait MCP calls (no server field, args nested under 'args')", () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call_ksc62mkz",
+        title: "mcp",
+        kind: "other",
+        status: "in_progress",
+        rawInput: {
+          tool: "jait_agent_spawn",
+          args: { description: "Test specialist", maxRounds: 6, prompt: "Do a quick read-only investigation" },
+        },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "agent.spawn",
+      callId: "call_ksc62mkz",
+      args: { description: "Test specialist", maxRounds: 6, prompt: "Do a quick read-only investigation" },
+    });
+  });
+
+  it("resolves Claude Code calling an already-loaded Jait MCP tool directly, without clobbering the tool's own 'title' arg", () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    // Real trace shape: title is the fully-qualified MCP function name, and
+    // rawInput IS the tool's actual params directly — no {tool, args} wrapper.
+    // user.ask's own schema has a `title` param, which a naive title-copy
+    // (the bug: `args.title = record.title`) would overwrite with the tool's
+    // own identity string instead of the real "Inter-agent interaction model".
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "toolu_018FvvuoFm6VVnFMj4sGMK1u",
+        title: "mcp__jait_core__user_ask",
+        kind: "other",
+        status: "in_progress",
+        rawInput: {
+          title: "Inter-agent interaction model",
+          questions: [{ id: "rendering", header: "Rendering", question: "..." }],
+        },
+      },
+    } as any);
+    unsubscribe();
+
+    expect(events).toContainEqual({
+      type: "tool.start",
+      sessionId: "provider-session-1",
+      tool: "user.ask",
+      callId: "toolu_018FvvuoFm6VVnFMj4sGMK1u",
+      args: {
+        title: "Inter-agent interaction model",
+        questions: [{ id: "rendering", header: "Rendering", question: "..." }],
+      },
+    });
+  });
+
   it("emits read file paths from ACP locations instead of empty rawInput", () => {
     const provider = new AcpProvider({
       id: "codex",
@@ -1029,6 +1107,151 @@ describe("AcpProvider native terminal capability", () => {
       expect(result.sessionId).toBe("thread-1");
       expect(result.exitCode).toBe(3);
     } finally {
+      await provider.dispose();
+    }
+  });
+});
+
+const fakeAcpModeRejectScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_mode" || request.method === "session/set_model" || request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+
+// Mirrors real claude-agent-acp / pi-acp behavior (verified live): they reject
+// the unstable session/set_model RPC entirely, but accept the stable
+// session/set_config_option RPC with configId "model".
+const fakeAcpConfigOptionModelScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_model") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }) + "\\n");
+    }
+  }
+});
+`;
+
+describe("AcpProvider session mode/model failures", () => {
+  it("falls back to session/set_config_option for the model when session/set_model is unimplemented, without logging an error", async () => {
+    // Regression for: claude-agent-acp and pi-acp both reject the unstable
+    // session/set_model RPC ("Method not found"), so the model picked in
+    // Jait's UI silently never applied — the agent just ran on its own
+    // default model. Verified live that both agents DO accept
+    // session/set_config_option with configId "model" instead.
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpConfigOptionModelScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    try {
+      const session = await provider.startSession({
+        threadId: "thread-1",
+        workingDirectory: process.cwd(),
+        model: "opus",
+      });
+
+      expect(session.status).toBe("running");
+      // The fallback succeeded, so no "did not accept model" activity should fire.
+      expect(events.some((e) => e.type === "activity" && "summary" in e && e.summary.includes("did not accept model"))).toBe(false);
+    } finally {
+      unsubscribe();
+      await provider.dispose();
+    }
+  });
+
+  it("surfaces a visible activity event instead of silently swallowing a rejected session/set_mode", async () => {
+    // Regression for: Jait's own "full-access"/"supervised" runtimeMode isn't
+    // a universal ACP modeId, so agents that reject it (or don't implement
+    // session/set_mode at all) used to fail completely silently — the agent
+    // just kept running on its own default mode with zero trace of why the
+    // requested one never took effect.
+    const provider = new AcpProvider({
+      id: "pi",
+      name: "Pi",
+      description: "Pi via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpModeRejectScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    try {
+      const session = await provider.startSession({
+        threadId: "thread-1",
+        workingDirectory: process.cwd(),
+        mode: "full-access",
+        model: "some-model",
+      });
+
+      // The session still starts successfully — a rejected mode/model must
+      // not block the turn, only be reported.
+      expect(session.status).toBe("running");
+
+      expect(events).toContainEqual(expect.objectContaining({
+        type: "activity",
+        kind: "stderr",
+        summary: expect.stringContaining('did not accept mode "full-access"'),
+      }));
+      // Model falls back to session/set_config_option, which also fails here
+      // (the fake agent rejects it too) — that failure must still be reported.
+      expect(events).toContainEqual(expect.objectContaining({
+        type: "activity",
+        kind: "stderr",
+        summary: expect.stringContaining('did not accept model "some-model"'),
+      }));
+    } finally {
+      unsubscribe();
       await provider.dispose();
     }
   });

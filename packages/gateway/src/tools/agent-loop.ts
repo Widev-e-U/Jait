@@ -11,12 +11,20 @@
  * Both the main chat route and the agent.spawn sub-agent tool use this.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
 import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js";
 import { computeContextUsage, estimateMessageTokens, estimateTokens } from "./token-estimator.js";
+import { ToolName } from "./tool-names.js";
+import { createSwarmRound, endSwarmRound } from "./swarm-mailbox.js";
+
+/** Tool names that spawn a sub-agent — either the simplified "agent" core tool or legacy "agent.spawn". */
+function isAgentSpawnToolName(name: string): boolean {
+  return name === ToolName.AgentSpawn || name === ToolName.CoreAgent;
+}
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -1000,6 +1008,8 @@ interface ExecuteOneOptions {
   maxRetries: number;
   onEvent?: (event: AgentLoopEvent) => void;
   executeTool: ToolExecutor;
+  /** When set, this call is one of several agent-spawn calls in the same parallel batch. */
+  swarmRoundId?: string;
 }
 
 async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
@@ -1007,13 +1017,20 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
   executed: ExecutedToolCall;
   historyEntry: AgentMessage;
 }> {
-  const { tc, sessionId, auth, signal, toolRegistry, maxRetries, onEvent, executeTool } = opts;
+  const { tc, sessionId, auth, signal, toolRegistry, maxRetries, onEvent, executeTool, swarmRoundId } = opts;
 
   const startedAt = Date.now();
   let args: unknown;
   try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
 
   const internalName = fromOpenAIName(tc.function.name);
+
+  // Thread the shared swarm mailbox down to agent.spawn's own execute() via a
+  // hidden arg — cheaper than widening ToolExecutor's signature across every
+  // call site. Extra properties are ignored by validateToolInput below.
+  if (swarmRoundId && isAgentSpawnToolName(internalName) && args && typeof args === "object" && !Array.isArray(args)) {
+    args = { ...args, __swarmRoundId: swarmRoundId };
+  }
 
   // ── Input validation (fast reject bad LLM args) ──
   if (toolRegistry) {
@@ -2106,23 +2123,36 @@ export async function runAgentLoop(
         } else {
           // ── Parallel execution ──
           log.info(`Executing ${batch.length} tool calls in parallel`);
-          const results = await Promise.all(
-            batch.map((item) =>
-              executeOneToolCall({
-                tc: item.toolCall,
-                sessionId,
-                auth,
-                signal: abort.signal,
-                toolRegistry,
-                maxRetries,
-                onEvent,
-                executeTool,
-              }),
-            ),
-          );
-          for (const { executed, historyEntry } of results) {
-            executedToolCalls.push(executed);
-            history.push(historyEntry);
+
+          // Swarm round: when 2+ agent-spawn calls land in the same parallel
+          // batch, give them a shared mailbox (agent.message) so the specialists
+          // can post notes to / read from each other while they run.
+          const agentSpawnCount = batch.filter((item) => isAgentSpawnToolName(fromOpenAIName(item.toolCall.function.name))).length;
+          const swarmRoundId = agentSpawnCount >= 2 ? randomUUID() : undefined;
+          if (swarmRoundId) createSwarmRound(swarmRoundId, agentSpawnCount);
+
+          try {
+            const results = await Promise.all(
+              batch.map((item) =>
+                executeOneToolCall({
+                  tc: item.toolCall,
+                  sessionId,
+                  auth,
+                  signal: abort.signal,
+                  toolRegistry,
+                  maxRetries,
+                  onEvent,
+                  executeTool,
+                  swarmRoundId,
+                }),
+              ),
+            );
+            for (const { executed, historyEntry } of results) {
+              executedToolCalls.push(executed);
+              history.push(historyEntry);
+            }
+          } finally {
+            if (swarmRoundId) endSwarmRound(swarmRoundId);
           }
         }
       }

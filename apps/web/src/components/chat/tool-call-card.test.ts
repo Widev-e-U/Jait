@@ -491,6 +491,28 @@ describe('getCallSummary', () => {
     })
   })
 
+  it('summarizes user.ask with the question title, not a raw key/value dump', () => {
+    const args = {
+      title: 'Inter-agent interaction model',
+      questions: [
+        { id: 'rendering', header: 'Rendering', question: '...' },
+        { id: 'scope', header: 'Scope', question: '...' },
+      ],
+    }
+    expect(getCallSummary('user.ask', args)).toBe('Inter-agent interaction model (+1 more)')
+    expect(getToolInvocationLabels('user.ask', args)).toEqual({
+      running: 'Asking a question',
+      done: 'Asked a question',
+    })
+  })
+
+  it('falls back to the first question header/text when user.ask has no title', () => {
+    expect(getCallSummary('user.ask', { questions: [{ header: 'Rendering', question: 'How should this look?' }] }))
+      .toBe('Rendering')
+    expect(getCallSummary('user.ask', { questions: [{ question: 'How should this look?' }] }))
+      .toBe('How should this look?')
+  })
+
   it('uses ACP read result text as a file summary when args are empty', () => {
     expect(getCallSummary(
       'read_file',

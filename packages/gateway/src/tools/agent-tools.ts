@@ -44,6 +44,13 @@ interface AgentSpawnInput {
   allowedTools?: string;
   /** Max tool-calling rounds for the sub-agent (0 = no cap, default). */
   maxRounds?: number;
+  /**
+   * Internal only — never part of the tool's JSON schema, so the model can't
+   * set it itself. Injected by the agent loop when this spawn call is one of
+   * several running concurrently in the same parallel batch (see
+   * agent-loop.ts / swarm-mailbox.ts); grants access to agent.message.
+   */
+  __swarmRoundId?: string;
 }
 
 // ── Default allowed tools for sub-agents ─────────────────────────────
@@ -258,6 +265,15 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
         };
       }
 
+      // Running alongside siblings in the same swarm batch — grant access to
+      // agent.message so they can talk to each other. Copy the set first:
+      // `allowedTools` may still be the shared DEFAULT_SUBAGENT_TOOLS singleton.
+      const swarmRoundId = input.__swarmRoundId;
+      if (swarmRoundId) {
+        allowedTools = new Set(allowedTools);
+        allowedTools.add(ToolName.AgentMessage);
+      }
+
       // ── Build sub-agent tool schemas ──
       const toolSchemas = buildToolSchemas(toolRegistry, allowedTools);
       const hasTools = toolSchemas.length > 0;
@@ -302,6 +318,8 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           runtimeMode: context.runtimeMode,
           onOutputChunk: onChunk,
           signal,
+          swarmRoundId,
+          swarmParticipant: swarmRoundId ? input.description : undefined,
         };
         return toolRegistry.execute(name, args, subContext, audit);
       };

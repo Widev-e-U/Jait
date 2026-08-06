@@ -2017,11 +2017,15 @@ function App() {
   const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingCliModels) return
+    // Persist a model selection for every provider the user has picked one
+    // for — not just a hardcoded subset. A fixed allow-list here silently
+    // drops the selection (and it "resets to default" every reload) for any
+    // provider added after this list was last updated (e.g. pi, pi-gemini,
+    // cursor, deepagents never made it onto the original jait/codex/claude-code list).
     const nextModels: Partial<Record<CliProviderId, string | null>> = {}
-    for (const providerId of ['jait', 'codex', 'claude-code'] as const) {
-      const value = cliModelsByProvider[providerId]
+    for (const [providerId, value] of Object.entries(cliModelsByProvider)) {
       if (typeof value === 'string' && value.trim()) {
-        nextModels[providerId] = value
+        nextModels[providerId as CliProviderId] = value
       }
     }
 

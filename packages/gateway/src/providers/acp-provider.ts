@@ -733,11 +733,42 @@ export class AcpProvider implements CliProviderAdapter {
         mcpServers: (options.mcpServers ?? []).map(toAcpMcpServer),
       });
 
+      // These calls can legitimately fail — not every ACP agent implements
+      // `session/set_mode` or the unstable set-model RPC, and `options.mode`
+      // ("full-access"/"supervised") is Jait's own vocabulary rather than a
+      // universal ACP modeId, so an agent may reject it outright. Swallowing
+      // the error used to leave zero trace: the agent would silently keep
+      // running on its own default mode/model with no way to tell from the
+      // outside why the requested one "didn't stick". Surface it as an
+      // activity event instead so it shows up like any other provider issue.
       if (options.mode) {
-        await connection.setSessionMode({ sessionId: newSession.sessionId, modeId: options.mode }).catch(() => {});
+        await connection.setSessionMode({ sessionId: newSession.sessionId, modeId: options.mode }).catch((err) => {
+          this.emitEvent({
+            type: "activity",
+            sessionId,
+            kind: "stderr",
+            summary: `${this.info.name} did not accept mode "${options.mode}": ${extractErrorMessage(err, "unknown error")}`,
+          });
+        });
       }
       if (options.model) {
-        await connection.unstable_setSessionModel({ sessionId: newSession.sessionId, modelId: options.model }).catch(() => {});
+        // `unstable_setSessionModel` (session/set_model) is genuinely unstable —
+        // Codex implements it, but Claude Code's and Pi's ACP wrappers don't
+        // ("Method not found"). Both of those *do* support the stable
+        // session/set_config_option RPC with configId "model" instead, and the
+        // model id Jait passes here always comes from that same agent's own
+        // listModels()/session-new model list, so it's already a value the
+        // agent recognizes — no vocabulary mismatch like runtimeMode has.
+        await connection.unstable_setSessionModel({ sessionId: newSession.sessionId, modelId: options.model }).catch(() =>
+          connection.setSessionConfigOption({ sessionId: newSession.sessionId, configId: "model", value: options.model! }),
+        ).catch((err) => {
+          this.emitEvent({
+            type: "activity",
+            sessionId,
+            kind: "stderr",
+            summary: `${this.info.name} did not accept model "${options.model}": ${extractErrorMessage(err, "unknown error")}`,
+          });
+        });
       }
     } catch (error) {
       child.kill();
@@ -1247,26 +1278,53 @@ function getAcpJaitMcpCall(update: unknown): { tool: string; args: Record<string
   if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return null;
 
   const wrapper = rawInput as Record<string, unknown>;
+  const title = typeof record["title"] === "string" ? record["title"].trim() : "";
+
+  // Shape 3: Claude Code calling an already-loaded Jait MCP tool directly (not
+  // through the deferred-tool dispatcher) — ACP reports the fully-qualified
+  // name as `title` ("mcp__<server>__<tool>") and `rawInput` IS the tool's real
+  // arguments already, completely unwrapped. Must be checked first: falling
+  // through to the generic-dispatcher logic below would blindly overwrite a
+  // tool's own `title` argument (e.g. user.ask's) with this identity string.
+  const qualifiedMatch = title.match(/^mcp__(?:jait_core|jait)__(.+)$/);
+  if (qualifiedMatch) {
+    return { tool: qualifiedMatch[1]!.replace(/_/g, "."), args: wrapper };
+  }
+
   const server = typeof wrapper["server"] === "string" ? wrapper["server"].trim() : "";
-  if (server !== JAIT_CORE_MCP_SERVER_NAME && server !== JAIT_DEFERRED_MCP_SERVER_NAME) return null;
+  const hasJaitServer = server === JAIT_CORE_MCP_SERVER_NAME || server === JAIT_DEFERRED_MCP_SERVER_NAME;
+  // Codex's code-mode wrapper carries an explicit `server` field. Claude Code's ACP
+  // bridge omits `server` entirely and nests args under `args` instead of `arguments`,
+  // but still reports the outer tool_call `title` as the literal string "mcp" — use
+  // that as the fallback signal that this is a Jait deferred-tool dispatch call.
+  if (!hasJaitServer && title !== "mcp") return null;
 
-  const rawTool = typeof wrapper["tool"] === "string" ? wrapper["tool"].trim() : "";
+  let rawTool = typeof wrapper["tool"] === "string" ? wrapper["tool"].trim() : "";
   if (!rawTool) return null;
+  // Codex's `tool` field is already bare (server is a separate field), but Claude
+  // Code's collapsed naming folds the server name into `tool` itself
+  // (e.g. "jait_agent_spawn" for server "jait", tool "agent_spawn") — strip it so
+  // both shapes resolve to the same normalized identity ("agent.spawn").
+  if (!hasJaitServer) {
+    if (rawTool.startsWith("jait_core_")) rawTool = rawTool.slice("jait_core_".length);
+    else if (rawTool.startsWith("jait_")) rawTool = rawTool.slice("jait_".length);
+  }
+  const normalizedTool = rawTool.replace(/_/g, ".");
 
-  const rawArgs = wrapper["arguments"];
+  const rawArgs = wrapper["arguments"] ?? wrapper["args"];
   if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
-    return { tool: rawTool.replace(/_/g, "."), args: rawArgs as Record<string, unknown> };
+    return { tool: normalizedTool, args: rawArgs as Record<string, unknown> };
   }
   if (typeof rawArgs === "string") {
     try {
       const parsed = JSON.parse(rawArgs) as unknown;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return { tool: rawTool.replace(/_/g, "."), args: parsed as Record<string, unknown> };
+        return { tool: normalizedTool, args: parsed as Record<string, unknown> };
       }
     } catch {}
   }
 
-  return { tool: rawTool.replace(/_/g, "."), args: {} };
+  return { tool: normalizedTool, args: {} };
 }
 
 function getAcpToolName(update: unknown): string {

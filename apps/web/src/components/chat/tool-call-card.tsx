@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -80,6 +80,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'agent.run':       { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
   'agent.search':    { icon: Network,   label: 'Agent',       color: 'text-purple-500' },
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
+  'user.ask':        { icon: HelpCircle, label: 'Question',   color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
   'thread.control':  { icon: Network,   label: 'Threads',     color: 'text-purple-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
@@ -261,6 +262,9 @@ export function getToolInvocationLabels(
   }
   if (normalized === 'todo') {
     return { running: 'Updating tasks', done: 'Updated tasks' }
+  }
+  if (normalized === 'user.ask') {
+    return { running: 'Asking a question', done: 'Asked a question' }
   }
   if (normalized === 'skill') {
     const names = displayStr(args.skills)
@@ -959,6 +963,16 @@ export function getCallSummary(
     const inProgress = list.filter(t => t.status === 'in-progress')
     if (inProgress.length) return truncate(inProgress[0].title, 60)
     return `${list.length} task(s)`
+  }
+  if (normalized === 'user.ask') {
+    const questions = Array.isArray(normalizedArgs.questions)
+      ? normalizedArgs.questions as Array<{ question?: string; header?: string }>
+      : []
+    const label = displayStr(normalizedArgs.title)
+      || questions[0]?.header
+      || questions[0]?.question
+      || 'Question'
+    return questions.length > 1 ? `${label} (+${questions.length - 1} more)` : label
   }
   if (normalized === 'jait') {
     const action = displayStr(args.action)
@@ -3496,13 +3510,16 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
 }
 
 /**
- * Swarm specialist block. Renders one spawned sub-agent as a slim, collapsed
+ * Agent specialist block. Renders one spawned sub-agent as a slim, collapsed
  * tool-call row ("Sub-agent" + one-line mission description, ellipsed, with
  * an explicit "Show more" toggle on the right) with the specialist's *actual*
  * work — its tool calls and final markdown answer — rendered below it at the
- * SAME depth as normal chat, not nested inside an indented card.
+ * SAME depth as normal chat, not nested inside an indented card. Applies to
+ * every agent-type call individually — whether it's the only one in its turn
+ * or running alongside independent siblings — so each specialist gets this
+ * treatment on its own rather than sharing one merged/collapsed unit.
  */
-function SwarmSpecialistBlock({
+function AgentSpecialistBlock({
   call,
   childCalls,
   threadControlThreads,
@@ -3619,6 +3636,56 @@ function SwarmSpecialistBlock({
   )
 }
 
+/** Renders a top-level call: agent-type calls get the specialist block treatment, everything else the normal card. */
+function TopLevelToolCall({
+  call,
+  childCalls,
+  threadControlThreads,
+  onOpenTerminal,
+  onOpenDiff,
+  renderInlineSecretPrompt,
+  onApprovalResponse,
+  hideTopConnector,
+  hideBottomConnector,
+}: {
+  call: ToolCallInfo
+  childCalls?: ToolCallInfo[]
+  threadControlThreads?: ThreadListRecord[]
+  onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (path: string) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (callId: string, approve: boolean) => void
+  hideTopConnector?: boolean
+  hideBottomConnector?: boolean
+}) {
+  if (isAgentToolName(call.tool)) {
+    return (
+      <AgentSpecialistBlock
+        call={call}
+        childCalls={childCalls}
+        threadControlThreads={threadControlThreads}
+        onOpenTerminal={onOpenTerminal}
+        onOpenDiff={onOpenDiff}
+        renderInlineSecretPrompt={renderInlineSecretPrompt}
+        onApprovalResponse={onApprovalResponse}
+      />
+    )
+  }
+  return (
+    <ToolCallCard
+      call={call}
+      childCalls={childCalls}
+      threadControlThreads={threadControlThreads}
+      onOpenTerminal={onOpenTerminal}
+      onOpenDiff={onOpenDiff}
+      renderInlineSecretPrompt={renderInlineSecretPrompt}
+      onApprovalResponse={onApprovalResponse}
+      hideTopConnector={hideTopConnector}
+      hideBottomConnector={hideBottomConnector}
+    />
+  )
+}
+
 function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
@@ -3627,11 +3694,6 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
   // Compute agent nesting so inner-agent tool calls render inside the agent card
   const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
   const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
-
-  // Swarm mode: a single turn spawns several specialist sub-agents in parallel.
-  // Each specialist renders as a slim collapsed "Sub-agent" row followed by its
-  // actual tool calls + final answer as a normal chat at the same depth.
-  const isSwarmLayout = topLevelCalls.length >= 2 && topLevelCalls.every(c => isAgentToolName(c.tool))
 
   const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
   const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
@@ -3655,25 +3717,6 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
   const totalSuccessCount = completedCalls.filter(c => c.status === 'success').length
   const totalErrorCount = completedCalls.filter(c => c.status === 'error').length
   const SummaryIcon = getToolCallWrapperIcon(completedCalls)
-
-  if (isSwarmLayout) {
-    return (
-      <div className="my-1">
-        {topLevelCalls.map((call) => (
-          <SwarmSpecialistBlock
-            key={call.callId}
-            call={call}
-            childCalls={childMap.get(call.callId)}
-            threadControlThreads={threadControlThreads}
-            onOpenTerminal={onOpenTerminal}
-            onOpenDiff={onOpenDiff}
-            renderInlineSecretPrompt={renderInlineSecretPrompt}
-            onApprovalResponse={onApprovalResponse}
-          />
-        ))}
-      </div>
-    )
-  }
 
   if (shouldCollapseGroup && !groupOpen) {
     return (
@@ -3736,7 +3779,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
         </button>
       )}
       {showAll && completedCalls.slice(0, hiddenCount).map((call, index, arr) => (
-        <ToolCallCard
+        <TopLevelToolCall
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}
@@ -3750,7 +3793,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
         />
       ))}
       {visibleCompleted.map((call, index) => (
-        <ToolCallCard
+        <TopLevelToolCall
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}
@@ -3764,7 +3807,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
         />
       ))}
       {activeCalls.map((call, index) => (
-        <ToolCallCard
+        <TopLevelToolCall
           key={call.callId}
           call={call}
           childCalls={childMap.get(call.callId)}

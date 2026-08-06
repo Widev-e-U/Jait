@@ -20,6 +20,14 @@ export interface ToolContext {
   onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
+  /**
+   * When set, this tool call is running as one of several specialists spawned
+   * concurrently in the same swarm batch — `swarmRoundId` identifies the shared
+   * mailbox (see swarm-mailbox.ts) and `swarmParticipant` is this specialist's
+   * own label (its `description`) for messages it posts.
+   */
+  swarmRoundId?: string;
+  swarmParticipant?: string;
 }
 
 export interface ToolResult {

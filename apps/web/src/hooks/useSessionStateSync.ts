@@ -69,6 +69,19 @@ export function useSessionStateSync({
   const prevTodoListPayloadRef = useRef<string | null>(null)
   const prevThreadQueuePayloadRef = useRef<string | null>(null)
 
+  // Reset dedup refs on session switch so the persistence effects re-save
+  // the current value for the new session instead of short-circuiting when
+  // the value happens to match the previous session's (e.g. both
+  // 'full-access'). Without this, chat.providerRuntimeMode / chat.mode /
+  // chat.responseStyle / chat.view are never written for chats opened after
+  // the first one, so they "reset to default" on every reload.
+  useEffect(() => {
+    prevChatModePayloadRef.current = null
+    prevChatResponseStylePayloadRef.current = null
+    prevProviderRuntimeModePayloadRef.current = null
+    prevChatViewPayloadRef.current = null
+  }, [activeSessionId])
+
   useEffect(() => {
     if (activeSessionId && token && !wsFullStateReceivedRef.current) return
     const payload = { open: showMobileToolbar }

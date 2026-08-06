@@ -77,6 +77,15 @@ export function useSessionState<T>(
       return
     }
 
+    // Cancel any pending debounced PATCH from the previous session —
+    // otherwise it fires after latestRef is reset to null below and
+    // silently deletes the key (e.g. chat.providerRuntimeMode) for the
+    // old session, causing the mode to "reset to default" on next visit.
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+
     // Reset to null immediately so stale values from the previous session
     // don't briefly leak into UI (e.g. terminal panel flash on project switch).
     setValueLocal(null)

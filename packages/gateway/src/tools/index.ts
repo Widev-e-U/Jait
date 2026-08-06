@@ -59,6 +59,7 @@ export { createSessionSearchTool } from "./session-search-tools.js";
 export { createChatTracesTool } from "./chat-traces-tools.js";
 export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
+export { createAgentMessageTool } from "./agent-message-tool.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createEmailTools } from "./email-tools.js";
@@ -195,6 +196,7 @@ import { createSessionSearchTool } from "./session-search-tools.js";
 import { createChatTracesTool } from "./chat-traces-tools.js";
 import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
+import { createAgentMessageTool } from "./agent-message-tool.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createEmailTools } from "./email-tools.js";
@@ -570,6 +572,8 @@ export function createToolRegistry(
     tools.register(createAgentTool(agentDeps));
     // Standard: legacy "agent.spawn" tool (backward compat)
     tools.register(createAgentSpawnTool(agentDeps));
+    // Lets concurrently-spawned swarm specialists message each other mid-run
+    tools.register(createAgentMessageTool());
   }
 
   return tools;
