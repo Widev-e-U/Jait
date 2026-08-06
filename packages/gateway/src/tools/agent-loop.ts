@@ -12,7 +12,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { ToolDefinition, ToolResult } from "./contracts.js";
+import type { NestedAgentEvent, ToolDefinition, ToolResult } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, SWARM_ORCHESTRATION_TOOLS, type PlannedAction } from "./chat-modes.js";
@@ -146,7 +146,7 @@ export type AgentLoopEvent =
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string; parent_call_id?: string }
-  | { type: "tool_output"; call_id: string; content: string }
+  | { type: "tool_output"; call_id: string; content: string; channel?: "text" | "thinking" }
   | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; parent_call_id?: string; data?: unknown }
   | { type: "tool_retry"; call_id: string; attempt: number; maxAttempts: number }
   | { type: "tool_validation_error"; call_id: string; tool: string; errors: string[] }
@@ -1090,7 +1090,16 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
 
     result = await executeTool(internalName, args, sessionId, auth, (chunk) => {
       onEvent?.({ type: "tool_output", call_id: tc.id, content: chunk });
-    }, signal);
+    }, signal, (nested) => {
+      // Sub-agent work surfaces as real events on this turn's stream. The tool
+      // doesn't know its own call id, so stamp it here: its own text/thinking
+      // belongs to this call, and the tool calls it makes hang under it.
+      if (nested.type === "tool_output") {
+        onEvent?.({ ...nested, call_id: nested.call_id || tc.id });
+      } else {
+        onEvent?.({ ...nested, parent_call_id: nested.parent_call_id ?? tc.id });
+      }
+    });
 
     if (result.ok) break;
 
@@ -1196,6 +1205,8 @@ export type ToolExecutor = (
   auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string },
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
+  /** Lets a tool emit nested tool-call events (sub-agent work) onto this turn's stream. */
+  onNestedEvent?: (event: NestedAgentEvent) => void,
 ) => Promise<ToolResult>;
 
 // ── Main agent loop ──────────────────────────────────────────────────

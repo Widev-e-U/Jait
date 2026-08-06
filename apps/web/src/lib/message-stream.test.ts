@@ -106,6 +106,49 @@ describe('createMessageStream', () => {
     vi.useRealTimers()
   })
 
+  it('accumulates a sub-agent run into ordered child segments (thinking, tools, prose interleaved)', () => {
+    const stream = createMessageStream()
+    // Parent agent call starts
+    stream.pushToolStart('agent1', 'agent.spawn', { prompt: 'do work' })
+    // Sub-agent thinks, then runs tool #1
+    stream.pushToolOutput('agent1', 'thinking one', 'thinking')
+    stream.pushToolStart('read1', 'read', { path: 'a.ts' }, 'agent1')
+    stream.pushToolOutput('read1', 'file contents')
+    stream.pushToolResult('read1', true, 'read ok', { lines: 1 }, 'agent1')
+    // Thinks again, then runs tool #2
+    stream.pushToolOutput('agent1', 'thinking two', 'thinking')
+    stream.pushToolStart('grep1', 'grep', { pattern: 'x' }, 'agent1')
+    stream.pushToolResult('grep1', true, 'grep ok', {}, 'agent1')
+    // Then streams its final prose answer
+    stream.pushToolOutput('agent1', 'final answer text', 'text')
+
+    const snap = stream.snapshot()
+    const agent = snap.toolCalls.find(tc => tc.callId === 'agent1')!
+    expect(agent.childSegments).toEqual([
+      { type: 'thinking', content: 'thinking one' },
+      { type: 'toolGroup', callIds: ['read1'] },
+      { type: 'thinking', content: 'thinking two' },
+      { type: 'toolGroup', callIds: ['grep1'] },
+      { type: 'text', content: 'final answer text' },
+    ])
+    // The child tool is stamped as a sub-agent call and keeps its own output
+    const read1 = snap.toolCalls.find(tc => tc.callId === 'read1')!
+    expect(read1.parentCallId).toBe('agent1')
+    expect(read1.streamingOutput).toBe('file contents')
+    // Concatenated streams are still kept for fallback/legacy paths
+    expect(agent.streamingThinking).toBe('thinking onethinking two')
+    expect(agent.streamingOutput).toBe('final answer text')
+  })
+
+  it('does not attach child segments when the parent is not an agent call', () => {
+    const stream = createMessageStream()
+    stream.pushToolStart('read1', 'read', { path: 'a.ts' })
+    stream.pushToolStart('grep1', 'grep', { pattern: 'x' }, 'read1')
+    const snap = stream.snapshot()
+    const read1 = snap.toolCalls.find(tc => tc.callId === 'read1')!
+    expect(read1.childSegments).toBeUndefined()
+  })
+
   it('hydrates from a snapshot and re-seeds seen tool call IDs', () => {
     const stream = createMessageStream()
     stream.hydrate({

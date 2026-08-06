@@ -6,7 +6,7 @@ import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { UserService } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { ToolContext, ToolOutputStreamMetadata } from "../tools/contracts.js";
+import type { NestedAgentEvent, ToolContext, ToolOutputStreamMetadata } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryEntry, MemoryScope, MemoryService } from "../memory/contracts.js";
@@ -2060,6 +2060,7 @@ export function registerChatRoutes(
     auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; jaitBackend?: string; runtimeMode?: string },
     onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void,
     signal?: AbortSignal,
+    onNestedEvent?: (event: NestedAgentEvent) => void,
   ): Promise<ToolResult> {
     if (!toolRegistry) {
       return { ok: false, message: "Tool registry not available" };
@@ -2086,6 +2087,7 @@ export function registerChatRoutes(
       jaitBackend: auth?.jaitBackend,
       runtimeMode: auth?.runtimeMode,
       onOutputChunk,
+      onNestedEvent,
       signal,
     };
     try {
@@ -3167,7 +3169,9 @@ export function registerChatRoutes(
           if (event.type === "token") accumulateToken(sessionId, event.content);
           else if (event.type === "thinking") accumulateThinking(sessionId, event.content);
           else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args, event.parent_call_id);
-          else if (event.type === "tool_output") accumulateToolOutput(sessionId, event.call_id, event.content);
+          // Sub-agent reasoning streams on its own channel — keep it out of the
+          // call's output accumulator so reload snapshots don't mix the two.
+          else if (event.type === "tool_output" && event.channel !== "thinking") accumulateToolOutput(sessionId, event.call_id, event.content);
           else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
 
           // ── Cross-client sync: persist & broadcast state changes ──

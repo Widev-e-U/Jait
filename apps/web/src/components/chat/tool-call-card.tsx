@@ -13,6 +13,8 @@ import { agentsApi } from '@/lib/agents-api'
 import type { ThreadActivity } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
+import { AssistantBody } from '@/components/chat/assistant-body'
+import type { MessageSegment } from '@/hooks/useChat'
 
 /** Auto-scroll a container to the bottom when content changes. */
 function useAutoScroll<T extends HTMLElement = HTMLPreElement>(dep: unknown) {
@@ -45,6 +47,12 @@ export interface ToolCallInfo {
   approvalState?: 'pending' | 'approved' | 'rejected'
   result?: { ok: boolean; message: string; data?: unknown }
   streamingOutput?: string
+  /** Live reasoning stream (sub-agent thinking), kept separate from output */
+  streamingThinking?: string
+  /** Ordered interleaved segments of a sub-agent's work (thinking / tool groups /
+   *  text) captured from the live event stream, so a sub-agent renders like a
+   *  normal chat instead of one flat thinking block + batched tool group. */
+  childSegments?: MessageSegment[]
   /** Accumulated raw JSON argument string while LLM is still streaming the tool call */
   streamingArgs?: string
   startedAt: number
@@ -1900,7 +1908,7 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   return (
     <div className="space-y-2 px-3 py-2.5">
       {prompt && (
-        <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2 text-xs leading-5 text-foreground/90">
+        <div className="text-xs leading-5 text-foreground/90">
           <span className="mr-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
           <span className={cn('whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}>{prompt}</span>
           {prompt.length > 120 && (
@@ -3237,33 +3245,15 @@ function ToolCallCardInner({
     <ImageView src={imageDataUri} alt="Image" caption={typeof normalizedArgs.path === 'string' ? `Image: ${normalizedArgs.path}` : undefined} />
   ) : bodyKind === 'subagent' ? (
     childCalls && childCalls.length > 0 ? (
-      <div className="text-xs">
-        <SubAgentMission args={normalizedArgs} />
-        <SubAgentLiveActivity
-          output={call.streamingOutput}
-          isRunning={call.status === 'running' || call.status === 'pending'}
-        />
-        <div className="py-1">
-          {childCalls.map((child) => (
-            <ToolCallCard
-              key={child.callId}
-              call={child}
-              threadControlThreads={threadControlThreads}
-              onOpenTerminal={onOpenTerminal}
-              onOpenDiff={onOpenDiff}
-              renderInlineSecretPrompt={renderInlineSecretPrompt}
-              onApprovalResponse={onApprovalResponse}
-            />
-          ))}
-        </div>
-        {call.result?.message && (call.status === 'success' || call.status === 'error') && (
-          <div className="px-3 py-2.5">
-            <div className="max-h-64 overflow-auto">
-              <AssistantMarkdown content={call.result.message} />
-            </div>
-          </div>
-        )}
-      </div>
+      <AgentSpecialistBlock
+        call={call}
+        childCalls={childCalls}
+        threadControlThreads={threadControlThreads}
+        onOpenTerminal={onOpenTerminal}
+        onOpenDiff={onOpenDiff}
+        renderInlineSecretPrompt={renderInlineSecretPrompt}
+        onApprovalResponse={onApprovalResponse}
+      />
     ) : (
       <SubAgentHistoryView
         args={normalizedArgs}
@@ -3510,14 +3500,12 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
 }
 
 /**
- * Agent specialist block. Renders one spawned sub-agent as a slim, collapsed
- * tool-call row ("Sub-agent" + one-line mission description, ellipsed, with
- * an explicit "Show more" toggle on the right) with the specialist's *actual*
- * work — its tool calls and final markdown answer — rendered below it at the
- * SAME depth as normal chat, not nested inside an indented card. Applies to
- * every agent-type call individually — whether it's the only one in its turn
- * or running alongside independent siblings — so each specialist gets this
- * treatment on its own rather than sharing one merged/collapsed unit.
+ * Agent specialist block. Renders one spawned sub-agent as a normal chat at the
+ * SAME depth as the parent: the delegated mission as markdown text (only the
+ * *description* is collapsed to a one-liner with a "Show more" toggle), followed
+ * by the sub-agent's live thinking block, its tool calls, and its final markdown
+ * answer — all without an enclosing card or border so it fits the surrounding
+ * chat design. Applies to every agent-type call individually.
  */
 function AgentSpecialistBlock({
   call,
@@ -3538,100 +3526,82 @@ function AgentSpecialistBlock({
 }) {
   const [missionOpen, setMissionOpen] = useState(false)
   const displayTool = normalizeTool(call.tool)
-  const meta = getToolMeta(displayTool)
   const resultRecord = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
     ? call.result.data as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultRecord)
   const isRunning = call.status === 'running' || call.status === 'pending'
-  const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
-  const Icon = meta.icon
-
   const missionText = displayStr(normalizedArgs.prompt ?? normalizedArgs.message ?? normalizedArgs.description).trim()
-  const description = summary || missionText || meta.label
-  const canExpandMission = missionText.length > 0 && missionText.length > description.length
+  const canExpandMission = missionText.length > 140
   const allowedTools = displayStr(normalizedArgs.allowedTools).trim().split(',').map((tool) => tool.trim()).filter(Boolean)
 
-  // The specialist's own children may themselves contain nested agents
-  const { childMap: innerChildMap } = useMemo(() => computeAgentNesting(childCalls ?? []), [childCalls])
-
-  // Final markdown answer (prefer structured content, fall back to the message)
+  // Live reasoning stream + final markdown answer (prefer structured content)
+  const thinking = call.streamingThinking ?? ''
   const content = (typeof resultRecord?.content === 'string' ? resultRecord.content.trim() : '')
     || (call.result?.message ? call.result.message.trim() : '')
     || ''
 
-  return (
-    <div className="my-1.5">
-      {/* Slim collapsed "sub-agent" row */}
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-2 py-1.5">
-        <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
-        <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Sub-agent
-        </span>
-        <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={description}>
-          {description}
-        </span>
-        {canExpandMission && (
-          <button
-            type="button"
-            onClick={() => setMissionOpen((o) => !o)}
-            className="shrink-0 text-2xs font-medium text-primary hover:underline"
-          >
-            {missionOpen ? 'Show less' : 'Show more'}
-          </button>
-        )}
-        {isRunning ? (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-        ) : call.status === 'success' ? (
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
-        ) : call.status === 'error' ? (
-          <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
-        ) : null}
-      </div>
+  // Render the specialist's actual work through the SAME chat body renderer used
+  // for a normal assistant message: live reasoning → tool cards → markdown answer.
+  // The delegated mission stays as a compact one-line description above this body.
+  const liveText = isRunning ? (call.streamingOutput ?? '') : ''
+  // Prefer the ordered segments captured from the live event stream — a real agent
+  // run interleaves multiple thinking blocks and tool calls across rounds. Historical /
+  // persisted calls carry no childSegments, so fall back to a best-effort reconstruction.
+  const childSegments = call.childSegments
+  const bodySegments = useMemo<MessageSegment[]>(() => {
+    if (childSegments && childSegments.length > 0) return childSegments
+    const segs: MessageSegment[] = []
+    if (thinking.trim()) segs.push({ type: 'thinking', content: thinking })
+    if (childCalls && childCalls.length > 0) segs.push({ type: 'toolGroup', callIds: childCalls.map((c) => c.callId) })
+    if (liveText.trim()) segs.push({ type: 'text', content: liveText })
+    if (content) segs.push({ type: 'text', content })
+    return segs
+  }, [childSegments, thinking, childCalls, liveText, content])
 
-      {/* Expanded mission detail (show-more target) — full text, no re-truncation */}
-      {missionOpen && (missionText || allowedTools.length > 0) && (
-        <div className="space-y-2 px-3 py-2">
-          {missionText && (
-            <div className="whitespace-pre-wrap break-words text-xs leading-5 text-foreground/90">{missionText}</div>
-          )}
-          {allowedTools.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {allowedTools.map((tool) => (
-                <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
-              ))}
-            </div>
+  return (
+    <div className="space-y-1">
+      {/* Delegated mission — a one-liner (ellipsed) with a show-more toggle that
+          reveals the full description in place. The card header above shows the
+          normal "Sub-agent" tool-call title; no extra border here. */}
+      {missionText && (
+        <div className="px-0.5 py-1">
+          <div className={cn('whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 [overflow-wrap:anywhere]', !missionOpen && 'line-clamp-1')}>
+            <AssistantMarkdown content={missionText} compact />
+          </div>
+          {canExpandMission && (
+            <button
+              type="button"
+              onClick={() => setMissionOpen((o) => !o)}
+              className="mt-0.5 text-2xs font-medium text-primary hover:underline"
+            >
+              {missionOpen ? 'Show less' : 'Show more'}
+            </button>
           )}
         </div>
       )}
+      {allowedTools.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-0.5">
+          {allowedTools.map((tool) => (
+            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+          ))}
+        </div>
+      )}
 
-      {/* The specialist's actual work — rendered as a normal chat at the same depth */}
-      <div className="mt-1 space-y-1">
-        <SubAgentLiveActivity output={call.streamingOutput} isRunning={isRunning} />
-        {childCalls && childCalls.length > 0 && (
-          <>
-            {childCalls.map((child, index) => (
-              <ToolCallCard
-                key={child.callId}
-                call={child}
-                childCalls={innerChildMap.get(child.callId)}
-                threadControlThreads={threadControlThreads}
-                onOpenTerminal={onOpenTerminal}
-                onOpenDiff={onOpenDiff}
-                renderInlineSecretPrompt={renderInlineSecretPrompt}
-                onApprovalResponse={onApprovalResponse}
-                hideTopConnector={index === 0}
-                hideBottomConnector={index === childCalls.length - 1 && !content}
-              />
-            ))}
-          </>
-        )}
-        {!isRunning && content && (
-          <div className="px-0.5 py-1">
-            <AssistantMarkdown content={content} />
-          </div>
-        )}
-      </div>
+      {/* The specialist's actual work — rendered through the same chat body renderer
+          as a normal assistant message (thinking block + tool cards + markdown). */}
+      <AssistantBody
+        segments={bodySegments}
+        toolCalls={childCalls ?? []}
+        isStreaming={isRunning}
+        hasStreamingText={!!content}
+        threadControlThreads={threadControlThreads}
+        onOpenTerminal={onOpenTerminal}
+        onOpenDiff={onOpenDiff}
+        renderInlineSecretPrompt={renderInlineSecretPrompt}
+        onApprovalResponse={onApprovalResponse}
+        compact
+      />
     </div>
   )
 }
@@ -3658,19 +3628,6 @@ function TopLevelToolCall({
   hideTopConnector?: boolean
   hideBottomConnector?: boolean
 }) {
-  if (isAgentToolName(call.tool)) {
-    return (
-      <AgentSpecialistBlock
-        call={call}
-        childCalls={childCalls}
-        threadControlThreads={threadControlThreads}
-        onOpenTerminal={onOpenTerminal}
-        onOpenDiff={onOpenDiff}
-        renderInlineSecretPrompt={renderInlineSecretPrompt}
-        onApprovalResponse={onApprovalResponse}
-      />
-    )
-  }
   return (
     <ToolCallCard
       call={call}

@@ -1,5 +1,5 @@
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps } from 'react'
-import { AlertTriangle, ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
 import {
   Message as AIMessage,
@@ -23,6 +23,7 @@ import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
+import { AssistantBody, shouldUseAgentToolCallWrapper } from './assistant-body'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
 import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
@@ -50,12 +51,6 @@ import {
   serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
-
-const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
-
-export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
-  return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
-}
 
 interface MessageProps {
   messageId?: string
@@ -747,98 +742,22 @@ function MessageInner({
             'relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]',
             hasSteeringSegment && '[&>*]:max-w-[85%]',
           )}>
-            {(() => {
-              return segments.map((seg, i) => {
-                if (seg.type === 'toolGroup') {
-                  const callIds = Array.isArray(seg.callIds) ? seg.callIds : []
-                  const calls = (toolCalls ?? []).filter((tc) => callIds.includes(tc.callId))
-                  // Collapse completed tool groups that are followed by text
-                  const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
-                  return calls.length > 0 ? (
-                    shouldUseAgentToolCallWrapper(provider, calls) ? (
-                      <AgentToolCallWrapper
-                        key={`tg-${i}`}
-                        provider={provider}
-                        calls={calls}
-                        isStreaming={!!isStreaming && i === segments.length - 1}
-                        threadControlThreads={threadControlThreads}
-                        onOpenTerminal={onOpenTerminal}
-                        onOpenDiff={onOpenDiff}
-                        renderInlineSecretPrompt={renderInlineSecretPrompt}
-                        onApprovalResponse={onApprovalResponse}
-                      />
-                    ) : (
-                      <ToolCallGroup
-                        key={`tg-${i}`}
-                        calls={calls}
-                        collapsible={followedByText}
-                        threadControlThreads={threadControlThreads}
-                        onOpenTerminal={onOpenTerminal}
-                        onOpenDiff={onOpenDiff}
-                        renderInlineSecretPrompt={renderInlineSecretPrompt}
-                        onApprovalResponse={onApprovalResponse}
-                      />
-                    )
-                  ) : null
-                }
-
-                if (seg.type === 'thinking') {
-                  return seg.content.trim() ? (
-                    <Reasoning
-                      key={`th-${i}`}
-                      content={seg.content}
-                      isStreaming={!!isStreaming && i === segments.length - 1}
-                      duration={thinkingDuration}
-                    />
-                  ) : null
-                }
-
-                if (seg.type === 'error') {
-                  return (
-                    <div key={`err-${i}`} className="flex items-start gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="min-w-0 break-words">{seg.content}</span>
-                    </div>
-                  )
-                }
-
-                if (seg.type === 'steering') {
-                  return (
-                    <div key={`sg-${i}`} className="relative ml-auto flex w-fit max-w-full flex-col items-end">
-                      <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
-                        <ArrowRight className="h-3 w-3" />
-                        Steered into running turn
-                      </span>
-                      <div className="min-w-0 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-3 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
-                        {seg.displayContent ?? seg.content}
-                      </div>
-                    </div>
-                  )
-                }
-
-                return (typeof seg.content === 'string' && seg.content.trim()) ? (
-                  <AIMessageContent
-                    key={`ts-${i}`}
-                    data-message-from="assistant"
-                    className="max-w-full bg-card/78"
-                  >
-                    <AssistantMarkdown
-                      content={seg.content}
-                      compact={compact}
-                      isStreaming={!!isStreaming && i === segments.length - 1}
-                      preferLlmUi={preferLlmUi}
-                      onOpenPath={onOpenPath}
-                    />
-                  </AIMessageContent>
-                ) : null
-              })
-            })()}
-
-            {isStreaming && !content && !segments.some((s) => s.type === 'text' && typeof s.content === 'string' && s.content.trim()) && (
-              <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
-                <ThinkingDots />
-              </div>
-            )}
+            <AssistantBody
+              segments={segments}
+              toolCalls={toolCalls}
+              isStreaming={isStreaming}
+              hasStreamingText={!!content}
+              thinkingDuration={thinkingDuration}
+              provider={provider}
+              threadControlThreads={threadControlThreads}
+              onOpenTerminal={onOpenTerminal}
+              onOpenDiff={onOpenDiff}
+              renderInlineSecretPrompt={renderInlineSecretPrompt}
+              onApprovalResponse={onApprovalResponse}
+              compact={compact}
+              preferLlmUi={preferLlmUi}
+              onOpenPath={onOpenPath}
+            />
 
             {assistantActions}
             {memoryProvenance}

@@ -863,6 +863,7 @@ export function useChat(
                   segments?: unknown[];
                   toolCalls?: Array<{
                     callId: string;
+                    parentCallId?: string;
                     tool: string;
                     args: Record<string, unknown>;
                     status?: 'pending' | 'running' | 'success' | 'error';
@@ -924,6 +925,7 @@ export function useChat(
                             : startedAt
                       return {
                         callId: tc.callId,
+                        parentCallId: tc.parentCallId,
                         approvalRequestId: tc.approvalRequestId,
                         approvalState: tc.approvalState,
                         tool: tc.tool,
@@ -1027,7 +1029,7 @@ export function useChat(
               } else if (data.type === 'tool_output') {
                 await textPacer.waitUntilIdle()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                stream.pushToolOutput(data.call_id as string, data.content as string)
+                stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
                 applyStreamSnapshot()
               } else if (data.type === 'tool_result') {
                 await textPacer.waitUntilIdle()
@@ -1234,6 +1236,7 @@ export function useChat(
           segments?: unknown[];
           toolCalls?: Array<{
             callId: string;
+            parentCallId?: string;
             tool: string;
             args: Record<string, unknown>;
             status?: 'pending' | 'running' | 'success' | 'error';
@@ -1274,6 +1277,7 @@ export function useChat(
         if (m.toolCalls && m.toolCalls.length > 0) {
           msg.toolCalls = m.toolCalls.map(tc => ({
             callId: tc.callId,
+            parentCallId: tc.parentCallId,
             approvalRequestId: tc.approvalRequestId,
             approvalState: tc.approvalState,
             tool: tc.tool,
@@ -1519,7 +1523,7 @@ export function useChat(
               updateMessage({ immediate: true })
             } else if (data.type === 'tool_output') {
               await textPacer.waitUntilIdle()
-              stream.pushToolOutput(data.call_id as string, data.content as string)
+              stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
               updateMessage()
             } else if (data.type === 'tool_result') {
               await textPacer.waitUntilIdle()

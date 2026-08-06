@@ -217,7 +217,9 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const callId = payload.callId as string | undefined
         if (callId && toolCallMap.has(callId)) {
           const tc = toolCallMap.get(callId)!
-          tc.streamingOutput = (tc.streamingOutput ?? '') + ((payload.content as string) ?? '')
+          const content = (payload.content as string) ?? ''
+          if (payload.channel === 'thinking') tc.streamingThinking = (tc.streamingThinking ?? '') + content
+          else tc.streamingOutput = (tc.streamingOutput ?? '') + content
         }
         break
       }

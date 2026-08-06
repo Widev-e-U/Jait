@@ -12,7 +12,7 @@
  * turn, and tear it down.
  */
 
-import type { ToolResult } from "./contracts.js";
+import type { NestedAgentEvent, ToolResult } from "./contracts.js";
 import type { CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { RuntimeMode } from "@jait/shared/types";
@@ -32,6 +32,11 @@ export interface AcpSpecialistTurnOptions {
   abortSignal?: AbortSignal;
   /** Defaults to 8 minutes — specialist turns can involve real tool work. */
   timeoutMs?: number;
+  /**
+   * Forwards the specialist's live work (tool calls, assistant text, reasoning)
+   * onto the parent turn's stream so the UI renders it as a normal chat turn.
+   */
+  onNestedEvent?: (event: NestedAgentEvent) => void;
 }
 
 function resolveRuntimeMode(provider: CliProviderAdapter, requested?: string): RuntimeMode {
@@ -89,10 +94,23 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
   }
 
   const chunks: string[] = [];
+  const emitNested = opts.onNestedEvent;
   const handleEvent = (event: ProviderEvent) => {
     if (event.sessionId !== session.id) return;
-    if (event.type === "token") chunks.push(event.content);
-    else if (event.type === "session.error") chunks.push(`\n[error] ${event.error}`);
+    if (event.type === "token") {
+      chunks.push(event.content);
+      emitNested?.({ type: "tool_output", call_id: "", content: event.content, channel: "text" });
+    } else if (event.type === "session.error") {
+      chunks.push(`\n[error] ${event.error}`);
+    } else if (event.type === "thinking") {
+      emitNested?.({ type: "tool_output", call_id: "", content: event.content, channel: "thinking" });
+    } else if (event.type === "tool.start") {
+      emitNested?.({ type: "tool_start", tool: event.tool, args: event.args, call_id: event.callId ?? `${opts.subAgentId}-${event.tool}`, parent_call_id: event.parentCallId });
+    } else if (event.type === "tool.output") {
+      emitNested?.({ type: "tool_output", call_id: event.callId, content: event.content });
+    } else if (event.type === "tool.result") {
+      emitNested?.({ type: "tool_result", call_id: event.callId ?? `${opts.subAgentId}-${event.tool}`, tool: event.tool, ok: event.ok, message: event.message, parent_call_id: event.parentCallId, data: event.data });
+    }
   };
   const unsubscribe = provider.onEvent(handleEvent);
 

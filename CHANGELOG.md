@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.686](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.686) — 2026-08-06
+- feat(gateway + web): sub-agents now render as real chat turns instead of a flat log
+  - gateway: the `agent`/`agent.spawn` tools emit a sub-agent's live work (its reasoning, its own assistant prose, and every tool it runs) as `NestedAgentEvent`s that are stamped with the owning tool call and forwarded onto the parent turn's event stream, wired through a new `onNestedEvent` tool-context callback. A new `thinking` output channel keeps reasoning separate from output so the UI can render it as a proper thinking block.
+  - web: extracted a shared `AssistantBody` renderer (thinking block + tool cards + markdown) used by both normal chat messages and sub-agent tool cards. A sub-agent now renders with the standard tool-call card header, a one-line ellipsed delegated description with a "Show more" toggle, a borderless inner body, and its work ordered as it actually ran — multiple interleaved thinking blocks and tool calls — via new `childSegments` captured from the live event stream (with a best-effort fallback for historical messages).
+
 ## [v0.1.685](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.685) — 2026-08-06
 - feat(gateway): real duplicate tool-call loop detection in the agent loop — if the model emits the exact same tool call(s) (same name + args) for `MAX_DUPLICATE_CALL_STREAK` (3) consecutive rounds, the loop now nudges the model to break out (up to `MAX_DUPLICATE_CALL_INTERVENTIONS` (2) times) and, if the nudge is ignored, ends the turn with an explanatory stop message instead of looping forever. This is the actual backstop for the repeated-call failure mode; the previous comments/prompts referenced "loop detectors" that didn't exist.
 - feat(gateway): swarm mode now forces delegation — the coordinator is nudged to hand off work to a specialist once it has made `SWARM_MAX_UNDELEGATED_READS` (6) direct read/search-style calls without ever calling the agent tool, since the orchestration allowlist blocks mutating tools but not reads (so a coordinator could previously stay "compliant" while never delegating).

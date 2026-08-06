@@ -3,6 +3,20 @@ export interface ToolOutputStreamMetadata {
   seq: number;
 }
 
+/**
+ * Events a tool can emit *on behalf of work it runs internally* (today: the
+ * `agent`/`agent.spawn` tools running a sub-agent loop). They are forwarded
+ * onto the parent turn's normal event stream so the UI renders a sub-agent's
+ * work as real tool cards / thinking / markdown text instead of a flat log.
+ *
+ * `call_id` / `parent_call_id` may be left empty — the agent loop stamps the
+ * owning tool call's id before forwarding.
+ */
+export type NestedAgentEvent =
+  | { type: "tool_start"; tool: string; args: unknown; call_id: string; parent_call_id?: string }
+  | { type: "tool_output"; call_id: string; content: string; channel?: "text" | "thinking" }
+  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; parent_call_id?: string; data?: unknown };
+
 export interface ToolContext {
   sessionId: string;
   actionId: string;
@@ -18,6 +32,11 @@ export interface ToolContext {
   sandboxContainerName?: string;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
   onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
+  /**
+   * Optional callback for emitting nested tool-call events (sub-agent work) onto
+   * the parent turn's event stream. See {@link NestedAgentEvent}.
+   */
+  onNestedEvent?: (event: NestedAgentEvent) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
   /**

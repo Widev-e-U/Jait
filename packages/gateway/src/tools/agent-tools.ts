@@ -213,6 +213,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           model: context.model,
           prompt: acpPrompt,
           abortSignal: context.signal,
+          onNestedEvent: context.onNestedEvent,
         });
 
         const durationMs = Date.now() - startedAt;
@@ -302,7 +303,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       const steering = new SteeringController();
 
       // ── Sub-agent tool executor — scoped to allowed tools ──
-      const subExecuteTool: ToolExecutor = async (name, args, sid, _auth, onChunk, signal) => {
+      const subExecuteTool: ToolExecutor = async (name, args, sid, _auth, onChunk, signal, onNestedEvent) => {
         if (!allowedTools.has(name)) {
           return { ok: false, message: `Tool '${name}' is not available to this sub-agent` };
         }
@@ -318,6 +319,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           jaitBackend: context.jaitBackend,
           runtimeMode: context.runtimeMode,
           onOutputChunk: onChunk,
+          onNestedEvent,
           signal,
           swarmRoundId,
           swarmParticipant: swarmRoundId ? input.description : undefined,
@@ -326,21 +328,32 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       };
 
       // ── Collect sub-agent events and stream them to parent ──
+      //
+      // The specialist's work is forwarded onto the parent turn's event stream
+      // as *real* events, not log lines: its tool calls become nested tool
+      // cards under this call, and its assistant text / reasoning stream on
+      // their own channels so the UI can render them exactly like a normal
+      // chat turn (markdown + thinking block) instead of a flat activity log.
       const subEvents: AgentLoopEvent[] = [];
+      const emitNested = context.onNestedEvent;
       const onEvent = (event: AgentLoopEvent) => {
         subEvents.push(event);
-        // Forward tool events to the parent's output stream so the UI
-        // can show sub-agent progress
-        if (context.onOutputChunk) {
+        if (emitNested) {
           if (event.type === "tool_start") {
-            context.onOutputChunk(`[sub-agent] Starting ${event.tool}...\n`);
+            emitNested({ type: "tool_start", tool: event.tool, args: event.args, call_id: event.call_id, parent_call_id: event.parent_call_id });
+          } else if (event.type === "tool_output") {
+            emitNested({ type: "tool_output", call_id: event.call_id, content: event.content, channel: event.channel });
           } else if (event.type === "tool_result") {
-            const status = event.ok ? "✓" : "✗";
-            context.onOutputChunk(`[sub-agent] ${status} ${event.message}\n`);
+            emitNested({ type: "tool_result", call_id: event.call_id, tool: event.tool, ok: event.ok, message: event.message, parent_call_id: event.parent_call_id, data: event.data });
           } else if (event.type === "token") {
-            // Stream sub-agent's thinking to parent
-            context.onOutputChunk(event.content);
+            // call_id is stamped by the parent loop — this is *this* call's own text
+            emitNested({ type: "tool_output", call_id: "", content: event.content, channel: "text" });
+          } else if (event.type === "thinking") {
+            emitNested({ type: "tool_output", call_id: "", content: event.content, channel: "thinking" });
           }
+        } else if (context.onOutputChunk && event.type === "token") {
+          // No nested-event channel (non-chat callers) — fall back to raw text.
+          context.onOutputChunk(event.content);
         }
       };
 

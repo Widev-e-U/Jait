@@ -22,6 +22,7 @@
  */
 
 import { withTextSegment, withThinkingSegment, withToolSegment, seedSeenToolCallIds, normalizeMessageSegments, type ResumeSegmentEvent } from '@/lib/stream-segments'
+import { isAgentToolName } from '@/lib/tool-call-body'
 import type { MessageSegment, ChatMessage } from '@/hooks/useChat'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 
@@ -63,6 +64,8 @@ export type ToolStreamEvent =
       type: 'tool_output'
       callId: string
       content: string
+      /** 'thinking' streams a sub-agent's reasoning; defaults to 'text'. */
+      channel?: 'text' | 'thinking'
     }
   | {
       type: 'tool_result'
@@ -96,7 +99,7 @@ export interface MessageStreamWriter {
   /** Convenience: push an approval_required event. */
   pushApprovalRequired(requestId: string, callId: string, tool: string, args: Record<string, unknown>): void
   /** Convenience: append streaming tool output. */
-  pushToolOutput(callId: string, content: string): void
+  pushToolOutput(callId: string, content: string, channel?: 'text' | 'thinking'): void
   /** Convenience: finalize a tool with a result. */
   pushToolResult(callId: string, ok: boolean, message: string, data: unknown, parentCallId?: string): void
   /**
@@ -204,6 +207,21 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
 
   const findToolCallIndex = (callId: string): number => toolCalls.findIndex(tc => tc.callId === callId)
 
+  // A tool call whose parent is an agent call is a sub-agent's inner tool — add
+  // it to that agent call's ordered segments so it renders inside its card in
+  // the same interleaved position it was actually run, like a normal chat.
+  const appendChildToolSegment = (callId: string, parentCallId?: string) => {
+    if (!parentCallId) return
+    const parentIdx = findToolCallIndex(parentCallId)
+    if (parentIdx === -1) return
+    if (!isAgentToolName(toolCalls[parentIdx].tool)) return
+    toolCalls = toolCalls.map((tc, i) =>
+      i === parentIdx
+        ? { ...tc, childSegments: withToolSegment(tc.childSegments, callId) }
+        : tc
+    )
+  }
+
   const pushEvent = (event: MessageStreamEvent) => {
     switch (event.type) {
       case 'text': {
@@ -276,10 +294,12 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
               tool: event.tool,
               args: event.args,
               status: 'running',
+              childSegments: isAgentToolName(event.tool) ? [] : undefined,
               startedAt: Date.now(),
             },
           ]
         }
+        appendChildToolSegment(event.callId, event.parentCallId)
         mark()
         return
       }
@@ -304,9 +324,26 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
       case 'tool_output': {
         const idx = findToolCallIndex(event.callId)
         if (idx !== -1) {
-          toolCalls = toolCalls.map((tc, i) =>
-            i === idx ? { ...tc, streamingOutput: (tc.streamingOutput ?? '') + event.content } : tc
-          )
+          const thinking = event.channel === 'thinking'
+          toolCalls = toolCalls.map((tc, i) => {
+            if (i !== idx) return tc
+            const base = thinking
+              ? { ...tc, streamingThinking: (tc.streamingThinking ?? '') + event.content }
+              : { ...tc, streamingOutput: (tc.streamingOutput ?? '') + event.content }
+            // A sub-agent's own reasoning / prose streams on an explicit channel
+            // against its own call id — accumulate it into its ordered segments
+            // (alongside the tool groups from appendChildToolSegment) so the card
+            // renders like a normal chat instead of one flat thinking block.
+            if (event.channel && isAgentToolName(tc.tool)) {
+              return {
+                ...base,
+                childSegments: thinking
+                  ? withThinkingSegment(tc.childSegments, event.content)
+                  : withTextSegment(tc.childSegments, event.content),
+              }
+            }
+            return base
+          })
           mark()
         }
         return
@@ -343,7 +380,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
       pushEvent({ type: 'tool_start', callId, tool, args, parentCallId }),
     pushApprovalRequired: (requestId, callId, tool, args) =>
       pushEvent({ type: 'approval_required', requestId, callId, tool, args }),
-    pushToolOutput: (callId, content) => pushEvent({ type: 'tool_output', callId, content }),
+    pushToolOutput: (callId, content, channel) => pushEvent({ type: 'tool_output', callId, content, channel }),
     pushToolResult: (callId, ok, message, data, parentCallId) =>
       pushEvent({ type: 'tool_result', callId, ok, message, data, parentCallId }),
 
