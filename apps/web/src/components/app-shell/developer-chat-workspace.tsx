@@ -9,6 +9,7 @@ import { ConsentQueue } from '@/components/consent'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import type { ContextUsage } from '@/hooks/useChat'
+import { getProjectRepositoryId } from '@/lib/project-repositories'
 
 interface DeveloperChatWorkspaceProps {
   activeProject: any
@@ -448,14 +449,15 @@ export function DeveloperChatWorkspace({
   }
 
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
-  const gitDiffCounts = useMemo(() => {
-    const items = Array.isArray(changedFiles) ? changedFiles : []
-    return {
-      count: items.length,
-      insertions: items.reduce((sum, f) => sum + (typeof (f as { insertions?: number }).insertions === 'number' ? (f as { insertions: number }).insertions : 0), 0),
-      deletions: items.reduce((sum, f) => sum + (typeof (f as { deletions?: number }).deletions === 'number' ? (f as { deletions: number }).deletions : 0), 0),
-    }
-  }, [changedFiles])
+
+  const activeProjectHasRepo = useMemo(
+    () => {
+      if (!activeProjectId) return false
+      const record = projects.find((project) => project.id === activeProjectId) ?? null
+      return getProjectRepositoryId(record) != null
+    },
+    [projects, activeProjectId],
+  )
 
   return (
     <div
@@ -465,12 +467,12 @@ export function DeveloperChatWorkspace({
     >
       {!chatCollapsed && (
         <>
-          {isProjectChat && (
+          {isProjectChat && activeProjectHasRepo && (
             <div className="absolute top-2 left-2 z-10">
               <GitDiffIndicator
-                count={gitDiffCounts.count}
-                insertions={gitDiffCounts.insertions}
-                deletions={gitDiffCounts.deletions}
+                projectRoot={activeProjectRoot}
+                nodeId={activeProject?.nodeId}
+                fileCount={changedFiles.length}
                 onOpen={onOpenSourceControl}
                 compact={isMobile}
               />

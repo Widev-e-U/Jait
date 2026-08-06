@@ -1,33 +1,76 @@
+import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, FileDiff } from 'lucide-react'
+import { gitApi } from '@/lib/git-api'
 import { cn } from '@/lib/utils'
 
 interface GitDiffIndicatorProps {
-  /** Number of changed files. */
-  count: number
-  /** Total insertions across changed files. */
-  insertions: number
-  /** Total deletions across changed files. */
-  deletions: number
+  /** Absolute project root used to run `git status`. */
+  projectRoot: string | null
+  /** Optional connected-node id (windows/desktop) for the git API call. */
+  nodeId?: string | null
+  /** Number of changed files, used for the tooltip/aria-label. */
+  fileCount: number
+  /** Bumping this value forces a refetch (e.g. after a source-control refresh). */
+  refreshSignal?: number
   /** Opens the editor + source-control tab. */
   onOpen: () => void
   /** Compact (mobile) sizing so the chat header stays uncluttered. */
   compact?: boolean
 }
 
+const REFRESH_INTERVAL_MS = 15_000
+
 /**
  * Small up/down git-diff pill shown in the top-left of a project chat,
- * mirroring the context-window indicator on the top-right. Clicking opens the
- * project editor with the source-control (Git) tab focused.
+ * mirroring the context-window indicator on the top-right. It fetches
+ * `git status` itself so the counts appear as soon as there are changes,
+ * regardless of whether the composer's enriched file list has loaded yet.
+ * Clicking opens the project editor with the source-control (Git) tab focused.
  */
-export function GitDiffIndicator({ count, insertions, deletions, onOpen, compact }: GitDiffIndicatorProps) {
+export function GitDiffIndicator({ projectRoot, nodeId, fileCount, refreshSignal, onOpen, compact }: GitDiffIndicatorProps) {
+  const [insertions, setInsertions] = useState(0)
+  const [deletions, setDeletions] = useState(0)
+
+  useEffect(() => {
+    if (!projectRoot) {
+      setInsertions(0)
+      setDeletions(0)
+      return
+    }
+
+    let cancelled = false
+
+    const load = () => {
+      gitApi
+        .status(projectRoot, undefined, nodeId)
+        .then((status) => {
+          if (cancelled) return
+          setInsertions(status.index.insertions + status.workingTree.insertions)
+          setDeletions(status.index.deletions + status.workingTree.deletions)
+        })
+        .catch(() => {
+          if (cancelled) return
+          setInsertions(0)
+          setDeletions(0)
+        })
+    }
+
+    load()
+    const timer = setInterval(load, REFRESH_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [projectRoot, nodeId, refreshSignal])
+
   const hasChanges = insertions > 0 || deletions > 0
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={`${count} changed file${count === 1 ? '' : 's'} — open editor & source control`}
-      aria-label={`${count} changed files. Open editor and source control.`}
+      title={`${fileCount} changed file${fileCount === 1 ? '' : 's'} — open editor & source control`}
+      aria-label={`${fileCount} changed files. Open editor and source control.`}
       className={cn(
         'flex items-center gap-1 rounded-md hover:bg-muted/50 cursor-pointer transition-colors',
         compact ? 'px-1 py-0.5' : 'px-1.5 py-1',
