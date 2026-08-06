@@ -1877,20 +1877,28 @@ export function getLatestSubAgentActivity(streamingOutput: string | undefined): 
 function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   const prompt = displayStr(args.prompt ?? args.message ?? args.description).trim()
   const allowedTools = displayStr(args.allowedTools).trim()
+  const [expanded, setExpanded] = useState(false)
   if (!prompt && !allowedTools) return null
 
   // The delegation prompt is, from the sub-agent's perspective, the message it
   // received — shown collapsed to a single line so it reads as a lightweight
-  // header for the sub-agent, with the full prompt available on hover.
+  // header for the sub-agent, with a "Show more" toggle to reveal the full text.
   return (
     <div className="space-y-2 px-3 py-2.5">
       {prompt && (
-        <div
-          className="truncate rounded-md border border-border/60 bg-muted/25 px-3 py-2 text-xs leading-5 text-foreground/90"
-          title={prompt}
-        >
+        <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2 text-xs leading-5 text-foreground/90">
           <span className="mr-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
-          {prompt}
+          <span className={cn('whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}>{prompt}</span>
+          {prompt.length > 120 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(v => !v)}
+              className="mt-1 flex items-center gap-0.5 text-2xs font-medium text-primary hover:underline"
+            >
+              {expanded ? 'Show less' : 'Show more'}
+              <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
+            </button>
+          )}
         </div>
       )}
       {allowedTools && (

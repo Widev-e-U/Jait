@@ -62,12 +62,18 @@ export function VoiceActiveControls({
   voiceAssistant,
   isMobile,
   isElectron,
-}: Pick<VoiceHeaderControlsBaseProps, 'setVoiceOverlayOpen' | 'voiceAssistant' | 'isElectron'> & { isMobile: boolean }) {
+  activeProjectTitle,
+}: Pick<VoiceHeaderControlsBaseProps, 'setVoiceOverlayOpen' | 'voiceAssistant' | 'isElectron'> & { isMobile: boolean; activeProjectTitle?: string | null }) {
   return (
     <div
       className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 backdrop-blur-sm px-1.5 py-1 ${isMobile ? 'pointer-events-auto' : ''}`}
       style={noDragStyle(isElectron)}
     >
+      {activeProjectTitle ? (
+        <span className="hidden sm:inline max-w-[10rem] truncate px-1.5 text-[11px] text-muted-foreground" title={activeProjectTitle}>
+          {activeProjectTitle}
+        </span>
+      ) : null}
       {/* Mute toggle */}
       <button
         onClick={voiceAssistant.toggleMic}

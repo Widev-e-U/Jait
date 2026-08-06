@@ -78,6 +78,7 @@ interface AppHeaderProps {
   voiceAssistant: any
   voiceControlProps: any
   voiceOverlayOpen: any
+  activeProjectTitle: any
 }
 
 export function AppHeader(props: AppHeaderProps) {
@@ -118,6 +119,7 @@ export function AppHeader(props: AppHeaderProps) {
     voiceAssistant,
     voiceControlProps,
     voiceOverlayOpen,
+    activeProjectTitle,
   } = props
 
   // ── Dynamic nav: measure how much horizontal room is available for the
@@ -230,6 +232,7 @@ export function AppHeader(props: AppHeaderProps) {
               voiceAssistant={voiceAssistant}
               isMobile={isMobile}
               isElectron={isElectron}
+              activeProjectTitle={activeProjectTitle}
             />
           ) : currentView === 'chat' ? (
             <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>

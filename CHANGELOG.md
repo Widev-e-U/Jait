@@ -4,6 +4,18 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.680](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.680) — 2026-08-06
+- feat(gateway + web): voice assistant gets full Jait tool access
+  - The Realtime voice assistant now exposes the full tool registry (minus external/MCP tools) to the model and routes calls through the consent-aware executor, so it can read files, run commands, search memory, and more — gated by the same consent rules as the main agent (the voice-assistant consent bypass was removed).
+  - Defaults moved to the newer `gpt-realtime-2.1` model and `semantic_vad` turn detection.
+- feat(web): voice overlay shows the active project title
+- feat(web): sub-agent delegated prompt gets a "Show more" toggle
+- fix(gateway): sub-agents no longer hit a hard 8-round cap by default
+  - Sub-agents now run until done or until a behavioral guard (tool-loop / duplicate / unproductive detection) stops them, matching the main agent loop; a positive `maxRounds` still acts as a hard backstop.
+
+## [v0.1.679](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.679) — 2026-08-06
+- feat(web): render swarm specialists as flat normal-chat rows with inline work
+
 ## [v0.1.678](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.678) — 2026-08-06
 - feat(web): git-diff indicator self-fetches status & only shows for repo-backed projects
   - The project-chat git-diff pill now runs `git status` itself (refreshed every 15s) instead of waiting for the composer's enriched file list, so insertions/deletions appear as soon as there are changes.

@@ -147,7 +147,7 @@ export function loadConfig(): AppConfig {
     hookSecret,
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
-    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",
+    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-realtime-2.1",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
     sttPrompt:
       process.env["JAIT_STT_PROMPT"]?.trim() ??

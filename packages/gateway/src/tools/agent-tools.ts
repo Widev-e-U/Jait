@@ -42,7 +42,7 @@ interface AgentSpawnInput {
    * If omitted, defaults to a safe read-only subset.
    */
   allowedTools?: string;
-  /** Max tool-calling rounds for the sub-agent (default: 8) */
+  /** Max tool-calling rounds for the sub-agent (0 = no cap, default). */
   maxRounds?: number;
 }
 
@@ -61,7 +61,11 @@ const DEFAULT_SUBAGENT_TOOLS = new Set([
   ToolName.TerminalRun,
 ]);
 
-const SUBAGENT_MAX_ROUNDS_DEFAULT = 8;
+// pi-style: no round cap by default — the sub-agent runs until the model
+// decides it's done or a behavioral guard (tool-loop / duplicate / unproductive
+// detection) stops it, matching the main agent loop. A positive maxRounds still
+// acts as a hard backstop.
+const SUBAGENT_MAX_ROUNDS_DEFAULT = 0;
 
 // ── System prompt for sub-agents ─────────────────────────────────────
 
@@ -143,7 +147,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
         },
         maxRounds: {
           type: "number",
-          description: `Max tool-calling rounds (default: ${SUBAGENT_MAX_ROUNDS_DEFAULT}).`,
+          description: "Max tool-calling rounds (0 = no cap, default).",
         },
       },
       required: ["prompt", "description"],

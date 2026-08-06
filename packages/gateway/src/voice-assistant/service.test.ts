@@ -23,7 +23,7 @@ describe("VoiceAssistantService", () => {
     expect(instructions).toContain("you MUST call ask_agent_about_request before answering.");
   });
 
-  it("configures Realtime voice and low-latency server VAD defaults", () => {
+  it("configures Realtime voice and semantic VAD defaults", () => {
     const service = new VoiceAssistantService({
       config: { ...loadConfig(), realtimeVoice: "shimmer" },
       verifyToken: async () => ({ id: "u1", username: "Alice" }),
@@ -33,10 +33,8 @@ describe("VoiceAssistantService", () => {
 
     expect(update.session.voice).toBe("shimmer");
     expect(update.session.turn_detection).toEqual({
-      type: "server_vad",
-      threshold: 0.5,
-      prefix_padding_ms: 300,
-      silence_duration_ms: 450,
+      type: "semantic_vad",
+      eagerness: "auto",
       create_response: true,
       interrupt_response: true,
     });

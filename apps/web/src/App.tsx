@@ -3838,6 +3838,7 @@ function App() {
     toggleWakeWord,
     voiceAssistant,
     isElectron,
+    activeProjectTitle: activeProjectRecord?.title ?? null,
   }
 
   const limitReached = error === 'limit_reached'
@@ -4055,6 +4056,7 @@ function App() {
               voiceAssistant={voiceAssistant}
               voiceControlProps={voiceControlProps}
               voiceOverlayOpen={voiceOverlayOpen}
+              activeProjectTitle={activeProjectRecord?.title ?? null}
             />
 
 

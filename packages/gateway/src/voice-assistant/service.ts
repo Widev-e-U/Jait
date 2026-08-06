@@ -123,6 +123,8 @@ export class VoiceAssistantService {
     let suppressAssistantAudio = false;
     const timing: VoiceTiming = {};
     const pendingAnnouncements: string[] = [];
+    // Per-connection holder so `select_project` persists across tool calls.
+    const projectContext: { activeProjectId?: string } = {};
 
     const logTiming = (event: string, data: Record<string, number | string | boolean | undefined>) => {
       console.log(`[voice-assistant] timing.${event}`, JSON.stringify(data));
@@ -230,11 +232,24 @@ export class VoiceAssistantService {
           send(clientWs, { type: "tool_call", name: fnName, status: "running" });
           send(clientWs, { type: "status", status: "thinking" });
 
+          // Resolve the project root from the currently selected project (if any).
+          let projectRoot = "";
+          if (projectContext.activeProjectId && this.deps.projectService) {
+            try {
+              const project = await this.deps.projectService.getById(projectContext.activeProjectId, user.id);
+              projectRoot = project?.rootPath ?? "";
+            } catch {}
+          }
+
           const connectionDeps: VoiceToolDeps = {
             ...this.deps,
             userApiKeys,
             userId: user.id,
             clientIp: getClientIp(req),
+            sessionId: `voice-${user.id}`,
+            actionId: `voice-${Date.now()}`,
+            projectContext,
+            projectRoot,
           };
           const result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
 
@@ -445,7 +460,7 @@ export class VoiceAssistantService {
         instructions: this.buildInstructions(username),
         voice: this.deps.config.realtimeVoice,
         turn_detection: this.buildTurnDetection(),
-        tools: getVoiceToolSchemas(),
+        tools: getVoiceToolSchemas(this.deps.toolRegistry),
         tool_choice: "auto",
         // Bias speech-to-text toward domain proper nouns (e.g. "Jait", not "Jade").
         input_audio_transcription: {
@@ -457,7 +472,7 @@ export class VoiceAssistantService {
   }
 
   private buildTurnDetection(): RealtimeTurnDetection {
-    const mode = (process.env["OPENAI_REALTIME_TURN_DETECTION"] ?? "server_vad").trim();
+    const mode = (process.env["OPENAI_REALTIME_TURN_DETECTION"] ?? "semantic_vad").trim();
     if (mode === "disabled" || mode === "none" || mode === "manual") return null;
 
     if (mode === "semantic_vad") {

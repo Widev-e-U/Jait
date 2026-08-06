@@ -149,9 +149,8 @@ export class ConsentAwareExecutor {
     const needsConsent = requiresConsent(permission, trustLevel, this.sessionApprovals);
     const approveAllEnabled = this.consentManager.isApproveAllEnabledForSession(context.sessionId);
     const isScheduler = context.requestedBy === "scheduler";
-    const isVoiceAssistant = context.requestedBy === "voice-assistant";
 
-    if (!needsConsent || approveAllEnabled || isScheduler || isVoiceAssistant) {
+    if (!needsConsent || approveAllEnabled || isScheduler) {
       const result = await this.runTool(toolName, input, context);
 
       // Record successful approval for trust progression

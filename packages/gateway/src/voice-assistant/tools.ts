@@ -35,6 +35,13 @@ export interface VoiceToolDeps {
   userApiKeys?: Record<string, string>;
   /** Client IP from the voice WebSocket request, used only for coarse location lookup. */
   clientIp?: string;
+  /** Session/action identifiers used when routing registry tools through the consent-aware executor. */
+  sessionId?: string;
+  actionId?: string;
+  /** Root of the currently selected project (resolved from projectContext when possible). */
+  projectRoot?: string;
+  /** Mutable per-connection holder so `select_project` persists across tool calls. */
+  projectContext?: { activeProjectId?: string };
 }
 
 /** OpenAI function-calling tool schema */
@@ -646,6 +653,28 @@ const getWeather: VoiceTool = {
   },
 };
 
+const selectProject: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "select_project",
+    description:
+      "Select the active project for subsequent tool calls. Use before calling project-scoped tools so they operate on the right project.",
+    parameters: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "The project ID to select" },
+      },
+      required: ["projectId"],
+    },
+  },
+  execute: async (args, deps) => {
+    const projectId = String(args["projectId"] ?? "").trim();
+    if (!projectId) return "No projectId provided.";
+    if (deps.projectContext) deps.projectContext.activeProjectId = projectId;
+    return `Selected project ${projectId}.`;
+  },
+};
+
 // ── Registry ────────────────────────────────────────────────────
 
 const ALL_TOOLS: VoiceTool[] = [
@@ -663,13 +692,34 @@ const ALL_TOOLS: VoiceTool[] = [
   getLocation,
   getWeather,
   stopVoice,
+  selectProject,
 ];
 
 const toolMap = new Map<string, VoiceTool>(ALL_TOOLS.map((t) => [t.schema.name, t]));
 
-/** Get all tool schemas (for session.update → tools). */
-export function getVoiceToolSchemas(): RealtimeToolDef[] {
-  return ALL_TOOLS.map((t) => t.schema);
+/**
+ * Get all tool schemas (for session.update → tools).
+ *
+ * Returns the built-in voice tools plus, when a registry is provided, the
+ * registry-backed tools (excluding external/MCP tools) so the Realtime model
+ * has full access to the Jait environment. Built-in voice tools win on name
+ * collisions.
+ */
+export function getVoiceToolSchemas(registry?: ToolRegistry): RealtimeToolDef[] {
+  const schemas: RealtimeToolDef[] = ALL_TOOLS.map((t) => t.schema);
+  if (registry) {
+    for (const tool of registry.list()) {
+      if (tool.tier === "external") continue;
+      if (toolMap.has(tool.name)) continue;
+      schemas.push({
+        type: "function",
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters as unknown as Record<string, unknown>,
+      });
+    }
+  }
+  return schemas;
 }
 
 /** Execute a tool by name. Returns the string result for the function_call_output. */
@@ -679,10 +729,36 @@ export async function executeVoiceTool(
   deps: VoiceToolDeps,
 ): Promise<string> {
   const tool = toolMap.get(name);
-  if (!tool) return `Unknown tool: ${name}`;
-  try {
-    return await tool.execute(args, deps);
-  } catch (e) {
-    return `Tool error: ${e}`;
+  if (tool) {
+    try {
+      return await tool.execute(args, deps);
+    } catch (e) {
+      return `Tool error: ${e}`;
+    }
   }
+
+  // Not a built-in voice tool → route through the consent-aware executor so
+  // the model gets full Jait access with consent gating.
+  if (deps.toolExecutor) {
+    const ctx: ToolContext = {
+      sessionId: deps.sessionId ?? "voice",
+      actionId: deps.actionId ?? `voice-${Date.now()}`,
+      projectRoot: deps.projectRoot ?? "",
+      requestedBy: "voice-assistant",
+      userId: deps.userId,
+      apiKeys: deps.userApiKeys,
+    };
+    try {
+      const result = await deps.toolExecutor(name, args, ctx);
+      if (result.ok) {
+        const data = result.data !== undefined ? `\n${JSON.stringify(result.data)}` : "";
+        return `${result.message}${data}`;
+      }
+      return `Tool blocked: ${result.message}`;
+    } catch (e) {
+      return `Tool error: ${e}`;
+    }
+  }
+
+  return `Unknown tool: ${name}`;
 }
