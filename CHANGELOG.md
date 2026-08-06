@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.678](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.678) — 2026-08-06
+- feat(web): git-diff indicator self-fetches status & only shows for repo-backed projects
+  - The project-chat git-diff pill now runs `git status` itself (refreshed every 15s) instead of waiting for the composer's enriched file list, so insertions/deletions appear as soon as there are changes.
+  - It is only rendered when the active project has a repository assigned (`getProjectRepositoryId`), so loose folders without a repo no longer show an empty/`0` pill even if a `.git` is present.
+- feat(web): session chat icon reflects the provider, not the model
+  - The per-chat provider badge in the session/project list now uses the same icon as the provider/model selector, so e.g. a Jait chat running a deepseek model shows the Jait logo rather than DeepSeek. `providerIconFor`/`providerLabelFor` are now exported from the selector for reuse.
+
 ## [v0.1.677](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.677) — 2026-08-06
 - fix(gateway): never re-send a queued chat message after a WebSocket drop
   - When a message was queued server-side but the client delivered it directly via `POST /api/chat` while the WebSocket was down, the end-of-turn drain (or a stale client re-push after reconnect) could re-send it — the "already sent but still queued" duplicate. The direct send now removes the matching queued entry and tracks its id as consumed, so the drain filters re-introductions and the message is sent exactly once.
