@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { createAgentSpawnTool } from "./agent-tools.js";
+import { createAgentTool } from "./core/agent.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import type { ToolRegistry } from "./registry.js";
 import type { ToolContext } from "./contracts.js";
@@ -107,5 +108,84 @@ describe("createAgentSpawnTool provider routing", () => {
 
     expect(result.message).toContain("Cancelled");
     expect(getLLMConfig).toHaveBeenCalled();
+  });
+});
+
+describe("sub-agents run uncapped", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("exposes no round-cap parameter for the model to set", () => {
+    const spawn = createAgentSpawnTool({ toolRegistry: {} as ToolRegistry, getLLMConfig: vi.fn<() => LLMConfig>() });
+    const core = createAgentTool({ toolRegistry: {} as ToolRegistry, getLLMConfig: vi.fn<() => LLMConfig>() });
+
+    // A cap the model can set is a cap the model *will* set — it truncates the
+    // specialist mid-task and the partial work comes back looking finished.
+    for (const def of [spawn, core]) {
+      const props = (def.parameters as { properties: Record<string, unknown> }).properties;
+      expect(Object.keys(props)).not.toContain("maxRounds");
+    }
+  });
+
+  it("keeps a specialist running past any round count a caller tries to impose", async () => {
+    // Four tool rounds, then a final tagged answer. If a cap were still applied
+    // the run would stop at round 2 with truncated, untagged output.
+    const toolRound = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const finalRound = [
+      'data: {"choices":[{"delta":{"content":"[INFORM] implemented and verified"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    let round = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = round++ < 4 ? toolRound : finalRound;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const fileReadDef = {
+      name: "file.read",
+      description: "Read a file",
+      parameters: { type: "object", properties: {} },
+    };
+    let call = 0;
+    const toolRegistry = {
+      has: () => true,
+      get: () => fileReadDef,
+      list: () => [fileReadDef],
+      // Vary the result so duplicate-call loop detection doesn't end the run.
+      execute: async () => ({ ok: true, message: `finding ${++call}` }),
+    } as unknown as ToolRegistry;
+
+    const tool = createAgentSpawnTool({
+      toolRegistry,
+      getLLMConfig: () => ({
+        openaiApiKey: "test-key",
+        openaiBaseUrl: "https://llm.test",
+        openaiModel: "test-model",
+        contextWindow: 100_000,
+      }),
+    });
+
+    const result = await tool.execute(
+      // Passed anyway — the schema no longer advertises it, so it must be ignored.
+      { prompt: "implement the thing", description: "Developer", allowedTools: "file.read", maxRounds: 2 } as never,
+      { ...baseContext, providerId: "jait" },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe("implemented and verified");
+    expect(result.data).toMatchObject({ performative: "inform" });
+    expect(round).toBeGreaterThan(2);
   });
 });

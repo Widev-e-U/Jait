@@ -660,6 +660,28 @@ export function useChat(
       readCachedStartupChat(cacheScope, sessionId),
       sessionLastActiveAt,
     )
+    // Never attach a second live consumer to a session this tab is already
+    // streaming directly. The direct POST stream is only aborted by stop /
+    // restart — not by a session switch — so re-entering a chat mid-run used to
+    // open a resume stream alongside it. Both consumers then append token
+    // chunks into the same turn, which renders as duplicated/interleaved text
+    // that exists only on screen: the gateway persists its own clean copy, so
+    // the garbage disappears from history on the next load.
+    //
+    // The direct stream keeps rendering; `finishDirectStream` hands off to a
+    // resume stream once it ends.
+    if (!shouldOpenResumeStream({
+      sessionId,
+      activeResumeSessionId: streamResumeSessionRef.current,
+      hasActiveResumeStream: !!streamAbortRef.current,
+      directStreamSessionId: directStreamSessionRef.current,
+      hasActiveDirectStream: !!abortControllerRef.current,
+    })) {
+      pendingResumeAfterDirectStreamRef.current = true
+      setState(prev => ({ ...prev, isLoadingHistory: false, error: null }))
+      return
+    }
+
     // Show a skeleton (never cached messages) until the fresh server snapshot
     // is received, evaluated and merged. Rendering cached messages immediately
     // caused a stale-then-sudden-update flash once the snapshot arrived.

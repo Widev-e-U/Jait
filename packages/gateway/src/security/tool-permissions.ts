@@ -112,6 +112,48 @@ export function requiresConsent(
 }
 
 /**
+ * Shell commands that destroy work irreversibly.
+ *
+ * Consent is granted per *tool*, so a single approval of `terminal.run` (or an
+ * approve-all session) authorizes every later command — including ones that
+ * discard uncommitted work or kill processes by pattern. An agent that used
+ * `git stash` to run a baseline test, or `pkill -f` to free a port, could then
+ * destroy state nobody agreed to lose, as a side effect of an unrelated task.
+ *
+ * These patterns re-ask regardless of accumulated trust. They deliberately do
+ * NOT cover ordinary outward-facing commands like `git push` or a deploy —
+ * those get asked for explicitly and would only train users to click through.
+ *
+ * Matching runs over the whole command string so chained commands
+ * (`a && b; c`) are covered. False positives fail safe: an extra prompt.
+ */
+const IRREVERSIBLE_COMMAND_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /\bgit\s+stash\b(?!\s+list)/, reason: "git stash hides uncommitted work and can be lost on conflict" },
+  { pattern: /\bgit\s+checkout\s+--\s/, reason: "git checkout -- discards uncommitted changes" },
+  { pattern: /\bgit\s+restore\b(?!.*--staged\b)/, reason: "git restore discards uncommitted changes" },
+  { pattern: /\bgit\s+reset\s+--hard\b/, reason: "git reset --hard discards commits and working-tree changes" },
+  { pattern: /\bgit\s+clean\s+-[a-z]*f/, reason: "git clean -f deletes untracked files" },
+  { pattern: /\bgit\s+rm\b/, reason: "git rm removes files from the working tree or index" },
+  { pattern: /\bgit\s+push\b.*(--force\b|--force-with-lease\b|\s-f\b)/, reason: "force push rewrites remote history" },
+  { pattern: /\brm\s+-[a-z]*[rf]/, reason: "rm -r/-f deletes files irreversibly" },
+  { pattern: /\b(pkill|killall)\b/, reason: "kills processes by pattern and can hit unrelated ones" },
+  { pattern: /\b(mkfs|dd)\s/, reason: "writes raw device or filesystem data" },
+];
+
+/**
+ * Classify a shell command as irreversible. Used to force a consent prompt even
+ * when the tool's own consent level would otherwise be satisfied.
+ */
+export function classifyIrreversibleCommand(
+  command: string,
+): { irreversible: boolean; reason?: string } {
+  for (const { pattern, reason } of IRREVERSIBLE_COMMAND_PATTERNS) {
+    if (pattern.test(command)) return { irreversible: true, reason };
+  }
+  return { irreversible: false };
+}
+
+/**
  * Check if a command is allowed by the permission's allow/deny lists.
  * Returns { allowed: boolean, reason?: string }.
  */

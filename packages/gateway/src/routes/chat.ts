@@ -1083,7 +1083,11 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
     if (parentCallId !== undefined) existing.parentCallId = parentCallId;
     return;
   }
-  acc.toolCalls.push({ callId, parentCallId, tool, args, ok: true, message: "", startedAt: Date.now() });
+  // Explicitly "running" until a result arrives. Without it, mapPersistedToolCallsForUI
+  // falls back to `ok ? "success" : "error"` and a reconnect snapshot reports every
+  // in-flight call as already-succeeded-with-no-message — which is what made a
+  // long-running sub-agent card come back looking finished and frozen.
+  acc.toolCalls.push({ callId, parentCallId, tool, args, ok: true, message: "", status: "running", startedAt: Date.now() });
   const last = acc.segments[acc.segments.length - 1];
   if (last?.type === "toolGroup") {
     if (!last.callIds.includes(callId)) {
@@ -1139,6 +1143,9 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
     tc.ok = ok;
     tc.message = message;
     tc.data = data;
+    // Clear the "running" marker set by accumulateToolStart so the call maps to
+    // success/error. Approval-gated calls keep their own status lifecycle.
+    if (tc.status === "running") tc.status = ok ? "success" : "error";
     tc.completedAt = Date.now();
   }
 }
@@ -1488,6 +1495,15 @@ function buildVisibleHistoryEntries(
           .map((tc) => [tc.callId, tc.startedAt] as const),
       )
     : undefined;
+  // A live accumulator already represents every assistant round of the
+  // in-flight turn — including nested sub-agent calls, which the raw LLM
+  // `tool_calls` cannot carry (the specialist's own calls exist only as
+  // events, never as entries in the parent's tool_calls array). Emitting the
+  // pending rounds as their own bubbles as well produced a second, child-less
+  // copy of the same tool card that never completes — the stuck sub-agent card
+  // you get after leaving a chat mid-run and coming back.
+  const liveAccumulatorCoversTurn =
+    includePendingAssistantToolCalls && sessionStreamingState.has(sessionId);
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "tool") continue;
@@ -1510,14 +1526,20 @@ function buildVisibleHistoryEntries(
     }
 
     let uiToolCalls: Array<Record<string, unknown>> | undefined;
+    const isPendingAssistantRound =
+      m.role === "assistant" && !!m.tool_calls && !(Array.isArray(m.uiToolCalls) && m.uiToolCalls.length > 0);
     if (m.role === "assistant") {
       if (Array.isArray(m.uiToolCalls) && m.uiToolCalls.length > 0) {
         uiToolCalls = mapPersistedToolCallsForUI(m.uiToolCalls);
-      } else if (m.tool_calls && includePendingAssistantToolCalls) {
+      } else if (m.tool_calls && includePendingAssistantToolCalls && !liveAccumulatorCoversTurn) {
         uiToolCalls = mapPendingToolCallsForUI(m.tool_calls, toolResultStateByCallId, realStartedAtByCallId);
       }
     }
 
+    // Skip the in-flight round when the accumulator already covers it (its
+    // content and tool calls are both replayed from there), and keep the
+    // original rule that hides tool-only rounds from non-streaming snapshots.
+    if (isPendingAssistantRound && liveAccumulatorCoversTurn) continue;
     if (m.role === "assistant" && m.tool_calls && !m.content && !includePendingAssistantToolCalls) {
       continue;
     }
@@ -1663,6 +1685,16 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
 }
 
 // ── Route registration ───────────────────────────────────────────────
+
+/** Internals exposed for unit tests (reconnect-snapshot shape). */
+export const __chatTestUtils = {
+  sessionHistory,
+  sessionStreamingState,
+  buildVisibleHistoryMessages,
+  accumulateToolStart,
+  accumulateToolResult,
+  getOrCreateAccumulator,
+};
 
 export interface ChatRouteDeps {
   db?: JaitDB;

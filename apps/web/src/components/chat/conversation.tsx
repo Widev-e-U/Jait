@@ -47,10 +47,80 @@ export function positionConversationAtBottom(
   element.scrollTop = element.scrollHeight
 }
 
+/** Sub-pixel jitter isn't worth a scroll write — it would itself look like flicker. */
+const ANCHOR_EPSILON_PX = 0.5
+
+export interface ConversationItemBox {
+  key: string
+  /** Offset of the item's top edge from the scroll container's top edge. */
+  top: number
+  height: number
+}
+
+export interface ConversationScrollAnchor {
+  key: string
+  offset: number
+}
+
+/**
+ * Pick the item to pin the viewport to: the first one still on screen.
+ *
+ * Its offset is usually negative — the user is normally partway through an item
+ * rather than exactly at its top edge — and preserving that exact offset is
+ * what stops the view drifting when the list reflows.
+ */
+export function pickScrollAnchor(items: ConversationItemBox[]): ConversationScrollAnchor | null {
+  for (const item of items) {
+    if (!item.key) continue
+    if (item.top + item.height > 0) return { key: item.key, offset: item.top }
+  }
+  return null
+}
+
+/** How far to move scrollTop to put the anchored item back where it was. */
+export function scrollAnchorDelta(currentTop: number, anchoredOffset: number): number {
+  const delta = currentTop - anchoredOffset
+  return Math.abs(delta) < ANCHOR_EPSILON_PX ? 0 : delta
+}
+
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
   touchAction: 'pan-y',
+}
+
+/**
+ * Placeholder turns, oldest first — the column is bottom-anchored, so the last
+ * entry sits just above the composer and the top of the list is clipped, the
+ * same way a real conversation scrolled to the end looks.
+ *
+ * Line counts are deliberately lopsided: a user prompt is usually a line or
+ * two, an assistant reply several. Alternating equal-sized blocks reads as a
+ * generic loading list rather than a chat, and then visibly reflows when the
+ * real messages arrive. There are enough turns here to overflow a tall
+ * viewport, which is what makes the skeleton fill the full height.
+ */
+export const CONVERSATION_SKELETON_TURNS: ReadonlyArray<{ role: 'user' | 'assistant'; lines: number }> = [
+  { role: 'user', lines: 1 },
+  { role: 'assistant', lines: 5 },
+  { role: 'user', lines: 2 },
+  { role: 'assistant', lines: 6 },
+  { role: 'user', lines: 1 },
+  { role: 'assistant', lines: 4 },
+  { role: 'user', lines: 2 },
+  { role: 'assistant', lines: 5 },
+  { role: 'user', lines: 1 },
+  { role: 'assistant', lines: 3 },
+]
+
+/** Ragged line widths so a block reads as prose; the last line runs short. */
+const ASSISTANT_LINE_WIDTHS = ['w-full', 'w-11/12', 'w-4/5', 'w-full', 'w-3/4']
+const USER_LINE_WIDTHS = ['w-5/6', 'w-1/2']
+
+function skeletonLineWidth(role: 'user' | 'assistant', index: number, total: number): string {
+  if (role === 'user') return USER_LINE_WIDTHS[index % USER_LINE_WIDTHS.length]!
+  if (index === total - 1) return 'w-2/5'
+  return ASSISTANT_LINE_WIDTHS[index % ASSISTANT_LINE_WIDTHS.length]!
 }
 
 function ConversationPositioningSkeleton({ label }: { label: string }) {
@@ -63,31 +133,50 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
     >
       <span className="sr-only">{label}</span>
       <div className="mx-auto flex h-full max-w-4xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
-        {/* Assistant turn — transparent, text-only lines like the real layout. */}
-        <div className="flex animate-pulse items-start gap-3">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
-          <div className="w-full max-w-xl space-y-2.5 pt-1.5">
-            <div className="h-3 w-4/5 rounded-md bg-muted-foreground/10" />
-            <div className="h-3 w-3/5 rounded-md bg-muted-foreground/10" />
-            <div className="h-3 w-2/5 rounded-md bg-muted-foreground/10" />
-          </div>
-        </div>
-        {/* User turn — right-aligned primary-tinted bubble matching MessageContent. */}
-        <div className="flex animate-pulse justify-end [animation-delay:120ms]">
-          <div className="w-3/5 max-w-md space-y-2.5 rounded-lg border border-primary/20 bg-primary/[0.08] p-4">
-            <div className="ml-auto h-3 w-5/6 rounded-md bg-primary/15" />
-            <div className="ml-auto h-3 w-1/2 rounded-md bg-primary/15" />
-          </div>
-        </div>
-        {/* Assistant turn — text-only lines. */}
-        <div className="flex animate-pulse items-start gap-3 [animation-delay:240ms]">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
-          <div className="w-4/5 max-w-lg space-y-2.5 pt-1.5">
-            <div className="h-3 w-full rounded-md bg-muted-foreground/10" />
-            <div className="h-3 w-2/3 rounded-md bg-muted-foreground/10" />
-          </div>
-        </div>
+        {CONVERSATION_SKELETON_TURNS.map((turn, turnIndex) => {
+          // Stagger the pulse, but cycle it so the top of a long list isn't
+          // still waiting to start animating.
+          const delay = `${(turnIndex % 4) * 120}ms`
+          const lines = Array.from({ length: turn.lines }, (_, i) =>
+            skeletonLineWidth(turn.role, i, turn.lines))
+
+          if (turn.role === 'user') {
+            // Right-aligned primary-tinted bubble matching MessageContent.
+            return (
+              <div
+                key={turnIndex}
+                className="flex shrink-0 animate-pulse justify-end"
+                style={{ animationDelay: delay }}
+              >
+                <div className="w-3/5 max-w-md space-y-2.5 rounded-lg border border-primary/20 bg-primary/[0.08] p-4">
+                  {lines.map((width, i) => (
+                    <div key={i} className={cn('ml-auto h-3 rounded-md bg-primary/15', width)} />
+                  ))}
+                </div>
+              </div>
+            )
+          }
+
+          // Assistant turn — transparent, text-only lines like the real layout.
+          return (
+            <div
+              key={turnIndex}
+              className="flex shrink-0 animate-pulse items-start gap-3"
+              style={{ animationDelay: delay }}
+            >
+              <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
+              <div className="w-full max-w-xl space-y-2.5 pt-1.5">
+                {lines.map((width, i) => (
+                  <div key={i} className={cn('h-3 rounded-md bg-muted-foreground/10', width)} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
+      {/* Fade both edges: the top turn is clipped mid-block, the bottom meets
+          the composer. */}
+      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-background to-transparent" />
       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background to-transparent" />
     </div>
   )
@@ -117,6 +206,57 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // as new streamed content and yank the view down to the bottom.
   const suppressAutoScrollRef = useRef(false)
   const suppressAutoScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // ── Scroll anchoring ──
+  // The list is virtualized, so any height change — older messages prepended,
+  // or a streaming sub-agent card growing an item that sits above the viewport
+  // — reflows every offset below it and drags the view with it. Nothing pins
+  // the content the user is actually looking at, which is what makes the
+  // position jump on lazy-load and flicker during nested streaming.
+  //
+  // We remember the first item intersecting the viewport plus its exact offset
+  // from the container top, then put it back there after the reflow.
+  const anchorKeyRef = useRef<string | null>(null)
+  const anchorOffsetRef = useRef(0)
+  const restoringAnchorRef = useRef(false)
+  // Set when a lazy-load was triggered, so the next render that grows the list
+  // knows to restore rather than letting the browser keep raw scrollTop.
+  const pendingPrependAnchorRef = useRef(false)
+
+  const captureScrollAnchor = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || restoringAnchorRef.current) return
+    const containerTop = el.getBoundingClientRect().top
+    const anchor = pickScrollAnchor(
+      Array.from(el.querySelectorAll<HTMLElement>('[data-conv-key]')).map((node) => {
+        const rect = node.getBoundingClientRect()
+        return { key: node.dataset.convKey ?? '', top: rect.top - containerTop, height: rect.height }
+      }),
+    )
+    if (!anchor) return
+    anchorKeyRef.current = anchor.key
+    anchorOffsetRef.current = anchor.offset
+  }, [])
+
+  const restoreScrollAnchor = useCallback(() => {
+    const el = scrollRef.current
+    const key = anchorKeyRef.current
+    if (!el || !key) return
+    const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(key)
+      : key.replace(/["\\]/g, '\\$&')
+    const node = el.querySelector<HTMLElement>(`[data-conv-key="${escaped}"]`)
+    if (!node) return
+    const top = node.getBoundingClientRect().top - el.getBoundingClientRect().top
+    const delta = scrollAnchorDelta(top, anchorOffsetRef.current)
+    if (delta === 0) return
+    // Guard so the scroll we cause here isn't captured as a new anchor.
+    restoringAnchorRef.current = true
+    el.scrollTop += delta
+    requestAnimationFrame(() => {
+      restoringAnchorRef.current = false
+    })
+  }, [])
 
   // Track inner container width for pretext layout calculations.
   const innerRef = useRef<HTMLDivElement | null>(null)
@@ -268,10 +408,6 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
   // Lazy-load older messages when user scrolls near the top
   const loadMoreTriggeredRef = useRef(false)
-  useEffect(() => {
-    // Reset trigger guard when hasMore changes (e.g. new batch loaded)
-    loadMoreTriggeredRef.current = false
-  }, [hasMore, childItems.length])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -281,19 +417,37 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       if (loadMoreTriggeredRef.current) return
       if (el.scrollTop < 200) {
         loadMoreTriggeredRef.current = true
-        const prevHeight = el.scrollHeight
+        // Anchor before requesting. onLoadMore is async (it fetches), so the
+        // old single-rAF height diff always measured an unchanged list and
+        // corrected by zero. The batch then landed with scrollTop untouched,
+        // which — with content prepended above — leaves the user near the top
+        // of a now much longer list, re-arming this trigger and cascading
+        // straight to the beginning of the conversation.
+        captureScrollAnchor()
+        pendingPrependAnchorRef.current = true
         onLoadMore()
-        // After older messages are prepended, maintain scroll position
-        requestAnimationFrame(() => {
-          const newHeight = el.scrollHeight
-          el.scrollTop += newHeight - prevHeight
-        })
       }
     }
 
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => el.removeEventListener('scroll', handleScroll)
-  }, [hasMore, onLoadMore, childItems.length])
+  }, [captureScrollAnchor, hasMore, onLoadMore, childItems.length])
+
+  // Restore once the prepended batch is actually in the DOM.
+  useLayoutEffect(() => {
+    if (!pendingPrependAnchorRef.current) return
+    if (childItems.length === prevChildCount.current) return
+    pendingPrependAnchorRef.current = false
+    restoreScrollAnchor()
+    // Re-arm only after the view has been put back, so being near the top
+    // during the load can't queue another page.
+    loadMoreTriggeredRef.current = false
+  }, [childItems.length, restoreScrollAnchor])
+
+  useEffect(() => {
+    // Re-arm when the server reports a different pagination state.
+    loadMoreTriggeredRef.current = false
+  }, [hasMore])
 
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
@@ -306,6 +460,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     setIsAtBottom(nextIsAtBottom)
 
+    // Keep the anchor current while detached, so a height change from streamed
+    // content can put the view back exactly where the user left it. Not needed
+    // while stuck to the bottom — that path just follows the end of the list.
+    if (!stickToBottomRef.current) captureScrollAnchor()
+
     // If the user is actively scrolling up, detach so streamed content doesn't
     // yank the view down to the bottom.
     if (scrollingUp && userScrollingRef.current) {
@@ -313,6 +472,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       if (stickToBottomRef.current) {
         stickToBottomRef.current = false
         setStickToBottom(false)
+        captureScrollAnchor()
       }
       return
     }
@@ -412,6 +572,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     const observer = new ResizeObserver(() => {
       if (!stickToBottomRef.current || suppressAutoScrollRef.current) {
+        // Detached: the total size just changed under us. A streaming nested
+        // sub-agent card grows an item continuously, and every growth above
+        // the viewport shifts everything below it — that reflow, several times
+        // a second, is the flicker. Pin the anchor back before reporting state.
+        restoreScrollAnchor()
         updateBottomState()
         return
       }
@@ -420,7 +585,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     observer.observe(sizerEl)
     return () => observer.disconnect()
-  }, [scrollToBottom, updateBottomState])
+  }, [restoreScrollAnchor, scrollToBottom, updateBottomState])
 
   return (
     <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
@@ -469,6 +634,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
                 <div
                   key={virtualItem.key}
                   data-index={virtualItem.index}
+                  // Stable identity for scroll anchoring — index shifts when
+                  // older messages are prepended, the key does not.
+                  data-conv-key={String(virtualItem.key)}
                   ref={virtualizer.measureElement}
                   style={{
                     position: 'absolute',

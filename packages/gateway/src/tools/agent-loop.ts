@@ -865,6 +865,14 @@ export async function parseOpenAIStream(
     number,
     { id: string; type: "function"; function: { name: string; arguments: string } }
   >();
+  // Slot resolution for streamed tool-call deltas. `index` is the OpenAI way to
+  // say which call a fragment belongs to, but plenty of OpenAI-*compatible*
+  // backends omit it. Defaulting those to slot 0 collapsed every call of the
+  // round into one entry and appended their names together, producing a single
+  // garbage identifier ("searchweb_fetchfile_read") with unparseable arguments.
+  // Tool-call ids are unique per call, so prefer them and fall back to index.
+  const slotByToolCallId = new Map<string, number>();
+  let lastToolCallSlot = 0;
 
   const processLine = (line: string) => {
     const trimmed = line.trim();
@@ -909,7 +917,23 @@ export async function parseOpenAIStream(
       // Tool calls (streamed incrementally)
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
-          const idx: number = tc.index ?? 0;
+          let idx: number;
+          if (tc.id && slotByToolCallId.has(tc.id)) {
+            // Continuation of a call we've already seen.
+            idx = slotByToolCallId.get(tc.id)!;
+          } else if (tc.id) {
+            // First fragment of a new call. Honour the provider's index when it
+            // gave one and it isn't already taken; otherwise append a new slot.
+            idx = typeof tc.index === "number" && !toolCallMap.has(tc.index)
+              ? tc.index
+              : toolCallMap.size;
+            slotByToolCallId.set(tc.id, idx);
+          } else {
+            // Fragment with no id — belongs to the indexed call, or to whichever
+            // call we were last building if the provider omits index too.
+            idx = typeof tc.index === "number" ? tc.index : lastToolCallSlot;
+          }
+          lastToolCallSlot = idx;
           const isNew = !toolCallMap.has(idx);
           if (isNew) {
             toolCallMap.set(idx, {

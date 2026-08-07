@@ -12,10 +12,65 @@ import { generateTitleViaApi, generateTitleViaTurn, normalizeGeneratedThreadTitl
 import type { ThreadRow, ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
-import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import type { NestedAgentEvent, ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
 import type { SkillRegistry } from "../skills/index.js";
 import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
+
+/**
+ * Translate a delegated thread's provider events into nested events on the
+ * calling chat turn, so a thread started from a chat renders inline as a real
+ * sub-agent turn instead of only existing behind the threads UI.
+ *
+ * Each thread gets one synthetic card keyed by its thread id, and everything
+ * that thread does hangs underneath it. That keying is what makes `create_many`
+ * work: N threads share a single `thread.control` tool call, and without a
+ * per-thread card their prose and tool calls would interleave into one card.
+ *
+ * `parent_call_id` / an empty `call_id` are left for the agent loop to stamp
+ * with the calling tool call's id (see executeOneToolCall).
+ */
+export function forwardThreadEventAsNested(
+  emit: (event: NestedAgentEvent) => void,
+  threadId: string,
+  event: ProviderEvent,
+): void {
+  switch (event.type) {
+    case "token":
+      emit({ type: "tool_output", call_id: threadId, content: event.content, channel: "text" });
+      break;
+    case "thinking":
+      emit({ type: "tool_output", call_id: threadId, content: event.content, channel: "thinking" });
+      break;
+    case "tool.start":
+      emit({
+        type: "tool_start",
+        tool: event.tool,
+        args: event.args,
+        call_id: event.callId ?? `${threadId}:${event.tool}`,
+        parent_call_id: threadId,
+      });
+      break;
+    case "tool.output":
+      emit({ type: "tool_output", call_id: event.callId, content: event.content });
+      break;
+    case "tool.result":
+      emit({
+        type: "tool_result",
+        call_id: event.callId ?? `${threadId}:${event.tool}`,
+        tool: event.tool,
+        ok: event.ok,
+        message: event.message,
+        data: event.data,
+        parent_call_id: threadId,
+      });
+      break;
+    default:
+      // Lifecycle events (session.*, turn.*, message, activity) are represented
+      // by the synthetic per-thread card opened/closed around this stream.
+      break;
+  }
+}
 
 interface ThreadControlInput {
   action:
@@ -516,6 +571,34 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       let unsubscribed = false;
       let unsubscribe: (() => void) | undefined;
       let pendingAssistantContent = "";
+
+      // Inline rendering: only when this thread was started from a chat turn
+      // that can host nested events (a detached thread has no turn to render
+      // into and just runs behind the threads UI as before).
+      const emitNested = detach ? undefined : context.onNestedEvent;
+      let nestedCardOpen = false;
+      const openNestedCard = () => {
+        if (!emitNested || nestedCardOpen) return;
+        nestedCardOpen = true;
+        emitNested({
+          type: "tool_start",
+          tool: "agent",
+          args: { description: effectiveThread.title, thread: effectiveThread.id },
+          call_id: effectiveThread.id,
+        });
+      };
+      const closeNestedCard = (ok: boolean, message: string) => {
+        if (!emitNested || !nestedCardOpen) return;
+        nestedCardOpen = false;
+        emitNested({
+          type: "tool_result",
+          call_id: effectiveThread.id,
+          tool: "agent",
+          ok,
+          message,
+        });
+      };
+      openNestedCard();
       const cleanup = () => {
         if (timeout) {
           clearTimeout(timeout);
@@ -525,6 +608,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           unsubscribed = true;
           unsubscribe();
         }
+        // Backstop for paths that end the thread without a terminal provider
+        // event (e.g. the timeout above) — an unclosed card renders as a
+        // sub-agent that never finishes.
+        closeNestedCard(true, "Thread ended");
       };
       const flushPendingAssistantContent = () => {
         if (!pendingAssistantContent.trim()) {
@@ -548,6 +635,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         if (event.sessionId !== session.id) {
           return;
         }
+
+        if (emitNested) forwardThreadEventAsNested(emitNested, effectiveThread.id, event);
 
         if (event.type === "token") {
           pendingAssistantContent += event.content;
@@ -585,10 +674,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             deps.threadService.markCompleted(effectiveThread.id);
           }
           broadcastThreadStatus(effectiveThread.id, "completed");
+          closeNestedCard(true, "Completed");
           cleanup();
         } else if (event.type === "session.error") {
           deps.threadService.markError(effectiveThread.id, event.error);
           broadcastThreadStatus(effectiveThread.id, "error", { error: event.error });
+          closeNestedCard(false, event.error);
           cleanup();
         } else if (event.type === "turn.started") {
           // Re-assert running when a new turn begins
@@ -604,6 +695,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               // leaves the session open after answering the first task.
             });
             deps.threadService.markCompletedAndClearSession(effectiveThread.id);
+            closeNestedCard(true, "Completed");
             cleanup();
           } else {
             deps.threadService.markCompleted(effectiveThread.id);

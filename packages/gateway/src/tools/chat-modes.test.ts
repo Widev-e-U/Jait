@@ -8,7 +8,9 @@ describe("chat mode prompts", () => {
     expect(prompt).toContain("agent tool");
     expect(prompt).toContain("concurrently");
     expect(prompt).toContain("allowedTools");
-    expect(prompt).toContain("maxRounds");
+    // Specialists must never be handed a round cap — it truncates them mid-task.
+    expect(prompt).toContain("no round cap");
+    expect(prompt).not.toContain("maxRounds");
     expect(prompt).toContain("Research Specialist");
     expect(prompt).toContain("Testing Specialist");
     expect(prompt).toContain("Validation Specialist");

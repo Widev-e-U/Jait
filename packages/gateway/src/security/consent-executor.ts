@@ -16,7 +16,7 @@ import type { ConsentManager } from "./consent-manager.js";
 import type { TrustEngine } from "./trust-engine.js";
 import type { ProfileName } from "./tool-profiles.js";
 import type { ToolPermission } from "./tool-permissions.js";
-import { requiresConsent, isCommandAllowed, resolveToolPermission } from "./tool-permissions.js";
+import { requiresConsent, isCommandAllowed, classifyIrreversibleCommand, resolveToolPermission } from "./tool-permissions.js";
 
 const COMMAND_TOOL_NAMES = new Set(["terminal.run", "terminal.stream", "execute", "jait.terminal"]);
 
@@ -129,6 +129,7 @@ export class ConsentAwareExecutor {
     }
 
     // ── Command allow/deny check (for terminal tools) ──
+    let irreversibleReason: string | undefined;
     if (COMMAND_TOOL_NAMES.has(toolName)) {
       const command = (input as Record<string, unknown>)?.command;
       if (typeof command === "string") {
@@ -142,15 +143,19 @@ export class ConsentAwareExecutor {
             message: `Command blocked: ${cmdCheck.reason}`,
           };
         }
+        irreversibleReason = classifyIrreversibleCommand(command).reason;
       }
     }
 
     // ── Auto-execute if no consent required ──
-    const needsConsent = requiresConsent(permission, trustLevel, this.sessionApprovals);
+    // An irreversible command always re-asks. Consent is granted per tool, so
+    // without this a single earlier approval — or an approve-all session meant
+    // for ordinary commands — silently authorizes destroying uncommitted work.
+    const needsConsent = requiresConsent(permission, trustLevel, this.sessionApprovals) || !!irreversibleReason;
     const approveAllEnabled = this.consentManager.isApproveAllEnabledForSession(context.sessionId);
     const isScheduler = context.requestedBy === "scheduler";
 
-    if (!needsConsent || approveAllEnabled || isScheduler) {
+    if (!needsConsent || (!irreversibleReason && (approveAllEnabled || isScheduler))) {
       const result = await this.runTool(toolName, input, context);
 
       // Record successful approval for trust progression
@@ -165,12 +170,12 @@ export class ConsentAwareExecutor {
     const decision = await this.consentManager.requestConsent({
       actionId: context.actionId,
       toolName,
-      summary,
+      summary: irreversibleReason ? `${summary} — ${irreversibleReason}` : summary,
       preview,
-      risk: permission.risk,
+      risk: irreversibleReason ? "high" : permission.risk,
       policy: {
-        consentLevel: permission.consentLevel,
-        description: permission.description,
+        consentLevel: irreversibleReason ? "dangerous" : permission.consentLevel,
+        description: irreversibleReason ?? permission.description,
         knownTool: permission.knownTool,
         source: permission.source,
       },

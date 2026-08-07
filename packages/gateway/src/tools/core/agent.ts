@@ -4,7 +4,11 @@
  * Inspired by VS Code Copilot's runSubagent + search_subagent:
  * - `prompt` + `description` + `details` for clear task specification
  * - `allowedTools` for scoping what the sub-agent can do
- * - `maxRounds` to limit autonomous tool-calling loops
+ *
+ * Sub-agents run uncapped: there is deliberately no round limit to hand out,
+ * because a cap truncates a specialist mid-task and its partial work then gets
+ * reported back as if it were finished. Runaway loops are caught behaviorally
+ * by the agent loop's duplicate-call detection instead.
  *
  * Our advantage: single unified agent tool instead of Copilot's two
  * separate tools (runSubagent + search_subagent).
@@ -25,8 +29,6 @@ interface AgentInput {
    *  Defaults to a safe read-only set (read, search, execute, web).
    *  Example: 'read,search,execute,web' */
   allowedTools?: string;
-  /** Max tool-calling rounds (default: 8) */
-  maxRounds?: number;
 }
 
 export function createAgentTool(deps: AgentSpawnDeps): ToolDefinition<AgentInput> {
@@ -59,10 +61,6 @@ export function createAgentTool(deps: AgentSpawnDeps): ToolDefinition<AgentInput
         allowedTools: {
           type: "string",
           description: "Comma-separated tool names (default: read,search,execute,web).",
-        },
-        maxRounds: {
-          type: "number",
-          description: "Max tool-calling rounds (default: 8).",
         },
       },
       required: ["prompt", "description"],

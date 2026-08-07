@@ -42,8 +42,6 @@ interface AgentSpawnInput {
    * If omitted, defaults to a safe read-only subset.
    */
   allowedTools?: string;
-  /** Max tool-calling rounds for the sub-agent (0 = no cap, default). */
-  maxRounds?: number;
   /**
    * Internal only — never part of the tool's JSON schema, so the model can't
    * set it itself. Injected by the agent loop when this spawn call is one of
@@ -68,12 +66,16 @@ const DEFAULT_SUBAGENT_TOOLS = new Set([
   ToolName.TerminalRun,
 ]);
 
-// pi-style: no round cap by default — the sub-agent runs until the model
-// decides it's done or runAgentLoop's duplicate-call detection stops it
-// (identical tool call repeated MAX_DUPLICATE_CALL_STREAK rounds in a row),
-// matching the main agent loop since sub-agents share the same loop. A
-// positive maxRounds still acts as a hard backstop.
-const SUBAGENT_MAX_ROUNDS_DEFAULT = 0;
+// pi-style: sub-agents run with NO round cap, and no way for a caller to set
+// one. They run until the model decides they're done or runAgentLoop's
+// duplicate-call detection stops them (identical tool call repeated
+// MAX_DUPLICATE_CALL_STREAK rounds in a row), matching the main agent loop
+// since sub-agents share the same loop.
+//
+// A cap is worse than useless here: it stops a specialist mid-task, and the
+// truncated output carries no performative tag, so the parent reads it as a
+// completed [INFORM] and folds half-finished work into its synthesis.
+const SUBAGENT_MAX_ROUNDS = 0;
 
 // ── System prompt for sub-agents ─────────────────────────────────────
 
@@ -152,10 +154,6 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
             "Comma-separated tool names the sub-agent may use. " +
             "Defaults to a safe read-only subset if omitted. " +
             "Example: 'file.read,file.list,terminal.run,web.search'",
-        },
-        maxRounds: {
-          type: "number",
-          description: "Max tool-calling rounds (0 = no cap, default).",
         },
       },
       required: ["prompt", "description"],
@@ -367,7 +365,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           prompt: input.prompt,
           description: input.description,
           allowedTools: [...allowedTools],
-          maxRounds: input.maxRounds ?? SUBAGENT_MAX_ROUNDS_DEFAULT,
+          maxRounds: SUBAGENT_MAX_ROUNDS,
         },
         status: "executing",
         parentActionId: context.actionId,
@@ -393,7 +391,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
               }
               : undefined,
             abort: subAbort,
-            maxRounds: input.maxRounds ?? SUBAGENT_MAX_ROUNDS_DEFAULT,
+            maxRounds: SUBAGENT_MAX_ROUNDS,
             maxRetries: 1, // sub-agents get 1 retry (faster turnaround)
             parallel: true,
             toolRegistry,

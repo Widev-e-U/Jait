@@ -200,6 +200,21 @@ describe('shouldOpenResumeStream', () => {
     })).toBe(false)
   })
 
+  it('blocks the session-switch path from attaching a second consumer mid-run', () => {
+    // Re-entering a chat while this tab's own POST stream is still running. That
+    // stream is only aborted by stop/restart, never by a session switch, so
+    // opening a resume stream here means two consumers append tokens into the
+    // same turn — duplicated/interleaved text on screen that isn't in the
+    // gateway's persisted copy, so it vanishes on the next load.
+    expect(shouldOpenResumeStream({
+      sessionId: 'session-1',
+      activeResumeSessionId: null,
+      hasActiveResumeStream: false,
+      directStreamSessionId: 'session-1',
+      hasActiveDirectStream: true,
+    })).toBe(false)
+  })
+
   it('allows a resume stream when there is no active owner for the session', () => {
     expect(shouldOpenResumeStream({
       sessionId: 'session-1',
