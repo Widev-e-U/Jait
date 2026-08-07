@@ -14,6 +14,7 @@ import type { ThreadActivity } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { AssistantBody } from '@/components/chat/assistant-body'
+import { ConversationScrollButton } from '@/components/ai-elements/conversation'
 import type { MessageSegment } from '@/hooks/useChat'
 
 /** Auto-scroll a container to the bottom when content changes. */
@@ -2015,6 +2016,35 @@ function SubAgentHistoryView({
     completedAt: tc.completedAt,
   }))
 
+  // Scroll handling mirrors the normal chat: stick to the bottom while the
+  // user is at the bottom, and show a scroll-to-bottom button when they scroll
+  // up. The sub-agent card is capped at 500px tall.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const stickToBottomRef = useRef(true)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const scrollDep = `${nestedCalls.length}|${content.length}|${message?.length ?? 0}|${streamingOutput?.length ?? 0}`
+
+  const updateBottomState = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setIsAtBottom(distanceFromBottom < 24)
+  }, [])
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior })
+  }, [])
+
+  // Auto-scroll to the bottom on content changes while the user is at the bottom.
+  useEffect(() => {
+    if (!stickToBottomRef.current) return
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [scrollDep])
+
   return (
     <div className="text-xs">
       <div className="flex items-center gap-2 px-3 pt-2.5">
@@ -2026,35 +2056,51 @@ function SubAgentHistoryView({
         )}
       </div>
 
-      <SubAgentMission args={args} />
-      <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
+      <div
+        ref={scrollRef}
+        onScroll={updateBottomState}
+        className="relative max-h-[500px] overflow-auto"
+      >
+        <SubAgentMission args={args} />
+        <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
-      {/* Nested tool calls rendered as full ToolCallCards */}
-      {nestedCalls.length > 0 && (
-        <div className="py-1">
-          {nestedCalls.map((call) => (
-            <ToolCallCard key={call.callId} call={call} />
-          ))}
-        </div>
-      )}
-
-      {/* Final output — rendered as markdown, like a normal assistant reply */}
-      {content && (
-        <div className="px-3 py-2.5">
-          <div className="max-h-64 overflow-auto">
-            <AssistantMarkdown content={content} />
+        {/* Nested tool calls rendered as full ToolCallCards */}
+        {nestedCalls.length > 0 && (
+          <div className="py-1">
+            {nestedCalls.map((call) => (
+              <ToolCallCard key={call.callId} call={call} />
+            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Fallback to message if no content */}
-      {!content && message && (
-        <div className="px-3 py-2">
-          <div className="max-h-64 overflow-auto">
-            <AssistantMarkdown content={message} />
+        {/* Final output — rendered as markdown, like a normal assistant reply */}
+        {content && (
+          <div className="px-3 py-2.5">
+            <div className="max-h-64 overflow-auto">
+              <AssistantMarkdown content={content} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Fallback to message if no content */}
+        {!content && message && (
+          <div className="px-3 py-2">
+            <div className="max-h-64 overflow-auto">
+              <AssistantMarkdown content={message} />
+            </div>
+          </div>
+        )}
+
+        {!isAtBottom && (
+          <ConversationScrollButton
+            className="bottom-3"
+            onClick={() => {
+              stickToBottomRef.current = true
+              scrollToBottom()
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }

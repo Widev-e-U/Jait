@@ -1887,6 +1887,190 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(executedCount).toBeLessThan(fetchCalls);
     expect(events.some((e) => e.type === "steering" && /repeated tool call/.test(e.message ?? ""))).toBe(true);
   });
+
+  it("caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly", async () => {
+    const longThinking = "x".repeat(5_000);
+    const responses = [
+      [
+        `data: {"choices":[{"delta":{"content":"<thinking>${longThinking}</thinking>"}}]}\n\n`,
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Done."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Do the task." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "file_read",
+            description: "Read a file",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-thinking-cap",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "Tool completed" }),
+    );
+
+    expect(result.content).toBe("Done.");
+    const assistantWithTools = history.find((m) => m.role === "assistant" && m.tool_calls);
+    expect(assistantWithTools?.thinking).toBeDefined();
+    // 1 ellipsis + 4000 tail chars — capped, not the full 5000.
+    expect(assistantWithTools!.thinking!.length).toBe(4001);
+    // The tail is preserved (reasoning continuity), not the head.
+    expect(assistantWithTools!.thinking!.endsWith("x".repeat(4000))).toBe(true);
+  });
+
+  it("stops instead of replaying when a thinking-only round repeats the same reasoning verbatim", async () => {
+    // A thinking-only response has no visible text and no tool call, so it hits
+    // empty-response recovery. Before the fix that recovery re-issued a
+    // byte-identical request, the provider reproduced the same reasoning, and
+    // each copy was concatenated onto the same thinking segment — the user saw
+    // the model repeat itself two or three times inside one block.
+    const thinking =
+      "The user says the spiral happened in the thinking block. Let me look at the thinking content of the big spiral message and work out what produced it.";
+    const thinkingOnly = [
+      `data: {"choices":[{"delta":{"content":"<thinking>${thinking}</thinking>"}}]}\n\n`,
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of thinkingOnly) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const events: AgentLoopEvent[] = [];
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Why did it spiral?" },
+    ];
+    const result = await runAgentLoop({
+      llm: {
+        openaiApiKey: "test-key",
+        openaiBaseUrl: "https://llm.test",
+        openaiModel: "test-model",
+        contextWindow: 100_000,
+      },
+      history,
+      toolSchemas: [],
+      hasTools: false,
+      sessionId: "session-thinking-replay",
+      abort: new AbortController(),
+      maxRounds: 6,
+      mode: "agent",
+      onEvent: (e) => events.push(e),
+    });
+
+    // Gave up after the first replay rather than burning every retry.
+    expect(fetchCalls).toBe(2);
+    expect(result.content).toMatch(/kept repeating the same reasoning/i);
+    expect(events.some((e) => e.type === "steering" && /repeated the same reasoning/i.test(e.message ?? ""))).toBe(true);
+
+    // The reasoning is recorded once, not glued to itself.
+    const thinkingSegments = result.segments.filter((s) => s.type === "thinking");
+    expect(thinkingSegments).toHaveLength(1);
+    expect(thinkingSegments[0]!.content.split(thinking).length - 1).toBe(1);
+  });
+
+  it("feeds answer-less reasoning back as an assistant turn so the retry request differs", async () => {
+    const firstThinking =
+      "I need to decide how to answer this. Let me weigh the options carefully before writing anything down for the user.";
+    const responses = [
+      [
+        `data: {"choices":[{"delta":{"content":"<thinking>${firstThinking}</thinking>"}}]}\n\n`,
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Here is the answer."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    const bodies: string[] = [];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      bodies.push(String((init as RequestInit).body));
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Answer me." },
+    ];
+    const result = await runAgentLoop({
+      llm: {
+        openaiApiKey: "test-key",
+        openaiBaseUrl: "https://llm.test",
+        openaiModel: "test-model",
+        contextWindow: 100_000,
+      },
+      history,
+      toolSchemas: [],
+      hasTools: false,
+      sessionId: "session-thinking-recovery",
+      abort: new AbortController(),
+      maxRounds: 6,
+      mode: "agent",
+    });
+
+    expect(result.content).toBe("Here is the answer.");
+    // The retry payload carries the reasoning that produced no answer, so it is
+    // not a byte-identical replay of the attempt that just failed.
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toContain(firstThinking);
+    expect(bodies[1]).not.toBe(bodies[0]);
+    expect(bodies[1]).toContain("produced reasoning but no answer");
+    // Recorded as a real assistant turn, so it survives recovery-prompt cleanup.
+    expect(history.some((m) => m.role === "assistant" && m.content === "" && m.thinking === firstThinking)).toBe(true);
+  });
 });
 
 describe("retryToolCall", () => {

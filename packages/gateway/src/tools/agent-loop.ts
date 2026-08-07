@@ -1305,6 +1305,34 @@ const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
 const SWARM_MAX_UNDELEGATED_READS = 6;
 
 /**
+ * Cap on how much thinking we persist to history per assistant message. Reasoning
+ * models (e.g. deepseek-v4-flash via ollama) can emit very long thinking blocks;
+ * persisting them verbatim lets the context grow unboundedly across tool rounds,
+ * which keeps triggering compaction and can look like an endless thinking loop.
+ * Truncating to the tail keeps recent reasoning continuity while bounding growth.
+ */
+const MAX_PERSISTED_THINKING_CHARS = 4000;
+
+/**
+ * Minimum length before an exact thinking repeat is treated as pathological.
+ * Short fragments ("Okay.", "Let me check the file.") can legitimately recur
+ * across rounds; a multi-sentence block reproduced word for word cannot.
+ */
+const MIN_REPEAT_THINKING_CHARS = 80;
+
+/** True when `addition` is a verbatim repeat of the tail of `existing`. */
+function isVerbatimThinkingRepeat(existing: string, addition: string): boolean {
+  return addition.length >= MIN_REPEAT_THINKING_CHARS && existing.endsWith(addition);
+}
+
+/** Truncate a thinking block to the tail so persisted context stays bounded. */
+function capThinking(thinking: string | undefined): string | undefined {
+  if (!thinking) return undefined;
+  if (thinking.length <= MAX_PERSISTED_THINKING_CHARS) return thinking;
+  return "…" + thinking.slice(-MAX_PERSISTED_THINKING_CHARS);
+}
+
+/**
  * Detect if the model emitted a tool call as plain text instead of structured format.
  * Matches patterns like: `toolName\n{"arg": "value"}` or `toolName({"arg": "value"})`
  */
@@ -1899,6 +1927,8 @@ export async function runAgentLoop(
   let plainTextRetries = 0;
   /** Consecutive terminal provider responses with no visible text or tool call. */
   let emptyResponseRetries = 0;
+  /** Thinking from the last answer-less round, to detect a replayed reasoning loop. */
+  let lastEmptyThinking = "";
   const emptyResponseRecoveryPrompts = new Set<AgentMessage>();
   const clearEmptyResponseRecoveryPrompts = () => {
     for (const prompt of emptyResponseRecoveryPrompts) {
@@ -2173,13 +2203,23 @@ export async function runAgentLoop(
     }
 
     fullContent += contentText;
-    if (contentText.trim()) emptyResponseRetries = 0;
+    if (contentText.trim()) {
+      emptyResponseRetries = 0;
+      lastEmptyThinking = "";
+    }
 
     // ── Track segments for interleaved rendering ──
+    // Skip verbatim repeats. When a round produces no visible text the
+    // empty-response recovery below re-issues the request, and a deterministic
+    // provider reproduces the same reasoning word for word. Concatenating it
+    // is what surfaces to the user as the model repeating itself inside a
+    // single thinking block.
     if (thinkingText) {
       const last = segments[segments.length - 1];
       if (last?.type === "thinking") {
-        segments[segments.length - 1] = { type: "thinking", content: last.content + thinkingText };
+        if (!isVerbatimThinkingRepeat(last.content, thinkingText)) {
+          segments[segments.length - 1] = { type: "thinking", content: last.content + thinkingText };
+        }
       } else {
         segments.push({ type: "thinking", content: thinkingText });
       }
@@ -2211,6 +2251,7 @@ export async function runAgentLoop(
     // ── Model returned tool calls → queue & execute ──
     if (toolCalls.length > 0) {
       emptyResponseRetries = 0;
+      lastEmptyThinking = "";
       if (finishReason && finishReason !== "tool_calls") {
         log.warn(
           `LLM returned ${toolCalls.length} tool call(s) with finish_reason="${finishReason}" — executing anyway`,
@@ -2282,7 +2323,7 @@ export async function runAgentLoop(
         role: "assistant",
         content: contentText || "",
         tool_calls: toolCalls,
-        thinking: thinkingText || undefined,
+        thinking: capThinking(thinkingText),
       });
 
       // Enqueue all tool calls (pi-style, data-driven within a round: the loop
@@ -2607,6 +2648,37 @@ export async function runAgentLoop(
     }
 
     if (!contentText.trim() && toolCalls.length === 0) {
+      // A thinking-only response lands here: the model reasoned but produced
+      // neither an answer nor a tool call. Retrying only helps if the next
+      // request differs from the one that just failed — the recovery prompt
+      // added below is stripped again by clearEmptyResponseRecoveryPrompts()
+      // as soon as the next stream parses, so on its own it leaves the payload
+      // byte-identical and a deterministic provider replays the same
+      // reasoning. Record the reasoning as a real assistant turn (which
+      // survives that cleanup) so each attempt sees new context.
+      const repeatedThinking = isVerbatimThinkingRepeat(lastEmptyThinking, thinkingText);
+      lastEmptyThinking = thinkingText;
+
+      if (repeatedThinking) {
+        log.warn(
+          `Provider re-emitted identical reasoning (${thinkingText.length} chars) with no answer for session ${sessionId} — ` +
+            `reasoning loop, ending turn instead of replaying the request`,
+        );
+        onEvent?.({
+          type: "steering",
+          message: "Model repeated the same reasoning without answering — stopping",
+        });
+        const msg =
+          "\n\n[Stopped: the model kept repeating the same reasoning without producing an answer. Try rephrasing or narrowing the request.]";
+        history.push({ role: "assistant", content: msg, thinking: capThinking(thinkingText) });
+        fullContent += msg;
+        segments.push({ type: "text", content: msg });
+        onEvent?.({ type: "token", content: msg });
+        onPersist?.(sessionId, "assistant", fullContent, undefined, JSON.stringify(segments), thinkingText || undefined);
+        persisted = true;
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
+      }
+
       const canRetry = emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < roundLimit;
       if (canRetry) {
         emptyResponseRetries++;
@@ -2616,11 +2688,16 @@ export async function runAgentLoop(
           : `Provider returned an empty response — retrying (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES})`;
         log.warn(`${message} for session ${sessionId}`);
         onEvent?.({ type: "steering", message });
+        if (thinkingText) {
+          history.push({ role: "assistant", content: "", thinking: capThinking(thinkingText) });
+        }
         const recoveryPrompt: AgentMessage = {
           role: "system",
-          content: afterTools
-            ? "Your previous response ended without a final answer after the tools completed. Continue from the completed tool results and give the user a concise final answer. Do not repeat completed tool calls."
-            : "Your previous response was empty. Answer the user's request now. Return either a substantive response or a structured tool call.",
+          content: thinkingText
+            ? "You produced reasoning but no answer. Do not think further and do not repeat that reasoning — write the answer for the user now, or make a structured tool call."
+            : afterTools
+              ? "Your previous response ended without a final answer after the tools completed. Continue from the completed tool results and give the user a concise final answer. Do not repeat completed tool calls."
+              : "Your previous response was empty. Answer the user's request now. Return either a substantive response or a structured tool call.",
         };
         history.push(recoveryPrompt);
         emptyResponseRecoveryPrompts.add(recoveryPrompt);
@@ -2649,7 +2726,7 @@ export async function runAgentLoop(
 
     // ── Normal text response — done ──
     if (contentText) {
-      history.push({ role: "assistant", content: contentText, thinking: thinkingText || undefined });
+      history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText) });
     }
     if (fullContent || thinkingText || segments.length > 0 || executedToolCalls.length > 0) {
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;

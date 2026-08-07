@@ -83,6 +83,35 @@ export function scrollAnchorDelta(currentTop: number, anchoredOffset: number): n
   return Math.abs(delta) < ANCHOR_EPSILON_PX ? 0 : delta
 }
 
+/** Scroll distance from the top that arms the lazy-load of older messages. */
+export const LOAD_MORE_SCROLL_THRESHOLD_PX = 200
+
+/** How long to wait for a requested batch before assuming it will never land. */
+const LOAD_MORE_REARM_TIMEOUT_MS = 8_000
+
+/** A one-pixel slack so sub-pixel layout rounding doesn't read as scrollable. */
+const SCROLLABLE_EPSILON_PX = 1
+
+/**
+ * Whether the next page of older messages should be requested for the current
+ * scroll geometry.
+ *
+ * Near the top is the obvious case. The non-obvious one is a window that cannot
+ * scroll at all: a chat opens on a very small message window
+ * (INITIAL_CHAT_HISTORY_MESSAGE_LIMIT), which routinely does not overflow the
+ * viewport. There is then no scrollable overflow, so the container never emits
+ * a scroll event, and a trigger wired only to scroll events can never fire —
+ * the user spins the wheel and no earlier messages ever arrive. Treat
+ * "unscrollable with more available" as a request to backfill.
+ */
+export function shouldLoadOlderMessages(
+  element: Pick<HTMLElement, 'scrollTop' | 'scrollHeight' | 'clientHeight'>,
+): boolean {
+  const scrollable = element.scrollHeight > element.clientHeight + SCROLLABLE_EPSILON_PX
+  if (!scrollable) return true
+  return element.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX
+}
+
 const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
   overscrollBehaviorY: 'contain',
@@ -99,18 +128,23 @@ const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
  * generic loading list rather than a chat, and then visibly reflows when the
  * real messages arrive. There are enough turns here to overflow a tall
  * viewport, which is what makes the skeleton fill the full height.
+ *
+ * The column is bottom-anchored, so the last two turns (the two user prompts)
+ * sit just above the composer and everything above them is assistant output —
+ * the skeleton reads as a mostly-agent conversation with a couple of recent
+ * user messages, which is the shape the user asked for.
  */
 export const CONVERSATION_SKELETON_TURNS: ReadonlyArray<{ role: 'user' | 'assistant'; lines: number }> = [
-  { role: 'user', lines: 1 },
   { role: 'assistant', lines: 5 },
-  { role: 'user', lines: 2 },
   { role: 'assistant', lines: 6 },
-  { role: 'user', lines: 1 },
   { role: 'assistant', lines: 4 },
-  { role: 'user', lines: 2 },
+  { role: 'assistant', lines: 5 },
+  { role: 'assistant', lines: 3 },
+  { role: 'assistant', lines: 6 },
+  { role: 'assistant', lines: 4 },
   { role: 'assistant', lines: 5 },
   { role: 'user', lines: 1 },
-  { role: 'assistant', lines: 3 },
+  { role: 'user', lines: 2 },
 ]
 
 /** Ragged line widths so a block reads as prose; the last line runs short. */
@@ -157,17 +191,18 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
             )
           }
 
-          // Assistant turn — transparent, text-only lines like the real layout.
+          // Assistant turn — transparent, text-only lines like the real layout,
+          // no avatar, and wider/taller than the user bubbles so the agent
+          // output dominates the skeleton.
           return (
             <div
               key={turnIndex}
-              className="flex shrink-0 animate-pulse items-start gap-3"
+              className="flex shrink-0 animate-pulse"
               style={{ animationDelay: delay }}
             >
-              <div className="h-8 w-8 shrink-0 rounded-full bg-muted-foreground/10" />
-              <div className="w-full max-w-xl space-y-2.5 pt-1.5">
+              <div className="w-full max-w-2xl space-y-3">
                 {lines.map((width, i) => (
-                  <div key={i} className={cn('h-3 rounded-md bg-muted-foreground/10', width)} />
+                  <div key={i} className={cn('h-4 rounded-md bg-muted-foreground/10', width)} />
                 ))}
               </div>
             </div>
@@ -408,36 +443,59 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
   // Lazy-load older messages when user scrolls near the top
   const loadMoreTriggeredRef = useRef(false)
+  const rearmTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  const requestOlderMessages = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || !hasMore || !onLoadMore) return
+    if (loadMoreTriggeredRef.current) return
+    if (!shouldLoadOlderMessages(el)) return
+    loadMoreTriggeredRef.current = true
+    // A request that brings nothing back (failed fetch, stale cursor) would
+    // otherwise leave the trigger armed-but-never-cleared, and the user would
+    // get no earlier messages for the rest of the session. The prepend effect
+    // below clears this on the happy path, well before it fires.
+    clearTimeout(rearmTimerRef.current)
+    rearmTimerRef.current = setTimeout(() => {
+      pendingPrependAnchorRef.current = false
+      loadMoreTriggeredRef.current = false
+    }, LOAD_MORE_REARM_TIMEOUT_MS)
+    // Anchor before requesting. onLoadMore is async (it fetches), so the
+    // old single-rAF height diff always measured an unchanged list and
+    // corrected by zero. The batch then landed with scrollTop untouched,
+    // which — with content prepended above — leaves the user near the top
+    // of a now much longer list, re-arming this trigger and cascading
+    // straight to the beginning of the conversation.
+    captureScrollAnchor()
+    pendingPrependAnchorRef.current = true
+    onLoadMore()
+  }, [captureScrollAnchor, hasMore, onLoadMore])
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !hasMore || !onLoadMore) return
-
-    const handleScroll = () => {
-      if (loadMoreTriggeredRef.current) return
-      if (el.scrollTop < 200) {
-        loadMoreTriggeredRef.current = true
-        // Anchor before requesting. onLoadMore is async (it fetches), so the
-        // old single-rAF height diff always measured an unchanged list and
-        // corrected by zero. The batch then landed with scrollTop untouched,
-        // which — with content prepended above — leaves the user near the top
-        // of a now much longer list, re-arming this trigger and cascading
-        // straight to the beginning of the conversation.
-        captureScrollAnchor()
-        pendingPrependAnchorRef.current = true
-        onLoadMore()
-      }
-    }
-
+    const handleScroll = () => requestOlderMessages()
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => el.removeEventListener('scroll', handleScroll)
-  }, [captureScrollAnchor, hasMore, onLoadMore, childItems.length])
+  }, [hasMore, onLoadMore, requestOlderMessages, childItems.length])
+
+  // Also evaluate whenever the rendered window changes. A scroll listener alone
+  // is dead weight while the loaded window is too short to overflow the
+  // viewport: no overflow means no scroll events, so nothing would ever request
+  // the earlier pages. Re-checking here backfills until the list is scrollable.
+  useEffect(() => {
+    if (loading || !hasContent || !initialScrollReady) return
+    requestOlderMessages()
+  }, [requestOlderMessages, childItems.length, hasContent, initialScrollReady, loading])
+
+  useEffect(() => () => clearTimeout(rearmTimerRef.current), [])
 
   // Restore once the prepended batch is actually in the DOM.
   useLayoutEffect(() => {
     if (!pendingPrependAnchorRef.current) return
     if (childItems.length === prevChildCount.current) return
     pendingPrependAnchorRef.current = false
+    clearTimeout(rearmTimerRef.current)
     restoreScrollAnchor()
     // Re-arm only after the view has been put back, so being near the top
     // during the load can't queue another page.

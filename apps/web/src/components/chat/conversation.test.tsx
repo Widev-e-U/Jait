@@ -4,9 +4,11 @@ import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
+  LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
   positionConversationAtBottom,
   scrollAnchorDelta,
+  shouldLoadOlderMessages,
 } from './conversation'
 
 describe('Conversation', () => {
@@ -52,6 +54,41 @@ describe('Conversation', () => {
   })
 })
 
+describe('shouldLoadOlderMessages', () => {
+  it('requests earlier messages when the loaded window cannot scroll at all', () => {
+    // The regression: a chat opens on a tiny message window that often does not
+    // overflow the viewport. With no overflow the container emits no scroll
+    // events, so a scroll-only trigger never fires and scrolling up produces
+    // nothing — no matter how much history the session actually has.
+    expect(shouldLoadOlderMessages({ scrollTop: 0, scrollHeight: 400, clientHeight: 900 })).toBe(true)
+  })
+
+  it('treats an exactly-fitting window as unscrollable', () => {
+    expect(shouldLoadOlderMessages({ scrollTop: 0, scrollHeight: 900, clientHeight: 900 })).toBe(true)
+  })
+
+  it('requests earlier messages near the top of a scrollable list', () => {
+    expect(shouldLoadOlderMessages({
+      scrollTop: LOAD_MORE_SCROLL_THRESHOLD_PX - 1,
+      scrollHeight: 5000,
+      clientHeight: 900,
+    })).toBe(true)
+  })
+
+  it('stays quiet while the user is reading below the threshold', () => {
+    expect(shouldLoadOlderMessages({
+      scrollTop: LOAD_MORE_SCROLL_THRESHOLD_PX,
+      scrollHeight: 5000,
+      clientHeight: 900,
+    })).toBe(false)
+    expect(shouldLoadOlderMessages({ scrollTop: 4100, scrollHeight: 5000, clientHeight: 900 })).toBe(false)
+  })
+
+  it('ignores sub-pixel overflow that cannot actually be scrolled', () => {
+    expect(shouldLoadOlderMessages({ scrollTop: 0, scrollHeight: 900.4, clientHeight: 900 })).toBe(true)
+  })
+})
+
 describe('conversation skeleton proportions', () => {
   it('gives assistant turns more lines than user turns', () => {
     const user = CONVERSATION_SKELETON_TURNS.filter((t) => t.role === 'user')
@@ -63,12 +100,19 @@ describe('conversation skeleton proportions', () => {
       .toBeLessThan(Math.min(...assistant.map((t) => t.lines)))
   })
 
-  it('alternates prompt then reply and ends on an assistant turn', () => {
+  it('keeps exactly two user turns and fills the rest with assistant turns', () => {
+    const user = CONVERSATION_SKELETON_TURNS.filter((t) => t.role === 'user')
+    const assistant = CONVERSATION_SKELETON_TURNS.filter((t) => t.role === 'assistant')
+
+    // The skeleton reads as a mostly-agent conversation with a couple of recent
+    // user prompts, so the agent output dominates the placeholder.
+    expect(user).toHaveLength(2)
+    expect(assistant.length).toBeGreaterThan(user.length * 2)
+  })
+
+  it('ends on a user turn (the most recent prompt sits next to the composer)', () => {
     // Bottom-anchored, so the last entry is the one next to the composer.
-    expect(CONVERSATION_SKELETON_TURNS.at(-1)?.role).toBe('assistant')
-    CONVERSATION_SKELETON_TURNS.forEach((turn, i) => {
-      expect(turn.role).toBe(i % 2 === 0 ? 'user' : 'assistant')
-    })
+    expect(CONVERSATION_SKELETON_TURNS.at(-1)?.role).toBe('user')
   })
 
   it('renders a scroll container that keeps mobile pull-to-refresh out of the chat surface', () => {
