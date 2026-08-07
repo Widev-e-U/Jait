@@ -37,6 +37,34 @@ describe("token-estimator", () => {
     })).toBeGreaterThan(estimateMessageTokens({ role: "assistant", content: "abcd" }));
   });
 
+  it("counts hidden thinking/reasoning text in the token estimate", () => {
+    const withoutThinking = estimateMessageTokens({ role: "assistant", content: "abcd" });
+    const withThinking = estimateMessageTokens({
+      role: "assistant",
+      content: "abcd",
+      thinking: "Let me analyze this step by step. The user wants me to read the file.",
+    });
+    expect(withThinking).toBeGreaterThan(withoutThinking);
+    // The thinking text is ~66 chars → ~18 tokens, so the difference should be significant.
+    expect(withThinking - withoutThinking).toBeGreaterThanOrEqual(15);
+  });
+
+  it("counts thinking text in context usage breakdown", () => {
+    const largeThinking = "x".repeat(100_000); // ~27k tokens of thinking
+    const usage = computeContextUsage(
+      [
+        { role: "system", content: "system prompt" },
+        { role: "user", content: "do the task" },
+        { role: "assistant", content: "working on it", thinking: largeThinking },
+      ],
+      [],
+      200_000,
+    );
+    // The thinking text alone should be ~27k tokens, so history should be well above 27k.
+    expect(usage.history).toBeGreaterThan(27_000);
+    expect(usage.ratio).toBeGreaterThan(0.13);
+  });
+
   it("adds request priming tokens for message history", () => {
     expect(estimateHistoryTokens([
       { role: "system", content: "abcd" },

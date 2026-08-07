@@ -16,6 +16,7 @@ import {
   buildSystemPrompt,
   buildTieredToolSchemas,
   computeContextUsage,
+  generateLLMConversationSummary,
   pruneHistory,
   runAgentLoop,
   type AgentLoopEvent,
@@ -289,7 +290,9 @@ export class JaitProvider implements CliProviderAdapter {
             llm.contextWindow,
           );
           if (postUsage.ratio >= 0.45) {
-            pruneHistory(state.history, llm.contextWindow, toolSchemas);
+            await pruneHistory(state.history, llm.contextWindow, toolSchemas, {
+              summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
+            });
             console.info(`Post-turn history compacted: ${state.history.length} messages → ratio was ${(postUsage.ratio * 100).toFixed(0)}%`);
           }
         }

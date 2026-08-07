@@ -484,7 +484,7 @@ describe("repairToolCallHistory", () => {
 });
 
 describe("context pruning summary", () => {
-  it("replaces pruned turns with a structured summary", () => {
+  it("replaces pruned turns with a structured summary", async () => {
     const history: AgentMessage[] = [
       { role: "system", content: "system prompt" },
       {
@@ -513,7 +513,7 @@ describe("context pruning summary", () => {
       { role: "user", content: "Please continue with the current implementation." },
     ];
 
-    const pruned = __testUtils.pruneHistory(history, 40, []);
+    const pruned = await __testUtils.pruneHistory(history, 40, []);
     const summary = history[1]?.content ?? "";
 
     expect(pruned).toBe(true);
@@ -532,7 +532,7 @@ describe("context pruning summary", () => {
     expect(history.at(-1)).toMatchObject({ role: "user", content: "Please continue with the current implementation." });
   });
 
-  it("re-injects the latest substantive user task when the tail is a bare continuation", () => {
+  it("re-injects the latest substantive user task when the tail is a bare continuation", async () => {
     const task =
       "generating commit messages with Jait provider selected gives me LLM returned an empty response please fix that at last then push";
     const history: AgentMessage[] = [
@@ -555,7 +555,7 @@ describe("context pruning summary", () => {
       { role: "user", content: "continue?" },
     ];
 
-    const pruned = __testUtils.pruneHistory(history, 40, []);
+    const pruned = await __testUtils.pruneHistory(history, 40, []);
 
     expect(pruned).toBe(true);
     // The bulk was collapsed into a summary at the top.
@@ -569,7 +569,7 @@ describe("context pruning summary", () => {
     expect(reinjected).toBeDefined();
   });
 
-  it("compacts older tool output while leaving recent results untouched", () => {
+  it("compacts older tool output while leaving recent results untouched", async () => {
     // One old, oversized tool result plus 12 small "recent" ones (the protected window).
     // Crushing the old one alone should be enough to hit budget, so the 12 recent results —
     // content the model just fetched — must come out byte-for-byte unchanged.
@@ -596,7 +596,7 @@ describe("context pruning summary", () => {
     const recentContentsBefore = history.filter((m) => m.role === "tool").slice(1).map((m) => m.content);
     const contextWindow = 30_000;
 
-    expect(__testUtils.pruneHistory(history, contextWindow, [])).toBe(false);
+    expect(await __testUtils.pruneHistory(history, contextWindow, [])).toBe(false);
     expect(__testUtils.compactToolResultsToBudget(history, [], contextWindow)).toBe(true);
     __testUtils.repairToolCallHistory(history);
 
@@ -650,7 +650,7 @@ describe("context pruning summary", () => {
     }
   });
 
-  it("does not re-inject when the tail user message is already substantive", () => {
+  it("does not re-inject when the tail user message is already substantive", async () => {
     const history: AgentMessage[] = [
       { role: "system", content: "system prompt" },
       { role: "user", content: "First task: refactor the pruning helper and keep it minimal." },
@@ -665,7 +665,7 @@ describe("context pruning summary", () => {
       { role: "user", content: "now run the focused tests and report the results please" },
     ];
 
-    __testUtils.pruneHistory(history, 40, []);
+    await __testUtils.pruneHistory(history, 40, []);
 
     // Only one user turn should follow the summary: the substantive tail itself.
     const userTurns = history.filter((m) => m.role === "user");

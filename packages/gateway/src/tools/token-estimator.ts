@@ -40,6 +40,8 @@ export function estimateMessageTokens(msg: {
   tool_calls?: unknown[];
   tool_call_id?: string;
   name?: string;
+  /** Hidden reasoning text (e.g. <thinking> blocks, reasoning model output). */
+  thinking?: string;
 }): number {
   let tokens = TOKENS_PER_MESSAGE;
   tokens += estimateTokens(msg.content);
@@ -49,12 +51,16 @@ export function estimateMessageTokens(msg: {
     // Tool calls are JSON-heavy
     tokens += estimateJsonTokens(msg.tool_calls);
   }
+  // Count hidden reasoning — reasoning models can emit very large thinking
+  // blocks that are sent to the provider as part of the context but were
+  // previously invisible to the estimator, causing context overflow.
+  if (msg.thinking) tokens += estimateTokens(msg.thinking);
   return tokens;
 }
 
 /** Estimate total token cost of a message array. */
 export function estimateHistoryTokens(
-  messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string }>,
+  messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string; thinking?: string }>,
 ): number {
   let total = 3; // every request has ~3 priming tokens
   for (const msg of messages) {
@@ -95,7 +101,7 @@ export interface ContextUsage {
 
 /** Compute context usage breakdown from current state. */
 export function computeContextUsage(
-  messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string }>,
+  messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string; name?: string; thinking?: string }>,
   toolSchemas: unknown[],
   contextWindow: number,
 ): ContextUsage {

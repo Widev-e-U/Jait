@@ -185,6 +185,22 @@ function formatLLMError(status: number, responseText: string): string {
   }
 }
 
+/** Detect whether an LLM error response indicates context-window overflow. */
+function isContextOverflowError(status: number, responseText: string): boolean {
+  if (status !== 400 && status !== 413) return false;
+  const lower = responseText.toLowerCase();
+  return lower.includes("context length") ||
+    lower.includes("context_length") ||
+    lower.includes("maximum context") ||
+    lower.includes("max context") ||
+    lower.includes("too long") ||
+    lower.includes("too many tokens") ||
+    lower.includes("prompt is too long") ||
+    lower.includes("context window") ||
+    lower.includes("maximum number of tokens") ||
+    lower.includes("input is too long");
+}
+
 /** Priority levels for queued tool calls */
 export enum ToolCallPriority {
   /** Run before anything else (e.g. abort-checks, validation) */
@@ -1542,11 +1558,144 @@ function reinjectSubstantiveUserTask(
  *
  * Mutates `history` in place. Returns true if anything was pruned.
  */
-export function pruneHistory(
+// ── LLM-based conversation summarization (pi-style) ──────────────────
+
+/** Max chars for a tool result when serializing conversation for summarization. */
+const SUMMARY_TOOL_RESULT_MAX_CHARS = 2_000;
+
+/**
+ * Serialize conversation messages to text for LLM summarization.
+ * This prevents the model from treating it as a conversation to continue.
+ * Tool results are truncated to keep the summarization request within reasonable budgets.
+ */
+function serializeConversationForSummary(messages: AgentMessage[]): string {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      if (msg.content) parts.push(`[User]: ${msg.content}`);
+    } else if (msg.role === "assistant") {
+      if (msg.thinking) parts.push(`[Assistant thinking]: ${msg.thinking}`);
+      if (msg.content) parts.push(`[Assistant]: ${msg.content}`);
+      if (msg.tool_calls?.length) {
+        const calls = msg.tool_calls.map((tc) => {
+          let args = "";
+          try { args = tc.function.arguments; } catch { args = ""; }
+          return `${fromOpenAIName(tc.function.name)}(${args})`;
+        });
+        parts.push(`[Assistant tool calls]: ${calls.join("; ")}`);
+      }
+    } else if (msg.role === "tool") {
+      const content = msg.content;
+      if (content) {
+        const truncated = content.length <= SUMMARY_TOOL_RESULT_MAX_CHARS
+          ? content
+          : `${content.slice(0, SUMMARY_TOOL_RESULT_MAX_CHARS)}\n\n[... ${content.length - SUMMARY_TOOL_RESULT_MAX_CHARS} more characters truncated]`;
+        parts.push(`[Tool result]: ${truncated}`);
+      }
+    } else if (msg.role === "system") {
+      // Skip system messages (system prompt, prior summaries, steering, etc.)
+    }
+  }
+  return parts.join("\n\n");
+}
+
+const LLM_SUMMARIZATION_SYSTEM_PROMPT =
+  "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified. " +
+  "Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.";
+
+const LLM_SUMMARIZATION_PROMPT =
+  `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.\n\n` +
+  `Use this EXACT format:\n\n` +
+  `## Goal\n[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]\n\n` +
+  `## Constraints & Preferences\n- [Any constraints, preferences, or requirements mentioned by user]\n- [Or "(none)" if none were mentioned]\n\n` +
+  `## Progress\n### Done\n- [x] [Completed tasks/changes]\n\n### In Progress\n- [ ] [Current work]\n\n### Blocked\n- [Issues preventing progress, if any]\n\n` +
+  `## Key Decisions\n- **[Decision]**: [Brief rationale]\n\n` +
+  `## Next Steps\n1. [Ordered list of what should happen next]\n\n` +
+  `## Critical Context\n- [Any data, examples, or references needed to continue]\n- [Or "(none)" if not applicable]\n\n` +
+  `Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+
+/**
+ * Generate a structured conversation summary using the LLM (pi-style compaction).
+ *
+ * Sends the removed messages to the model with a summarization prompt and returns
+ * the generated summary text. Falls back to the regex-based
+ * {@link buildStructuredConversationSummary} on any error (network failure,
+ * non-OK response, parse error, or when no LLM config is provided).
+ */
+export async function generateLLMConversationSummary(
+  removedMessages: AgentMessage[],
+  llm: LLMConfig,
+  signal?: AbortSignal,
+): Promise<string> {
+  const conversationText = serializeConversationForSummary(removedMessages);
+  if (!conversationText.trim()) {
+    return buildStructuredConversationSummary(removedMessages);
+  }
+
+  const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${LLM_SUMMARIZATION_PROMPT}`;
+  const messages = [
+    { role: "system" as const, content: LLM_SUMMARIZATION_SYSTEM_PROMPT },
+    { role: "user" as const, content: promptText },
+  ];
+
+  try {
+    const isOllama = llm.backend === "ollama";
+    const requestUrl = isOllama
+      ? `${llm.openaiBaseUrl.replace(/\/v1\/?$/, "")}/api/chat`
+      : `${llm.openaiBaseUrl}/chat/completions`;
+    const reqBody: Record<string, unknown> = isOllama
+      ? { model: llm.openaiModel, messages, stream: false, options: { num_ctx: llm.numCtx ?? llm.contextWindow } }
+      : { model: llm.openaiModel, messages, stream: false, max_tokens: 2048 };
+
+    const response = await fetch(requestUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${llm.openaiApiKey}` },
+      body: JSON.stringify(reqBody),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Summarization LLM returned ${response.status}`);
+    }
+
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; message?: { content?: string } };
+    // OpenAI format: data.choices[0].message.content
+    // Ollama format: data.message.content
+    const summary = data.choices?.[0]?.message?.content ?? data.message?.content ?? "";
+    if (!summary.trim()) {
+      throw new Error("Summarization LLM returned empty content");
+    }
+
+    return `[conversation-summary]\n${summary.trim()}\n[/conversation-summary]`;
+  } catch {
+    // Fall back to the deterministic regex-based summary — better than nothing.
+    return buildStructuredConversationSummary(removedMessages);
+  }
+}
+
+/**
+ * Prune oldest conversation turns to bring context usage below the target.
+ *
+ * Strategy (similar to Copilot):
+ *  1. Never remove the system prompt (index 0) or the last user message.
+ *  2. Remove oldest user/assistant/tool turn groups first.
+ *  3. Insert a structured `[conversation-summary]` so the model keeps the
+ *     pruned goal, constraints, decisions, files, progress, and next steps.
+ *
+ * When `options.summaryGenerator` is provided, it is used to generate the
+ * summary (pi-style LLM compaction). Otherwise, the deterministic regex-based
+ * {@link buildStructuredConversationSummary} is used as a fallback.
+ *
+ * Mutates `history` in place. Returns true if anything was pruned.
+ */
+export async function pruneHistory(
   history: AgentMessage[],
   contextWindow: number,
   toolSchemas: unknown[],
-): boolean {
+  options?: {
+    summaryGenerator?: (removedMessages: AgentMessage[]) => Promise<string>;
+  },
+): Promise<boolean> {
   const usage = computeContextUsage(history, toolSchemas, contextWindow);
   const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
   if (usage.total <= targetTokens) return false;
@@ -1599,9 +1748,12 @@ export function pruneHistory(
     }
     // Insert a structured summary after the system messages.
     const insertAt = firstRemovable;
+    const summary = options?.summaryGenerator
+      ? await options.summaryGenerator(removedMessages)
+      : buildStructuredConversationSummary(removedMessages);
     history.splice(insertAt, 0, {
       role: "system",
-      content: buildStructuredConversationSummary(removedMessages),
+      content: summary,
     });
 
     // If the only surviving user turn is a trivial continuation ("continue?"),
@@ -1763,6 +1915,8 @@ export async function runAgentLoop(
   let duplicateCallStreak = 0;
   /** Times we've nudged the model to break out of a duplicate-call loop. */
   let duplicateCallInterventions = 0;
+  /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
+  let overflowRecoveryAttempted = false;
   /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
   let swarmHasDelegated = false;
   /** Swarm mode: direct read/search-style tool calls made before any delegation. */
@@ -1829,7 +1983,9 @@ export async function runAgentLoop(
       // If context usage ≥ 60%, proactively prune oldest conversation turns
       // Lower threshold because the estimator is imprecise (char/token ratio doesn't match real tokenization).
       if (usage.ratio >= 0.60) {
-        const pruned = pruneHistory(history, contextWindow, activeSchemas);
+        const pruned = await pruneHistory(history, contextWindow, activeSchemas, {
+          summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
+        });
         const compactedToolResults = compactToolResultsToBudget(
           history,
           activeSchemas,
@@ -1930,6 +2086,42 @@ export async function runAgentLoop(
       if (!response.ok) {
         const errText = await response.text();
         log.error(`LLM error ${response.status}: ${errText}`);
+
+        // ── Context overflow recovery (pi-style: compact + retry once) ──
+        // When the provider rejects the request because the context is too long,
+        // aggressively compact the history and retry this round. Only attempt
+        // recovery once — if the compacted context is still too large, surface
+        // the error to the user rather than looping forever.
+        if (
+          isContextOverflowError(response.status, errText) &&
+          !overflowRecoveryAttempted &&
+          llm.contextWindow > 0
+        ) {
+          overflowRecoveryAttempted = true;
+          log.warn(
+            `Context overflow detected (status ${response.status}) — compacting history and retrying once for session ${sessionId}`,
+          );
+          onEvent?.({
+            type: "steering",
+            message: "Context too large for the model — compacting conversation history and retrying...",
+          });
+
+          // Force aggressive pruning: lower the threshold to trigger even if
+          // the estimator thinks we're under 60% (the estimator is imprecise
+          // and the provider clearly disagrees).
+          const emergencyUsage = computeContextUsage(history, activeSchemas, llm.contextWindow);
+          if (emergencyUsage.ratio >= 0.30) {
+            await pruneHistory(history, llm.contextWindow, activeSchemas, {
+              summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
+            });
+            compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
+          }
+
+          // Continue this round again (decrement round counter so we don't consume a round)
+          round--;
+          continue;
+        }
+
         const friendlyMessage = formatLLMError(response.status, errText);
         onEvent?.({ type: "error", message: friendlyMessage });
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
