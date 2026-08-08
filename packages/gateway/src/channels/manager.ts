@@ -20,6 +20,7 @@ import {
 } from "../tools/agent-loop.js";
 import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
 import { MUTATING_TOOLS } from "../tools/chat-modes.js";
+import { classifyIrreversibleCommand } from "../security/tool-permissions.js";
 import type { Skill } from "../skills/index.js";
 import type { ConsentManager, ConsentRequest, ConsentDecision } from "../security/consent-manager.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -186,6 +187,18 @@ function resolveChannelMaxRounds(apiKeys?: Record<string, string>): number {
  */
 export function autoApproves(config: ChannelConfig): boolean {
   return config.autoApprove !== false;
+}
+
+/**
+ * Reason a tool call is irreversible, or undefined when it is not. Mirrors the
+ * check in ConsentAwareExecutor for the channel's own executor, which runs
+ * tools directly against the registry.
+ */
+export function irreversibleReasonFor(args: unknown): string | undefined {
+  const command = (args as { command?: unknown } | null)?.command;
+  if (typeof command !== "string" || !command.trim()) return undefined;
+  const verdict = classifyIrreversibleCommand(command);
+  return verdict.irreversible ? verdict.reason ?? "irreversible command" : undefined;
 }
 
 /** Default approval window for an in-band consent prompt before auto-deny. */
@@ -591,12 +604,27 @@ export class ChannelManager {
     // very message, so queuing behind the lock would deadlock.
     if (await this.tryResolveConsent(managed, msg, key)) return;
 
-    // Serialize replies per conversation.
+    // Serialize replies per conversation so answers stay in order. A turn can
+    // run for minutes (tools, many rounds), and queueing behind it silently
+    // looks exactly like the bot being broken — so say so once.
+    const busy = this.locks.has(key);
+    if (busy) {
+      void managed.connector
+        .send({ conversationId: msg.conversationId, text: "⏳ Still working on the previous message — I'll get to this next." })
+        .catch(() => { /* connector may be down */ });
+    }
+
     const prev = this.locks.get(key) ?? Promise.resolve();
     const next = prev
       .catch(() => {})
       .then(() => this.replyTo(managed, msg, config));
-    this.locks.set(key, next.then(() => {}, () => {}));
+    const settled = next.then(() => {}, () => {});
+    this.locks.set(key, settled);
+    // Drop the lock once the queue drains, so the next message isn't told the
+    // channel is busy when it is idle.
+    void settled.then(() => {
+      if (this.locks.get(key) === settled) this.locks.delete(key);
+    });
     await next;
   }
 
@@ -1135,12 +1163,19 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       // In-band approval: mutating tools require a yes/no reply from the user
       // before running. The ConsentManager `onRequest` bridge sends the prompt
       // to the chat; this awaits the decision (or the timeout).
+      //
+      // With auto-approve the agent decides instead — except for irreversible
+      // commands. This path calls the tool registry directly rather than going
+      // through ConsentAwareExecutor, so that carve-out has to be applied here
+      // too; without it, auto-approve would also wave through `rm -rf`.
       const consent = this.deps.consentManager;
-      if (consent && MUTATING_TOOLS.has(name)) {
+      const autoApproved = consent?.isApproveAllEnabledForSession(sid) ?? false;
+      const irreversible = autoApproved ? irreversibleReasonFor(args) : undefined;
+      if (consent && MUTATING_TOOLS.has(name) && (!autoApproved || irreversible)) {
         const decision = await consent.requestConsent({
           actionId,
           toolName: name,
-          summary: `Run ${name}`,
+          summary: irreversible ? `Run ${name} — ${irreversible}` : `Run ${name}`,
           preview: (args as Record<string, unknown>) ?? {},
           risk: "high",
           policy: {

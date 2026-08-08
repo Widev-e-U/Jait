@@ -6,6 +6,7 @@ import {
   buildCliPrompt,
   formatNotification,
   groupModelsByProvider,
+  irreversibleReasonFor,
   normalizeSenderId,
   parseCommand,
   shouldRespond,
@@ -1075,5 +1076,63 @@ describe("tool approvals", () => {
 
     expect((await send(connector, "/approvals")).text).toContain("run automatically");
     expect((await send(connector, "/status")).text).toContain("Tool approvals: automatic");
+  });
+});
+
+describe("auto-approve in the channel executor", () => {
+  it("classifies irreversible commands so they still ask", () => {
+    expect(irreversibleReasonFor({ command: "rm -rf /home/user/project" })).toBeTruthy();
+    expect(irreversibleReasonFor({ command: "ls -la" })).toBeUndefined();
+    expect(irreversibleReasonFor({ path: "/tmp/x" })).toBeUndefined();
+    expect(irreversibleReasonFor(null)).toBeUndefined();
+  });
+});
+
+describe("queued messages", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("says so instead of going silent while a turn is running", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate() { await blocked; return "done"; },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "first", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    connector.emit({ text: "second", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(connector.sent.map((m) => m.text)).toContain("⏳ Still working on the previous message — I'll get to this next.");
+
+    release();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(connector.sent.filter((m) => m.text === "done")).toHaveLength(2);
+  });
+
+  it("does not warn once the queue has drained", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "one", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 30));
+    connector.emit({ text: "two", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(connector.sent.some((m) => m.text.includes("Still working"))).toBe(false);
   });
 });
