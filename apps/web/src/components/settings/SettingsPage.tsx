@@ -759,7 +759,7 @@ export function SettingsPage({
     'skills instructions prompts specialized workflows SKILL.md',
   )
   const showChannelsSection = matchesSearch(
-    'channels whatsapp messaging connect link qr inbound outbound',
+    'connectors channels telegram bot botfather token whatsapp teams messaging connect link pair qr inbound outbound',
   )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
@@ -811,6 +811,7 @@ export function SettingsPage({
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
+          <TabsTrigger value="channels" className="flex-1 sm:flex-none">Channels</TabsTrigger>
           <TabsTrigger value="shortcuts" className="flex-1 sm:flex-none">Shortcuts</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>

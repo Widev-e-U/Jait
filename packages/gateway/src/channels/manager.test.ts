@@ -1,15 +1,31 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { openRawSqlite } from "../db/sqlite-shim.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
-import { ChannelManager, shouldRespond, normalizeSenderId, type ReplyGenerator } from "./manager.js";
+import {
+  ChannelManager,
+  buildCliPrompt,
+  chooseFallbackModel,
+  looksLikeCliAuthFailure,
+  formatNotification,
+  groupModelsByProvider,
+  ProgressReporter,
+  formatProgress,
+  irreversibleReasonFor,
+  normalizeSenderId,
+  parseCommand,
+  shouldRespond,
+  type ReplyContext,
+  type ReplyGenerator,
+} from "./manager.js";
 import type {
+  ChannelConfig,
   ChannelConnector,
   ChannelConnectorEvents,
   ChannelStatus,
   InboundMessage,
   OutboundMessage,
 } from "./types.js";
-import type { LLMConfig } from "../tools/agent-loop.js";
+import type { AgentMessage, LLMConfig } from "../tools/agent-loop.js";
 import { ConsentManager } from "../security/consent-manager.js";
 
 /* A fake connector that lets the test drive inbound messages and capture sends. */
@@ -20,9 +36,43 @@ class FakeConnector implements ChannelConnector {
   sent: OutboundMessage[] = [];
   private _status: ChannelStatus = "stopped";
 
-  async start(events: ChannelConnectorEvents) { this.events = events; this._status = "connected"; events.onStatus("connected"); }
+  /** Config handed over by the manager on start — asserted by the pairing tests. */
+  startConfig: ChannelConfig | undefined;
+
+  async start(events: ChannelConnectorEvents, config?: ChannelConfig) {
+    this.events = events;
+    this.startConfig = config;
+    this._status = "connected";
+    events.onStatus("connected");
+  }
   async stop() { this._status = "stopped"; }
   async send(msg: OutboundMessage) { this.sent.push(msg); }
+
+  /** Typing indicator: how often it was started, and whether it is running. */
+  typingStarts = 0;
+  typingActive = false;
+  startTyping(_conversationId: string) {
+    this.typingStarts += 1;
+    this.typingActive = true;
+    return () => { this.typingActive = false; };
+  }
+
+  /** Live progress message: id → current text, in send order. */
+  live: { id: string; text: string }[] = [];
+  private liveSeq = 0;
+  async sendLive(_conversationId: string, text: string) {
+    const id = `live-${++this.liveSeq}`;
+    this.live.push({ id, text });
+    return id;
+  }
+  async editLive(_conversationId: string, messageId: string, text: string) {
+    const entry = this.live.find((m) => m.id === messageId);
+    if (entry) entry.text = text;
+  }
+
+  /** Command menu published by the manager — asserted by the menu test. */
+  menu: { name: string; description: string }[] | null = null;
+  async setCommandMenu(commands: { name: string; description: string }[]) { this.menu = commands; }
   status() { return this._status; }
   currentQr() { return null; }
 
@@ -130,6 +180,48 @@ describe("ChannelManager pipeline", () => {
     const list = mgr.list();
     expect(list[0]).toMatchObject({ id: "fake", status: "connected", enabled: true });
   });
+
+  it("hands the persisted config to the connector on start", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { token: "bot-token", allowedSenders: ["123"] });
+    await mgr.start("fake");
+    expect(connector.startConfig).toMatchObject({ token: "bot-token", allowedSenders: ["123"] });
+  });
+});
+
+describe("ChannelManager pairing", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("allowlists a paired sender so the agent replies to them", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    await mgr.start("fake");
+
+    connector.events?.onPaired?.({ senderId: "4242", senderName: "@lukas", conversationId: "4242" });
+    expect(mgr.getConfig("fake").allowedSenders).toEqual(["4242"]);
+
+    connector.emit({ text: "hi", senderId: "4242", conversationId: "4242" });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(connector.sent).toHaveLength(1);
+    expect(connector.sent[0]?.text).toBe("echo: hi");
+  });
+
+  it("keeps existing senders and ignores a repeated pairing", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { allowedSenders: ["111"] });
+    await mgr.start("fake");
+
+    connector.events?.onPaired?.({ senderId: "4242", conversationId: "4242" });
+    connector.events?.onPaired?.({ senderId: "4242", conversationId: "4242" });
+
+    expect(mgr.getConfig("fake").allowedSenders).toEqual(["111", "4242"]);
+  });
+
+  it("rejects re-pairing on connectors that do not support it", async () => {
+    const { mgr } = makeManager(sqlite);
+    await mgr.start("fake");
+    await expect(mgr.pair("fake")).rejects.toThrow(/does not support re-pairing/);
+  });
 });
 
 describe("ChannelManager in-band consent", () => {
@@ -213,5 +305,1219 @@ describe("ChannelManager in-band consent", () => {
     await new Promise((r) => setTimeout(r, 150));
     expect(connector.sent.map((m) => m.text)).toContain("⌛ No reply — skipped that action.");
     expect(connector.sent.map((m) => m.text)).toContain("skipped: not run");
+  });
+});
+
+describe("parseCommand", () => {
+  it("recognises the supported commands", () => {
+    expect(parseCommand("/help")).toEqual({ command: "help", args: "" });
+    expect(parseCommand("  /status  ")).toEqual({ command: "status", args: "" });
+    expect(parseCommand("/model 3")).toEqual({ command: "model", args: "3" });
+    expect(parseCommand("/notifications on")).toEqual({ command: "notifications", args: "on" });
+  });
+
+  it("strips the @botname suffix Telegram adds in groups", () => {
+    expect(parseCommand("/model@jait_bot gpt-4o")).toEqual({ command: "model", args: "gpt-4o" });
+  });
+
+  it("ignores ordinary messages and unknown commands", () => {
+    expect(parseCommand("what model are you?")).toBeNull();
+    expect(parseCommand("/deploy production")).toBeNull();
+    expect(parseCommand("/start CODE")).toBeNull();
+  });
+});
+
+describe("formatNotification", () => {
+  it("renders level, title and body", () => {
+    expect(formatNotification({ title: "Build failed", body: "3 tests red", level: "error" }))
+      .toBe("🚨 Build failed\n\n3 tests red");
+  });
+
+  it("keeps absolute links but drops in-app paths", () => {
+    expect(formatNotification({ title: "T", body: "B", link: "https://jait.example/plans/1" }))
+      .toContain("https://jait.example/plans/1");
+    expect(formatNotification({ title: "T", body: "B", link: "/plans/1" })).not.toContain("/plans/1");
+  });
+});
+
+describe("ChannelManager notifications", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("delivers to the allowed senders once enabled", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { notifications: true, allowedSenders: ["111", "222"] });
+    await mgr.start("fake");
+
+    const delivered = await mgr.notify({ title: "Routine done", body: "Nightly sync finished" });
+
+    expect(delivered).toBe(2);
+    expect(connector.sent.map((m) => m.conversationId)).toEqual(["111", "222"]);
+    expect(connector.sent[0]!.text).toContain("Routine done");
+  });
+
+  it("stays silent when the channel has not opted in", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { allowedSenders: ["111"] });
+    await mgr.start("fake");
+
+    expect(await mgr.notify({ title: "T", body: "B" })).toBe(0);
+    expect(connector.sent).toHaveLength(0);
+  });
+
+  it("does not notify a disconnected channel", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { notifications: true, allowedSenders: ["111"] });
+
+    expect(await mgr.notify({ title: "T", body: "B" })).toBe(0);
+    expect(connector.sent).toHaveLength(0);
+  });
+
+  it("never broadcasts to unknown senders just because respondToAll is on", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    mgr.setConfig("fake", { notifications: true, respondToAll: true, allowedSenders: [] });
+    await mgr.start("fake");
+
+    expect(await mgr.notify({ title: "T", body: "B" })).toBe(0);
+    expect(connector.sent).toHaveLength(0);
+  });
+});
+
+describe("ChannelManager commands", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  /** Manager with a model catalogue, so /model has something to offer. */
+  function makeCommandManager(db: SqliteDatabase) {
+    const models = [
+      { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+      { id: "llama3", label: "Llama 3", group: "Ollama" },
+    ];
+    const seen: (string | undefined)[] = [];
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: {
+        async generate(_history, ctx) { seen.push(ctx.model); return "reply"; },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, seen };
+  }
+
+  const lastText = (connector: FakeConnector) => connector.sent.at(-1)?.text ?? "";
+
+  it("lists the catalogue on a bare /model", async () => {
+    const { mgr, connector } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(lastText(connector)).toContain("1. GPT-4o");
+    expect(lastText(connector)).toContain("2. Llama 3");
+  });
+
+  it("switches by number and applies the model to the next turn", async () => {
+    const { mgr, connector, seen } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model 2", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mgr.getConfig("fake").model).toBe("llama3");
+
+    connector.emit({ text: "hello", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seen).toEqual(["llama3"]);
+  });
+
+  it("switches by id and resets back to the default", async () => {
+    const { mgr, connector } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model gpt-4o", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mgr.getConfig("fake").model).toBe("gpt-4o");
+
+    connector.emit({ text: "/model reset", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mgr.getConfig("fake").model).toBe("");
+  });
+
+  it("rejects a model that is not in the catalogue", async () => {
+    const { mgr, connector } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model nonsense-9000", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(lastText(connector)).toContain("Unknown model");
+    expect(mgr.getConfig("fake").model).toBeUndefined();
+  });
+
+  it("toggles notifications from the chat", async () => {
+    const { mgr, connector } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/notifications on", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mgr.getConfig("fake").notifications).toBe(true);
+
+    connector.emit({ text: "/notifications off", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mgr.getConfig("fake").notifications).toBe(false);
+  });
+
+  it("never sends a command to the agent", async () => {
+    const { mgr, connector, seen } = makeCommandManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/help", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen).toHaveLength(0);
+    expect(lastText(connector)).toContain("/model");
+  });
+});
+
+describe("ChannelManager command menu", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("publishes every supported command to the connector on start", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    await mgr.start("fake");
+
+    expect(connector.menu?.map((c) => c.name)).toEqual(["model", "notifications", "approvals", "progress", "status", "help"]);
+    for (const entry of connector.menu ?? []) {
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the channel up when publishing the menu fails", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    connector.setCommandMenu = async () => { throw new Error("Telegram said no"); };
+
+    await expect(mgr.start("fake")).resolves.toBeUndefined();
+    expect(mgr.list()[0]).toMatchObject({ status: "connected" });
+  });
+
+  it("matches the commands the dispatcher accepts", async () => {
+    const { mgr, connector } = makeManager(sqlite);
+    await mgr.start("fake");
+
+    for (const entry of connector.menu ?? []) {
+      expect(parseCommand(`/${entry.name}`)).toMatchObject({ command: entry.name });
+    }
+  });
+});
+
+describe("/model dialog", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const models = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `Model ${i}`, group: "OpenAI" }));
+
+  function makeDialogManager(db: SqliteDatabase, supportsChoices: boolean) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: supportsChoices });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  it("offers tappable options on a channel that renders dialogs", async () => {
+    const { mgr, connector } = makeDialogManager(sqlite, true);
+    mgr.setConfig("fake", { model: "m1" });
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sent = connector.sent.at(-1)!;
+    expect(sent.text).not.toContain("1. Model 0");
+    expect(sent.choices?.length).toBe(25); // 24 models + reset
+    expect(sent.choices?.[1]).toEqual({ label: "✅ Model 1 (OpenAI)", value: "/model m1" });
+    expect(sent.choices?.at(-1)).toEqual({ label: "↩️ Gateway default", value: "/model reset" });
+    expect(sent.text).toContain("6 more available");
+  });
+
+  it("falls back to the numbered list where dialogs are not supported", async () => {
+    const { mgr, connector } = makeDialogManager(sqlite, false);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const sent = connector.sent.at(-1)!;
+    expect(sent.choices).toBeUndefined();
+    expect(sent.text).toContain("1. Model 0");
+  });
+
+  it("applies the choice when its value comes back as a message", async () => {
+    const { mgr, connector } = makeDialogManager(sqlite, true);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    const choice = connector.sent.at(-1)!.choices![3]!;
+
+    // A tapped button re-enters through the same path as a typed command.
+    connector.emit({ text: choice.value, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(mgr.getConfig("fake").model).toBe("m3");
+    expect(connector.sent.at(-1)!.text).toContain("Now using Model 3");
+  });
+});
+
+/** Choice labels without the navigation entries (back / reset / all). */
+function modelLabels(sent: OutboundMessage): string[] {
+  return (sent.choices ?? [])
+    .filter((c) => !/^(⬅️|↩️|All models)/.test(c.label))
+    .map((c) => c.label);
+}
+
+describe("/model provider selection", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const mixed = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "gpt-5", label: "GPT-5", group: "OpenAI" },
+    { id: "anthropic/claude", label: "Claude", group: "OpenRouter" },
+    { id: "llama3", label: "Llama 3", group: "Ollama" },
+  ];
+
+  function makeMixedManager(db: SqliteDatabase, supportsChoices: boolean, models = mixed) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: supportsChoices });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("asks for the provider first when several are configured", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.text).toContain("Pick a provider");
+    expect(sent.choices?.map((c) => c.label)).toEqual([
+      "OpenAI (2)", "Ollama (1)", "OpenRouter (1)", "All models (4)",
+    ]);
+    expect(sent.choices?.[0]!.value).toBe("/model provider OpenAI");
+  });
+
+  it("lists that provider's models after the first step", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider OpenAI");
+
+    expect(sent.text).toContain("OpenAI —");
+    expect(modelLabels(sent)).toEqual(["GPT-4o (OpenAI)", "GPT-5 (OpenAI)"]);
+  });
+
+  it("offers everything on /model provider all", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider all");
+
+    expect(modelLabels(sent)).toEqual([
+      "GPT-4o (OpenAI)", "GPT-5 (OpenAI)", "Claude (OpenRouter)", "Llama 3 (Ollama)",
+    ]);
+  });
+
+  it("skips the provider step when only one provider exists", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true, [mixed[0]!, mixed[1]!]);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.text).not.toContain("Pick a provider");
+    expect(modelLabels(sent)).toEqual(["GPT-4o (OpenAI)", "GPT-5 (OpenAI)"]);
+  });
+
+  it("names the provider in the numbered list and on confirmation", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, false);
+    await mgr.start("fake");
+
+    const listed = await send(connector, "/model");
+    expect(listed.text).toContain("3. Claude (OpenRouter)");
+
+    const confirmed = await send(connector, "/model llama3");
+    expect(confirmed.text).toBe("✅ Now using Llama 3 (Ollama) on this channel.");
+  });
+
+  it("reports an unknown provider instead of an empty list", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider Anthropic");
+
+    expect(sent.text).toContain('No models from "Anthropic"');
+    expect(sent.choices).toBeUndefined();
+  });
+});
+
+describe("groupModelsByProvider", () => {
+  it("counts per provider, biggest first", () => {
+    expect(groupModelsByProvider([
+      { id: "a", group: "Ollama" },
+      { id: "b", group: "OpenAI" },
+      { id: "c", group: "OpenAI" },
+      { id: "d" },
+    ])).toEqual([{ group: "OpenAI", count: 2 }, { group: "Ollama", count: 1 }]);
+  });
+});
+
+describe("/model back navigation", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const models = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "llama3", label: "Llama 3", group: "Ollama" },
+  ];
+
+  function makeManager2(db: SqliteDatabase) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("offers a way back from the model list to the providers", async () => {
+    const { mgr, connector } = makeManager2(sqlite);
+    await mgr.start("fake");
+
+    const step2 = await send(connector, "/model provider OpenAI");
+    const back = step2.choices?.find((c) => c.label.includes("Back"));
+    expect(back?.value).toBe("/model");
+
+    // Following it lands on the provider step again.
+    const step1 = await send(connector, back!.value);
+    expect(step1.text).toContain("Pick a provider");
+  });
+
+  it("shows no back option on the first step", async () => {
+    const { mgr, connector } = makeManager2(sqlite);
+    await mgr.start("fake");
+
+    const step1 = await send(connector, "/model");
+
+    expect(step1.choices?.some((c) => c.label.includes("Back"))).toBe(false);
+  });
+});
+
+describe("buildCliPrompt", () => {
+  it("passes a single message through unchanged", () => {
+    expect(buildCliPrompt([
+      { role: "system", content: "ignored" },
+      { role: "user", content: "list the failing tests" },
+    ] as AgentMessage[])).toBe("list the failing tests");
+  });
+
+  it("carries earlier turns, since each CLI session starts fresh", () => {
+    const prompt = buildCliPrompt([
+      { role: "user", content: "what is in src?" },
+      { role: "assistant", content: "Three files." },
+      { role: "user", content: "and the biggest one?" },
+    ] as AgentMessage[]);
+
+    expect(prompt).toBe(
+      "Earlier in this chat:\nUser: what is in src?\nAssistant: Three files.\n\nUser: and the biggest one?",
+    );
+  });
+
+  it("keeps only the most recent turns", () => {
+    const history = Array.from({ length: 20 }, (_, i) => ({ role: "user", content: `m${i}` }));
+    const prompt = buildCliPrompt(history as AgentMessage[], 4);
+
+    expect(prompt).toContain("m19");
+    expect(prompt).not.toContain("m15");
+  });
+});
+
+describe("CLI provider models", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const models = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "opus", label: "Opus", group: "Claude Code", provider: "claude-code-1" },
+  ];
+
+  function makeManager3(db: SqliteDatabase) {
+    const seen: Array<{ model?: string; modelProvider?: string }> = [];
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: {
+        async generate(_history, ctx) {
+          seen.push({ model: ctx.model, modelProvider: ctx.modelProvider });
+          return "reply";
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector, seen };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("offers CLI providers alongside the API backends", async () => {
+    const { mgr, connector } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.choices?.map((c) => c.label)).toContain("Claude Code (1)");
+  });
+
+  it("stores the provider with the model and routes the next turn to it", async () => {
+    const { mgr, connector, seen } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    const confirmation = await send(connector, "/model opus");
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "opus", modelProvider: "claude-code-1" });
+    expect(confirmation.text).toContain("supervised CLI session");
+
+    await send(connector, "hello");
+    expect(seen.at(-1)).toEqual({ model: "opus", modelProvider: "claude-code-1" });
+  });
+
+  it("clears the provider when switching back to an API model", async () => {
+    const { mgr, connector, seen } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/model opus");
+    await send(connector, "/model gpt-4o");
+    expect(mgr.getConfig("fake").modelProvider).toBe("");
+
+    await send(connector, "hello");
+    expect(seen.at(-1)).toEqual({ model: "gpt-4o", modelProvider: undefined });
+  });
+
+  it("clears the provider on reset", async () => {
+    const { mgr, connector } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/model opus");
+    await send(connector, "/model reset");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
+  });
+});
+
+describe("model catalogue caching", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeCountingManager(db: SqliteDatabase, models = [{ id: "m1", label: "M1", group: "OpenAI" }]) {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return models; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector, calls: () => calls };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+  };
+
+  it("resolves the catalogue once while walking the picker", async () => {
+    const { mgr, connector, calls } = makeCountingManager(sqlite, [
+      { id: "m1", label: "M1", group: "OpenAI" },
+      { id: "m2", label: "M2", group: "Ollama" },
+    ]);
+    await mgr.start("fake");
+
+    await send(connector, "/model");
+    await send(connector, "/model provider OpenAI");
+    await send(connector, "/model");
+    await send(connector, "/model m1");
+
+    expect(calls()).toBe(1);
+  });
+
+  it("does not cache an empty catalogue", async () => {
+    const { mgr, connector, calls } = makeCountingManager(sqlite, []);
+    await mgr.start("fake");
+
+    await send(connector, "/model");
+    await send(connector, "/model");
+
+    expect(calls()).toBe(2);
+  });
+});
+
+describe('/model "default" is a real model id', () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeManager4(db: SqliteDatabase, models: { id: string; label?: string; group?: string; provider?: string }[]) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("selects Claude Code's default instead of falling back", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [
+      { id: "default", label: "Default", group: "Claude Code", provider: "claude-code-1" },
+      { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    ]);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model default");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "default", modelProvider: "claude-code-1" });
+    expect(sent.text).toContain("Now using Default (Claude Code)");
+  });
+
+  it("still resets when no model is called default", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [{ id: "gpt-4o", label: "GPT-4o", group: "OpenAI" }]);
+    await mgr.start("fake");
+    await send(connector, "/model gpt-4o");
+
+    const sent = await send(connector, "/model default");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
+    expect(sent.text).toContain("Back to the gateway default");
+  });
+
+  it("keeps reset reserved even against a model of that name", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [
+      { id: "reset", label: "Reset", group: "Odd" },
+      { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    ]);
+    await mgr.start("fake");
+    await send(connector, "/model gpt-4o");
+
+    await send(connector, "/model reset");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
+  });
+});
+
+describe("catalogue warm-up", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("resolves ahead of the first /model so the chat doesn't wait", async () => {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return [{ id: "m1", label: "M1", group: "OpenAI" }]; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    mgr.warmModelCatalogue();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(calls).toBe(1);
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Served from the warmed cache, not a second resolution.
+    expect(calls).toBe(1);
+    expect(connector.sent.at(-1)!.choices?.length).toBeGreaterThan(0);
+  });
+
+  it("survives a failing warm-up", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { throw new Error("provider down"); },
+      replyGenerator: echoGenerator,
+      log: () => {},
+    });
+    mgr.register(new FakeConnector());
+
+    expect(() => mgr.warmModelCatalogue()).not.toThrow();
+    await new Promise((r) => setTimeout(r, 10));
+  });
+});
+
+describe("catalogue invalidation", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("re-resolves after a late provider invalidates the cache", async () => {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return [{ id: `m${calls}`, label: `M${calls}`, group: "OpenAI" }]; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(1);
+
+    // A provider that missed its budget has answered — the partial list is stale.
+    mgr.invalidateModelCache();
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(2);
+  });
+});
+
+describe("tool approvals", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeApprovalManager(db: SqliteDatabase) {
+    const consentManager = new ConsentManager({ db, timeoutMs: 1000 });
+    const seen: Array<boolean | undefined> = [];
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      consentManager,
+      replyGenerator: {
+        async generate(_history, ctx) { seen.push(ctx.autoApprove); return "reply"; },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, consentManager, seen };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("lets the agent decide by default", async () => {
+    const { mgr, connector, consentManager, seen } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "do something");
+
+    expect(seen).toEqual([true]);
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(true);
+  });
+
+  it("asks each time once switched to ask", async () => {
+    const { mgr, connector, consentManager, seen } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/approvals ask");
+    expect(mgr.getConfig("fake").autoApprove).toBe(false);
+
+    await send(connector, "do something");
+    expect(seen).toEqual([false]);
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(false);
+  });
+
+  it("switches back to automatic", async () => {
+    const { mgr, connector, consentManager } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/approvals ask");
+    await send(connector, "do something");
+    const confirmation = await send(connector, "/approvals auto");
+
+    expect(mgr.getConfig("fake").autoApprove).toBe(true);
+    expect(confirmation.text).toContain("Irreversible commands still ask");
+
+    await send(connector, "do something else");
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(true);
+  });
+
+  it("reports the current mode on a bare /approvals and in /status", async () => {
+    const { mgr, connector } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    expect((await send(connector, "/approvals")).text).toContain("run automatically");
+    expect((await send(connector, "/status")).text).toContain("Tool approvals: automatic");
+  });
+});
+
+describe("auto-approve in the channel executor", () => {
+  it("classifies irreversible commands so they still ask", () => {
+    expect(irreversibleReasonFor({ command: "rm -rf /home/user/project" })).toBeTruthy();
+    expect(irreversibleReasonFor({ command: "ls -la" })).toBeUndefined();
+    expect(irreversibleReasonFor({ path: "/tmp/x" })).toBeUndefined();
+    expect(irreversibleReasonFor(null)).toBeUndefined();
+  });
+});
+
+describe("queued messages", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("says so instead of going silent while a turn is running", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate() { await blocked; return "done"; },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "first", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    connector.emit({ text: "second", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(connector.sent.map((m) => m.text)).toContain("⏳ Still working on the previous message — I'll get to this next.");
+
+    release();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(connector.sent.filter((m) => m.text === "done")).toHaveLength(2);
+  });
+
+  it("does not warn once the queue has drained", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "one", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 30));
+    connector.emit({ text: "two", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(connector.sent.some((m) => m.text.includes("Still working"))).toBe(false);
+  });
+});
+
+describe("progress updates", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeProgressManager(db: SqliteDatabase) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate(_history, ctx) {
+          ctx.onProgress?.("• search");
+          ctx.onProgress?.("  ✓ search");
+          await new Promise((r) => setTimeout(r, 5));
+          return "found it";
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  it("mirrors tool calls into a live message and marks it done", async () => {
+    const { mgr, connector } = makeProgressManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "find something", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(connector.live).toHaveLength(1);
+    expect(connector.live[0]!.text).toContain("• search");
+    expect(connector.live[0]!.text).toContain("✅ Done");
+    // The answer is still its own message.
+    expect(connector.sent.map((m) => m.text)).toContain("found it");
+  });
+
+  it("stays quiet when switched off", async () => {
+    const { mgr, connector } = makeProgressManager(sqlite);
+    mgr.setConfig("fake", { progress: false });
+    await mgr.start("fake");
+
+    connector.emit({ text: "find something", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(connector.live).toHaveLength(0);
+    expect(connector.sent.map((m) => m.text)).toContain("found it");
+  });
+
+  it("is skipped for connectors that cannot edit messages", () => {
+    const plain = { id: "x", label: "X" } as unknown as Parameters<typeof ProgressReporter.supportedBy>[0];
+    expect(ProgressReporter.supportedBy(plain)).toBe(false);
+    expect(ProgressReporter.supportedBy(new FakeConnector())).toBe(true);
+  });
+
+  it("keeps the newest steps and counts the rest", () => {
+    const many = Array.from({ length: 12 }, (_, i) => `• step${i}`);
+    const text = formatProgress(many);
+
+    expect(text).toContain("4 earlier steps");
+    expect(text).toContain("• step11");
+    expect(text).not.toContain("• step3");
+  });
+});
+
+describe("typing indicator", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("runs for the length of the turn and stops afterwards", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { await blocked; return "done"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "hello", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 15));
+    expect(connector.typingActive).toBe(true);
+
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(connector.typingActive).toBe(false);
+    expect(connector.typingStarts).toBe(1);
+  });
+
+  it("stops even when the turn fails", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { throw new Error("model exploded"); } },
+      log: () => {},
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "hello", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(connector.typingActive).toBe(false);
+  });
+});
+
+describe("channel context", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("tells the agent which chat it is in and what the local time is", async () => {
+    let seen: ReplyContext | null = null;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate(_h, ctx) { seen = ctx; return "ok"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+    mgr.setConfig("fake", { timeZone: "Asia/Tokyo" });
+
+    connector.emit({ text: "remind me tomorrow at 5", isSelfChat: true, conversationId: "chat-9" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen!.contextBlock).toContain("conversationId: chat-9");
+    expect(seen!.contextBlock).toContain("Asia/Tokyo");
+    expect(seen!.contextBlock).toContain("channel: Fake (id: fake)");
+  });
+});
+
+describe("scheduled delivery", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("sends a fixed reminder without running the model", async () => {
+    let turns = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { turns += 1; return "should not run"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    await mgr.deliver({ channelId: "fake", conversationId: "chat-1", text: "Anlage prüfen" });
+
+    expect(connector.sent.map((m) => m.text)).toEqual(["Anlage prüfen"]);
+    expect(turns).toBe(0);
+  });
+
+  it("works a prompted reminder out at delivery time and sends the answer", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    await mgr.deliver({ channelId: "fake", conversationId: "chat-1", prompt: "What is on today?" });
+
+    expect(connector.sent.map((m) => m.text)).toEqual(["echo: What is on today?"]);
+  });
+
+  it("waits for the reply in flight instead of interleaving with it", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate(history) {
+          const last = [...history].reverse().find((m) => m.role === "user");
+          if (last?.content === "slow question") await blocked;
+          return `answer to ${String(last?.content)}`;
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "slow question", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    const delivery = mgr.deliver({ channelId: "fake", conversationId: "chat-1", prompt: "reminder" });
+
+    expect(connector.sent).toHaveLength(0);
+    release();
+    await delivery;
+
+    expect(connector.sent.map((m) => m.text)).toEqual([
+      "answer to slow question",
+      "answer to reminder",
+    ]);
+  });
+
+  it("refuses to deliver into a channel that is not connected", async () => {
+    const { mgr } = makeManager(sqlite);
+    await expect(mgr.deliver({ channelId: "fake", conversationId: "c", text: "x" }))
+      .rejects.toThrow(/stopped/);
+  });
+
+  it("refuses to deliver into a channel nobody registered", async () => {
+    const { mgr } = makeManager(sqlite);
+    await expect(mgr.deliver({ channelId: "signal", conversationId: "c", text: "x" }))
+      .rejects.toThrow(/not registered/);
+  });
+});
+
+describe("model fallback", () => {
+  it("uses the channel's configured fallback first", () => {
+    expect(chooseFallbackModel({ model: "gpt-5", fallbackModel: "claude-sonnet-5" }, "gpt-5"))
+      .toEqual({ model: "claude-sonnet-5", provider: undefined, label: "claude-sonnet-5" });
+  });
+
+  it("carries the fallback's provider, so a CLI model routes correctly", () => {
+    expect(chooseFallbackModel(
+      { model: "gpt-5", fallbackModel: "opus", fallbackModelProvider: "claude-code" },
+    )).toMatchObject({ model: "opus", provider: "claude-code" });
+  });
+
+  it("falls back to the gateway default when the channel overrode it", () => {
+    expect(chooseFallbackModel({ model: "gpt-5" }, "claude-sonnet-5"))
+      .toEqual({ label: "claude-sonnet-5" });
+  });
+
+  it("gives up when the failing model already is the gateway default", () => {
+    // Nothing else to try — the same credential would be rejected again.
+    expect(chooseFallbackModel({ model: "gpt-5" }, "gpt-5")).toBeNull();
+    expect(chooseFallbackModel({}, "gpt-5")).toBeNull();
+    expect(chooseFallbackModel({})).toBeNull();
+  });
+});
+
+describe("CLI auth failures", () => {
+  it("recognises an expired login", () => {
+    expect(looksLikeCliAuthFailure("Unauthorized: please run `claude login`")).toBe(true);
+    expect(looksLikeCliAuthFailure("Your session expired")).toBe(true);
+    expect(looksLikeCliAuthFailure("API key invalid")).toBe(true);
+  });
+
+  it("leaves ordinary failures alone, so they reach the user unchanged", () => {
+    expect(looksLikeCliAuthFailure("The command exited with status 1")).toBe(false);
+    expect(looksLikeCliAuthFailure("No such file or directory")).toBe(false);
+  });
+});
+
+describe("falling back over a rejected key", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  /** A single-chunk OpenAI SSE stream carrying `text`. */
+  function sseResponse(text: string): Response {
+    const body = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }
+
+  function managerWithRealGenerator(fetchImpl: typeof fetch) {
+    const original = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+    const mgr = new ChannelManager({
+      sqlite,
+      // Each requested model becomes its own endpoint, so the fake server can
+      // tell which one the turn is asking for.
+      resolveLLM: (requested) => ({
+        openaiApiKey: "key",
+        openaiBaseUrl: `http://llm.test/${requested ?? "gateway-default"}`,
+        openaiModel: requested ?? "gateway-default",
+        contextWindow: 8000,
+      }),
+      resolveAuth: () => ({ userId: "owner", model: "gateway-default" }),
+      log: () => {},
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, restore: () => { globalThis.fetch = original; } };
+  }
+
+  it("answers on the fallback and says the main model is broken", async () => {
+    const seen: string[] = [];
+    const { mgr, connector, restore } = managerWithRealGenerator(async (input) => {
+      const url = String(input);
+      seen.push(url);
+      if (url.includes("/broken-model")) {
+        return new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 });
+      }
+      return sseResponse("here is your answer");
+    });
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(seen.some((u) => u.includes("/broken-model"))).toBe(true);
+      expect(seen.some((u) => u.includes("/rescue-model"))).toBe(true);
+      expect(connector.sent.map((m) => m.text)).toEqual([
+        expect.stringContaining("couldn't authenticate"),
+        "here is your answer",
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("does not retry a failure the fallback cannot fix", async () => {
+    let calls = 0;
+    const { mgr, connector, restore } = managerWithRealGenerator(async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: "upstream is down" } }), { status: 503 });
+    });
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(calls).toBe(1);
+      expect(connector.sent.some((m) => m.text.includes("couldn't authenticate"))).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps the channel on its chosen model — a rescue is not a decision", async () => {
+    const { mgr, connector, restore } = managerWithRealGenerator(async (input) =>
+      String(input).includes("/broken-model")
+        ? new Response("{}", { status: 401 })
+        : sseResponse("answered"));
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(mgr.getConfig("fake").model).toBe("broken-model");
+    } finally {
+      restore();
+    }
   });
 });

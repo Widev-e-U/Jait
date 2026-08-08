@@ -46,6 +46,7 @@ export function createToolsListTool(registry: ToolRegistry): ToolDefinition<Tool
             "memory",
             "voice",
             "agent",
+            "channels",
             "meta",
             "external",
           ],

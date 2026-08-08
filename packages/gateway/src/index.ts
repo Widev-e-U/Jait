@@ -75,6 +75,35 @@ import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
 import { ChatTracesService } from "./services/chat-traces.js";
 
+
+/**
+ * How long a CLI provider may take to answer before the picker moves on.
+ * A healthy Claude Code probe measures ~4s cold, so this leaves headroom
+ * while staying far below the adapter's own 20s ceiling.
+ */
+const CLI_CATALOGUE_BUDGET_MS = 8_000;
+
+/**
+ * Resolve `promise`, or an empty list once the budget is up. The promise is
+ * deliberately left running: provider adapters cache their catalogue on
+ * success, so a slow probe still pays off for the next call.
+ */
+async function withCatalogueBudget<T>(
+  promise: Promise<T[]>,
+  budgetMs: number,
+  onOverrun: () => void,
+): Promise<T[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<T[]>((resolve) => {
+    timer = setTimeout(() => { onOverrun(); resolve([]); }, budgetMs);
+  });
+  try {
+    return await Promise.race([promise.catch(() => [] as T[]), budget]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function parsePositiveIntegerEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
   if (!raw) return fallback;
@@ -802,19 +831,110 @@ async function main() {
     // same skills as the web chat. `skillRegistry` is declared below; the
     // closure runs at reply time (after startup), so it is always initialized.
     resolveSkills: () => skillRegistry.listEnabled(),
-    resolveLLM: () => {
+    resolveLLM: (requestedModel?: string) => {
       // Read the owner's selected provider/model from persisted settings —
       // otherwise replies fall back to the default model and ignore the
-      // chosen provider.
+      // chosen provider. A per-channel `/model` override wins over both.
       const a = resolveChannelAuth();
       return resolveJaitLlmConfig({
         config,
         apiKeys: a?.apiKeys,
         jaitBackend: a?.jaitBackend as never,
-        requestedModel: a?.model,
+        requestedModel: requestedModel ?? a?.model,
       });
     },
+    // Catalogue behind `/model` — the HTTP backends resolved through the same
+    // service the web UI model picker uses, plus the CLI provider accounts
+    // (Claude Code, Codex) the owner has logged in.
+    resolveModels: async () => {
+      const owner = resolveChannelAuth();
+      if (!owner?.userId) return [];
+      const userId = owner.userId;
+
+      const jaitProvider = providerRegistry.getForUser("jait", userId);
+      const fallbackModels = (await jaitProvider?.listModels?.()) ?? [];
+      const { listJaitModels } = await import("./services/jait-models.js");
+
+      // Only account-backed providers: the shared ACP entries (cursor, pi, …)
+      // have no login behind them, so probing them costs a 20s timeout each and
+      // yields nothing.
+      const cliProviders = providerRegistry.list().filter((candidate) =>
+        candidate.id !== "jait" && candidate.ownerUserId === userId);
+
+      // Probing a CLI provider spawns its process, so the catalogues are
+      // gathered concurrently and a provider that is down contributes nothing
+      // instead of failing the whole list.
+      const [httpModels, ...cliCatalogues] = await Promise.all([
+        listJaitModels({ config, apiKeys: owner.apiKeys, fallbackModels }),
+        ...cliProviders.map(async (candidate) => {
+          try {
+            // No availability probe: it spawns the CLI binary just to read
+            // `--version`, which costs more than the catalogue call itself.
+            // listModels() already fails soft when the provider is down.
+            //
+            // The probe opens an ACP session and gives up only after 20s, which
+            // is far too long to keep someone waiting on a model picker. Wait a
+            // short budget, then answer without this provider — the probe keeps
+            // running and populates the adapter's own cache, so the next call
+            // has the models. Better to miss them once than to stall the menu.
+            const catalogue = candidate.listModels?.() ?? Promise.resolve([]);
+            const models = await withCatalogueBudget(
+              catalogue,
+              CLI_CATALOGUE_BUDGET_MS,
+              () => {
+                console.warn(`[channels] ${candidate.id}: model catalogue slow, answering without it`);
+                // Once it does answer, the cached partial list is stale.
+                void catalogue
+                  .then((late) => { if (late.length > 0) channelManager.invalidateModelCache(); })
+                  .catch(() => { /* nothing to refresh */ });
+              },
+            );
+            return models.map((model) => ({
+              id: model.id,
+              label: model.name,
+              group: candidate.info.name,
+              provider: candidate.id,
+            }));
+          } catch {
+            return [];
+          }
+        }),
+      ]);
+
+      return [
+        ...httpModels.map((model) => ({ id: model.id, label: model.name, group: model.group })),
+        ...cliCatalogues.flat(),
+      ];
+    },
+    providerRegistry,
+    gatewayAddress: { host: config.host, port: config.port },
   });
+  // Resolve the model catalogue in the background so the first `/model` in a
+  // chat doesn't pay for a cold CLI provider probe.
+  channelManager.warmModelCatalogue();
+
+  // Delivery back into a chat — the tools behind "remind me tomorrow at 5".
+  // Registered here rather than in createToolRegistry because they need the
+  // channel manager, which is built after the registry.
+  {
+    const { createChannelSendTool, createChannelRemindTool } = await import("./tools/channel-tools.js");
+    const { hostTimeZone } = await import("./channels/assistant.js");
+    const channelToolDeps = { channels: channelManager, scheduler, defaultTimeZone: hostTimeZone };
+    toolRegistry.register(createChannelSendTool(channelToolDeps));
+    toolRegistry.register(createChannelRemindTool(channelToolDeps));
+  }
+
+  // Forward gateway notifications (maintenance, routines, provider limits) to
+  // every channel the user opted in via Settings → Channels.
+  notifications.addSink((notification) => {
+    void channelManager.notify({
+      title: notification.title,
+      body: notification.body,
+      level: notification.level,
+      link: notification.link,
+    }).catch((err) => console.error("Channel notification failed:", err));
+  });
+
   // Now that the channel manager exists, route channel-session consent prompts
   // to it (sends the in-band yes/no message; clears mappings on decision).
   channelConsentRequestBridge = (request) => channelManager.handleConsentRequest(request);

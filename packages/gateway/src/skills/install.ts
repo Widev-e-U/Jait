@@ -8,7 +8,7 @@
 
 import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { rm, readFile } from "node:fs/promises";
+import { rm, readFile, mkdir, writeFile } from "node:fs/promises";
 import type { ClawHubClient } from "../clawhub/client.js";
 import { extractZip, writeOrigin } from "../clawhub/client.js";
 import type { Skill, SkillRegistry } from "./index.js";
@@ -79,6 +79,81 @@ export async function uninstallClawHubSkill(params: {
 
   await rm(skillDir, { recursive: true, force: true });
   skillRegistry.remove(slug);
+}
+
+/**
+ * Slug a skill id into something safe to use as a directory name.
+ *
+ * The id becomes a path under the user's skills directory, so anything that
+ * could climb out of it (slashes, dots, absolute paths) is stripped rather than
+ * escaped — a skill called "../../etc" is a bug, not a filename to honour.
+ */
+export function slugifySkillId(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+/** Render a SKILL.md with the frontmatter the discovery scanner requires. */
+export function renderSkillMarkdown(params: { name: string; description: string; body: string }): string {
+  // Quoted scalars: a description ending in a colon or containing one would
+  // otherwise be read as a nested mapping and the skill would be skipped for
+  // having no description.
+  const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\s+/g, " ").trim();
+  return [
+    "---",
+    `name: "${escape(params.name)}"`,
+    `description: "${escape(params.description)}"`,
+    "---",
+    "",
+    params.body.trim(),
+    "",
+  ].join("\n");
+}
+
+export interface WrittenSkillSummary {
+  id: string;
+  name: string;
+  filePath: string;
+  created: boolean;
+}
+
+/**
+ * Write a skill the assistant authored itself into the user's skills directory
+ * and re-discover so it is usable in the very next turn.
+ *
+ * Refuses to clobber by default: skills accumulate knowledge, and silently
+ * replacing one that took a conversation to get right is a real loss.
+ */
+export async function writeUserSkill(params: {
+  skillRegistry: SkillRegistry;
+  id: string;
+  name: string;
+  description: string;
+  body: string;
+  overwrite?: boolean;
+}): Promise<WrittenSkillSummary> {
+  const id = slugifySkillId(params.id);
+  if (!id) throw new Error(`'${params.id}' does not make a usable skill id`);
+
+  const skillDir = join(userSkillsDir(), id);
+  const filePath = join(skillDir, "SKILL.md");
+  const existed = await readFile(filePath, "utf-8").then(() => true).catch(() => false);
+  if (existed && !params.overwrite) {
+    throw new Error(`Skill '${id}' already exists — pass overwrite to replace it`);
+  }
+
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(
+    filePath,
+    renderSkillMarkdown({ name: params.name, description: params.description, body: params.body }),
+    "utf-8",
+  );
+
+  await params.skillRegistry.discover([{ path: userSkillsDir(), source: "user" }]);
+  return { id, name: params.name, filePath, created: !existed };
 }
 
 export interface SkillToolInstallResult {

@@ -6,6 +6,7 @@ Public project documentation for Jait lives primarily in the repository root and
 
 - [README.md](../README.md)
 - [vision.md](vision.md)
+- [channel-assistant.md](channel-assistant.md) — Jait over a messenger: continuity, reminders, model fallback
 - [site/index.html](site/index.html)
 - [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [SECURITY.md](../SECURITY.md)
