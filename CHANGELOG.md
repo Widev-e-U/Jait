@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.697](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.697) — 2026-08-08
+- feat: Telegram channel assistant through the OpenClaw extension (#233) (`5d53ff06`)
+- feat: move chats between projects from the sidebar context menu (#235) (`0b6e4281`)
+- feat(web): central, customizable keyboard shortcut system (#234) (`1d283488`)
+
 ## [v0.1.696](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.696) — 2026-08-08
 - fix(gateway): gateway projects now self-heal stale repository device assignments before Manager provider scoping, and remote node registration no longer claims repositories whose paths already exist on the gateway; selecting the Jait repo therefore shows its gateway provider accounts instead of incorrectly limiting Manager to Jait.
 
