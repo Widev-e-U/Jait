@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
+import { useHotkeyActions } from '@/components/hotkeys'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -3980,6 +3981,38 @@ function App() {
   // ── Memoised edit-composer bag (prevents every Message from re-rendering) ──
   const handleVoiceStop = useCallback(() => { void stopRecordingAndTranscribe() }, [stopRecordingAndTranscribe])
   const handleFolderPickerOpen = useCallback(() => { automation.setFolderPickerOpen(true) }, [automation.setFolderPickerOpen])
+
+  // ── Central keyboard shortcuts (defaults + user bindings live in lib/hotkeys) ──
+  useHotkeyActions({
+    'app.settings': () => setCurrentView('settings'),
+    'app.toggleTheme': () => { void handleThemeModeChange(appliedThemeMode === 'dark' ? 'light' : 'dark') },
+    'app.toggleDebugPanel': () => setShowDebugPanel((shown) => !shown),
+    'view.chat': () => setCurrentView('chat'),
+    'view.pulls': () => setCurrentView('pulls'),
+    'view.todo': () => setCurrentView('todo'),
+    'view.email': () => setCurrentView('email'),
+    'view.calendar': () => setCurrentView('calendar'),
+    'view.memory': () => setCurrentView('memory'),
+    'view.jobs': () => setCurrentView('jobs'),
+    'view.network': () => setCurrentView('network'),
+    'chat.new': () => { setCurrentView('chat'); handleStartNewChat() },
+    'chat.newTab': handleStartNewChatInTab,
+    'chat.focusComposer': () => { setCurrentView('chat'); promptInputRef.current?.focus() },
+    'chat.stop': isLoading ? handleCancelRequest : null,
+    'chat.toggleSidebar': () => setShowSidebar((shown) => !shown),
+    'workspace.toggleTerminal': () => { void handleToggleTerminal() },
+    'workspace.toggleEditor': () => { void handleToggleEditor() },
+    'workspace.togglePreview': () => { void handleSidebarPreviewToggle() },
+    'workspace.toggleArchitecture': () => { void handleSidebarArchitectureToggle() },
+    'workspace.toggleScreenShare': () => {
+      if (showScreenShare) closeScreenSharePanel()
+      else openScreenSharePanel()
+    },
+    'voice.toggleRecording': () => {
+      if (voiceRecording) handleVoiceStop()
+      else void handleVoiceInput()
+    },
+  })
   const developerChatPanelStyle: React.CSSProperties = chatCollapsed
     ? {
         flex: '0 0 0px',

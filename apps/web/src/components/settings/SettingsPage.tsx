@@ -13,6 +13,7 @@ import { ChannelSettings } from './ChannelSettings'
 import { EmailSettings } from './EmailSettings'
 import { CalendarSettings } from './CalendarSettings'
 import { UsageSettings } from './UsageSettings'
+import { KeyboardShortcutSettings } from './KeyboardShortcutSettings'
 import { PatchNotesTooltip } from './PatchNotesTooltip'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -130,7 +131,7 @@ interface WearStatus {
   }>
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'usage' | 'activity' | 'changelog'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'shortcuts' | 'usage' | 'activity' | 'changelog'
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   general: 'General',
@@ -140,6 +141,7 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   skills: 'Skills',
   email: 'Mail & Calendar',
   channels: 'Channels',
+  shortcuts: 'Shortcuts',
   usage: 'Usage',
   activity: 'Activity',
   changelog: 'Changelog',
@@ -809,6 +811,7 @@ export function SettingsPage({
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
+          <TabsTrigger value="shortcuts" className="flex-1 sm:flex-none">Shortcuts</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
           <TabsTrigger value="changelog" className="flex-1 sm:flex-none">Changelog</TabsTrigger>
@@ -1615,6 +1618,10 @@ export function SettingsPage({
 
         <TabsContent value="channels" className="space-y-6">
           {showChannelsSection ? <ChannelSettings token={token} /> : emptyState}
+        </TabsContent>
+
+        <TabsContent value="shortcuts" className="space-y-6">
+          <KeyboardShortcutSettings search={search} />
         </TabsContent>
 
         <TabsContent value="usage" className="space-y-6">
