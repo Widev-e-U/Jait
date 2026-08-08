@@ -63,6 +63,8 @@ export interface ReplyGenerator {
       conversationId?: string;
       /** Agent decides tool use itself instead of asking in the chat. */
       autoApprove?: boolean;
+      /** Called for each tool call, to mirror the work into the chat. */
+      onProgress?: (line: string) => void;
     },
   ): Promise<string>;
 }
@@ -201,6 +203,81 @@ export function irreversibleReasonFor(args: unknown): string | undefined {
   return verdict.irreversible ? verdict.reason ?? "irreversible command" : undefined;
 }
 
+/** Telegram rejects rapid edits; this is a comfortable floor between them. */
+const PROGRESS_EDIT_INTERVAL_MS = 2_000;
+
+/** How many steps to keep visible in the live message. */
+const PROGRESS_MAX_STEPS = 8;
+
+/** One line per tool call, in the order they happened. */
+export function formatProgress(steps: string[]): string {
+  const shown = steps.slice(-PROGRESS_MAX_STEPS);
+  const omitted = steps.length - shown.length;
+  return [
+    omitted > 0 ? `🔧 Working… (${omitted} earlier steps)` : "🔧 Working…",
+    ...shown,
+  ].join("\n");
+}
+
+/**
+ * Mirrors the agent's tool calls into a single message that gets edited as the
+ * turn runs, so a long reply shows its work instead of going quiet. Edits are
+ * throttled and always best-effort — progress must never break the answer.
+ */
+export class ProgressReporter {
+  private steps: string[] = [];
+  private messageId: string | null = null;
+  private lastEditAt = 0;
+  private pending: string | null = null;
+  private chain: Promise<void> = Promise.resolve();
+
+  constructor(
+    private readonly connector: ChannelConnector,
+    private readonly conversationId: string,
+  ) {}
+
+  /** True when this connector can show live progress at all. */
+  static supportedBy(connector: ChannelConnector): boolean {
+    return typeof connector.sendLive === "function" && typeof connector.editLive === "function";
+  }
+
+  step(line: string): void {
+    this.steps.push(line);
+    this.pending = formatProgress(this.steps);
+    this.flushSoon();
+  }
+
+  /** Remove the progress message once the real answer is on its way. */
+  finish(): void {
+    this.pending = null;
+    const id = this.messageId;
+    if (!id) return;
+    this.messageId = null;
+    this.chain = this.chain
+      .then(() => this.connector.editLive?.(this.conversationId, id, formatProgress(this.steps).replace("🔧 Working…", "✅ Done")))
+      .catch(() => { /* best effort */ });
+  }
+
+  private flushSoon(): void {
+    const now = Date.now();
+    if (this.messageId && now - this.lastEditAt < PROGRESS_EDIT_INTERVAL_MS) return;
+    this.lastEditAt = now;
+    const text = this.pending;
+    if (!text) return;
+    this.pending = null;
+
+    this.chain = this.chain
+      .then(async () => {
+        if (!this.messageId) {
+          this.messageId = await this.connector.sendLive?.(this.conversationId, text) ?? null;
+          return;
+        }
+        await this.connector.editLive?.(this.conversationId, this.messageId, text);
+      })
+      .catch(() => { /* best effort */ });
+  }
+}
+
 /** Default approval window for an in-band consent prompt before auto-deny. */
 const DEFAULT_CONSENT_TIMEOUT_MS = 5 * 60_000;
 
@@ -240,6 +317,7 @@ export const CHANNEL_COMMAND_DEFS = [
   { name: "model", description: "Pick a provider and model for this channel", usage: "/model [number|id|provider <name>|reset]" },
   { name: "notifications", description: "Send routines and gateway alerts to this chat", usage: "/notifications on|off" },
   { name: "approvals", description: "Ask before each tool instead of deciding automatically", usage: "/approvals ask|auto" },
+  { name: "progress", description: "Show tool calls while the agent works", usage: "/progress on|off" },
   { name: "status", description: "Channel, model and notification state", usage: "/status" },
   { name: "help", description: "Show the available commands", usage: "/help" },
 ] as const;
@@ -655,15 +733,22 @@ export class ChannelManager {
     }
 
     try {
+      // Live progress, when the channel can edit messages and it's switched on.
+      const wantsProgress = config.progress !== false && ProgressReporter.supportedBy(managed.connector);
+      const progress = wantsProgress ? new ProgressReporter(managed.connector, msg.conversationId) : null;
+
       const reply = (await this.replyGenerator.generate(history, {
         channelId: msg.channelId,
         sessionId,
         allowedTools,
+        onProgress: progress ? (line) => progress.step(line) : undefined,
         model: config.model?.trim() || undefined,
         modelProvider: config.modelProvider?.trim() || undefined,
         conversationId: msg.conversationId,
         autoApprove: autoApproves(config),
       })).trim();
+
+      progress?.finish();
 
       if (reply) {
         history.push({ role: "assistant", content: reply });
@@ -725,6 +810,7 @@ export class ChannelManager {
           `Model: ${config.model ?? auth?.model ?? "gateway default"}${config.model ? " (channel override)" : ""}`,
           `Notifications: ${config.notifications ? "on" : "off"}`,
           `Tool approvals: ${autoApproves(config) ? "automatic" : "ask each time"}`,
+          `Progress updates: ${config.progress === false ? "off" : "on"}`,
           `Allowed senders: ${(config.allowedSenders ?? []).join(", ") || "none"}`,
         ].join("\n"));
         return true;
@@ -742,6 +828,17 @@ export class ChannelManager {
         await reply(arg === "auto"
           ? "⚡ I'll decide about tools myself. Irreversible commands still ask."
           : "🔒 I'll ask before each tool.");
+        return true;
+      }
+
+      case "progress": {
+        const arg = parsed.args.trim().toLowerCase();
+        if (arg !== "on" && arg !== "off") {
+          await reply(`Progress updates are ${config.progress === false ? "off" : "on"}. Use /progress on or /progress off.`);
+          return true;
+        }
+        this.setConfig(msg.channelId, { progress: arg === "on" });
+        await reply(arg === "on" ? "👀 I'll show what I'm doing." : "🤫 No more step-by-step updates.");
         return true;
       }
 
@@ -1093,6 +1190,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       modelProvider?: string;
       conversationId?: string;
       autoApprove?: boolean;
+      onProgress?: (line: string) => void;
     },
   ): Promise<string> {
     const { toolRegistry, audit } = this.deps;
@@ -1219,6 +1317,14 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
 
     const result = await runAgentLoop(
       {
+        onEvent: ctx.onProgress
+          ? (event) => {
+              if (event.type === "tool_start") ctx.onProgress!(`• ${event.tool}`);
+              else if (event.type === "tool_result") {
+                ctx.onProgress!(`${event.ok ? "  ✓" : "  ✗"} ${event.tool}${event.ok ? "" : ` — ${event.message.slice(0, 80)}`}`);
+              }
+            }
+          : undefined,
         llm,
         history,
         toolSchemas,

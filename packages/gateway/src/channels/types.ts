@@ -162,6 +162,13 @@ export interface ChannelConnector {
    */
   setupGuide?(): Promise<ChannelSetupGuide>;
   /**
+   * Send a message and return its id, so it can be edited afterwards. Optional:
+   * messengers without editable messages omit it and get no live progress.
+   */
+  sendLive?(conversationId: string, text: string): Promise<string | null>;
+  /** Replace the text of a message sent via `sendLive`. Must not throw. */
+  editLive?(conversationId: string, messageId: string, text: string): Promise<void>;
+  /**
    * Publish the gateway's slash commands to the messenger's own command menu,
    * so typing `/` offers them. Optional — messengers without a command menu
    * (WhatsApp) omit it. Implementations must never throw: a command menu is a
@@ -191,6 +198,12 @@ export interface ChannelConfig {
    * ask — that carve-out lives in the consent executor and is not bypassed.
    */
   autoApprove?: boolean;
+  /**
+   * Show what the agent is doing while it works — tool calls and their results
+   * in a message that updates as the turn runs. On by default: a reply that
+   * takes minutes with no sign of life is indistinguishable from a hang.
+   */
+  progress?: boolean;
   /**
    * Deliver gateway notifications (and anything routines push through them) to
    * this channel's allowed senders. Off by default — turning a messenger into a

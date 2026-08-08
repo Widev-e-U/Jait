@@ -20,6 +20,8 @@ interface ChannelConfig {
   notifications?: boolean
   /** Agent decides tool use itself instead of asking in the chat. */
   autoApprove?: boolean
+  /** Show tool calls in a live-updating message while the agent works. */
+  progress?: boolean
   /** Per-channel model override, set in-chat with /model. */
   model?: string
   /** Whether a channel credential (Telegram bot token) is stored. Never the token itself. */
@@ -131,6 +133,7 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
   const [notifications, setNotifications] = useState(Boolean(channel.config.notifications))
   // Defaults to on — an assistant that asks before every step is unusable on a phone.
   const [autoApprove, setAutoApprove] = useState(channel.config.autoApprove !== false)
+  const [progress, setProgress] = useState(channel.config.progress !== false)
   // Set in-chat with /model — displayed here, not editable, so both ends agree.
   const [modelOverride, setModelOverride] = useState(channel.config.model ?? '')
   const [tokenSet, setTokenSet] = useState(Boolean(channel.config.tokenSet))
@@ -190,7 +193,8 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
     setModelOverride(channel.config.model ?? '')
     setNotifications(Boolean(channel.config.notifications))
     setAutoApprove(channel.config.autoApprove !== false)
-  }, [channel.config.model, channel.config.notifications, channel.config.autoApprove])
+    setProgress(channel.config.progress !== false)
+  }, [channel.config.model, channel.config.notifications, channel.config.autoApprove, channel.config.progress])
 
   // Fetch the "create the bot" guide while there is no credential yet.
   useEffect(() => {
@@ -287,13 +291,13 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
       const res = await fetch(`${API_URL}/api/channels/${channel.id}/config`, {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowedSenders, respondToAll, notifications, autoApprove }),
+        body: JSON.stringify({ allowedSenders, respondToAll, notifications, autoApprove, progress }),
       })
       if (!res.ok) throw new Error(`Failed to save (HTTP ${res.status})`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally { setBusy(false) }
-  }, [allowed, respondToAll, notifications, autoApprove, channel.id, token])
+  }, [allowed, respondToAll, notifications, autoApprove, progress, channel.id, token])
 
   const badge = STATUS_BADGE[status]
   const linking = status === 'qr'
@@ -490,6 +494,15 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
         </div>
         <div className="flex items-center justify-between gap-3 border-t pt-3">
           <div>
+            <p className="text-sm font-medium">Show progress while working</p>
+            <p className="text-xs text-muted-foreground">
+              Mirrors tool calls into a message that updates as the reply is worked out.
+            </p>
+          </div>
+          <Switch checked={progress} onCheckedChange={setProgress} />
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t pt-3">
+          <div>
             <p className="text-sm font-medium">Notifications & routines</p>
             <p className="text-xs text-muted-foreground">
               Send gateway alerts and scheduled routine output to the linked accounts here.
@@ -503,7 +516,7 @@ function ChannelCard({ token, channel, onChanged }: { token: string | null; chan
         {status === 'connected' && (
           <p className="text-xs text-muted-foreground">
             In the chat: <span className="font-mono">/model</span> switches the model{modelOverride ? ` (currently ${modelOverride})` : ''},
-            {' '}<span className="font-mono">/approvals ask|auto</span>, <span className="font-mono">/notifications on|off</span>,
+            {' '}<span className="font-mono">/approvals ask|auto</span>, <span className="font-mono">/progress on|off</span>, <span className="font-mono">/notifications on|off</span>,
             {' '}<span className="font-mono">/status</span>, <span className="font-mono">/help</span>.
           </p>
         )}

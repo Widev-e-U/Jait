@@ -6,6 +6,8 @@ import {
   buildCliPrompt,
   formatNotification,
   groupModelsByProvider,
+  ProgressReporter,
+  formatProgress,
   irreversibleReasonFor,
   normalizeSenderId,
   parseCommand,
@@ -42,6 +44,19 @@ class FakeConnector implements ChannelConnector {
   }
   async stop() { this._status = "stopped"; }
   async send(msg: OutboundMessage) { this.sent.push(msg); }
+
+  /** Live progress message: id → current text, in send order. */
+  live: { id: string; text: string }[] = [];
+  private liveSeq = 0;
+  async sendLive(_conversationId: string, text: string) {
+    const id = `live-${++this.liveSeq}`;
+    this.live.push({ id, text });
+    return id;
+  }
+  async editLive(_conversationId: string, messageId: string, text: string) {
+    const entry = this.live.find((m) => m.id === messageId);
+    if (entry) entry.text = text;
+  }
 
   /** Command menu published by the manager — asserted by the menu test. */
   menu: { name: string; description: string }[] | null = null;
@@ -463,7 +478,7 @@ describe("ChannelManager command menu", () => {
     const { mgr, connector } = makeManager(sqlite);
     await mgr.start("fake");
 
-    expect(connector.menu?.map((c) => c.name)).toEqual(["model", "notifications", "approvals", "status", "help"]);
+    expect(connector.menu?.map((c) => c.name)).toEqual(["model", "notifications", "approvals", "progress", "status", "help"]);
     for (const entry of connector.menu ?? []) {
       expect(entry.description.length).toBeGreaterThan(0);
     }
@@ -1134,5 +1149,69 @@ describe("queued messages", () => {
     await new Promise((r) => setTimeout(r, 30));
 
     expect(connector.sent.some((m) => m.text.includes("Still working"))).toBe(false);
+  });
+});
+
+describe("progress updates", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeProgressManager(db: SqliteDatabase) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate(_history, ctx) {
+          ctx.onProgress?.("• search");
+          ctx.onProgress?.("  ✓ search");
+          await new Promise((r) => setTimeout(r, 5));
+          return "found it";
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  it("mirrors tool calls into a live message and marks it done", async () => {
+    const { mgr, connector } = makeProgressManager(sqlite);
+    await mgr.start("fake");
+
+    connector.emit({ text: "find something", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(connector.live).toHaveLength(1);
+    expect(connector.live[0]!.text).toContain("• search");
+    expect(connector.live[0]!.text).toContain("✅ Done");
+    // The answer is still its own message.
+    expect(connector.sent.map((m) => m.text)).toContain("found it");
+  });
+
+  it("stays quiet when switched off", async () => {
+    const { mgr, connector } = makeProgressManager(sqlite);
+    mgr.setConfig("fake", { progress: false });
+    await mgr.start("fake");
+
+    connector.emit({ text: "find something", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 40));
+
+    expect(connector.live).toHaveLength(0);
+    expect(connector.sent.map((m) => m.text)).toContain("found it");
+  });
+
+  it("is skipped for connectors that cannot edit messages", () => {
+    const plain = { id: "x", label: "X" } as unknown as Parameters<typeof ProgressReporter.supportedBy>[0];
+    expect(ProgressReporter.supportedBy(plain)).toBe(false);
+    expect(ProgressReporter.supportedBy(new FakeConnector())).toBe(true);
+  });
+
+  it("keeps the newest steps and counts the rest", () => {
+    const many = Array.from({ length: 12 }, (_, i) => `• step${i}`);
+    const text = formatProgress(many);
+
+    expect(text).toContain("4 earlier steps");
+    expect(text).toContain("• step11");
+    expect(text).not.toContain("• step3");
   });
 });

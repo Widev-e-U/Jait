@@ -434,6 +434,37 @@ export class TelegramConnector implements ChannelConnector {
   }
 
   /**
+   * Send a message and hand back its id, so the turn can keep editing it as
+   * work progresses instead of spamming the chat with one message per step.
+   */
+  async sendLive(conversationId: string, text: string): Promise<string | null> {
+    try {
+      const res = await this.api<{ message_id?: number }>("sendMessage", {
+        chat_id: conversationId,
+        text,
+      }, this.abort?.signal);
+      const id = res.result?.message_id;
+      return res.ok && id !== undefined ? String(id) : null;
+    } catch (err) {
+      this.log("live message failed:", err);
+      return null;
+    }
+  }
+
+  /** Replace a live message's text. Never throws — progress is not the payload. */
+  async editLive(conversationId: string, messageId: string, text: string): Promise<void> {
+    try {
+      await this.api("editMessageText", {
+        chat_id: conversationId,
+        message_id: Number(messageId),
+        text,
+      }, this.abort?.signal);
+    } catch (err) {
+      this.log("live message edit failed:", err);
+    }
+  }
+
+  /**
    * Store a choice's value behind a short token. `callback_data` is capped at
    * 64 bytes, which many model ids exceed, so the button carries a token and
    * the connector keeps the mapping.
