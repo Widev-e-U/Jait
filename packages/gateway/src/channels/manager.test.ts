@@ -4,6 +4,7 @@ import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import {
   ChannelManager,
   formatNotification,
+  groupModelsByProvider,
   normalizeSenderId,
   parseCommand,
   shouldRespond,
@@ -514,7 +515,7 @@ describe("/model dialog", () => {
     const sent = connector.sent.at(-1)!;
     expect(sent.text).not.toContain("1. Model 0");
     expect(sent.choices?.length).toBe(25); // 24 models + reset
-    expect(sent.choices?.[1]).toEqual({ label: "✅ Model 1 · OpenAI", value: "/model m1" });
+    expect(sent.choices?.[1]).toEqual({ label: "✅ Model 1 (OpenAI)", value: "/model m1" });
     expect(sent.choices?.at(-1)).toEqual({ label: "↩️ Gateway default", value: "/model reset" });
     expect(sent.text).toContain("6 more available");
   });
@@ -545,5 +546,170 @@ describe("/model dialog", () => {
 
     expect(mgr.getConfig("fake").model).toBe("m3");
     expect(connector.sent.at(-1)!.text).toContain("Now using Model 3");
+  });
+});
+
+/** Choice labels without the navigation entries (back / reset / all). */
+function modelLabels(sent: OutboundMessage): string[] {
+  return (sent.choices ?? [])
+    .filter((c) => !/^(⬅️|↩️|All models)/.test(c.label))
+    .map((c) => c.label);
+}
+
+describe("/model provider selection", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const mixed = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "gpt-5", label: "GPT-5", group: "OpenAI" },
+    { id: "anthropic/claude", label: "Claude", group: "OpenRouter" },
+    { id: "llama3", label: "Llama 3", group: "Ollama" },
+  ];
+
+  function makeMixedManager(db: SqliteDatabase, supportsChoices: boolean, models = mixed) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: supportsChoices });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("asks for the provider first when several are configured", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.text).toContain("Pick a provider");
+    expect(sent.choices?.map((c) => c.label)).toEqual([
+      "OpenAI (2)", "Ollama (1)", "OpenRouter (1)", "All models (4)",
+    ]);
+    expect(sent.choices?.[0]!.value).toBe("/model provider OpenAI");
+  });
+
+  it("lists that provider's models after the first step", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider OpenAI");
+
+    expect(sent.text).toContain("OpenAI —");
+    expect(modelLabels(sent)).toEqual(["GPT-4o (OpenAI)", "GPT-5 (OpenAI)"]);
+  });
+
+  it("offers everything on /model provider all", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider all");
+
+    expect(modelLabels(sent)).toEqual([
+      "GPT-4o (OpenAI)", "GPT-5 (OpenAI)", "Claude (OpenRouter)", "Llama 3 (Ollama)",
+    ]);
+  });
+
+  it("skips the provider step when only one provider exists", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true, [mixed[0]!, mixed[1]!]);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.text).not.toContain("Pick a provider");
+    expect(modelLabels(sent)).toEqual(["GPT-4o (OpenAI)", "GPT-5 (OpenAI)"]);
+  });
+
+  it("names the provider in the numbered list and on confirmation", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, false);
+    await mgr.start("fake");
+
+    const listed = await send(connector, "/model");
+    expect(listed.text).toContain("3. Claude (OpenRouter)");
+
+    const confirmed = await send(connector, "/model llama3");
+    expect(confirmed.text).toBe("✅ Now using Llama 3 (Ollama) on this channel.");
+  });
+
+  it("reports an unknown provider instead of an empty list", async () => {
+    const { mgr, connector } = makeMixedManager(sqlite, true);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model provider Anthropic");
+
+    expect(sent.text).toContain('No models from "Anthropic"');
+    expect(sent.choices).toBeUndefined();
+  });
+});
+
+describe("groupModelsByProvider", () => {
+  it("counts per provider, biggest first", () => {
+    expect(groupModelsByProvider([
+      { id: "a", group: "Ollama" },
+      { id: "b", group: "OpenAI" },
+      { id: "c", group: "OpenAI" },
+      { id: "d" },
+    ])).toEqual([{ group: "OpenAI", count: 2 }, { group: "Ollama", count: 1 }]);
+  });
+});
+
+describe("/model back navigation", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const models = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "llama3", label: "Llama 3", group: "Ollama" },
+  ];
+
+  function makeManager2(db: SqliteDatabase) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("offers a way back from the model list to the providers", async () => {
+    const { mgr, connector } = makeManager2(sqlite);
+    await mgr.start("fake");
+
+    const step2 = await send(connector, "/model provider OpenAI");
+    const back = step2.choices?.find((c) => c.label.includes("Back"));
+    expect(back?.value).toBe("/model");
+
+    // Following it lands on the provider step again.
+    const step1 = await send(connector, back!.value);
+    expect(step1.text).toContain("Pick a provider");
+  });
+
+  it("shows no back option on the first step", async () => {
+    const { mgr, connector } = makeManager2(sqlite);
+    await mgr.start("fake");
+
+    const step1 = await send(connector, "/model");
+
+    expect(step1.choices?.some((c) => c.label.includes("Back"))).toBe(false);
   });
 });

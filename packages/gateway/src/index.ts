@@ -811,12 +811,15 @@ async function main() {
         requestedModel: requestedModel ?? a?.model,
       });
     },
-    // Catalogue behind `/model` — the same provider list the web UI picks from.
+    // Catalogue behind `/model` — resolved through the same service the web UI
+    // model picker uses, so both offer the identical set across backends.
     resolveModels: async () => {
       const owner = resolveChannelAuth();
       if (!owner?.userId) return [];
       const provider = providerRegistry.getForUser("jait", owner.userId);
-      const models = (await provider?.listModels?.()) ?? [];
+      const fallbackModels = (await provider?.listModels?.()) ?? [];
+      const { listJaitModels } = await import("./services/jait-models.js");
+      const models = await listJaitModels({ config, apiKeys: owner.apiKeys, fallbackModels });
       return models.map((model) => ({ id: model.id, label: model.name, group: model.group }));
     },
   });

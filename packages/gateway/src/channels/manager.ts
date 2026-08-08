@@ -191,7 +191,7 @@ export function shouldRespond(msg: InboundMessage, config: ChannelConfig): boole
  * from this list, so a new command shows up everywhere at once.
  */
 export const CHANNEL_COMMAND_DEFS = [
-  { name: "model", description: "List models, or switch with a number or id", usage: "/model [number|id|reset]" },
+  { name: "model", description: "Pick a provider and model for this channel", usage: "/model [number|id|provider <name>|reset]" },
   { name: "notifications", description: "Send routines and gateway alerts to this chat", usage: "/notifications on|off" },
   { name: "status", description: "Channel, model and notification state", usage: "/status" },
   { name: "help", description: "Show the available commands", usage: "/help" },
@@ -227,11 +227,24 @@ export function parseCommand(text: string): { command: ChannelCommand; args: str
  */
 const MAX_MODEL_CHOICES = 24;
 
-/** Button caption for a model — group and current marker where they help. */
+/** Button caption for a model — provider and current marker where they help. */
 export function modelChoiceLabel(model: ChannelModelOption, active?: string): string {
   const name = model.label ?? model.id;
-  const grouped = model.group ? `${name} · ${model.group}` : name;
+  const grouped = model.group ? `${name} (${model.group})` : name;
   return model.id === active ? `✅ ${grouped}` : grouped;
+}
+
+/** Providers present in a catalogue, with their model counts, biggest first. */
+export function groupModelsByProvider(models: ChannelModelOption[]): { group: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const model of models) {
+    const group = model.group?.trim();
+    if (!group) continue;
+    counts.set(group, (counts.get(group) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([group, count]) => ({ group, count }))
+    .sort((a, b) => b.count - a.count || a.group.localeCompare(b.group));
 }
 
 const NOTIFICATION_ICONS = {
@@ -684,44 +697,42 @@ export class ChannelManager {
       this.log(`${channelId}: model catalogue failed:`, err);
     }
 
-    if (!arg) {
-      if (models.length === 0) {
-        return {
-          text: `Current model: ${active ?? "gateway default"}\n\nNo catalogue is available, so switching is off. Set the model in the web UI instead.`,
-        };
-      }
+    if (models.length === 0 && !arg) {
+      return {
+        text: `Current model: ${active ?? "gateway default"}\n\nNo catalogue is available, so switching is off. Set the model in the web UI instead.`,
+      };
+    }
 
-      if (supportsChoices) {
-        const offered = models.slice(0, MAX_MODEL_CHOICES);
-        const choices: ChannelChoice[] = offered.map((model) => ({
-          label: modelChoiceLabel(model, active),
-          value: `/model ${model.id}`,
+    // `/model provider <name>` — the second step of the dialog, and typeable.
+    const providerArg = /^provider\s+(.+)$/i.exec(arg);
+    if (providerArg) {
+      const wanted = providerArg[1]!.trim();
+      const matching = wanted.toLowerCase() === "all"
+        ? models
+        : models.filter((model) => (model.group ?? "").toLowerCase() === wanted.toLowerCase());
+      if (matching.length === 0) {
+        return { text: `No models from "${wanted}". Send /model to see the providers.` };
+      }
+      return this.renderModelPicker(matching, active, supportsChoices, wanted);
+    }
+
+    if (!arg) {
+      // More than one backend is configured → pick the provider first, so a
+      // 100-model OpenRouter catalogue doesn't bury the three local Ollama ones.
+      const providers = groupModelsByProvider(models);
+      if (supportsChoices && providers.length > 1) {
+        const choices: ChannelChoice[] = providers.map(({ group, count }) => ({
+          label: `${group} (${count})`,
+          value: `/model provider ${group}`,
         }));
+        choices.push({ label: `All models (${models.length})`, value: "/model provider all" });
         if (active) choices.push({ label: "↩️ Gateway default", value: "/model reset" });
-        const truncated = models.length - offered.length;
         return {
-          text: [
-            `Current model: ${active ?? "gateway default"}`,
-            truncated > 0
-              ? `Pick one — ${truncated} more available with /model <id>.`
-              : "Pick one:",
-          ].join("\n"),
+          text: `Current model: ${active ?? "gateway default"}\nPick a provider:`,
           choices,
         };
       }
-
-      const list = models
-        .map((model, index) => `${index + 1}. ${model.label ?? model.id}${model.id === active ? "  ← current" : ""}`)
-        .join("\n");
-      return {
-        text: [
-          `Current model: ${active ?? "gateway default"}`,
-          "",
-          list,
-          "",
-          "Switch with /model <number> or /model <id>, /model reset for the default.",
-        ].join("\n"),
-      };
+      return this.renderModelPicker(models, active, supportsChoices);
     }
 
     // A number picks from the list just shown; anything else is treated as an id.
@@ -738,7 +749,56 @@ export class ChannelManager {
     if (!modelId) return { text: `Unknown model "${arg}". Send /model to see what is available.` };
 
     this.setConfig(channelId, { model: modelId });
-    return { text: `✅ Now using ${picked?.label ?? modelId} on this channel.` };
+    const suffix = picked?.group ? ` (${picked.group})` : "";
+    return { text: `✅ Now using ${picked?.label ?? modelId}${suffix} on this channel.` };
+  }
+
+  /**
+   * Render a set of models as tappable options, or as the numbered list that
+   * `/model <n>` accepts on channels without dialogs.
+   */
+  private renderModelPicker(
+    models: ChannelModelOption[],
+    active: string | undefined,
+    supportsChoices: boolean,
+    providerLabel?: string,
+  ): { text: string; choices?: ChannelChoice[] } {
+    const heading = providerLabel
+      ? `${providerLabel} — current model: ${active ?? "gateway default"}`
+      : `Current model: ${active ?? "gateway default"}`;
+
+    if (supportsChoices) {
+      const offered = models.slice(0, MAX_MODEL_CHOICES);
+      const choices: ChannelChoice[] = offered.map((model) => ({
+        label: modelChoiceLabel(model, active),
+        value: `/model ${model.id}`,
+      }));
+      // Step two of the dialog — offer the way back up rather than making the
+      // user retype /model to see the other providers.
+      if (providerLabel) choices.push({ label: "⬅️ Back to providers", value: "/model" });
+      if (active) choices.push({ label: "↩️ Gateway default", value: "/model reset" });
+      const truncated = models.length - offered.length;
+      return {
+        text: [heading, truncated > 0 ? `Pick one — ${truncated} more available with /model <id>.` : "Pick one:"].join("\n"),
+        choices,
+      };
+    }
+
+    const list = models
+      .map((model, index) => {
+        const group = model.group ? ` (${model.group})` : "";
+        return `${index + 1}. ${model.label ?? model.id}${group}${model.id === active ? "  ← current" : ""}`;
+      })
+      .join("\n");
+    return {
+      text: [
+        heading,
+        "",
+        list,
+        "",
+        "Switch with /model <number> or /model <id>, /model provider <name> to filter, /model reset for the default.",
+      ].join("\n"),
+    };
   }
 
   /* ── In-band tool approval (consent over the chat) ──────────────── */
