@@ -31,8 +31,23 @@ export interface JaitNotification {
   timestamp: string;
 }
 
+/** Extra delivery path for notifications, e.g. a messaging channel. */
+export type NotificationSink = (notification: JaitNotification) => void;
+
 export class NotificationService {
+  private sinks: NotificationSink[] = [];
+
   constructor(private ws: WsControlPlane) {}
+
+  /**
+   * Register an additional delivery path. Used to forward notifications to
+   * messaging channels the user opted in (Settings → Connectors), so alerts
+   * reach a phone that has no Jait client open.
+   */
+  addSink(sink: NotificationSink): () => void {
+    this.sinks.push(sink);
+    return () => { this.sinks = this.sinks.filter((candidate) => candidate !== sink); };
+  }
 
   /**
    * Send a notification to all connected clients.
@@ -49,6 +64,12 @@ export class NotificationService {
       timestamp: payload.timestamp,
       payload,
     });
+
+    // Sinks are best-effort: a broken channel must not swallow the broadcast
+    // that already went out to connected clients.
+    for (const sink of this.sinks) {
+      try { sink(payload); } catch { /* delivery is fire-and-forget */ }
+    }
   }
 
   /** Shorthand for info-level notifications */
