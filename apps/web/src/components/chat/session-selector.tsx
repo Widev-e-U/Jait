@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
-import {
-  getSessionContextMenuHeight,
-  SESSION_MOVE_SEARCH_THRESHOLD,
-  SessionContextMenu,
-} from '@/components/chat/session-context-menu'
+import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -213,8 +209,6 @@ export function SessionSelector({
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
       showMoveSection: Boolean(onMoveSession),
-      projectCount: projects.length,
-      showSearch: Boolean(onSearchProjects) || projects.length > SESSION_MOVE_SEARCH_THRESHOLD,
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
       showPersonalTarget: projectId !== null,
       showArchive: Boolean(onArchiveSession),

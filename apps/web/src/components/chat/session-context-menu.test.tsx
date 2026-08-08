@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuHeight, SessionContextMenu } from './session-context-menu'
+import {
+  getSessionContextMenuHeight,
+  getSessionMoveSubmenuPosition,
+  SessionContextMenu,
+  SessionMoveSubmenu,
+} from './session-context-menu'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
 function createProject(id: string, title: string): ProjectRecord {
@@ -17,6 +22,8 @@ function createProject(id: string, title: string): ProjectRecord {
   }
 }
 
+const projects = [createProject('project-1', 'Jait'), createProject('project-2', 'Mobile App')]
+
 function renderMenu(props: Partial<Parameters<typeof SessionContextMenu>[0]> = {}) {
   return renderToStaticMarkup(
     <SessionContextMenu
@@ -24,7 +31,7 @@ function renderMenu(props: Partial<Parameters<typeof SessionContextMenu>[0]> = {
       sessionProjectId={null}
       left={10}
       top={10}
-      projects={[createProject('project-1', 'Jait'), createProject('project-2', 'Mobile App')]}
+      projects={projects}
       onMoveSession={() => {}}
       onArchiveSession={() => {}}
       onClose={() => {}}
@@ -33,13 +40,28 @@ function renderMenu(props: Partial<Parameters<typeof SessionContextMenu>[0]> = {
   )
 }
 
+function renderSubmenu(props: Partial<Parameters<typeof SessionMoveSubmenu>[0]> = {}) {
+  return renderToStaticMarkup(
+    <SessionMoveSubmenu
+      left={10}
+      top={10}
+      sessionProjectId={null}
+      projects={projects}
+      onSelectProject={() => {}}
+      {...props}
+    />,
+  )
+}
+
 describe('SessionContextMenu', () => {
-  it('offers every project as a move target alongside archiving', () => {
+  it('keeps the project list behind a submenu parent instead of listing it inline', () => {
     const markup = renderMenu()
 
     expect(markup).toContain('Move to project')
-    expect(markup).toContain('Jait')
-    expect(markup).toContain('Mobile App')
+    expect(markup).toContain('aria-haspopup="menu"')
+    expect(markup).toContain('aria-expanded="false"')
+    // The projects themselves only show up once the submenu opens.
+    expect(markup).not.toContain('Mobile App')
     expect(markup).toContain('Archive chat')
   })
 
@@ -47,23 +69,17 @@ describe('SessionContextMenu', () => {
     expect(renderMenu()).not.toContain('Move to personal chats')
   })
 
-  it('offers the personal chats to a project chat and marks its current project', () => {
-    const markup = renderMenu({ sessionProjectId: 'project-1' })
-
-    expect(markup).toContain('Move to personal chats')
-    expect(markup).toContain('current')
-    // The chat's own project must not be a clickable target.
-    expect(markup).toContain('disabled=""')
+  it('offers the personal chats to a project chat', () => {
+    expect(renderMenu({ sessionProjectId: 'project-1' })).toContain('Move to personal chats')
   })
 
   it('blocks moving while the chat is still responding', () => {
     const markup = renderMenu({ sessionProjectId: 'project-1', isStreaming: true })
 
     expect(markup).toContain('Not while this chat is responding.')
-    // Archiving stays available — only the move targets are disabled.
     expect(markup).toContain('Archive chat')
-    const disabledCount = (markup.match(/disabled=""/g) ?? []).length
-    expect(disabledCount).toBe(3) // two projects + personal chats
+    // The submenu parent and the personal-chats row, but never archiving.
+    expect((markup.match(/disabled=""/g) ?? []).length).toBe(2)
   })
 
   it('renders without the move section when no move handler is wired', () => {
@@ -72,40 +88,75 @@ describe('SessionContextMenu', () => {
     expect(markup).not.toContain('Move to project')
     expect(markup).toContain('Archive chat')
   })
+})
 
-  it('flags move targets whose node is offline', () => {
-    const markup = renderMenu({ offlineProjectIds: new Set(['project-2']) })
+describe('SessionMoveSubmenu', () => {
+  it('lists every project as a target', () => {
+    const markup = renderSubmenu()
 
-    expect(markup).toContain('Node offline')
+    expect(markup).toContain('Jait')
+    expect(markup).toContain('Mobile App')
+  })
+
+  it('marks the chat\'s own project as the current one and blocks it', () => {
+    const markup = renderSubmenu({ sessionProjectId: 'project-1' })
+
+    expect(markup).toContain('current')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('flags targets whose node is offline', () => {
+    expect(renderSubmenu({ offlineProjectIds: new Set(['project-2']) })).toContain('Node offline')
   })
 
   it('shows a project search once a lookup is available', () => {
-    expect(renderMenu()).not.toContain('Search projects')
-    expect(renderMenu({ onSearchProjects: async () => [] })).toContain('Search projects')
+    expect(renderSubmenu()).not.toContain('Search projects')
+    expect(renderSubmenu({ onSearchProjects: async () => [] })).toContain('Search projects')
+  })
+
+  it('says so when there is nothing to move into', () => {
+    expect(renderSubmenu({ projects: [] })).toContain('No projects yet.')
+  })
+})
+
+describe('getSessionMoveSubmenuPosition', () => {
+  const viewport = { width: 1000, height: 800 }
+  const submenu = { width: 256, height: 240 }
+
+  it('opens to the right of its parent row', () => {
+    expect(getSessionMoveSubmenuPosition({ left: 100, right: 356, top: 200 }, viewport, submenu))
+      .toEqual({ left: 356, top: 200 })
+  })
+
+  it('flips to the left when the right edge has no room', () => {
+    expect(getSessionMoveSubmenuPosition({ left: 700, right: 956, top: 200 }, viewport, submenu))
+      .toEqual({ left: 444, top: 200 })
+  })
+
+  it('lifts the submenu so its bottom stays on screen', () => {
+    expect(getSessionMoveSubmenuPosition({ left: 100, right: 356, top: 760 }, viewport, submenu).top)
+      .toBe(552)
   })
 })
 
 describe('getSessionContextMenuHeight', () => {
   const base = {
     showMoveSection: true,
-    projectCount: 2,
-    showSearch: false,
     showStreamingNote: false,
     showPersonalTarget: false,
     showArchive: true,
   }
 
-  it('grows with each rendered section', () => {
+  it('grows with each rendered row', () => {
     const plain = getSessionContextMenuHeight(base)
 
-    expect(getSessionContextMenuHeight({ ...base, showSearch: true })).toBeGreaterThan(plain)
     expect(getSessionContextMenuHeight({ ...base, showPersonalTarget: true })).toBeGreaterThan(plain)
-    expect(getSessionContextMenuHeight({ ...base, projectCount: 5 })).toBeGreaterThan(plain)
+    expect(getSessionContextMenuHeight({ ...base, showStreamingNote: true })).toBeGreaterThan(plain)
   })
 
-  it('stops growing once the project list starts scrolling', () => {
-    expect(getSessionContextMenuHeight({ ...base, projectCount: 50 }))
-      .toBe(getSessionContextMenuHeight({ ...base, projectCount: 6 }))
+  it('stays compact now that the projects live in a submenu', () => {
+    // Parent row + divider + archive row + padding.
+    expect(getSessionContextMenuHeight(base)).toBe(77)
   })
 
   it('falls back to the archive-only height without a move section', () => {
