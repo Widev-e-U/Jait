@@ -204,7 +204,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.projectService, deps.ws, deps.userService);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.projectService, deps.ws, deps.userService, deps.providerRegistry);
   }
   if (deps.projectService && deps.sessionService) {
     registerProjectEntityRoutes(app, config, deps.projectService, deps.sessionService, deps.projectState, {

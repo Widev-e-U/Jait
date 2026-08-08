@@ -22,6 +22,30 @@ import type { WsControlPlane } from "../ws.js";
 import type { WsEventType } from "@jait/shared/types";
 import type { UserService } from "../services/users.js";
 import { generateTitleViaApi, normalizeGeneratedThreadTitle } from "../services/thread-title.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import { projectSupportsProvider } from "../services/session-provider-availability.js";
+
+function readSessionChatProvider(metadata: string | null): string | null {
+  if (!metadata) return null;
+  try {
+    const parsed = JSON.parse(metadata) as Record<string, unknown>;
+    const chat = parsed["chat"];
+    if (!chat || typeof chat !== "object" || Array.isArray(chat)) return null;
+    const provider = (chat as Record<string, unknown>)["provider"];
+    return typeof provider === "string" && provider.trim() ? provider : null;
+  } catch {
+    return null;
+  }
+}
+
+function readChatModels(value: unknown): Record<string, string | null> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string | null] => (
+      typeof entry[1] === "string" || entry[1] === null
+    )),
+  );
+}
 
 export function registerSessionRoutes(
   app: FastifyInstance,
@@ -33,6 +57,7 @@ export function registerSessionRoutes(
   projectService?: ProjectService,
   ws?: WsControlPlane,
   userService?: UserService,
+  providerRegistry?: ProviderRegistry,
 ) {
   /** Broadcast a chat/session event over WS to the owning user's other clients */
   const broadcastChatEvent = (
@@ -306,6 +331,46 @@ export function registerSessionRoutes(
     if (fromProjectId === targetProjectId) {
       // Already where it should be — report success without touching anything.
       return { ok: true, moved: false, session, fromProjectId, toProjectId: targetProjectId };
+    }
+
+    const storedState = sessionState?.get(id, ["chat.provider", "chat.cliModels"]) ?? {};
+    const stateProvider = storedState["chat.provider"];
+    const chatProvider = typeof stateProvider === "string" && stateProvider.trim()
+      ? stateProvider
+      : readSessionChatProvider(session.metadata);
+    const shouldFallbackToJait = Boolean(
+      targetProject
+      && chatProvider
+      && !projectSupportsProvider({
+        providerId: chatProvider,
+        projectNodeId: targetProject.nodeId,
+        userId: authUser.id,
+        providerRegistry,
+        ws,
+      }),
+    );
+
+    if (shouldFallbackToJait) {
+      const chatModels = readChatModels(storedState["chat.cliModels"]);
+      const storedJaitModel = chatModels["jait"];
+      const selectedJaitModel = typeof storedJaitModel === "string" && storedJaitModel.trim()
+        ? storedJaitModel
+        : userService?.getSettings(authUser.id).selectedModel?.trim() || null;
+
+      sessionState?.set(id, {
+        "chat.provider": "jait",
+        "chat.cliModels": { ...chatModels, jait: selectedJaitModel },
+      });
+      sessionService.updateChatSelection(id, {
+        provider: "jait",
+        model: selectedJaitModel,
+      }, authUser.id);
+      ws?.broadcast(id, {
+        type: "ui.state-sync",
+        sessionId: id,
+        timestamp: new Date().toISOString(),
+        payload: { key: "chat.provider", value: "jait" },
+      });
     }
 
     const updated = sessionService.moveToProject(
