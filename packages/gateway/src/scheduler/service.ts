@@ -45,6 +45,15 @@ interface SchedulerOptions {
 const MINUTE_MS = 60_000;
 
 /**
+ * How long a *failed* one-off stays in the list before it is cleaned away.
+ * Long enough that "did my 05:00 reminder go out?" is answerable the same day.
+ */
+const ONE_SHOT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** How often the sweep runs. The work is cheap, but not once-a-minute cheap. */
+const PURGE_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
  * Match a single cron field against a value.
  * Supports: "*" (any), exact number, comma lists, ranges, and step syntax.
  */
@@ -257,6 +266,8 @@ function mapJob(row: typeof scheduledJobs.$inferSelect): ScheduledJobRecord {
 export class SchedulerService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
+  /** Epoch millis of the last cleanup sweep. `0` → sweep on the first tick. */
+  private lastPurgeAt = 0;
 
   constructor(private options: SchedulerOptions) {}
 
@@ -360,19 +371,53 @@ export class SchedulerService {
   }
 
   /**
-   * Disarms a one-shot job once the schedule has fired it.
+   * What becomes of a one-shot job the schedule has just fired.
    *
-   * Also applied when the run failed: the cron expression behind "tomorrow at
-   * 05:00" repeats yearly, so leaving a failed one-off armed means it goes off
-   * again at a time nobody asked for. The failure is in the run history, which
-   * is the honest place for it.
-   *
-   * Manual triggers are exempt — running a reminder to see what it does must
-   * not silently cancel it.
+   * - `"delete"` — it did its job. Nothing is left to look at, and a spent
+   *   reminder in the job list is clutter the user has to mentally filter.
+   * - `"disarm"` — it failed. The cron behind "tomorrow at 05:00" repeats
+   *   yearly, so it must not stay armed; but deleting it would hide the failure
+   *   at the moment it matters most, so it lingers until {@link purgeSpentOneShots}
+   *   collects it.
+   * - `"keep"` — recurring, or a manual run. Trying a reminder to see what it
+   *   does must never cancel it.
    */
-  private oneShotPatch(job: ScheduledJobRecord, triggeredBy: SchedulerRunTrigger): { enabled?: number } {
-    if (triggeredBy !== "schedule" || !isOneShotJob(job.input)) return {};
-    return { enabled: 0 };
+  private oneShotOutcome(
+    job: ScheduledJobRecord,
+    triggeredBy: SchedulerRunTrigger,
+    succeeded: boolean,
+  ): "delete" | "disarm" | "keep" {
+    if (triggeredBy !== "schedule" || !isOneShotJob(job.input)) return "keep";
+    return succeeded ? "delete" : "disarm";
+  }
+
+  /**
+   * Delete a job and the run history that belongs to it.
+   *
+   * Runs are keyed by job id with no foreign key behind them, so dropping the
+   * job alone would leave rows nothing can ever join back to a name.
+   */
+  private forget(id: string): void {
+    this.options.db.delete(scheduledJobRuns).where(eq(scheduledJobRuns.jobId, id)).run();
+    this.options.db.delete(scheduledJobs).where(eq(scheduledJobs.id, id)).run();
+  }
+
+  /**
+   * Collect one-shots that fired, failed, and have since been read.
+   *
+   * The retention window exists so "did my 05:00 reminder go out?" is still
+   * answerable the same day. Successful ones never get here — they are deleted
+   * the moment they deliver.
+   */
+  purgeSpentOneShots(now = new Date(), retentionMs = ONE_SHOT_RETENTION_MS): number {
+    const cutoff = now.getTime() - retentionMs;
+    const spent = this.list().filter((job) => {
+      if (job.enabled || !isOneShotJob(job.input) || !job.lastRunAt) return false;
+      const ranAt = new Date(job.lastRunAt).getTime();
+      return Number.isFinite(ranAt) && ranAt <= cutoff;
+    });
+    for (const job of spent) this.forget(job.id);
+    return spent.length;
   }
 
   async trigger(
@@ -412,7 +457,8 @@ export class SchedulerService {
       this.options.db.update(scheduledJobs).set({
         lastRunAt: startedAt,
         updatedAt: completedAt,
-        ...this.oneShotPatch(job, triggeredBy),
+        // A throw is a failure, so this never deletes — the job stays visible.
+        ...(this.oneShotOutcome(job, triggeredBy, false) === "disarm" ? { enabled: 0 } : {}),
       }).where(eq(scheduledJobs.id, id)).run();
 
       throw err;
@@ -426,11 +472,18 @@ export class SchedulerService {
       completedAt,
     }).where(eq(scheduledJobRuns.id, actionId)).run();
 
-    this.options.db.update(scheduledJobs).set({
-      lastRunAt: startedAt,
-      updatedAt: completedAt,
-      ...this.oneShotPatch(job, triggeredBy),
-    }).where(eq(scheduledJobs.id, id)).run();
+    const outcome = this.oneShotOutcome(job, triggeredBy, result.ok);
+    if (outcome === "delete") {
+      // Written and immediately dropped: the run row exists so the failure path
+      // above can share this code, and the delivered message is the receipt.
+      this.forget(id);
+    } else {
+      this.options.db.update(scheduledJobs).set({
+        lastRunAt: startedAt,
+        updatedAt: completedAt,
+        ...(outcome === "disarm" ? { enabled: 0 } : {}),
+      }).where(eq(scheduledJobs.id, id)).run();
+    }
 
     const payload = { jobId: id, actionId, result };
     this.options.onExecuted?.(payload);
@@ -451,8 +504,28 @@ export class SchedulerService {
           }
         }
       }
+      this.purgeIfDue(now);
     } finally {
       this.ticking = false;
+    }
+  }
+
+  /**
+   * Sweep spent one-shots, at most hourly.
+   *
+   * Deliberately part of the tick rather than a seeded cron job: a cleanup the
+   * user can disable is a cleanup that eventually stops running, and the job
+   * list would fill up with exactly the entries it was meant to remove.
+   */
+  private purgeIfDue(now: Date): void {
+    if (now.getTime() - this.lastPurgeAt < PURGE_INTERVAL_MS) return;
+    this.lastPurgeAt = now.getTime();
+    try {
+      const removed = this.purgeSpentOneShots(now);
+      if (removed > 0) console.log(`Scheduler: cleaned up ${removed} spent one-off job(s)`);
+    } catch (err) {
+      // Housekeeping must never take the scheduler down with it.
+      console.error("Scheduler cleanup failed:", err);
     }
   }
 }

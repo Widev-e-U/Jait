@@ -99,7 +99,7 @@ const CHANNEL_SESSION = {
 };
 
 describe("a reminder from asking to arriving", () => {
-  it("delivers the message at the minute the user named, then disarms", async () => {
+  it("delivers at the minute the user named, then clears itself away", async () => {
     const { registry, scheduler, connector } = await harness(NOW);
 
     const scheduled = await registry.execute(
@@ -108,6 +108,7 @@ describe("a reminder from asking to arriving", () => {
       CHANNEL_SESSION,
     );
     expect(scheduled.ok).toBe(true);
+    expect(scheduler.list()).toHaveLength(1);
 
     // 04:59 Vienna the next morning — one minute early, nothing yet.
     await scheduler.tick(new Date("2026-08-09T02:59:00Z"));
@@ -117,6 +118,9 @@ describe("a reminder from asking to arriving", () => {
     await scheduler.tick(new Date("2026-08-09T03:00:00Z"));
     expect(connector.sent.map((m) => m.text)).toEqual(["Anlage prüfen"]);
     expect(connector.sent[0]!.conversationId).toBe("4242");
+
+    // Delivered, so it is gone — not left sitting in the list as "done".
+    expect(scheduler.list()).toHaveLength(0);
 
     // A year later the same cron minute comes round again — and stays quiet.
     await scheduler.tick(new Date("2027-08-09T03:00:00Z"));
@@ -153,7 +157,7 @@ describe("a reminder from asking to arriving", () => {
     expect(connector.sent).toHaveLength(2);
   });
 
-  it("records the failure and disarms when the chat cannot be reached", async () => {
+  it("keeps a failed reminder visible instead of vanishing with it", async () => {
     const { registry, scheduler, manager, connector } = await harness(NOW);
     await registry.execute("channel.remind", { at: "2026-08-09T05:00", text: "x" }, CHANNEL_SESSION);
 
@@ -164,6 +168,11 @@ describe("a reminder from asking to arriving", () => {
     const job = scheduler.list()[0]!;
     expect(job.enabled).toBe(false);
     expect(scheduler.listRuns(job.id)[0]).toMatchObject({ status: "failed" });
+
+    // Still there the next morning; collected once it is a day old.
+    expect(scheduler.purgeSpentOneShots(new Date("2026-08-09T09:00:00Z"))).toBe(0);
+    expect(scheduler.purgeSpentOneShots(new Date("2026-08-10T09:00:00Z"))).toBe(1);
+    expect(scheduler.list()).toHaveLength(0);
   });
 
   it("addresses the chat it was asked in, not the last one to speak", async () => {

@@ -44,11 +44,21 @@ usually doesn't, and answers "I don't have that context" instead.
 - `cron: "0 7 * * 1-5"` — a recurring routine, left armed.
 - `text` for a fixed message, `prompt` to work the answer out at delivery time.
 
-Cron cannot express a year, so a one-off would otherwise come back annually. The
-scheduler disarms `once` jobs after the schedule fires them — including after a
-failed delivery, because a reminder that re-fires at an unpredictable future
-moment is worse than a recorded failure. A *manual* trigger does not disarm:
-trying a reminder must not cancel it.
+Cron cannot express a year, so a one-off would otherwise come back annually.
+What happens to it after it fires depends on how it went:
+
+| Outcome | What the scheduler does | Why |
+| --- | --- | --- |
+| Delivered | Deletes the job and its runs immediately | A spent reminder in the job list is clutter the user has to filter out |
+| Failed | Disarms it, then deletes after 24h | Deleting on the spot would hide the failure exactly when it matters |
+| Manually triggered | Nothing | Trying a reminder must not cancel it |
+
+The 24-hour sweep (`purgeSpentOneShots`) runs from the scheduler's own tick, at
+most hourly — not as a seeded cron job. A cleanup the user can disable is a
+cleanup that eventually stops running, and the job list would then fill with
+exactly the entries it exists to remove. Run rows are deleted with their job:
+they are keyed by job id with no foreign key behind them, so an orphan is a row
+nothing can ever join back to a name.
 
 Times are read in the channel's zone (`config.timeZone`, else the host's), never
 in UTC. The zone, the current local time and the conversation id are injected
