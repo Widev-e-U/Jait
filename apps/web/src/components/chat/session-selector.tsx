@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
+import {
+  getSessionContextMenuHeight,
+  SESSION_MOVE_SEARCH_THRESHOLD,
+  SessionContextMenu,
+} from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -33,6 +38,10 @@ interface SessionSelectorProps {
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onArchiveSession?: (sessionId: string) => void
+  /** Moves a chat into a project, or back to the personal chats when null. */
+  onMoveSession?: (sessionId: string, projectId: string | null) => void
+  /** Finds move targets beyond the projects the sidebar has paged in. */
+  onSearchProjects?: (query: string) => Promise<ProjectRecord[]>
   onNewPersonalSession?: () => void
   onCreateProject: () => void
   onRemoveProject: (projectId: string) => void
@@ -50,14 +59,22 @@ interface SessionSelectorProps {
 }
 
 const RECENT_SESSIONS_LIMIT = 5
-const SESSION_CONTEXT_MENU_WIDTH = 176
+const SESSION_CONTEXT_MENU_WIDTH = 256
 const SESSION_CONTEXT_MENU_HEIGHT = 40
 const SESSION_CONTEXT_MENU_MARGIN = 8
+/** Touch devices have no right-click — a press this long opens the menu instead. */
+const SESSION_LONG_PRESS_MS = 500
 
-export function getSessionContextMenuPosition(x: number, y: number, viewportWidth: number, viewportHeight: number) {
+export function getSessionContextMenuPosition(
+  x: number,
+  y: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  menuHeight: number = SESSION_CONTEXT_MENU_HEIGHT,
+) {
   return {
     left: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(x, viewportWidth - SESSION_CONTEXT_MENU_WIDTH - SESSION_CONTEXT_MENU_MARGIN)),
-    top: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(y, viewportHeight - SESSION_CONTEXT_MENU_HEIGHT - SESSION_CONTEXT_MENU_MARGIN)),
+    top: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(y, viewportHeight - menuHeight - SESSION_CONTEXT_MENU_MARGIN)),
   }
 }
 
@@ -121,6 +138,8 @@ export function SessionSelector({
   onSelectProjectSession,
   onSelectPersonalSession,
   onArchiveSession,
+  onMoveSession,
+  onSearchProjects,
   onNewPersonalSession,
   onCreateProject,
   onRemoveProject,
@@ -141,7 +160,12 @@ export function SessionSelector({
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
-  const [sessionContextMenu, setSessionContextMenu] = useState<{ sessionId: string; left: number; top: number } | null>(null)
+  const [sessionContextMenu, setSessionContextMenu] = useState<
+    { sessionId: string; projectId: string | null; left: number; top: number } | null
+  >(null)
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressFiredRef = useRef(false)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
   const displayedProjects = normalizedSearchQuery && onSearch
     ? searchResults?.projects ?? []
@@ -177,6 +201,73 @@ export function SessionSelector({
       return terms.some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     })
   }, [displayedProjects, nodes, normalizedSearchQuery, onSearch, repositories])
+
+  const offlineProjectIds = useMemo(
+    () => new Set(projects.filter((project) => isNodeOffline(project.nodeId, onlineNodeIds)).map((project) => project.id)),
+    [onlineNodeIds, projects],
+  )
+
+  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession)
+
+  const openSessionContextMenu = (x: number, y: number, sessionId: string, projectId: string | null) => {
+    if (!hasSessionContextMenu) return
+    const menuHeight = getSessionContextMenuHeight({
+      showMoveSection: Boolean(onMoveSession),
+      projectCount: projects.length,
+      showSearch: Boolean(onSearchProjects) || projects.length > SESSION_MOVE_SEARCH_THRESHOLD,
+      showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
+      showPersonalTarget: projectId !== null,
+      showArchive: Boolean(onArchiveSession),
+    })
+    setSessionContextMenu({
+      sessionId,
+      projectId,
+      ...getSessionContextMenuPosition(x, y, window.innerWidth, window.innerHeight, menuHeight),
+    })
+  }
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressOriginRef.current = null
+  }
+
+  useEffect(() => cancelLongPress, [])
+
+  /**
+   * Touch equivalent of the right-click menu. The press must stay roughly in
+   * place — a moving finger is a scroll, not a long press.
+   */
+  const longPressHandlers = (sessionId: string, projectId: string | null) => ({
+    onPointerDown: (event: ReactPointerEvent) => {
+      if (event.pointerType !== 'touch' || !hasSessionContextMenu) return
+      const { clientX, clientY } = event
+      cancelLongPress()
+      longPressFiredRef.current = false
+      longPressOriginRef.current = { x: clientX, y: clientY }
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressFiredRef.current = true
+        openSessionContextMenu(clientX, clientY, sessionId, projectId)
+      }, SESSION_LONG_PRESS_MS)
+    },
+    onPointerMove: (event: ReactPointerEvent) => {
+      const origin = longPressOriginRef.current
+      if (!origin) return
+      if (Math.abs(event.clientX - origin.x) > 10 || Math.abs(event.clientY - origin.y) > 10) cancelLongPress()
+    },
+    onPointerUp: cancelLongPress,
+    onPointerLeave: cancelLongPress,
+    onPointerCancel: cancelLongPress,
+  })
+
+  /** True when the tap that just ended was consumed by the long-press menu. */
+  const consumedByLongPress = () => {
+    if (!longPressFiredRef.current) return false
+    longPressFiredRef.current = false
+    return true
+  }
 
   const filteredPersonalSessions = useMemo(() => {
     if (!normalizedSearchQuery || onSearch) return displayedPersonalSessions
@@ -397,16 +488,17 @@ export function SessionSelector({
                                 isActiveSession ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                               }`}
                               onClick={() => {
+                                if (consumedByLongPress()) return
                                 onDismiss?.()
                                 if (!isActiveSession) onSelectProjectSession?.(project.id, session.id)
                               }}
                               onContextMenu={(event) => {
-                                if (!onArchiveSession) return
+                                if (!hasSessionContextMenu) return
                                 event.preventDefault()
                                 event.stopPropagation()
-                                const position = getSessionContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
-                                setSessionContextMenu({ sessionId: session.id, ...position })
+                                openSessionContextMenu(event.clientX, event.clientY, session.id, project.id)
                               }}
+                              {...longPressHandlers(session.id, project.id)}
                             >
                               {isStreaming ? (
                                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
@@ -510,16 +602,17 @@ export function SessionSelector({
                         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                       }`}
                       onClick={() => {
+                        if (consumedByLongPress()) return
                         onDismiss?.()
                         if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id)
                       }}
                       onContextMenu={(event) => {
-                        if (!onArchiveSession) return
+                        if (!hasSessionContextMenu) return
                         event.preventDefault()
                         event.stopPropagation()
-                        const position = getSessionContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
-                        setSessionContextMenu({ sessionId: session.id, ...position })
+                        openSessionContextMenu(event.clientX, event.clientY, session.id, null)
                       }}
+                      {...longPressHandlers(session.id, null)}
                     >
                       {isStreaming ? (
                         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
@@ -543,36 +636,20 @@ export function SessionSelector({
             </ScrollArea>
           </div>
 
-          {sessionContextMenu && onArchiveSession && (
-            <div
-              className="fixed inset-0 z-50"
-              onPointerDown={() => setSessionContextMenu(null)}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                setSessionContextMenu(null)
-              }}
-            >
-              <div
-                role="menu"
-                aria-label="Chat actions"
-                className="fixed w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-                style={{ left: sessionContextMenu.left, top: sessionContextMenu.top }}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
-                  onClick={() => {
-                    onArchiveSession(sessionContextMenu.sessionId)
-                    setSessionContextMenu(null)
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span>Archive chat</span>
-                </button>
-              </div>
-            </div>
+          {sessionContextMenu && (
+            <SessionContextMenu
+              sessionId={sessionContextMenu.sessionId}
+              sessionProjectId={sessionContextMenu.projectId}
+              left={sessionContextMenu.left}
+              top={sessionContextMenu.top}
+              projects={projects}
+              offlineProjectIds={offlineProjectIds}
+              isStreaming={streamingSessionIds?.has(sessionContextMenu.sessionId) ?? false}
+              onMoveSession={onMoveSession}
+              onArchiveSession={onArchiveSession}
+              onSearchProjects={onSearchProjects}
+              onClose={() => setSessionContextMenu(null)}
+            />
           )}
         </>
       )}

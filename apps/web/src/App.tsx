@@ -486,6 +486,7 @@ function App() {
     switchProject,
     switchSession,
     archiveSession,
+    moveSession,
     fetchArchivedSessions,
     removeProject,
     clearArchivedProjects,
@@ -497,6 +498,7 @@ function App() {
     loadProject,
     loadSession,
     searchChats,
+    searchProjects,
     searchResults,
     searchLoading,
     hasMoreProjects,
@@ -4215,6 +4217,8 @@ function App() {
                   sidebarRef={sidebarRef}
                   onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
                   onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
+                  onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
+                  onSearchProjects={searchProjects}
                   onBlur={handleSidebarBlur}
                   onChangeDirectory={handleChangeDirectory}
                   onCreateProject={handleCreateProject}
@@ -4542,6 +4546,8 @@ function App() {
                       onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
                       onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSelectPersonalSession(sessionId) }}
                       onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
+                      onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
+                      onSearchProjects={searchProjects}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
