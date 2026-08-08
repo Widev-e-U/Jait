@@ -7,6 +7,7 @@
  *   PATCH  /api/sessions/:id          — update name / metadata
  *   DELETE /api/sessions/:id          — soft-delete
  *   POST   /api/sessions/:id/archive  — archive
+ *   POST   /api/sessions/:id/move     — move into a project (or to personal chats)
  */
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
@@ -36,7 +37,7 @@ export function registerSessionRoutes(
   /** Broadcast a chat/session event over WS to the owning user's other clients */
   const broadcastChatEvent = (
     userId: string,
-    event: "created" | "updated" | "archived" | "deleted",
+    event: "created" | "updated" | "archived" | "deleted" | "moved",
     data: Record<string, unknown>,
   ): void => {
     if (!ws) return;
@@ -268,6 +269,71 @@ export function registerSessionRoutes(
     hooks?.emit("session.end", { sessionId: id });
     broadcastChatEvent(authUser.id, "archived", { projectId: session.projectId ?? null, sessionId: id });
     return sessionService.getById(id, authUser.id);
+  });
+
+  // Move a chat into another project, or out of every project (projectId: null)
+  // back into the user's personal chats.
+  app.post("/api/sessions/:id/move", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const rawProjectId = body["projectId"];
+    if (rawProjectId !== null && typeof rawProjectId !== "string") {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        details: "projectId must be a project id or null",
+      });
+    }
+    const targetProjectId = rawProjectId === null || rawProjectId === "" ? null : rawProjectId;
+
+    const session = sessionService.getById(id, authUser.id);
+    if (!session) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+
+    // A target project must exist and belong to the same user — otherwise a
+    // chat could be filed into someone else's sidebar.
+    let targetProject: ReturnType<NonNullable<typeof projectService>["getById"]> | undefined;
+    if (targetProjectId) {
+      targetProject = projectService?.getById(targetProjectId, authUser.id);
+      if (!targetProject) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
+      }
+    }
+
+    const fromProjectId = session.projectId ?? null;
+    if (fromProjectId === targetProjectId) {
+      // Already where it should be — report success without touching anything.
+      return { ok: true, moved: false, session, fromProjectId, toProjectId: targetProjectId };
+    }
+
+    const updated = sessionService.moveToProject(
+      id,
+      targetProjectId,
+      targetProject?.rootPath ?? null,
+      authUser.id,
+    );
+    if (targetProjectId) projectService?.touch(targetProjectId);
+
+    audit.write({
+      sessionId: id,
+      actionId: uuidv7(),
+      actionType: "session.move",
+      status: "executed",
+      consentMethod: "auto",
+    });
+
+    broadcastChatEvent(authUser.id, "moved", {
+      fromProjectId,
+      toProjectId: targetProjectId,
+      // `projectId` mirrors the other chat.* events so consumers that only
+      // read that field still see where the chat now lives.
+      projectId: targetProjectId,
+      sessionId: id,
+      session: updated,
+    });
+    return { ok: true, moved: true, session: updated, fromProjectId, toProjectId: targetProjectId };
   });
 
   // ─── Self-control tools ────────────────────────────────────────────
