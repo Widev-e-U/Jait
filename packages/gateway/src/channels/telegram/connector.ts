@@ -164,6 +164,9 @@ export function botFatherSetupLink(): string {
 /** Telegram's own cap on a bot's command menu. */
 export const TELEGRAM_MAX_COMMANDS = 100;
 
+/** Telegram clears the typing indicator after ~5s; refresh inside that window. */
+const TYPING_REFRESH_MS = 4_000;
+
 /** Inline-keyboard button captions are truncated by clients past ~64 chars. */
 const TELEGRAM_BUTTON_LABEL_MAX = 64;
 
@@ -431,6 +434,21 @@ export class TelegramConnector implements ChannelConnector {
     }
     const res = await this.api("sendMessage", body, this.abort?.signal);
     if (!res.ok) throw new Error(res.description ?? "Telegram sendMessage failed");
+  }
+
+  /**
+   * Show "typing…" until the returned function is called. Telegram drops the
+   * indicator after about five seconds, so it is refreshed on a shorter beat
+   * for as long as the turn runs.
+   */
+  startTyping(conversationId: string): () => void {
+    const send = () => {
+      void this.api("sendChatAction", { chat_id: conversationId, action: "typing" }, this.abort?.signal)
+        .catch(() => { /* the indicator is decoration; never fail a turn over it */ });
+    };
+    send();
+    const timer = setInterval(send, TYPING_REFRESH_MS);
+    return () => clearInterval(timer);
   }
 
   /**

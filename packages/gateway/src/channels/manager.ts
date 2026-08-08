@@ -722,6 +722,8 @@ export class ChannelManager {
       (config.tools ?? []).filter((t) => this.deps.toolRegistry?.has(t)),
     );
 
+    let stopTyping: (() => void) | undefined;
+
     // Record where this session lives so consent prompts reach the right chat.
     const sessionId = `channel:${key}`;
     this.sessionTargets.set(sessionId, { channelId: msg.channelId, conversationId: msg.conversationId, key });
@@ -736,6 +738,9 @@ export class ChannelManager {
       // Live progress, when the channel can edit messages and it's switched on.
       const wantsProgress = config.progress !== false && ProgressReporter.supportedBy(managed.connector);
       const progress = wantsProgress ? new ProgressReporter(managed.connector, msg.conversationId) : null;
+      // "typing…" for as long as the turn runs — cleared in the finally below,
+      // so a thrown turn cannot leave the indicator (and its timer) running.
+      stopTyping = managed.connector.startTyping?.(msg.conversationId);
 
       const reply = (await this.replyGenerator.generate(history, {
         channelId: msg.channelId,
@@ -768,6 +773,7 @@ export class ChannelManager {
         });
       } catch { /* connector may be down */ }
     } finally {
+      stopTyping?.();
       this.sessionTargets.delete(sessionId);
     }
   }

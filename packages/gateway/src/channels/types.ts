@@ -162,6 +162,12 @@ export interface ChannelConnector {
    */
   setupGuide?(): Promise<ChannelSetupGuide>;
   /**
+   * Show the messenger's "typing" indicator until the returned function is
+   * called. Optional — connectors without one omit it. Implementations own the
+   * repeat cadence, since the indicator expires on most platforms.
+   */
+  startTyping?(conversationId: string): () => void;
+  /**
    * Send a message and return its id, so it can be edited afterwards. Optional:
    * messengers without editable messages omit it and get no live progress.
    */

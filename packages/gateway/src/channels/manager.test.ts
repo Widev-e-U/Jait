@@ -45,6 +45,15 @@ class FakeConnector implements ChannelConnector {
   async stop() { this._status = "stopped"; }
   async send(msg: OutboundMessage) { this.sent.push(msg); }
 
+  /** Typing indicator: how often it was started, and whether it is running. */
+  typingStarts = 0;
+  typingActive = false;
+  startTyping(_conversationId: string) {
+    this.typingStarts += 1;
+    this.typingActive = true;
+    return () => { this.typingActive = false; };
+  }
+
   /** Live progress message: id → current text, in send order. */
   live: { id: string; text: string }[] = [];
   private liveSeq = 0;
@@ -1213,5 +1222,49 @@ describe("progress updates", () => {
     expect(text).toContain("4 earlier steps");
     expect(text).toContain("• step11");
     expect(text).not.toContain("• step3");
+  });
+});
+
+describe("typing indicator", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("runs for the length of the turn and stops afterwards", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { await blocked; return "done"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "hello", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 15));
+    expect(connector.typingActive).toBe(true);
+
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(connector.typingActive).toBe(false);
+    expect(connector.typingStarts).toBe(1);
+  });
+
+  it("stops even when the turn fails", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { throw new Error("model exploded"); } },
+      log: () => {},
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "hello", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(connector.typingActive).toBe(false);
   });
 });
