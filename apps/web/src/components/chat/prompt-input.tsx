@@ -1741,10 +1741,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               aria-label="Copy chat id"
               title={`Copy chat id: ${chatId}`}
-              // The visible box hugs the icon; an invisible ::after ring widens
-              // the tap target on touch screens without making the control look
-              // like a wide grey pill next to the tiny project label.
-              className="pointer-events-auto relative shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-all after:absolute after:-inset-1.5 after:content-[''] hover:text-foreground hover:bg-muted/60 focus-visible:opacity-100 focus-visible:text-foreground group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 max-md:text-muted-foreground/70"
+              // The box hugs the icon exactly — no padding or extra hit ring, so
+              // it doesn't leave dead space beside the tiny project label.
+              className="pointer-events-auto inline-flex shrink-0 items-center justify-center rounded p-0 text-muted-foreground/40 opacity-0 transition-all hover:text-foreground hover:bg-muted/60 focus-visible:opacity-100 focus-visible:text-foreground group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 max-md:text-muted-foreground/70"
               onClick={async (e) => {
                 e.preventDefault()
                 try {
@@ -1756,7 +1755,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 }
               }}
             >
-              {chatIdCopied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+              {chatIdCopied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
             </button>
           )}
         </div>
