@@ -39,6 +39,21 @@ const windowsAccount: ProviderInfo = {
 const allProviders = [jaitProvider, gatewayAccount, windowsAccount]
 
 describe('scopeProviders', () => {
+  it('keeps providers advertised by the selected repository node', () => {
+    const { entries } = scopeProviders({
+      providers: [jaitProvider, gatewayAccount],
+      scopeNodeId: 'windows-node',
+      connectedNodeIds: ['windows-node'],
+      availableProviderIds: ['jait', gatewayAccount.id, 'codex'],
+    })
+
+    expect(entries.map((entry) => entry.id)).toEqual([
+      'jait',
+      gatewayAccount.id,
+      'codex',
+    ])
+  })
+
   it('lists only gateway-hosted providers when working on the gateway', () => {
     const { entries, scopeNodeOffline } = scopeProviders({
       providers: allProviders,

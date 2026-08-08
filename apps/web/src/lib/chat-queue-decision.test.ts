@@ -88,4 +88,21 @@ describe('chat queue decision helpers', () => {
 
     expect(shouldProcessQueuedMessage(params)).toBe(true)
   })
+
+  it('does not process a held (locked) next message until it is unlocked', () => {
+    const base = {
+      hasInterruptedExit: false,
+      isLoading: false,
+      isLoadingHistory: false,
+      queuedCount: 1,
+      allowQueuedMessageAfterInterruptedExit: false,
+      isProcessing: false,
+      deferToServerDrain: false,
+    }
+
+    // A held next message blocks the queue even in the offline fallback path.
+    expect(shouldProcessQueuedMessage({ ...base, nextItemHeld: true })).toBe(false)
+    // Once unlocked, it processes normally.
+    expect(shouldProcessQueuedMessage({ ...base, nextItemHeld: false })).toBe(true)
+  })
 })

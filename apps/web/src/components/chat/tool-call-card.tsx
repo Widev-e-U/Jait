@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -1905,20 +1905,28 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(false)
   if (!prompt && !allowedTools) return null
 
+  const canToggle = prompt.length > 120
+
   // The delegation prompt is, from the sub-agent's perspective, the message it
-  // received — shown collapsed to a single line so it reads as a lightweight
-  // header for the sub-agent, with a "Show more" toggle to reveal the full text.
+  // received. It is pinned to the top of the sub-agent's inline chat (sticky)
+  // so it always stays in view while you scroll the run's history. Collapsed it
+  // shares one line with the toggle — the text truncates with an ellipsis and
+  // "Show more" sits on the right, matching how the normal chat reads.
   return (
-    <div className="space-y-2 px-3 py-2.5">
+    <div className="sticky top-0 z-10 space-y-2 border-b border-border/50 bg-card/95 px-3 py-2.5 backdrop-blur">
       {prompt && (
-        <div className="text-xs leading-5 text-foreground/90">
-          <span className="mr-1.5 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
-          <span className={cn('whitespace-pre-wrap break-words', !expanded && 'line-clamp-2')}>{prompt}</span>
-          {prompt.length > 120 && (
+        <div className="flex items-center gap-2 text-xs leading-5 text-foreground/90">
+          <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
+          {expanded ? (
+            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{prompt}</span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{prompt}</span>
+          )}
+          {canToggle && (
             <button
               type="button"
               onClick={() => setExpanded(v => !v)}
-              className="mt-1 flex items-center gap-0.5 text-2xs font-medium text-primary hover:underline"
+              className="shrink-0 flex items-center gap-0.5 text-2xs font-medium text-primary hover:underline"
             >
               {expanded ? 'Show less' : 'Show more'}
               <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
@@ -1988,6 +1996,13 @@ function PerformativeBadge({ performative }: { performative?: string }) {
 
 /** Height cap for a sub-agent's inline chat, so it never dominates the parent turn. */
 const SUB_AGENT_MAX_HEIGHT_PX = 500
+
+// Lazy-loading of a sub-agent's run history, mirroring the normal chat: only the
+// most recent items are rendered, and scrolling near the top reveals older ones
+// so the full history is always reachable without mounting a huge DOM at once.
+const SUB_AGENT_LAZY_INITIAL = 24
+const SUB_AGENT_LAZY_PAGE = 12
+const SUB_AGENT_LAZY_THRESHOLD_PX = 160
 
 /**
  * The scroll surface a sub-agent's inline chat lives in: capped at 500px, with
@@ -2066,6 +2081,76 @@ function SubAgentHistoryView({
   // scroll-to-bottom button to come back.
   const { scrollRef, contentRef, isAtBottom, onScroll, scrollToBottom } = useStickToBottom()
 
+  // Lazy window over the run's history, like the normal chat's load-more-on-scroll:
+  // only the trailing items are rendered and scrolling near the top reveals older
+  // ones, so the full history is always readable without mounting a huge DOM.
+  const hasSegments = segments.length > 0
+  const finalContent = content || message
+  const totalItems = hasSegments
+    ? segments.length
+    : nestedCalls.length + (finalContent ? 1 : 0)
+  const [visibleCount, setVisibleCount] = useState(Math.min(SUB_AGENT_LAZY_INITIAL, totalItems || SUB_AGENT_LAZY_INITIAL))
+  // Clamp as the history streams in or changes without resetting an open window.
+  const loadTriggeredRef = useRef(false)
+  useEffect(() => {
+    setVisibleCount(c => Math.min(Math.max(c, SUB_AGENT_LAZY_INITIAL), totalItems))
+  }, [totalItems])
+  // Re-arm the scroll reveal once a reveal has rendered, so the next near-top
+  // scroll can pull in another page.
+  useEffect(() => {
+    loadTriggeredRef.current = false
+  }, [visibleCount])
+  const hiddenCount = Math.max(0, totalItems - visibleCount)
+
+  const revealOlder = useCallback(() => {
+    setVisibleCount(c => Math.min(totalItems, c + SUB_AGENT_LAZY_PAGE))
+  }, [totalItems])
+
+  // Keep the reader anchored when older items are prepended above the viewport:
+  // record the scroll height before a reveal, then add back the growth afterwards
+  // so the content the user is looking at does not jump.
+  const heightBeforeRef = useRef<number | null>(null)
+  const requestOlder = useCallback(() => {
+    heightBeforeRef.current = scrollRef.current?.scrollHeight ?? null
+    revealOlder()
+  }, [revealOlder, scrollRef])
+  useLayoutEffect(() => {
+    const before = heightBeforeRef.current
+    if (before === null) return
+    heightBeforeRef.current = null
+    const el = scrollRef.current
+    if (!el) return
+    const delta = el.scrollHeight - before
+    if (delta > 0) el.scrollTop += delta
+  }, [visibleCount, scrollRef])
+
+  // Combined scroll handler: keep stick-to-bottom behaviour, then reveal older
+  // items when the user scrolls near the top — exactly the normal chat's pattern.
+  // The ref guard lets a single near-top scroll reveal one page, then re-arms
+  // once the reveal has been rendered, so the position can re-anchor cleanly.
+  const handleScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
+    onScroll(e)
+    const el = e.currentTarget
+    if (loadTriggeredRef.current) return
+    if (el.scrollTop <= SUB_AGENT_LAZY_THRESHOLD_PX) {
+      loadTriggeredRef.current = true
+      requestOlder()
+    }
+  }, [onScroll, requestOlder])
+
+  const loadEarlierButton = hiddenCount > 0 ? (
+    <div className="flex justify-center py-1.5">
+      <button
+        type="button"
+        onClick={requestOlder}
+        className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-2xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
+      >
+        <ChevronDown className="h-3 w-3 rotate-180 text-primary" />
+        <span>Load earlier activity</span>
+      </button>
+    </div>
+  ) : null
+
   return (
     <div className="text-xs">
       <div className="flex items-center gap-2 px-3 pt-2.5">
@@ -2081,41 +2166,38 @@ function SubAgentHistoryView({
         scrollRef={scrollRef}
         contentRef={contentRef}
         isAtBottom={isAtBottom}
-        onScroll={onScroll}
+        onScroll={handleScroll}
         scrollToBottom={scrollToBottom}
       >
         <SubAgentMission args={args} />
         <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
-        {segments.length > 0 ? (
+        {hasSegments ? (
           /* Replay of the run in the order it happened — same renderer as a
              normal assistant turn, so tool cards sit where they actually ran. */
-          <div className="px-3 py-1">
-            <AssistantBody segments={segments} toolCalls={nestedCalls} isStreaming={isRunning} compact />
-          </div>
+          <>
+            {loadEarlierButton}
+            <div className="px-3 py-1">
+              <AssistantBody segments={segments.slice(segments.length - visibleCount)} toolCalls={nestedCalls} isStreaming={isRunning} compact />
+            </div>
+          </>
         ) : (
           <>
+            {loadEarlierButton}
             {/* Pre-segments runs (and ACP specialists): no recorded chronology,
                 so the tool calls can only be listed, then the answer. */}
             {nestedCalls.length > 0 && (
               <div className="py-1">
-                {nestedCalls.map((call) => (
+                {nestedCalls.slice(Math.max(0, nestedCalls.length - (visibleCount - (finalContent ? 1 : 0)))).map((call) => (
                   <ToolCallCard key={call.callId} call={call} />
                 ))}
               </div>
             )}
 
             {/* Final output — rendered as markdown, like a normal assistant reply */}
-            {content && (
+            {finalContent && (
               <div className="px-3 py-2.5">
-                <AssistantMarkdown content={content} />
-              </div>
-            )}
-
-            {/* Fallback to message if no content */}
-            {!content && message && (
-              <div className="px-3 py-2">
-                <AssistantMarkdown content={message} />
+                <AssistantMarkdown content={finalContent} />
               </div>
             )}
           </>

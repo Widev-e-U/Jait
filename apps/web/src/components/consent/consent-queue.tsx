@@ -85,10 +85,10 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
     const first = visibleQueue[0]
     const extra = visibleQueue.length - 1
     return (
-      <div className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2 border-t bg-background dark:bg-card ${className}`}>
+      <div className={`flex flex-nowrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2 border-t bg-background dark:bg-card ${className}`}>
         <ToolIcon toolName={first.toolName} />
-        <span className="text-xs font-semibold text-foreground truncate shrink-0 max-w-[40%]">{first.toolName}</span>
-        <span className="text-xs text-muted-foreground truncate flex-1 min-w-[60px]">{first.summary}</span>
+        <span className="text-xs font-semibold text-foreground truncate shrink-0 max-w-[30%]">{first.toolName}</span>
+        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{first.summary}</span>
         {extra > 0 && (
           <span
             title={`${extra} more pending ${extra === 1 ? 'request' : 'requests'}`}

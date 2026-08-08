@@ -341,6 +341,18 @@ export const messages = sqliteTable(
   ],
 );
 
+export const messageContextMetadata = sqliteTable(
+  "message_context_metadata",
+  {
+    messageId: text("message_id")
+      .primaryKey()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    hasMemoryProvenance: integer("has_memory_provenance", { mode: "boolean" })
+      .notNull()
+      .default(false),
+  },
+);
+
 // ─── Session State (per-session key-value UI/app state) ─────────────
 export const sessionState = sqliteTable(
   "session_state",

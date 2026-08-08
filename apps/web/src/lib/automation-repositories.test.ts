@@ -5,6 +5,7 @@ import {
   inferSharedRepositories,
   inferThreadRepositoryName,
   mapDbRepoToAutomationRepository,
+  resolveThreadRepository,
   threadBelongsToRepository,
   type AutomationRepository,
 } from './automation-repositories'
@@ -55,6 +56,29 @@ describe('automation repositories', () => {
       forgeUrl: null,
       source: 'local',
     })
+  })
+
+  it('keeps the selected matching repository when duplicate paths belong to different nodes', () => {
+    const thread = makeThread({ workingDirectory: '/workspace/jait' })
+    const staleRepository: AutomationRepository = {
+      id: 'repo-stale',
+      name: 'Jait',
+      defaultBranch: 'main',
+      localPath: '/workspace/jait',
+      deviceId: 'offline-node',
+      source: 'local',
+    }
+    const selectedRepository: AutomationRepository = {
+      ...staleRepository,
+      id: 'repo-selected',
+      deviceId: 'connected-node',
+    }
+
+    expect(resolveThreadRepository(
+      thread,
+      [staleRepository, selectedRepository],
+      selectedRepository,
+    )).toBe(selectedRepository)
   })
 
   it('infers a shared repository from a worktree thread', () => {
@@ -129,7 +153,8 @@ describe('automation repositories', () => {
           nodeId: 'desktop-1',
           nodeName: 'Desktop (Windows)',
           platform: 'windows',
-          providers: ['codex', 'claude-code'],
+          providers: ['codex-account'],
+          availableProviderTypes: ['codex', 'claude-code'],
         },
       ],
       providersLoaded: true,
@@ -139,7 +164,7 @@ describe('automation repositories', () => {
       locationLabel: 'Desktop (Windows)',
       online: true,
       loading: false,
-      availableProviders: ['codex', 'claude-code'],
+      availableProviders: ['codex-account', 'codex', 'claude-code'],
     })
   })
 

@@ -56,11 +56,18 @@ function createMessageCollector(socket: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
+        const waiter = (msg: unknown) => {
           clearTimeout(timer);
           resolve(msg);
-        });
+        };
+        const timer = setTimeout(() => {
+          // Drop our waiter again — leaving it queued would make it swallow
+          // the next message instead of letting it reach the queue.
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
   };
@@ -267,6 +274,108 @@ describe("project/chat WS broadcast sync", () => {
 
     clientSelf.socket.close();
     clientOther.socket.close();
+  });
+
+  it("broadcasts chat.moved when a chat changes project, and rejects foreign targets", async () => {
+    const user = userService.createUser(`sync-move-user-${Date.now()}`, "password123");
+    const stranger = userService.createUser(`sync-move-stranger-${Date.now()}`, "password123");
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const client = await connectClient(wsPort, token);
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+    const strangerHeaders = await authHeaders(stranger.id, stranger.username, testConfig.jwtSecret);
+
+    const projectRes = await fetch(`${address}/api/projects`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Move Target", rootPath: "/repo/move-target" }),
+    });
+    const project = await projectRes.json() as { id: string };
+    await nextAppEvent(client.collector); // project.created
+
+    const personalRes = await fetch(`${address}/api/sessions`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Movable chat" }),
+    });
+    const personal = await personalRes.json() as { id: string };
+    await nextAppEvent(client.collector); // chat.created
+
+    // Personal → project: the chat adopts the project's root path.
+    const moveIn = await fetch(`${address}/api/sessions/${personal.id}/move`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: project.id }),
+    });
+    expect(moveIn.status).toBe(200);
+    const moveInBody = await moveIn.json() as {
+      moved: boolean;
+      fromProjectId: string | null;
+      session: { projectId: string | null; projectPath: string | null };
+    };
+    expect(moveInBody.moved).toBe(true);
+    expect(moveInBody.fromProjectId).toBeNull();
+    expect(moveInBody.session.projectId).toBe(project.id);
+    expect(moveInBody.session.projectPath).toBe("/repo/move-target");
+
+    const movedEvent = await nextAppEvent(client.collector);
+    expect(movedEvent.type).toBe("chat.moved");
+    expect(movedEvent.payload.sessionId).toBe(personal.id);
+    expect(movedEvent.payload.fromProjectId).toBeNull();
+    expect(movedEvent.payload.toProjectId).toBe(project.id);
+    expect(movedEvent.payload.session.projectId).toBe(project.id);
+
+    // Moving to the same project again is a no-op and broadcasts nothing.
+    const noop = await fetch(`${address}/api/sessions/${personal.id}/move`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: project.id }),
+    });
+    expect(noop.status).toBe(200);
+    expect((await noop.json() as { moved: boolean }).moved).toBe(false);
+    expect(await client.collector.maybeNext(400)).toBeNull();
+
+    // Project → personal chats: both projectId and projectPath are cleared.
+    const moveOut = await fetch(`${address}/api/sessions/${personal.id}/move`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: null }),
+    });
+    expect(moveOut.status).toBe(200);
+    const moveOutBody = await moveOut.json() as {
+      session: { projectId: string | null; projectPath: string | null };
+    };
+    expect(moveOutBody.session.projectId).toBeNull();
+    expect(moveOutBody.session.projectPath).toBeNull();
+
+    const movedOutEvent = await nextAppEvent(client.collector);
+    expect(movedOutEvent.type).toBe("chat.moved");
+    expect(movedOutEvent.payload.fromProjectId).toBe(project.id);
+    expect(movedOutEvent.payload.toProjectId).toBeNull();
+
+    // A project belonging to somebody else is not a valid target.
+    const strangerProjectRes = await fetch(`${address}/api/projects`, {
+      method: "POST",
+      headers: { ...strangerHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Not Yours" }),
+    });
+    const strangerProject = await strangerProjectRes.json() as { id: string };
+    const foreign = await fetch(`${address}/api/sessions/${personal.id}/move`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: strangerProject.id }),
+    });
+    expect(foreign.status).toBe(404);
+    expect(await client.collector.maybeNext(400)).toBeNull();
+
+    // A malformed target is rejected before anything is written.
+    const invalid = await fetch(`${address}/api/sessions/${personal.id}/move`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: 42 }),
+    });
+    expect(invalid.status).toBe(400);
+
+    client.socket.close();
   });
 
   it("broadcasts project.deleted on archive and project.restored on restore", async () => {

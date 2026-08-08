@@ -347,9 +347,10 @@ export function ProviderModelSelector({
     providers: allProviders,
     scopeNodeId,
     connectedNodeIds,
+    availableProviderIds: repoRuntime?.availableProviders,
     scopeNodeLabel: repoRuntime?.locationLabel,
     loading: !providersLoaded || Boolean(repoRuntime?.loading),
-  }), [allProviders, connectedNodeIds, providersLoaded, repoRuntime?.loading, repoRuntime?.locationLabel, scopeNodeId])
+  }), [allProviders, connectedNodeIds, providersLoaded, repoRuntime?.availableProviders, repoRuntime?.loading, repoRuntime?.locationLabel, scopeNodeId])
 
   const providerEntries = useMemo(() => scopedEntries.map((entry) => ({
     value: entry.id,

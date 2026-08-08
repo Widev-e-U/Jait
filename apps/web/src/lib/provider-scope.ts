@@ -38,6 +38,8 @@ export interface ScopeProvidersOptions {
   scopeNodeId?: string | null
   /** Devices currently connected to the gateway. */
   connectedNodeIds?: string[]
+  /** Provider accounts the selected repository node reports as runnable. */
+  availableProviderIds?: ProviderId[]
   /** Display name for the scope device when it is not connected. */
   scopeNodeLabel?: string | null
   /** Provider snapshot has not arrived yet — availability is still unknown. */
@@ -76,26 +78,60 @@ function isGatewayNativeProvider(provider: ProviderInfo): boolean {
   return provider.id === 'jait'
 }
 
+function inferAdvertisedProviderType(providerId: ProviderId): string {
+  const providerTypes = ['claude-code', 'pi-gemini', 'deepagents', 'codex', 'cursor', 'pi']
+  return providerTypes.find((providerType) =>
+    providerId === providerType || providerId.startsWith(`${providerType}-`),
+  ) ?? providerId
+}
+
 export function scopeProviders({
   providers,
   scopeNodeId,
   connectedNodeIds = [],
+  availableProviderIds = [],
   scopeNodeLabel,
   loading = false,
 }: ScopeProvidersOptions): ScopedProviders {
   const source = providers.length > 0 ? providers : [FALLBACK_JAIT]
-  const annotated = source.map(withNode)
+  const baseProviders = source.map(withNode)
 
   const scope = scopeNodeId && scopeNodeId !== GATEWAY_NODE_ID ? scopeNodeId : null
   const scopeNodeOffline = Boolean(scope) && !connectedNodeIds.includes(scope!)
+  const advertisedProviderIds = new Set(availableProviderIds)
+  const resolvedScopeLabel = scope
+    ? baseProviders.find((provider) => provider.nodeId === scope)?.nodeName ?? scopeNodeLabel ?? scope
+    : undefined
+  const knownProviderIds = new Set(baseProviders.map((provider) => provider.id))
+  const advertisedProviders = scope
+    ? availableProviderIds
+        .filter((providerId) => providerId !== 'jait' && !knownProviderIds.has(providerId))
+        .map((providerId): ProviderInfo & { nodeId: string; nodeName: string } => ({
+          id: providerId,
+          providerType: inferAdvertisedProviderType(providerId),
+          name: providerId,
+          description: `Runs on ${resolvedScopeLabel ?? scope}`,
+          available: true,
+          modes: ['full-access', 'supervised'],
+          nodeId: scope,
+          nodeName: resolvedScopeLabel ?? scope,
+        }))
+    : []
+  const annotated = [...baseProviders, ...advertisedProviders]
 
   const visible = scope
-    ? annotated.filter((provider) => provider.nodeId === scope || isGatewayNativeProvider(provider))
+    ? annotated
+        .filter((provider) =>
+          provider.nodeId === scope
+          || isGatewayNativeProvider(provider)
+          || advertisedProviderIds.has(provider.id),
+        )
+        .map((provider) =>
+          advertisedProviderIds.has(provider.id) && !isGatewayNativeProvider(provider)
+            ? { ...provider, nodeId: scope, nodeName: resolvedScopeLabel ?? scope }
+            : provider,
+        )
     : annotated.filter((provider) => provider.nodeId === GATEWAY_NODE_ID)
-
-  const resolvedScopeLabel = scope
-    ? visible.find((provider) => provider.nodeId === scope)?.nodeName ?? scopeNodeLabel ?? scope
-    : undefined
 
   const entries = visible.map((provider): ScopedProviderEntry => {
     if (isGatewayNativeProvider(provider)) {

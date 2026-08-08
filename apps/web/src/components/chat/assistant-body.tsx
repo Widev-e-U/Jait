@@ -11,12 +11,11 @@ import type { MessageSegment } from '@/hooks/useChat'
 /**
  * Assistant messages that are built from a live stream only collapse their
  * tool calls into a wrapper when there are several agent-style tool calls.
- * Non-Jait providers use inline tool groups; the Jait loop keeps them flat.
  */
 const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
 
-export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
-  return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
+export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is ProviderId {
+  return Boolean(provider && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
 }
 
 function ThinkingDots() {

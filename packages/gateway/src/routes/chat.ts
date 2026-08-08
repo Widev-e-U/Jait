@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -20,8 +21,8 @@ import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from 
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
-import { messages as messagesTable } from "../db/schema.js";
-import { eq, sql } from "drizzle-orm";
+import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable } from "../db/schema.js";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -86,6 +87,90 @@ interface LlmContextFlow {
   rounds: LlmContextFlowRound[];
   note?: string;
   memory?: LlmContextFlowMemory;
+}
+
+const MAX_PERSISTED_CONTEXT_FLOW_BYTES = 512_000;
+const CONTEXT_FLOW_TRUNCATION_MARKER = "\n[Stored context truncated]";
+
+function truncateContextText(value: unknown, maxChars: number): unknown {
+  if (typeof value !== "string" || value.length <= maxChars) return value;
+  return value.slice(0, maxChars) + CONTEXT_FLOW_TRUNCATION_MARKER;
+}
+
+function compactContextRound(round: LlmContextFlowRound, severe = false): LlmContextFlowRound {
+  const sourceMessages = round.messages as Array<Record<string, unknown>>;
+  const selectedMessages = severe && sourceMessages.length > 10
+    ? [sourceMessages[0]!, ...sourceMessages.slice(-9)]
+    : sourceMessages;
+  const contentLimit = severe ? 4_000 : 16_000;
+  const messages = selectedMessages.map((message) => {
+    const compact = { ...message };
+    compact["content"] = truncateContextText(compact["content"], contentLimit);
+    compact["thinking"] = truncateContextText(compact["thinking"], contentLimit);
+    if (compact["tool_calls"] && Buffer.byteLength(JSON.stringify(compact["tool_calls"]), "utf8") > contentLimit) {
+      compact["tool_calls"] = [{ truncated: true }];
+    }
+    return compact;
+  }) as LlmContextFlowRound["messages"];
+
+  return {
+    ...round,
+    messages,
+    tools: undefined,
+  };
+}
+
+function compactContextMemory(memory: LlmContextFlowMemory | undefined, severe = false): LlmContextFlowMemory | undefined {
+  if (!memory) return undefined;
+  return {
+    ...memory,
+    query: String(truncateContextText(memory.query, severe ? 2_000 : 8_000)),
+    retrieved: memory.retrieved.map((entry) => ({
+      ...entry,
+      content: String(truncateContextText(entry.content, severe ? 1_000 : 4_000)),
+    })),
+  };
+}
+
+function serializePersistedContextFlow(flow: LlmContextFlow): string {
+  let json = JSON.stringify(flow);
+  if (Buffer.byteLength(json, "utf8") <= MAX_PERSISTED_CONTEXT_FLOW_BYTES) return json;
+
+  const selectedRounds = flow.rounds.length > 3
+    ? [flow.rounds[0]!, ...flow.rounds.slice(-2)]
+    : flow.rounds;
+  const truncatedRounds = flow.rounds.length !== selectedRounds.length ? flow.rounds.length : undefined;
+  const compactFlow = {
+    ...flow,
+    rounds: selectedRounds.map((round) => compactContextRound(round)),
+    memory: compactContextMemory(flow.memory),
+    ...(truncatedRounds ? { truncatedRounds } : {}),
+  };
+  json = JSON.stringify(compactFlow);
+  if (Buffer.byteLength(json, "utf8") <= MAX_PERSISTED_CONTEXT_FLOW_BYTES) return json;
+
+  const severeFlow = {
+    ...compactFlow,
+    rounds: selectedRounds.map((round) => compactContextRound(round, true)),
+    memory: compactContextMemory(flow.memory, true),
+    truncated: true,
+  };
+  json = JSON.stringify(severeFlow);
+  if (Buffer.byteLength(json, "utf8") <= MAX_PERSISTED_CONTEXT_FLOW_BYTES) return json;
+
+  return JSON.stringify({
+    ...severeFlow,
+    rounds: selectedRounds.map((round) => ({
+      ...round,
+      messages: [{ role: "system", content: "[Stored context omitted: size limit exceeded]" }],
+      tools: undefined,
+    })),
+    memory: flow.memory ? {
+      ...flow.memory,
+      query: String(truncateContextText(flow.memory.query, 1_000)),
+      retrieved: [],
+    } : undefined,
+  });
 }
 
 interface LlmContextFlowMemoryEntry {
@@ -708,6 +793,10 @@ interface QueuedChatMessage {
   id?: string;
   content: string;
   queuedAt?: number;
+  /** When true, the queue drain skips this message (and everything after it)
+   *  until the user explicitly unlocks it. The client re-pushes the
+   *  `queued_messages` state on unlock, which re-triggers the drain. */
+  held?: boolean;
   mode?: ChatMode;
   provider?: ProviderId;
   runtimeMode?: RuntimeMode;
@@ -879,6 +968,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
       id,
       content: record.content,
       queuedAt: typeof record.queuedAt === "number" ? record.queuedAt : undefined,
+      held: record.held === true,
       mode: isValidChatMode(record.mode) ? record.mode : undefined,
       provider: typeof record.provider === "string" && record.provider.trim()
         ? record.provider
@@ -1380,7 +1470,10 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
 type PersistedUIMessageRow = Pick<
   typeof messagesTable.$inferSelect,
   "role" | "content" | "toolCalls" | "segments" | "thinking"
-> & { contextFlowHead: string | null };
+> & {
+  contextMetadataId: string | null;
+  hasMemoryProvenance: boolean | null;
+};
 
 function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex: number): UIMsg {
   const content = typeof row.content === "string" ? row.content : String(row.content ?? "");
@@ -1408,26 +1501,31 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
   if (row.thinking) {
     msg.thinking = row.thinking;
   }
-  if (row.contextFlowHead) {
-    // Lightweight badges instead of parsing the (potentially multi-MB)
-    // context_flow JSON. The frontend lazy-loads the full payload on demand
-    // via GET /api/sessions/:sessionId/messages/:index/context-flow.
+  if (row.contextMetadataId) {
+    // Lightweight badges come from the sidecar metadata table. Selecting even
+    // `context_flow IS NOT NULL` makes SQLite materialize giant trace values.
     msg.hasContextFlow = true;
-    msg.hasMemoryProvenance = hasMemoryProvenanceInContextFlow(row.contextFlowHead);
+    if (row.hasMemoryProvenance) msg.hasMemoryProvenance = true;
   }
   return msg;
 }
 
-/**
- * Quick peek at the start of a context_flow JSON string to determine whether
- * it contains injected memories — without parsing the entire (huge) blob.
- * The `memory` object is near the top of the serialized shape, so checking the
- * first ~2 KB is sufficient.
- */
 function hasMemoryProvenanceInContextFlow(json: string): boolean {
-  if (!json || json.length < 20) return false;
-  const head = json.slice(0, 2048);
-  return head.includes('"memory"') && head.includes('"injectedIds"') && head.includes('[');
+  return json.includes('"injectedIds":[') && !json.includes('"injectedIds":[]');
+}
+
+function writeMessageContextMetadata(db: JaitDB, messageId: string, contextFlow?: string): void {
+  if (!contextFlow) return;
+  db.insert(messageContextMetadataTable)
+    .values({
+      messageId,
+      hasMemoryProvenance: hasMemoryProvenanceInContextFlow(contextFlow),
+    })
+    .onConflictDoUpdate({
+      target: messageContextMetadataTable.messageId,
+      set: { hasMemoryProvenance: hasMemoryProvenanceInContextFlow(contextFlow) },
+    })
+    .run();
 }
 
 function persistedMessageWindow(
@@ -1454,9 +1552,11 @@ function persistedMessageWindow(
         toolCalls: messagesTable.toolCalls,
         segments: messagesTable.segments,
         thinking: messagesTable.thinking,
-        contextFlowHead: sql<string | null>`substr(${messagesTable.contextFlow}, 1, 2048)`,
+        contextMetadataId: messageContextMetadataTable.messageId,
+        hasMemoryProvenance: messageContextMetadataTable.hasMemoryProvenance,
       })
       .from(messagesTable)
+      .leftJoin(messageContextMetadataTable, eq(messageContextMetadataTable.messageId, messagesTable.id))
       .where(eq(messagesTable.sessionId, sessionId))
       .orderBy(messagesTable.createdAt, messagesTable.id)
       .limit(end - start)
@@ -1641,8 +1741,8 @@ Guidelines:
 const MAX_TOOL_ROUNDS_CEILING = 200;
 /**
  * Resolve the max autonomous tool-calling rounds for a turn.
- * pi-style: when no explicit value is configured, returns `0` = NO cap — the
- * model decides when it is done (guarded by the loop detectors). A per-user
+ * When no explicit value is configured, returns `0` so the agent loop uses
+ * its 64-round safety backstop. A per-user
  * `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway config default.
  * Positive values are clamped to a sane ceiling to avoid runaway loops.
  */
@@ -1666,9 +1766,10 @@ let _appRef: FastifyInstance | undefined;
 function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
   if (!_dbRef) return;
   try {
+    const messageId = randomUUID();
     _dbRef.insert(messagesTable)
       .values({
-        id: randomUUID(),
+        id: messageId,
         sessionId,
         role,
         content,
@@ -1679,6 +1780,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
         createdAt: new Date().toISOString(),
       })
       .run();
+    writeMessageContextMetadata(_dbRef, messageId, contextFlow);
   } catch (err) {
     _appRef?.log.error(err, "Failed to persist message");
   }
@@ -1694,6 +1796,7 @@ export const __chatTestUtils = {
   accumulateToolStart,
   accumulateToolResult,
   getOrCreateAccumulator,
+  serializePersistedContextFlow,
 };
 
 export interface ChatRouteDeps {
@@ -1851,6 +1954,10 @@ export function registerChatRoutes(
 
         const [nextMessage, ...rest] = freshQueue;
         if (!nextMessage) return;
+        // A held message blocks the queue: don't auto-drain it (or anything
+        // after it) until the user explicitly unlocks it. The client re-pushes
+        // the `queued_messages` state on unlock, which re-triggers this drain.
+        if (nextMessage.held) return;
         if (nextMessage.id) {
           tracked.add(nextMessage.id);
           if (tracked.size > MAX_TRACKED_CONSUMED_IDS) {
@@ -2045,9 +2152,10 @@ export function registerChatRoutes(
   function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
     if (!db) return;
     try {
+      const messageId = randomUUID();
       db.insert(messagesTable)
         .values({
-          id: randomUUID(),
+          id: messageId,
           sessionId,
           role,
           content,
@@ -2058,6 +2166,7 @@ export function registerChatRoutes(
           createdAt: new Date().toISOString(),
         })
         .run();
+      writeMessageContextMetadata(db, messageId, contextFlow);
     } catch (err) {
       app.log.error(err, "Failed to persist message");
     }
@@ -2066,18 +2175,22 @@ export function registerChatRoutes(
   function updateLatestAssistantContextFlow(sessionId: string, contextFlow: string): void {
     if (!db) return;
     try {
-      const rows = db
-        .select()
+      const lastAssistant = db
+        .select({ id: messagesTable.id })
         .from(messagesTable)
-        .where(eq(messagesTable.sessionId, sessionId))
-        .orderBy(messagesTable.createdAt, messagesTable.id)
-        .all();
-      const lastAssistant = [...rows].reverse().find((row) => row.role === "assistant");
+        .where(and(
+          eq(messagesTable.sessionId, sessionId),
+          eq(messagesTable.role, "assistant"),
+        ))
+        .orderBy(desc(messagesTable.createdAt), desc(messagesTable.id))
+        .limit(1)
+        .get();
       if (!lastAssistant) return;
       db.update(messagesTable)
         .set({ contextFlow })
         .where(eq(messagesTable.id, lastAssistant.id))
         .run();
+      writeMessageContextMetadata(db, lastAssistant.id, contextFlow);
     } catch (err) {
       app.log.error(err, "Failed to update assistant context flow");
     }
@@ -2969,7 +3082,7 @@ export function registerChatRoutes(
             memoryFlow,
             recentContextBlock,
           );
-          contextFlowJson = JSON.stringify(cliContextFlow);
+          contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           await cliProvider.sendTurn(providerSessionId, cliContent);
         } catch (sendErr) {
           const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
@@ -3039,7 +3152,7 @@ export function registerChatRoutes(
             memoryFlow,
             recoveryContextBlock,
           );
-          contextFlowJson = JSON.stringify(cliContextFlow);
+          contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           try {
             await cliProvider.sendTurn(providerSessionId, recoveryContent);
           } catch (recoveryError) {
@@ -3102,7 +3215,7 @@ export function registerChatRoutes(
           try {
             const flow = JSON.parse(contextFlowJson) as LlmContextFlow;
             attachCliTurnMetrics(flow, fullContent, cliToolCalls, Date.now() - turnStartedAt);
-            contextFlowJson = JSON.stringify(flow);
+            contextFlowJson = serializePersistedContextFlow(flow);
             const usage = flow.rounds[0]?.metrics?.contextUsage;
             if (usage) {
               const event = { type: "context_usage", ...usage } as StreamEvent;
@@ -3279,22 +3392,12 @@ export function registerChatRoutes(
               onEvent,
               onContext: (round) => {
                 contextRounds.push(round);
-                // Cap stored context_flow: if rounds accumulate too much data,
-                // keep only the first round (for system prompt reference) and the
-                // last 2 rounds (most useful for debugging). Stream still gets all.
-                const MAX_CONTEXT_FLOW_BYTES = 512_000; // 512 KB
-                let storedRounds = contextRounds;
-                const fullJson = JSON.stringify(contextRounds);
-                if (fullJson.length > MAX_CONTEXT_FLOW_BYTES && contextRounds.length > 3) {
-                  storedRounds = [contextRounds[0]!, ...contextRounds.slice(-2)];
-                }
-                contextFlowJson = JSON.stringify({
+                contextFlowJson = serializePersistedContextFlow({
                   provider: "jait",
                   model: llmRuntime.openaiModel,
-                  rounds: storedRounds,
-                  ...(contextRounds.length !== storedRounds.length ? { truncatedRounds: contextRounds.length } : {}),
+                  rounds: contextRounds,
                   ...(memoryFlow ? { memory: memoryFlow } : {}),
-                } satisfies LlmContextFlow & { truncatedRounds?: number });
+                });
               },
               onPersist: (sid, role, content, tc, seg, thinking) => {
                 const acc = sid === sessionId ? sessionStreamingState.get(sid) : undefined;
@@ -3334,14 +3437,16 @@ export function registerChatRoutes(
         hitMaxRounds = result.hitMaxRounds;
         loopPersisted = result.persisted === true;
 
-        // Re-serialize contextFlow now that round metrics have been attached
+        // Re-serialize through the same storage cap now that round metrics
+        // have been attached. The metrics pass must never re-expand the full
+        // outbound context into a multi-megabyte database row.
         if (contextRounds.length > 0) {
-          contextFlowJson = JSON.stringify({
+          contextFlowJson = serializePersistedContextFlow({
             provider: "jait",
             model: llmRuntime.openaiModel,
             rounds: contextRounds,
             ...(memoryFlow ? { memory: memoryFlow } : {}),
-          } satisfies LlmContextFlow);
+          });
         }
 
         if (contextFlowJson) {

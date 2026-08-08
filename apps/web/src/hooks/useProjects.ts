@@ -49,6 +49,40 @@ export function prependProjectSession(
     : [session, ...sessions]
 }
 
+/**
+ * Re-file a chat inside the project buckets: drop it from wherever it was and
+ * insert it into `targetProjectId` (a `null` target means it left projects
+ * entirely). Idempotent, so applying it twice — once optimistically, once from
+ * the client's own `chat.moved` broadcast — is harmless.
+ */
+export function applyProjectSessionMove(
+  projects: ProjectRecord[],
+  session: ProjectSession,
+  targetProjectId: string | null,
+): ProjectRecord[] {
+  return projects.map((project) => {
+    const without = project.sessions.filter((entry) => entry.id !== session.id)
+    if (project.id === targetProjectId) {
+      return { ...project, sessions: [session, ...without] }
+    }
+    if (without.length === project.sessions.length) return project
+    return { ...project, sessions: without }
+  })
+}
+
+/** Counterpart of `applyProjectSessionMove` for the personal-chats bucket. */
+export function applyPersonalSessionMove(
+  personalSessions: ProjectSession[],
+  session: ProjectSession,
+  targetProjectId: string | null,
+): ProjectSession[] {
+  const without = personalSessions.filter((entry) => entry.id !== session.id)
+  if (targetProjectId) {
+    return without.length === personalSessions.length ? personalSessions : without
+  }
+  return [session, ...without]
+}
+
 export interface CreateProjectOptions {
   title?: string
   rootPath?: string | null
@@ -101,6 +135,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const cacheWriteReadyScopeRef = useRef<string | null>(null)
   const activeProjectIdRef = useRef<string | null>(null)
   activeProjectIdRef.current = activeProjectId
+  const activeSessionIdRef = useRef<string | null>(null)
+  activeSessionIdRef.current = activeSessionId
   const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
   if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
@@ -363,6 +399,27 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [onLoginRequired, token])
 
+  /**
+   * One-off project lookup that does not touch the sidebar's own search state.
+   * Used by the move-chat menu, whose targets may be projects the sidebar has
+   * not paged in yet.
+   */
+  const searchProjects = useCallback(async (query: string): Promise<ProjectRecord[]> => {
+    const normalized = query.trim()
+    if (!normalized || !token) return []
+    try {
+      const response = await fetch(`${API_URL}/api/projects/search?q=${encodeURIComponent(normalized)}`, {
+        headers: authHeaders(token),
+      })
+      if (!response.ok) return []
+      const data = await response.json() as ProjectSearchResults
+      return data.projects ?? []
+    } catch (err) {
+      console.error('Failed to search projects:', err)
+      return []
+    }
+  }, [token])
+
   const createProject = useCallback(async (options: CreateProjectOptions = {}) => {
     if (!token) {
       onLoginRequired?.()
@@ -538,6 +595,86 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       console.error('Failed to archive session:', err)
     }
   }, [fetchProjects, onLoginRequired, token])
+
+  /**
+   * Move a chat into another project, or back to the personal chats when
+   * `targetProjectId` is null. Applied optimistically so the sidebar reacts
+   * immediately, and rolled back if the gateway rejects the move.
+   */
+  const moveSession = useCallback(async (sessionId: string, targetProjectId: string | null) => {
+    if (!token) {
+      onLoginRequired?.()
+      return false
+    }
+
+    const sourceProject = projects.find((project) => project.sessions.some((entry) => entry.id === sessionId)) ?? null
+    const session = sourceProject?.sessions.find((entry) => entry.id === sessionId)
+      ?? personalSessions.find((entry) => entry.id === sessionId)
+      ?? null
+    if (!session) return false
+
+    const sourceProjectId = sourceProject?.id ?? null
+    if (sourceProjectId === targetProjectId) return true
+
+    const targetProject = targetProjectId
+      ? projects.find((project) => project.id === targetProjectId) ?? null
+      : null
+    // Tool execution resolves the working directory from the project root, so
+    // mirror that here instead of keeping the old path around.
+    const optimistic: ProjectSession = {
+      ...session,
+      projectId: targetProjectId,
+      projectPath: targetProject?.rootPath ?? null,
+    }
+    const wasActive = activeSessionIdRef.current === sessionId
+
+    setProjects((prev) => applyProjectSessionMove(prev, optimistic, targetProjectId))
+    setPersonalSessions((prev) => applyPersonalSessionMove(prev, optimistic, targetProjectId))
+    if (wasActive) {
+      setActiveProjectId(targetProjectId)
+      persistSelection(targetProjectId, sessionId)
+      persistActiveSelectionToCache(targetProjectId, sessionId)
+    }
+
+    const rollback = () => {
+      setProjects((prev) => applyProjectSessionMove(prev, session, sourceProjectId))
+      setPersonalSessions((prev) => applyPersonalSessionMove(prev, session, sourceProjectId))
+      if (wasActive) {
+        setActiveProjectId(sourceProjectId)
+        persistSelection(sourceProjectId, sessionId)
+        persistActiveSelectionToCache(sourceProjectId, sessionId)
+      }
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}/move`, {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: targetProjectId }),
+      })
+      if (response.status === 401) {
+        rollback()
+        onLoginRequired?.()
+        return false
+      }
+      if (!response.ok) {
+        rollback()
+        return false
+      }
+      const data = await response.json() as { session: ProjectSession }
+      // Re-apply with the gateway's record so projectPath matches the server.
+      setProjects((prev) => applyProjectSessionMove(prev, data.session, targetProjectId))
+      setPersonalSessions((prev) => applyPersonalSessionMove(prev, data.session, targetProjectId))
+      // The target can be a project the sidebar has not paged in yet (picked
+      // through the menu's search) — pull it in so the chat stays visible.
+      if (targetProjectId && !targetProject) void loadProject(targetProjectId)
+      return true
+    } catch (err) {
+      console.error('Failed to move session:', err)
+      rollback()
+      return false
+    }
+  }, [loadProject, onLoginRequired, personalSessions, persistActiveSelectionToCache, persistSelection, projects, token])
 
   const fetchArchivedSessions = useCallback(async (projectId: string) => {
     if (!token) {
@@ -903,6 +1040,17 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         ))
         break
       }
+      case 'chat.moved': {
+        const session = payload.session as ProjectSession | undefined
+        if (!session) break
+        const toProjectId = (payload.toProjectId as string | null | undefined) ?? null
+        setProjects((prev) => applyProjectSessionMove(prev, session, toProjectId))
+        setPersonalSessions((prev) => applyPersonalSessionMove(prev, session, toProjectId))
+        // Keep the sidebar selection on the chat the user is looking at, even
+        // when another tab is what moved it.
+        if (activeSessionIdRef.current === session.id) setActiveProjectId(toProjectId)
+        break
+      }
       case 'chat.archived':
       case 'chat.deleted': {
         const sessionId = payload.sessionId as string | undefined
@@ -957,6 +1105,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     loadProject,
     loadSession,
     searchChats,
+    searchProjects,
     createProject,
     updateProject,
     assignProjectRepository,
@@ -964,6 +1113,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     switchProject,
     switchSession,
     archiveSession,
+    moveSession,
     fetchArchivedSessions,
     removeProject,
     clearArchivedProjects,

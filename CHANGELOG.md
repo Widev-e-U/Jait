@@ -4,6 +4,32 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.696](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.696) — 2026-08-08
+- fix(gateway): gateway projects now self-heal stale repository device assignments before Manager provider scoping, and remote node registration no longer claims repositories whose paths already exist on the gateway; selecting the Jait repo therefore shows its gateway provider accounts instead of incorrectly limiting Manager to Jait.
+
+## [v0.1.695](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.695) — 2026-08-08
+- fix(web): developer and Manager modes now keep independent provider/model selections; switching modes no longer replaces the chat's developer provider with Jait, and Manager's picker includes provider accounts advertised by the selected repositories' nodes.
+- fix(web): the conversation loading skeleton again spans the full viewport with alternating realistic turns, beginning and ending with user-message placeholders instead of collapsing to a three-turn block at the bottom.
+
+## [v0.1.694](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.694) — 2026-08-08
+- fix(web): Manager thread composers now preserve the explicitly selected matching repository when duplicate records share a path across different devices, so the provider/model picker remains scoped to the selected repo node and shows that node's provider accounts instead of falling back to Jait only.
+- feat(web): Manager mode now exposes the global model selector in the app header, while session performance aggregation is deferred until the context details dialog opens to avoid scanning long conversations during ordinary rendering.
+- fix(gateway): chat snapshots no longer touch multi-megabyte context-flow blobs; lightweight sidecar metadata preserves context/memory badges, stored traces are capped at 512 KB even after metrics are attached, and latest-assistant updates avoid loading full histories.
+- feat(gateway + web): queued chat messages can be held/locked; a held head item blocks both client and server auto-drain until the user explicitly unlocks it.
+- fix(gateway): agent-loop safety now includes a 64-round default backstop, a 200-round absolute ceiling, per-round duplicate collapse, a 64-call round cap, and recurring-call detection across non-consecutive rounds.
+- fix(web): tool, approval, and nested-agent stream events flush pending paced text synchronously, preserving order without stalling the SSE reader behind long prose.
+- fix(mobile): Android now requests notification permission at launch and microphone permission before voice capture through a native Capacitor bridge, with `RECORD_AUDIO` declared in the manifest.
+
+## [v0.1.693](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.693) — 2026-08-08
+- fix(web): the chat loading skeleton now reads as a single exchange — one user prompt, one agent reply, then the user's latest prompt — instead of a run of assistant turns ending in two user messages back-to-back, so the placeholder mirrors a real scrolled-to-end chat.
+- fix(web): swarm-mode live streaming no longer stalls — the direct-POST SSE reader loop previously awaited the text pacer before each tool event, so the (long) swarm `mode_notice` text blocked the loop and the coordinator's tool card + specialist prose didn't render until a reload. Tool events now call `textPacer.flushNow()`, which drains pending text synchronously so tool/sub-agent content commits immediately without blocking the loop on rAF/deadline timers.
+- feat(web): the context-window indicator's detail dialog now also surfaces session-level performance metrics (completion/prompt tokens, tokens-per-second, text written, total duration) aggregated lazily from already-persisted per-message metrics.
+- fix(web): on mobile the floating edit composer now stays pinned just above the on-screen keyboard (tracked via the visual viewport) and the message being edited is scrolled into view, so it isn't pushed out of the viewport when the keyboard opens.
+- feat(web): a sub-agent's delegation prompt is now a sticky header pinned to the top of its inline chat, collapsed to a single truncating line with a "Show more" toggle, so it stays in view while scrolling the run's history.
+- fix(web): agent tool calls now collapse into a wrapper for all providers (including the Jait loop), not just non-Jait providers, so multi-tool turns render consistently.
+- fix(web): the merged in-composer approval row (e.g. the terminal/`execute` tool needing consent) no longer wraps onto a second line on narrow/mobile screens — the row is now `flex-nowrap` with the summary truncating instead of wrapping, so the tool icon, name, preview and Approve/Reject stay on a single line.
+- fix(web): the tiny "copy chat id" icon button no longer gets blown up to 40px wide by the global mobile `button[aria-label]` min-width rule — it now overrides `min-width: 0` so it hugs the icon without dead space beside the project label.
+
 ## [v0.1.687](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.687) — 2026-08-07
 - fix(web): lazy-loaded history no longer snaps to the top — scrolling up to paginate now restores your exact viewport position. The old restore ran a single `requestAnimationFrame` after `onLoadMore`, but that fetch is async, so the list hadn't grown by the time it measured; the correction was always `+= 0` and the batch then landed with `scrollTop` untouched. The list is now scroll-anchored by picking the first item still on screen and preserving its offset through the reflow (via `pickScrollAnchor` / `scrollAnchorDelta`), so prepending older messages keeps you exactly where you were.
 - fix(web): scroll position no longer flickers while a streaming sub-agent is open — a single scroll-anchor primitive now guards both the lazy-load path and the live streaming path. Anchoring the first on-screen item (with a sub-pixel epsilon so a scroll write isn't emitted for jitter that would itself look like flicker) keeps the viewport pinned during streaming even when a tool/sub-agent card is streaming alongside the main turn.

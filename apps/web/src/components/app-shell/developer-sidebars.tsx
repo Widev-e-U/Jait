@@ -36,6 +36,8 @@ interface DeveloperSidebarsProps {
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
   onArchiveSession: (sessionId: string) => void
+  onMoveSession: (sessionId: string, projectId: string | null) => void
+  onSearchProjects: (query: string) => Promise<ProjectRecord[]>
   onBlur: (event: FocusEvent<HTMLElement>) => void
   onChangeDirectory: (projectId: string) => void
   onCreateProject: () => void
@@ -81,6 +83,8 @@ export function DeveloperSidebars({
   sidebarRef,
   onAssignRepository,
   onArchiveSession,
+  onMoveSession,
+  onSearchProjects,
   onBlur,
   onChangeDirectory,
   onCreateProject,
@@ -209,6 +213,8 @@ export function DeveloperSidebars({
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
               onArchiveSession={onArchiveSession}
+              onMoveSession={onMoveSession}
+              onSearchProjects={onSearchProjects}
               onNewPersonalSession={onCreatePersonalSession}
               onCreateProject={onCreateProject}
               onRemoveProject={onRemoveProject}

@@ -71,6 +71,7 @@ describe("fresh onboarding", () => {
       "consent_session_approvals",
       "memories",
       "messages",
+      "message_context_metadata",
       "network_hosts",
       "reminders",
       "scheduled_job_runs",
@@ -191,6 +192,33 @@ describe("fresh onboarding", () => {
   it("migrations are idempotent (running twice does not fail)", () => {
     migrateDatabase(sqlite);
     expect(() => migrateDatabase(sqlite)).not.toThrow();
+  });
+});
+
+describe("message context metadata migration", () => {
+  it("backfills lightweight flags for existing large context traces", () => {
+    applyMigrationsThrough(51);
+    sqlite.prepare(`
+      INSERT INTO messages (id, session_id, role, content, context_flow, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      "message-with-memory",
+      "session-1",
+      "assistant",
+      "done",
+      JSON.stringify({ memory: { injectedIds: ["memory-1"] }, rounds: [] }),
+      new Date().toISOString(),
+    );
+
+    const migration = migrations.find((entry) => entry.id === 52);
+    expect(migration).toBeDefined();
+    if (!migration) return;
+    migration.run(sqlite);
+
+    expect(sqlite.prepare(`
+      SELECT message_id AS messageId, has_memory_provenance AS hasMemoryProvenance
+      FROM message_context_metadata
+    `).all()).toEqual([{ messageId: "message-with-memory", hasMemoryProvenance: 1 }]);
   });
 });
 

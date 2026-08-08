@@ -31,9 +31,13 @@ export function shouldProcessQueuedMessage(params: {
    * no server connection to drain.
    */
   deferToServerDrain?: boolean
+  /** True when the next queued message is held (locked) by the user. A held
+   *  message blocks the queue until the user explicitly unlocks it. */
+  nextItemHeld?: boolean
 }): boolean {
   if (params.isLoading || params.isLoadingHistory || params.isProcessing) return false
   if (params.queuedCount === 0) return false
+  if (params.nextItemHeld) return false
   // After an interrupted exit the user must explicitly choose to send the
   // queued message — that explicit approval is the one case where the client
   // should send even though the server drain is authoritative.

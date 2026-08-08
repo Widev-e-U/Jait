@@ -3,6 +3,15 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 describe('ContextIndicator', () => {
+  it('defers the full message metrics scan until the dialog opens', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./context-indicator.tsx', import.meta.url)),
+      'utf8',
+    )
+
+    expect(source).toContain('dialogOpen ? aggregateSessionMetrics(messages)')
+  })
+
   it('keeps hook calls before the unavailable-usage return', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./context-indicator.tsx', import.meta.url)),

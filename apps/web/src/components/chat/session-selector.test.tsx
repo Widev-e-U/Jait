@@ -115,7 +115,13 @@ describe('SessionSelector', () => {
 
   it('keeps the chat context menu inside the viewport', () => {
     expect(getSessionContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100 })
-    expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 216, top: 352 })
+    expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 136, top: 352 })
     expect(getSessionContextMenuPosition(-10, -10, 400, 400)).toEqual({ left: 8, top: 8 })
+  })
+
+  it('lifts a tall move menu further up so its last item stays reachable', () => {
+    // A menu listing projects is much taller than the old archive-only one;
+    // clamping against the small default would push it off-screen.
+    expect(getSessionContextMenuPosition(100, 300, 400, 400, 240)).toEqual({ left: 100, top: 152 })
   })
 })

@@ -29,7 +29,7 @@ export interface UpdateRepoRequest {
   name?: string;
   defaultBranch?: string;
   localPath?: string;
-  deviceId?: string;
+  deviceId?: string | null;
   forgeUrl?: string;
   /** @deprecated Use forgeUrl. */
   githubUrl?: string;

@@ -68,6 +68,7 @@ export type WsEventType =
   | "chat.updated"
   | "chat.archived"
   | "chat.deleted"
+  | "chat.moved"
   | "notification"
   | "fs.changes"
   | "error";

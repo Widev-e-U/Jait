@@ -44,8 +44,8 @@ export interface AppConfig {
   contextWindow: number;
   /**
    * Max autonomous tool-calling rounds per turn for the Jait provider.
-   * pi-style: `0` means NO cap — the model decides when it is done, guarded by
-   * the loop detectors. Local models in particular make many small tool calls
+   * `0` uses the agent loop's 64-round safety backstop. Local models in
+   * particular make many small tool calls
    * and need a high ceiling. Override with env JAIT_MAX_ROUNDS (clamped to a
    * sane ceiling); per-user overrides come from the JAIT_MAX_ROUNDS settings key.
    */
