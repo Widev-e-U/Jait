@@ -925,7 +925,7 @@ async function main() {
   }
 
   // Forward gateway notifications (maintenance, routines, provider limits) to
-  // every channel the user opted in via Settings → Connectors.
+  // every channel the user opted in via Settings → Channels.
   notifications.addSink((notification) => {
     void channelManager.notify({
       title: notification.title,
@@ -958,16 +958,6 @@ async function main() {
     openclawExtensionsDirs: openclawDirs,
   });
   await pluginManager.syncAndLoad();
-
-  // Built-in connectors — selectable in Settings → Connectors without installing
-  // an extension first. Registered after plugins so a plugin that contributes the
-  // same channel id keeps ownership of it.
-  const { TelegramConnector } = await import("./channels/telegram/connector.js");
-  const builtinConnectors = [new TelegramConnector()];
-  for (const connector of builtinConnectors) {
-    if (channelManager.list().some((c) => c.id === connector.id)) continue;
-    channelManager.register(connector);
-  }
 
   // Skill registry — discover skills from bundled, user dir, project, and OpenClaw
   const { SkillRegistry, userSkillsDir } = await import("./skills/index.js");

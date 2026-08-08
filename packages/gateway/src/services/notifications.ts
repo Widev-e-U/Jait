@@ -41,7 +41,7 @@ export class NotificationService {
 
   /**
    * Register an additional delivery path. Used to forward notifications to
-   * messaging channels the user opted in (Settings → Connectors), so alerts
+   * messaging channels the user opted in (Settings → Channels), so alerts
    * reach a phone that has no Jait client open.
    */
   addSink(sink: NotificationSink): () => void {

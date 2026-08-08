@@ -546,10 +546,9 @@ export function ChannelSettings({ token }: { token: string | null }) {
   return (
     <div className="space-y-4">
       <Card className="space-y-1 p-5">
-        <h2 className="text-base font-medium">Connectors</h2>
+        <h2 className="text-base font-medium">Channels</h2>
         <p className="text-sm text-muted-foreground">
-          Connect external messaging apps so your assistant can chat through them.
-          Telegram is built in — paste a bot token and scan the code.
+          Enable a messaging extension, then connect its account here so your assistant can chat through it.
         </p>
       </Card>
 
@@ -565,8 +564,7 @@ export function ChannelSettings({ token }: { token: string | null }) {
       ) : channels.length === 0 ? (
         <Card className="p-5">
           <p className="text-sm text-muted-foreground">
-            No connectors available. Telegram ships with the gateway — if it is missing here,
-            the gateway needs a restart. Additional channels come from Extensions.
+            No channels available. Install and enable a messaging extension in Extensions, then return here to connect it.
           </p>
         </Card>
       ) : (
