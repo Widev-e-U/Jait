@@ -833,7 +833,9 @@ async function main() {
         listJaitModels({ config, apiKeys: owner.apiKeys, fallbackModels }),
         ...cliProviders.map(async (candidate) => {
           try {
-            if (!await candidate.checkAvailability()) return [];
+            // No availability probe: it spawns the CLI binary just to read
+            // `--version`, which costs more than the catalogue call itself.
+            // listModels() already fails soft when the provider is down.
             const models = (await candidate.listModels?.()) ?? [];
             return models.map((model) => ({
               id: model.id,

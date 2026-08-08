@@ -821,3 +821,52 @@ describe("CLI provider models", () => {
     expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
   });
 });
+
+describe("model catalogue caching", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeCountingManager(db: SqliteDatabase, models = [{ id: "m1", label: "M1", group: "OpenAI" }]) {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return models; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector, calls: () => calls };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+  };
+
+  it("resolves the catalogue once while walking the picker", async () => {
+    const { mgr, connector, calls } = makeCountingManager(sqlite, [
+      { id: "m1", label: "M1", group: "OpenAI" },
+      { id: "m2", label: "M2", group: "Ollama" },
+    ]);
+    await mgr.start("fake");
+
+    await send(connector, "/model");
+    await send(connector, "/model provider OpenAI");
+    await send(connector, "/model");
+    await send(connector, "/model m1");
+
+    expect(calls()).toBe(1);
+  });
+
+  it("does not cache an empty catalogue", async () => {
+    const { mgr, connector, calls } = makeCountingManager(sqlite, []);
+    await mgr.start("fake");
+
+    await send(connector, "/model");
+    await send(connector, "/model");
+
+    expect(calls()).toBe(2);
+  });
+});

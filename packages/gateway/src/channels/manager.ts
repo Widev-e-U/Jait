@@ -243,6 +243,13 @@ export function parseCommand(text: string): { command: ChannelCommand; args: str
 }
 
 /**
+ * How long a resolved model catalogue is reused. Walking the picker fires
+ * several `/model` calls in a row (providers → models → back), and re-resolving
+ * each time means re-probing every CLI provider for the same answer.
+ */
+const MODEL_CACHE_TTL_MS = 60_000;
+
+/**
  * Options offered as buttons by `/model`. A catalogue can run to hundreds of
  * entries; past a couple of dozen a dialog is worse than useless on a phone, so
  * the rest stay reachable by id.
@@ -309,6 +316,10 @@ export class ChannelManager {
   private readonly consentByConversation = new Map<string, string>();
   /** requestId → conversation, to clear mappings once a decision lands. */
   private readonly consentTargets = new Map<string, { channelId: string; conversationId: string; key: string }>();
+  /** Last resolved model catalogue, reused while walking the `/model` picker. */
+  private modelCache: { at: number; models: ChannelModelOption[] } | null = null;
+  /** In-flight catalogue resolution, so parallel taps don't each probe. */
+  private modelCacheInflight: Promise<ChannelModelOption[]> | null = null;
 
   private readonly replyGenerator: ReplyGenerator;
 
@@ -643,9 +654,13 @@ export class ChannelManager {
     const parsed = parseCommand(msg.text);
     if (!parsed) return false;
 
+    // Commands that resolve catalogues can be slow on a cold cache; log how
+    // long the user actually waited so a "this takes ages" report has numbers.
+    const startedAt = Date.now();
     const reply = async (text: string, choices?: ChannelChoice[]) => {
       try {
         await managed.connector.send({ conversationId: msg.conversationId, text, choices });
+        this.log(`${msg.channelId}: /${parsed.command} answered in ${Date.now() - startedAt}ms`);
       } catch (err) {
         this.log(`${msg.channelId}: command reply failed:`, err);
       }
@@ -716,7 +731,7 @@ export class ChannelManager {
 
     let models: ChannelModelOption[] = [];
     try {
-      models = (await this.deps.resolveModels?.()) ?? [];
+      models = await this.resolveModelsCached();
     } catch (err) {
       this.log(`${channelId}: model catalogue failed:`, err);
     }
@@ -778,6 +793,29 @@ export class ChannelManager {
       ? "\n\nThis one runs as a supervised CLI session — I'll ask before each tool."
       : "";
     return { text: `✅ Now using ${picked?.label ?? modelId}${suffix} on this channel.${cliNote}` };
+  }
+
+  /**
+   * The model catalogue, cached briefly. Resolving it probes every configured
+   * backend and CLI provider, which is far too slow to repeat for each step of
+   * the picker. Concurrent callers share one resolution.
+   */
+  private async resolveModelsCached(): Promise<ChannelModelOption[]> {
+    if (!this.deps.resolveModels) return [];
+    if (this.modelCache && Date.now() - this.modelCache.at < MODEL_CACHE_TTL_MS) {
+      return this.modelCache.models;
+    }
+    if (this.modelCacheInflight) return this.modelCacheInflight;
+
+    this.modelCacheInflight = this.deps.resolveModels()
+      .then((models) => {
+        // Never cache an empty result: it would pin the picker to "no models"
+        // for the whole TTL after a single hiccup.
+        if (models.length > 0) this.modelCache = { at: Date.now(), models };
+        return models;
+      })
+      .finally(() => { this.modelCacheInflight = null; });
+    return this.modelCacheInflight;
   }
 
   /**

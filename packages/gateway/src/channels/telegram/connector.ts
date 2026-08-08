@@ -459,15 +459,19 @@ export class TelegramConnector implements ChannelConnector {
   private async handleCallbackQuery(query: TelegramCallbackQuery): Promise<void> {
     const value = query.data ? this.choiceValues.get(query.data) : undefined;
 
-    await this.api("answerCallbackQuery", {
+    // Stops the client's loading spinner. Fired without awaiting so the actual
+    // answer isn't queued behind a second round-trip to Telegram.
+    void this.api("answerCallbackQuery", {
       callback_query_id: query.id,
       ...(value ? {} : { text: "That menu has expired — send /model again." }),
     }, this.abort?.signal).catch((err) => { this.log("answerCallbackQuery failed:", err); });
 
     if (!value || !query.message) return;
 
-    // Drop the keyboard so the dialog cannot be answered twice.
-    await this.api("editMessageReplyMarkup", {
+    // Drop the keyboard so the dialog cannot be answered twice. Not awaited:
+    // it is cosmetic, and making the user wait a Telegram round-trip for it
+    // before the answer is even dispatched is the wrong trade.
+    void this.api("editMessageReplyMarkup", {
       chat_id: query.message.chat.id,
       message_id: query.message.message_id,
     }, this.abort?.signal).catch(() => { /* cosmetic only */ });
