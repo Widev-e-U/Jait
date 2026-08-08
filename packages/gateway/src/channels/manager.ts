@@ -51,7 +51,16 @@ export interface ChannelAuthContext {
 export interface ReplyGenerator {
   generate(
     history: AgentMessage[],
-    ctx: { channelId: string; sessionId: string; allowedTools: Set<string>; model?: string },
+    ctx: {
+      channelId: string;
+      sessionId: string;
+      allowedTools: Set<string>;
+      model?: string;
+      /** Provider serving `model` — a CLI provider id routes to the ACP path. */
+      modelProvider?: string;
+      /** Conversation the turn belongs to, for provider-side approval prompts. */
+      conversationId?: string;
+    },
   ): Promise<string>;
 }
 
@@ -61,6 +70,12 @@ export interface ChannelModelOption {
   label?: string;
   /** Backend grouping shown in the picker, e.g. "OpenAI" / "Ollama". */
   group?: string;
+  /**
+   * Provider id serving this model. Absent/"jait" for the HTTP backends; a
+   * provider account id for CLI providers (Claude Code, Codex), which need the
+   * ACP reply path rather than a chat-completions call.
+   */
+  provider?: string;
 }
 
 /** A message pushed into a channel by the gateway rather than by a reply turn. */
@@ -110,6 +125,13 @@ export interface ChannelManagerDeps {
   systemPrompt?: string;
   /** Max conversation messages to retain (excluding the system prompt). */
   maxHistory?: number;
+  /**
+   * Provider registry, needed to run turns against CLI providers picked with
+   * `/model`. Absent → those models are offered by nobody and never selected.
+   */
+  providerRegistry?: import("../providers/registry.js").ProviderRegistry;
+  /** Gateway host/port, so a CLI session can reach back for MCP tools. */
+  gatewayAddress?: { host: string; port: number };
   /** Override reply generation (defaults to the agent loop). */
   replyGenerator?: ReplyGenerator;
   log?: (msg: string, ...args: unknown[]) => void;
@@ -581,6 +603,8 @@ export class ChannelManager {
         sessionId,
         allowedTools,
         model: config.model?.trim() || undefined,
+        modelProvider: config.modelProvider?.trim() || undefined,
+        conversationId: msg.conversationId,
       })).trim();
 
       if (reply) {
@@ -686,7 +710,7 @@ export class ChannelManager {
     const arg = args.trim();
 
     if (arg.toLowerCase() === "reset" || arg.toLowerCase() === "default") {
-      this.setConfig(channelId, { model: "" });
+      this.setConfig(channelId, { model: "", modelProvider: "" });
       return { text: `↩️ Back to the gateway default${auth?.model ? ` (${auth.model})` : ""}.` };
     }
 
@@ -748,9 +772,12 @@ export class ChannelManager {
     const modelId = picked?.id ?? (models.length === 0 ? arg : null);
     if (!modelId) return { text: `Unknown model "${arg}". Send /model to see what is available.` };
 
-    this.setConfig(channelId, { model: modelId });
+    this.setConfig(channelId, { model: modelId, modelProvider: picked?.provider ?? "" });
     const suffix = picked?.group ? ` (${picked.group})` : "";
-    return { text: `✅ Now using ${picked?.label ?? modelId}${suffix} on this channel.` };
+    const cliNote = picked?.provider && picked.provider !== "jait"
+      ? "\n\nThis one runs as a supervised CLI session — I'll ask before each tool."
+      : "";
+    return { text: `✅ Now using ${picked?.label ?? modelId}${suffix} on this channel.${cliNote}` };
   }
 
   /**
@@ -892,15 +919,59 @@ function buildConsentPrompt(request: ConsentRequest): string {
 /*  Default reply generator — runs the agent loop                      */
 /* ------------------------------------------------------------------ */
 
+
+/**
+ * Flatten the recent conversation into one prompt. A CLI turn is a fresh
+ * session every time, so without this the provider would answer each message
+ * with no idea what was said before.
+ */
+export function buildCliPrompt(history: AgentMessage[], maxTurns = 8): string {
+  const turns = history
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .slice(-maxTurns);
+  const latest = turns.at(-1);
+  const earlier = turns.slice(0, -1);
+  const asText = (content: unknown) => (typeof content === "string" ? content : JSON.stringify(content));
+
+  if (earlier.length === 0) return asText(latest?.content ?? "");
+  const transcript = earlier
+    .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${asText(message.content)}`)
+    .join("\n");
+  return `Earlier in this chat:\n${transcript}\n\nUser: ${asText(latest?.content ?? "")}`;
+}
+
+/** Context a CLI-provider turn needs on top of the usual reply context. */
+interface CliTurnContext {
+  channelId: string;
+  sessionId: string;
+  model?: string;
+  modelProvider?: string;
+  conversationId?: string;
+}
+
 export class AgentLoopReplyGenerator implements ReplyGenerator {
   constructor(private readonly deps: ChannelManagerDeps) {}
 
   async generate(
     history: AgentMessage[],
-    ctx: { channelId: string; sessionId: string; allowedTools: Set<string>; model?: string },
+    ctx: {
+      channelId: string;
+      sessionId: string;
+      allowedTools: Set<string>;
+      model?: string;
+      modelProvider?: string;
+      conversationId?: string;
+    },
   ): Promise<string> {
     const { toolRegistry, audit } = this.deps;
     const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
+
+    // A CLI provider (Claude Code, Codex) speaks ACP, not chat-completions, so
+    // it gets its own one-shot session instead of the HTTP agent loop.
+    if (ctx.modelProvider && ctx.modelProvider !== "jait") {
+      return this.generateViaCliProvider(history, ctx as CliTurnContext);
+    }
+
     const llm = this.deps.resolveLLM(ctx.model);
     const disabledTools = auth?.disabledTools;
 
@@ -1033,5 +1104,65 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     );
 
     return result.content ?? "";
+  }
+
+  /**
+   * Run one turn against a CLI (ACP) provider — Claude Code, Codex, and the
+   * like. They are separate processes rather than an HTTP endpoint, so the turn
+   * is a scoped session that is torn down afterwards.
+   *
+   * The session runs *supervised*: every tool the CLI wants to use becomes the
+   * same in-band yes/no question the Jait agent loop already asks over the
+   * chat. Without a consent manager there is nobody to ask, so the turn is
+   * refused rather than silently run with full access.
+   */
+  private async generateViaCliProvider(history: AgentMessage[], ctx: CliTurnContext): Promise<string> {
+    const { providerRegistry, gatewayAddress, consentManager } = this.deps;
+    const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
+
+    if (!providerRegistry || !gatewayAddress || !auth?.userId) {
+      return "⚠️ CLI providers aren't wired up on this gateway — pick an API model with /model.";
+    }
+    if (!consentManager) {
+      return "⚠️ This model runs a CLI with tool access, which needs the in-band approval flow. Pick an API model with /model.";
+    }
+
+    const { runAcpSpecialistTurn } = await import("../tools/agent-acp-runner.js");
+    const prompt = buildCliPrompt(history);
+
+    const result = await runAcpSpecialistTurn({
+      providerRegistry,
+      config: gatewayAddress,
+      providerId: ctx.modelProvider!,
+      userId: auth.userId,
+      sessionId: ctx.sessionId,
+      subAgentId: "channel",
+      projectRoot: this.deps.projectRoot ?? process.cwd(),
+      runtimeMode: "supervised",
+      model: ctx.model,
+      prompt,
+      onApprovalRequired: async ({ tool, args }) => {
+        const decision = await consentManager.requestConsent({
+          actionId: `channel-cli:${ctx.channelId}:${tool}`,
+          toolName: tool,
+          summary: `${tool} (via ${ctx.modelProvider})`,
+          preview: (args ?? {}) as Record<string, unknown>,
+          risk: "high",
+          policy: {
+            consentLevel: "dangerous",
+            description: `Requested by ${ctx.modelProvider} while answering in this chat`,
+            // The CLI's tool vocabulary is its own, not Jait's tool registry.
+            knownTool: false,
+            source: "unknown-tool",
+          },
+          sessionId: ctx.sessionId,
+          timeoutMs: this.deps.consentTimeoutMs,
+        });
+        return decision.approved;
+      },
+    });
+
+    if (!result.ok) return `⚠️ ${result.message}`;
+    return result.message;
   }
 }

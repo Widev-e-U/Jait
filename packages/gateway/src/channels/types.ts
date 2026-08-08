@@ -196,6 +196,12 @@ export interface ChannelConfig {
    */
   model?: string;
   /**
+   * Provider serving `model`. Empty/"jait" means one of the HTTP backends;
+   * anything else is a CLI (ACP) provider account such as Claude Code or Codex,
+   * which the reply path runs as a supervised one-shot session.
+   */
+  modelProvider?: string;
+  /**
    * Channel credential (Telegram bot token from @BotFather). Stored server-side
    * and never returned by the REST API — reads report `tokenSet` instead.
    */

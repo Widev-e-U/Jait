@@ -811,17 +811,49 @@ async function main() {
         requestedModel: requestedModel ?? a?.model,
       });
     },
-    // Catalogue behind `/model` — resolved through the same service the web UI
-    // model picker uses, so both offer the identical set across backends.
+    // Catalogue behind `/model` — the HTTP backends resolved through the same
+    // service the web UI model picker uses, plus the CLI provider accounts
+    // (Claude Code, Codex) the owner has logged in.
     resolveModels: async () => {
       const owner = resolveChannelAuth();
       if (!owner?.userId) return [];
-      const provider = providerRegistry.getForUser("jait", owner.userId);
-      const fallbackModels = (await provider?.listModels?.()) ?? [];
+      const userId = owner.userId;
+
+      const jaitProvider = providerRegistry.getForUser("jait", userId);
+      const fallbackModels = (await jaitProvider?.listModels?.()) ?? [];
       const { listJaitModels } = await import("./services/jait-models.js");
-      const models = await listJaitModels({ config, apiKeys: owner.apiKeys, fallbackModels });
-      return models.map((model) => ({ id: model.id, label: model.name, group: model.group }));
+
+      const cliProviders = providerRegistry.list().filter((candidate) =>
+        candidate.id !== "jait" && providerRegistry.isVisibleTo(candidate.id, userId));
+
+      // Probing a CLI provider spawns its process, so the catalogues are
+      // gathered concurrently and a provider that is down contributes nothing
+      // instead of failing the whole list.
+      const [httpModels, ...cliCatalogues] = await Promise.all([
+        listJaitModels({ config, apiKeys: owner.apiKeys, fallbackModels }),
+        ...cliProviders.map(async (candidate) => {
+          try {
+            if (!await candidate.checkAvailability()) return [];
+            const models = (await candidate.listModels?.()) ?? [];
+            return models.map((model) => ({
+              id: model.id,
+              label: model.name,
+              group: candidate.info.name,
+              provider: candidate.id,
+            }));
+          } catch {
+            return [];
+          }
+        }),
+      ]);
+
+      return [
+        ...httpModels.map((model) => ({ id: model.id, label: model.name, group: model.group })),
+        ...cliCatalogues.flat(),
+      ];
     },
+    providerRegistry,
+    gatewayAddress: { host: config.host, port: config.port },
   });
   // Forward gateway notifications (maintenance, routines, provider limits) to
   // every channel the user opted in via Settings → Connectors.

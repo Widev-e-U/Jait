@@ -37,6 +37,12 @@ export interface AcpSpecialistTurnOptions {
    * onto the parent turn's stream so the UI renders it as a normal chat turn.
    */
   onNestedEvent?: (event: NestedAgentEvent) => void;
+  /**
+   * Decides tool approvals when the provider runs supervised. Without it the
+   * CLI's approval requests go unanswered and the turn stalls until the
+   * timeout, so callers that pass `runtimeMode: "supervised"` must supply one.
+   */
+  onApprovalRequired?: (request: { tool: string; args: unknown; requestId: string }) => Promise<boolean>;
 }
 
 function resolveRuntimeMode(provider: CliProviderAdapter, requested?: string): RuntimeMode {
@@ -110,6 +116,15 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
       emitNested?.({ type: "tool_output", call_id: event.callId, content: event.content });
     } else if (event.type === "tool.result") {
       emitNested?.({ type: "tool_result", call_id: event.callId ?? `${opts.subAgentId}-${event.tool}`, tool: event.tool, ok: event.ok, message: event.message, parent_call_id: event.parentCallId, data: event.data });
+    } else if (event.type === "tool.approval-required" && opts.onApprovalRequired) {
+      // Supervised runs block here until the caller decides. Errors deny: a
+      // broken approval path must not silently grant tool access.
+      void opts.onApprovalRequired({ tool: event.tool, args: event.args, requestId: event.requestId })
+        .catch(() => false)
+        .then((approved) => provider.respondToApproval(session.id, event.requestId, approved))
+        .catch((err) => {
+          chunks.push(`\n[error] could not answer approval for ${event.tool}: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
   };
   const unsubscribe = provider.onEvent(handleEvent);

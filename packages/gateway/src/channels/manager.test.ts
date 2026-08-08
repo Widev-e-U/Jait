@@ -3,6 +3,7 @@ import { openRawSqlite } from "../db/sqlite-shim.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import {
   ChannelManager,
+  buildCliPrompt,
   formatNotification,
   groupModelsByProvider,
   normalizeSenderId,
@@ -18,7 +19,7 @@ import type {
   InboundMessage,
   OutboundMessage,
 } from "./types.js";
-import type { LLMConfig } from "../tools/agent-loop.js";
+import type { AgentMessage, LLMConfig } from "../tools/agent-loop.js";
 import { ConsentManager } from "../security/consent-manager.js";
 
 /* A fake connector that lets the test drive inbound messages and capture sends. */
@@ -711,5 +712,112 @@ describe("/model back navigation", () => {
     const step1 = await send(connector, "/model");
 
     expect(step1.choices?.some((c) => c.label.includes("Back"))).toBe(false);
+  });
+});
+
+describe("buildCliPrompt", () => {
+  it("passes a single message through unchanged", () => {
+    expect(buildCliPrompt([
+      { role: "system", content: "ignored" },
+      { role: "user", content: "list the failing tests" },
+    ] as AgentMessage[])).toBe("list the failing tests");
+  });
+
+  it("carries earlier turns, since each CLI session starts fresh", () => {
+    const prompt = buildCliPrompt([
+      { role: "user", content: "what is in src?" },
+      { role: "assistant", content: "Three files." },
+      { role: "user", content: "and the biggest one?" },
+    ] as AgentMessage[]);
+
+    expect(prompt).toBe(
+      "Earlier in this chat:\nUser: what is in src?\nAssistant: Three files.\n\nUser: and the biggest one?",
+    );
+  });
+
+  it("keeps only the most recent turns", () => {
+    const history = Array.from({ length: 20 }, (_, i) => ({ role: "user", content: `m${i}` }));
+    const prompt = buildCliPrompt(history as AgentMessage[], 4);
+
+    expect(prompt).toContain("m19");
+    expect(prompt).not.toContain("m15");
+  });
+});
+
+describe("CLI provider models", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  const models = [
+    { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    { id: "opus", label: "Opus", group: "Claude Code", provider: "claude-code-1" },
+  ];
+
+  function makeManager3(db: SqliteDatabase) {
+    const seen: Array<{ model?: string; modelProvider?: string }> = [];
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: {
+        async generate(_history, ctx) {
+          seen.push({ model: ctx.model, modelProvider: ctx.modelProvider });
+          return "reply";
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector, seen };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("offers CLI providers alongside the API backends", async () => {
+    const { mgr, connector } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model");
+
+    expect(sent.choices?.map((c) => c.label)).toContain("Claude Code (1)");
+  });
+
+  it("stores the provider with the model and routes the next turn to it", async () => {
+    const { mgr, connector, seen } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    const confirmation = await send(connector, "/model opus");
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "opus", modelProvider: "claude-code-1" });
+    expect(confirmation.text).toContain("supervised CLI session");
+
+    await send(connector, "hello");
+    expect(seen.at(-1)).toEqual({ model: "opus", modelProvider: "claude-code-1" });
+  });
+
+  it("clears the provider when switching back to an API model", async () => {
+    const { mgr, connector, seen } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/model opus");
+    await send(connector, "/model gpt-4o");
+    expect(mgr.getConfig("fake").modelProvider).toBe("");
+
+    await send(connector, "hello");
+    expect(seen.at(-1)).toEqual({ model: "gpt-4o", modelProvider: undefined });
+  });
+
+  it("clears the provider on reset", async () => {
+    const { mgr, connector } = makeManager3(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/model opus");
+    await send(connector, "/model reset");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
   });
 });
