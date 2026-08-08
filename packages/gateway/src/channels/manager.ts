@@ -805,6 +805,26 @@ export class ChannelManager {
   }
 
   /**
+   * Drop the cached catalogue. Called when a provider that missed its budget
+   * finally answers, so the next `/model` shows its models instead of serving
+   * the partial list for the rest of the TTL.
+   */
+  invalidateModelCache(): void {
+    this.modelCache = null;
+  }
+
+  /**
+   * Resolve the catalogue ahead of the first `/model`, so nobody waits for a
+   * cold CLI probe in a chat. Fire-and-forget: failures just leave the cache
+   * empty and the next real call retries.
+   */
+  warmModelCatalogue(): void {
+    void this.resolveModelsCached().catch((err) => {
+      this.log("model catalogue warm-up failed:", err);
+    });
+  }
+
+  /**
    * The model catalogue, cached briefly. Resolving it probes every configured
    * backend and CLI provider, which is far too slow to repeat for each step of
    * the picker. Concurrent callers share one resolution.

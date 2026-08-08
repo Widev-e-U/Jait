@@ -931,3 +931,77 @@ describe('/model "default" is a real model id', () => {
     expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
   });
 });
+
+describe("catalogue warm-up", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("resolves ahead of the first /model so the chat doesn't wait", async () => {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return [{ id: "m1", label: "M1", group: "OpenAI" }]; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    mgr.warmModelCatalogue();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(calls).toBe(1);
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Served from the warmed cache, not a second resolution.
+    expect(calls).toBe(1);
+    expect(connector.sent.at(-1)!.choices?.length).toBeGreaterThan(0);
+  });
+
+  it("survives a failing warm-up", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { throw new Error("provider down"); },
+      replyGenerator: echoGenerator,
+      log: () => {},
+    });
+    mgr.register(new FakeConnector());
+
+    expect(() => mgr.warmModelCatalogue()).not.toThrow();
+    await new Promise((r) => setTimeout(r, 10));
+  });
+});
+
+describe("catalogue invalidation", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("re-resolves after a late provider invalidates the cache", async () => {
+    let calls = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => { calls += 1; return [{ id: `m${calls}`, label: `M${calls}`, group: "OpenAI" }]; },
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(1);
+
+    // A provider that missed its budget has answered — the partial list is stale.
+    mgr.invalidateModelCache();
+
+    connector.emit({ text: "/model", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(2);
+  });
+});
