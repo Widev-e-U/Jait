@@ -153,7 +153,8 @@ describe('automation repositories', () => {
           nodeId: 'desktop-1',
           nodeName: 'Desktop (Windows)',
           platform: 'windows',
-          providers: ['codex', 'claude-code'],
+          providers: ['codex-account'],
+          availableProviderTypes: ['codex', 'claude-code'],
         },
       ],
       providersLoaded: true,
@@ -163,7 +164,7 @@ describe('automation repositories', () => {
       locationLabel: 'Desktop (Windows)',
       online: true,
       loading: false,
-      availableProviders: ['codex', 'claude-code'],
+      availableProviders: ['codex-account', 'codex', 'claude-code'],
     })
   })
 

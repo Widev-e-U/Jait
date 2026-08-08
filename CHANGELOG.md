@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.695](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.695) — 2026-08-08
+- fix(web): developer and Manager modes now keep independent provider/model selections; switching modes no longer replaces the chat's developer provider with Jait, and Manager's picker includes provider accounts advertised by the selected repositories' nodes.
+- fix(web): the conversation loading skeleton again spans the full viewport with alternating realistic turns, beginning and ending with user-message placeholders instead of collapsing to a three-turn block at the bottom.
+
 ## [v0.1.694](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.694) — 2026-08-08
 - fix(web): Manager thread composers now preserve the explicitly selected matching repository when duplicate records share a path across different devices, so the provider/model picker remains scoped to the selected repo node and shows that node's provider accounts instead of falling back to Jait only.
 - feat(web): Manager mode now exposes the global model selector in the app header, while session performance aggregation is deferred until the context details dialog opens to avoid scanning long conversations during ordinary rendering.

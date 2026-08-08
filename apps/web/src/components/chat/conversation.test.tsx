@@ -48,8 +48,8 @@ describe('Conversation', () => {
     // above it on a tall screen.
     const pulses = markup.match(/animate-pulse/g) ?? []
     expect(pulses).toHaveLength(CONVERSATION_SKELETON_TURNS.length)
-    // Turns are bottom-anchored and the overflow is clipped at the top.
-    expect(markup).toContain('justify-end')
+    // The first and last user turns pin the skeleton to both viewport edges.
+    expect(markup).toContain('justify-between')
     expect(markup).toContain('overflow-hidden')
   })
 })
@@ -100,14 +100,13 @@ describe('conversation skeleton proportions', () => {
       .toBeLessThan(Math.min(...assistant.map((t) => t.lines)))
   })
 
-  it('reads as a single exchange: user, assistant, then user again', () => {
-    // The skeleton is one user prompt, one agent reply, then the user's latest
-    // prompt — never two user turns back-to-back.
-    expect(CONVERSATION_SKELETON_TURNS.map((t) => t.role)).toEqual([
-      'user',
-      'assistant',
-      'user',
-    ])
+  it('fills the viewport with alternating turns bounded by user messages', () => {
+    const roles = CONVERSATION_SKELETON_TURNS.map((turn) => turn.role)
+
+    expect(roles.length).toBeGreaterThanOrEqual(7)
+    expect(roles[0]).toBe('user')
+    expect(roles.at(-1)).toBe('user')
+    expect(roles.every((role, index) => index === 0 || role !== roles[index - 1])).toBe(true)
   })
 
   it('ends on a user turn (the most recent prompt sits next to the composer)', () => {

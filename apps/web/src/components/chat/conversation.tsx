@@ -126,25 +126,25 @@ const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
 }
 
 /**
- * Placeholder turns, oldest first — the column is bottom-anchored, so the last
- * entry sits just above the composer and the top of the list is clipped, the
- * same way a real conversation scrolled to the end looks.
+ * Placeholder turns, oldest first. The first and last entries are user
+ * messages, so the skeleton has the same visible boundaries as the loaded
+ * conversation while the intervening exchange fills the full viewport.
  *
  * Line counts are deliberately lopsided: a user prompt is usually a line or
  * two, an assistant reply several. Alternating equal-sized blocks reads as a
  * generic loading list rather than a chat, and then visibly reflows when the
- * real messages arrive. There are enough turns here to overflow a tall
- * viewport, which is what makes the skeleton fill the full height.
- *
- * The column is bottom-anchored, so the last turn (a user prompt) sits just
- * above the composer. The skeleton reads as a single exchange — one user
- * prompt, one agent reply, then the user's latest prompt — which is the shape
- * the user asked for.
+ * real messages arrive.
  */
 export const CONVERSATION_SKELETON_TURNS: ReadonlyArray<{ role: 'user' | 'assistant'; lines: number }> = [
   { role: 'user', lines: 1 },
   { role: 'assistant', lines: 5 },
   { role: 'user', lines: 2 },
+  { role: 'assistant', lines: 6 },
+  { role: 'user', lines: 1 },
+  { role: 'assistant', lines: 4 },
+  { role: 'user', lines: 2 },
+  { role: 'assistant', lines: 5 },
+  { role: 'user', lines: 1 },
 ]
 
 /** Ragged line widths so a block reads as prose; the last line runs short. */
@@ -166,7 +166,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
     >
       <span className="sr-only">{label}</span>
-      <div className="mx-auto flex h-full max-w-4xl flex-col justify-end gap-6 px-4 pb-8 pt-12 sm:px-5">
+      <div className="mx-auto flex h-full max-w-4xl flex-col justify-between gap-6 px-4 pb-8 pt-12 sm:px-5">
         {CONVERSATION_SKELETON_TURNS.map((turn, turnIndex) => {
           // Stagger the pulse, but cycle it so the top of a long list isn't
           // still waiting to start animating.
@@ -209,8 +209,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
           )
         })}
       </div>
-      {/* Fade both edges: the top turn is clipped mid-block, the bottom meets
-          the composer. */}
+      {/* Fade both edges where the skeleton meets the surrounding chat chrome. */}
       <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-background to-transparent" />
       <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background to-transparent" />
     </div>

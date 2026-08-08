@@ -81,6 +81,7 @@ import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { shouldAutoTitleSession } from '@/lib/session-title'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
+import { updateModeProviderSelection, type ModeProviderSelection } from '@/lib/mode-provider-selection'
 import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
@@ -269,13 +270,29 @@ function App() {
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
   const [chatResponseStyle, setChatResponseStyle] = useState<ResponseStyle>('normal')
   const [sendTarget, setSendTarget] = useState<SendTarget>('agent')
-  const [chatProvider, setChatProvider] = useState<ProviderId>('jait')
+  const [providerSelection, setProviderSelection] = useState<ModeProviderSelection>({
+    developer: 'jait',
+    manager: 'jait',
+  })
+  const chatProvider = providerSelection.developer
+  const managerProvider = providerSelection.manager
+  const setChatProvider = useCallback((provider: ProviderId) => {
+    setProviderSelection((current) => updateModeProviderSelection(current, 'developer', provider))
+  }, [])
+  const setManagerProvider = useCallback((provider: ProviderId) => {
+    setProviderSelection((current) => updateModeProviderSelection(current, 'manager', provider))
+  }, [])
   const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
+  const [managerProviderRuntimeMode, setManagerProviderRuntimeMode] = useState<RuntimeMode>('full-access')
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
     () => loadLegacyCliModelsByProvider('jait')
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
+  const managerCliModel = cliModelsByProvider[managerProvider] ?? null
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
+  const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
+  const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
+  const threadCliModel = viewMode === 'manager' ? managerCliModel : cliModel
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
   const isElectron = !!(window as any).jaitDesktop
@@ -2012,7 +2029,11 @@ function App() {
     if (token) {
       void updateSettings({ chat_provider: provider as ChatProvider })
     }
-  }, [activeProjectId, token, updateSettings])
+  }, [activeProjectId, setChatProvider, token, updateSettings])
+
+  const handleManagerProviderChange = useCallback((provider: ProviderId) => {
+    setManagerProvider(provider)
+  }, [setManagerProvider])
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -2022,6 +2043,10 @@ function App() {
     setChatProviderRuntimeMode(runtimeMode)
   }, [])
 
+  const handleManagerProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
+    setManagerProviderRuntimeMode(runtimeMode)
+  }, [])
+
   const handleCliModelChange = useCallback((model: string | null) => {
     setCliModelsByProvider((current) => ({
       ...current,
@@ -2029,6 +2054,13 @@ function App() {
     }))
     saveProjectModelSelection(activeProjectId, chatProvider, model)
   }, [activeProjectId, chatProvider])
+
+  const handleManagerCliModelChange = useCallback((model: string | null) => {
+    setCliModelsByProvider((current) => ({
+      ...current,
+      [managerProvider]: model,
+    }))
+  }, [managerProvider])
 
   const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -3255,9 +3287,9 @@ function App() {
         referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
         attachments: prepared?.attachments,
-        providerId: chatProvider,
-        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        model: cliModel ?? undefined,
+        providerId: threadProvider,
+        runtimeMode: threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
+        model: threadCliModel ?? undefined,
         queuedAt: Date.now(),
       })
       setInputValue('')
@@ -3268,9 +3300,9 @@ function App() {
     setInputSegments(undefined)
     await automation.handleSend(
       promptWithUploads,
-      chatProvider,
-      chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      cliModel ?? undefined,
+      threadProvider,
+      threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
+      threadCliModel ?? undefined,
       {
         displayContent,
         referencedFiles: prepared?.referencedFiles,
@@ -3552,14 +3584,14 @@ function App() {
       referencedFiles: prepared?.referencedFiles,
       displaySegments: nextDisplaySegments,
       attachments: prepared?.attachments,
-      providerId: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: cliModel ?? undefined,
+      providerId: managerProvider,
+      runtimeMode: managerProvider !== 'jait' ? managerProviderRuntimeMode : undefined,
+      model: managerCliModel ?? undefined,
       queuedAt: Date.now(),
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [automation.selectedThread, chatProvider, chatProviderRuntimeMode, cliModel, enqueueManagerMessage, preparePromptSubmission, setInputValue])
+  }, [automation.selectedThread, enqueueManagerMessage, managerCliModel, managerProvider, managerProviderRuntimeMode, preparePromptSubmission, setInputValue])
 
   useEffect(() => {
     if (activeSessionId) return
@@ -4060,8 +4092,8 @@ function App() {
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
-              chatProvider={chatProvider}
-              cliModel={cliModel}
+              chatProvider={viewMode === 'manager' ? managerProvider : chatProvider}
+              cliModel={viewMode === 'manager' ? managerCliModel : cliModel}
               closeScreenSharePanel={closeScreenSharePanel}
               currentView={currentView}
               desktopPlatform={desktopPlatform}
@@ -4072,7 +4104,7 @@ function App() {
               isElectron={isElectron}
               isMaximized={isMaximized}
               isMobile={isMobile}
-              onCliModelChange={handleCliModelChange}
+              onCliModelChange={viewMode === 'manager' ? handleManagerCliModelChange : handleCliModelChange}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
               remainingPrompts={remainingPrompts}
@@ -4342,10 +4374,10 @@ function App() {
                 automationMessages={automationMessages}
                 availableFiles={availableFilesForMention}
                 availableSkills={availableSkills}
-                chatProvider={chatProvider}
-                chatProviderRuntimeMode={chatProviderRuntimeMode}
+                chatProvider={managerProvider}
+                chatProviderRuntimeMode={managerProviderRuntimeMode}
                 chatResponseStyle={chatResponseStyle}
-                cliModel={cliModel}
+                cliModel={managerCliModel}
                 inputValueRef={inputValueRef}
                 inputVersion={inputVersion}
                 isMobile={isMobile}
@@ -4364,7 +4396,7 @@ function App() {
                 voiceTranscribing={voiceTranscribing}
                 onAddRepository={() => automation.setFolderPickerOpen(true)}
                 onChangedFileClick={handleChangedFileClick}
-                onCliModelChange={handleCliModelChange}
+                onCliModelChange={handleManagerCliModelChange}
                 onDeleteThread={automation.handleDelete}
                 onDequeueManagerMessage={dequeueManagerMessage}
                 onHandleInputChange={handleInputChange}
@@ -4374,8 +4406,8 @@ function App() {
                 onOpenManagerPlan={setPlanRepo}
                 onOpenManagerStrategy={setStrategyRepo}
                 onOpenMessagePath={handleOpenMessagePath}
-                onProviderChange={handleChatProviderChange}
-                onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                onProviderChange={handleManagerProviderChange}
+                onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
                 onRefreshThreads={() => { void automation.refresh() }}
                 onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
                 onReorderManagerQueueItem={reorderManagerQueueItem}
@@ -4602,9 +4634,9 @@ function App() {
           onStrategyRepoChange={setStrategyRepo}
           planRepo={planRepo}
           onPlanRepoChange={setPlanRepo}
-          provider={chatProvider}
-          runtimeMode={chatProviderRuntimeMode}
-          model={cliModel}
+          provider={managerProvider}
+          runtimeMode={managerProviderRuntimeMode}
+          model={managerCliModel}
         />
 
         {secretInput.backgroundRequest && (

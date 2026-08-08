@@ -263,7 +263,10 @@ export function getRepositoryRuntimeInfo(
     locationLabel,
     online: isOnline,
     loading: !isOnline && !providersLoaded,
-    availableProviders: dedupeProviders(remoteNode?.providers ?? []),
+    availableProviders: dedupeProviders([
+      ...(remoteNode?.providers ?? []),
+      ...(remoteNode?.availableProviderTypes ?? []),
+    ]),
   }
 }
 
