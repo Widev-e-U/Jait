@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { AssistantBody } from '@/components/chat/assistant-body'
 import { ConversationScrollButton } from '@/components/ai-elements/conversation'
+import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from '@/components/chat/use-stick-to-bottom'
+import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 
 /** Auto-scroll a container to the bottom when content changes. */
@@ -1984,6 +1986,43 @@ function PerformativeBadge({ performative }: { performative?: string }) {
   )
 }
 
+/** Height cap for a sub-agent's inline chat, so it never dominates the parent turn. */
+const SUB_AGENT_MAX_HEIGHT_PX = 500
+
+/**
+ * The scroll surface a sub-agent's inline chat lives in: capped at 500px, with
+ * the same stick-to-bottom behaviour and scroll-to-bottom button as the main
+ * conversation. The button is a sibling of the scroller (not a child) so it
+ * stays pinned in view instead of scrolling away with the content.
+ */
+function SubAgentScrollArea({
+  scrollRef,
+  contentRef,
+  isAtBottom,
+  onScroll,
+  scrollToBottom,
+  children,
+}: StickToBottomScroll & { children: ReactNode }) {
+  return (
+    <div className="relative">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="overflow-y-auto"
+        style={{ ...NESTED_SCROLL_STYLE, maxHeight: SUB_AGENT_MAX_HEIGHT_PX }}
+      >
+        <div ref={contentRef}>{children}</div>
+      </div>
+      {!isAtBottom && (
+        <ConversationScrollButton
+          className="bottom-3 h-7 w-7"
+          onClick={() => scrollToBottom()}
+        />
+      )}
+    </div>
+  )
+}
+
 function SubAgentHistoryView({
   args,
   data,
@@ -2016,34 +2055,16 @@ function SubAgentHistoryView({
     completedAt: tc.completedAt,
   }))
 
-  // Scroll handling mirrors the normal chat: stick to the bottom while the
-  // user is at the bottom, and show a scroll-to-bottom button when they scroll
-  // up. The sub-agent card is capped at 500px tall.
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const stickToBottomRef = useRef(true)
-  const [isAtBottom, setIsAtBottom] = useState(true)
-  const scrollDep = `${nestedCalls.length}|${content.length}|${message?.length ?? 0}|${streamingOutput?.length ?? 0}`
+  // The run's real chronology, persisted alongside the tool calls: thinking,
+  // tool groups and prose in the order they happened. Without it all we can do
+  // is show every tool call in one block followed by the answer, which is not
+  // when any of it actually ran.
+  const segments = useMemo(() => normalizeMessageSegments(data.segments), [data.segments])
 
-  const updateBottomState = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    setIsAtBottom(distanceFromBottom < 24)
-  }, [])
-
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTo({ top: el.scrollHeight, behavior })
-  }, [])
-
-  // Auto-scroll to the bottom on content changes while the user is at the bottom.
-  useEffect(() => {
-    if (!stickToBottomRef.current) return
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [scrollDep])
+  // Scroll handling is the normal chat's: stick to the bottom while the user is
+  // at the bottom, detach as soon as they scroll up, and offer the same
+  // scroll-to-bottom button to come back.
+  const { scrollRef, contentRef, isAtBottom, onScroll, scrollToBottom } = useStickToBottom()
 
   return (
     <div className="text-xs">
@@ -2056,51 +2077,50 @@ function SubAgentHistoryView({
         )}
       </div>
 
-      <div
-        ref={scrollRef}
-        onScroll={updateBottomState}
-        className="relative max-h-[500px] overflow-auto"
+      <SubAgentScrollArea
+        scrollRef={scrollRef}
+        contentRef={contentRef}
+        isAtBottom={isAtBottom}
+        onScroll={onScroll}
+        scrollToBottom={scrollToBottom}
       >
         <SubAgentMission args={args} />
         <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
-        {/* Nested tool calls rendered as full ToolCallCards */}
-        {nestedCalls.length > 0 && (
-          <div className="py-1">
-            {nestedCalls.map((call) => (
-              <ToolCallCard key={call.callId} call={call} />
-            ))}
+        {segments.length > 0 ? (
+          /* Replay of the run in the order it happened — same renderer as a
+             normal assistant turn, so tool cards sit where they actually ran. */
+          <div className="px-3 py-1">
+            <AssistantBody segments={segments} toolCalls={nestedCalls} isStreaming={isRunning} compact />
           </div>
-        )}
+        ) : (
+          <>
+            {/* Pre-segments runs (and ACP specialists): no recorded chronology,
+                so the tool calls can only be listed, then the answer. */}
+            {nestedCalls.length > 0 && (
+              <div className="py-1">
+                {nestedCalls.map((call) => (
+                  <ToolCallCard key={call.callId} call={call} />
+                ))}
+              </div>
+            )}
 
-        {/* Final output — rendered as markdown, like a normal assistant reply */}
-        {content && (
-          <div className="px-3 py-2.5">
-            <div className="max-h-64 overflow-auto">
-              <AssistantMarkdown content={content} />
-            </div>
-          </div>
-        )}
+            {/* Final output — rendered as markdown, like a normal assistant reply */}
+            {content && (
+              <div className="px-3 py-2.5">
+                <AssistantMarkdown content={content} />
+              </div>
+            )}
 
-        {/* Fallback to message if no content */}
-        {!content && message && (
-          <div className="px-3 py-2">
-            <div className="max-h-64 overflow-auto">
-              <AssistantMarkdown content={message} />
-            </div>
-          </div>
+            {/* Fallback to message if no content */}
+            {!content && message && (
+              <div className="px-3 py-2">
+                <AssistantMarkdown content={message} />
+              </div>
+            )}
+          </>
         )}
-
-        {!isAtBottom && (
-          <ConversationScrollButton
-            className="bottom-3"
-            onClick={() => {
-              stickToBottomRef.current = true
-              scrollToBottom()
-            }}
-          />
-        )}
-      </div>
+      </SubAgentScrollArea>
     </div>
   )
 }
@@ -2525,6 +2545,14 @@ export function computeAgentNesting(calls: ToolCallInfo[]): {
     for (let j = i + 1; j < calls.length; j++) {
       const candidate = calls[j]
       if (parentSet.has(candidate.callId)) continue
+      // Never adopt another agent call by lifetime alone. Specialists delegated
+      // in the same round run concurrently, so the second one starts while the
+      // first is still running — the heuristic would swallow it as a child and
+      // the coordinator would show one sub-agent with the rest buried inside it,
+      // instead of N siblings at the same depth. A genuinely nested sub-agent
+      // (a specialist that spawns its own) always carries an explicit
+      // parentCallId and is already handled above.
+      if (isAgentToolName(candidate.tool)) continue
 
       const isAgentActive = call.status === 'running' || call.status === 'pending'
       const isWithinAgentLifetime = call.completedAt != null && candidate.startedAt <= call.completedAt
@@ -3592,63 +3620,75 @@ function AgentSpecialistBlock({
   // The delegated mission stays as a compact one-line description above this body.
   const liveText = isRunning ? (call.streamingOutput ?? '') : ''
   // Prefer the ordered segments captured from the live event stream — a real agent
-  // run interleaves multiple thinking blocks and tool calls across rounds. Historical /
-  // persisted calls carry no childSegments, so fall back to a best-effort reconstruction.
+  // run interleaves multiple thinking blocks and tool calls across rounds.
   const childSegments = call.childSegments
+  // Second choice: the same chronology recorded in the result the sub-agent
+  // returned. Live segments only exist for the turn that streamed them, so this
+  // is what a reloaded conversation renders from.
+  const recordedSegments = useMemo(
+    () => normalizeMessageSegments(resultRecord?.segments),
+    [resultRecord?.segments],
+  )
+  const scroll = useStickToBottom()
   const bodySegments = useMemo<MessageSegment[]>(() => {
     if (childSegments && childSegments.length > 0) return childSegments
+    if (recordedSegments.length > 0) return recordedSegments
+    // Last resort (pre-segments history, ACP specialists): no recorded order, so
+    // everything collapses into thinking → one tool block → answer.
     const segs: MessageSegment[] = []
     if (thinking.trim()) segs.push({ type: 'thinking', content: thinking })
     if (childCalls && childCalls.length > 0) segs.push({ type: 'toolGroup', callIds: childCalls.map((c) => c.callId) })
     if (liveText.trim()) segs.push({ type: 'text', content: liveText })
     if (content) segs.push({ type: 'text', content })
     return segs
-  }, [childSegments, thinking, childCalls, liveText, content])
+  }, [childSegments, recordedSegments, thinking, childCalls, liveText, content])
 
   return (
-    <div className="space-y-1">
-      {/* Delegated mission — a one-liner (ellipsed) with a show-more toggle that
-          reveals the full description in place. The card header above shows the
-          normal "Sub-agent" tool-call title; no extra border here. */}
-      {missionText && (
-        <div className="px-0.5 py-1">
-          <div className={cn('whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 [overflow-wrap:anywhere]', !missionOpen && 'line-clamp-1')}>
-            <AssistantMarkdown content={missionText} compact />
+    <SubAgentScrollArea {...scroll}>
+      <div className="space-y-1">
+        {/* Delegated mission — a one-liner (ellipsed) with a show-more toggle that
+            reveals the full description in place. The card header above shows the
+            normal "Sub-agent" tool-call title; no extra border here. */}
+        {missionText && (
+          <div className="px-0.5 py-1">
+            <div className={cn('whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 [overflow-wrap:anywhere]', !missionOpen && 'line-clamp-1')}>
+              <AssistantMarkdown content={missionText} compact />
+            </div>
+            {canExpandMission && (
+              <button
+                type="button"
+                onClick={() => setMissionOpen((o) => !o)}
+                className="mt-0.5 text-2xs font-medium text-primary hover:underline"
+              >
+                {missionOpen ? 'Show less' : 'Show more'}
+              </button>
+            )}
           </div>
-          {canExpandMission && (
-            <button
-              type="button"
-              onClick={() => setMissionOpen((o) => !o)}
-              className="mt-0.5 text-2xs font-medium text-primary hover:underline"
-            >
-              {missionOpen ? 'Show less' : 'Show more'}
-            </button>
-          )}
-        </div>
-      )}
-      {allowedTools.length > 0 && (
-        <div className="flex flex-wrap gap-1 px-0.5">
-          {allowedTools.map((tool) => (
-            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
-          ))}
-        </div>
-      )}
+        )}
+        {allowedTools.length > 0 && (
+          <div className="flex flex-wrap gap-1 px-0.5">
+            {allowedTools.map((tool) => (
+              <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+            ))}
+          </div>
+        )}
 
-      {/* The specialist's actual work — rendered through the same chat body renderer
-          as a normal assistant message (thinking block + tool cards + markdown). */}
-      <AssistantBody
-        segments={bodySegments}
-        toolCalls={childCalls ?? []}
-        isStreaming={isRunning}
-        hasStreamingText={!!content}
-        threadControlThreads={threadControlThreads}
-        onOpenTerminal={onOpenTerminal}
-        onOpenDiff={onOpenDiff}
-        renderInlineSecretPrompt={renderInlineSecretPrompt}
-        onApprovalResponse={onApprovalResponse}
-        compact
-      />
-    </div>
+        {/* The specialist's actual work — rendered through the same chat body renderer
+            as a normal assistant message (thinking block + tool cards + markdown). */}
+        <AssistantBody
+          segments={bodySegments}
+          toolCalls={childCalls ?? []}
+          isStreaming={isRunning}
+          hasStreamingText={!!content}
+          threadControlThreads={threadControlThreads}
+          onOpenTerminal={onOpenTerminal}
+          onOpenDiff={onOpenDiff}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={onApprovalResponse}
+          compact
+        />
+      </div>
+    </SubAgentScrollArea>
   )
 }
 

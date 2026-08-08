@@ -1124,22 +1124,41 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
 
     if (attempt > 0) {
       onEvent?.({ type: "tool_retry", call_id: tc.id, attempt, maxAttempts: maxRetries });
-      // Exponential backoff: 500ms, 1s, 2s
-      await new Promise((r) => setTimeout(r, Math.min(500 * 2 ** (attempt - 1), 4000)));
+      // Exponential backoff: 500ms, 1s, 2s — abortable, so cancelling a turn
+      // doesn't have to wait out the full backoff of every in-flight retry.
+      await sleepUntilAborted(Math.min(500 * 2 ** (attempt - 1), 4000), signal);
+      if (signal?.aborted) {
+        result = { ok: false, message: "Cancelled" };
+        break;
+      }
     }
 
-    result = await executeTool(internalName, args, sessionId, auth, (chunk) => {
-      onEvent?.({ type: "tool_output", call_id: tc.id, content: chunk });
-    }, signal, (nested) => {
-      // Sub-agent work surfaces as real events on this turn's stream. The tool
-      // doesn't know its own call id, so stamp it here: its own text/thinking
-      // belongs to this call, and the tool calls it makes hang under it.
-      if (nested.type === "tool_output") {
-        onEvent?.({ ...nested, call_id: nested.call_id || tc.id });
-      } else {
-        onEvent?.({ ...nested, parent_call_id: nested.parent_call_id ?? tc.id });
+    try {
+      result = normalizeToolResult(await executeTool(internalName, args, sessionId, auth, (chunk) => {
+        onEvent?.({ type: "tool_output", call_id: tc.id, content: chunk });
+      }, signal, (nested) => {
+        // Sub-agent work surfaces as real events on this turn's stream. The tool
+        // doesn't know its own call id, so stamp it here: its own text/thinking
+        // belongs to this call, and the tool calls it makes hang under it.
+        if (nested.type === "tool_output") {
+          onEvent?.({ ...nested, call_id: nested.call_id || tc.id });
+        } else {
+          onEvent?.({ ...nested, parent_call_id: nested.parent_call_id ?? tc.id });
+        }
+      }));
+    } catch (error) {
+      // A tool that throws instead of returning { ok: false } must never reject
+      // this promise. executeOneToolCall runs inside Promise batches, and one
+      // rejection there discards every sibling's result — leaving the assistant's
+      // tool_calls message with no matching tool messages, which corrupts history
+      // and makes the provider reject the next round. Surface the throw to the
+      // model as a normal failed result instead, so it can self-correct.
+      if (signal?.aborted) {
+        result = { ok: false, message: "Cancelled" };
+        break;
       }
-    });
+      result = { ok: false, message: `TOOL ERROR: ${error instanceof Error ? error.message : String(error)}` };
+    }
 
     if (result.ok) break;
 
@@ -1209,21 +1228,106 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
   };
 }
 
+/** Sleep that resolves early when `signal` aborts, so cancels aren't held up by backoff. */
+function sleepUntilAborted(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
+}
+
+/**
+ * Coerces whatever a tool returned into a well-formed ToolResult. Tools are
+ * third-party-ish (plugins, MCP servers, remote executors) and can resolve with
+ * `undefined`, a bare string, or an object with no `message`. Downstream code
+ * reads `result.message.length` and lowercases it, so an unnormalized result
+ * turns a tool's sloppy return value into a TypeError that kills the whole turn.
+ */
+function normalizeToolResult(raw: unknown): ToolResult {
+  if (raw && typeof raw === "object") {
+    const candidate = raw as Partial<ToolResult>;
+    return {
+      ...(raw as ToolResult),
+      ok: candidate.ok === true,
+      message: typeof candidate.message === "string" ? candidate.message : "",
+    };
+  }
+  if (typeof raw === "string") return { ok: true, message: raw };
+  return { ok: false, message: "Tool returned no result" };
+}
+
+/**
+ * How much of a failure message to scan for transient-error markers. Failure
+ * messages lead with the error; the tail is often captured stdout/stderr, and
+ * scanning all of it (up to TOOL_RESULT_MAX_CHARS) made unrelated output — a
+ * failing test run that happens to print "503" or "network" — trigger retries.
+ */
+const TRANSIENT_SCAN_CHARS = 400;
+
+/**
+ * Anchored markers of a genuinely retryable failure. These are word-bounded
+ * rather than bare substrings: `includes("429")` also matched "1429 bytes",
+ * and `includes("network")` matched any prose mentioning networks.
+ */
+const TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
+  /\btimed?\s?out\b/,
+  /\btimeout\b/,
+  /\be(?:conn(?:refused|reset|aborted)|timedout|hostunreach|ai_again|pipe)\b/,
+  /socket hang up/,
+  /\brate[ _-]?limit(?:ed|ing)?\b/,
+  /\btoo many requests\b/,
+  /\b(?:429|502|503|504)\b/,
+  /\bnetwork\b(?=.{0,40}\b(?:error|failure|failed|unreachable|down|timeout|issue)\b)/,
+  /\b(?:service|server|host|endpoint|model|resource)s?\s+(?:is\s+|are\s+|currently\s+|temporarily\s+)*unavailable\b/,
+  /\b(?:temporarily|currently)\s+unavailable\b/,
+  /\bbad gateway\b/,
+  /\bgateway time-?out\b/,
+  /\boverloaded\b/,
+];
+
 /** Heuristic: is this error transient and worth retrying? */
-function isTransientFailure(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("timeout") ||
-    lower.includes("econnrefused") ||
-    lower.includes("econnreset") ||
-    lower.includes("socket hang up") ||
-    lower.includes("rate limit") ||
-    lower.includes("429") ||
-    lower.includes("503") ||
-    lower.includes("502") ||
-    lower.includes("network") ||
-    lower.includes("unavailable")
-  );
+function isTransientFailure(message: string | undefined): boolean {
+  if (!message) return false;
+  const head = message.slice(0, TRANSIENT_SCAN_CHARS).toLowerCase();
+  return TRANSIENT_FAILURE_PATTERNS.some((pattern) => pattern.test(head));
+}
+
+/**
+ * Last-resort record for a tool call whose execution rejected outright. Keeps the
+ * one-tool-message-per-tool_call invariant intact so the conversation stays valid.
+ */
+function failedToolCallOutcome(
+  tc: OpenAIToolCall,
+  reason: unknown,
+): { executed: ExecutedToolCall; historyEntry: AgentMessage } {
+  let args: unknown;
+  try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
+  const message = `TOOL ERROR: ${reason instanceof Error ? reason.message : String(reason)}`;
+  const now = Date.now();
+  return {
+    executed: {
+      callId: tc.id,
+      tool: fromOpenAIName(tc.function.name),
+      args,
+      ok: false,
+      message,
+      startedAt: now,
+      completedAt: now,
+      retryCount: 0,
+    },
+    historyEntry: {
+      role: "tool",
+      content: JSON.stringify({ ok: false, message }),
+      tool_call_id: tc.id,
+      name: tc.function.name,
+    },
+  };
 }
 
 export const __testUtils = {
@@ -2539,7 +2643,12 @@ export async function runAgentLoop(
           if (swarmRoundId) createSwarmRound(swarmRoundId, agentSpawnCount);
 
           try {
-            const results = await Promise.all(
+            // allSettled, not all: every tool_call in this batch must end up with
+            // exactly one matching tool message in history. Promise.all would
+            // discard all sibling results the moment one call rejected, leaving
+            // the assistant's tool_calls message half-answered — which providers
+            // reject on the next round.
+            const results = await Promise.allSettled(
               batch.map((item) =>
                 executeOneToolCall({
                   tc: item.toolCall,
@@ -2554,9 +2663,24 @@ export async function runAgentLoop(
                 }),
               ),
             );
-            for (const { executed, historyEntry } of results) {
-              executedToolCalls.push(executed);
-              history.push(historyEntry);
+            for (const [index, outcome] of results.entries()) {
+              if (outcome.status === "fulfilled") {
+                executedToolCalls.push(outcome.value.executed);
+                history.push(outcome.value.historyEntry);
+                continue;
+              }
+              const item = batch[index]!;
+              const failed = failedToolCallOutcome(item.toolCall, outcome.reason);
+              log.error(`Tool call ${item.toolCall.function.name} rejected unexpectedly: ${failed.executed.message}`);
+              onEvent?.({
+                type: "tool_result",
+                call_id: item.toolCall.id,
+                tool: failed.executed.tool,
+                ok: false,
+                message: failed.executed.message,
+              });
+              executedToolCalls.push(failed.executed);
+              history.push(failed.historyEntry);
             }
           } finally {
             if (swarmRoundId) endSwarmRound(swarmRoundId);

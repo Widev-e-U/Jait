@@ -39,7 +39,11 @@ export function createAgentTool(deps: AgentSpawnDeps): ToolDefinition<AgentInput
     description:
       "Launch a sub-agent for complex, multi-step tasks. " +
       "It gets its own tools, works autonomously, and returns a single result. " +
-      "Provide a detailed prompt specifying exactly what to do and return.",
+      "Provide a detailed prompt specifying exactly what to do and return. " +
+      "To run work in parallel, emit several agent calls in the SAME reply — they " +
+      "start concurrently, one visible sub-agent each. One call per independent " +
+      "piece of work; only split across replies when a task needs an earlier " +
+      "sub-agent's output.",
     tier: "core",
     category: "agent",
     source: "builtin",

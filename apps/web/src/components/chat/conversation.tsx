@@ -31,6 +31,13 @@ interface ConversationProps {
   hasMore?: boolean
   /** Callback to load older messages (scroll-up lazy loading). */
   onLoadMore?: () => void
+  /**
+   * When this changes to a new, non-null message id, force the conversation to
+   * reveal that message — even if the user has scrolled up away from the
+   * bottom. Used to follow a freshly-sent user message so it's always in view
+   * the moment it lands.
+   */
+  scrollToMessageId?: string | null
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
@@ -217,7 +224,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, scrollToMessageId }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
@@ -232,6 +239,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // Once the user scrolls up away from the bottom, stay detached (don't follow
   // new streamed content) until they scroll back down to the bottom edge.
   const detachedRef = useRef(false)
+  // Last scrollToMessageId handled, so we only force-scroll on a genuinely new
+  // target (not on every re-render while the value stays constant).
+  const prevScrollTargetRef = useRef(scrollToMessageId ?? null)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
@@ -257,6 +267,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // Set when a lazy-load was triggered, so the next render that grows the list
   // knows to restore rather than letting the browser keep raw scrollTop.
   const pendingPrependAnchorRef = useRef(false)
+  // Virtualized total height right before a prepend, so the restore step can
+  // compensate scrollTop by exactly how much content was added above the
+  // fold — see the comment on the restore effect for why this replaced the
+  // DOM-lookup approach.
+  const prevTotalSizeRef = useRef(0)
 
   const captureScrollAnchor = useCallback(() => {
     const el = scrollRef.current
@@ -342,6 +357,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       return index
     },
   })
+
+  // Always-fresh handle for reading virtualizer state from callbacks/effects
+  // without needing the (identity-unstable) virtualizer in their deps.
+  const virtualizerRef = useRef(virtualizer)
+  virtualizerRef.current = virtualizer
 
   // Track user-initiated scroll gestures (wheel/touch) so we don't
   // confuse layout-induced scrollTop changes (tool cards collapsing)
@@ -467,6 +487,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     // of a now much longer list, re-arming this trigger and cascading
     // straight to the beginning of the conversation.
     captureScrollAnchor()
+    prevTotalSizeRef.current = virtualizerRef.current.getTotalSize()
     pendingPrependAnchorRef.current = true
     onLoadMore()
   }, [captureScrollAnchor, hasMore, onLoadMore])
@@ -491,16 +512,36 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   useEffect(() => () => clearTimeout(rearmTimerRef.current), [])
 
   // Restore once the prepended batch is actually in the DOM.
+  //
+  // This deliberately does not use restoreScrollAnchor()'s DOM-key lookup.
+  // Right after a prepend, the virtualizer's render window is still computed
+  // from the pre-prepend scrollTop, which now maps to indices near the start
+  // of the (longer) list — i.e. the just-loaded oldest batch, not wherever
+  // the anchored item ended up. A key lookup for the anchor then finds
+  // nothing, compensation silently no-ops, and the user is left staring at
+  // the top of the new batch (which reads as "jumped to the start of the
+  // chat"). Total-size delta doesn't depend on any item being rendered, so
+  // it always applies.
   useLayoutEffect(() => {
     if (!pendingPrependAnchorRef.current) return
     if (childItems.length === prevChildCount.current) return
     pendingPrependAnchorRef.current = false
     clearTimeout(rearmTimerRef.current)
-    restoreScrollAnchor()
+    const el = scrollRef.current
+    if (el) {
+      const delta = virtualizerRef.current.getTotalSize() - prevTotalSizeRef.current
+      if (delta !== 0) {
+        restoringAnchorRef.current = true
+        el.scrollTop += delta
+        requestAnimationFrame(() => {
+          restoringAnchorRef.current = false
+        })
+      }
+    }
     // Re-arm only after the view has been put back, so being near the top
     // during the load can't queue another page.
     loadMoreTriggeredRef.current = false
-  }, [childItems.length, restoreScrollAnchor])
+  }, [childItems.length])
 
   useEffect(() => {
     // Re-arm when the server reports a different pagination state.
@@ -562,6 +603,35 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior })
   }, [])
+
+  // When a new user message lands, re-attach to the bottom and bring that
+  // message into view — even if the user had scrolled up to read history.
+  // Runs in layout so the scroll happens before paint, avoiding a visible jump.
+  useLayoutEffect(() => {
+    const target = scrollToMessageId ?? null
+    if (target == null || target === prevScrollTargetRef.current) return
+    prevScrollTargetRef.current = target
+
+    const el = scrollRef.current
+    if (!el) return
+
+    // Cancel any in-flight "stay where I am" gesture so this reveal isn't
+    // immediately fought by the scroll/detach handlers.
+    detachedRef.current = false
+    stickToBottomRef.current = true
+    setStickToBottom(true)
+    setIsAtBottom(true)
+
+    const index = childItems.findIndex((child) =>
+      typeof child === 'object' && child !== null && 'key' in child && String(child.key) === target,
+    )
+    if (index < 0) {
+      // Not (yet) rendered as an item — fall back to the bottom edge.
+      positionConversationAtBottom(el)
+      return
+    }
+    virtualizerRef.current.scrollToIndex(index, { align: 'end' })
+  }, [scrollToMessageId, childItems])
 
   useLayoutEffect(() => {
     updateBottomState()

@@ -115,6 +115,7 @@ export {
   runAgentLoop,
   retryToolCall,
   pruneHistory,
+  repairToolCallHistory,
   generateLLMConversationSummary,
   buildToolSchemas,
   buildTieredToolSchemas,

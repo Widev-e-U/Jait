@@ -788,6 +788,32 @@ describe('AgentToolCallWrapper', () => {
     expect(nested.parentSet.has('read-1')).toBe(true)
     expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['read-1'])
   })
+
+  it('keeps concurrently spawned sub-agents as siblings instead of nesting them', () => {
+    // Two specialists delegated in the same round run at the same time, so the
+    // second one starts while the first is still running. Neither is a child of
+    // the other — they belong side by side at coordinator depth.
+    const nested = computeAgentNesting([
+      { callId: 'agent-1', tool: 'agent', args: { description: 'Implementation Specialist' }, status: 'running', startedAt: 1 },
+      { callId: 'agent-2', tool: 'agent', args: { description: 'Verification Specialist' }, status: 'running', startedAt: 2 },
+      { callId: 'read-1', parentCallId: 'agent-1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 3, completedAt: 4 },
+      { callId: 'read-2', parentCallId: 'agent-2', tool: 'read', args: { path: 'b.ts' }, status: 'success', startedAt: 5, completedAt: 6 },
+    ])
+
+    expect(nested.parentSet.has('agent-2')).toBe(false)
+    expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['read-1'])
+    expect(nested.childMap.get('agent-2')?.map(call => call.callId)).toEqual(['read-2'])
+  })
+
+  it('still nests an explicitly parented sub-agent spawned by another sub-agent', () => {
+    const nested = computeAgentNesting([
+      { callId: 'agent-1', tool: 'agent', args: { description: 'Lead' }, status: 'running', startedAt: 1 },
+      { callId: 'agent-2', parentCallId: 'agent-1', tool: 'agent', args: { description: 'Helper' }, status: 'running', startedAt: 2 },
+    ])
+
+    expect(nested.parentSet.has('agent-2')).toBe(true)
+    expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['agent-2'])
+  })
 })
 
 describe('summarizeCollapsedToolCalls', () => {

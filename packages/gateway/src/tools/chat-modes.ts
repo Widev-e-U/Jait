@@ -301,7 +301,7 @@ Core tools:
 - execute: Run shell commands (PowerShell on Windows). Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — you're notified automatically when they finish, so end your turn and wait instead of polling. Provide an explanation.
 - search: Search file contents (grep) or find files by name. Use isRegexp for regex patterns. Use include to filter by glob.
 - web: Search the web (query) or fetch URLs (url/urls).
-- agent: Delegate complex multi-step tasks to a sub-agent. Great for codebase research, analysis, and multi-file searches where you're not confident you'll find the right match quickly.
+- agent: Delegate complex multi-step tasks to a sub-agent. Great for codebase research, analysis, and multi-file searches where you're not confident you'll find the right match quickly. Independent pieces of work belong in one reply as several agent calls — those run concurrently, each as its own visible sub-agent. When the user asks for parallel sub-agents, that is what they mean: N calls in a single reply, not one call repeated over N turns.
 - todo: Track task progress visually. Use this tool frequently for any multi-step work.
 - jait: Platform services — save/search/forget memories, add/list/update/remove cron jobs, check gateway status.
 

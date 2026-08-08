@@ -43,6 +43,17 @@ export function parsePerformative(rawContent: string): ParsedPerformative {
   return { performative, content: rawContent.slice(match[0].length).trim() };
 }
 
+/**
+ * Strip a leading performative tag from a piece of text, if it carries one.
+ *
+ * `parsePerformative` does this for the final answer; this is for the same
+ * answer as it appears inside the sub-agent's ordered render segments, where
+ * the tag is bookkeeping the user should never see.
+ */
+export function stripPerformativeTag(text: string): string {
+  return text.replace(PERFORMATIVE_TAG_RE, "");
+}
+
 /** Whether a result carrying this performative should be treated as a successful completion. */
 export function isSuccessfulPerformative(performative: Performative): boolean {
   return !UNSUCCESSFUL_PERFORMATIVES.has(performative);

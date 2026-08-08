@@ -189,3 +189,71 @@ describe("sub-agents run uncapped", () => {
     expect(round).toBeGreaterThan(2);
   });
 });
+
+describe("sub-agent result chronology", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reports the run's ordered segments so the UI can replay it as a chat", async () => {
+    const rounds = [
+      [
+        'data: {"choices":[{"delta":{"content":"Looking at the config first."}}]}\n\n',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"[INFORM] the config sets the port"}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let round = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = rounds[Math.min(round++, rounds.length - 1)]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const fileReadDef = { name: "file.read", description: "Read a file", parameters: { type: "object", properties: {} } };
+    const toolRegistry = {
+      has: () => true,
+      get: () => fileReadDef,
+      list: () => [fileReadDef],
+      execute: async () => ({ ok: true, message: "port = 8000" }),
+    } as unknown as ToolRegistry;
+
+    const tool = createAgentSpawnTool({
+      toolRegistry,
+      getLLMConfig: () => ({
+        openaiApiKey: "test-key",
+        openaiBaseUrl: "https://llm.test",
+        openaiModel: "test-model",
+        contextWindow: 100_000,
+      }),
+    });
+
+    const result = await tool.execute(
+      { prompt: "find the port", description: "Researcher", allowedTools: "file.read" },
+      { ...baseContext, providerId: "jait" },
+    );
+
+    // The prose the specialist wrote before delegating to a tool has to stay
+    // *before* that tool call — this ordering is the whole point of shipping
+    // segments, since the flat toolCalls list can only be rendered as one lump.
+    expect(result.data).toMatchObject({
+      segments: [
+        { type: "text", content: "Looking at the config first." },
+        { type: "toolGroup", callIds: ["call-1"] },
+        // Performative tag is parent-agent bookkeeping, never rendered.
+        { type: "text", content: "the config sets the port" },
+      ],
+    });
+  });
+});

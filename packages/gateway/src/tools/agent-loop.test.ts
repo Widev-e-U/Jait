@@ -710,6 +710,190 @@ describe("executeOneToolCall retry accounting", () => {
   });
 });
 
+describe("executeOneToolCall failure containment", () => {
+  it("turns a thrown tool error into a failed result instead of rejecting", async () => {
+    const events: AgentLoopEvent[] = [];
+    const result = await __testUtils.executeOneToolCall({
+      tc: toolCall("throwing-case", "file_read"),
+      sessionId: "session-1",
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      executeTool: async () => {
+        throw new Error("ENOENT: no such file or directory");
+      },
+    });
+
+    expect(result.result.ok).toBe(false);
+    expect(result.result.message).toContain("ENOENT: no such file or directory");
+    // The model still receives a tool message for this call id.
+    expect(result.historyEntry).toMatchObject({ role: "tool", tool_call_id: "throwing-case" });
+    expect(JSON.parse(result.historyEntry.content)).toMatchObject({ ok: false });
+    expect(events.some((event) => event.type === "tool_result")).toBe(true);
+  });
+
+  it("retries a thrown transient error and succeeds on a later attempt", async () => {
+    let calls = 0;
+    const result = await __testUtils.executeOneToolCall({
+      tc: toolCall("throwing-transient", "file_read"),
+      sessionId: "session-1",
+      maxRetries: 2,
+      executeTool: async () => {
+        calls += 1;
+        if (calls < 2) throw new Error("socket hang up");
+        return { ok: true, message: "recovered" };
+      },
+    });
+
+    expect(calls).toBe(2);
+    expect(result.result).toMatchObject({ ok: true, message: "recovered" });
+    expect(result.executed.retryCount).toBe(1);
+  });
+
+  it("normalizes a malformed tool result rather than throwing on it", async () => {
+    const result = await __testUtils.executeOneToolCall({
+      tc: toolCall("malformed-case", "file_read"),
+      sessionId: "session-1",
+      maxRetries: 0,
+      // A plugin/MCP tool that resolves without a message field.
+      executeTool: async () => ({ ok: true } as never),
+    });
+
+    expect(result.result).toMatchObject({ ok: true, message: "" });
+    expect(() => JSON.parse(result.historyEntry.content)).not.toThrow();
+  });
+
+  it("stops retrying promptly once the signal aborts", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const started = Date.now();
+    const result = await __testUtils.executeOneToolCall({
+      tc: toolCall("abort-case", "file_read"),
+      sessionId: "session-1",
+      maxRetries: 3,
+      signal: controller.signal,
+      executeTool: async () => {
+        calls += 1;
+        controller.abort();
+        return { ok: false, message: "request timeout" };
+      },
+    });
+
+    expect(calls).toBe(1);
+    expect(result.result).toMatchObject({ ok: false, message: "Cancelled" });
+    // Would have been ~500ms of un-abortable backoff before the fix.
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+});
+
+describe("isTransientFailure", () => {
+  it("matches genuine transient errors", () => {
+    for (const message of [
+      "503 service unavailable",
+      "Error: socket hang up",
+      "request timed out after 30s",
+      "connect ECONNREFUSED 127.0.0.1:11434",
+      "429 Too Many Requests",
+      "upstream model is temporarily unavailable",
+      "rate-limited by provider",
+      "502 Bad Gateway",
+    ]) {
+      expect(__testUtils.isTransientFailure(message), message).toBe(true);
+    }
+  });
+
+  it("ignores digits and prose that merely look transient", () => {
+    for (const message of [
+      "permission denied",
+      "wrote 1429 bytes to disk",
+      "assertion failed at line 5030",
+      "the network topology diagram is missing a node",
+      "exit code 1: 2 tests failed",
+    ]) {
+      expect(__testUtils.isTransientFailure(message), message).toBe(false);
+    }
+  });
+
+  it("does not retry on transient-looking text buried deep in captured output", () => {
+    const noise = `${"stdout line\n".repeat(400)}connection timeout`;
+    expect(__testUtils.isTransientFailure(noise)).toBe(false);
+  });
+
+  it("treats a missing message as non-transient", () => {
+    expect(__testUtils.isTransientFailure(undefined)).toBe(false);
+    expect(__testUtils.isTransientFailure("")).toBe(false);
+  });
+});
+
+describe("runAgentLoop parallel batch containment", () => {
+  it("keeps sibling tool results when one parallel call throws", async () => {
+    const responses = [
+      [
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-a","type":"function","function":{"name":"file_read","arguments":"{}"}},{"index":1,"id":"call-b","type":"function","function":{"name":"web_search","arguments":"{}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Done."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Look things up." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [
+          { type: "function", function: { name: "file_read", description: "Read a file", parameters: { type: "object", properties: {} } } },
+          { type: "function", function: { name: "web_search", description: "Search", parameters: { type: "object", properties: {} } } },
+        ],
+        hasTools: true,
+        sessionId: "session-parallel-throw",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+        parallel: true,
+        maxRetries: 0,
+      },
+      async (name) => {
+        if (name === "web.search") throw new Error("provider exploded");
+        return { ok: true, message: "file contents" };
+      },
+    );
+
+    expect(result.content).toBe("Done.");
+    // Every tool_call gets exactly one tool message — the throw must not eat the sibling.
+    const toolMessages = history.filter((message) => message.role === "tool");
+    expect(toolMessages.map((message) => message.tool_call_id).sort()).toEqual(["call-a", "call-b"]);
+    const byId = Object.fromEntries(
+      result.executedToolCalls.map((executed) => [executed.callId, executed]),
+    );
+    expect(byId["call-a"]).toMatchObject({ ok: true });
+    expect(byId["call-b"]!.ok).toBe(false);
+    expect(byId["call-b"]!.message).toContain("provider exploded");
+  });
+});
+
 describe("runAgentLoop persistence", () => {
   it("recovers when the provider returns an empty completion after a successful tool", async () => {
     const responses = [

@@ -21,10 +21,11 @@ import {
   type AgentMessage,
   type ToolExecutor,
   type AgentLoopEvent,
+  type MessageSegment,
 } from "./agent-loop.js";
 import { ToolName } from "./tool-names.js";
 import { uuidv7 } from "../db/uuidv7.js";
-import { isSuccessfulPerformative, parsePerformative } from "./agent-communication.js";
+import { isSuccessfulPerformative, parsePerformative, stripPerformativeTag } from "./agent-communication.js";
 import { runAcpSpecialistTurn } from "./agent-acp-runner.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 
@@ -103,6 +104,22 @@ function buildSubAgentSystemPrompt(description: string, details?: string): strin
   ].join("\n");
 }
 
+/**
+ * The sub-agent's work in the order it actually happened (thinking → tools →
+ * prose → more tools → answer), so the UI can replay it as a real chat turn
+ * instead of lumping every tool call into one block after the fact.
+ *
+ * The live stream carries this ordering as events, but those are gone on
+ * reload — the result data is what gets persisted, so the ordering has to
+ * travel with it. The final answer's performative tag is bookkeeping for the
+ * parent agent, not something to render, so strip it here too.
+ */
+function renderSegments(segments: MessageSegment[]): MessageSegment[] {
+  return segments.map((seg) =>
+    seg.type === "text" ? { ...seg, content: stripPerformativeTag(seg.content) } : seg,
+  );
+}
+
 // ── Factory ──────────────────────────────────────────────────────────
 
 export interface AgentSpawnDeps {
@@ -129,7 +146,9 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       "Launch a sub-agent to handle a complex, multi-step task autonomously. " +
       "The sub-agent gets its own conversation and tool set, runs independently, " +
       "and returns a single result. Use this for research, code search, multi-file " +
-      "analysis, or any task that requires several tool calls to complete.",
+      "analysis, or any task that requires several tool calls to complete. " +
+      "Several calls in the SAME reply run concurrently — one visible sub-agent " +
+      "each — so delegate independent work as parallel calls rather than one at a time.",
     tier: "standard",
     category: "agent",
     source: "builtin",
@@ -429,6 +448,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
             data: {
               subAgentId,
               partialContent: result.content,
+              segments: renderSegments(result.segments),
               rounds: result.rounds,
               toolCalls: result.executedToolCalls.length,
               durationMs,
@@ -450,6 +470,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
             subAgentId,
             content,
             performative,
+            segments: renderSegments(result.segments),
             rounds: result.rounds,
             toolCalls: result.executedToolCalls.map((tc) => ({
               callId: tc.callId,

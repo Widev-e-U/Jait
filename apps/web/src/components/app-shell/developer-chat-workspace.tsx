@@ -448,6 +448,17 @@ export function DeveloperChatWorkspace({
     }
   }
 
+  // Id of the most recently sent user message. When a new user message lands we
+  // pass this to <Conversation> so it reveals the message even if the user had
+  // scrolled up to read history. The value only changes when a user message is
+  // added, so streaming assistant replies won't retrigger the scroll.
+  const scrollToUserMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return messages[i].id
+    }
+    return null
+  }, [messages])
+
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
 
   const activeProjectHasRepo = useMemo(
@@ -494,6 +505,7 @@ export function DeveloperChatWorkspace({
               messageEstimateInputs={messages}
               hasMore={hasMoreMessages}
               onLoadMore={loadOlderMessages}
+              scrollToMessageId={scrollToUserMessageId}
             >
               {messageElements}
               {messageQueue.length > 0 && (

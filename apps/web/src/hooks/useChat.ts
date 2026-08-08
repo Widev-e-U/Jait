@@ -303,6 +303,106 @@ export interface ChatMessage {
   segments?: MessageSegment[]
 }
 
+type RawSnapshotMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  systemNotice?: boolean
+  contextFlow?: LlmContextFlow
+  hasContextFlow?: boolean
+  hasMemoryProvenance?: boolean
+  thinking?: string
+  segments?: unknown[]
+  toolCalls?: Array<{
+    callId: string
+    parentCallId?: string
+    tool: string
+    args: Record<string, unknown>
+    status?: 'pending' | 'running' | 'success' | 'error'
+    approvalRequestId?: string
+    approvalState?: 'pending' | 'approved' | 'rejected'
+    ok?: boolean
+    message?: string
+    output?: string
+    data?: unknown
+    streamingOutput?: string
+    startedAt?: number
+    completedAt?: number
+  }>
+}
+
+/** Shared by the live resume-stream loop and the one-shot snapshot fetch (see loadedMessagesSessionRef). */
+function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: boolean): ChatMessage[] {
+  return rawMsgs.map(m => {
+    const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
+    // Visible system notices (e.g. background terminal commands) are
+    // surfaced as a right-aligned gray line rather than a bubble.
+    if (m.role === 'system') {
+      return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
+    }
+    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
+    if (m.hasContextFlow) msg.hasContextFlow = true
+    if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
+    if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
+      msg.displaySegments = parseUserMessageSegments(m.segments)
+      msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
+      msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
+      msg.attachments = attachmentsFromSegments(msg.displaySegments)
+    } else if (m.role === 'user') {
+      const parsed = parseLegacyReferencedFilesBlock(m.content)
+      if (parsed.files.length > 0) {
+        msg.displayContent = parsed.text
+        msg.referencedFiles = parsed.files
+        msg.displaySegments = parsed.displaySegments
+        msg.attachments = attachmentsFromSegments(msg.displaySegments)
+      }
+    } else if (Array.isArray(m.segments) && m.segments.length > 0) {
+      msg.segments = normalizeMessageSegments(m.segments)
+    }
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      msg.toolCalls = m.toolCalls.map(tc => {
+        // Streaming snapshots may provide explicit running status.
+        // Persisted DB snapshots provide ok/message for completed calls.
+        let status: 'pending' | 'running' | 'success' | 'error' =
+          tc.status ?? (tc.ok ? 'success' as const : 'error' as const)
+        // Safety net: if the server says streaming is done, no tool
+        // call should remain in 'running' or 'pending' state (handles race conditions).
+        if ((status === 'running' || status === 'pending') && !snapshotStreaming) status = 'error'
+        const completedAt = finiteTimestamp(tc.completedAt)
+        const startedAt = finiteTimestamp(tc.startedAt) ?? completedAt ?? Date.now()
+        const resolvedCompletedAt =
+          status === 'running' || status === 'pending'
+            ? undefined
+            : completedAt != null && completedAt >= startedAt
+              ? completedAt
+              : startedAt
+        return {
+          callId: tc.callId,
+          parentCallId: tc.parentCallId,
+          approvalRequestId: tc.approvalRequestId,
+          approvalState: tc.approvalState,
+          tool: tc.tool,
+          args: tc.args ?? {},
+          status,
+          result: status === 'running' || status === 'pending'
+            ? undefined
+            : {
+                ok: !!tc.ok,
+                message: tc.message ?? 'Cancelled',
+                // Prefer full data object (new format); fall back to
+                // { output } wrapper for old persisted rows.
+                data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
+              },
+          streamingOutput: tc.streamingOutput,
+          startedAt,
+          completedAt: resolvedCompletedAt,
+        }
+      })
+    }
+    return msg
+  })
+}
+
 interface ChatState {
   messages: ChatMessage[]
   isLoading: boolean
@@ -492,6 +592,15 @@ export function useChat(
     isCurrent: () => boolean
   } | null>(null)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
+  /**
+   * Which session's data `state.messages` currently holds. Set whenever a
+   * snapshot (live resume or the one-shot fetch below) is actually applied.
+   * Needed because the "already have a live direct stream for this session"
+   * short-circuit below must not assume the displayed messages are still
+   * this session's — the user may have switched to a different chat and
+   * back while that background stream kept running.
+   */
+  const loadedMessagesSessionRef = useRef<string | null>(null)
   const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
   if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
@@ -648,6 +757,7 @@ export function useChat(
       setChangedFiles([])
       setMessageQueue([])
       setContextUsage(null)
+      loadedMessagesSessionRef.current = null
       return
     }
 
@@ -678,7 +788,86 @@ export function useChat(
       hasActiveDirectStream: !!abortControllerRef.current,
     })) {
       pendingResumeAfterDirectStreamRef.current = true
-      setState(prev => ({ ...prev, isLoadingHistory: false, error: null }))
+      // This tab already owns a live direct stream for sessionId, so it must
+      // not open a second SSE consumer (see comment above — duplicated
+      // token chunks). That shortcut only leaves the right chat on screen if
+      // state.messages is still this session's own — true if the user never
+      // navigated away, false if they switched to another chat and back
+      // while this one kept streaming in the background. In the latter case
+      // state.messages holds the *other* session's history, and skipping
+      // straight to `return` would leave it there, displayed under the newly
+      // selected session. Fetch one snapshot (no subscription — the direct
+      // stream already owns live delivery) to correct it.
+      if (loadedMessagesSessionRef.current !== sessionId) {
+        void (async () => {
+          try {
+            const res = await fetch(
+              `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
+              { headers: authHeaders(authToken) },
+            )
+            if (prevSessionIdRef.current !== sessionId || !res.ok) {
+              if (prevSessionIdRef.current === sessionId) {
+                setState(prev => ({ ...prev, isLoadingHistory: false }))
+              }
+              return
+            }
+            const reader = res.body?.getReader()
+            if (!reader) {
+              setState(prev => ({ ...prev, isLoadingHistory: false }))
+              return
+            }
+            const decoder = new TextDecoder()
+            let buffer = ''
+            let applied = false
+            while (!applied) {
+              const { done, value } = await reader.read()
+              if (done) break
+              if (prevSessionIdRef.current !== sessionId) { reader.cancel(); return }
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue
+                let data: Record<string, unknown>
+                try {
+                  data = JSON.parse(line.slice(6)) as Record<string, unknown>
+                } catch {
+                  continue
+                }
+                if (data.type !== 'snapshot') continue
+                applied = true
+                const rawMsgs = data.messages as RawSnapshotMessage[]
+                const msgs = mapSnapshotMessages(rawMsgs, data.streaming as boolean)
+                const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
+                if (prevSessionIdRef.current === sessionId) {
+                  setState(prev => ({
+                    ...prev,
+                    messages: msgs,
+                    isLoadingHistory: false,
+                    error: null,
+                    hasMore: msgs.length < totalMessages,
+                    totalMessages,
+                  }))
+                  loadedMessagesSessionRef.current = sessionId
+                }
+                break
+              }
+            }
+            reader.cancel()
+            if (!applied && prevSessionIdRef.current === sessionId) {
+              setState(prev => ({ ...prev, isLoadingHistory: false }))
+            }
+          } catch {
+            // Best-effort — the ongoing direct stream keeps the chat usable
+            // even if this correction fetch fails.
+            if (prevSessionIdRef.current === sessionId) {
+              setState(prev => ({ ...prev, isLoadingHistory: false }))
+            }
+          }
+        })()
+      } else {
+        setState(prev => ({ ...prev, isLoadingHistory: false, error: null }))
+      }
       return
     }
 
@@ -722,6 +911,7 @@ export function useChat(
         hasMore: cached.hasMore,
         totalMessages: cached.totalMessages,
       }))
+      loadedMessagesSessionRef.current = sessionId
     }
 
     ;(async () => {
@@ -751,6 +941,7 @@ export function useChat(
               hasMore: false,
               totalMessages: 0,
             }))
+            loadedMessagesSessionRef.current = sessionId
           }
           return
         }
@@ -873,103 +1064,10 @@ export function useChat(
                 serverSnapshotReceived = true
                 cacheWriteReadySessionRef.current = sessionId
                 textPacer.flushNow()
-                const rawMsgs = data.messages as Array<{
-                  id: string;
-                  role: 'user' | 'assistant' | 'system';
-                  content: string;
-                  systemNotice?: boolean;
-                  contextFlow?: LlmContextFlow;
-                  hasContextFlow?: boolean;
-                  hasMemoryProvenance?: boolean;
-                  thinking?: string;
-                  segments?: unknown[];
-                  toolCalls?: Array<{
-                    callId: string;
-                    parentCallId?: string;
-                    tool: string;
-                    args: Record<string, unknown>;
-                    status?: 'pending' | 'running' | 'success' | 'error';
-                    approvalRequestId?: string;
-                    approvalState?: 'pending' | 'approved' | 'rejected';
-                    ok?: boolean;
-                    message?: string;
-                    output?: string;
-                    data?: unknown;
-                    streamingOutput?: string;
-                    startedAt?: number;
-                    completedAt?: number;
-                  }>;
-                }>
+                const rawMsgs = data.messages as RawSnapshotMessage[]
                 const snapshotStreaming = data.streaming as boolean
                 applyResumeSnapshotSeq(lastResumeSeqBySessionRef.current, sessionId, data.seq)
-                let msgs: ChatMessage[] = rawMsgs.map(m => {
-                  const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
-                  // Visible system notices (e.g. background terminal commands) are
-                  // surfaced as a right-aligned gray line rather than a bubble.
-                  if (m.role === 'system') {
-                    return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
-                  }
-                  const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
-                  if (m.hasContextFlow) msg.hasContextFlow = true
-                  if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
-                  if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
-                    msg.displaySegments = parseUserMessageSegments(m.segments)
-                    msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
-                    msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
-                    msg.attachments = attachmentsFromSegments(msg.displaySegments)
-                  } else if (m.role === 'user') {
-                    const parsed = parseLegacyReferencedFilesBlock(m.content)
-                    if (parsed.files.length > 0) {
-                      msg.displayContent = parsed.text
-                      msg.referencedFiles = parsed.files
-                      msg.displaySegments = parsed.displaySegments
-                      msg.attachments = attachmentsFromSegments(msg.displaySegments)
-                    }
-                  } else if (Array.isArray(m.segments) && m.segments.length > 0) {
-                    msg.segments = normalizeMessageSegments(m.segments)
-                  }
-                  if (m.toolCalls && m.toolCalls.length > 0) {
-                    msg.toolCalls = m.toolCalls.map(tc => {
-                      // Streaming snapshots may provide explicit running status.
-                      // Persisted DB snapshots provide ok/message for completed calls.
-                      let status: 'pending' | 'running' | 'success' | 'error' =
-                        tc.status ?? (tc.ok ? 'success' as const : 'error' as const)
-                      // Safety net: if the server says streaming is done, no tool
-                      // call should remain in 'running' or 'pending' state (handles race conditions).
-                      if ((status === 'running' || status === 'pending') && !snapshotStreaming) status = 'error'
-                      const completedAt = finiteTimestamp(tc.completedAt)
-                      const startedAt = finiteTimestamp(tc.startedAt) ?? completedAt ?? Date.now()
-                      const resolvedCompletedAt =
-                        status === 'running' || status === 'pending'
-                          ? undefined
-                          : completedAt != null && completedAt >= startedAt
-                            ? completedAt
-                            : startedAt
-                      return {
-                        callId: tc.callId,
-                        parentCallId: tc.parentCallId,
-                        approvalRequestId: tc.approvalRequestId,
-                        approvalState: tc.approvalState,
-                        tool: tc.tool,
-                        args: tc.args ?? {},
-                        status,
-                        result: status === 'running' || status === 'pending'
-                          ? undefined
-                          : {
-                              ok: !!tc.ok,
-                              message: tc.message ?? 'Cancelled',
-                              // Prefer full data object (new format); fall back to
-                              // { output } wrapper for old persisted rows.
-                              data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
-                            },
-                        streamingOutput: tc.streamingOutput,
-                        startedAt,
-                        completedAt: resolvedCompletedAt,
-                      }
-                    })
-                  }
-                  return msg
-                })
+                let msgs: ChatMessage[] = mapSnapshotMessages(rawMsgs, snapshotStreaming)
                 // Track whether the server reported an active stream for this
                 // snapshot. This MUST be set independent of whether the snapshot
                 // included a synthetic assistant message: when a client (re)opens
@@ -979,6 +1077,10 @@ export function useChat(
                 // wasStreaming here, a silent SSE drop would never trigger the
                 // auto-reconnect, so the chat freezes until a manual reload.
                 wasStreaming = wasStreaming || snapshotStreaming
+                // state.messages now genuinely reflects sessionId — see the
+                // shouldOpenResumeStream early-return branch below, which relies
+                // on this to know whether it can skip re-fetching.
+                loadedMessagesSessionRef.current = sessionId
                 // Track the last assistant message for token updates
                 const lastMsg = msgs[msgs.length - 1]
                 if (lastMsg?.role === 'assistant') {

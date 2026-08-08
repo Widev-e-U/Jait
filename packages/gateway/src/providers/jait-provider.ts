@@ -18,6 +18,7 @@ import {
   computeContextUsage,
   generateLLMConversationSummary,
   pruneHistory,
+  repairToolCallHistory,
   runAgentLoop,
   type AgentLoopEvent,
   type LlmContextFlowRound,
@@ -293,6 +294,10 @@ export class JaitProvider implements CliProviderAdapter {
             await pruneHistory(state.history, llm.contextWindow, toolSchemas, {
               summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
             });
+            // pruneHistory drops messages by token cost alone, so it can cut an
+            // assistant tool_calls message loose from its tool results (or the
+            // reverse). Repair before this history is persisted for the next turn.
+            repairToolCallHistory(state.history);
             console.info(`Post-turn history compacted: ${state.history.length} messages → ratio was ${(postUsage.ratio * 100).toFixed(0)}%`);
           }
         }
