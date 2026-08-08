@@ -24,6 +24,12 @@ import { classifyIrreversibleCommand } from "../security/tool-permissions.js";
 import type { Skill } from "../skills/index.js";
 import type { ConsentManager, ConsentRequest, ConsentDecision } from "../security/consent-manager.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import {
+  CHANNEL_ACTIVATED_TOOLS,
+  CHANNEL_ASSISTANT_NOTE,
+  buildChannelContextBlock,
+  hostTimeZone,
+} from "./assistant.js";
 import type {
   ChannelChoice,
   ChannelConfig,
@@ -48,25 +54,33 @@ export interface ChannelAuthContext {
   disabledTools?: Set<string>;
 }
 
+/** Everything a reply turn needs to know about where and how it is running. */
+export interface ReplyContext {
+  channelId: string;
+  sessionId: string;
+  allowedTools: Set<string>;
+  model?: string;
+  /** Provider serving `model` — a CLI provider id routes to the ACP path. */
+  modelProvider?: string;
+  /** Conversation the turn belongs to, for provider-side approval prompts. */
+  conversationId?: string;
+  /** Agent decides tool use itself instead of asking in the chat. */
+  autoApprove?: boolean;
+  /** Called for each tool call, to mirror the work into the chat. */
+  onProgress?: (line: string) => void;
+  /** Situational facts (chat id, local time, model) prepended to the prompt. */
+  contextBlock?: string;
+  /** Model to try once when `model` fails to authenticate. */
+  fallbackModel?: string;
+  /** Provider serving `fallbackModel`. */
+  fallbackModelProvider?: string;
+  /** Told when a turn had to fall back, so the chat can say so. */
+  onFallback?: (from: string | undefined, to: string) => void;
+}
+
 /** Produces an assistant reply for a conversation. Injectable for testing. */
 export interface ReplyGenerator {
-  generate(
-    history: AgentMessage[],
-    ctx: {
-      channelId: string;
-      sessionId: string;
-      allowedTools: Set<string>;
-      model?: string;
-      /** Provider serving `model` — a CLI provider id routes to the ACP path. */
-      modelProvider?: string;
-      /** Conversation the turn belongs to, for provider-side approval prompts. */
-      conversationId?: string;
-      /** Agent decides tool use itself instead of asking in the chat. */
-      autoApprove?: boolean;
-      /** Called for each tool call, to mirror the work into the chat. */
-      onProgress?: (line: string) => void;
-    },
-  ): Promise<string>;
+  generate(history: AgentMessage[], ctx: ReplyContext): Promise<string>;
 }
 
 /** A model the channel can switch to with `/model`. */
@@ -152,17 +166,6 @@ const DEFAULT_SYSTEM_PROMPT =
   "You are Jait, a helpful AI assistant replying over a messaging channel (e.g. WhatsApp). " +
   "Keep replies concise and conversational — they are read on a phone. " +
   "Do not use markdown headings or code fences unless explicitly asked.";
-
-/**
- * Channel-style guidance appended to the full agent system prompt. The base
- * prompt grants the same tools/skills as the web chat; this note just adapts
- * tone/format for a messaging surface.
- */
-const CHANNEL_STYLE_NOTE =
-  "You are replying over a messaging channel (e.g. WhatsApp), read on a phone, so keep replies " +
-  "concise and conversational and avoid markdown headings or code fences unless explicitly asked. " +
-  "You have the same tools and skills as the desktop app — use them to actually perform tasks " +
-  "(run commands, search, read/edit files, manage skills, etc.) instead of only describing them.";
 
 const DEFAULT_MAX_HISTORY = 20;
 
@@ -314,7 +317,7 @@ export function shouldRespond(msg: InboundMessage, config: ChannelConfig): boole
  * from this list, so a new command shows up everywhere at once.
  */
 export const CHANNEL_COMMAND_DEFS = [
-  { name: "model", description: "Pick a provider and model for this channel", usage: "/model [number|id|provider <name>|reset]" },
+  { name: "model", description: "Pick a provider and model for this channel", usage: "/model [number|id|provider <name>|fallback <id>|reset]" },
   { name: "notifications", description: "Send routines and gateway alerts to this chat", usage: "/notifications on|off" },
   { name: "approvals", description: "Ask before each tool instead of deciding automatically", usage: "/approvals ask|auto" },
   { name: "progress", description: "Show tool calls while the agent works", usage: "/progress on|off" },
@@ -658,7 +661,61 @@ export class ChannelManager {
     return delivered;
   }
 
+  /**
+   * Put a message into a conversation from outside a reply turn — today, a
+   * scheduled reminder coming due.
+   *
+   * With `text` the message is delivered verbatim. With `prompt` the assistant
+   * works the answer out first, as a normal turn in that conversation: same
+   * model, same history, same approvals. That is what makes "every morning,
+   * tell me what's on today" different from a fixed string.
+   *
+   * Queued behind the conversation lock, so a reminder that fires while the
+   * user is mid-question waits its turn instead of interleaving with the reply.
+   */
+  async deliver(params: {
+    channelId: string;
+    conversationId: string;
+    text?: string;
+    prompt?: string;
+  }): Promise<void> {
+    const managed = this.channels.get(params.channelId);
+    if (!managed) throw new Error(`Channel '${params.channelId}' is not registered`);
+    if (managed.status !== "connected") {
+      throw new Error(`Channel '${params.channelId}' is ${managed.status}`);
+    }
+
+    if (params.text) {
+      await managed.connector.send({ conversationId: params.conversationId, text: params.text });
+      return;
+    }
+    if (!params.prompt) throw new Error("Nothing to deliver — give text or prompt");
+
+    const config = this.getConfig(params.channelId);
+    await this.enqueue(
+      `${params.channelId}:${params.conversationId}`,
+      () => this.runTurn(managed, params.conversationId, params.prompt!, config),
+    );
+  }
+
   /* ── Inbound → agent → outbound ─────────────────────────────────── */
+
+  /**
+   * Run `task` after whatever is already queued for this conversation, so
+   * answers stay in order. Returns when `task` itself has finished.
+   */
+  private async enqueue(key: string, task: () => Promise<void>): Promise<void> {
+    const prev = this.locks.get(key) ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(task);
+    const settled = next.then(() => {}, () => {});
+    this.locks.set(key, settled);
+    // Drop the lock once the queue drains, so the next message isn't told the
+    // channel is busy when it is idle.
+    void settled.then(() => {
+      if (this.locks.get(key) === settled) this.locks.delete(key);
+    });
+    await next;
+  }
 
   private async handleInbound(msg: InboundMessage): Promise<void> {
     const managed = this.channels.get(msg.channelId);
@@ -692,22 +749,29 @@ export class ChannelManager {
         .catch(() => { /* connector may be down */ });
     }
 
-    const prev = this.locks.get(key) ?? Promise.resolve();
-    const next = prev
-      .catch(() => {})
-      .then(() => this.replyTo(managed, msg, config));
-    const settled = next.then(() => {}, () => {});
-    this.locks.set(key, settled);
-    // Drop the lock once the queue drains, so the next message isn't told the
-    // channel is busy when it is idle.
-    void settled.then(() => {
-      if (this.locks.get(key) === settled) this.locks.delete(key);
-    });
-    await next;
+    await this.enqueue(key, () => this.replyTo(managed, msg, config));
   }
 
   private async replyTo(managed: ManagedChannel, msg: InboundMessage, config: ChannelConfig): Promise<void> {
-    const key = `${msg.channelId}:${msg.conversationId}`;
+    await this.runTurn(managed, msg.conversationId, msg.text, config);
+  }
+
+  /**
+   * One agent turn in a conversation: append the prompt, generate, send.
+   *
+   * Shared by inbound messages and by scheduled deliveries — a reminder that has
+   * to work something out at delivery time is the same turn as a reply, and
+   * running it through a second path would give it a different model, a
+   * different history and a different set of approvals.
+   */
+  private async runTurn(
+    managed: ManagedChannel,
+    conversationId: string,
+    prompt: string,
+    config: ChannelConfig,
+  ): Promise<void> {
+    const key = `${managed.connector.id}:${conversationId}`;
+    const msg = { channelId: managed.connector.id, conversationId };
     const maxHistory = this.deps.maxHistory ?? DEFAULT_MAX_HISTORY;
 
     let history = this.histories.get(key);
@@ -715,7 +779,7 @@ export class ChannelManager {
       history = [{ role: "system", content: this.deps.systemPrompt ?? DEFAULT_SYSTEM_PROMPT }];
       this.histories.set(key, history);
     }
-    history.push({ role: "user", content: msg.text });
+    history.push({ role: "user", content: prompt });
 
     // Resolve allowed tools (filtered to those that actually exist).
     const allowedTools = new Set(
@@ -742,6 +806,11 @@ export class ChannelManager {
       // so a thrown turn cannot leave the indicator (and its timer) running.
       stopTyping = managed.connector.startTyping?.(msg.conversationId);
 
+      // Told by the generator when the picked model refused to authenticate and
+      // the fallback answered instead — reported once, after the answer, so the
+      // user learns their model is broken without losing this reply to it.
+      let fellBackTo: string | null = null;
+
       const reply = (await this.replyGenerator.generate(history, {
         channelId: msg.channelId,
         sessionId,
@@ -751,9 +820,29 @@ export class ChannelManager {
         modelProvider: config.modelProvider?.trim() || undefined,
         conversationId: msg.conversationId,
         autoApprove: autoApproves(config),
+        contextBlock: buildChannelContextBlock({
+          channelId: msg.channelId,
+          channelLabel: managed.connector.label,
+          conversationId: msg.conversationId,
+          model: config.model?.trim() || undefined,
+          timeZone: config.timeZone?.trim() || hostTimeZone(),
+          now: new Date(),
+        }),
+        fallbackModel: config.fallbackModel?.trim() || undefined,
+        fallbackModelProvider: config.fallbackModelProvider?.trim() || undefined,
+        onFallback: (_from, to) => { fellBackTo = to; },
       })).trim();
 
       progress?.finish();
+
+      if (fellBackTo) {
+        await managed.connector
+          .send({
+            conversationId: msg.conversationId,
+            text: `⚠️ ${config.model ?? "The selected model"} couldn't authenticate — answered with ${fellBackTo} this once. Fix the key, or switch with /model.`,
+          })
+          .catch(() => { /* the answer matters more than the notice */ });
+      }
 
       if (reply) {
         history.push({ role: "assistant", content: reply });
@@ -814,6 +903,8 @@ export class ChannelManager {
         await reply([
           `Channel: ${managed.connector.label} (${managed.status})`,
           `Model: ${config.model ?? auth?.model ?? "gateway default"}${config.model ? " (channel override)" : ""}`,
+          `Fallback: ${config.fallbackModel ?? "gateway default"}`,
+          `Time zone: ${config.timeZone ?? hostTimeZone()}`,
           `Notifications: ${config.notifications ? "on" : "off"}`,
           `Tool approvals: ${autoApproves(config) ? "automatic" : "ask each time"}`,
           `Progress updates: ${config.progress === false ? "off" : "on"}`,
@@ -911,6 +1002,12 @@ export class ChannelManager {
       return resetToDefault();
     }
 
+    // `/model fallback …` — the model that answers a single message when the
+    // picked one is refused. Kept separate from the selection itself: a rescue
+    // must never quietly become the choice.
+    const fallbackArg = /^fallback(?:\s+(.+))?$/i.exec(arg);
+    if (fallbackArg) return this.runFallbackCommand(channelId, config, fallbackArg[1]?.trim() ?? "", models);
+
     if (models.length === 0 && !arg) {
       return {
         text: `Current model: ${active ?? "gateway default"}\n\nNo catalogue is available, so switching is off. Set the model in the web UI instead.`,
@@ -968,6 +1065,36 @@ export class ChannelManager {
       ? "\n\nThis one runs as a supervised CLI session — I'll ask before each tool."
       : "";
     return { text: `✅ Now using ${picked?.label ?? modelId}${suffix} on this channel.${cliNote}` };
+  }
+
+  /** `/model fallback [id|number|off]` — show, set, or clear the rescue model. */
+  private runFallbackCommand(
+    channelId: string,
+    config: ChannelConfig,
+    arg: string,
+    models: ChannelModelOption[],
+  ): { text: string; choices?: ChannelChoice[] } {
+    if (!arg) {
+      return {
+        text: config.fallbackModel
+          ? `Fallback: ${config.fallbackModel} — used for one message when the picked model is refused.\nChange it with /model fallback <id>, or turn it off with /model fallback off.`
+          : "No fallback set. If the picked model is refused I try the gateway default once.\nPick a specific one with /model fallback <id>.",
+      };
+    }
+    if (arg.toLowerCase() === "off" || arg.toLowerCase() === "reset") {
+      this.setConfig(channelId, { fallbackModel: "", fallbackModelProvider: "" });
+      return { text: "↩️ Fallback cleared — the gateway default stands in instead." };
+    }
+
+    const index = /^\d+$/.test(arg) ? parseInt(arg, 10) - 1 : -1;
+    const picked = index >= 0
+      ? models[index]
+      : models.find((model) => model.id.toLowerCase() === arg.toLowerCase());
+    const modelId = picked?.id ?? (models.length === 0 ? arg : null);
+    if (!modelId) return { text: `Unknown model "${arg}". Send /model to see what is available.` };
+
+    this.setConfig(channelId, { fallbackModel: modelId, fallbackModelProvider: picked?.provider ?? "" });
+    return { text: `🛟 Fallback set to ${picked?.label ?? modelId}. I'll use it for a single message when the main model is refused.` };
   }
 
   /**
@@ -1173,6 +1300,71 @@ export function buildCliPrompt(history: AgentMessage[], maxTurns = 8): string {
   return `Earlier in this chat:\n${transcript}\n\nUser: ${asText(latest?.content ?? "")}`;
 }
 
+/**
+ * Provider statuses where the request was refused over credentials or budget
+ * rather than over what was asked. Another model may well answer the same
+ * question, which is what makes these worth a fallback: 401/403 a bad or
+ * expired key, 402 an unpaid account, 429 an exhausted quota.
+ */
+const CREDENTIAL_FAILURE_STATUSES = new Set([401, 402, 403, 429]);
+
+/** The model that answers a single message when the picked one is refused. */
+export interface FallbackChoice {
+  /** Model id, or undefined to let the gateway resolve its default. */
+  model?: string;
+  provider?: string;
+  /** How to name it to the user. */
+  label: string;
+}
+
+/**
+ * Pick the model to retry on.
+ *
+ * The channel's configured fallback wins. Without one the only other option is
+ * the gateway default, and that is only a *different* model when this channel
+ * overrode it — retrying the same model with the same rejected credential would
+ * just spend another round trip failing identically.
+ */
+export function chooseFallbackModel(
+  ctx: Pick<ReplyContext, "model" | "modelProvider" | "fallbackModel" | "fallbackModelProvider">,
+  ownerModel?: string,
+): FallbackChoice | null {
+  const configured = ctx.fallbackModel?.trim();
+  if (configured) {
+    return { model: configured, provider: ctx.fallbackModelProvider?.trim() || undefined, label: configured };
+  }
+  if (!ctx.model?.trim() && !ctx.modelProvider?.trim()) return null;
+  const owner = ownerModel?.trim();
+  if (owner && owner === ctx.model?.trim()) return null;
+  return { label: owner ?? "the gateway default" };
+}
+
+/** A turn that failed because the model would not take the credential. */
+class CredentialFailure extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CredentialFailure";
+  }
+}
+
+/** Whether a thrown turn is one another model could plausibly rescue. */
+function isAuthFailure(err: unknown): boolean {
+  return err instanceof CredentialFailure;
+}
+
+/**
+ * Whether a CLI provider's refusal was about its login.
+ *
+ * CLI providers answer with prose rather than status codes, so this reads their
+ * wording — narrowly, and only to decide whether to try a second model. A false
+ * positive costs one extra attempt; a false negative just surfaces the original
+ * message, which is what would have happened anyway.
+ */
+export function looksLikeCliAuthFailure(message: string): boolean {
+  return /\b(unauthori[sz]ed|not logged in|log ?in again|authentication|auth failed|credential|api key|token (?:expired|invalid)|session expired|subscription)\b/i
+    .test(message);
+}
+
 /** Context a CLI-provider turn needs on top of the usual reply context. */
 interface CliTurnContext {
   channelId: string;
@@ -1186,19 +1378,39 @@ interface CliTurnContext {
 export class AgentLoopReplyGenerator implements ReplyGenerator {
   constructor(private readonly deps: ChannelManagerDeps) {}
 
-  async generate(
-    history: AgentMessage[],
-    ctx: {
-      channelId: string;
-      sessionId: string;
-      allowedTools: Set<string>;
-      model?: string;
-      modelProvider?: string;
-      conversationId?: string;
-      autoApprove?: boolean;
-      onProgress?: (line: string) => void;
-    },
-  ): Promise<string> {
+  /**
+   * Answer one turn, retrying once on a different model when the picked one
+   * cannot authenticate.
+   *
+   * A dead key is the one failure a chat assistant should not pass on to the
+   * user as "sorry, I hit an error": the question is answerable, just not by
+   * that model. The retry is scoped to this message — `config.model` is left
+   * alone, because a fallback is a rescue, not a decision.
+   */
+  async generate(history: AgentMessage[], ctx: ReplyContext): Promise<string> {
+    try {
+      return await this.generateOnce(history, ctx);
+    } catch (err) {
+      if (!isAuthFailure(err)) throw err;
+
+      const owner = (this.deps.resolveAuth?.() ?? this.deps.auth)?.model;
+      const fallback = chooseFallbackModel(ctx, owner);
+      if (!fallback) throw err;
+
+      this.deps.log?.(`${ctx.channelId}: ${ctx.model ?? "default model"} refused auth, retrying on ${fallback.label}`);
+      ctx.onFallback?.(ctx.model, fallback.label);
+      return this.generateOnce(history, {
+        ...ctx,
+        model: fallback.model,
+        modelProvider: fallback.provider,
+        // The fallback must not itself fall back — one rescue per message.
+        fallbackModel: undefined,
+        fallbackModelProvider: undefined,
+      });
+    }
+  }
+
+  private async generateOnce(history: AgentMessage[], ctx: ReplyContext): Promise<string> {
     const { toolRegistry, audit } = this.deps;
     const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
 
@@ -1221,6 +1433,11 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       ? buildTieredToolSchemas(toolRegistry, disabledTools, {
           ollamaEssentials: isOllama,
           query: latestUserQuery,
+          // Memory, reminders and skill authoring are what make this an
+          // assistant rather than a chat window. Leaving them to `tools.search`
+          // costs a round trip, and a model that doesn't take it answers "I
+          // can't schedule that" — so they are always on the table.
+          activatedToolNames: CHANNEL_ACTIVATED_TOOLS,
         })
       : [];
     if (restrictTo) {
@@ -1245,8 +1462,16 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
         skills: this.deps.resolveSkills?.(),
         backend: auth?.jaitBackend,
       };
-      const channelNote = this.deps.systemPrompt ?? CHANNEL_STYLE_NOTE;
-      const systemPrompt = `${buildSystemPrompt("agent", modelEndpoint, promptCtx)}\n\n${channelNote}`;
+      const channelNote = this.deps.systemPrompt ?? CHANNEL_ASSISTANT_NOTE;
+      const systemPrompt = [
+        buildSystemPrompt("agent", modelEndpoint, promptCtx),
+        channelNote,
+        // Rebuilt every turn: the chat's clock moves and its model can change
+        // between two messages, so this cannot be cached with the history.
+        ctx.contextBlock,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       if (history[0]?.role === "system") history[0] = { role: "system", content: systemPrompt };
       else history.unshift({ role: "system", content: systemPrompt });
     }
@@ -1321,16 +1546,23 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       );
     };
 
+    // The loop reports a rejected key as an `error` event and returns whatever
+    // it had — it does not throw. Remembered here so an answerless turn can be
+    // retried on another model instead of reaching the user as "I hit an error".
+    let credentialFailure: string | null = null;
+
     const result = await runAgentLoop(
       {
-        onEvent: ctx.onProgress
-          ? (event) => {
-              if (event.type === "tool_start") ctx.onProgress!(`• ${event.tool}`);
-              else if (event.type === "tool_result") {
-                ctx.onProgress!(`${event.ok ? "  ✓" : "  ✗"} ${event.tool}${event.ok ? "" : ` — ${event.message.slice(0, 80)}`}`);
-              }
-            }
-          : undefined,
+        onEvent: (event) => {
+          if (event.type === "error" && event.status && CREDENTIAL_FAILURE_STATUSES.has(event.status)) {
+            credentialFailure = event.message;
+          }
+          if (!ctx.onProgress) return;
+          if (event.type === "tool_start") ctx.onProgress(`• ${event.tool}`);
+          else if (event.type === "tool_result") {
+            ctx.onProgress(`${event.ok ? "  ✓" : "  ✗"} ${event.tool}${event.ok ? "" : ` — ${event.message.slice(0, 80)}`}`);
+          }
+        },
         llm,
         history,
         toolSchemas,
@@ -1353,6 +1585,13 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       executor,
       steering,
     );
+
+    // Only when the turn produced nothing: a key that expires mid-answer has
+    // still said something worth keeping, and re-running it on another model
+    // would repeat the tool calls it already made.
+    if (credentialFailure && !result.content?.trim()) {
+      throw new CredentialFailure(credentialFailure);
+    }
 
     return result.content ?? "";
   }
@@ -1417,7 +1656,12 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       },
     });
 
-    if (!result.ok) return `⚠️ ${result.message}`;
+    if (!result.ok) {
+      // An expired CLI login is the most likely way this fails — and the case
+      // the fallback exists for. Anything else is reported as it came.
+      if (looksLikeCliAuthFailure(result.message)) throw new CredentialFailure(result.message);
+      return `⚠️ ${result.message}`;
+    }
     return result.message;
   }
 }

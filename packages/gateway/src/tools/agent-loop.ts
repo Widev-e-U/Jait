@@ -156,7 +156,11 @@ export type AgentLoopEvent =
   | { type: "mode_notice"; mode: ChatMode; message: string }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
-  | { type: "error"; message: string };
+  // `status` is the provider's HTTP status when the error came from the LLM
+  // call. Carried alongside the prose so callers can act on *which* failure it
+  // was — retrying a rejected key on another model, say — without matching on
+  // wording that exists to be read by humans and translated.
+  | { type: "error"; message: string; status?: number };
 
 /** Format an LLM HTTP error into a user-friendly message, similar to VS Code Copilot. */
 function formatLLMError(status: number, responseText: string): string {
@@ -2257,7 +2261,7 @@ export async function runAgentLoop(
         }
 
         const friendlyMessage = formatLLMError(response.status, errText);
-        onEvent?.({ type: "error", message: friendlyMessage });
+        onEvent?.({ type: "error", message: friendlyMessage, status: response.status });
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
       }
 

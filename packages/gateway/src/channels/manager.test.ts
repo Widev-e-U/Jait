@@ -4,6 +4,8 @@ import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import {
   ChannelManager,
   buildCliPrompt,
+  chooseFallbackModel,
+  looksLikeCliAuthFailure,
   formatNotification,
   groupModelsByProvider,
   ProgressReporter,
@@ -12,6 +14,7 @@ import {
   normalizeSenderId,
   parseCommand,
   shouldRespond,
+  type ReplyContext,
   type ReplyGenerator,
 } from "./manager.js";
 import type {
@@ -1266,5 +1269,255 @@ describe("typing indicator", () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(connector.typingActive).toBe(false);
+  });
+});
+
+describe("channel context", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("tells the agent which chat it is in and what the local time is", async () => {
+    let seen: ReplyContext | null = null;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate(_h, ctx) { seen = ctx; return "ok"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+    mgr.setConfig("fake", { timeZone: "Asia/Tokyo" });
+
+    connector.emit({ text: "remind me tomorrow at 5", isSelfChat: true, conversationId: "chat-9" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(seen!.contextBlock).toContain("conversationId: chat-9");
+    expect(seen!.contextBlock).toContain("Asia/Tokyo");
+    expect(seen!.contextBlock).toContain("channel: Fake (id: fake)");
+  });
+});
+
+describe("scheduled delivery", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  it("sends a fixed reminder without running the model", async () => {
+    let turns = 0;
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: { async generate() { turns += 1; return "should not run"; } },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    await mgr.deliver({ channelId: "fake", conversationId: "chat-1", text: "Anlage prüfen" });
+
+    expect(connector.sent.map((m) => m.text)).toEqual(["Anlage prüfen"]);
+    expect(turns).toBe(0);
+  });
+
+  it("works a prompted reminder out at delivery time and sends the answer", async () => {
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    await mgr.deliver({ channelId: "fake", conversationId: "chat-1", prompt: "What is on today?" });
+
+    expect(connector.sent.map((m) => m.text)).toEqual(["echo: What is on today?"]);
+  });
+
+  it("waits for the reply in flight instead of interleaving with it", async () => {
+    let release: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const mgr = new ChannelManager({
+      sqlite,
+      resolveLLM: () => fakeLLM,
+      replyGenerator: {
+        async generate(history) {
+          const last = [...history].reverse().find((m) => m.role === "user");
+          if (last?.content === "slow question") await blocked;
+          return `answer to ${String(last?.content)}`;
+        },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    await mgr.start("fake");
+
+    connector.emit({ text: "slow question", isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 10));
+    const delivery = mgr.deliver({ channelId: "fake", conversationId: "chat-1", prompt: "reminder" });
+
+    expect(connector.sent).toHaveLength(0);
+    release();
+    await delivery;
+
+    expect(connector.sent.map((m) => m.text)).toEqual([
+      "answer to slow question",
+      "answer to reminder",
+    ]);
+  });
+
+  it("refuses to deliver into a channel that is not connected", async () => {
+    const { mgr } = makeManager(sqlite);
+    await expect(mgr.deliver({ channelId: "fake", conversationId: "c", text: "x" }))
+      .rejects.toThrow(/stopped/);
+  });
+
+  it("refuses to deliver into a channel nobody registered", async () => {
+    const { mgr } = makeManager(sqlite);
+    await expect(mgr.deliver({ channelId: "signal", conversationId: "c", text: "x" }))
+      .rejects.toThrow(/not registered/);
+  });
+});
+
+describe("model fallback", () => {
+  it("uses the channel's configured fallback first", () => {
+    expect(chooseFallbackModel({ model: "gpt-5", fallbackModel: "claude-sonnet-5" }, "gpt-5"))
+      .toEqual({ model: "claude-sonnet-5", provider: undefined, label: "claude-sonnet-5" });
+  });
+
+  it("carries the fallback's provider, so a CLI model routes correctly", () => {
+    expect(chooseFallbackModel(
+      { model: "gpt-5", fallbackModel: "opus", fallbackModelProvider: "claude-code" },
+    )).toMatchObject({ model: "opus", provider: "claude-code" });
+  });
+
+  it("falls back to the gateway default when the channel overrode it", () => {
+    expect(chooseFallbackModel({ model: "gpt-5" }, "claude-sonnet-5"))
+      .toEqual({ label: "claude-sonnet-5" });
+  });
+
+  it("gives up when the failing model already is the gateway default", () => {
+    // Nothing else to try — the same credential would be rejected again.
+    expect(chooseFallbackModel({ model: "gpt-5" }, "gpt-5")).toBeNull();
+    expect(chooseFallbackModel({}, "gpt-5")).toBeNull();
+    expect(chooseFallbackModel({})).toBeNull();
+  });
+});
+
+describe("CLI auth failures", () => {
+  it("recognises an expired login", () => {
+    expect(looksLikeCliAuthFailure("Unauthorized: please run `claude login`")).toBe(true);
+    expect(looksLikeCliAuthFailure("Your session expired")).toBe(true);
+    expect(looksLikeCliAuthFailure("API key invalid")).toBe(true);
+  });
+
+  it("leaves ordinary failures alone, so they reach the user unchanged", () => {
+    expect(looksLikeCliAuthFailure("The command exited with status 1")).toBe(false);
+    expect(looksLikeCliAuthFailure("No such file or directory")).toBe(false);
+  });
+});
+
+describe("falling back over a rejected key", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  /** A single-chunk OpenAI SSE stream carrying `text`. */
+  function sseResponse(text: string): Response {
+    const body = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }
+
+  function managerWithRealGenerator(fetchImpl: typeof fetch) {
+    const original = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+    const mgr = new ChannelManager({
+      sqlite,
+      // Each requested model becomes its own endpoint, so the fake server can
+      // tell which one the turn is asking for.
+      resolveLLM: (requested) => ({
+        openaiApiKey: "key",
+        openaiBaseUrl: `http://llm.test/${requested ?? "gateway-default"}`,
+        openaiModel: requested ?? "gateway-default",
+        contextWindow: 8000,
+      }),
+      resolveAuth: () => ({ userId: "owner", model: "gateway-default" }),
+      log: () => {},
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, restore: () => { globalThis.fetch = original; } };
+  }
+
+  it("answers on the fallback and says the main model is broken", async () => {
+    const seen: string[] = [];
+    const { mgr, connector, restore } = managerWithRealGenerator(async (input) => {
+      const url = String(input);
+      seen.push(url);
+      if (url.includes("/broken-model")) {
+        return new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 });
+      }
+      return sseResponse("here is your answer");
+    });
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(seen.some((u) => u.includes("/broken-model"))).toBe(true);
+      expect(seen.some((u) => u.includes("/rescue-model"))).toBe(true);
+      expect(connector.sent.map((m) => m.text)).toEqual([
+        expect.stringContaining("couldn't authenticate"),
+        "here is your answer",
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("does not retry a failure the fallback cannot fix", async () => {
+    let calls = 0;
+    const { mgr, connector, restore } = managerWithRealGenerator(async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: "upstream is down" } }), { status: 503 });
+    });
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(calls).toBe(1);
+      expect(connector.sent.some((m) => m.text.includes("couldn't authenticate"))).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps the channel on its chosen model — a rescue is not a decision", async () => {
+    const { mgr, connector, restore } = managerWithRealGenerator(async (input) =>
+      String(input).includes("/broken-model")
+        ? new Response("{}", { status: 401 })
+        : sseResponse("answered"));
+
+    try {
+      await mgr.start("fake");
+      mgr.setConfig("fake", { model: "broken-model", fallbackModel: "rescue-model" });
+
+      connector.emit({ text: "hello", isSelfChat: true });
+      await new Promise((r) => setTimeout(r, 60));
+
+      expect(mgr.getConfig("fake").model).toBe("broken-model");
+    } finally {
+      restore();
+    }
   });
 });

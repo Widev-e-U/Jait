@@ -109,6 +109,7 @@ export type ToolCategory =
   | "voice"
   | "agent"
   | "network"
+  | "channels"
   | "meta"
   | "external";
 

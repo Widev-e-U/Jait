@@ -228,6 +228,22 @@ export interface ChannelConfig {
    */
   modelProvider?: string;
   /**
+   * Model used for a single turn when `model` cannot answer — a rejected key,
+   * an expired login, an exhausted quota. Set with `/model fallback <id>`;
+   * unset means the gateway default is tried instead. Never persisted as the
+   * channel's model: a fallback covers one message, it does not silently
+   * become the choice the user made.
+   */
+  fallbackModel?: string;
+  /** Provider serving `fallbackModel`, same encoding as `modelProvider`. */
+  fallbackModelProvider?: string;
+  /**
+   * IANA zone the chat's wall clock is measured in ("tomorrow at 5"). Unset
+   * means the gateway host's zone, which is right whenever Jait runs on the
+   * user's own machine.
+   */
+  timeZone?: string;
+  /**
    * Channel credential (Telegram bot token from @BotFather). Stored server-side
    * and never returned by the REST API — reads report `tokenSet` instead.
    */

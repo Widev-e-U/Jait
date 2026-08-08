@@ -14,6 +14,7 @@ import {
   installClawHubSkill,
   uninstallClawHubSkill,
   installSkillTool,
+  writeUserSkill,
 } from "../skills/install.js";
 import type { ClawHubClient } from "../clawhub/client.js";
 import type { PluginManager } from "../plugins/manager.js";
@@ -29,11 +30,12 @@ type SkillsAction =
   | "uninstall"
   | "enable"
   | "disable"
-  | "install_tool";
+  | "install_tool"
+  | "create";
 
 interface SkillsManageInput {
   action: SkillsAction;
-  /** Skill id/slug for install/uninstall/enable/disable/install_tool. */
+  /** Skill id/slug for install/uninstall/enable/disable/install_tool/create. */
   id?: string;
   /** Search query for the `search` action. */
   query?: string;
@@ -43,6 +45,14 @@ interface SkillsManageInput {
   installId?: string;
   /** Result limit for `search`/`list`. */
   limit?: number;
+  /** Display name for `create`. */
+  name?: string;
+  /** One-line "use this when …" summary for `create`. */
+  description?: string;
+  /** Markdown instructions for `create`. */
+  body?: string;
+  /** Allow `create` to replace an existing skill of the same id. */
+  overwrite?: boolean;
 }
 
 export interface SkillsManageDeps {
@@ -58,8 +68,10 @@ export function createSkillsManageTool(deps: SkillsManageDeps): ToolDefinition<S
       "Manage skills (specialized instruction sets). Actions: " +
       "`list` installed skills; `search` the ClawHub marketplace; " +
       "`install`/`uninstall` a ClawHub skill by id; `enable`/`disable` an installed skill; " +
-      "`install_tool` to install a CLI tool a skill requires (npm). " +
-      "Use this to set up skills the user asks for.",
+      "`install_tool` to install a CLI tool a skill requires (npm); " +
+      "`create` to write a new skill yourself from what you just worked out — pass `id`, " +
+      "`name`, `description` (a \"use this when …\" line) and `body` (markdown instructions). " +
+      "Use this to set up skills the user asks for, and to record know-how worth reusing.",
     tier: "standard",
     category: "gateway",
     source: "builtin",
@@ -71,13 +83,17 @@ export function createSkillsManageTool(deps: SkillsManageDeps): ToolDefinition<S
         action: {
           type: "string",
           description: "The operation to perform.",
-          enum: ["list", "search", "install", "uninstall", "enable", "disable", "install_tool"],
+          enum: ["list", "search", "install", "uninstall", "enable", "disable", "install_tool", "create"],
         },
-        id: { type: "string", description: "Skill id/slug (for install/uninstall/enable/disable/install_tool)." },
+        id: { type: "string", description: "Skill id/slug (for install/uninstall/enable/disable/install_tool/create)." },
         query: { type: "string", description: "Search query (for `search`)." },
         version: { type: "string", description: "Optional version to install." },
         installId: { type: "string", description: "Optional install-option id (for `install_tool`)." },
         limit: { type: "number", description: "Max results for search/list (default 25)." },
+        name: { type: "string", description: "Display name (for `create`)." },
+        description: { type: "string", description: "One-line \"use this when …\" summary (for `create`)." },
+        body: { type: "string", description: "Markdown instructions the skill teaches (for `create`)." },
+        overwrite: { type: "boolean", description: "Replace an existing skill of the same id (for `create`)." },
       },
       required: ["action"],
     },
@@ -140,6 +156,29 @@ export function createSkillsManageTool(deps: SkillsManageDeps): ToolDefinition<S
             if (!skill) return { ok: false, message: `Skill '${input.id}' not found.` };
             skillRegistry.setEnabled(input.id, action === "enable");
             return { ok: true, message: `${action === "enable" ? "Enabled" : "Disabled"} skill '${skill.name}'.` };
+          }
+
+          case "create": {
+            const name = input.name?.trim();
+            const description = input.description?.trim();
+            const body = input.body?.trim();
+            if (!name) return { ok: false, message: "A `name` is required." };
+            if (!description) return { ok: false, message: "A `description` is required — it is how you find the skill later." };
+            if (!body) return { ok: false, message: "A `body` is required — the instructions the skill teaches." };
+
+            const written = await writeUserSkill({
+              skillRegistry,
+              id: input.id?.trim() || name,
+              name,
+              description,
+              body,
+              overwrite: input.overwrite === true,
+            });
+            return {
+              ok: true,
+              message: `${written.created ? "Wrote" : "Replaced"} skill '${written.id}' — active from the next turn.`,
+              data: written,
+            };
           }
 
           case "install_tool": {

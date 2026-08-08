@@ -46,6 +46,10 @@ export const ToolName = {
   JaitTodos: "jait.todos",
   UserAsk: "user.ask",
 
+  // ── Messaging channels ──
+  ChannelSend: "channel.send",
+  ChannelRemind: "channel.remind",
+
   // ── Skills & extensions management ──
   SkillsManage: "skills.manage",
   ExtensionsManage: "extensions.manage",

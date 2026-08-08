@@ -910,6 +910,17 @@ async function main() {
   // chat doesn't pay for a cold CLI provider probe.
   channelManager.warmModelCatalogue();
 
+  // Delivery back into a chat — the tools behind "remind me tomorrow at 5".
+  // Registered here rather than in createToolRegistry because they need the
+  // channel manager, which is built after the registry.
+  {
+    const { createChannelSendTool, createChannelRemindTool } = await import("./tools/channel-tools.js");
+    const { hostTimeZone } = await import("./channels/assistant.js");
+    const channelToolDeps = { channels: channelManager, scheduler, defaultTimeZone: hostTimeZone };
+    toolRegistry.register(createChannelSendTool(channelToolDeps));
+    toolRegistry.register(createChannelRemindTool(channelToolDeps));
+  }
+
   // Forward gateway notifications (maintenance, routines, provider limits) to
   // every channel the user opted in via Settings → Connectors.
   notifications.addSink((notification) => {

@@ -158,6 +158,17 @@ function isScheduledAgentTask(input: unknown): boolean {
   return meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job";
 }
 
+/**
+ * Whether this job is meant to fire exactly once.
+ *
+ * Cron has no way to express "tomorrow at 05:00" — the closest it gets is
+ * `0 5 9 8 *`, which comes back every year. So a one-off carries a flag and the
+ * scheduler disables it after it has fired.
+ */
+export function isOneShotJob(input: unknown): boolean {
+  return asRecord(asRecord(input)?.["__jaitJobMeta"])?.["once"] === true;
+}
+
 function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExecution {
   const toolName = normalizeToolName(job.toolName);
   const input = job.input;
@@ -348,6 +359,22 @@ export class SchedulerService {
       .all();
   }
 
+  /**
+   * Disarms a one-shot job once the schedule has fired it.
+   *
+   * Also applied when the run failed: the cron expression behind "tomorrow at
+   * 05:00" repeats yearly, so leaving a failed one-off armed means it goes off
+   * again at a time nobody asked for. The failure is in the run history, which
+   * is the honest place for it.
+   *
+   * Manual triggers are exempt — running a reminder to see what it does must
+   * not silently cancel it.
+   */
+  private oneShotPatch(job: ScheduledJobRecord, triggeredBy: SchedulerRunTrigger): { enabled?: number } {
+    if (triggeredBy !== "schedule" || !isOneShotJob(job.input)) return {};
+    return { enabled: 0 };
+  }
+
   async trigger(
     id: string,
     userId?: string,
@@ -385,6 +412,7 @@ export class SchedulerService {
       this.options.db.update(scheduledJobs).set({
         lastRunAt: startedAt,
         updatedAt: completedAt,
+        ...this.oneShotPatch(job, triggeredBy),
       }).where(eq(scheduledJobs.id, id)).run();
 
       throw err;
@@ -401,6 +429,7 @@ export class SchedulerService {
     this.options.db.update(scheduledJobs).set({
       lastRunAt: startedAt,
       updatedAt: completedAt,
+      ...this.oneShotPatch(job, triggeredBy),
     }).where(eq(scheduledJobs.id, id)).run();
 
     const payload = { jobId: id, actionId, result };
