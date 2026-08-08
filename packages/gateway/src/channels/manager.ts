@@ -24,8 +24,12 @@ import type { Skill } from "../skills/index.js";
 import type { ConsentManager, ConsentRequest, ConsentDecision } from "../security/consent-manager.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type {
+  ChannelChoice,
   ChannelConfig,
   ChannelConnector,
+  ChannelPairing,
+  ChannelPairOptions,
+  ChannelSetupGuide,
   ChannelStatus,
   ChannelStatusDetail,
   InboundMessage,
@@ -47,14 +51,36 @@ export interface ChannelAuthContext {
 export interface ReplyGenerator {
   generate(
     history: AgentMessage[],
-    ctx: { channelId: string; sessionId: string; allowedTools: Set<string> },
+    ctx: { channelId: string; sessionId: string; allowedTools: Set<string>; model?: string },
   ): Promise<string>;
+}
+
+/** A model the channel can switch to with `/model`. */
+export interface ChannelModelOption {
+  id: string;
+  label?: string;
+  /** Backend grouping shown in the picker, e.g. "OpenAI" / "Ollama". */
+  group?: string;
+}
+
+/** A message pushed into a channel by the gateway rather than by a reply turn. */
+export interface ChannelNotification {
+  title: string;
+  body: string;
+  level?: "info" | "success" | "warning" | "error";
+  /** Deep link into the Jait UI, appended so the phone can jump straight there. */
+  link?: string;
 }
 
 export interface ChannelManagerDeps {
   sqlite: SqliteDatabase;
-  /** Resolves the LLM config used for channel replies. */
-  resolveLLM: () => LLMConfig;
+  /**
+   * Resolves the LLM config used for channel replies. `requestedModel` carries
+   * the per-channel `/model` override and wins over the owner's picked model.
+   */
+  resolveLLM: (requestedModel?: string) => LLMConfig;
+  /** Models offered by `/model`. Defaults to none, which disables switching. */
+  resolveModels?: () => Promise<ChannelModelOption[]>;
   toolRegistry?: ToolRegistry;
   audit?: AuditWriter;
   projectRoot?: string;
@@ -157,6 +183,84 @@ export function shouldRespond(msg: InboundMessage, config: ChannelConfig): boole
   return false;
 }
 
+/**
+ * Commands the gateway answers itself, before the agent sees the message.
+ *
+ * Single source of truth: the in-chat `/help` text, the dispatcher, and the
+ * messenger's own command menu (Telegram's `/` autocomplete) are all derived
+ * from this list, so a new command shows up everywhere at once.
+ */
+export const CHANNEL_COMMAND_DEFS = [
+  { name: "model", description: "List models, or switch with a number or id", usage: "/model [number|id|reset]" },
+  { name: "notifications", description: "Send routines and gateway alerts to this chat", usage: "/notifications on|off" },
+  { name: "status", description: "Channel, model and notification state", usage: "/status" },
+  { name: "help", description: "Show the available commands", usage: "/help" },
+] as const;
+
+type ChannelCommand = (typeof CHANNEL_COMMAND_DEFS)[number]["name"];
+
+const CHANNEL_COMMANDS: readonly string[] = CHANNEL_COMMAND_DEFS.map((c) => c.name);
+
+const COMMAND_HELP = [
+  "Commands:",
+  ...CHANNEL_COMMAND_DEFS.map((c) => `${c.usage} — ${c.description}`),
+  "",
+  "Anything else goes to the assistant.",
+].join("\n");
+
+/**
+ * Parse a leading slash command. Telegram appends `@botname` to commands sent
+ * in groups, so that suffix is stripped. Returns null for ordinary messages.
+ */
+export function parseCommand(text: string): { command: ChannelCommand; args: string } | null {
+  const match = /^\/([a-zA-Z]+)(?:@\S+)?(?:\s+([\s\S]*))?$/.exec(text.trim());
+  if (!match) return null;
+  const name = match[1]!.toLowerCase();
+  if (!CHANNEL_COMMANDS.includes(name)) return null;
+  return { command: name as ChannelCommand, args: match[2] ?? "" };
+}
+
+/**
+ * Options offered as buttons by `/model`. A catalogue can run to hundreds of
+ * entries; past a couple of dozen a dialog is worse than useless on a phone, so
+ * the rest stay reachable by id.
+ */
+const MAX_MODEL_CHOICES = 24;
+
+/** Button caption for a model — group and current marker where they help. */
+export function modelChoiceLabel(model: ChannelModelOption, active?: string): string {
+  const name = model.label ?? model.id;
+  const grouped = model.group ? `${name} · ${model.group}` : name;
+  return model.id === active ? `✅ ${grouped}` : grouped;
+}
+
+const NOTIFICATION_ICONS = {
+  info: "ℹ️",
+  success: "✅",
+  warning: "⚠️",
+  error: "🚨",
+} as const;
+
+/** Render a notification as the plain text a messenger shows well. */
+export function formatNotification(notification: ChannelNotification): string {
+  const icon = NOTIFICATION_ICONS[notification.level ?? "info"];
+  const lines = [`${icon} ${notification.title}`.trim()];
+  if (notification.body.trim()) lines.push(notification.body.trim());
+  // Notification links are usually in-app paths ("/plans/abc"), which mean
+  // nothing in a messenger — only absolute URLs are worth sending.
+  if (/^https?:\/\//i.test(notification.link ?? "")) lines.push(notification.link!);
+  return lines.join("\n\n");
+}
+
+/**
+ * Who receives a notification on a channel. Only the paired/allowlisted
+ * accounts — `respondToAll` governs who may *talk to* the agent and must not
+ * turn the channel into a broadcast list.
+ */
+export function notificationRecipients(config: ChannelConfig): string[] {
+  return [...new Set((config.allowedSenders ?? []).map((s) => s.trim()).filter(Boolean))];
+}
+
 export class ChannelManager {
   private readonly deps: ChannelManagerDeps;
   private readonly channels = new Map<string, ManagedChannel>();
@@ -241,7 +345,7 @@ export class ChannelManager {
     }
   }
 
-  list(): { id: string; label: string; status: ChannelStatus; enabled: boolean; qr: string | null; config: ChannelConfig }[] {
+  list(): { id: string; label: string; status: ChannelStatus; enabled: boolean; qr: string | null; link: string | null; expiresAt: string | null; config: ChannelConfig }[] {
     return [...this.channels.values()].map((c) => {
       const config = this.getConfig(c.connector.id);
       return {
@@ -250,6 +354,10 @@ export class ChannelManager {
         status: c.status,
         enabled: Boolean(config.enabled),
         qr: c.detail.qr ?? c.connector.currentQr(),
+        // Kept alongside the QR so reloading mid-pairing still offers the link
+        // and can keep counting down instead of showing a dead code.
+        link: c.detail.link ?? null,
+        expiresAt: c.detail.expiresAt ?? null,
         config,
       };
     });
@@ -260,7 +368,7 @@ export class ChannelManager {
   }
 
   /** Start a connector and persist enabled=true. */
-  async start(id: string): Promise<void> {
+  async start(id: string, options?: ChannelPairOptions): Promise<void> {
     const managed = this.channels.get(id);
     if (!managed) throw new Error(`Channel '${id}' not found`);
     this.setConfig(id, { enabled: true });
@@ -276,7 +384,64 @@ export class ChannelManager {
         managed.detail = detail ?? {};
         this.log(`${id}: status=${status}${detail?.error ? ` error=${detail.error}` : ""}`);
       },
-    });
+      onPaired: (pairing) => { this.recordPairing(id, pairing); },
+    }, this.getConfig(id), options);
+
+    await this.publishCommandMenu(managed);
+  }
+
+  /**
+   * Publish the slash commands to the messenger's own menu, so typing `/`
+   * offers them. Best-effort: the channel is already up at this point, and a
+   * rejected menu update must not turn a working connection into a failure.
+   */
+  private async publishCommandMenu(managed: ManagedChannel): Promise<void> {
+    if (!managed.connector.setCommandMenu) return;
+    try {
+      await managed.connector.setCommandMenu(
+        CHANNEL_COMMAND_DEFS.map(({ name, description }) => ({ name, description })),
+      );
+    } catch (err) {
+      this.log(`${managed.connector.id}: command menu not published:`, err);
+    }
+  }
+
+  /**
+   * Re-enter pairing mode so another account can be linked. Only connectors
+   * that support repeated pairing (Telegram) implement this.
+   */
+  async pair(id: string, options?: ChannelPairOptions): Promise<void> {
+    const managed = this.channels.get(id);
+    if (!managed) throw new Error(`Channel '${id}' not found`);
+    if (!managed.connector.pair) {
+      throw new Error(`Channel '${id}' does not support re-pairing`);
+    }
+    await managed.connector.pair(options);
+  }
+
+  /**
+   * Setup instructions for creating the underlying messenger account. Returns
+   * null for channels that need no such step (WhatsApp links an existing app).
+   */
+  async setupGuide(id: string): Promise<ChannelSetupGuide | null> {
+    const managed = this.channels.get(id);
+    if (!managed) throw new Error(`Channel '${id}' not found`);
+    if (!managed.connector.setupGuide) return null;
+    return managed.connector.setupGuide();
+  }
+
+  /**
+   * Persist a paired sender into the channel allowlist, so the agent replies to
+   * them without the user having to copy a numeric id by hand.
+   */
+  private recordPairing(id: string, pairing: ChannelPairing): void {
+    const senderId = pairing.senderId.trim();
+    if (!senderId) return;
+    const existing = this.getConfig(id).allowedSenders ?? [];
+    const normalized = normalizeSenderId(senderId);
+    if (existing.some((s) => normalizeSenderId(s) === normalized)) return;
+    this.setConfig(id, { allowedSenders: [...existing, senderId] });
+    this.log(`${id}: paired ${pairing.senderName ?? senderId}`);
   }
 
   /** Stop a connector and persist enabled=false. */
@@ -308,6 +473,42 @@ export class ChannelManager {
     }
   }
 
+  /* ── Outbound notifications (gateway → channel) ─────────────────── */
+
+  /**
+   * Push a gateway notification into every channel opted in via
+   * `config.notifications`. Recipients are the channel's allowed senders — the
+   * accounts that completed pairing — so nothing is sent to strangers.
+   *
+   * Fire-and-forget by design: a messenger being down must never break the
+   * task that produced the notification. Returns the delivery count for tests
+   * and callers that want to report reach.
+   */
+  async notify(notification: ChannelNotification): Promise<number> {
+    const text = formatNotification(notification);
+    let delivered = 0;
+
+    for (const managed of this.channels.values()) {
+      const id = managed.connector.id;
+      const config = this.getConfig(id);
+      if (!config.notifications) continue;
+      if (managed.status !== "connected") {
+        this.log(`${id}: notification skipped (status=${managed.status})`);
+        continue;
+      }
+
+      for (const recipient of notificationRecipients(config)) {
+        try {
+          await managed.connector.send({ conversationId: recipient, text });
+          delivered += 1;
+        } catch (err) {
+          this.log(`${id}: notification to ${recipient} failed:`, err);
+        }
+      }
+    }
+    return delivered;
+  }
+
   /* ── Inbound → agent → outbound ─────────────────────────────────── */
 
   private async handleInbound(msg: InboundMessage): Promise<void> {
@@ -319,6 +520,12 @@ export class ChannelManager {
     if (!shouldRespond(msg, config)) return;
 
     const key = `${msg.channelId}:${msg.conversationId}`;
+
+    // Slash commands are handled by the gateway, not the model — they change
+    // channel settings, which the agent cannot do. Checked before the consent
+    // branch: a command is never a yes/no answer, so it must not be swallowed
+    // as one, and a pending approval stays pending while the user runs /status.
+    if (await this.tryHandleCommand(managed, msg, config)) return;
 
     // If we're awaiting a yes/no approval in this conversation, this message is
     // the answer to it. Handle it OUTSIDE the per-conversation lock — the reply
@@ -360,6 +567,7 @@ export class ChannelManager {
         channelId: msg.channelId,
         sessionId,
         allowedTools,
+        model: config.model?.trim() || undefined,
       })).trim();
 
       if (reply) {
@@ -382,6 +590,155 @@ export class ChannelManager {
     } finally {
       this.sessionTargets.delete(sessionId);
     }
+  }
+
+  /* ── In-chat commands ───────────────────────────────────────────── */
+
+  /**
+   * Handle a slash command. Returns true when the message was a command and
+   * must not reach the agent.
+   */
+  private async tryHandleCommand(
+    managed: ManagedChannel,
+    msg: InboundMessage,
+    config: ChannelConfig,
+  ): Promise<boolean> {
+    const parsed = parseCommand(msg.text);
+    if (!parsed) return false;
+
+    const reply = async (text: string, choices?: ChannelChoice[]) => {
+      try {
+        await managed.connector.send({ conversationId: msg.conversationId, text, choices });
+      } catch (err) {
+        this.log(`${msg.channelId}: command reply failed:`, err);
+      }
+    };
+
+    switch (parsed.command) {
+      case "help":
+        await reply(COMMAND_HELP);
+        return true;
+
+      case "status": {
+        const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
+        await reply([
+          `Channel: ${managed.connector.label} (${managed.status})`,
+          `Model: ${config.model ?? auth?.model ?? "gateway default"}${config.model ? " (channel override)" : ""}`,
+          `Notifications: ${config.notifications ? "on" : "off"}`,
+          `Allowed senders: ${(config.allowedSenders ?? []).join(", ") || "none"}`,
+        ].join("\n"));
+        return true;
+      }
+
+      case "notifications": {
+        const arg = parsed.args.trim().toLowerCase();
+        if (arg !== "on" && arg !== "off") {
+          await reply(`Notifications are ${config.notifications ? "on" : "off"}. Use /notifications on or /notifications off.`);
+          return true;
+        }
+        this.setConfig(msg.channelId, { notifications: arg === "on" });
+        await reply(arg === "on"
+          ? "✅ Notifications on — routines and gateway alerts land here."
+          : "🔕 Notifications off.");
+        return true;
+      }
+
+      case "model": {
+        const result = await this.runModelCommand(
+          msg.channelId,
+          config,
+          parsed.args,
+          Boolean(managed.connector.supportsChoices),
+        );
+        await reply(result.text, result.choices);
+        return true;
+      }
+    }
+  }
+
+  /**
+   * `/model` — offer the catalogue, or switch to a model by number or id.
+   *
+   * With a channel that renders dialogs the catalogue comes back as tappable
+   * options; otherwise as the numbered list, which `/model <n>` still accepts.
+   */
+  private async runModelCommand(
+    channelId: string,
+    config: ChannelConfig,
+    args: string,
+    supportsChoices: boolean,
+  ): Promise<{ text: string; choices?: ChannelChoice[] }> {
+    const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
+    const active = config.model ?? auth?.model;
+    const arg = args.trim();
+
+    if (arg.toLowerCase() === "reset" || arg.toLowerCase() === "default") {
+      this.setConfig(channelId, { model: "" });
+      return { text: `↩️ Back to the gateway default${auth?.model ? ` (${auth.model})` : ""}.` };
+    }
+
+    let models: ChannelModelOption[] = [];
+    try {
+      models = (await this.deps.resolveModels?.()) ?? [];
+    } catch (err) {
+      this.log(`${channelId}: model catalogue failed:`, err);
+    }
+
+    if (!arg) {
+      if (models.length === 0) {
+        return {
+          text: `Current model: ${active ?? "gateway default"}\n\nNo catalogue is available, so switching is off. Set the model in the web UI instead.`,
+        };
+      }
+
+      if (supportsChoices) {
+        const offered = models.slice(0, MAX_MODEL_CHOICES);
+        const choices: ChannelChoice[] = offered.map((model) => ({
+          label: modelChoiceLabel(model, active),
+          value: `/model ${model.id}`,
+        }));
+        if (active) choices.push({ label: "↩️ Gateway default", value: "/model reset" });
+        const truncated = models.length - offered.length;
+        return {
+          text: [
+            `Current model: ${active ?? "gateway default"}`,
+            truncated > 0
+              ? `Pick one — ${truncated} more available with /model <id>.`
+              : "Pick one:",
+          ].join("\n"),
+          choices,
+        };
+      }
+
+      const list = models
+        .map((model, index) => `${index + 1}. ${model.label ?? model.id}${model.id === active ? "  ← current" : ""}`)
+        .join("\n");
+      return {
+        text: [
+          `Current model: ${active ?? "gateway default"}`,
+          "",
+          list,
+          "",
+          "Switch with /model <number> or /model <id>, /model reset for the default.",
+        ].join("\n"),
+      };
+    }
+
+    // A number picks from the list just shown; anything else is treated as an id.
+    const index = /^\d+$/.test(arg) ? parseInt(arg, 10) - 1 : -1;
+    const picked = index >= 0
+      ? models[index]
+      : models.find((model) => model.id.toLowerCase() === arg.toLowerCase());
+
+    if (index >= 0 && !picked) return { text: `There is no model ${arg} in the list. Send /model to see it again.` };
+
+    // Unknown ids are accepted when no catalogue could be loaded — otherwise a
+    // failed model fetch would lock the channel to its current model.
+    const modelId = picked?.id ?? (models.length === 0 ? arg : null);
+    if (!modelId) return { text: `Unknown model "${arg}". Send /model to see what is available.` };
+
+    this.setConfig(channelId, { model: modelId });
+    return { text: `✅ Now using ${picked?.label ?? modelId} on this channel.` };
   }
 
   /* ── In-band tool approval (consent over the chat) ──────────────── */
@@ -480,11 +837,11 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
 
   async generate(
     history: AgentMessage[],
-    ctx: { channelId: string; sessionId: string; allowedTools: Set<string> },
+    ctx: { channelId: string; sessionId: string; allowedTools: Set<string>; model?: string },
   ): Promise<string> {
     const { toolRegistry, audit } = this.deps;
     const auth = this.deps.resolveAuth?.() ?? this.deps.auth;
-    const llm = this.deps.resolveLLM();
+    const llm = this.deps.resolveLLM(ctx.model);
     const disabledTools = auth?.disabledTools;
 
     // Tools: the channel agent gets the same tiered registry as the web chat

@@ -88,3 +88,49 @@ describe("channel routes", () => {
     expect(res.json()).toMatchObject({ ok: true });
   });
 });
+
+describe("channel credentials", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>["app"];
+  let mgr: Awaited<ReturnType<typeof buildApp>>["mgr"];
+  beforeEach(async () => { ({ app, mgr } = await buildApp()); });
+
+  async function patch(payload: Record<string, unknown>) {
+    return app.inject({ method: "PATCH", url: "/api/channels/whatsapp/config", headers: await authHeaders(), payload });
+  }
+
+  it("stores a token but never returns it", async () => {
+    const res = await patch({ token: "secret-bot-token" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ tokenSet: true });
+    expect(res.json().token).toBeUndefined();
+    expect(mgr.getConfig("whatsapp").token).toBe("secret-bot-token");
+
+    const list = await app.inject({ method: "GET", url: "/api/channels", headers: await authHeaders() });
+    expect(list.json()[0].config).toMatchObject({ tokenSet: true });
+    expect(list.json()[0].config.token).toBeUndefined();
+  });
+
+  it("keeps the stored token when saving other settings", async () => {
+    await patch({ token: "secret-bot-token" });
+    await patch({ respondToAll: true });
+    expect(mgr.getConfig("whatsapp").token).toBe("secret-bot-token");
+  });
+
+  it("clears the token when explicitly nulled", async () => {
+    await patch({ token: "secret-bot-token" });
+    const res = await patch({ token: null });
+    expect(res.json()).toMatchObject({ tokenSet: false });
+    expect(mgr.getConfig("whatsapp").token).toBe("");
+  });
+
+  it("rejects re-pairing on a connector without pair support", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/channels/whatsapp/pair", headers: await authHeaders() });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/does not support re-pairing/);
+  });
+
+  it("404s pairing for an unknown channel", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/channels/nope/pair", headers: await authHeaders() });
+    expect(res.statusCode).toBe(404);
+  });
+});

@@ -1,6 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { TelegramConnector, telegramMessageToInbound } from "./connector.js";
-import type { ChannelStatus } from "../types.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  TELEGRAM_MAX_COMMANDS,
+  TelegramConnector,
+  botFatherSetupLink,
+  extractBotToken,
+  generateUsernameSlug,
+  isPaired,
+  parseStartPayload,
+  sanitizeReturnUrl,
+  suggestBotUsername,
+  telegramMessageToInbound,
+  toTelegramCommands,
+} from "./connector.js";
+import type { ChannelPairing, ChannelStatus, ChannelStatusDetail, InboundMessage } from "../types.js";
 
 describe("TelegramConnector", () => {
   it("converts text messages to inbound channel messages", () => {
@@ -32,6 +44,568 @@ describe("TelegramConnector", () => {
       onStatus: (status, detail) => { statuses.push({ status, error: detail?.error }); },
     });
 
-    expect(statuses).toMatchObject([{ status: "error", error: "TELEGRAM_BOT_TOKEN is required" }]);
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]!.status).toBe("error");
+    expect(statuses[0]!.error).toMatch(/@BotFather/);
+  });
+
+  describe("parseStartPayload", () => {
+    it("extracts the deep-link payload", () => {
+      expect(parseStartPayload("/start abc123")).toBe("abc123");
+      expect(parseStartPayload("/start@jait_bot abc123")).toBe("abc123");
+    });
+
+    it("returns an empty payload for a bare /start", () => {
+      expect(parseStartPayload("/start")).toBe("");
+    });
+
+    it("ignores ordinary messages", () => {
+      expect(parseStartPayload("start the build")).toBeNull();
+      expect(parseStartPayload("/startup")).toBeNull();
+    });
+  });
+
+  describe("isPaired", () => {
+    it("is true once a sender is allowlisted or everyone may talk", () => {
+      expect(isPaired({ allowedSenders: ["123"] })).toBe(true);
+      expect(isPaired({ respondToAll: true })).toBe(true);
+    });
+
+    it("is false for a fresh channel", () => {
+      expect(isPaired({})).toBe(false);
+      expect(isPaired(undefined)).toBe(false);
+    });
+  });
+
+  describe("extractBotToken", () => {
+    it("picks the token out of the whole BotFather reply", () => {
+      const reply = [
+        "Done! Congratulations on your new bot.",
+        "Use this token to access the HTTP API:",
+        "8123456789:AAF-mK3sample_TOKEN-value_1234567890x",
+        "Keep your token secure.",
+      ].join("\n");
+
+      expect(extractBotToken(reply)).toBe("8123456789:AAF-mK3sample_TOKEN-value_1234567890x");
+    });
+
+    it("accepts a bare token", () => {
+      expect(extractBotToken("  8123456789:AAF-mK3sample_TOKEN-value_1234567890x  "))
+        .toBe("8123456789:AAF-mK3sample_TOKEN-value_1234567890x");
+    });
+
+    it("returns null when nothing token-shaped is present", () => {
+      expect(extractBotToken("no token here")).toBeNull();
+      expect(extractBotToken("123:short")).toBeNull();
+    });
+  });
+
+  describe("sanitizeReturnUrl", () => {
+    it("keeps http(s) URLs", () => {
+      expect(sanitizeReturnUrl("https://jait.example/settings")).toBe("https://jait.example/settings");
+      expect(sanitizeReturnUrl("http://localhost:8010/")).toBe("http://localhost:8010/");
+    });
+
+    it("drops anything that is not http(s)", () => {
+      expect(sanitizeReturnUrl("javascript:alert(1)")).toBeUndefined();
+      expect(sanitizeReturnUrl("tg://resolve?domain=x")).toBeUndefined();
+      expect(sanitizeReturnUrl("not a url")).toBeUndefined();
+      expect(sanitizeReturnUrl("")).toBeUndefined();
+      expect(sanitizeReturnUrl(undefined)).toBeUndefined();
+    });
+  });
+
+  describe("setup guide", () => {
+    it("deep-links to BotFather with /newbot prefilled", () => {
+      expect(botFatherSetupLink()).toBe("https://t.me/BotFather?text=%2Fnewbot");
+    });
+
+    it("suggests a username Telegram accepts", () => {
+      const username = suggestBotUsername("abc123");
+      expect(username).toBe("jait_abc123_bot");
+      expect(username.endsWith("bot")).toBe(true);
+      expect(username.length).toBeGreaterThanOrEqual(5);
+      expect(username.length).toBeLessThanOrEqual(32);
+      expect(username).toMatch(/^[A-Za-z0-9_]+$/);
+    });
+
+    it("returns link, QR and suggestions", async () => {
+      const connector = new TelegramConnector({
+        encodeQr: async (text) => `data:image/png;base64,${Buffer.from(text).toString("base64")}`,
+      });
+
+      const guide = await connector.setupGuide();
+
+      expect(guide.link).toBe("https://t.me/BotFather?text=%2Fnewbot");
+      expect(guide.qr).toMatch(/^data:image\/png;base64,/);
+      expect(guide.suggestedName).toBe("Jait Assistant");
+      expect(guide.suggestedUsername).toMatch(/^jait_[a-z2-7]{16}_bot$/);
+    });
+
+    it("still returns the link when QR encoding fails", async () => {
+      const connector = new TelegramConnector({
+        encodeQr: async () => { throw new Error("no encoder"); },
+        log: () => {},
+      });
+
+      const guide = await connector.setupGuide();
+
+      expect(guide.qr).toBeNull();
+      expect(guide.link).toContain("BotFather");
+    });
+  });
+
+  /**
+   * Fake Bot API: getMe resolves the bot username, the first getUpdates poll
+   * delivers the scripted updates, later polls hang until the connector stops.
+   */
+  function fakeApi(updates: unknown[]) {
+    const sent: Array<Record<string, unknown>> = [];
+    let polled = false;
+    const fetchImpl = vi.fn(async (url: unknown, init?: unknown) => {
+      const path = String(url);
+      const body = (init as { body?: string } | undefined)?.body;
+      const json = (value: unknown) => ({ json: async () => value }) as unknown as Response;
+
+      if (path.endsWith("/getMe")) return json({ ok: true, result: { id: 1, username: "jait_bot" } });
+      if (path.endsWith("/sendMessage")) {
+        sent.push(JSON.parse(body ?? "{}") as Record<string, unknown>);
+        return json({ ok: true, result: {} });
+      }
+      if (path.endsWith("/getUpdates")) {
+        if (polled) return await new Promise<Response>(() => {}); // idle forever
+        polled = true;
+        return json({ ok: true, result: updates });
+      }
+      return json({ ok: false, description: `unexpected ${path}` });
+    });
+    return { fetchImpl: fetchImpl as unknown as typeof fetch, sent };
+  }
+
+  const startUpdate = (payload: string) => ({
+    update_id: 1,
+    message: {
+      message_id: 1,
+      date: 1_700_000_000,
+      chat: { id: 4242, type: "private" },
+      from: { id: 4242, username: "lukas" },
+      text: `/start ${payload}`,
+    },
+  });
+
+  it("shows a deep-link QR while unpaired", async () => {
+    const { fetchImpl } = fakeApi([]);
+    const details: ChannelStatusDetail[] = [];
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl,
+      makePairingCode: () => "CODE123",
+      encodeQr: async (text) => `data:image/png;base64,${Buffer.from(text).toString("base64")}`,
+    });
+
+    await connector.start({
+      onInbound: () => {},
+      onStatus: (_status, detail) => { if (detail) details.push(detail); },
+    }, {});
+
+    expect(connector.status()).toBe("qr");
+    expect(connector.currentLink()).toBe("https://t.me/jait_bot?start=CODE123");
+    expect(connector.currentQr()).toMatch(/^data:image\/png;base64,/);
+    await connector.stop();
+  });
+
+  it("pairs the user that scans the QR and reports their id", async () => {
+    const { fetchImpl, sent } = fakeApi([startUpdate("CODE123")]);
+    const paired: ChannelPairing[] = [];
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl,
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+    });
+
+    await connector.start({
+      onInbound: () => {},
+      onStatus: () => {},
+      onPaired: (p) => { paired.push(p); },
+    }, {});
+
+    await vi.waitFor(() => expect(paired).toHaveLength(1));
+    expect(paired[0]).toMatchObject({ senderId: "4242", senderName: "@lukas", conversationId: "4242" });
+    expect(connector.status()).toBe("connected");
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(String(sent[0]!.text)).toContain("Linked to Jait");
+    await connector.stop();
+  });
+
+  it("sends the way back to Jait with the pairing confirmation", async () => {
+    const { fetchImpl, sent } = fakeApi([startUpdate("CODE123")]);
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl,
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+    });
+
+    await connector.start(
+      { onInbound: () => {}, onStatus: () => {} },
+      {},
+      { returnUrl: "https://jait.example/settings" },
+    );
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(String(sent[0]!.text)).toContain("https://jait.example/settings");
+    await connector.stop();
+  });
+
+  it("keeps a non-http return url out of the message", async () => {
+    const { fetchImpl, sent } = fakeApi([startUpdate("CODE123")]);
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl,
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+    });
+
+    await connector.start(
+      { onInbound: () => {}, onStatus: () => {} },
+      {},
+      { returnUrl: "javascript:alert(1)" },
+    );
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(String(sent[0]!.text)).not.toContain("javascript");
+    expect(String(sent[0]!.text)).toContain("Linked to Jait");
+    await connector.stop();
+  });
+
+  it("does not pair on a stale code and never forwards /start to the agent", async () => {
+    const { fetchImpl, sent } = fakeApi([startUpdate("WRONG")]);
+    const paired: ChannelPairing[] = [];
+    const inbound: unknown[] = [];
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl,
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+    });
+
+    await connector.start({
+      onInbound: (msg) => { inbound.push(msg); },
+      onStatus: () => {},
+      onPaired: (p) => { paired.push(p); },
+    }, {});
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(paired).toHaveLength(0);
+    expect(inbound).toHaveLength(0);
+    expect(connector.status()).toBe("qr");
+    await connector.stop();
+  });
+
+  it("connects straight through when already paired", async () => {
+    const { fetchImpl } = fakeApi([]);
+    const connector = new TelegramConnector({ token: "t", fetchImpl });
+
+    await connector.start({ onInbound: () => {}, onStatus: () => {} }, { allowedSenders: ["4242"] });
+
+    expect(connector.status()).toBe("connected");
+    expect(connector.currentQr()).toBeNull();
+    await connector.stop();
+  });
+
+  it("reads the bot token from the channel config", async () => {
+    const { fetchImpl } = fakeApi([]);
+    const connector = new TelegramConnector({ fetchImpl });
+
+    await connector.start(
+      { onInbound: () => {}, onStatus: () => {} },
+      { token: "from-config", allowedSenders: ["1"] },
+    );
+
+    expect(connector.status()).toBe("connected");
+    expect(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0])).toContain("/botfrom-config/");
+    await connector.stop();
+  });
+});
+
+describe("command menu", () => {
+  it("normalises names and descriptions to what setMyCommands accepts", () => {
+    const commands = toTelegramCommands([
+      { name: "Model", description: "Switch model" },
+      { name: "my-command", description: "Hyphens are not allowed" },
+      { name: "model", description: "duplicate — dropped" },
+      { name: "", description: "no name" },
+      { name: "empty", description: "   " },
+      { name: "x".repeat(40), description: "y".repeat(300) },
+    ]);
+
+    expect(commands).toEqual([
+      { command: "model", description: "Switch model" },
+      { command: "my_command", description: "Hyphens are not allowed" },
+      { command: "x".repeat(32), description: "y".repeat(256) },
+    ]);
+  });
+
+  it("stays within Telegram's 100-command cap", () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({ name: `cmd${i}`, description: `Command ${i}` }));
+    expect(toTelegramCommands(many)).toHaveLength(TELEGRAM_MAX_COMMANDS);
+  });
+
+  it("registers the menu for every scope", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const fetchImpl = vi.fn(async (url: unknown, init?: unknown) => {
+      const body = (init as { body?: string } | undefined)?.body;
+      if (String(url).endsWith("/setMyCommands")) calls.push(JSON.parse(body ?? "{}") as Record<string, unknown>);
+      return { json: async () => ({ ok: true }) } as unknown as Response;
+    });
+    const connector = new TelegramConnector({ token: "t", fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await connector.setCommandMenu([{ name: "model", description: "Switch model" }]);
+
+    expect(calls.map((c) => (c.scope as { type: string }).type))
+      .toEqual(["default", "all_private_chats", "all_group_chats"]);
+    expect(calls[0]!.commands).toEqual([{ command: "model", description: "Switch model" }]);
+  });
+
+  it("survives a rejected scope without throwing", async () => {
+    const fetchImpl = vi.fn(async (url: unknown) => {
+      if (String(url).endsWith("/setMyCommands")) throw new Error("network down");
+      return { json: async () => ({ ok: true }) } as unknown as Response;
+    });
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      log: () => {},
+    });
+
+    await expect(connector.setCommandMenu([{ name: "model", description: "Switch model" }])).resolves.toBeUndefined();
+  });
+
+  it("does nothing without a token", async () => {
+    const fetchImpl = vi.fn();
+    const connector = new TelegramConnector({ token: "", fetchImpl: fetchImpl as unknown as typeof fetch });
+
+    await connector.setCommandMenu([{ name: "model", description: "Switch model" }]);
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("choice dialogs", () => {
+  /** Bot API fake that records sends and replays a button tap as an update. */
+  function dialogApi() {
+    const sent: Array<Record<string, unknown>> = [];
+    const answered: Array<Record<string, unknown>> = [];
+    const edited: Array<Record<string, unknown>> = [];
+    let pending: unknown[] = [];
+    let polls = 0;
+    const fetchImpl = vi.fn(async (url: unknown, init?: unknown) => {
+      const path = String(url);
+      const body = JSON.parse((init as { body?: string } | undefined)?.body ?? "{}") as Record<string, unknown>;
+      const json = (value: unknown) => ({ json: async () => value }) as unknown as Response;
+
+      if (path.endsWith("/getMe")) return json({ ok: true, result: { id: 1, username: "jait_bot" } });
+      if (path.endsWith("/sendMessage")) { sent.push(body); return json({ ok: true, result: { message_id: 7 } }); }
+      if (path.endsWith("/answerCallbackQuery")) { answered.push(body); return json({ ok: true }); }
+      if (path.endsWith("/editMessageReplyMarkup")) { edited.push(body); return json({ ok: true }); }
+      if (path.endsWith("/setMyCommands")) return json({ ok: true });
+      if (path.endsWith("/getUpdates")) {
+        polls += 1;
+        if (pending.length) { const batch = pending; pending = []; return json({ ok: true, result: batch }); }
+        // Keep long-polling like the real API instead of parking forever, so an
+        // update queued after the first poll is still picked up.
+        await new Promise((r) => setTimeout(r, 10));
+        return json({ ok: true, result: [] });
+      }
+      return json({ ok: false, description: `unexpected ${path}` });
+    });
+    return {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sent, answered, edited,
+      pollCount: () => polls,
+      tap: (data: string) => { pending = [{ update_id: 99, callback_query: { id: "q1", data, from: { id: 4242, username: "lukas" }, message: { message_id: 7, chat: { id: 4242, type: "private" } } } }]; },
+    };
+  }
+
+  it("renders choices as an inline keyboard", async () => {
+    const api = dialogApi();
+    const connector = new TelegramConnector({ token: "t", fetchImpl: api.fetchImpl });
+    await connector.start({ onInbound: () => {}, onStatus: () => {} }, { allowedSenders: ["4242"] });
+
+    await connector.send({
+      conversationId: "4242",
+      text: "Pick one:",
+      choices: [{ label: "GPT-4o", value: "/model gpt-4o" }, { label: "Llama 3", value: "/model llama3" }],
+    });
+
+    const markup = api.sent.at(-1)!["reply_markup"] as { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+    expect(markup.inline_keyboard.map((row) => row[0]!.text)).toEqual(["GPT-4o", "Llama 3"]);
+    // Values ride in the token map, not in callback_data (64-byte cap).
+    for (const row of markup.inline_keyboard) {
+      expect(row[0]!.callback_data.length).toBeLessThanOrEqual(64);
+      expect(row[0]!.callback_data).not.toContain("/model");
+    }
+    await connector.stop();
+  });
+
+  it("replays a tapped button through the inbound path", async () => {
+    const api = dialogApi();
+    const inbound: InboundMessage[] = [];
+    const connector = new TelegramConnector({ token: "t", fetchImpl: api.fetchImpl });
+    await connector.start({ onInbound: (m) => { inbound.push(m); }, onStatus: () => {} }, { allowedSenders: ["4242"] });
+
+    await connector.send({
+      conversationId: "4242",
+      text: "Pick one:",
+      choices: [{ label: "Llama 3", value: "/model llama3" }],
+    });
+    const markup = api.sent.at(-1)!["reply_markup"] as { inline_keyboard: Array<Array<{ callback_data: string }>> };
+    api.tap(markup.inline_keyboard[0]![0]!.callback_data);
+
+    await vi.waitFor(() => expect(inbound).toHaveLength(1));
+    expect(inbound[0]).toMatchObject({ text: "/model llama3", senderId: "4242", conversationId: "4242" });
+    expect(api.answered).toHaveLength(1);
+    // Keyboard removed so the dialog cannot be answered twice.
+    expect(api.edited).toHaveLength(1);
+    await connector.stop();
+  });
+
+  it("tells the user when a menu has expired", async () => {
+    const api = dialogApi();
+    const inbound: InboundMessage[] = [];
+    const connector = new TelegramConnector({ token: "t", fetchImpl: api.fetchImpl });
+    await connector.start({ onInbound: (m) => { inbound.push(m); }, onStatus: () => {} }, { allowedSenders: ["4242"] });
+
+    api.tap("c999");
+
+    await vi.waitFor(() => expect(api.answered).toHaveLength(1));
+    expect(String(api.answered[0]!["text"])).toMatch(/expired/i);
+    expect(inbound).toHaveLength(0);
+    await connector.stop();
+  });
+
+  it("sends no keyboard for a plain message", async () => {
+    const api = dialogApi();
+    const connector = new TelegramConnector({ token: "t", fetchImpl: api.fetchImpl });
+    await connector.start({ onInbound: () => {}, onStatus: () => {} }, { allowedSenders: ["4242"] });
+
+    await connector.send({ conversationId: "4242", text: "hello" });
+
+    expect(api.sent.at(-1)!["reply_markup"]).toBeUndefined();
+    await connector.stop();
+  });
+});
+
+describe("pairing code expiry", () => {
+  function api() {
+    const fetchImpl = vi.fn(async (url: unknown) => {
+      const path = String(url);
+      const json = (value: unknown) => ({ json: async () => value }) as unknown as Response;
+      if (path.endsWith("/getMe")) return json({ ok: true, result: { id: 1, username: "jait_bot" } });
+      if (path.endsWith("/sendMessage")) return json({ ok: true, result: {} });
+      if (path.endsWith("/getUpdates")) {
+        await new Promise((r) => setTimeout(r, 10));
+        return json({ ok: true, result: [] });
+      }
+      return json({ ok: true, result: {} });
+    });
+    return fetchImpl as unknown as typeof fetch;
+  }
+
+  it("reports when the shown code stops working", async () => {
+    const details: ChannelStatusDetail[] = [];
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl: api(),
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+      pairingTtlMs: 60_000,
+    });
+
+    await connector.start({
+      onInbound: () => {},
+      onStatus: (_status, detail) => { if (detail) details.push(detail); },
+    }, {});
+
+    const expiresAt = details.at(-1)!.expiresAt;
+    expect(expiresAt).toBeDefined();
+    const remaining = new Date(expiresAt!).getTime() - Date.now();
+    expect(remaining).toBeGreaterThan(50_000);
+    expect(remaining).toBeLessThanOrEqual(60_000);
+    expect(connector.currentExpiry()).toBe(expiresAt);
+    await connector.stop();
+  });
+
+  it("clears the deadline once linked or stopped", async () => {
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl: api(),
+      encodeQr: async () => "data:image/png;base64,x",
+    });
+
+    await connector.start({ onInbound: () => {}, onStatus: () => {} }, {});
+    expect(connector.currentExpiry()).not.toBeNull();
+
+    await connector.stop();
+    expect(connector.currentExpiry()).toBeNull();
+  });
+
+  it("refuses an expired code instead of pairing", async () => {
+    const paired: ChannelPairing[] = [];
+    const sent: Array<Record<string, unknown>> = [];
+    let pending: unknown[] = [];
+    const fetchImpl = vi.fn(async (url: unknown, init?: unknown) => {
+      const path = String(url);
+      const json = (value: unknown) => ({ json: async () => value }) as unknown as Response;
+      if (path.endsWith("/getMe")) return json({ ok: true, result: { id: 1, username: "jait_bot" } });
+      if (path.endsWith("/sendMessage")) {
+        sent.push(JSON.parse((init as { body?: string }).body ?? "{}") as Record<string, unknown>);
+        return json({ ok: true, result: {} });
+      }
+      if (path.endsWith("/getUpdates")) {
+        if (pending.length) { const batch = pending; pending = []; return json({ ok: true, result: batch }); }
+        await new Promise((r) => setTimeout(r, 10));
+        return json({ ok: true, result: [] });
+      }
+      return json({ ok: true, result: {} });
+    });
+
+    const connector = new TelegramConnector({
+      token: "t",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      makePairingCode: () => "CODE123",
+      encodeQr: async () => "data:image/png;base64,x",
+      pairingTtlMs: 20,
+    });
+    await connector.start({
+      onInbound: () => {},
+      onStatus: () => {},
+      onPaired: (p) => { paired.push(p); },
+    }, {});
+
+    await new Promise((r) => setTimeout(r, 50)); // let the code lapse
+    pending = [{
+      update_id: 1,
+      message: { message_id: 1, date: 1, chat: { id: 4242, type: "private" }, from: { id: 4242 }, text: "/start CODE123" },
+    }];
+
+    await vi.waitFor(() => expect(sent.length).toBeGreaterThan(0));
+    expect(paired).toHaveLength(0);
+    expect(String(sent.at(-1)!["text"])).toMatch(/expired|Jait/i);
+    await connector.stop();
+  });
+});
+
+describe("generateUsernameSlug", () => {
+  it("keeps the suggested username inside Telegram's limits", () => {
+    const username = suggestBotUsername();
+    expect(username.length).toBeLessThanOrEqual(32);
+    expect(username).toMatch(/^jait_[a-z2-7]{16}_bot$/);
+  });
+
+  it("does not repeat itself", () => {
+    const slugs = new Set(Array.from({ length: 50 }, () => generateUsernameSlug()));
+    expect(slugs.size).toBe(50);
   });
 });
