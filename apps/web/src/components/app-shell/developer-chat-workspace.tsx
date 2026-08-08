@@ -108,6 +108,7 @@ interface DeveloperChatWorkspaceProps {
   onSteerQueuedMessage?: (id: string) => void
   onStopRecording: () => void
   onSubmit: () => void
+  onToggleHoldQueueItem: (id: string) => void
   onUpdateQueueItem: (...args: any[]) => void
   onVoiceInput: () => void
   renderInlineSecretPrompt: (call: any) => ReactNode
@@ -210,6 +211,7 @@ export function DeveloperChatWorkspace({
   onSteerQueuedMessage,
   onStopRecording,
   onSubmit,
+  onToggleHoldQueueItem,
   onUpdateQueueItem,
   onVoiceInput,
   renderInlineSecretPrompt,
@@ -515,6 +517,7 @@ export function DeveloperChatWorkspace({
                   onEdit={onUpdateQueueItem}
                   onReorder={onReorderQueueItem}
                   onSteer={isLoading && activeSessionId ? onSteerQueuedMessage : undefined}
+                  onToggleHold={onToggleHoldQueueItem}
                 />
               )}
             </Conversation>

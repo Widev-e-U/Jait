@@ -635,6 +635,7 @@ function App() {
     recordSteeredMessage,
     updateQueueItem,
     reorderQueueItem,
+    toggleHoldQueueItem,
     setMessageQueueState,
     acceptFile,
     rejectFile,
@@ -3292,6 +3293,7 @@ function App() {
       queuedCount: messageQueue.length,
       allowQueuedMessageAfterInterruptedExit,
       isProcessing: chatQueueProcessingRef.current,
+      nextItemHeld: messageQueue[0]?.held ?? false,
       // While the gateway WS is connected the server-side
       // `drainQueuedChatMessages` is the authoritative queue consumer
       // (it runs on every turn's `done` and on every `queued_messages`
@@ -3305,6 +3307,10 @@ function App() {
 
     const [nextItem] = messageQueue
     if (!nextItem) return
+    // A held message blocks the queue: don't auto-send it (or anything after
+    // it) until the user explicitly unlocks it. The server-side drain applies
+    // the same rule; this guards the no-server-connection fallback path.
+    if (nextItem.held) return
 
     chatQueueProcessingRef.current = true
     dequeueMessage(nextItem.id)
@@ -4054,6 +4060,8 @@ function App() {
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
+              chatProvider={chatProvider}
+              cliModel={cliModel}
               closeScreenSharePanel={closeScreenSharePanel}
               currentView={currentView}
               desktopPlatform={desktopPlatform}
@@ -4064,6 +4072,7 @@ function App() {
               isElectron={isElectron}
               isMaximized={isMaximized}
               isMobile={isMobile}
+              onCliModelChange={handleCliModelChange}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
               remainingPrompts={remainingPrompts}
@@ -4483,6 +4492,7 @@ function App() {
                 onSteerQueuedMessage={isLoading && activeSessionId ? steerQueuedChatMessage : undefined}
                 onStopRecording={() => { void stopRecordingAndTranscribe() }}
                 onSubmit={handleSubmit}
+                onToggleHoldQueueItem={toggleHoldQueueItem}
                 onUpdateQueueItem={updateQueueItem}
                 onVoiceInput={handleVoiceInput}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}

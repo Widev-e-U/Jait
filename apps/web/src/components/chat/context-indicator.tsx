@@ -31,17 +31,21 @@ export function ContextIndicator({ usage, messages, compact }: ContextIndicatorP
   const [dialogOpen, setDialogOpen] = useState(false)
   const pct = usage && usage.limit > 0 ? Math.round(usage.ratio * 100) : 0
 
-  // Session-level performance metrics aggregated lazily from already-persisted
-  // per-message metrics. Pure + synchronous (no streaming / network work), so
-  // it only re-runs when the component re-renders and is cheap.
-  const sessionMetrics = useMemo(() => aggregateSessionMetrics(messages), [messages])
-  const hasSessionMetrics =
+  // Scanning message bodies is unnecessary during normal chat rendering and
+  // becomes noticeable on long/streaming conversations. Do it only when the
+  // user asks for the details dialog.
+  const sessionMetrics = useMemo(
+    () => dialogOpen ? aggregateSessionMetrics(messages) : aggregateSessionMetrics(undefined),
+    [dialogOpen, messages],
+  )
+  const hasSessionMetrics = dialogOpen && (
     sessionMetrics.assistantTurns > 0 ||
     sessionMetrics.completionTokens > 0 ||
     sessionMetrics.promptTokens > 0 ||
     sessionMetrics.textWritten > 0 ||
     sessionMetrics.totalDurationMs > 0 ||
     sessionMetrics.tokensPerSecond != null
+  )
 
   // Category percentages (of total used)
   const categories = useMemo(() => {

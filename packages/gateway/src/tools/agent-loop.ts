@@ -1400,6 +1400,31 @@ const MAX_LENGTH_CONTINUATIONS = 3;
 const MAX_DUPLICATE_CALL_STREAK = 3;
 /** Max times we nudge a duplicate-call loop before giving up and ending the turn. */
 const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
+const MAX_SAME_TOOL_CALLS_PER_TURN = 6;
+const MAX_TOOL_CALLS_PER_ROUND = 64;
+const DEFAULT_MAX_TOOL_ROUNDS = 64;
+const ABSOLUTE_MAX_TOOL_ROUNDS = 200;
+
+function canonicalizeToolCallValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeToolCallValue);
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => [key, canonicalizeToolCallValue(entryValue)]);
+    return Object.fromEntries(entries);
+  }
+  return value;
+}
+
+function toolCallSignature(toolCall: OpenAIToolCall): string {
+  let args: unknown = toolCall.function.arguments.trim();
+  try {
+    args = canonicalizeToolCallValue(JSON.parse(toolCall.function.arguments));
+  } catch {
+    args = toolCall.function.arguments.trim();
+  }
+  return JSON.stringify({ name: fromOpenAIName(toolCall.function.name), args });
+}
 /**
  * Swarm mode only: max direct read/search-style calls the coordinator may
  * make before it has delegated anything to a specialist, before we force
@@ -2015,9 +2040,8 @@ export async function runAgentLoop(
     log = console,
   } = options;
 
-  // pi-style: no round cap by default — the model decides when it's done.
-  // A positive maxRounds acts only as a hard backstop.
-  const roundLimit = maxRounds && maxRounds > 0 ? maxRounds : Number.MAX_SAFE_INTEGER;
+  const requestedRoundLimit = maxRounds && maxRounds > 0 ? maxRounds : DEFAULT_MAX_TOOL_ROUNDS;
+  const roundLimit = Math.min(requestedRoundLimit, ABSOLUTE_MAX_TOOL_ROUNDS);
 
   let fullContent = "";
   const executedToolCalls: ExecutedToolCall[] = [];
@@ -2049,6 +2073,7 @@ export async function runAgentLoop(
   let duplicateCallStreak = 0;
   /** Times we've nudged the model to break out of a duplicate-call loop. */
   let duplicateCallInterventions = 0;
+  const toolCallOccurrences = new Map<string, number>();
   /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
   let overflowRecoveryAttempted = false;
   /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
@@ -2356,6 +2381,33 @@ export async function runAgentLoop(
     if (toolCalls.length > 0) {
       emptyResponseRetries = 0;
       lastEmptyThinking = "";
+
+      const originalToolCallCount = toolCalls.length;
+      const uniqueToolCalls: OpenAIToolCall[] = [];
+      const signaturesInRound = new Set<string>();
+      for (const toolCall of toolCalls) {
+        const signature = toolCallSignature(toolCall);
+        if (signaturesInRound.has(signature)) continue;
+        signaturesInRound.add(signature);
+        uniqueToolCalls.push(toolCall);
+      }
+      const duplicateToolCallCount = originalToolCallCount - uniqueToolCalls.length;
+      const excessToolCallCount = Math.max(0, uniqueToolCalls.length - MAX_TOOL_CALLS_PER_ROUND);
+      toolCalls = uniqueToolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
+      if (duplicateToolCallCount > 0 || excessToolCallCount > 0) {
+        const collapsedKinds = [
+          duplicateToolCallCount > 0 ? `${duplicateToolCallCount} duplicate` : "",
+          excessToolCallCount > 0 ? `${excessToolCallCount} excess` : "",
+        ].filter(Boolean).join(" and ");
+        log.warn(
+          `Collapsed ${collapsedKinds} tool calls in one provider round for session ${sessionId}`,
+        );
+        onEvent?.({
+          type: "steering",
+          message: `Collapsed ${collapsedKinds} tool calls from one model response`,
+        });
+      }
+
       if (finishReason && finishReason !== "tool_calls") {
         log.warn(
           `LLM returned ${toolCalls.length} tool call(s) with finish_reason="${finishReason}" — executing anyway`,
@@ -2367,14 +2419,11 @@ export async function runAgentLoop(
       // args — round after round, it's stuck: no new information is arriving
       // to change its decision, so letting it repeat indefinitely just burns
       // rounds/context until the provider degenerates into garbage output.
-      // Nudge it to break out; if it ignores the nudge, end the turn rather
-      // than loop forever (there is no round cap by default).
+      // Nudge it to break out; if it ignores the nudge, end the turn before
+      // the safety round backstop is needed.
       {
-        const callSignature = JSON.stringify(
-          toolCalls
-            .map((tc) => ({ name: fromOpenAIName(tc.function.name), args: tc.function.arguments }))
-            .sort((a, b) => (a.name === b.name ? a.args.localeCompare(b.args) : a.name.localeCompare(b.name))),
-        );
+        const currentCallSignatures = toolCalls.map(toolCallSignature);
+        const callSignature = JSON.stringify([...currentCallSignatures].sort());
         if (callSignature === lastToolCallSignature) {
           duplicateCallStreak++;
         } else {
@@ -2382,12 +2431,26 @@ export async function runAgentLoop(
           duplicateCallStreak = 0;
         }
 
-        if (duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK) {
-          const names = [...new Set(toolCalls.map((tc) => fromOpenAIName(tc.function.name)))].join(", ");
+        const repeatedAcrossTurn = new Set<string>();
+        for (const signature of currentCallSignatures) {
+          const occurrences = (toolCallOccurrences.get(signature) ?? 0) + 1;
+          toolCallOccurrences.set(signature, occurrences);
+          if (occurrences >= MAX_SAME_TOOL_CALLS_PER_TURN) repeatedAcrossTurn.add(signature);
+        }
+
+        if (duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK || repeatedAcrossTurn.size > 0) {
+          const repeatedNames = toolCalls
+            .filter((toolCall) => repeatedAcrossTurn.has(toolCallSignature(toolCall)))
+            .map((toolCall) => fromOpenAIName(toolCall.function.name));
+          const names = [...new Set(
+            repeatedNames.length > 0
+              ? repeatedNames
+              : toolCalls.map((toolCall) => fromOpenAIName(toolCall.function.name)),
+          )].join(", ");
 
           if (duplicateCallInterventions >= MAX_DUPLICATE_CALL_INTERVENTIONS) {
             log.warn(
-              `Agent loop stuck: identical tool call (${names}) repeated ${duplicateCallStreak}+ rounds in a row, ` +
+              `Agent loop stuck: tool call (${names}) kept recurring without progress, ` +
                 `${duplicateCallInterventions} nudge(s) ignored — ending turn for session ${sessionId}`,
             );
             const msg = `\n\n[Stopped: repeated the same tool call (${names}) with no new progress, even after being asked to change approach. Try narrowing or rephrasing the request.]`;
@@ -2405,6 +2468,7 @@ export async function runAgentLoop(
 
           duplicateCallInterventions++;
           duplicateCallStreak = 0;
+          for (const signature of currentCallSignatures) toolCallOccurrences.set(signature, 0);
           log.warn(
             `Detected repeated identical tool call (${names}) for session ${sessionId} — nudging model to break the loop ` +
               `(intervention ${duplicateCallInterventions}/${MAX_DUPLICATE_CALL_INTERVENTIONS})`,
@@ -2430,10 +2494,7 @@ export async function runAgentLoop(
         thinking: capThinking(thinkingText),
       });
 
-      // Enqueue all tool calls (pi-style, data-driven within a round: the loop
-      // feeds every call the model emits in a single round and trusts the
-      // model to decide when to stop *within* that round; repeated calls
-      // *across* rounds are caught by the duplicate-loop detection above).
+      // Enqueue the bounded, deduplicated tool calls for this round.
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
         queue.enqueue(tc, ToolCallPriority.Normal, isParallelSafe(internalName));
@@ -2875,7 +2936,7 @@ export async function runAgentLoop(
     return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, plan: planResult };
   }
 
-  // Hit max rounds (only reachable when a positive maxRounds was supplied).
+  // Hit the configured or default safety round backstop.
   log.warn(`Agent loop hit max rounds (${roundLimit}) for session ${sessionId}`);
   const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
   onEvent?.({ type: "token", content: msg });

@@ -342,3 +342,30 @@ describe('swarm direct-POST: the REAL useChat.ts must gate tool events on flushN
     expect(block).not.toContain('await textPacer.waitUntilIdle()')
   })
 })
+
+describe('swarm resume-stream: the REAL useChat.ts must gate tool events on flushNow (source guard)', () => {
+  it('the resume-stream branch in useChat.ts does not gate tool events behind await textPacer.waitUntilIdle()', () => {
+    const src = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
+    // Extract the resume-stream SSE branch (resumeSessionStream). The `snapshot`
+    // handler is unique to this branch and marks its start.
+    const start = src.indexOf("data.type === 'snapshot'")
+    // Slice up to the `done` terminal handler so the only `waitUntilIdle`
+    // usages captured are the tool-event handlers (the legit terminal
+    // `await waitUntilIdle()` in `done` comes AFTER this marker).
+    const endMarker = src.indexOf("data.type === 'done'", start)
+    expect(start, 'resume-stream snapshot branch not found in useChat.ts').toBeGreaterThan(-1)
+    expect(endMarker, 'resume-stream done terminal not found in useChat.ts').toBeGreaterThan(start)
+
+    const block = src.slice(start, endMarker)
+
+    // Fixed: tool events (incl. approval_required) flush pending text synchronously.
+    expect(block).toMatch(/textPacer\.flushNow\(\)/)
+
+    // Pre-fix code awaited waitUntilIdle() directly before pushing tool events,
+    // which is what blocked the reader loop (e.g. the approver appearing while
+    // long mode-notice text is still queued). Within the tool-event window it
+    // must NOT appear at all.
+    expect(block).not.toContain('await textPacer.waitUntilIdle()')
+  })
+})

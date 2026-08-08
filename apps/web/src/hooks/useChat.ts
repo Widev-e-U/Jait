@@ -1118,7 +1118,12 @@ export function useChat(
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 textPacer.enqueueThinking(data.content as string)
               } else if (data.type === 'tool_call_delta') {
-                await textPacer.waitUntilIdle()
+                // Flush pending text synchronously instead of awaiting the text
+                // pacer's idle. Awaiting waitUntilIdle here blocks the entire SSE
+                // reader loop behind the (long) paced text and delays tool /
+                // sub-agent / approval rendering. flushNow drains text now and
+                // keeps ordering (text before tool) without blocking the loop.
+                textPacer.flushNow()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolCallDelta(
@@ -1129,7 +1134,7 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'tool_start') {
-                await textPacer.waitUntilIdle()
+                textPacer.flushNow()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolStart(
@@ -1140,7 +1145,7 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'approval_required') {
-                await textPacer.waitUntilIdle()
+                textPacer.flushNow()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushApprovalRequired(
@@ -1151,12 +1156,12 @@ export function useChat(
                 )
                 applyStreamSnapshot()
               } else if (data.type === 'tool_output') {
-                await textPacer.waitUntilIdle()
+                textPacer.flushNow()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
                 applyStreamSnapshot()
               } else if (data.type === 'tool_result') {
-                await textPacer.waitUntilIdle()
+                textPacer.flushNow()
                 if (!ensureStreamingAssistant()) { /* run no longer current */ }
                 subscribeScheduler.flushNow()
                 stream.pushToolResult(
@@ -2011,6 +2016,10 @@ export function useChat(
     })
   }, [])
 
+  const toggleHoldQueueItem = useCallback((id: string) => {
+    setMessageQueue(prev => prev.map(q => q.id === id ? { ...q, held: !q.held } : q))
+  }, [])
+
   const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {
     setMessageQueue(items)
   }, [])
@@ -2495,6 +2504,7 @@ export function useChat(
     recordSteeredMessage,
     updateQueueItem,
     reorderQueueItem,
+    toggleHoldQueueItem,
     setMessageQueueState,
     acceptFile,
     rejectFile,

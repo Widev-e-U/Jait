@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface QueuedMessage {
@@ -8,6 +8,8 @@ export interface QueuedMessage {
   displayContent?: string
   /** timestamp when queued */
   queuedAt: number
+  /** When true, the queue drain skips this message until the user unlocks it. */
+  held?: boolean
 }
 
 interface MessageQueueProps {
@@ -17,6 +19,7 @@ interface MessageQueueProps {
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
+  onToggleHold?: (id: string) => void
   className?: string
 }
 
@@ -94,6 +97,7 @@ function QueueItem({
   onReorder,
   onSteer,
   onSendToParallelThread,
+  onToggleHold,
   dragActive,
   dropBefore,
   dropAfter,
@@ -106,6 +110,7 @@ function QueueItem({
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
+  onToggleHold?: (id: string) => void
   dragActive?: boolean
   dropBefore?: boolean
   dropAfter?: boolean
@@ -206,14 +211,23 @@ function QueueItem({
 
       {/* Content: read-only or editable */}
       <div className="flex-1 min-w-0">
-        {index === 0 && !editing && (
-          <span className="text-2xs font-medium uppercase tracking-wider text-primary/70 block mb-0.5">
-            Next
-          </span>
-        )}
-        {index > 0 && !editing && (
-          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground block mb-0.5">
-            Queued #{index + 1}
+        {!editing && (
+          <span className="mb-0.5 flex items-center gap-1.5">
+            {index === 0 ? (
+              <span className="text-2xs font-medium uppercase tracking-wider text-primary/70">
+                Next
+              </span>
+            ) : (
+              <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                Queued #{index + 1}
+              </span>
+            )}
+            {item.held && !editing && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-2xs font-medium uppercase tracking-wider text-amber-500">
+                <Lock className="h-2.5 w-2.5" />
+                Held
+              </span>
+            )}
           </span>
         )}
         {editing ? (
@@ -295,6 +309,23 @@ function QueueItem({
                 <GitBranch className="h-3 w-3" />
               </button>
             )}
+            {onToggleHold && (
+              <button
+                type="button"
+                data-no-drag="true"
+                className={cn(
+                  'p-1 rounded transition-colors',
+                  item.held
+                    ? 'text-amber-500 hover:bg-amber-500/10'
+                    : 'text-muted-foreground hover:bg-foreground/10',
+                )}
+                onClick={() => onToggleHold(item.id)}
+                title={item.held ? 'Unlock — allow this message to be sent' : 'Hold — keep this message from being sent until you unlock it'}
+                aria-pressed={item.held}
+              >
+                {item.held ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
+              </button>
+            )}
             <button
               type="button"
               data-no-drag="true"
@@ -319,7 +350,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, onToggleHold, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -472,6 +503,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSe
           onReorder={onReorder}
           onSteer={onSteer}
           onSendToParallelThread={onSendToParallelThread}
+          onToggleHold={onToggleHold}
           dragActive={dragSourceId === item.id}
           dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}
           dropAfter={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'after' && dragSourceId !== item.id)}

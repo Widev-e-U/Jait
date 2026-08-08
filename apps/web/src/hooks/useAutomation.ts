@@ -30,6 +30,7 @@ import {
   getRepositoryRuntimeInfo,
   inferSharedRepositories,
   mapDbRepoToAutomationRepository,
+  resolveThreadRepository,
   threadBelongsToRepository,
   type AutomationRepository,
 } from '@/lib/automation-repositories'
@@ -188,8 +189,8 @@ export function useAutomation(enabled = true) {
     : null
   const getRepositoryForThread = useCallback(
     (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) =>
-      repositories.find((repository) => threadBelongsToRepository(thread, repository)) ?? null,
-    [repositories],
+      resolveThreadRepository(thread, repositories, selectedRepo),
+    [repositories, selectedRepo],
   )
   const selectedThreadRepo = useMemo(
     () => (selectedThread ? getRepositoryForThread(selectedThread) : null),

@@ -293,6 +293,77 @@ describe("server-side queued chat processing", () => {
     ]);
   });
 
+  it("skips a held (locked) queued message and everything after it until unlocked", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-hold-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Hold" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+
+    const readUserMessages = async () => {
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = response.json() as { messages: Array<{ role: string; content: string }> };
+      return body.messages.filter((message) => message.role === "user").map((message) => message.content);
+    };
+
+    // A held message at the front of the queue blocks the drain entirely.
+    sessionState.set(session.id, {
+      queued_messages: [
+        { id: "q-held", content: "held message", held: true },
+        { id: "q-after", content: "message after held" },
+      ],
+    });
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+
+    expect(await readUserMessages()).toEqual([]);
+    // The held message (and the one after it) must remain queued.
+    const remaining = sessionState.get(session.id, ["queued_messages"])["queued_messages"] as Array<{ id: string; content: string }>;
+    expect(remaining.map((m) => m.id)).toEqual(["q-held", "q-after"]);
+
+    // Unlock the held message and drain again — both should now be sent.
+    sessionState.set(session.id, {
+      queued_messages: [
+        { id: "q-held", content: "held message", held: false },
+        { id: "q-after", content: "message after held" },
+      ],
+    });
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+
+    expect(await readUserMessages()).toEqual(["held message", "message after held"]);
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
   it("drains duplicated persisted queued_messages only once per queued id", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

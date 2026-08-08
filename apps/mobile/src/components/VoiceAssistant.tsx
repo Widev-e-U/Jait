@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import { designTokens } from '@jait/ui-shared'
+import { requestMicrophonePermission } from '../permissions'
 
 /**
  * Voice-first assistant screen for Jait Mobile.
@@ -95,6 +96,14 @@ export function VoiceAssistant({ apiBaseUrl, token, sessionId = 'mobile-voice', 
       // Stop listening — in a real implementation this would stop the audio recorder
       // and send the captured audio to the gateway
       setState('idle')
+      return
+    }
+
+    // Android only shows the mic permission dialog when the app requests it at
+    // runtime. Ask first so the user can grant access before we start listening.
+    const granted = await requestMicrophonePermission()
+    if (!granted) {
+      setInterimText('Microphone permission is required to use the voice assistant.')
       return
     }
 

@@ -1638,6 +1638,27 @@ describe("runAgentLoop tool-loop detection", () => {
     return sseResponse([`data: ${payload}\n\n`, `data: ${finish}\n\n`, "data: [DONE]\n\n"]);
   }
 
+  function toolCallsSSE(calls: Array<{ id: string; name: string; args?: unknown }>): Response {
+    const payload = JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: calls.map((call, index) => ({
+              index,
+              id: call.id,
+              type: "function",
+              function: { name: call.name, arguments: JSON.stringify(call.args ?? {}) },
+            })),
+          },
+        },
+      ],
+    });
+    const finish = JSON.stringify({
+      choices: [{ delta: {}, finish_reason: "tool_calls" }],
+    });
+    return sseResponse([`data: ${payload}\n\n`, `data: ${finish}\n\n`, "data: [DONE]\n\n"]);
+  }
+
   function sseResponse(chunks: string[]): Response {
     return new Response(
       new ReadableStream<Uint8Array>({
@@ -1659,11 +1680,7 @@ describe("runAgentLoop tool-loop detection", () => {
     ]);
   }
 
-  it("keeps calling tools while the model emits them, stopping only at the caller-set maxRounds backstop", async () => {
-    // pi-style, data-driven: the loop has no behavioral counters. A model that
-    // keeps emitting tool calls is trusted and fed round after round; the only
-    // hard stop is the caller's maxRounds backstop (analogous to pi's
-    // shouldStopAfterTurn hook).
+  it("stops a ping-pong loop that alternates the same two tool calls", async () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
@@ -1713,15 +1730,12 @@ describe("runAgentLoop tool-loop detection", () => {
       async () => ({ ok: true, message: "ok" }),
     );
 
-    // No behavioral detector fired — only the caller-set 40-round backstop stopped it.
-    expect(result.hitMaxRounds).toBe(true);
-    expect(fetchCalls).toBe(40);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(fetchCalls).toBeLessThan(40);
+    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
   });
 
-  it("with no maxRounds, the loop is data-driven: it runs while the model calls tools and ends when the model returns an answer", async () => {
-    // pi-style: omit maxRounds entirely (no cap). The loop must simply keep
-    // executing whatever tool calls the model emits and stop the moment the
-    // model returns a non-tool-call answer — no round counter required.
+  it("without maxRounds, ends normally when the model answers before the safety backstop", async () => {
     const calls = ["file_read", "file_write"];
     let callIdx = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -1767,7 +1781,6 @@ describe("runAgentLoop tool-loop detection", () => {
         hasTools: true,
         sessionId: "session-no-cap-data-driven",
         abort: new AbortController(),
-        // NOTE: no maxRounds passed — the model decides when done.
         mode: "agent",
       },
       async () => ({ ok: true, message: "ok" }),
@@ -2070,6 +2083,171 @@ describe("runAgentLoop tool-loop detection", () => {
     // Only the rounds before each nudge actually executed the duplicate call.
     expect(executedCount).toBeLessThan(fetchCalls);
     expect(events.some((e) => e.type === "steering" && /repeated tool call/.test(e.message ?? ""))).toBe(true);
+  });
+
+  it("executes an identical tool call only once when the provider repeats it within one round", async () => {
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      if (fetchCalls === 1) {
+        return toolCallsSSE(
+          Array.from({ length: 20 }, (_, index) => ({
+            id: `call-batch-${index}`,
+            name: "read",
+            args: { path: "chat-queue.test.ts", startLine: 100, endLine: 260 },
+          })),
+        );
+      }
+      return textResponse("Done.");
+    });
+
+    let executedCount = 0;
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Inspect the queue test." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-duplicate-batch",
+        abort: new AbortController(),
+        maxRounds: 10,
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => {
+        executedCount++;
+        return { ok: true, message: "read ok" };
+      },
+    );
+
+    expect(result.content).toBe("Done.");
+    expect(executedCount).toBe(1);
+    expect(result.executedToolCalls).toHaveLength(1);
+    expect(events.some((event) => event.type === "steering" && /duplicate tool calls/i.test(event.message ?? ""))).toBe(true);
+  });
+
+  it("stops a repeated call hidden inside otherwise changing tool batches", async () => {
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      return toolCallsSSE([
+        {
+          id: `call-repeated-${round}`,
+          name: "read",
+          args: { path: "message-queue.tsx", startLine: 139, endLine: 499 },
+        },
+        {
+          id: `call-changing-${round}`,
+          name: "search",
+          args: { pattern: `queue-${round}` },
+        },
+      ]);
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Inspect the queue implementation." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-changing-batch-loop",
+        abort: new AbortController(),
+        maxRounds: 40,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    expect(fetchCalls).toBeLessThan(40);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
+  });
+
+  it("uses a default safety backstop when the caller omits maxRounds", async () => {
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      if (round < 80) {
+        return toolCallSSE(`call-${round}`, "search", { pattern: `unique-${round}` });
+      }
+      return textResponse("Finished too late.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Keep searching." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-default-round-backstop",
+        abort: new AbortController(),
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
+    expect(result.hitMaxRounds).toBe(true);
+    expect(fetchCalls).toBe(64);
   });
 
   it("caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly", async () => {

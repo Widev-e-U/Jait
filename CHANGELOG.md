@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.694](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.694) — 2026-08-08
+- fix(web): Manager thread composers now preserve the explicitly selected matching repository when duplicate records share a path across different devices, so the provider/model picker remains scoped to the selected repo node and shows that node's provider accounts instead of falling back to Jait only.
+- feat(web): Manager mode now exposes the global model selector in the app header, while session performance aggregation is deferred until the context details dialog opens to avoid scanning long conversations during ordinary rendering.
+- fix(gateway): chat snapshots no longer touch multi-megabyte context-flow blobs; lightweight sidecar metadata preserves context/memory badges, stored traces are capped at 512 KB even after metrics are attached, and latest-assistant updates avoid loading full histories.
+- feat(gateway + web): queued chat messages can be held/locked; a held head item blocks both client and server auto-drain until the user explicitly unlocks it.
+- fix(gateway): agent-loop safety now includes a 64-round default backstop, a 200-round absolute ceiling, per-round duplicate collapse, a 64-call round cap, and recurring-call detection across non-consecutive rounds.
+- fix(web): tool, approval, and nested-agent stream events flush pending paced text synchronously, preserving order without stalling the SSE reader behind long prose.
+- fix(mobile): Android now requests notification permission at launch and microphone permission before voice capture through a native Capacitor bridge, with `RECORD_AUDIO` declared in the manifest.
+
 ## [v0.1.693](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.693) — 2026-08-08
 - fix(web): the chat loading skeleton now reads as a single exchange — one user prompt, one agent reply, then the user's latest prompt — instead of a run of assistant turns ending in two user messages back-to-back, so the placeholder mirrors a real scrolled-to-end chat.
 - fix(web): swarm-mode live streaming no longer stalls — the direct-POST SSE reader loop previously awaited the text pacer before each tool event, so the (long) swarm `mode_notice` text blocked the loop and the coordinator's tool card + specialist prose didn't render until a reload. Tool events now call `textPacer.flushNow()`, which drains pending text synchronously so tool/sub-agent content commits immediately without blocking the loop on rAF/deadline timers.

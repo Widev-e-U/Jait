@@ -1257,4 +1257,32 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 52: Lightweight context-flow metadata ───────────────────────
+  {
+    id: 52,
+    name: "message_context_metadata",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS message_context_metadata (
+          message_id TEXT PRIMARY KEY,
+          has_memory_provenance INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )
+      `);
+      db.exec(`
+        INSERT OR IGNORE INTO message_context_metadata (message_id, has_memory_provenance)
+        SELECT
+          id,
+          CASE
+            WHEN instr(context_flow, '"injectedIds":[') > 0
+              AND instr(context_flow, '"injectedIds":[]') = 0
+            THEN 1
+            ELSE 0
+          END
+        FROM messages
+        WHERE context_flow IS NOT NULL
+      `);
+    },
+  },
+
 ];

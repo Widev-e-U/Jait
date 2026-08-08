@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
-import { messages } from "../db/schema.js";
+import { messageContextMetadata, messages } from "../db/schema.js";
 import { SessionService } from "../services/sessions.js";
 import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -98,6 +98,10 @@ describe("chat route auth guards", () => {
       contextFlow: index === 7 ? JSON.stringify({ rounds: [], unused: "large-context-payload" }) : null,
       createdAt: createdAt(index),
     }))).run();
+    db.insert(messageContextMetadata).values({
+      messageId: "message-7",
+      hasMemoryProvenance: false,
+    }).run();
 
     const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
     const headers = { authorization: `Bearer ${token}` };

@@ -6,6 +6,7 @@ import { BaseCard } from './src/components/BaseCard'
 import { VoiceAssistant } from './src/components/VoiceAssistant'
 import { getMobileGatewayUrl } from './src/gateway-config'
 import { bootstrapMobileClient } from './src/mobile-bootstrap'
+import { requestNotificationPermission } from './src/permissions'
 
 type Screen = 'home' | 'assistant'
 
@@ -20,6 +21,11 @@ export default function App() {
     bootstrapMobileClient(gatewayUrl)
       .then(result => setApiBaseUrl(result.apiBaseUrl))
       .catch(err => console.warn('Gateway discovery failed:', err))
+  }, [])
+
+  // Ask for notification access on launch (Android 13+ requires a runtime request)
+  useEffect(() => {
+    requestNotificationPermission().catch(() => {})
   }, [])
 
   if (screen === 'assistant' && apiBaseUrl) {

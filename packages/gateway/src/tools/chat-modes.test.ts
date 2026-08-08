@@ -9,7 +9,7 @@ describe("chat mode prompts", () => {
     expect(prompt).toContain("concurrently");
     expect(prompt).toContain("allowedTools");
     // Specialists must never be handed a round cap — it truncates them mid-task.
-    expect(prompt).toContain("no round cap");
+    expect(prompt).toContain("safety backstop");
     expect(prompt).not.toContain("maxRounds");
     expect(prompt).toContain("Research Specialist");
     expect(prompt).toContain("Testing Specialist");

@@ -167,6 +167,21 @@ export function threadBelongsToRepository(
   return threadRepoName === repoName
 }
 
+export function resolveThreadRepository(
+  thread: ThreadRepositoryReference,
+  repositories: AutomationRepository[],
+  selectedRepository?: AutomationRepository | null,
+): AutomationRepository | null {
+  if (
+    selectedRepository
+    && repositories.some((repository) => repository.id === selectedRepository.id)
+    && threadBelongsToRepository(thread, selectedRepository)
+  ) {
+    return selectedRepository
+  }
+  return repositories.find((repository) => threadBelongsToRepository(thread, repository)) ?? null
+}
+
 export function inferSharedRepositories(
   threads: AgentThread[],
   localRepositories: AutomationRepository[],
