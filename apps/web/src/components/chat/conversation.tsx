@@ -136,21 +136,14 @@ const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
  * real messages arrive. There are enough turns here to overflow a tall
  * viewport, which is what makes the skeleton fill the full height.
  *
- * The column is bottom-anchored, so the last two turns (the two user prompts)
- * sit just above the composer and everything above them is assistant output —
- * the skeleton reads as a mostly-agent conversation with a couple of recent
- * user messages, which is the shape the user asked for.
+ * The column is bottom-anchored, so the last turn (a user prompt) sits just
+ * above the composer. The skeleton reads as a single exchange — one user
+ * prompt, one agent reply, then the user's latest prompt — which is the shape
+ * the user asked for.
  */
 export const CONVERSATION_SKELETON_TURNS: ReadonlyArray<{ role: 'user' | 'assistant'; lines: number }> = [
-  { role: 'assistant', lines: 5 },
-  { role: 'assistant', lines: 6 },
-  { role: 'assistant', lines: 4 },
-  { role: 'assistant', lines: 5 },
-  { role: 'assistant', lines: 3 },
-  { role: 'assistant', lines: 6 },
-  { role: 'assistant', lines: 4 },
-  { role: 'assistant', lines: 5 },
   { role: 'user', lines: 1 },
+  { role: 'assistant', lines: 5 },
   { role: 'user', lines: 2 },
 ]
 

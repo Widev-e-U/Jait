@@ -100,14 +100,14 @@ describe('conversation skeleton proportions', () => {
       .toBeLessThan(Math.min(...assistant.map((t) => t.lines)))
   })
 
-  it('keeps exactly two user turns and fills the rest with assistant turns', () => {
-    const user = CONVERSATION_SKELETON_TURNS.filter((t) => t.role === 'user')
-    const assistant = CONVERSATION_SKELETON_TURNS.filter((t) => t.role === 'assistant')
-
-    // The skeleton reads as a mostly-agent conversation with a couple of recent
-    // user prompts, so the agent output dominates the placeholder.
-    expect(user).toHaveLength(2)
-    expect(assistant.length).toBeGreaterThan(user.length * 2)
+  it('reads as a single exchange: user, assistant, then user again', () => {
+    // The skeleton is one user prompt, one agent reply, then the user's latest
+    // prompt — never two user turns back-to-back.
+    expect(CONVERSATION_SKELETON_TURNS.map((t) => t.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+    ])
   })
 
   it('ends on a user turn (the most recent prompt sits next to the composer)', () => {

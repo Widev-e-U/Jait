@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { ContextUsage } from '@/hooks/useChat'
+import type { ContextUsage, ChatMessage } from '@/hooks/useChat'
+import { aggregateSessionMetrics } from '@/lib/chat-session-metrics'
 import {
   Dialog,
   DialogContent,
@@ -15,17 +16,32 @@ import {
 
 interface ContextIndicatorProps {
   usage: ContextUsage | null
+  /** Chat messages used to derive session-level performance metrics. */
+  messages?: ChatMessage[]
   /** Compact (mobile) sizing so the chat header stays uncluttered. */
   compact?: boolean
 }
 
 /**
  * Small donut chart showing context window usage with a tooltip
- * breakdown. Clicking opens a detail dialog.
+ * breakdown. Clicking opens a detail dialog that also surfaces
+ * session-level performance metrics (tokens written, speed, text volume).
  */
-export function ContextIndicator({ usage, compact }: ContextIndicatorProps) {
+export function ContextIndicator({ usage, messages, compact }: ContextIndicatorProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const pct = usage && usage.limit > 0 ? Math.round(usage.ratio * 100) : 0
+
+  // Session-level performance metrics aggregated lazily from already-persisted
+  // per-message metrics. Pure + synchronous (no streaming / network work), so
+  // it only re-runs when the component re-renders and is cheap.
+  const sessionMetrics = useMemo(() => aggregateSessionMetrics(messages), [messages])
+  const hasSessionMetrics =
+    sessionMetrics.assistantTurns > 0 ||
+    sessionMetrics.completionTokens > 0 ||
+    sessionMetrics.promptTokens > 0 ||
+    sessionMetrics.textWritten > 0 ||
+    sessionMetrics.totalDurationMs > 0 ||
+    sessionMetrics.tokensPerSecond != null
 
   // Category percentages (of total used)
   const categories = useMemo(() => {
@@ -67,6 +83,17 @@ export function ContextIndicator({ usage, compact }: ContextIndicatorProps) {
   const formatTokens = (n: number) => {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
     return String(n)
+  }
+
+  const formatNumber = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+    return String(n)
+  }
+
+  const formatDuration = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
   }
 
   if (!usage || usage.limit <= 0) return null
@@ -184,6 +211,59 @@ export function ContextIndicator({ usage, compact }: ContextIndicatorProps) {
               </div>
             )}
           </div>
+
+          {hasSessionMetrics && (
+            <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground/80">Session Performance</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {sessionMetrics.assistantTurns} turn{sessionMetrics.assistantTurns !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {sessionMetrics.completionTokens > 0 && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                    <div className="text-xs text-muted-foreground">Tokens written</div>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">
+                      {formatNumber(sessionMetrics.completionTokens)} <span className="text-xs font-normal text-muted-foreground">out</span>
+                    </div>
+                  </div>
+                )}
+                {sessionMetrics.promptTokens > 0 && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                    <div className="text-xs text-muted-foreground">Prompt tokens</div>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">
+                      {formatNumber(sessionMetrics.promptTokens)} <span className="text-xs font-normal text-muted-foreground">in</span>
+                    </div>
+                  </div>
+                )}
+                {sessionMetrics.tokensPerSecond != null && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                    <div className="text-xs text-muted-foreground">Avg speed</div>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">
+                      {sessionMetrics.tokensPerSecond.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">tok/s</span>
+                    </div>
+                  </div>
+                )}
+                {sessionMetrics.totalDurationMs > 0 && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                    <div className="text-xs text-muted-foreground">Total time</div>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">
+                      {formatDuration(sessionMetrics.totalDurationMs)}
+                    </div>
+                  </div>
+                )}
+                {sessionMetrics.textWritten > 0 && (
+                  <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                    <div className="text-xs text-muted-foreground">Text written</div>
+                    <div className="text-sm font-semibold text-foreground tabular-nums">
+                      {formatNumber(sessionMetrics.textWritten)} <span className="text-xs font-normal text-muted-foreground">chars</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>

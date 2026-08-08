@@ -1619,7 +1619,13 @@ export function useChat(
             } else if (data.type === 'token') {
               textPacer.enqueueText(data.content as string)
             } else if (data.type === 'tool_call_delta') {
-              await textPacer.waitUntilIdle()
+              // Flush pending text synchronously instead of awaiting the text
+              // pacer's idle. In swarm mode the coordinator's first content is a
+              // tool call (not text), so awaiting waitUntilIdle here blocks the
+              // entire SSE reader loop behind the (long) mode-notice text and
+              // delays tool/sub-agent rendering. flushNow drains text now and
+              // keeps ordering (text before tool) without blocking the loop.
+              textPacer.flushNow()
               stream.pushToolCallDelta(
                 data.call_id as string,
                 (data.name_delta as string) || '',
@@ -1628,7 +1634,7 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'tool_start') {
-              await textPacer.waitUntilIdle()
+              textPacer.flushNow()
               stream.pushToolStart(
                 data.call_id as string,
                 data.tool as string,
@@ -1637,7 +1643,7 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'approval_required') {
-              await textPacer.waitUntilIdle()
+              textPacer.flushNow()
               stream.pushApprovalRequired(
                 data.request_id as string,
                 (data.call_id as string) || `approval-${data.request_id as string}`,
@@ -1646,11 +1652,11 @@ export function useChat(
               )
               updateMessage({ immediate: true })
             } else if (data.type === 'tool_output') {
-              await textPacer.waitUntilIdle()
+              textPacer.flushNow()
               stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
               updateMessage()
             } else if (data.type === 'tool_result') {
-              await textPacer.waitUntilIdle()
+              textPacer.flushNow()
               stream.pushToolResult(
                 data.call_id as string,
                 data.ok as boolean,

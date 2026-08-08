@@ -76,7 +76,7 @@ export interface StickToBottomScroll {
   /** Whether the viewport currently sits at the bottom of the content. */
   isAtBottom: boolean
   /** Wire to the scroll element's onScroll. */
-  onScroll: () => void
+  onScroll: (e: React.UIEvent<HTMLDivElement>) => void
   /** Scroll to the bottom and resume following new content. */
   scrollToBottom: (behavior?: ScrollBehavior) => void
 }

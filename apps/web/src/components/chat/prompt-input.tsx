@@ -1741,9 +1741,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               aria-label="Copy chat id"
               title={`Copy chat id: ${chatId}`}
-              // The box hugs the icon exactly — no padding or extra hit ring, so
-              // it doesn't leave dead space beside the tiny project label.
-              className="pointer-events-auto inline-flex shrink-0 items-center justify-center rounded p-0 text-muted-foreground/40 opacity-0 transition-all hover:text-foreground hover:bg-muted/60 focus-visible:opacity-100 focus-visible:text-foreground group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 max-md:text-muted-foreground/70"
+              // The box hugs the icon exactly — no padding or extra hit ring. The
+              // global `button[aria-label] { min-width: 2.5rem }` mobile rule would
+              // blow this tiny inline icon up to 40px wide, so override min-width
+              // to 0 to kill the dead space on either side of the icon.
+              className="pointer-events-auto inline-flex shrink-0 items-center justify-center rounded p-0 !min-w-0 text-muted-foreground/40 opacity-0 transition-all hover:text-foreground hover:bg-muted/60 focus-visible:opacity-100 focus-visible:text-foreground group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 max-md:text-muted-foreground/70"
               onClick={async (e) => {
                 e.preventDefault()
                 try {

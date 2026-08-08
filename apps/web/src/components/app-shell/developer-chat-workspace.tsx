@@ -491,7 +491,7 @@ export function DeveloperChatWorkspace({
           )}
           {contextUsage && (
             <div className="absolute top-2 right-2 z-10">
-              <ContextIndicator usage={contextUsage} compact={isMobile} />
+              <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}
           <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>

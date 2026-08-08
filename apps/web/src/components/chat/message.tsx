@@ -297,6 +297,15 @@ function MessageInner({
   const memoryFeedbackTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
+  // Root wrapper of the whole message bubble. Scrolled into view on mobile so
+  // the message being edited stays visible above the floating edit composer /
+  // keyboard instead of being pushed out of the viewport when the keyboard opens.
+  const messageRootRef = useRef<HTMLDivElement | null>(null)
+  // Height (px) of the on-screen keyboard, derived from the visual viewport on
+  // mobile. Used to keep the floating edit composer sitting just above the
+  // keyboard even on browsers where `position: fixed; bottom` would otherwise
+  // slide the composer underneath it.
+  const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0)
 
   useEffect(() => {
     return () => {
@@ -417,6 +426,54 @@ function MessageInner({
   }
 
   const isMobile = useIsMobile()
+
+  // Track the on-screen keyboard height via the visual viewport so the floating
+  // edit composer can be pinned just above the keyboard on mobile.
+  useEffect(() => {
+    if (!isEditing || !isMobile) {
+      setMobileKeyboardInset(0)
+      return
+    }
+    const update = () => {
+      const vv = window.visualViewport
+      if (!vv) return
+      // When the keyboard is up the visual viewport is shorter than the layout
+      // viewport; the difference is (close to) the keyboard height.
+      const inset = Math.max(0, window.innerHeight - vv.height)
+      setMobileKeyboardInset(inset)
+    }
+    update()
+    window.visualViewport?.addEventListener?.('resize', update)
+    window.visualViewport?.addEventListener?.('scroll', update)
+    window.addEventListener('resize', update)
+    return () => {
+      window.visualViewport?.removeEventListener?.('resize', update)
+      window.visualViewport?.removeEventListener?.('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [isEditing, isMobile])
+
+  // On mobile, keep the message being edited in view. The floating edit composer
+  // is fixed to the bottom of the screen (above the keyboard), so without this
+  // the message gets pushed up out of the viewport by the keyboard / chat input
+  // and the user can't see what they're editing.
+  const revealEditingMessageInView = useCallback(() => {
+    if (!isEditing || !isMobile) return
+    const el = messageRootRef.current
+    if (!el) return
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [isEditing, isMobile])
+
+  useEffect(() => {
+    if (!isEditing || !isMobile) return
+    revealEditingMessageInView()
+    window.addEventListener('resize', revealEditingMessageInView)
+    window.visualViewport?.addEventListener?.('resize', revealEditingMessageInView)
+    return () => {
+      window.removeEventListener('resize', revealEditingMessageInView)
+      window.visualViewport?.removeEventListener?.('resize', revealEditingMessageInView)
+    }
+  }, [isEditing, isMobile, revealEditingMessageInView])
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
@@ -723,6 +780,7 @@ function MessageInner({
 
   return (
     <>
+    <div ref={messageRootRef} className="w-full">
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn(
         'min-w-0 space-y-2',
@@ -779,7 +837,7 @@ function MessageInner({
               ) : (
                 <ToolCallGroup
                   calls={toolCalls}
-                  collapsible={provider !== 'jait'}
+                  collapsible
                   threadControlThreads={threadControlThreads}
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
@@ -794,6 +852,11 @@ function MessageInner({
                 isEditing ? (
                   <div
                     className={getUserMessageEditComposerShellClassName()}
+                    style={
+                      isMobile && mobileKeyboardInset > 0
+                        ? { bottom: mobileKeyboardInset + 12 }
+                        : undefined
+                    }
                     onClick={(event) => event.stopPropagation()}
                   >
                     <div
@@ -1003,6 +1066,7 @@ function MessageInner({
         )}
       </div>
     </AIMessage>
+    </div>
     <LlmContextFlowDialog
       open={contextOpen}
       onOpenChange={setContextOpen}
