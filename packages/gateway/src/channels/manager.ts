@@ -724,16 +724,25 @@ export class ChannelManager {
     const active = config.model ?? auth?.model;
     const arg = args.trim();
 
-    if (arg.toLowerCase() === "reset" || arg.toLowerCase() === "default") {
+    const resetToDefault = () => {
       this.setConfig(channelId, { model: "", modelProvider: "" });
       return { text: `↩️ Back to the gateway default${auth?.model ? ` (${auth.model})` : ""}.` };
-    }
+    };
+
+    // `reset` is reserved. `default` is not: Claude Code ships a model with
+    // exactly that id, and swallowing it as "reset" silently sent the channel
+    // back to the fallback model instead of selecting it.
+    if (arg.toLowerCase() === "reset") return resetToDefault();
 
     let models: ChannelModelOption[] = [];
     try {
       models = await this.resolveModelsCached();
     } catch (err) {
       this.log(`${channelId}: model catalogue failed:`, err);
+    }
+
+    if (arg.toLowerCase() === "default" && !models.some((model) => model.id.toLowerCase() === "default")) {
+      return resetToDefault();
     }
 
     if (models.length === 0 && !arg) {

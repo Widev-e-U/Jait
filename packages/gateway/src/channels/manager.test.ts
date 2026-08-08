@@ -870,3 +870,64 @@ describe("model catalogue caching", () => {
     expect(calls()).toBe(2);
   });
 });
+
+describe('/model "default" is a real model id', () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeManager4(db: SqliteDatabase, models: { id: string; label?: string; group?: string; provider?: string }[]) {
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      resolveModels: async () => models,
+      replyGenerator: echoGenerator,
+    });
+    const connector = new FakeConnector();
+    Object.defineProperty(connector, "supportsChoices", { value: true });
+    mgr.register(connector);
+    return { mgr, connector };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("selects Claude Code's default instead of falling back", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [
+      { id: "default", label: "Default", group: "Claude Code", provider: "claude-code-1" },
+      { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    ]);
+    await mgr.start("fake");
+
+    const sent = await send(connector, "/model default");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "default", modelProvider: "claude-code-1" });
+    expect(sent.text).toContain("Now using Default (Claude Code)");
+  });
+
+  it("still resets when no model is called default", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [{ id: "gpt-4o", label: "GPT-4o", group: "OpenAI" }]);
+    await mgr.start("fake");
+    await send(connector, "/model gpt-4o");
+
+    const sent = await send(connector, "/model default");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
+    expect(sent.text).toContain("Back to the gateway default");
+  });
+
+  it("keeps reset reserved even against a model of that name", async () => {
+    const { mgr, connector } = makeManager4(sqlite, [
+      { id: "reset", label: "Reset", group: "Odd" },
+      { id: "gpt-4o", label: "GPT-4o", group: "OpenAI" },
+    ]);
+    await mgr.start("fake");
+    await send(connector, "/model gpt-4o");
+
+    await send(connector, "/model reset");
+
+    expect(mgr.getConfig("fake")).toMatchObject({ model: "", modelProvider: "" });
+  });
+});
