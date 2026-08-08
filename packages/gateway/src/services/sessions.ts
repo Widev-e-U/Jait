@@ -194,13 +194,19 @@ export class SessionService {
     this.db.update(sessions).set({ status: "deleted" }).where(and(...conditions)).run();
   }
 
-  /** Update session name, metadata, or projectPath. */
+  /**
+   * Update session name, metadata, projectPath, or projectId.
+   *
+   * `undefined` leaves a field untouched, `null` clears it — clearing matters
+   * for `projectId`, which is how a chat moves back out of a project into the
+   * user's personal chats.
+   */
   update(id: string, data: { name?: string; metadata?: Record<string, unknown>; projectPath?: string | null; projectId?: string | null }, userId?: string) {
-    const set: Record<string, string> = {};
+    const set: Record<string, string | null> = {};
     if (data.name !== undefined) set["name"] = data.name;
     if (data.metadata !== undefined) set["metadata"] = JSON.stringify(data.metadata);
-    if (data.projectPath != null) set["projectPath"] = data.projectPath;
-    if (data.projectId != null) set["projectId"] = data.projectId;
+    if (data.projectPath !== undefined) set["projectPath"] = data.projectPath;
+    if (data.projectId !== undefined) set["projectId"] = data.projectId;
     if (Object.keys(set).length > 0) {
       this.db
         .update(sessions)
@@ -208,6 +214,20 @@ export class SessionService {
         .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
         .run();
     }
+  }
+
+  /**
+   * Move a session into a project, or out of every project when `projectId`
+   * is `null` (back to the user's personal chats).
+   *
+   * `projectPath` is moved along with it: tool execution resolves a session's
+   * working directory as `project.rootPath ?? session.projectPath`, so leaving
+   * the old path behind would keep pointing a personal chat at the folder of
+   * the project it just left.
+   */
+  moveToProject(id: string, projectId: string | null, projectPath: string | null, userId?: string) {
+    this.update(id, { projectId, projectPath }, userId);
+    return this.getById(id, userId);
   }
 
   /**
