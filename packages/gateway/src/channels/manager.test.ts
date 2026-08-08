@@ -462,7 +462,7 @@ describe("ChannelManager command menu", () => {
     const { mgr, connector } = makeManager(sqlite);
     await mgr.start("fake");
 
-    expect(connector.menu?.map((c) => c.name)).toEqual(["model", "notifications", "status", "help"]);
+    expect(connector.menu?.map((c) => c.name)).toEqual(["model", "notifications", "approvals", "status", "help"]);
     for (const entry of connector.menu ?? []) {
       expect(entry.description.length).toBeGreaterThan(0);
     }
@@ -1003,5 +1003,77 @@ describe("catalogue invalidation", () => {
     connector.emit({ text: "/model", isSelfChat: true });
     await new Promise((r) => setTimeout(r, 20));
     expect(calls).toBe(2);
+  });
+});
+
+describe("tool approvals", () => {
+  let sqlite: SqliteDatabase;
+  beforeEach(async () => { sqlite = await openRawSqlite(":memory:"); });
+
+  function makeApprovalManager(db: SqliteDatabase) {
+    const consentManager = new ConsentManager({ db, timeoutMs: 1000 });
+    const seen: Array<boolean | undefined> = [];
+    const mgr = new ChannelManager({
+      sqlite: db,
+      resolveLLM: () => fakeLLM,
+      consentManager,
+      replyGenerator: {
+        async generate(_history, ctx) { seen.push(ctx.autoApprove); return "reply"; },
+      },
+    });
+    const connector = new FakeConnector();
+    mgr.register(connector);
+    return { mgr, connector, consentManager, seen };
+  }
+
+  const send = async (connector: FakeConnector, text: string) => {
+    connector.emit({ text, isSelfChat: true });
+    await new Promise((r) => setTimeout(r, 20));
+    return connector.sent.at(-1)!;
+  };
+
+  it("lets the agent decide by default", async () => {
+    const { mgr, connector, consentManager, seen } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "do something");
+
+    expect(seen).toEqual([true]);
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(true);
+  });
+
+  it("asks each time once switched to ask", async () => {
+    const { mgr, connector, consentManager, seen } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/approvals ask");
+    expect(mgr.getConfig("fake").autoApprove).toBe(false);
+
+    await send(connector, "do something");
+    expect(seen).toEqual([false]);
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(false);
+  });
+
+  it("switches back to automatic", async () => {
+    const { mgr, connector, consentManager } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    await send(connector, "/approvals ask");
+    await send(connector, "do something");
+    const confirmation = await send(connector, "/approvals auto");
+
+    expect(mgr.getConfig("fake").autoApprove).toBe(true);
+    expect(confirmation.text).toContain("Irreversible commands still ask");
+
+    await send(connector, "do something else");
+    expect(consentManager.isApproveAllEnabledForSession("channel:fake:chat-1")).toBe(true);
+  });
+
+  it("reports the current mode on a bare /approvals and in /status", async () => {
+    const { mgr, connector } = makeApprovalManager(sqlite);
+    await mgr.start("fake");
+
+    expect((await send(connector, "/approvals")).text).toContain("run automatically");
+    expect((await send(connector, "/status")).text).toContain("Tool approvals: automatic");
   });
 });

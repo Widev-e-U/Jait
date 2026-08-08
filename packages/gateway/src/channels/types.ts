@@ -185,6 +185,13 @@ export interface ChannelConfig {
   /** Tool names the channel agent may use. Empty/undefined → pure chat. */
   tools?: string[];
   /**
+   * Let the agent decide for itself whether a tool may run, instead of asking
+   * in the chat before each one. On by default: an assistant that stops for a
+   * yes/no on every step is unusable on a phone. Irreversible commands still
+   * ask — that carve-out lives in the consent executor and is not bypassed.
+   */
+  autoApprove?: boolean;
+  /**
    * Deliver gateway notifications (and anything routines push through them) to
    * this channel's allowed senders. Off by default — turning a messenger into a
    * notification sink is the user's call, not a side effect of linking it.

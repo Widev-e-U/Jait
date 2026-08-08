@@ -60,6 +60,8 @@ export interface ReplyGenerator {
       modelProvider?: string;
       /** Conversation the turn belongs to, for provider-side approval prompts. */
       conversationId?: string;
+      /** Agent decides tool use itself instead of asking in the chat. */
+      autoApprove?: boolean;
     },
   ): Promise<string>;
 }
@@ -177,6 +179,15 @@ function resolveChannelMaxRounds(apiKeys?: Record<string, string>): number {
   return CHANNEL_DEFAULT_MAX_ROUNDS;
 }
 
+/**
+ * Whether the agent decides tool use itself on this channel. Defaults to on:
+ * a chat assistant that asks before every step is unusable on a phone. The
+ * consent executor still stops for irreversible commands regardless.
+ */
+export function autoApproves(config: ChannelConfig): boolean {
+  return config.autoApprove !== false;
+}
+
 /** Default approval window for an in-band consent prompt before auto-deny. */
 const DEFAULT_CONSENT_TIMEOUT_MS = 5 * 60_000;
 
@@ -215,6 +226,7 @@ export function shouldRespond(msg: InboundMessage, config: ChannelConfig): boole
 export const CHANNEL_COMMAND_DEFS = [
   { name: "model", description: "Pick a provider and model for this channel", usage: "/model [number|id|provider <name>|reset]" },
   { name: "notifications", description: "Send routines and gateway alerts to this chat", usage: "/notifications on|off" },
+  { name: "approvals", description: "Ask before each tool instead of deciding automatically", usage: "/approvals ask|auto" },
   { name: "status", description: "Channel, model and notification state", usage: "/status" },
   { name: "help", description: "Show the available commands", usage: "/help" },
 ] as const;
@@ -608,6 +620,12 @@ export class ChannelManager {
     const sessionId = `channel:${key}`;
     this.sessionTargets.set(sessionId, { channelId: msg.channelId, conversationId: msg.conversationId, key });
 
+    // Hand the decision to the agent, or back to the user, for this turn.
+    if (this.deps.consentManager) {
+      if (autoApproves(config)) this.deps.consentManager.enableApproveAllForSession(sessionId);
+      else this.deps.consentManager.disableApproveAllForSession(sessionId);
+    }
+
     try {
       const reply = (await this.replyGenerator.generate(history, {
         channelId: msg.channelId,
@@ -616,6 +634,7 @@ export class ChannelManager {
         model: config.model?.trim() || undefined,
         modelProvider: config.modelProvider?.trim() || undefined,
         conversationId: msg.conversationId,
+        autoApprove: autoApproves(config),
       })).trim();
 
       if (reply) {
@@ -677,8 +696,24 @@ export class ChannelManager {
           `Channel: ${managed.connector.label} (${managed.status})`,
           `Model: ${config.model ?? auth?.model ?? "gateway default"}${config.model ? " (channel override)" : ""}`,
           `Notifications: ${config.notifications ? "on" : "off"}`,
+          `Tool approvals: ${autoApproves(config) ? "automatic" : "ask each time"}`,
           `Allowed senders: ${(config.allowedSenders ?? []).join(", ") || "none"}`,
         ].join("\n"));
+        return true;
+      }
+
+      case "approvals": {
+        const arg = parsed.args.trim().toLowerCase();
+        if (arg !== "ask" && arg !== "auto") {
+          await reply(autoApproves(config)
+            ? "Tools run automatically. Use /approvals ask to be asked each time."
+            : "I ask before each tool. Use /approvals auto to let me decide.");
+          return true;
+        }
+        this.setConfig(msg.channelId, { autoApprove: arg === "auto" });
+        await reply(arg === "auto"
+          ? "⚡ I'll decide about tools myself. Irreversible commands still ask."
+          : "🔒 I'll ask before each tool.");
         return true;
       }
 
@@ -1014,6 +1049,7 @@ interface CliTurnContext {
   model?: string;
   modelProvider?: string;
   conversationId?: string;
+  autoApprove?: boolean;
 }
 
 export class AgentLoopReplyGenerator implements ReplyGenerator {
@@ -1028,6 +1064,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       model?: string;
       modelProvider?: string;
       conversationId?: string;
+      autoApprove?: boolean;
     },
   ): Promise<string> {
     const { toolRegistry, audit } = this.deps;
@@ -1190,7 +1227,9 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     if (!providerRegistry || !gatewayAddress || !auth?.userId) {
       return "⚠️ CLI providers aren't wired up on this gateway — pick an API model with /model.";
     }
-    if (!consentManager) {
+    // Supervised mode is only usable with somebody to answer the approvals.
+    const supervised = !ctx.autoApprove;
+    if (supervised && !consentManager) {
       return "⚠️ This model runs a CLI with tool access, which needs the in-band approval flow. Pick an API model with /model.";
     }
 
@@ -1205,11 +1244,13 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
       sessionId: ctx.sessionId,
       subAgentId: "channel",
       projectRoot: this.deps.projectRoot ?? process.cwd(),
-      runtimeMode: "supervised",
+      // Auto-approve hands the decision to the CLI itself; otherwise it runs
+      // supervised and every tool becomes a yes/no question in the chat.
+      runtimeMode: supervised ? "supervised" : "full-access",
       model: ctx.model,
       prompt,
-      onApprovalRequired: async ({ tool, args }) => {
-        const decision = await consentManager.requestConsent({
+      onApprovalRequired: !supervised ? undefined : async ({ tool, args }) => {
+        const decision = await consentManager!.requestConsent({
           actionId: `channel-cli:${ctx.channelId}:${tool}`,
           toolName: tool,
           summary: `${tool} (via ${ctx.modelProvider})`,
