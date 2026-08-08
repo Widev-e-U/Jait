@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.695",
+  "version": "0.1.696",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "author": "JakobWl",
   "type": "module",

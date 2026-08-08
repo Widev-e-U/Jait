@@ -87,9 +87,9 @@ export function registerRepoRoutes(
     // Prevent duplicate path for same user
     const existing = repoService.findByPath(body.localPath, user.id);
     if (existing) {
-      // If re-registered from a different device, update deviceId
-      if (body.deviceId && existing.deviceId !== body.deviceId) {
-        const updated = repoService.update(existing.id, { deviceId: body.deviceId });
+      const deviceId = body.deviceId?.trim() || null;
+      if (existing.deviceId !== deviceId) {
+        const updated = repoService.update(existing.id, { deviceId });
         if (updated) {
           broadcastRepoEvent("updated", { repo: updated });
           return { repo: updated };

@@ -39,6 +39,12 @@ export function projectHasGitMetadata(rootPath: string | null | undefined): bool
   }
 }
 
+export function shouldAutoClaimRepositoryForNode(localPath: string, nodePlatform: string): boolean {
+  if (existsSync(localPath)) return false;
+  const pathIsWindows = /^[A-Za-z]:[\\/]/.test(localPath);
+  return pathIsWindows === (nodePlatform === "windows");
+}
+
 async function detectRepoDetails(rootPath: string, gitService: GitService): Promise<{ defaultBranch: string; remoteUrl?: string }> {
   let branch: string | undefined;
   let remoteUrl: string | null = null;
@@ -93,12 +99,27 @@ export async function assignRepositoryToProject(params: {
     throw new ProjectRepositoryAssignmentError("PROJECT_NOT_FOUND", "Project not found.");
   }
 
+  const reconcileGatewayRepository = (repo: RepoRow): RepoRow => {
+    if (
+      project.nodeId !== "gateway"
+      || repo.deviceId === null
+      || repo.localPath !== project.rootPath?.trim()
+      || !projectHasGitMetadata(project.rootPath)
+    ) {
+      return repo;
+    }
+    const updated = params.repoService.update(repo.id, { deviceId: null }) ?? repo;
+    broadcastRepoEvent(params.ws, "updated", updated);
+    return updated;
+  };
+
   const requestedRepoId = params.repoId?.trim();
   if (requestedRepoId) {
-    const repo = params.repoService.getById(requestedRepoId);
-    if (!repo || (params.userId && repo.userId !== params.userId)) {
+    const requestedRepo = params.repoService.getById(requestedRepoId);
+    if (!requestedRepo || (params.userId && requestedRepo.userId !== params.userId)) {
       throw new ProjectRepositoryAssignmentError("REPOSITORY_NOT_FOUND", "Repository not found.");
     }
+    const repo = reconcileGatewayRepository(requestedRepo);
     const existingRepositoryId = getProjectRepositoryId(project);
     if (existingRepositoryId === repo.id) {
       return { project, repo, assigned: false, skipped: true, created: false };
@@ -117,7 +138,8 @@ export async function assignRepositoryToProject(params: {
   if (existingRepositoryId) {
     const existingRepo = params.repoService.getById(existingRepositoryId);
     if (existingRepo && (!params.userId || existingRepo.userId === params.userId)) {
-      return { project, repo: existingRepo, assigned: false, skipped: true, created: false };
+      const repo = reconcileGatewayRepository(existingRepo);
+      return { project, repo, assigned: false, skipped: true, created: false };
     }
   }
 
@@ -139,6 +161,8 @@ export async function assignRepositoryToProject(params: {
     });
     created = true;
     broadcastRepoEvent(params.ws, "created", repo);
+  } else {
+    repo = reconcileGatewayRepository(repo);
   }
 
   const updatedProject = params.projectService.assignRepository(project.id, repo.id, params.userId);
@@ -159,7 +183,21 @@ export async function autoAssignProjectRepositories(params: {
     const existingRepositoryId = getProjectRepositoryId(project);
     if (existingRepositoryId) {
       const existingRepo = params.repoService.getById(existingRepositoryId);
-      if (existingRepo && (!userId || existingRepo.userId === userId)) continue;
+      if (existingRepo && (!userId || existingRepo.userId === userId)) {
+        try {
+          assignments.push(await assignRepositoryToProject({
+            projectService: params.projectService,
+            repoService: params.repoService,
+            gitService: params.gitService,
+            projectId: project.id,
+            userId,
+            ws: params.ws,
+          }));
+        } catch {
+          // Keep listing projects even if a stale repository cannot be reconciled.
+        }
+        continue;
+      }
     }
     if (!projectHasGitMetadata(project.rootPath)) continue;
     try {

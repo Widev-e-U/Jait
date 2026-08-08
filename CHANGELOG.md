@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.696](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.696) — 2026-08-08
+- fix(gateway): gateway projects now self-heal stale repository device assignments before Manager provider scoping, and remote node registration no longer claims repositories whose paths already exist on the gateway; selecting the Jait repo therefore shows its gateway provider accounts instead of incorrectly limiting Manager to Jait.
+
 ## [v0.1.695](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.695) — 2026-08-08
 - fix(web): developer and Manager modes now keep independent provider/model selections; switching modes no longer replaces the chat's developer provider with Jait, and Manager's picker includes provider accounts advertised by the selected repositories' nodes.
 - fix(web): the conversation loading skeleton again spans the full viewport with alternating realistic turns, beginning and ending with user-message placeholders instead of collapsing to a three-turn block at the bottom.

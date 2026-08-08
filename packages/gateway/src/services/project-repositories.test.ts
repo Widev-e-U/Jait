@@ -9,6 +9,7 @@ import { getProjectRepositoryId, ProjectService } from "./projects.js";
 import {
   assignRepositoryToProject,
   ProjectRepositoryAssignmentError,
+  shouldAutoClaimRepositoryForNode,
 } from "./project-repositories.js";
 
 const tempRoots: string[] = [];
@@ -69,6 +70,50 @@ describe("project repository assignment", () => {
     } finally {
       opened.sqlite.close();
     }
+  });
+
+  it("repairs an assigned gateway repository that was stale-claimed by a remote node", async () => {
+    const opened = await openDatabase(":memory:");
+    migrateDatabase(opened.sqlite);
+    try {
+      const projectService = new ProjectService(opened.db);
+      const repoService = new RepositoryService(opened.db);
+      const gitService = new GitService();
+      const rootPath = makeTempRoot(true);
+      const project = projectService.create({
+        userId: "user-1",
+        title: "Gateway project",
+        rootPath,
+        nodeId: "gateway",
+      });
+      const staleRepo = repoService.create({
+        userId: "user-1",
+        name: "Gateway project",
+        localPath: rootPath,
+        deviceId: "base-node",
+      });
+      projectService.assignRepository(project.id, staleRepo.id, "user-1");
+
+      const result = await assignRepositoryToProject({
+        projectService,
+        repoService,
+        gitService,
+        projectId: project.id,
+        userId: "user-1",
+      });
+
+      expect(result.repo.deviceId).toBeNull();
+      expect(repoService.getById(staleRepo.id)?.deviceId).toBeNull();
+    } finally {
+      opened.sqlite.close();
+    }
+  });
+
+  it("does not let a remote node claim a repository that exists on the gateway", () => {
+    const rootPath = makeTempRoot(true);
+
+    expect(shouldAutoClaimRepositoryForNode(rootPath, "linux")).toBe(false);
+    expect(shouldAutoClaimRepositoryForNode(join(rootPath, "missing"), "linux")).toBe(true);
   });
 
   it("rejects auto-assignment for a project without .git metadata", async () => {

@@ -64,7 +64,10 @@ import { ArchitectureDiagramService } from "./services/architecture-diagrams.js"
 import { CodeGraphService } from "./services/code-graph/code-graphs.js";
 import { ensureGraphifyRuntime } from "./services/code-graph/graphify-runtime.js";
 import { ProjectService } from "./services/projects.js";
-import { autoAssignProjectRepositories } from "./services/project-repositories.js";
+import {
+  autoAssignProjectRepositories,
+  shouldAutoClaimRepositoryForNode,
+} from "./services/project-repositories.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
 import { resolveJaitLlmConfig } from "./services/jait-llm.js";
@@ -1118,18 +1121,15 @@ async function main() {
     }
   };
 
-  // When a desktop/mobile FsNode registers, auto-claim repos that have no
-  // deviceId but a matching local path platform. This ensures repos created
-  // before deviceId tracking get properly associated.
+  // When a desktop/mobile FsNode registers, auto-claim legacy repos that have
+  // no deviceId, are not present on the gateway, and match the node platform.
   ws.onFsNodeRegistered = (node) => {
     if (node.isGateway) return;
-    const isWindowsNode = node.platform === "windows";
     const git = new GitService();
     for (const repo of repoService.list()) {
       if (repo.deviceId) continue; // already claimed
       const path = repo.localPath;
-      const pathIsWindows = /^[A-Za-z]:[\\\/]/.test(path);
-      if (pathIsWindows === isWindowsNode) {
+      if (shouldAutoClaimRepositoryForNode(path, node.platform)) {
         repoService.update(repo.id, { deviceId: node.id });
         ws.broadcastAll({
           type: "repo.updated",
