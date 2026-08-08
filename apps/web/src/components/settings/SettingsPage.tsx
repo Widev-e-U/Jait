@@ -139,7 +139,7 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   extensions: 'Extensions',
   skills: 'Skills',
   email: 'Mail & Calendar',
-  channels: 'Channels',
+  channels: 'Connectors',
   usage: 'Usage',
   activity: 'Activity',
   changelog: 'Changelog',
@@ -757,7 +757,7 @@ export function SettingsPage({
     'skills instructions prompts specialized workflows SKILL.md',
   )
   const showChannelsSection = matchesSearch(
-    'channels whatsapp messaging connect link qr inbound outbound',
+    'connectors channels telegram bot botfather token whatsapp teams messaging connect link pair qr inbound outbound',
   )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
@@ -809,6 +809,7 @@ export function SettingsPage({
           <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
+          <TabsTrigger value="channels" className="flex-1 sm:flex-none">Connectors</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
           <TabsTrigger value="changelog" className="flex-1 sm:flex-none">Changelog</TabsTrigger>
