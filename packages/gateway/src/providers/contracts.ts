@@ -155,6 +155,8 @@ export interface StartSessionOptions {
   mode: RuntimeMode;
   /** Model to use (provider-specific) */
   model?: string;
+  /** Provider-specific reasoning/thinking effort value */
+  reasoningEffort?: string;
   /** Environment variables to pass to the CLI process */
   env?: Record<string, string>;
   /** MCP server configs the CLI should connect to */

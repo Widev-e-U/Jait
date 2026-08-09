@@ -209,6 +209,38 @@ afterEach(() => {
 });
 
 describe("AcpProvider MCP startup events", () => {
+  it("ignores transient Jait MCP startup cancellations forwarded by Codex ACP", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    provider.handleSessionUpdate("provider-session-1", {
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "mcp_startup.jait_core",
+        title: "mcp__jait_core__startup",
+        kind: "other",
+        status: "failed",
+        content: [{
+          type: "content",
+          content: {
+            type: "text",
+            text: "[codex-acp forwarded startup error] MCP server `jait_core` startup was cancelled.",
+          },
+        }],
+      },
+    } as any);
+
+    unsubscribe();
+    expect(events).toEqual([]);
+  });
+
   it("replays early Jait MCP startup failures to later subscribers", () => {
     const provider = new AcpProvider({
       id: "codex",
@@ -1177,7 +1209,83 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpReasoningEffortScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "acp-session-1",
+          configOptions: [{
+            type: "select",
+            id: "effort",
+            name: "Effort",
+            category: "thought_level",
+            currentValue: "medium",
+            options: [
+              { value: "low", name: "Low" },
+              { value: "xhigh", name: "Extra high" }
+            ]
+          }]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const valid = request.params.configId === "effort" && request.params.value === "xhigh";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Wrong reasoning effort" } }
+      ) + "\\n");
+    }
+  }
+});
+`;
+
 describe("AcpProvider session mode/model failures", () => {
+  it("applies the advertised thought-level config when starting a session", async () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "Claude Code via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpReasoningEffortScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    try {
+      const session = await provider.startSession({
+        threadId: "thread-1",
+        workingDirectory: process.cwd(),
+        reasoningEffort: "xhigh",
+      });
+
+      expect(session.status).toBe("running");
+      expect(events.some((event) =>
+        event.type === "activity"
+        && "summary" in event
+        && event.summary.includes("reasoning")
+      )).toBe(false);
+    } finally {
+      unsubscribe();
+      await provider.dispose();
+    }
+  });
   it("falls back to session/set_config_option for the model when session/set_model is unimplemented, without logging an error", async () => {
     // Regression for: claude-agent-acp and pi-acp both reject the unstable
     // session/set_model RPC ("Method not found"), so the model picked in

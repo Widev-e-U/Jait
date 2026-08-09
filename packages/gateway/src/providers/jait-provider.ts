@@ -260,6 +260,7 @@ export class JaitProvider implements CliProviderAdapter {
             },
             abort,
             maxRounds: this.resolveMaxRounds(userSettings?.apiKeys),
+            continuous: true,
             parallel: true,
             toolRegistry: this.deps.toolRegistry,
             disabledTools,
@@ -386,12 +387,11 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   /**
-   * Resolve the max autonomous tool-calling rounds for a turn.
+   * Resolve the autonomous checkpoint interval for a user-facing turn.
    * When no explicit value is configured, returns `0` so runAgentLoop uses
-   * its 64-round safety backstop alongside duplicate-call
-   * detection). A per-user
-   * `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway config default.
-   * Positive values are clamped to a sane ceiling to avoid runaway loops.
+   * its default 64-round interval alongside behavioral loop detection.
+   * A per-user `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway
+   * config default. Positive values are clamped to 200 rounds.
    */
   private resolveMaxRounds(apiKeys?: Record<string, string>): number {
     const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();

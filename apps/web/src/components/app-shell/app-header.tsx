@@ -356,7 +356,16 @@ export function AppHeader(props: AppHeaderProps) {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>{user?.username}</DropdownMenuLabel>
+                      <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
+                        <span title={user?.username} className="max-w-[12rem] truncate text-sm font-semibold">
+                          {user?.username}
+                        </span>
+                        {updateInfo?.currentVersion && (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            Jait v{updateInfo.currentVersion}
+                          </span>
+                        )}
+                      </DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
                         <Settings className="h-4 w-4 mr-2" />
@@ -413,7 +422,16 @@ export function AppHeader(props: AppHeaderProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>{user?.username}</DropdownMenuLabel>
+                  <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
+                    <span title={user?.username} className="max-w-[12rem] truncate text-sm font-semibold">
+                      {user?.username}
+                    </span>
+                    {updateInfo?.currentVersion && (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        Jait v{updateInfo.currentVersion}
+                      </span>
+                    )}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
                     <Settings className="h-4 w-4 mr-2" />

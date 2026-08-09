@@ -1,5 +1,7 @@
+import { normalizeSessionReasoningEffort } from '@/lib/session-chat-selection'
+
 export type ProjectModelSelections = Partial<Record<string, string | null>>
-export type ProjectReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
+export type ProjectReasoningEffort = string
 
 const PROJECT_MODEL_CACHE_PREFIX = 'jait:project-models:v1:'
 const PROJECT_PROVIDER_CACHE_PREFIX = 'jait:project-provider:v1:'
@@ -126,10 +128,7 @@ export function readProjectReasoningEffortSelection(
     if (!raw) return undefined
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const value = parsed[provider]
-    if (value === null) return null
-    return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high'
-      ? value
-      : undefined
+    return normalizeSessionReasoningEffort(value)
   } catch {
     return undefined
   }

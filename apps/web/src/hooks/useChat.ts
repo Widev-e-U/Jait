@@ -166,6 +166,15 @@ export function shouldOwnDirectChatStream(params: {
   return !(params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId)
 }
 
+export function isResumeStreamRunCurrent(params: {
+  cancelled: boolean
+  aborted: boolean
+  currentRunId: number
+  runId: number
+}): boolean {
+  return !params.cancelled && !params.aborted && params.currentRunId === params.runId
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -501,6 +510,8 @@ interface SendMessageOptions {
   responseStyle?: ResponseStyle
   /** Model override for CLI providers */
   model?: string | null
+  /** Provider-specific reasoning/thinking effort */
+  reasoningEffort?: string | null
   /** Clean display text for user message (without file contents appended) */
   displayContent?: string
   /** File references to attach as metadata on the user message */
@@ -525,6 +536,7 @@ interface QueuedChatMessage extends QueuedMessage {
   runtimeMode?: RuntimeMode
   responseStyle?: ResponseStyle
   model?: string | null
+  reasoningEffort?: string | null
   mode?: ChatMode
   referencedFiles?: { path: string; name: string }[]
   displaySegments?: UserMessageSegment[]
@@ -892,7 +904,12 @@ export function useChat(
     streamAbortRef.current = streamController
     streamResumeSessionRef.current = sessionId
     const resumeRunId = ++resumeStreamRunIdRef.current
-    const isCurrentResumeRun = () => !cancelled && resumeStreamRunIdRef.current === resumeRunId
+    const isCurrentResumeRun = () => isResumeStreamRunCurrent({
+      cancelled,
+      aborted: streamController.signal.aborted,
+      currentRunId: resumeStreamRunIdRef.current,
+      runId: resumeRunId,
+    })
     let serverSnapshotReceived = false
 
     // Offline/snapshot-failure fallback: only surfaces cached history when the
@@ -1558,6 +1575,7 @@ export function useChat(
         ...(options.provider && options.provider !== 'jait' && options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
         ...(options.responseStyle && options.responseStyle !== 'normal' ? { responseStyle: options.responseStyle } : {}),
         ...(options.model ? { model: options.model } : {}),
+        ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
         ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
         ...(outboundAttachments?.length ? { attachments: outboundAttachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
       }
@@ -2328,7 +2346,9 @@ export function useChat(
         sessionId: requestSessionId,
         mode: options.mode,
         provider: options.provider,
+        runtimeMode: options.runtimeMode,
         model: options.model,
+        reasoningEffort: options.reasoningEffort,
         displayContent: options.displayContent ?? editedContent.trim(),
         referencedFiles: options.referencedFiles,
         displaySegments: options.displaySegments,

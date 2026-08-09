@@ -169,13 +169,13 @@ const DEFAULT_SYSTEM_PROMPT =
 
 const DEFAULT_MAX_HISTORY = 20;
 
-/** Hard ceiling on per-user max rounds to avoid runaway loops. */
+/** Hard ceiling on the per-user autonomous checkpoint interval. */
 const CHANNEL_MAX_ROUNDS_CEILING = 200;
 
-/** `0` delegates to the agent loop's 64-round safety backstop. */
+/** `0` delegates to the agent loop's default 64-round checkpoint interval. */
 const CHANNEL_DEFAULT_MAX_ROUNDS = 0;
 
-/** Resolve per-user JAIT_MAX_ROUNDS (clamped), else the channel safety default. */
+/** Resolve per-user JAIT_MAX_ROUNDS checkpoint interval, else the default. */
 function resolveChannelMaxRounds(apiKeys?: Record<string, string>): number {
   const raw = apiKeys?.["JAIT_MAX_ROUNDS"]?.trim();
   const parsed = raw ? parseInt(raw, 10) : NaN;
@@ -1573,6 +1573,7 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
           : undefined,
         abort,
         maxRounds: hasTools ? resolveChannelMaxRounds(auth?.apiKeys) : 1,
+        continuous: hasTools,
         maxRetries: 1,
         // Sequential so at most one approval prompt is outstanding per chat —
         // a messaging surface can only field one yes/no at a time.

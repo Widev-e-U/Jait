@@ -4,6 +4,7 @@ import {
   applyResumeSnapshotSeq,
   formatChatHttpError,
   getVisibleChangedFiles,
+  isResumeStreamRunCurrent,
   shouldFlushStreamTextImmediately,
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
@@ -230,6 +231,17 @@ describe('shouldForceMessageLifecycleRefresh', () => {
   it('forces reconciliation for both stream start and completion signals', () => {
     expect(shouldForceMessageLifecycleRefresh('started')).toBe(true)
     expect(shouldForceMessageLifecycleRefresh('complete')).toBe(true)
+  })
+})
+
+describe('isResumeStreamRunCurrent', () => {
+  it('invalidates buffered resume events as soon as the stream is aborted', () => {
+    expect(isResumeStreamRunCurrent({
+      cancelled: false,
+      aborted: true,
+      currentRunId: 7,
+      runId: 7,
+    })).toBe(false)
   })
 })
 

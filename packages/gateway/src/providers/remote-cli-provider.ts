@@ -70,8 +70,20 @@ function normalizeCodexModelList(result: unknown): ProviderModelInfo[] {
       ?? asNonEmptyString(model.name)
       ?? id;
     const description = asNonEmptyString(model.description) ?? undefined;
-    const reasoningEffortSupported = Array.isArray(model.supportedReasoningEfforts)
-      ? model.supportedReasoningEfforts.length > 0
+    const supportedReasoningEfforts = Array.isArray(model.supportedReasoningEfforts)
+      ? model.supportedReasoningEfforts.flatMap((rawEffort) => {
+        const effort = asRecord(rawEffort);
+        const reasoningEffort = effort ? asNonEmptyString(effort.reasoningEffort) : undefined;
+        if (!reasoningEffort) return [];
+        const effortDescription = effort ? asNonEmptyString(effort.description) ?? undefined : undefined;
+        return [{
+          reasoningEffort,
+          ...(effortDescription ? { description: effortDescription } : {}),
+        }];
+      })
+      : undefined;
+    const reasoningEffortSupported = supportedReasoningEfforts
+      ? supportedReasoningEfforts.length > 0
       : undefined;
 
     return [{
@@ -80,6 +92,7 @@ function normalizeCodexModelList(result: unknown): ProviderModelInfo[] {
       ...(description ? { description } : {}),
       ...(typeof model.isDefault === "boolean" ? { isDefault: model.isDefault } : {}),
       ...(reasoningEffortSupported !== undefined ? { reasoningEffortSupported } : {}),
+      ...(supportedReasoningEfforts?.length ? { supportedReasoningEfforts } : {}),
     }];
   });
 }
@@ -230,6 +243,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
         workingDirectory: options.workingDirectory,
         mode: options.mode,
         model: options.model,
+        reasoningEffort: options.reasoningEffort,
         env: options.env,
         mcpServers: options.mcpServers,
       }, 90_000);

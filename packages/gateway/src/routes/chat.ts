@@ -801,6 +801,7 @@ interface QueuedChatMessage {
   provider?: ProviderId;
   runtimeMode?: RuntimeMode;
   model?: string | null;
+  reasoningEffort?: string | null;
   responseStyle?: ResponseStyle;
   attachments?: Array<{ name: string; mimeType: string; data: string }>;
   displaySegments?: Array<
@@ -977,6 +978,9 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
         ? record.runtimeMode
         : undefined,
       model: typeof record.model === "string" ? record.model : null,
+      reasoningEffort: typeof record.reasoningEffort === "string" && record.reasoningEffort.trim()
+        ? record.reasoningEffort.trim()
+        : null,
       responseStyle: isResponseStyle(record.responseStyle) ? record.responseStyle : undefined,
       attachments: Array.isArray(record.attachments)
         ? record.attachments.flatMap((attachment) => {
@@ -1244,6 +1248,8 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
 const activeCliSessions = new Map<string, {
   providerId: ProviderId;
   runtimeMode: RuntimeMode;
+  model?: string;
+  reasoningEffort?: string;
   providerSessionId: string;
   provider: CliProviderAdapter;
   /**
@@ -1734,17 +1740,14 @@ Guidelines:
 - Do not create Windows Task Scheduler jobs unless the user explicitly asks for OS-native scheduling.`;
 
 /**
- * Resolve the max agentic loop iterations for a turn.
- * Per-user `JAIT_MAX_ROUNDS` setting takes precedence (clamped to a sane
- * ceiling to avoid runaway loops), then the gateway config default.
+ * Upper bound for the legacy JAIT_MAX_ROUNDS checkpoint interval.
  */
 const MAX_TOOL_ROUNDS_CEILING = 200;
 /**
- * Resolve the max autonomous tool-calling rounds for a turn.
+ * Resolve the autonomous checkpoint interval for a user-facing turn.
  * When no explicit value is configured, returns `0` so the agent loop uses
- * its 64-round safety backstop. A per-user
- * `JAIT_MAX_ROUNDS` setting takes precedence, then the gateway config default.
- * Positive values are clamped to a sane ceiling to avoid runaway loops.
+ * its default 64-round interval. A per-user `JAIT_MAX_ROUNDS` setting takes
+ * precedence, then the gateway config default.
  */
 function resolveMaxToolRounds(
   apiKeys?: Record<string, string>,
@@ -1986,6 +1989,7 @@ export function registerChatRoutes(
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
             ...(nextMessage.model ? { model: nextMessage.model } : {}),
+            ...(nextMessage.reasoningEffort ? { reasoningEffort: nextMessage.reasoningEffort } : {}),
             ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
             ...(nextMessage.attachments?.length ? { attachments: nextMessage.attachments } : {}),
             _queuedDrain: true,
@@ -2280,6 +2284,12 @@ export function registerChatRoutes(
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    const rawReasoningEffort = typeof body["reasoningEffort"] === "string"
+      ? (body["reasoningEffort"] as string).trim()
+      : "";
+    const requestReasoningEffort = /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(rawReasoningEffort)
+      ? rawReasoningEffort
+      : undefined;
     let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
@@ -2362,6 +2372,7 @@ export function registerChatRoutes(
           ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
           ...(responseStyle !== "normal" ? { responseStyle } : {}),
           ...(requestBodyModel ? { model: requestBodyModel } : {}),
+          ...(requestReasoningEffort ? { reasoningEffort: requestReasoningEffort } : {}),
           ...(displaySegments ? { displaySegments } : {}),
           ...(attachments.length ? { attachments } : {}),
         };
@@ -2764,6 +2775,8 @@ export function registerChatRoutes(
           cachedCliSession
           && cachedCliSession.providerId === requestProvider
           && cachedCliSession.runtimeMode === runtimeMode
+          && cachedCliSession.model === (requestBodyModel || undefined)
+          && cachedCliSession.reasoningEffort === requestReasoningEffort
           && remoteConnectionUnchanged
         ) {
           // Existing session with the same provider — try to reuse it
@@ -2785,12 +2798,21 @@ export function registerChatRoutes(
             threadId: sessionId,
             workingDirectory: cliWsRoot,
             mode: runtimeMode,
-            model: typeof body["model"] === "string" ? body["model"] as string : undefined,
+            model: requestBodyModel || undefined,
+            reasoningEffort: requestReasoningEffort,
             mcpServers,
           });
           providerSessionId = session.id;
           isNewCliSession = true;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider, remoteClientId: isRemote ? remoteNodeClientId : undefined });
+          activeCliSessions.set(sessionId, {
+            providerId: requestProvider,
+            runtimeMode,
+            model: requestBodyModel || undefined,
+            reasoningEffort: requestReasoningEffort,
+            providerSessionId,
+            provider: cliProvider,
+            remoteClientId: isRemote ? remoteNodeClientId : undefined,
+          });
           console.log(`[chat/cli] Started new ${requestProvider}/${runtimeMode}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
 
@@ -3102,11 +3124,20 @@ export function registerChatRoutes(
             threadId: sessionId,
             workingDirectory: cliWsRoot,
             mode: runtimeMode,
-            model: typeof body["model"] === "string" ? body["model"] as string : undefined,
+            model: requestBodyModel || undefined,
+            reasoningEffort: requestReasoningEffort,
             mcpServers,
           });
           providerSessionId = freshSession.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider, remoteClientId: isRemote ? remoteNodeClientId : undefined });
+          activeCliSessions.set(sessionId, {
+            providerId: requestProvider,
+            runtimeMode,
+            model: requestBodyModel || undefined,
+            reasoningEffort: requestReasoningEffort,
+            providerSessionId,
+            provider: cliProvider,
+            remoteClientId: isRemote ? remoteNodeClientId : undefined,
+          });
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
 
           // Re-register listener for the new session
@@ -3385,6 +3416,7 @@ export function registerChatRoutes(
               },
               abort: streamAbort,
               maxRounds: resolveMaxToolRounds(userSettings?.apiKeys, config.agentMaxRounds),
+              continuous: true,
               parallel: true,
               toolRegistry,
               disabledTools,

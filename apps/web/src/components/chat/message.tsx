@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
@@ -119,6 +120,8 @@ interface MessageProps {
     onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
     cliModel?: string | null
     onCliModelChange?: (model: string | null) => void
+    reasoningEffort?: SessionReasoningEffort | null
+    onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
     sessionInfo?: SessionInfo | null
     projectNodeId?: string
     availableFiles?: ReferencedFile[]
@@ -896,6 +899,8 @@ function MessageInner({
                           onProviderRuntimeModeChange={editComposer?.onProviderRuntimeModeChange}
                           cliModel={editComposer?.cliModel}
                           onCliModelChange={editComposer?.onCliModelChange}
+                          reasoningEffort={editComposer?.reasoningEffort}
+                          onReasoningEffortChange={editComposer?.onReasoningEffortChange}
                           sessionInfo={editComposer?.sessionInfo}
                           projectNodeId={editComposer?.projectNodeId}
                           availableFiles={editComposer?.availableFiles ?? userReferencedFilesFromSegments(userDisplaySegments)}

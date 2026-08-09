@@ -82,8 +82,13 @@ export interface ProviderModelInfo {
   description?: string;
   isDefault?: boolean;
   group?: string;
-  /** Model accepts the OpenAI `reasoning_effort` parameter (o-series, GPT-5, etc). */
+  /** Model accepts a provider-specific reasoning/thinking effort option. */
   reasoningEffortSupported?: boolean;
+  /** Exact effort values advertised by the provider for this model. */
+  supportedReasoningEfforts?: Array<{
+    reasoningEffort: string;
+    description?: string;
+  }>;
 }
 
 export interface RemoteProviderStatus {

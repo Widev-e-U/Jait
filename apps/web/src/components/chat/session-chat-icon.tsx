@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { providerTypeFromId } from '@jait/shared'
-import { formatModelDisplayLabel, getModelDisplayName } from '@/components/icons/model-icons'
-import { providerIconFor, providerLabelFor } from '@/components/chat/provider-model-selector'
-import { parseSessionChatSelection } from '@/lib/session-chat-selection'
+import { providerIconFor } from '@/components/chat/provider-model-selector'
+import { formatSessionChatSelectionLabel, parseSessionChatSelection } from '@/lib/session-chat-selection'
 
 /**
  * Provider-logo badge for a chat's last-used provider/model/mode. Shows the
@@ -16,19 +15,18 @@ export function SessionChatIcon({ metadata }: { metadata: string | null }) {
 
   const providerType = providerTypeFromId(selection.provider)
   const Icon = providerIconFor(providerType, selection.provider)
-  const providerLabel = providerLabelFor(providerType, selection.provider)
-  const modelLabel = selection.model ? formatModelDisplayLabel(getModelDisplayName(selection.model)) : null
-  const modeLabel = selection.reasoningEffort
-    ? `${selection.reasoningEffort.charAt(0).toUpperCase()}${selection.reasoningEffort.slice(1)} effort`
-    : null
-  const tooltipText = [providerLabel, modelLabel, modeLabel].filter(Boolean).join(' · ')
+  const selectionLabel = formatSessionChatSelectionLabel(selection)
 
   return (
     <span
-      title={tooltipText}
+      role="img"
+      title={selectionLabel}
+      aria-label={selectionLabel}
       className="inline-flex size-3 shrink-0 items-center justify-center text-muted-foreground"
     >
-      <Icon className="size-3" />
+      <span aria-hidden="true" className="pointer-events-none inline-flex">
+        <Icon className="size-3" />
+      </span>
     </span>
   )
 }

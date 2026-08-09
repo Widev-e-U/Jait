@@ -14,6 +14,7 @@ import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { cn } from '@/lib/utils'
 import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
@@ -101,6 +102,8 @@ interface PromptInputProps {
   /** Model override for CLI providers (codex / claude-code). */
   cliModel?: string | null
   onCliModelChange?: (model: string | null) => void
+  reasoningEffort?: SessionReasoningEffort | null
+  onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
   /** Scoped runtime info for the selected repo (Manager mode). */
   repoRuntime?: RepositoryRuntimeInfo | null
   /** Called when user wants to move the repo to the gateway. */
@@ -695,6 +698,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onProviderRuntimeModeChange,
   cliModel,
   onCliModelChange,
+  reasoningEffort,
+  onReasoningEffortChange,
   repoRuntime,
   onMoveToGateway,
   sessionInfo,
@@ -1967,6 +1972,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       sessionInfo={sessionInfo}
                       projectNodeId={projectNodeId}
                       projectId={projectId}
+                      reasoningEffort={reasoningEffort}
+                      onReasoningEffortChange={onReasoningEffortChange}
                     />
                   )}
                   {showProviderRuntimeSelector && (

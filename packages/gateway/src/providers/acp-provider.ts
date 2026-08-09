@@ -22,6 +22,7 @@ import {
   type ReleaseTerminalResponse,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionConfigOption,
   type SessionNotification,
   type TerminalOutputRequest,
   type TerminalOutputResponse,
@@ -72,6 +73,40 @@ const AVAILABILITY_PROBE_TIMEOUT_MS = 5_000;
 const AUTH_STATUS_TTL_MS = 5 * 60_000;
 const REPLAYABLE_EVENT_TTL_MS = 30_000;
 const REPLAYABLE_EVENT_LIMIT = 20;
+
+function findReasoningEffortConfig(configOptions: SessionConfigOption[] | null | undefined): {
+  configId: string;
+  efforts: NonNullable<ProviderModelInfo["supportedReasoningEfforts"]>;
+} | null {
+  const config = configOptions?.find((option) =>
+    option.type === "select" && (
+      option.category === "thought_level"
+      || option.id === "reasoning_effort"
+      || option.id === "reasoningEffort"
+      || option.id === "effort"
+      || option.id === "thought_level"
+    )
+  );
+  if (!config || config.type !== "select") return null;
+
+  const options = config.options.flatMap((option) =>
+    "options" in option ? option.options : [option]
+  );
+  const efforts = options.flatMap((option) => {
+    const reasoningEffort = option.value.trim();
+    if (!reasoningEffort) return [];
+    return [{
+      reasoningEffort,
+      ...(option.description?.trim() ? { description: option.description.trim() } : {}),
+    }];
+  });
+  return efforts.length > 0 ? { configId: config.id, efforts } : null;
+}
+
+const CLAUDE_FALLBACK_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+  .map((reasoningEffort) => ({ reasoningEffort }));
+const CODEX_FALLBACK_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"]
+  .map((reasoningEffort) => ({ reasoningEffort }));
 const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
   { id: "fable", name: "Fable", description: "Claude Fable alias for the top-tier Mythos-class model" },
@@ -79,10 +114,18 @@ const CLAUDE_CODE_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
   { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
   { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
-];
+].map((model) => ({
+  ...model,
+  reasoningEffortSupported: true,
+  supportedReasoningEfforts: CLAUDE_FALLBACK_EFFORTS,
+}));
 const CODEX_FALLBACK_MODELS: ProviderModelInfo[] = [
   { id: "gpt-5-codex", name: "GPT-5 Codex", description: "Codex default coding model", isDefault: true },
-];
+].map((model) => ({
+  ...model,
+  reasoningEffortSupported: true,
+  supportedReasoningEfforts: CODEX_FALLBACK_EFFORTS,
+}));
 
 export interface AcpProviderConfig {
   id: ProviderId;
@@ -302,6 +345,7 @@ export class AcpProvider implements CliProviderAdapter {
 
       const models: ProviderModelInfo[] = [];
       const modelState = newSession.models;
+      const effortConfig = findReasoningEffortConfig(newSession.configOptions);
       if (modelState && modelState.availableModels?.length) {
         for (const model of modelState.availableModels) {
           models.push({
@@ -309,6 +353,10 @@ export class AcpProvider implements CliProviderAdapter {
             name: model.name,
             description: model.description ?? undefined,
             isDefault: model.modelId === modelState.currentModelId,
+            ...(effortConfig ? {
+              reasoningEffortSupported: true,
+              supportedReasoningEfforts: effortConfig.efforts,
+            } : {}),
           });
         }
       }
@@ -751,6 +799,30 @@ export class AcpProvider implements CliProviderAdapter {
           });
         });
       }
+      if (options.reasoningEffort) {
+        const effortConfig = findReasoningEffortConfig(newSession.configOptions);
+        if (effortConfig) {
+          await connection.setSessionConfigOption({
+            sessionId: newSession.sessionId,
+            configId: effortConfig.configId,
+            value: options.reasoningEffort,
+          }).catch((err) => {
+            this.emitEvent({
+              type: "activity",
+              sessionId,
+              kind: "stderr",
+              summary: `${this.info.name} did not accept reasoning effort "${options.reasoningEffort}": ${extractErrorMessage(err, "unknown error")}`,
+            });
+          });
+        } else {
+          this.emitEvent({
+            type: "activity",
+            sessionId,
+            kind: "stderr",
+            summary: `${this.info.name} did not advertise a reasoning-effort setting for this session.`,
+          });
+        }
+      }
       if (options.model) {
         // `unstable_setSessionModel` (session/set_model) is genuinely unstable —
         // Codex implements it, but Claude Code's and Pi's ACP wrappers don't
@@ -913,6 +985,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   handleSessionUpdate(sessionId: string, params: SessionNotification): void {
     const update = params.update;
+    if (isTransientJaitMcpStartupCancellation(update)) return;
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text") {
@@ -1420,10 +1493,31 @@ function readUpdateMessage(update: unknown): string | null {
   return typeof status === "string" ? status : null;
 }
 
+function isTransientJaitMcpStartupCancellation(update: unknown): boolean {
+  if (!update || typeof update !== "object") return false;
+  const record = update as Record<string, unknown>;
+  if (record["sessionUpdate"] !== "tool_call" || record["status"] !== "failed") return false;
+  const title = typeof record["title"] === "string" ? record["title"] : "";
+  const callId = typeof record["toolCallId"] === "string" ? record["toolCallId"] : "";
+  const message = readUpdateMessage(update);
+
+  return [JAIT_CORE_MCP_SERVER_NAME, JAIT_DEFERRED_MCP_SERVER_NAME]
+    .some((serverName) => (
+      (
+        title === `mcp__${serverName}__startup`
+        || callId === `mcp_startup.${encodeURIComponent(serverName)}`
+      )
+      && message === `[codex-acp forwarded startup error] MCP server \`${serverName}\` startup was cancelled.`
+    ));
+}
+
 function isReplayableStartupEvent(event: ProviderEvent): boolean {
   if (event.type !== "tool.start" && event.type !== "tool.result") return false;
-  if (event.tool === "mcp__jait__startup") return true;
-  return typeof event.callId === "string" && event.callId === "mcp_startup.jait";
+  return [JAIT_CORE_MCP_SERVER_NAME, JAIT_DEFERRED_MCP_SERVER_NAME]
+    .some((serverName) => (
+      event.tool === `mcp__${serverName}__startup`
+      || event.callId === `mcp_startup.${encodeURIComponent(serverName)}`
+    ));
 }
 
 function stringifyToolContentItem(item: unknown): string {

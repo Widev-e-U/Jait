@@ -240,12 +240,16 @@ export interface AgentLoopOptions {
   /** Abort controller — abort to cancel the loop */
   abort: AbortController;
   /**
-   * Max tool-calling rounds before stopping. pi-style default: when omitted or
-   * `0`, there is NO round cap — the loop is purely data-driven and runs until
-   * the model itself decides it is done (returns a non-tool-call answer) or the
-   * turn is aborted. Pass a positive number to impose a hard backstop.
+   * Round budget for bounded runs, or checkpoint interval for continuous runs.
+   * Omitted and `0` use the default 64-round checkpoint interval.
    */
   maxRounds?: number;
+  /**
+   * Keep the turn alive across round-budget boundaries. Continuous runs compact
+   * context and inject an internal reassessment checkpoint instead of returning
+   * `hitMaxRounds`.
+   */
+  continuous?: boolean;
   /** Max retries per individual tool call failure (0 = no retry) */
   maxRetries?: number;
   /** Enable parallel execution of independent tool calls */
@@ -1406,8 +1410,8 @@ const MAX_DUPLICATE_CALL_STREAK = 3;
 const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
 const MAX_SAME_TOOL_CALLS_PER_TURN = 6;
 const MAX_TOOL_CALLS_PER_ROUND = 64;
-const DEFAULT_MAX_TOOL_ROUNDS = 64;
-const ABSOLUTE_MAX_TOOL_ROUNDS = 200;
+const DEFAULT_TOOL_ROUND_CHECKPOINT = 64;
+const ABSOLUTE_TOOL_ROUND_BUDGET = 200;
 
 function canonicalizeToolCallValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalizeToolCallValue);
@@ -2033,6 +2037,7 @@ export async function runAgentLoop(
     auth,
     abort,
     maxRounds,
+    continuous = !maxRounds || maxRounds <= 0,
     maxRetries = DEFAULT_MAX_RETRIES,
     parallel = true,
     toolRegistry,
@@ -2044,8 +2049,11 @@ export async function runAgentLoop(
     log = console,
   } = options;
 
-  const requestedRoundLimit = maxRounds && maxRounds > 0 ? maxRounds : DEFAULT_MAX_TOOL_ROUNDS;
-  const roundLimit = Math.min(requestedRoundLimit, ABSOLUTE_MAX_TOOL_ROUNDS);
+  const requestedRoundBudget = maxRounds && maxRounds > 0
+    ? maxRounds
+    : DEFAULT_TOOL_ROUND_CHECKPOINT;
+  const roundBudget = Math.min(requestedRoundBudget, ABSOLUTE_TOOL_ROUND_BUDGET);
+  const roundLimit = continuous ? Number.POSITIVE_INFINITY : roundBudget;
 
   let fullContent = "";
   const executedToolCalls: ExecutedToolCall[] = [];
@@ -2062,6 +2070,7 @@ export async function runAgentLoop(
   /** Thinking from the last answer-less round, to detect a replayed reasoning loop. */
   let lastEmptyThinking = "";
   const emptyResponseRecoveryPrompts = new Set<AgentMessage>();
+  let autonomousCheckpointPrompt: AgentMessage | null = null;
   const clearEmptyResponseRecoveryPrompts = () => {
     for (const prompt of emptyResponseRecoveryPrompts) {
       const index = history.indexOf(prompt);
@@ -2115,6 +2124,32 @@ export async function runAgentLoop(
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
       return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, persisted };
+    }
+
+    // ── Invisible continuous-run checkpoint ──
+    // A checkpoint is a context/strategy boundary, not a terminal condition.
+    // The previous checkpoint prompt is removed so these do not accumulate.
+    if (continuous && round > 0 && round % roundBudget === 0) {
+      if (autonomousCheckpointPrompt) {
+        const checkpointIndex = history.indexOf(autonomousCheckpointPrompt);
+        if (checkpointIndex >= 0) history.splice(checkpointIndex, 1);
+      }
+      if (llm.contextWindow > 0) {
+        compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
+      }
+      autonomousCheckpointPrompt = {
+        role: "system",
+        content:
+          "[AUTONOMOUS CHECKPOINT] Reassess the original request and the work completed so far. " +
+          "Do not repeat completed investigation or identical tool calls. Continue with the smallest " +
+          "remaining actions, verify the outcome, and give the user a final answer as soon as the task " +
+          "is complete. If external input is genuinely required, explain that blocker normally.",
+      };
+      history.push(autonomousCheckpointPrompt);
+      log.info(
+        `Agent loop crossed autonomous checkpoint ${round / roundBudget} ` +
+          `(${round} rounds) for session ${sessionId}; continuing`,
+      );
     }
 
     // ── Apply steering messages ──
@@ -2940,9 +2975,10 @@ export async function runAgentLoop(
     return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted, plan: planResult };
   }
 
-  // Hit the configured or default safety round backstop.
+  // Pause at the safety budget. Clients receive hitMaxRounds and can offer a
+  // continuation action, matching Copilot's confirm-to-continue behavior.
   log.warn(`Agent loop hit max rounds (${roundLimit}) for session ${sessionId}`);
-  const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
+  const msg = `\n\n[Paused after ${roundLimit} tool rounds to prevent a runaway loop. Continue to resume, or send a new message to refine the task.]`;
   onEvent?.({ type: "token", content: msg });
   fullContent += msg;
 

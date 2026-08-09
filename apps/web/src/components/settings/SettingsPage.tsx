@@ -1173,7 +1173,7 @@ export function SettingsPage({
                 </p>
               </div>
               <div className="max-w-sm">
-                <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Max agent rounds per turn</Label>
+                <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Agent checkpoint interval</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     id="jait-max-rounds"
@@ -1181,7 +1181,7 @@ export function SettingsPage({
                     min={1}
                     max={200}
                     inputMode="numeric"
-                    placeholder="40"
+                    placeholder="64"
                     value={maxRoundsDraft}
                     onChange={(e) => setMaxRoundsDraft(e.target.value)}
                     className="w-28"
@@ -1196,7 +1196,7 @@ export function SettingsPage({
                   </Button>
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  How many autonomous tool-calling rounds the agent may run before stopping. Local models often need more (default 40). Leave blank to use the gateway default. Max 200.
+                  How often a long-running agent compacts context and reassesses its remaining work. It continues automatically after each checkpoint (default 64). Leave blank to use the gateway default. Max 200.
                 </p>
               </div>
               {jaitBackend === 'ollama' && (

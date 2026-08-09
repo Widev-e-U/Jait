@@ -38,4 +38,13 @@ describe("chat mode prompts", () => {
     expect(prompt).toContain("concurrently");
     expect(prompt).toContain("Don't wait for the user to switch to Swarm mode");
   });
+
+  it("gives agent-mode final answers concrete Codex-style brevity limits", () => {
+    const prompt = getSystemPromptForMode("agent");
+
+    expect(prompt).toContain("Default to 3-6 sentences or no more than 5 bullets");
+    expect(prompt).toContain("For a small, focused change, use 2-4 sentences or no more than 3 bullets");
+    expect(prompt).toContain("Do not replay the chronology of your work");
+    expect(prompt).toContain("Lead with the outcome and verification result");
+  });
 });

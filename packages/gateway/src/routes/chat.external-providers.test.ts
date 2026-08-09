@@ -345,6 +345,56 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
+  it("restarts the provider session when the selected model or reasoning effort changes", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-model-effort-session";
+
+    await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "first turn",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "full-access",
+        model: "gpt-5.6-sol",
+        reasoningEffort: "high",
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "second turn",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "full-access",
+        model: "gpt-5.6-terra",
+        reasoningEffort: "ultra",
+      },
+    });
+
+    expect(provider.stopSession).toHaveBeenCalledTimes(1);
+    expect(provider.startSession).toHaveBeenCalledTimes(2);
+    expect(provider.startSession.mock.calls[0]?.[0]).toMatchObject({
+      model: "gpt-5.6-sol",
+      reasoningEffort: "high",
+    });
+    expect(provider.startSession.mock.calls[1]?.[0]).toMatchObject({
+      model: "gpt-5.6-terra",
+      reasoningEffort: "ultra",
+    });
+
+    await app.close();
+  });
+
   it("resolves supervised chat approval requests without leaving the stream open", { timeout: 30_000 }, async () => {
     const provider = new MockApprovalChatProvider();
     const providerRegistry = new ProviderRegistry();

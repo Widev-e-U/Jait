@@ -91,6 +91,10 @@ describe("RemoteCliProvider", () => {
         description: "Latest frontier agentic coding model.",
         isDefault: true,
         reasoningEffortSupported: true,
+        supportedReasoningEfforts: [
+          { reasoningEffort: "low", description: "Fast responses with lighter reasoning" },
+          { reasoningEffort: "medium", description: "Balances speed and reasoning depth" },
+        ],
       },
     ]);
   });

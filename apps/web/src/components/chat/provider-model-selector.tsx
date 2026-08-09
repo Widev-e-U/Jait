@@ -13,6 +13,7 @@ import { copyTextToClipboard } from '@/lib/clipboard'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
+import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
 import { GATEWAY_NODE_ID, resolveScopedProviderSelection, scopeProviders } from '@/lib/provider-scope'
@@ -64,6 +65,28 @@ interface ModelDef {
   isDefault?: boolean
   group?: string
   reasoningEffortSupported?: boolean
+  supportedReasoningEfforts?: Array<{
+    reasoningEffort: string
+    description?: string
+  }>
+}
+
+const DEFAULT_REASONING_EFFORTS: Array<{ value: ReasoningEffort; label: string; hint: string }> = [
+  { value: 'minimal', label: 'Minimal', hint: 'Fastest, least thinking' },
+  { value: 'low', label: 'Low', hint: 'Brief reasoning' },
+  { value: 'medium', label: 'Medium', hint: 'Balanced' },
+  { value: 'high', label: 'High', hint: 'Deepest reasoning' },
+]
+
+function isNativeReasoningEffort(value: string): value is ReasoningEffort {
+  return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high'
+}
+
+function formatReasoningEffortLabel(value: string): string {
+  return value
+    .split(/[-_]/)
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join(' ')
 }
 
 interface ProviderDef {
@@ -86,6 +109,8 @@ interface ProviderModelSelectorProps {
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
   projectNodeId?: string
   projectId?: string | null
+  reasoningEffort?: SessionReasoningEffort | null
+  onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
@@ -177,10 +202,14 @@ export function ProviderModelSelector({
   sessionInfo,
   projectNodeId,
   projectId,
+  reasoningEffort: controlledReasoningEffort,
+  onReasoningEffortChange,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings, settings } = useAuth()
-  const reasoningEffort = settings?.reasoning_effort ?? null
+  const reasoningEffort = controlledReasoningEffort !== undefined
+    ? controlledReasoningEffort
+    : settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const {
@@ -504,27 +533,37 @@ export function ProviderModelSelector({
   }
 
   useEffect(() => {
+    if (controlledReasoningEffort !== undefined || provider !== 'jait') return
     const savedReasoningEffort = readProjectReasoningEffortSelection(projectId, provider)
     if (savedReasoningEffort === undefined || savedReasoningEffort === reasoningEffort) return
-    updateSettings({ reasoning_effort: savedReasoningEffort }).catch(() => {})
-  }, [projectId, provider, reasoningEffort, updateSettings])
+    const nativeEffort = savedReasoningEffort === null || isNativeReasoningEffort(savedReasoningEffort)
+      ? savedReasoningEffort
+      : null
+    updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
+  }, [controlledReasoningEffort, projectId, provider, reasoningEffort, updateSettings])
 
-  const REASONING_EFFORTS: { value: ReasoningEffort; label: string; hint: string }[] = [
-    { value: 'minimal', label: 'Minimal', hint: 'Fastest, least thinking' },
-    { value: 'low', label: 'Low', hint: 'Brief reasoning' },
-    { value: 'medium', label: 'Medium', hint: 'Balanced' },
-    { value: 'high', label: 'High', hint: 'Deepest reasoning' },
-  ]
+  const activeModelDef = model
+    ? models.find((entry) => entry.id === model) ?? null
+    : models.find((entry) => entry.isDefault) ?? models[0] ?? null
+  const reasoningEfforts = activeModelDef?.supportedReasoningEfforts?.length
+    ? activeModelDef.supportedReasoningEfforts.map((effort) => ({
+        value: effort.reasoningEffort,
+        label: formatReasoningEffortLabel(effort.reasoningEffort),
+        hint: effort.description ?? `Use ${formatReasoningEffortLabel(effort.reasoningEffort).toLowerCase()} reasoning`,
+      }))
+    : DEFAULT_REASONING_EFFORTS
+  const modelSupportsReasoning = Boolean(
+    activeModelDef?.reasoningEffortSupported || activeModelDef?.supportedReasoningEfforts?.length,
+  )
 
-  const handleReasoningEffortChange = (next: ReasoningEffort | null) => {
+  const handleReasoningEffortChange = (next: SessionReasoningEffort | null) => {
     saveProjectReasoningEffortSelection(projectId, provider, next)
-    updateSettings({ reasoning_effort: next }).catch(() => {})
+    onReasoningEffortChange?.(next)
+    if (provider === 'jait') {
+      const nativeEffort = next === null || isNativeReasoningEffort(next) ? next : null
+      updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
+    }
   }
-
-  // The reasoning-effort selector is relevant only when the active model is
-  // known to accept the OpenAI `reasoning_effort` parameter.
-  const activeModelDef = model ? models.find((entry) => entry.id === model) : null
-  const modelSupportsReasoning = Boolean(activeModelDef?.reasoningEffortSupported)
 
   const GROUP_TO_BACKEND: Record<string, string> = { OpenAI: 'openai', OpenRouter: 'openrouter', Ollama: 'ollama' }
 
@@ -546,6 +585,7 @@ export function ProviderModelSelector({
       // that doesn't accept it, so it isn't silently forwarded to the API.
       if (reasoningEffort && !selectedModel?.reasoningEffortSupported) {
         saveProjectReasoningEffortSelection(projectId, provider, null)
+        onReasoningEffortChange?.(null)
         updateSettings({ selected_model: modelId, reasoning_effort: null }).catch(() => {})
       } else {
         updateSettings({ selected_model: modelId }).catch(() => {})
@@ -815,7 +855,7 @@ export function ProviderModelSelector({
               <span className="text-muted-foreground">Default</span>
               {reasoningEffort === null && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
             </button>
-            {REASONING_EFFORTS.map((effort) => {
+            {reasoningEfforts.map((effort) => {
               const active = reasoningEffort === effort.value
               return (
                 <button

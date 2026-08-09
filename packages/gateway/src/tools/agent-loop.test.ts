@@ -2206,8 +2206,12 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).toMatch(/Stopped: repeated the same tool call/);
   });
 
-  it("uses a default safety backstop when the caller omits maxRounds", async () => {
+  it("continues through an invisible checkpoint when the caller omits maxRounds", async () => {
     let fetchCalls = 0;
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Keep searching." },
+    ];
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       const round = fetchCalls++;
       if (round < 80) {
@@ -2224,10 +2228,7 @@ describe("runAgentLoop tool-loop detection", () => {
           openaiModel: "test-model",
           contextWindow: 100_000,
         },
-        history: [
-          { role: "system", content: "system" },
-          { role: "user", content: "Keep searching." },
-        ],
+        history,
         toolSchemas: [
           {
             type: "function",
@@ -2246,8 +2247,58 @@ describe("runAgentLoop tool-loop detection", () => {
       async () => ({ ok: true, message: "ok" }),
     );
 
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toBe("Finished too late.");
+    expect(result.content).not.toMatch(/Paused after/);
+    expect(fetchCalls).toBe(81);
+    expect(history.some((message) =>
+      message.role === "system" &&
+      typeof message.content === "string" &&
+      message.content.includes("[AUTONOMOUS CHECKPOINT]")
+    )).toBe(true);
+  });
+
+  it("keeps explicit round budgets bounded for specialist runs", async () => {
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      return toolCallSSE(`call-${round}`, "search", { pattern: `unique-${round}` });
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Search within this bounded specialist run." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-explicit-round-budget",
+        abort: new AbortController(),
+        maxRounds: 2,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "ok" }),
+    );
+
     expect(result.hitMaxRounds).toBe(true);
-    expect(fetchCalls).toBe(64);
+    expect(result.content).toMatch(/Paused after 2 tool rounds/);
+    expect(fetchCalls).toBe(2);
   });
 
   it("caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly", async () => {

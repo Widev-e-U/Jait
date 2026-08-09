@@ -51,13 +51,13 @@ describe('project model cache', () => {
   it('restores reasoning effort with the project and provider selection', () => {
     saveProjectProviderSelection('project-a', 'codex', localStorageMock)
     saveProjectModelSelection('project-a', 'codex', 'gpt-5.6-sol', localStorageMock)
-    saveProjectReasoningEffortSelection('project-a', 'codex', 'medium', localStorageMock)
+    saveProjectReasoningEffortSelection('project-a', 'codex', 'ultra', localStorageMock)
 
     saveProjectProviderSelection('project-b', 'jait', localStorageMock)
     saveProjectReasoningEffortSelection('project-b', 'jait', 'low', localStorageMock)
 
     expect(readProjectReasoningEffortSelection('project-b', 'jait', localStorageMock)).toBe('low')
-    expect(readProjectReasoningEffortSelection('project-a', 'codex', localStorageMock)).toBe('medium')
+    expect(readProjectReasoningEffortSelection('project-a', 'codex', localStorageMock)).toBe('ultra')
   })
 
   it('distinguishes an explicit default effort from no project preference', () => {

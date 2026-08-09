@@ -43,11 +43,10 @@ export interface AppConfig {
   /** Max context window tokens (auto-detected from model name if not set) */
   contextWindow: number;
   /**
-   * Max autonomous tool-calling rounds per turn for the Jait provider.
-   * `0` uses the agent loop's 64-round safety backstop. Local models in
-   * particular make many small tool calls
-   * and need a high ceiling. Override with env JAIT_MAX_ROUNDS (clamped to a
-   * sane ceiling); per-user overrides come from the JAIT_MAX_ROUNDS settings key.
+   * Autonomous checkpoint interval for user-facing Jait turns.
+   * `0` uses the default 64-round interval. The loop continues after each
+   * checkpoint; this legacy setting only controls how often it compacts and
+   * reassesses. Per-user overrides use the JAIT_MAX_ROUNDS settings key.
    */
   agentMaxRounds: number;
   /**

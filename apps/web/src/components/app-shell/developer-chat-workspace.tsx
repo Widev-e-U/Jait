@@ -9,6 +9,7 @@ import { ConsentQueue } from '@/components/consent'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import type { ContextUsage } from '@/hooks/useChat'
+import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getProjectRepositoryId } from '@/lib/project-repositories'
 
 interface DeveloperChatWorkspaceProps {
@@ -27,6 +28,7 @@ interface DeveloperChatWorkspaceProps {
   chatProviderRuntimeMode: any
   chatResponseStyle: any
   cliModel: string | null
+  reasoningEffort: SessionReasoningEffort | null
   contextUsage: ContextUsage | null
   developerChatPanelStyle: CSSProperties
   developerChatSubmitLoading: boolean
@@ -79,6 +81,7 @@ interface DeveloperChatWorkspaceProps {
   onChatModeChange: (mode: any) => void
   onClearTodoList: () => void
   onCliModelChange: (model: string | null) => void
+  onReasoningEffortChange: (reasoningEffort: SessionReasoningEffort | null) => void
   onContinueChat: (options: { token: string | null; sessionId: string | null }) => void
   onDequeueMessage: (id: string) => void
   onEditPreviousMessage: (...args: any[]) => void
@@ -130,6 +133,7 @@ export function DeveloperChatWorkspace({
   chatProviderRuntimeMode,
   chatResponseStyle,
   cliModel,
+  reasoningEffort,
   contextUsage,
   developerChatPanelStyle,
   developerChatSubmitLoading,
@@ -182,6 +186,7 @@ export function DeveloperChatWorkspace({
   onChatModeChange,
   onClearTodoList,
   onCliModelChange,
+  onReasoningEffortChange,
   onContinueChat,
   onDequeueMessage,
   onEditPreviousMessage,
@@ -277,6 +282,8 @@ export function DeveloperChatWorkspace({
                 onProviderRuntimeModeChange={onProviderRuntimeModeChange}
                 cliModel={cliModel}
                 onCliModelChange={onCliModelChange}
+                reasoningEffort={reasoningEffort}
+                onReasoningEffortChange={onReasoningEffortChange}
                 repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                 onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
                 availableFiles={availableFilesForMention}
@@ -550,8 +557,8 @@ export function DeveloperChatWorkspace({
                   )}
                   <span className="text-xs text-muted-foreground">
                     {promptBeforeProcessingQueuedMessage
-                      ? 'Agent stopped before finishing - continue or send the queued message'
-                      : 'Agent stopped - continue to resume'}
+                      ? 'Agent paused at its safety budget — continue or send the queued message'
+                      : 'Agent paused at its safety budget — continue to resume'}
                   </span>
                 </div>
               )}
@@ -617,6 +624,8 @@ export function DeveloperChatWorkspace({
                     onProviderRuntimeModeChange={onProviderRuntimeModeChange}
                     cliModel={cliModel}
                     onCliModelChange={onCliModelChange}
+                    reasoningEffort={reasoningEffort}
+                    onReasoningEffortChange={onReasoningEffortChange}
                     repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                     onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
                     availableFiles={availableFilesForMention}

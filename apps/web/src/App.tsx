@@ -31,7 +31,7 @@ import { DetachedTerminalView } from '@/components/terminal/detached-terminal-vi
 import { AppFolderPickers } from '@/components/project/app-folder-pickers'
 import { GatewayUnavailable } from '@/components/gateway-unavailable'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
-import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
+import { useAuth, type ThemeMode, type SttProvider, type ChatProvider, type ReasoningEffort } from '@/hooks/useAuth'
 import { useAuthForm } from '@/hooks/useAuthForm'
 import { useGatewayConnection } from '@/hooks/useGatewayConnection'
 import { useUpdateChecker } from '@/hooks/useUpdateChecker'
@@ -102,11 +102,14 @@ import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
 import {
   readProjectModelSelections,
   readProjectProviderSelection,
+  readProjectReasoningEffortSelection,
   saveProjectModelSelection,
   saveProjectProviderSelection,
+  saveProjectReasoningEffortSelection,
   writeProjectModelSelections,
 } from '@/lib/project-model-cache'
 import { isResponseStyle } from '@/lib/response-style'
+import { getSessionSelectionSyncKey, normalizeSessionReasoningEffort, type SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getNonEmptyMessage } from '@/lib/values'
 import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
 import {
@@ -284,6 +287,7 @@ function App() {
     setProviderSelection((current) => updateModeProviderSelection(current, 'manager', provider))
   }, [])
   const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
+  const [chatReasoningEffort, setChatReasoningEffort] = useState<SessionReasoningEffort | null>(null)
   const [managerProviderRuntimeMode, setManagerProviderRuntimeMode] = useState<RuntimeMode>('full-access')
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
     () => loadLegacyCliModelsByProvider('jait')
@@ -1009,6 +1013,9 @@ function App() {
   const [, setSavedChatProvider, loadingChatProvider] = useSessionState<ProviderId>(
     activeSessionId, 'chat.provider', token,
   )
+  const [, setSavedChatReasoningEffort, loadingChatReasoningEffort] = useSessionState<SessionReasoningEffort>(
+    activeSessionId, 'chat.reasoningEffort', token,
+  )
   const [, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
     activeSessionId, 'chat.cliModels', token,
   )
@@ -1537,6 +1544,11 @@ function App() {
           setChatProvider(value as ProviderId)
         }
         break
+      case 'chat.reasoningEffort': {
+        const reasoningEffort = normalizeSessionReasoningEffort(value)
+        if (reasoningEffort !== undefined) setChatReasoningEffort(reasoningEffort)
+        break
+      }
       case 'chat.cliModels':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           setCliModelsByProvider(value as Partial<Record<CliProviderId, string | null>>)
@@ -1643,9 +1655,23 @@ function App() {
     }
 
     const cp = state['chat.provider']
-    if (typeof cp === 'string' && cp.trim()) {
-      setChatProvider(cp as ProviderId)
+    const restoredChatProvider = typeof cp === 'string' && cp.trim()
+      ? cp as ProviderId
+      : chatProvider
+    if (restoredChatProvider !== chatProvider) {
+      setChatProvider(restoredChatProvider)
     }
+
+    const sessionReasoningEffort = Object.prototype.hasOwnProperty.call(state, 'chat.reasoningEffort')
+      ? normalizeSessionReasoningEffort(state['chat.reasoningEffort'])
+      : undefined
+    const fallbackReasoningEffort = readProjectReasoningEffortSelection(
+      activeProjectId,
+      restoredChatProvider,
+    ) ?? (restoredChatProvider === 'jait' ? settings?.reasoning_effort ?? null : null)
+    setChatReasoningEffort(
+      sessionReasoningEffort !== undefined ? sessionReasoningEffort : fallbackReasoningEffort,
+    )
 
     const ccm = state['chat.cliModels']
     const sessionModels = ccm && typeof ccm === 'object' && !Array.isArray(ccm)
@@ -1723,7 +1749,7 @@ function App() {
     if (wsEnvelope?.id && wsEnvelope.state && token) {
       primeStateCache('projects', wsEnvelope.id, token, wsEnvelope.state)
     }
-  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
+  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, settings?.reasoning_effort, suppressNextUiSync])
 
   const loadArchitectureDiagramForProject = useCallback((projectRoot: string, signal?: AbortSignal) => {
     return fetch(`${API_URL}/api/architecture?projectRoot=${encodeURIComponent(projectRoot)}`, {
@@ -2028,11 +2054,17 @@ function App() {
 
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
+    const savedReasoningEffort = readProjectReasoningEffortSelection(activeProjectId, provider)
+    setChatReasoningEffort(
+      savedReasoningEffort !== undefined
+        ? savedReasoningEffort
+        : provider === 'jait' ? settings?.reasoning_effort ?? null : null,
+    )
     saveProjectProviderSelection(activeProjectId, provider)
     if (token) {
       void updateSettings({ chat_provider: provider as ChatProvider })
     }
-  }, [activeProjectId, setChatProvider, token, updateSettings])
+  }, [activeProjectId, setChatProvider, settings?.reasoning_effort, token, updateSettings])
 
   const handleManagerProviderChange = useCallback((provider: ProviderId) => {
     setManagerProvider(provider)
@@ -2045,6 +2077,11 @@ function App() {
   const handleChatProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
     setChatProviderRuntimeMode(runtimeMode)
   }, [])
+
+  const handleChatReasoningEffortChange = useCallback((reasoningEffort: SessionReasoningEffort | null) => {
+    setChatReasoningEffort(reasoningEffort)
+    saveProjectReasoningEffortSelection(activeProjectId, chatProvider, reasoningEffort)
+  }, [activeProjectId, chatProvider])
 
   const handleManagerProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
     setManagerProviderRuntimeMode(runtimeMode)
@@ -2081,7 +2118,7 @@ function App() {
     }
 
     const payload = Object.keys(nextModels).length > 0 ? nextModels : null
-    const serialized = JSON.stringify(payload)
+    const serialized = getSessionSelectionSyncKey(activeSessionId, payload)
     if (serialized === prevCliModelsPayloadRef.current) return
     prevCliModelsPayloadRef.current = serialized
     writeProjectModelSelections(activeProjectId, payload ?? {})
@@ -2100,13 +2137,38 @@ function App() {
   const prevChatProviderPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingChatProvider) return
-    const serialized = JSON.stringify(chatProvider)
+    const serialized = getSessionSelectionSyncKey(activeSessionId, chatProvider)
     if (serialized === prevChatProviderPayloadRef.current) return
     prevChatProviderPayloadRef.current = serialized
     setSavedChatProvider(chatProvider)
     if (consumeSuppressedUiSync('chat.provider')) return
     sendUIState('chat.provider', chatProvider, activeSessionId)
   }, [chatProvider, activeSessionId, loadingChatProvider, sendUIState, setSavedChatProvider, token, consumeSuppressedUiSync])
+
+  const prevChatReasoningEffortPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && loadingChatReasoningEffort) return
+    const serialized = getSessionSelectionSyncKey(activeSessionId, chatReasoningEffort)
+    if (serialized === prevChatReasoningEffortPayloadRef.current) return
+    prevChatReasoningEffortPayloadRef.current = serialized
+    setSavedChatReasoningEffort(chatReasoningEffort)
+    if (!consumeSuppressedUiSync('chat.reasoningEffort')) {
+      sendUIState('chat.reasoningEffort', chatReasoningEffort, activeSessionId)
+    }
+  }, [activeSessionId, chatReasoningEffort, consumeSuppressedUiSync, loadingChatReasoningEffort, sendUIState, setSavedChatReasoningEffort, token])
+
+  useEffect(() => {
+    if (chatProvider !== 'jait' || !activeSessionId || !token || authLoading || loadingChatReasoningEffort) return
+    const nativeReasoningEffort: ReasoningEffort | null =
+      chatReasoningEffort === 'minimal'
+      || chatReasoningEffort === 'low'
+      || chatReasoningEffort === 'medium'
+      || chatReasoningEffort === 'high'
+        ? chatReasoningEffort
+        : null
+    if (settings?.reasoning_effort === nativeReasoningEffort) return
+    void updateSettings({ reasoning_effort: nativeReasoningEffort })
+  }, [activeSessionId, authLoading, chatProvider, chatReasoningEffort, loadingChatReasoningEffort, settings?.reasoning_effort, token, updateSettings])
 
   // ── Denormalize the chat's provider/model/mode onto the session row ──
   // The session-state sync above only restores the *currently open* chat's
@@ -2116,17 +2178,17 @@ function App() {
   const prevChatSelectionPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (!activeSessionId || !token) return
-    if (loadingChatProvider || loadingCliModels) return
+    if (loadingChatProvider || loadingCliModels || loadingChatReasoningEffort) return
     const model = cliModelsByProvider[chatProvider] ?? null
-    const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model })
+    const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model, reasoningEffort: chatReasoningEffort })
     if (payload === prevChatSelectionPayloadRef.current) return
     prevChatSelectionPayloadRef.current = payload
     void updateSessionChatSelection(activeSessionId, {
       provider: chatProvider,
       model,
-      reasoningEffort: settings?.reasoning_effort ?? null,
+      reasoningEffort: chatReasoningEffort,
     })
-  }, [activeSessionId, token, loadingChatProvider, loadingCliModels, chatProvider, cliModelsByProvider, settings?.reasoning_effort, updateSessionChatSelection])
+  }, [activeSessionId, token, loadingChatProvider, loadingCliModels, loadingChatReasoningEffort, chatProvider, cliModelsByProvider, chatReasoningEffort, updateSessionChatSelection])
 
   // ── Restore the Jait provider's selected model across new chats ──
   // The model picked in the provider/model selector is persisted to the user
@@ -3193,13 +3255,14 @@ function App() {
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
+      reasoningEffort: chatReasoningEffort,
       referencedFiles: prepared?.referencedFiles,
       displaySegments: nextDisplaySegments,
       attachments: fileAttachments,
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue])
 
   const handleSubmit = async (
     chipFiles?: ReferencedFile[],
@@ -3240,6 +3303,7 @@ function App() {
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         responseStyle: chatResponseStyle,
         model: cliModel ?? undefined,
+        reasoningEffort: chatReasoningEffort,
         referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
         attachments: fileAttachments,
@@ -3257,6 +3321,7 @@ function App() {
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
+      reasoningEffort: chatReasoningEffort,
       onLoginRequired: () => setShowLoginDialog(true),
       attachments: fileAttachments,
       ...(prepared?.displayContent ? { displayContent: prepared.displayContent || promptText } : {}),
@@ -3358,6 +3423,7 @@ function App() {
         runtimeMode: nextItem.runtimeMode,
         responseStyle: nextItem.responseStyle,
         model: nextItem.model,
+        reasoningEffort: nextItem.reasoningEffort,
         onLoginRequired: () => setShowLoginDialog(true),
       // Mark this as a queue-originated send so the `sendMessage` `queued`
       // handler does NOT mirror the server-assigned entry back into the local
@@ -3378,6 +3444,7 @@ function App() {
         runtimeMode: nextItem.runtimeMode,
         responseStyle: nextItem.responseStyle,
         model: nextItem.model,
+        reasoningEffort: nextItem.reasoningEffort,
         referencedFiles: nextItem.referencedFiles,
         displaySegments: nextItem.displaySegments,
         attachments: nextItem.attachments,
@@ -3404,8 +3471,15 @@ function App() {
 
   const handleContinueChat = useCallback((options: { token: string | null; sessionId: string | null }) => {
     setAllowQueuedMessageAfterInterruptedExit(false)
-    continueChat(options)
-  }, [continueChat])
+    continueChat({
+      ...options,
+      mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
+      provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      model: cliModel ?? undefined,
+      reasoningEffort: chatReasoningEffort,
+    })
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, continueChat, sendTarget])
 
   const handleSendQueuedAfterInterruptedExit = useCallback(() => {
     setAllowQueuedMessageAfterInterruptedExit(true)
@@ -3687,11 +3761,11 @@ function App() {
       setShowArchitecture(true)
       sendMessage(
         'Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) },
+        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -3716,13 +3790,14 @@ function App() {
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: cliModel ?? undefined,
+      reasoningEffort: chatReasoningEffort,
       displayContent: prepared.displayContent,
       referencedFiles: prepared.referencedFiles,
       displaySegments: prepared.displaySegments,
       expectedContent: metadata?.originalContent,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, preparePromptSubmission, sendTarget])
+  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, preparePromptSubmission, sendTarget])
 
   const authFormProps = {
     gatewayStep,
@@ -4076,6 +4151,8 @@ function App() {
     onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
     cliModel,
     onCliModelChange: handleCliModelChange,
+    reasoningEffort: chatReasoningEffort,
+    onReasoningEffortChange: handleChatReasoningEffortChange,
     availableFiles: availableFilesForMention,
     onSearchFiles: handleSearchFiles,
     projectOpen: showProject,
@@ -4087,6 +4164,7 @@ function App() {
     chatMode, setChatMode, chatProvider, handleChatProviderChange,
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
+    chatReasoningEffort, handleChatReasoningEffortChange,
     availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectId,
   ])
 
@@ -4480,6 +4558,7 @@ function App() {
                 chatProviderRuntimeMode={chatProviderRuntimeMode}
                 chatResponseStyle={chatResponseStyle}
                 cliModel={cliModel}
+                reasoningEffort={chatReasoningEffort}
                 contextUsage={contextUsage}
                 developerChatPanelStyle={developerChatPanelStyle}
                 developerChatSubmitLoading={developerChatSubmitLoading}
@@ -4532,6 +4611,7 @@ function App() {
                 onChatModeChange={setChatMode}
                 onClearTodoList={() => setTodoList([])}
                 onCliModelChange={handleCliModelChange}
+                onReasoningEffortChange={handleChatReasoningEffortChange}
                 onContinueChat={handleContinueChat}
                 onDequeueMessage={dequeueMessage}
                 onEditPreviousMessage={handleEditPreviousMessage}

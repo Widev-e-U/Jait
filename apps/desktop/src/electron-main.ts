@@ -1025,6 +1025,7 @@ interface RemoteProviderSession {
   workingDirectory: string;
   mode: string;
   model: string | null;
+  reasoningEffort: string | null;
   env: Record<string, string>;
   mcpServers?: DesktopMcpServerRef[];
   mcpConfigPath?: string;
@@ -1395,7 +1396,10 @@ async function discoverClaudeModelOptions(env: NodeJS.ProcessEnv): Promise<Array
           name: typeof m.displayName === "string" && m.displayName ? m.displayName : id,
           ...(typeof m.description === "string" && m.description ? { description: m.description } : {}),
           ...(id === "default" ? { isDefault: true } : {}),
-          ...(typeof m.supportsEffort === "boolean" ? { reasoningEffortSupported: m.supportsEffort } : {}),
+          ...(m.supportsEffort === true ? {
+            reasoningEffortSupported: true,
+            supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"].map((reasoningEffort) => ({ reasoningEffort })),
+          } : typeof m.supportsEffort === "boolean" ? { reasoningEffortSupported: false } : {}),
         }];
       }));
     });
@@ -1517,6 +1521,10 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 
   if (session.model) {
     args.push("--model", session.model);
+  }
+
+  if (session.reasoningEffort) {
+    args.push("--effort", session.reasoningEffort);
   }
 
   if (session.mcpConfigPath) {
@@ -1787,9 +1795,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       return { ok: true };
     }
     case "start-session": {
-      const { sessionId, providerId, providerType, workingDirectory, mode, model, env: extraEnv, mcpServers } = params as {
+      const { sessionId, providerId, providerType, workingDirectory, mode, model, reasoningEffort, env: extraEnv, mcpServers } = params as {
         sessionId: string; providerId: string; providerType: string; workingDirectory: string;
-        mode: string; model?: string; env?: Record<string, string>; mcpServers?: DesktopMcpServerRef[];
+        mode: string; model?: string; reasoningEffort?: string; env?: Record<string, string>; mcpServers?: DesktopMcpServerRef[];
       };
       if (!isSupportedDesktopProviderId(providerType)) {
         throw new Error(`Provider ${providerType} is not implemented by the desktop remote runner`);
@@ -1808,6 +1816,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           workingDirectory,
           mode,
           model: model ?? null,
+          reasoningEffort: reasoningEffort ?? null,
           env: providerEnv,
           mcpServers: resolvedMcpServers,
           mcpConfigPath: buildDesktopClaudeMcpConfig(sessionId, resolvedMcpServers),
@@ -1837,6 +1846,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         workingDirectory,
         mode,
         model: model ?? null,
+        reasoningEffort: reasoningEffort ?? null,
         env: providerEnv,
         mcpServers: resolvedMcpServers,
         stopRequested: false,
@@ -1954,6 +1964,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         await rpcSend(sess, "turn/start", {
           threadId: providerThreadId,
           input: [{ type: "text", text: message, text_elements: [] }],
+          ...(sess.reasoningEffort ? { effort: sess.reasoningEffort } : {}),
         });
         await turnDone;
         return { ok: true, completed: true };
@@ -1996,6 +2007,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         workingDirectory: process.cwd(),
         mode: "full-access",
         model: null,
+        reasoningEffort: null,
         env: providerEnv,
         stopRequested: false,
         pendingToolCalls: [],

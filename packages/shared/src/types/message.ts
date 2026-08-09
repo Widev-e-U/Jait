@@ -211,6 +211,7 @@ export type UIStateKey =
   | "chat.responseStyle"
   | "chat.providerRuntimeMode"
   | "chat.provider"
+  | "chat.reasoningEffort"
   | "chat.cliModels"
   | "chat.view"
   | "todo_list"
