@@ -131,7 +131,7 @@ export function useSessionStateSync({
   useEffect(() => {
     if (activeSessionId && token && !wsFullStateReceivedRef.current) return
     const payload = messageQueue.length > 0 ? messageQueue : null
-    const serialized = JSON.stringify(payload)
+    const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
     if (serialized === prevQueuePayloadRef.current) return
     prevQueuePayloadRef.current = serialized
     if (consumeSuppressedUiSync('queued_messages')) return

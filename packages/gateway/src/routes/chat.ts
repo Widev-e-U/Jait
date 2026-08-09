@@ -1576,6 +1576,39 @@ function persistedMessageWindow(
   };
 }
 
+function persistedStreamingMessageWindow(
+  db: JaitDB,
+  sessionId: string,
+  limit: number,
+  before?: number,
+): { messages: UIMsg[]; total: number; hasMore: boolean } {
+  const liveMessages = buildVisibleHistoryMessages(
+    sessionId,
+    [],
+    { includePendingAssistantToolCalls: true },
+  );
+
+  if (typeof before === "number" && Number.isFinite(before)) {
+    const persisted = persistedMessageWindow(db, sessionId, limit, before);
+    return {
+      messages: persisted.messages,
+      total: persisted.total + liveMessages.length,
+      hasMore: persisted.hasMore,
+    };
+  }
+
+  const persisted = persistedMessageWindow(
+    db,
+    sessionId,
+    Math.max(limit - liveMessages.length, 0),
+  );
+  return {
+    messages: [...persisted.messages, ...liveMessages],
+    total: persisted.total + liveMessages.length,
+    hasMore: persisted.hasMore,
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1793,6 +1826,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
 
 /** Internals exposed for unit tests (reconnect-snapshot shape). */
 export const __chatTestUtils = {
+  activeStreams,
   sessionHistory,
   sessionStreamingState,
   buildVisibleHistoryMessages,
@@ -3859,13 +3893,16 @@ export function registerChatRoutes(
         ? Number.parseInt(query.before, 10)
         : undefined;
     const streaming = activeStreams.has(sessionId);
-    const windowed = db && !streaming
-      ? persistedMessageWindow(db, sessionId, limit, Number.isFinite(before) ? before : undefined)
+    const normalizedBefore = Number.isFinite(before) ? before : undefined;
+    const windowed = db
+      ? streaming
+        ? persistedStreamingMessageWindow(db, sessionId, limit, normalizedBefore)
+        : persistedMessageWindow(db, sessionId, limit, normalizedBefore)
       : (() => {
           hydrateSession(sessionId);
           const history = sessionHistory.get(sessionId) ?? [];
           const visible = buildVisibleHistoryMessages(sessionId, history, { includePendingAssistantToolCalls: streaming });
-          return windowMessages(visible, limit, Number.isFinite(before) ? before : undefined);
+          return windowMessages(visible, limit, normalizedBefore);
         })();
     return {
       sessionId,
@@ -3897,11 +3934,11 @@ export function registerChatRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "messageIndex must be a non-negative integer" });
     }
 
-    // For active streams, the in-memory history has the live contextFlow
-    // attached (and the DB row may not be persisted yet). Otherwise read
-    // directly from the DB to avoid hydrating the full session.
+    // DB-backed sessions use persisted UI history even while streaming.
+    // The live agent context may be compacted and no longer maps 1:1 to the
+    // visible message indexes. In-memory-only sessions still resolve here.
     const isStreaming = activeStreams.has(sessionId);
-    if (isStreaming || !db) {
+    if (!db) {
       hydrateSession(sessionId);
       const history = sessionHistory.get(sessionId) ?? [];
       const visible = buildVisibleHistoryEntries(sessionId, history, { includePendingAssistantToolCalls: isStreaming });
@@ -3957,22 +3994,22 @@ export function registerChatRoutes(
     });
 
     const isStreaming = activeStreams.has(sessionId);
-    // Only the DB-windowed idle path can skip hydrating. Sessions without a DB
-    // (in-memory history) still need their completed messages loaded from the
-    // sessionHistory map, and streaming sessions need partial content too.
+    // Sessions without a DB still need their completed messages loaded from the
+    // in-memory history map. DB-backed snapshots read persisted UI history
+    // directly so agent-context compaction cannot truncate the visible chat.
     let history: ChatMessage[] = [];
-    if (!db || isStreaming) {
+    if (!db) {
       hydrateSession(sessionId);
       history = sessionHistory.get(sessionId) ?? [];
     }
 
-    // Build snapshot. While streaming, prefer in-memory history so partial assistant
-    // content is visible immediately (DB persistence may lag until stream completion).
     let snapshotMessages: UIMsg[];
     let total = 0;
     let hasMore = false;
-    if (db && !isStreaming) {
-      const windowed = persistedMessageWindow(db, sessionId, limit);
+    if (db) {
+      const windowed = isStreaming
+        ? persistedStreamingMessageWindow(db, sessionId, limit)
+        : persistedMessageWindow(db, sessionId, limit);
       snapshotMessages = windowed.messages;
       total = windowed.total;
       hasMore = windowed.hasMore;

@@ -73,6 +73,7 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
   const idleResolvers = new Set<() => void>()
   let frameHandle: number | null = null
   let deadlineHandle: ReturnType<typeof setTimeout> | null = null
+  let hasCommitted = false
 
   const resolveIdle = () => {
     if (queue.length > 0 || frameHandle !== null || deadlineHandle !== null) return
@@ -91,23 +92,23 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
     }
   }
 
+  const drainOne = () => {
+    cancelScheduled()
+    const next = queue.shift()
+    if (!next) {
+      resolveIdle()
+      return
+    }
+    if (next.kind === 'text') options.onText(next.content)
+    else options.onThinking(next.content)
+    hasCommitted = true
+    options.onCommit()
+    if (queue.length > 0) schedule()
+    else resolveIdle()
+  }
+
   const schedule = () => {
     if (queue.length === 0 || frameHandle !== null || deadlineHandle !== null) return
-
-    const drainOne = () => {
-      cancelScheduled()
-      const next = queue.shift()
-      if (!next) {
-        resolveIdle()
-        return
-      }
-      if (next.kind === 'text') options.onText(next.content)
-      else options.onThinking(next.content)
-      options.onCommit()
-      if (queue.length > 0) schedule()
-      else resolveIdle()
-    }
-
     deadlineHandle = setDeadline(drainOne, deadlineMs)
     frameHandle = requestFrame(() => drainOne())
   }
@@ -116,7 +117,8 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
     for (const chunk of splitStreamText(text, maxChunkChars)) {
       queue.push({ kind, content: chunk })
     }
-    schedule()
+    if (!hasCommitted) drainOne()
+    else schedule()
   }
 
   const flushNow = () => {
@@ -125,6 +127,7 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
       const next = queue.shift()!
       if (next.kind === 'text') options.onText(next.content)
       else options.onThinking(next.content)
+      hasCommitted = true
       options.onCommit()
     }
     resolveIdle()

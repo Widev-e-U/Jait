@@ -116,6 +116,13 @@ export type StateSyncHandler = (key: string, value: unknown) => void
  */
 export type FullStateHandler = (state: Record<string, unknown>) => void
 
+export function shouldApplySessionScopedWsEvent(
+  eventSessionId: unknown,
+  activeSessionId: string | null | undefined,
+): boolean {
+  return typeof eventSessionId === 'string' && eventSessionId === activeSessionId
+}
+
 /**
  * Callback for thread-related WS events (thread.created, thread.updated, etc.).
  * `eventType` is the full WS event type (e.g. "thread.created").
@@ -249,7 +256,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
   // Handle incoming messages — extracted so it's stable across reconnects
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
-      const msg = JSON.parse(event.data) as { type: string; payload: unknown }
+      const msg = JSON.parse(event.data) as { type: string; sessionId?: unknown; payload: unknown }
 
       if (msg.type === 'ui.command') {
         const payload = msg.payload as UICommandPayload
@@ -266,21 +273,33 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'ui.state-sync') {
         // Cross-client state sync from another client or the gateway
         const payload = msg.payload as { key?: string; value?: unknown }
-        if (payload?.key && onStateSyncRef.current) {
+        if (
+          shouldApplySessionScopedWsEvent(msg.sessionId, sessionIdRef.current)
+          && payload?.key
+          && onStateSyncRef.current
+        ) {
           onStateSyncRef.current(payload.key, payload.value ?? null)
         }
       } else if (msg.type === 'ui.full-state') {
         // Full session state pushed by the gateway on subscribe — authoritative
         const state = msg.payload as Record<string, unknown> | null
-        if (state && onFullStateRef.current) {
+        if (
+          shouldApplySessionScopedWsEvent(msg.sessionId, sessionIdRef.current)
+          && state
+          && onFullStateRef.current
+        ) {
           onFullStateRef.current(state)
         }
       } else if (msg.type === 'message.started') {
         // Assistant message started outside this client's direct request — attach to the live stream.
-        onMessageStartedRef.current?.()
+        if (shouldApplySessionScopedWsEvent(msg.sessionId, sessionIdRef.current)) {
+          onMessageStartedRef.current?.()
+        }
       } else if (msg.type === 'message.complete') {
         // Assistant message finished on another device — refresh chat
-        onMessageCompleteRef.current?.()
+        if (shouldApplySessionScopedWsEvent(msg.sessionId, sessionIdRef.current)) {
+          onMessageCompleteRef.current?.()
+        }
       } else if (msg.type === 'session.streaming') {
         // Any of the user's sessions started/stopped streaming — sidebar-wide, not session-scoped
         const payload = msg.payload as SessionStreamingData

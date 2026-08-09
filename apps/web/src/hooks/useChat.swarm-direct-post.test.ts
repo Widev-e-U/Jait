@@ -269,9 +269,10 @@ describe('swarm direct-POST: tool content is committed synchronously (no text-pa
 
     const snap = stream.snapshot() as any
 
-    // The mode_notice is still queued in the pacer — never drained, so the
-    // stream has no committed text yet.
-    expect(snap.segments?.some((s: any) => s.type === 'text')).toBe(false)
+    // The first visible text chunk now commits immediately, but the rest of
+    // the mode notice remains paced. The historical waitUntilIdle gate still
+    // blocks the reader before it can process the following tool event.
+    expect(snap.segments?.some((s: any) => s.type === 'text')).toBe(true)
 
     // THE REGRESSION: the tool event was never processed, so no tool card.
     expect(snap.toolCalls?.length ?? 0).toBe(0)

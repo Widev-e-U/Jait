@@ -2104,7 +2104,7 @@ function App() {
 
   const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeSessionId && token && loadingCliModels) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingCliModels)) return
     // Persist a model selection for every provider the user has picked one
     // for — not just a hardcoded subset. A fixed allow-list here silently
     // drops the selection (and it "resets to default" every reload) for any
@@ -2136,7 +2136,7 @@ function App() {
   // provider selected in a different chat.
   const prevChatProviderPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeSessionId && token && loadingChatProvider) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingChatProvider)) return
     const serialized = getSessionSelectionSyncKey(activeSessionId, chatProvider)
     if (serialized === prevChatProviderPayloadRef.current) return
     prevChatProviderPayloadRef.current = serialized
@@ -2147,7 +2147,7 @@ function App() {
 
   const prevChatReasoningEffortPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeSessionId && token && loadingChatReasoningEffort) return
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current || loadingChatReasoningEffort)) return
     const serialized = getSessionSelectionSyncKey(activeSessionId, chatReasoningEffort)
     if (serialized === prevChatReasoningEffortPayloadRef.current) return
     prevChatReasoningEffortPayloadRef.current = serialized
@@ -2158,7 +2158,14 @@ function App() {
   }, [activeSessionId, chatReasoningEffort, consumeSuppressedUiSync, loadingChatReasoningEffort, sendUIState, setSavedChatReasoningEffort, token])
 
   useEffect(() => {
-    if (chatProvider !== 'jait' || !activeSessionId || !token || authLoading || loadingChatReasoningEffort) return
+    if (
+      chatProvider !== 'jait'
+      || !activeSessionId
+      || !token
+      || authLoading
+      || !wsFullStateReceivedRef.current
+      || loadingChatReasoningEffort
+    ) return
     const nativeReasoningEffort: ReasoningEffort | null =
       chatReasoningEffort === 'minimal'
       || chatReasoningEffort === 'low'
@@ -2178,7 +2185,7 @@ function App() {
   const prevChatSelectionPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (!activeSessionId || !token) return
-    if (loadingChatProvider || loadingCliModels || loadingChatReasoningEffort) return
+    if (!wsFullStateReceivedRef.current || loadingChatProvider || loadingCliModels || loadingChatReasoningEffort) return
     const model = cliModelsByProvider[chatProvider] ?? null
     const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model, reasoningEffort: chatReasoningEffort })
     if (payload === prevChatSelectionPayloadRef.current) return
@@ -3284,14 +3291,19 @@ function App() {
     const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
-    let sid = activeSessionId
-    if (!sid) {
-      const session = await createSession(undefined)
-      sid = session?.id ?? null
-    }
-    if (!sid) return
+    const sid = activeSessionId
+    const sessionIdPromise = sid
+      ? undefined
+      : createSession(undefined).then((session) => session?.id ?? null)
     if (shouldAutoTitleSession(activeSessionRecord?.name)) {
-      void generateSessionTitle(sid, displayContent, chatProvider === 'jait' ? cliModel ?? undefined : undefined)
+      const titleModel = chatProvider === 'jait' ? cliModel ?? undefined : undefined
+      if (sid) {
+        void generateSessionTitle(sid, displayContent, titleModel)
+      } else {
+        void sessionIdPromise?.then((createdSessionId) => {
+          if (createdSessionId) void generateSessionTitle(createdSessionId, displayContent, titleModel)
+        })
+      }
     }
 
     if (isLoading || messageQueue.length > 0) {
@@ -3316,6 +3328,7 @@ function App() {
     sendMessage(promptText, {
       token,
       sessionId: sid,
+      sessionIdPromise,
       mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,

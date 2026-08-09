@@ -6,6 +6,7 @@ import { messageContextMetadata, messages } from "../db/schema.js";
 import { SessionService } from "../services/sessions.js";
 import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { __chatTestUtils } from "./chat.js";
 
 const testConfig = {
   ...loadConfig(),
@@ -144,5 +145,92 @@ describe("chat route auth guards", () => {
     });
 
     await app.close();
+  });
+
+  it("keeps persisted history pageable while a compacted agent turn is streaming", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("streaming-history-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Streaming History" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const createdAt = (index: number) => new Date(Date.UTC(2026, 7, 1, 0, 0, index)).toISOString();
+
+    db.insert(messages).values(Array.from({ length: 9 }, (_, index) => ({
+      id: `stream-message-${index}`,
+      sessionId: session.id,
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: `stream-content-${index}`,
+      contextFlow: index === 2
+        ? JSON.stringify({ provider: "test", model: "test", rounds: [] })
+        : null,
+      createdAt: createdAt(index),
+    }))).run();
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+    const headers = { authorization: `Bearer ${token}` };
+    __chatTestUtils.sessionHistory.set(session.id, [
+      { role: "system", content: "compacted system" },
+      { role: "user", content: "stream-content-8" },
+    ]);
+    __chatTestUtils.activeStreams.add(session.id);
+    __chatTestUtils.getOrCreateAccumulator(session.id).content = "live assistant";
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        streaming: true,
+        total: 10,
+        hasMore: true,
+        messages: [
+          { content: "stream-content-5" },
+          { content: "stream-content-6" },
+          { content: "stream-content-7" },
+          { content: "stream-content-8" },
+          { content: "live assistant" },
+        ],
+      });
+
+      const olderResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages?limit=5&before=5`,
+        headers,
+      });
+      expect(olderResponse.json()).toMatchObject({
+        streaming: true,
+        total: 10,
+        hasMore: false,
+        messages: [
+          { content: "stream-content-0" },
+          { content: "stream-content-1" },
+          { content: "stream-content-2" },
+          { content: "stream-content-3" },
+          { content: "stream-content-4" },
+        ],
+      });
+
+      const contextFlowResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages/2/context-flow`,
+        headers,
+      });
+      expect(contextFlowResponse.statusCode).toBe(200);
+      expect(contextFlowResponse.json()).toMatchObject({
+        contextFlow: { provider: "test", model: "test", rounds: [] },
+      });
+    } finally {
+      __chatTestUtils.activeStreams.delete(session.id);
+      __chatTestUtils.sessionHistory.delete(session.id);
+      __chatTestUtils.sessionStreamingState.delete(session.id);
+      await app.close();
+    }
   });
 });

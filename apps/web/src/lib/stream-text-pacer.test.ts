@@ -82,9 +82,6 @@ describe('createStreamTextPacer', () => {
 
     pacer.enqueueText('word1 word2 word3 word4')
 
-    expect(commits).toEqual([])
-
-    clock.runFrame()
     expect(commits).toEqual(['word1 '])
 
     clock.runFrame()

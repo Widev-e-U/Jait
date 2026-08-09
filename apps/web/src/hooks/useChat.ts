@@ -502,6 +502,7 @@ export function formatChatHttpError(status: number, context: ChatHttpErrorContex
 interface SendMessageOptions {
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
+  sessionIdPromise?: Promise<string | null>
   onLoginRequired?: () => void
   mode?: ChatMode
   /** CLI provider to use for this message (jait, codex, claude-code) */
@@ -613,6 +614,7 @@ export function useChat(
    * back while that background stream kept running.
    */
   const loadedMessagesSessionRef = useRef<string | null>(null)
+  const messageQueueSessionRef = useRef<string | null>(null)
   const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
   if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
@@ -768,14 +770,19 @@ export function useChat(
       setTodoList([])
       setChangedFiles([])
       setMessageQueue([])
+      messageQueueSessionRef.current = null
       setContextUsage(null)
       loadedMessagesSessionRef.current = null
       return
     }
 
-    // Todos are session-bound: clear the previous session's list immediately
-    // so it doesn't leak into the newly selected chat.
+    // Session-scoped transient UI must never remain visible under the next
+    // chat while its authoritative full-state packet is still in flight.
     setTodoList([])
+    if (messageQueueSessionRef.current !== sessionId) {
+      messageQueueSessionRef.current = sessionId
+      setMessageQueue([])
+    }
 
     let cancelled = false
     const startupCache = selectImmediateChatHistory(
@@ -1459,14 +1466,9 @@ export function useChat(
     const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
-    const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
-    if (requestSessionId) cacheWriteReadySessionRef.current = requestSessionId
+    let requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
     const outboundAttachments = mergeChatAttachments(options.attachments, attachmentsFromSegments(options.displaySegments))
     const assistantId = createOptimisticMessageId('assistant')
-
-    if (requestSessionId && prevSessionIdRef.current !== requestSessionId) {
-      prevSessionIdRef.current = requestSessionId
-    }
 
     const userMessage: ChatMessage = {
       id: createOptimisticMessageId('user'),
@@ -1490,6 +1492,28 @@ export function useChat(
     // Clear the todo list for the new turn. Keep changed files so pending
     // review state survives across follow-up prompts until the user decides.
     setTodoList([])
+
+    if (!requestSessionId && options.sessionIdPromise) {
+      requestSessionId = await options.sessionIdPromise
+    }
+    if (!requestSessionId) {
+      const errorMessage = 'Failed to create chat session'
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        messages: prev.messages.map(message =>
+          message.id === assistantId
+            ? { ...message, content: errorMessage, segments: [{ type: 'error' as const, content: errorMessage }] }
+            : message
+        ),
+      }))
+      return 'retry'
+    }
+
+    cacheWriteReadySessionRef.current = requestSessionId
+    if (prevSessionIdRef.current !== requestSessionId) {
+      prevSessionIdRef.current = requestSessionId
+    }
 
     const controller = new AbortController()
     const ownsDirectStream = shouldOwnDirectChatStream({
