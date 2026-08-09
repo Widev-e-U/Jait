@@ -38,22 +38,32 @@ function createOpenAIStreamResponse(): Response {
   });
 }
 
-function createDelayedOpenAIStreamResponse(delayMs = 80): Response {
+function createControlledOpenAIStreamResponse(): {
+  response: Response;
+  releaseSecondChunk: () => void;
+} {
   const encoder = new TextEncoder();
+  let releaseSecondChunk = () => {};
+  const secondChunkReady = new Promise<void>((resolve) => {
+    releaseSecondChunk = resolve;
+  });
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}\n\n'));
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await secondChunkReady;
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"B"},"finish_reason":null}]}\n\n'));
       controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     },
   });
-  return new Response(stream, {
-    status: 200,
-    headers: { "Content-Type": "text/event-stream" },
-  });
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+    releaseSecondChunk,
+  };
 }
 
 function createToolCallStreamResponse(): Response {
@@ -171,13 +181,14 @@ describe("chat route OpenRouter backend selection", () => {
       },
     });
 
+    const controlledStream = createControlledOpenAIStreamResponse();
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url.startsWith("http://127.0.0.1:")) {
         return originalFetch(input, init);
       }
       expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
-      return createDelayedOpenAIStreamResponse();
+      return controlledStream.response;
     });
     globalThis.fetch = fetchMock as typeof fetch;
 
@@ -211,26 +222,27 @@ describe("chat route OpenRouter backend selection", () => {
       const reader = response.body?.getReader();
       expect(reader).toBeTruthy();
       const decoder = new TextDecoder();
-      const startedAt = Date.now();
-      const seen: Array<{ token: string; at: number }> = [];
       let body = "";
 
-      while (reader && seen.length < 2) {
+      while (reader && !body.includes('"type":"token","content":"A"')) {
         const { done, value } = await reader.read();
         if (done) break;
         body += decoder.decode(value, { stream: true });
-        if (body.includes('"type":"token","content":"A"') && !seen.some((entry) => entry.token === "A")) {
-          seen.push({ token: "A", at: Date.now() - startedAt });
-        }
-        if (body.includes('"type":"token","content":"B"') && !seen.some((entry) => entry.token === "B")) {
-          seen.push({ token: "B", at: Date.now() - startedAt });
-        }
+      }
+
+      expect(body).not.toContain('"type":"context_flow"');
+      expect(body).toContain('"type":"token","content":"A"');
+      expect(body).not.toContain('"type":"token","content":"B"');
+
+      controlledStream.releaseSecondChunk();
+      while (reader && !body.includes('"type":"token","content":"B"')) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        body += decoder.decode(value, { stream: true });
       }
       await reader?.cancel().catch(() => {});
 
-      expect(body).not.toContain('"type":"context_flow"');
-      expect(seen.map((entry) => entry.token)).toEqual(["A", "B"]);
-      expect(seen[1]!.at - seen[0]!.at).toBeGreaterThanOrEqual(40);
+      expect(body).toContain('"type":"token","content":"B"');
     } finally {
       await app.close();
     }
