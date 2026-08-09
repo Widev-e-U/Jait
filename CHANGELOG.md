@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.699](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.699) — 2026-08-09
+- fix(gateway): compact completed active-turn work to prevent context-driven tool loops (`a8e672d8`)
+
 ## [v0.1.698](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.698) — 2026-08-09
 - feat: improve provider reasoning and chat continuity (`5e0847e0`)
 
