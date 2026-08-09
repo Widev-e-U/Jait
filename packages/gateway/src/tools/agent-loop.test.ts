@@ -2258,6 +2258,81 @@ describe("runAgentLoop tool-loop detection", () => {
     )).toBe(true);
   });
 
+  it("compacts completed work inside the active turn before context pressure causes a duplicate-call loop", async () => {
+    let fetchCalls = 0;
+    let preservedRecentEvidence = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: AgentMessage[] };
+      preservedRecentEvidence ||= (body.messages ?? []).some(
+        (message) => message.role === "system" &&
+          message.content.includes("[active-turn-summary]") &&
+          message.content.includes("evidence:unique-"),
+      );
+      const completedToolRounds = (body.messages ?? []).filter(
+        (message) => message.role === "assistant" && message.tool_calls?.length,
+      ).length;
+      const round = fetchCalls++;
+
+      if (round < 10) {
+        return toolCallSSE(`call-${round}`, "search", { pattern: `unique-${round}` });
+      }
+      if (completedToolRounds > 4) {
+        return toolCallSSE(`call-stuck-${round}`, "execute", { command: "check the same logs" });
+      }
+      return textResponse("Recovered from the long investigation.");
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 4_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Investigate until you can explain the failure." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "execute",
+              description: "Execute",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-active-turn-compaction",
+        abort: new AbortController(),
+        maxRounds: 40,
+        continuous: true,
+        mode: "agent",
+      },
+      async (name, args) => ({
+        ok: true,
+        message: name === "execute" ? "no matching logs" : "search complete",
+        data: name === "search"
+          ? { output: `evidence:${(args as { pattern: string }).pattern} ${"x".repeat(2_000)}` }
+          : { output: "" },
+      }),
+    );
+
+    expect(result.content).toBe("Recovered from the long investigation.");
+    expect(result.content).not.toMatch(/Stopped: repeated the same tool call/);
+    expect(preservedRecentEvidence).toBe(true);
+  });
+
   it("keeps explicit round budgets bounded for specialist runs", async () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {

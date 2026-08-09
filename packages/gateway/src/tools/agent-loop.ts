@@ -1551,8 +1551,16 @@ function summarizeToolMessage(message: AgentMessage): string {
   let detail = message.content;
   try {
     const parsed = JSON.parse(message.content) as { ok?: boolean; message?: string; data?: unknown };
+    const data = parsed.data === undefined
+      ? ""
+      : compactSummaryText(
+          typeof parsed.data === "string" ? parsed.data : JSON.stringify(parsed.data),
+          600,
+        );
     if (typeof parsed.message === "string" && parsed.message.trim()) {
-      detail = parsed.message;
+      detail = data ? `${parsed.message}; data: ${data}` : parsed.message;
+    } else if (data) {
+      detail = data;
     } else if (typeof parsed.ok === "boolean") {
       detail = parsed.ok ? "completed successfully" : "failed";
     }
@@ -2023,6 +2031,51 @@ function compactToolResultsToBudget(
   return older.compacted || recent.compacted;
 }
 
+const ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP = 3;
+const ACTIVE_TURN_SUMMARY_SOURCE_MESSAGES = 24;
+
+/**
+ * Long-running turns cannot be pruned by pruneHistory because it deliberately
+ * preserves the last user message and everything after it. Continuous runs can
+ * therefore accumulate dozens of completed assistant/tool protocol pairs inside
+ * one turn until the model is operating far beyond its context window.
+ *
+ * Collapse the completed prefix of the active turn into a compact progress
+ * summary while keeping the latest tool rounds verbatim. The original user
+ * request remains in history, so the summary only needs to preserve recent work.
+ */
+function compactActiveTurnHistory(history: AgentMessage[]): boolean {
+  let lastUserIndex = -1;
+  for (let index = history.length - 1; index >= 0; index--) {
+    if (history[index]!.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  if (lastUserIndex < 0) return false;
+
+  const toolRoundStarts: number[] = [];
+  for (let index = lastUserIndex + 1; index < history.length; index++) {
+    const message = history[index]!;
+    if (message.role === "assistant" && message.tool_calls?.length) {
+      toolRoundStarts.push(index);
+    }
+  }
+  if (toolRoundStarts.length <= ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP) return false;
+
+  const keepFromIndex = toolRoundStarts[toolRoundStarts.length - ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP]!;
+  const removeCount = keepFromIndex - lastUserIndex - 1;
+  if (removeCount <= 0) return false;
+
+  const removedMessages = history.splice(lastUserIndex + 1, removeCount);
+  const summarySource = removedMessages.slice(-ACTIVE_TURN_SUMMARY_SOURCE_MESSAGES).reverse();
+  const summary = buildStructuredConversationSummary(summarySource)
+    .replace("[conversation-summary]", "[active-turn-summary]")
+    .replace("[/conversation-summary]", "[/active-turn-summary]");
+  history.splice(lastUserIndex + 1, 0, { role: "system", content: summary });
+  return true;
+}
+
 export async function runAgentLoop(
   options: AgentLoopOptions,
   executeTool: ToolExecutor,
@@ -2135,6 +2188,7 @@ export async function runAgentLoop(
         if (checkpointIndex >= 0) history.splice(checkpointIndex, 1);
       }
       if (llm.contextWindow > 0) {
+        compactActiveTurnHistory(history);
         compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
       }
       autonomousCheckpointPrompt = {
@@ -2184,12 +2238,13 @@ export async function runAgentLoop(
         const pruned = await pruneHistory(history, contextWindow, activeSchemas, {
           summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
         });
+        const activeTurnCompacted = compactActiveTurnHistory(history);
         const compactedToolResults = compactToolResultsToBudget(
           history,
           activeSchemas,
           contextWindow,
         );
-        if (pruned || compactedToolResults) {
+        if (pruned || activeTurnCompacted || compactedToolResults) {
           usage = computeContextUsage(history, activeSchemas, contextWindow);
           onEvent?.({ type: "context_usage", ...usage, pruned: true });
           log.info(
@@ -2312,6 +2367,7 @@ export async function runAgentLoop(
             await pruneHistory(history, llm.contextWindow, activeSchemas, {
               summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
             });
+            compactActiveTurnHistory(history);
             compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
           }
 
