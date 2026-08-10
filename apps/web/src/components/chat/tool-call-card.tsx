@@ -3680,16 +3680,12 @@ function AgentSpecialistBlock({
   renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
   onApprovalResponse?: (callId: string, approve: boolean) => void
 }) {
-  const [missionOpen, setMissionOpen] = useState(false)
   const displayTool = normalizeTool(call.tool)
   const resultRecord = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
     ? call.result.data as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultRecord)
   const isRunning = call.status === 'running' || call.status === 'pending'
-  const missionText = displayStr(normalizedArgs.prompt ?? normalizedArgs.message ?? normalizedArgs.description).trim()
-  const canExpandMission = missionText.length > 140
-  const allowedTools = displayStr(normalizedArgs.allowedTools).trim().split(',').map((tool) => tool.trim()).filter(Boolean)
 
   // Live reasoning stream + final markdown answer (prefer structured content)
   const thinking = call.streamingThinking ?? ''
@@ -3728,32 +3724,7 @@ function AgentSpecialistBlock({
   return (
     <SubAgentScrollArea {...scroll}>
       <div className="space-y-1">
-        {/* Delegated mission — a one-liner (ellipsed) with a show-more toggle that
-            reveals the full description in place. The card header above shows the
-            normal "Sub-agent" tool-call title; no extra border here. */}
-        {missionText && (
-          <div className="px-0.5 py-1">
-            <div className={cn('whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 [overflow-wrap:anywhere]', !missionOpen && 'line-clamp-1')}>
-              <AssistantMarkdown content={missionText} compact />
-            </div>
-            {canExpandMission && (
-              <button
-                type="button"
-                onClick={() => setMissionOpen((o) => !o)}
-                className="mt-0.5 text-2xs font-medium text-primary hover:underline"
-              >
-                {missionOpen ? 'Show less' : 'Show more'}
-              </button>
-            )}
-          </div>
-        )}
-        {allowedTools.length > 0 && (
-          <div className="flex flex-wrap gap-1 px-0.5">
-            {allowedTools.map((tool) => (
-              <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
-            ))}
-          </div>
-        )}
+        <SubAgentMission args={normalizedArgs} />
 
         {/* The specialist's actual work — rendered through the same chat body renderer
             as a normal assistant message (thinking block + tool cards + markdown). */}

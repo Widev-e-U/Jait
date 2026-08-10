@@ -149,6 +149,8 @@ export function getWsUrl(): string {
   const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
   if (desktop) return stripTrailingSlash(httpToWs(desktop))
 
+  if (env) return stripTrailingSlash(env)
+
   const env2 = import.meta.env.VITE_API_URL as string | undefined
   if (env2) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(env2)))
 

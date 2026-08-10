@@ -2,14 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { Brain, ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
+import { AssistantMarkdown, type OnOpenPath } from '@/components/chat/assistant-markdown'
 
 interface ReasoningProps {
   content: string
   isStreaming: boolean
   duration?: number
+  onOpenPath?: OnOpenPath
 }
 
-export function Reasoning({ content, isStreaming, duration }: ReasoningProps) {
+export function Reasoning({ content, isStreaming, duration, onOpenPath }: ReasoningProps) {
   const [open, setOpen] = useState(false)
   const wasStreaming = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -68,13 +70,13 @@ export function Reasoning({ content, isStreaming, duration }: ReasoningProps) {
         <div
           ref={scrollRef}
           className={cn(
-            'mt-1 px-3 py-2.5 rounded-md border text-sm whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed',
+            'mt-1 px-3 py-2.5 rounded-md border text-sm max-h-60 overflow-y-auto leading-relaxed',
             isStreaming
               ? 'border-amber-500/25 bg-amber-500/[0.04] text-muted-foreground italic'
               : 'border-border/60 bg-muted/30 text-muted-foreground',
           )}
         >
-          {content}
+          <AssistantMarkdown content={content} onOpenPath={onOpenPath} />
           {isStreaming && (
             <span className="inline-block w-1.5 h-3.5 bg-amber-400 animate-pulse ml-0.5 align-middle rounded-sm" />
           )}

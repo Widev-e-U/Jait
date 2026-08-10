@@ -1,6 +1,7 @@
 import { StrictMode, type ReactNode, useCallback, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Message } from '@/components/chat/message'
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import { secretRequestMatchesTool, type SecretInputRequest } from '@/lib/secret-input'
 import type { MessageSegment } from '@/hooks/useChat'
@@ -98,6 +99,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <SecretToolcardRepro />
+    <ConfirmDialogProvider>
+      <SecretToolcardRepro />
+    </ConfirmDialogProvider>
   </StrictMode>,
 )

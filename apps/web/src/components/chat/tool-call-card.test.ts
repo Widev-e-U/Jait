@@ -26,6 +26,7 @@ let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchRe
 let humanizeStructuredKey: typeof import('./tool-call-card')['humanizeStructuredKey']
 let StructuredDataView: typeof import('./tool-call-card')['StructuredDataView']
 let ToolSearchResultsView: typeof import('./tool-call-card')['ToolSearchResultsView']
+let ToolCallCard: typeof import('./tool-call-card')['ToolCallCard']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -61,6 +62,7 @@ beforeAll(async () => {
     humanizeStructuredKey,
     StructuredDataView,
     ToolSearchResultsView,
+    ToolCallCard,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -184,6 +186,40 @@ describe('sub-agent activity', () => {
   it('turns streamed sub-agent events into a concise current action', () => {
     expect(getLatestSubAgentActivity('[sub-agent] Starting file.read...\n')).toBe('Using file.read')
     expect(getLatestSubAgentActivity('[sub-agent] Starting file.read...\n[sub-agent] ✓ Read src/app.ts\n')).toBe('Read src/app.ts')
+  })
+
+  it('keeps the delegated mission sticky when child calls appear', () => {
+    const call = {
+      callId: 'agent-implementation',
+      tool: 'spawn_agent',
+      args: {
+        message: 'Implement the sticky delegated mission header without changing its layout.',
+        allowedTools: 'file.read,terminal.run',
+      },
+      status: 'running' as const,
+      streamingOutput: 'Inspecting the component lifecycle.',
+      startedAt: 1,
+    }
+    const childCalls = [{
+      callId: 'agent-read',
+      parentCallId: call.callId,
+      tool: 'file.read',
+      args: { path: 'apps/web/src/components/chat/tool-call-card.tsx' },
+      status: 'success' as const,
+      result: { ok: true, message: 'Read tool-call-card.tsx' },
+      startedAt: 2,
+      completedAt: 3,
+    }]
+
+    const beforeChildCalls = renderToStaticMarkup(createElement(ToolCallCard, { call }))
+    const afterChildCalls = renderToStaticMarkup(createElement(ToolCallCard, { call, childCalls }))
+
+    for (const markup of [beforeChildCalls, afterChildCalls]) {
+      expect(markup).toContain('sticky top-0 z-10')
+      expect(markup).toContain('Delegated:')
+      expect(markup).toContain('file.read')
+      expect(markup).toContain('terminal.run')
+    }
   })
 })
 

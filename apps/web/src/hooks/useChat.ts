@@ -626,6 +626,8 @@ export function useChat(
   // chat "freezing" until the user manually reloads or switches sessions.
   const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumeReconnectAttemptsRef = useRef(0)
+  const documentWasHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false)
+  const browserWasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 
   useEffect(() => () => startupCacheWriterRef.current?.flush(), [])
 
@@ -942,6 +944,8 @@ export function useChat(
       let cancelPendingSubscribeFlush: (() => void) | null = null
       let textPacer: ReturnType<typeof createStreamTextPacer> | null = null
       try {
+        await Promise.resolve()
+        if (!isCurrentResumeRun()) return
         const res = await fetch(
           `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
           {
@@ -2080,9 +2084,13 @@ export function useChat(
     }
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        resumeActiveStreamIfNeeded()
+      if (document.hidden) {
+        documentWasHiddenRef.current = true
+        return
       }
+      if (!documentWasHiddenRef.current) return
+      documentWasHiddenRef.current = false
+      resumeActiveStreamIfNeeded()
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -2104,20 +2112,25 @@ export function useChat(
       resumeSessionStream(forceRestart ? { forceRestart: true } : undefined)
     }
 
-    const handleFocus = () => {
-      resumeActiveStreamIfNeeded(true)
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resumeActiveStreamIfNeeded(true)
     }
-    const handleWake = () => {
-      resumeActiveStreamIfNeeded(true)
+    const handleOffline = () => {
+      browserWasOfflineRef.current = true
+    }
+    const handleOnline = () => {
+      const wasOffline = browserWasOfflineRef.current
+      browserWasOfflineRef.current = false
+      if (wasOffline) resumeActiveStreamIfNeeded(true)
     }
 
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('pageshow', handleWake)
-    window.addEventListener('online', handleWake)
+    window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
     return () => {
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('pageshow', handleWake)
-      window.removeEventListener('online', handleWake)
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
     }
   }, [state.error, state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
 

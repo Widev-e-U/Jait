@@ -121,6 +121,7 @@ export function AssistantBody({
               content={seg.content}
               isStreaming={!!isStreaming && i === segments.length - 1}
               duration={thinkingDuration}
+              onOpenPath={onOpenPath}
             />
           ) : null
         }

@@ -14,12 +14,20 @@ describe('gateway-url websocket resolution', () => {
   afterEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     storage.clear()
   })
 
   it('normalizes direct gateway URLs to port 8000 in dev', async () => {
     const mod = await import('./gateway-url')
     expect(mod.normalizeDirectGatewayBase('http://host.docker.internal:4173', true)).toBe('http://host.docker.internal:8000')
+  })
+
+  it('uses VITE_WS_URL when Vite runs with NODE_ENV=test', async () => {
+    vi.stubEnv('VITE_WS_URL', 'ws://127.0.0.1:8100')
+
+    const mod = await import('./gateway-url')
+    expect(mod.getWsUrl()).toBe('ws://127.0.0.1:8100')
   })
 
   it('preserves the configured websocket URL outside dev normalization paths', async () => {

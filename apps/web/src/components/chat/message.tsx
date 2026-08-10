@@ -795,6 +795,7 @@ function MessageInner({
             content={thinking}
             isStreaming={!!isStreaming && !content}
             duration={thinkingDuration}
+            onOpenPath={onOpenPath}
           />
         )}
 

@@ -1270,7 +1270,7 @@ function App() {
       if (dp) {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
-        if (dp.open && ui.panel?.open === true && nextTarget) {
+        if (dp.open && nextTarget) {
           routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
@@ -1378,7 +1378,7 @@ function App() {
       if (dp) {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
-        if (dp.open && ui.panel?.open === true && nextTarget) {
+        if (dp.open && nextTarget) {
           routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
