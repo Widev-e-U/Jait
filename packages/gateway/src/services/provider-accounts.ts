@@ -23,10 +23,15 @@ export interface ProviderAccountType {
   providerType: string;
   name: string;
   description: string;
+  version?: string;
+  distribution?: "binary" | "npx" | "uvx";
+  icon?: string;
+  website?: string;
+  repository?: string;
 }
 
 export class ProviderAccountService {
-  private readonly definitions: Map<string, AcpProviderConfig>;
+  private definitions: Map<string, AcpProviderConfig>;
 
   constructor(
     private readonly db: JaitDB,
@@ -34,6 +39,7 @@ export class ProviderAccountService {
     definitions: AcpProviderConfig[],
     private readonly accountsRoot = join(homedir(), ".jait", "provider-accounts"),
     private readonly usageService?: ProviderUsageService,
+    private readonly definitionsLoader?: () => Promise<AcpProviderConfig[]>,
   ) {
     this.definitions = new Map(definitions.map((definition) => [definition.id, definition]));
   }
@@ -55,7 +61,25 @@ export class ProviderAccountService {
         providerType: definition.id,
         name: definition.name,
         description: definition.description,
+        ...(definition.registry?.version ? { version: definition.registry.version } : {}),
+        ...(definition.registry?.distribution ? { distribution: definition.registry.distribution } : {}),
+        ...(definition.registry?.icon ? { icon: definition.registry.icon } : {}),
+        ...(definition.registry?.website ? { website: definition.registry.website } : {}),
+        ...(definition.registry?.repository ? { repository: definition.registry.repository } : {}),
       }));
+  }
+
+  async refreshTypes(): Promise<ProviderAccountType[]> {
+    if (!this.definitionsLoader) return this.listTypes();
+    const definitions = await this.definitionsLoader();
+    if (definitions.length > 0) {
+      this.definitions = new Map(definitions.map((definition) => [definition.id, definition]));
+    }
+    return this.listTypes();
+  }
+
+  getType(providerType: string): ProviderAccountType | null {
+    return this.listTypes().find((type) => type.providerType === providerType) ?? null;
   }
 
   get(id: string, userId: string): ProviderAccountRecord | null {

@@ -51,6 +51,7 @@ import { ReminderService } from "./services/reminders.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { JaitProvider } from "./providers/jait-provider.js";
 import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
+import { loadAcpRegistryProviderConfigs } from "./providers/acp-registry.js";
 import { VoiceAssistantService } from "./voice-assistant/service.js";
 import { verifyAuthToken } from "./security/http-auth.js";
 import { ProjectWatcher } from "./services/project-watcher.js";
@@ -216,8 +217,20 @@ async function main() {
   for (const acpProvider of acpProviderConfigs) {
     if (acpProvider.auth === false) providerRegistry.register(new AcpProvider(acpProvider));
   }
+  const loadProviderAccountDefinitions = () => loadAcpRegistryProviderConfigs({
+    fallbackDefinitions: acpProviderConfigs,
+    preferFallbackDefinitions: Boolean(process.env.JAIT_ACP_PROVIDERS?.trim()),
+  });
+  const providerAccountDefinitions = await loadProviderAccountDefinitions();
   const providerUsageService = new ProviderUsageService(db);
-  const providerAccountService = new ProviderAccountService(db, providerRegistry, acpProviderConfigs, undefined, providerUsageService);
+  const providerAccountService = new ProviderAccountService(
+    db,
+    providerRegistry,
+    providerAccountDefinitions,
+    undefined,
+    providerUsageService,
+    loadProviderAccountDefinitions,
+  );
   providerAccountService.load();
 
   // Surface registry — register all surface factories

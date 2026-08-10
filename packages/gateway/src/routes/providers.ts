@@ -81,9 +81,10 @@ export function registerProviderRoutes(
   app.get("/api/provider-accounts", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
+    const providerTypes = await deps.providerAccountService?.refreshTypes() ?? [];
     return {
       accounts: deps.providerAccountService?.list(authUser.id) ?? [],
-      providerTypes: deps.providerAccountService?.listTypes() ?? [],
+      providerTypes,
     };
   });
 
@@ -206,7 +207,7 @@ export function registerProviderRoutes(
           return {
             id: account.id,
             providerType: account.providerType,
-            name: `${account.providerType === "claude-code" ? "Claude Code" : "Codex"} — ${account.label}`,
+            name: `${deps.providerAccountService?.getType(account.providerType)?.name ?? account.providerType} — ${account.label}`,
             installed: node.providers?.includes(account.providerType) ?? false,
             authenticated: status.authenticated,
             detail: status.detail,

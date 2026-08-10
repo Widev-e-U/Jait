@@ -74,6 +74,39 @@ const AUTH_STATUS_TTL_MS = 5 * 60_000;
 const REPLAYABLE_EVENT_TTL_MS = 30_000;
 const REPLAYABLE_EVENT_LIMIT = 20;
 
+function flattenSelectOptions(config: Extract<SessionConfigOption, { type: "select" }>) {
+  return config.options.flatMap((option) =>
+    "options" in option ? option.options : [option]
+  );
+}
+
+function findModelConfig(configOptions: SessionConfigOption[] | null | undefined): {
+  currentModelId: string | null;
+  models: ProviderModelInfo[];
+} | null {
+  const config = configOptions?.find((option) =>
+    option.type === "select" && (option.category === "model" || option.id === "model")
+  );
+  if (!config || config.type !== "select") return null;
+
+  const models = flattenSelectOptions(config).flatMap((option) => {
+    const id = option.value.trim();
+    if (!id) return [];
+    const name = option.name.trim() || id;
+    return [{
+      id,
+      name,
+      ...(option.description?.trim() ? { description: option.description.trim() } : {}),
+    }];
+  });
+  if (models.length === 0) return null;
+
+  const currentModelId = typeof config.currentValue === "string"
+    ? config.currentValue.trim() || null
+    : null;
+  return { currentModelId, models };
+}
+
 function findReasoningEffortConfig(configOptions: SessionConfigOption[] | null | undefined): {
   configId: string;
   efforts: NonNullable<ProviderModelInfo["supportedReasoningEfforts"]>;
@@ -89,10 +122,7 @@ function findReasoningEffortConfig(configOptions: SessionConfigOption[] | null |
   );
   if (!config || config.type !== "select") return null;
 
-  const options = config.options.flatMap((option) =>
-    "options" in option ? option.options : [option]
-  );
-  const efforts = options.flatMap((option) => {
+  const efforts = flattenSelectOptions(config).flatMap((option) => {
     const reasoningEffort = option.value.trim();
     if (!reasoningEffort) return [];
     return [{
@@ -139,6 +169,16 @@ export interface AcpProviderConfig {
   env?: Record<string, string>;
   modes?: RuntimeMode[];
   auth?: AcpProviderAuthKind | false;
+  registry?: AcpProviderRegistryMetadata;
+}
+
+export interface AcpProviderRegistryMetadata {
+  id: string;
+  version: string;
+  distribution: "binary" | "npx" | "uvx";
+  icon?: string;
+  website?: string;
+  repository?: string;
 }
 
 interface PendingApproval {
@@ -171,6 +211,7 @@ interface AcpSessionState {
 class JaitAcpClient implements Client {
   /** Terminals created via `createTerminal`, keyed by the id we hand back to the agent. */
   readonly terminals = new Map<string, AcpTerminal>();
+  readonly trackedTerminalIds = new Set<string>();
 
   constructor(
     private readonly provider: AcpProvider,
@@ -256,7 +297,7 @@ export class AcpProvider implements CliProviderAdapter {
   readonly executionNodeId?: string;
   readonly info: ProviderInfo;
 
-  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId">> & { env?: Record<string, string> };
+  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId" | "registry">> & { env?: Record<string, string>; registry?: AcpProviderRegistryMetadata };
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
@@ -266,6 +307,7 @@ export class AcpProvider implements CliProviderAdapter {
   private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
   private authProbeInFlight: Promise<ProviderAuthStatus> | null = null;
   private activeLoginAuthProbeInFlight: Promise<ProviderAuthStatus> | null = null;
+  private authenticatedHint: boolean | null = null;
 
   constructor(config: AcpProviderConfig) {
     const providerType = config.providerType ?? config.id;
@@ -344,9 +386,24 @@ export class AcpProvider implements CliProviderAdapter {
       );
 
       const models: ProviderModelInfo[] = [];
-      const modelState = newSession.models;
+      const modelState = (newSession as typeof newSession & {
+        models?: {
+          currentModelId: string;
+          availableModels?: Array<{ modelId: string; name: string; description?: string | null }>;
+        };
+      }).models;
       const effortConfig = findReasoningEffortConfig(newSession.configOptions);
-      if (modelState && modelState.availableModels?.length) {
+      const modelConfig = effortConfig ? findModelConfig(newSession.configOptions) : null;
+      if (modelConfig && effortConfig) {
+        for (const model of modelConfig.models) {
+          models.push({
+            ...model,
+            isDefault: model.id === modelConfig.currentModelId,
+            reasoningEffortSupported: true,
+            supportedReasoningEfforts: effortConfig.efforts,
+          });
+        }
+      } else if (modelState && modelState.availableModels?.length) {
         for (const model of modelState.availableModels) {
           models.push({
             id: model.modelId,
@@ -451,7 +508,7 @@ export class AcpProvider implements CliProviderAdapter {
     probe?.child.kill();
     const authenticated = this.providerType === "codex"
       ? await this.checkProviderAuthenticated()
-      : providerCliAuthenticated ?? await this.checkProviderAuthenticated();
+      : providerCliAuthenticated ?? await this.checkProviderAuthenticated() ?? this.authenticatedHint;
     // Only offer logout when authenticated via a revocable credential.
     const logout = this.providerType === "codex" ? (providerCliAuthenticated === true || this.hasCodexAuthFile()) : authenticated === true && (acpLogout || this.hasProviderCliLogout());
     const result: ProviderAuthStatus = {
@@ -499,13 +556,15 @@ export class AcpProvider implements CliProviderAdapter {
       });
       if (child) {
         this.authLoginProcess = child;
-        child.on("exit", () => {
+        child.on("exit", (code) => {
           if (this.authLoginProcess === child) this.authLoginProcess = null;
+          if (code === 0) this.authenticatedHint = true;
           this.cachedModels = null;
           this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
           void this.checkAvailability();
         });
       } else {
+        if (result.ok && result.status === "completed") this.authenticatedHint = true;
         this.cachedModels = null;
         this.cachedAuthStatus = null;
         void this.checkAvailability();
@@ -516,6 +575,9 @@ export class AcpProvider implements CliProviderAdapter {
     const child = probe.child;
     this.authLoginProcess = child;
     void probe.connection.authenticate({ methodId: method.id })
+      .then(() => {
+        this.authenticatedHint = true;
+      })
       .catch(() => {})
       .finally(() => {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
@@ -625,7 +687,7 @@ export class AcpProvider implements CliProviderAdapter {
     const probe = await this.probeAcpAuth().catch(() => null);
     try {
       if (probe?.initialized.agentCapabilities?.auth?.logout) {
-        await probe.connection.unstable_logout({}).catch(() => {});
+        await probe.connection.logout({}).catch(() => {});
       }
       // Always delete the local Codex auth file for Codex providers — this is the
       // source of truth that checkProviderAuthenticated() reads, regardless of whether
@@ -673,6 +735,8 @@ export class AcpProvider implements CliProviderAdapter {
         }
         return unsupportedLogout(this.id, "ACP agent did not advertise logout support.");
       }
+      this.authenticatedHint = false;
+      this.cachedAuthStatus = null;
       return {
         ok: true,
         status: "completed",
@@ -799,6 +863,22 @@ export class AcpProvider implements CliProviderAdapter {
           });
         });
       }
+      if (options.model) {
+        // Model selection is a stable session config option in current ACP.
+        // The model id comes from the same agent's advertised config options.
+        await connection.setSessionConfigOption({
+          sessionId: newSession.sessionId,
+          configId: "model",
+          value: options.model,
+        }).catch((err) => {
+          this.emitEvent({
+            type: "activity",
+            sessionId,
+            kind: "stderr",
+            summary: `${this.info.name} did not accept model "${options.model}": ${extractErrorMessage(err, "unknown error")}`,
+          });
+        });
+      }
       if (options.reasoningEffort) {
         const effortConfig = findReasoningEffortConfig(newSession.configOptions);
         if (effortConfig) {
@@ -822,25 +902,6 @@ export class AcpProvider implements CliProviderAdapter {
             summary: `${this.info.name} did not advertise a reasoning-effort setting for this session.`,
           });
         }
-      }
-      if (options.model) {
-        // `unstable_setSessionModel` (session/set_model) is genuinely unstable —
-        // Codex implements it, but Claude Code's and Pi's ACP wrappers don't
-        // ("Method not found"). Both of those *do* support the stable
-        // session/set_config_option RPC with configId "model" instead, and the
-        // model id Jait passes here always comes from that same agent's own
-        // listModels()/session-new model list, so it's already a value the
-        // agent recognizes — no vocabulary mismatch like runtimeMode has.
-        await connection.unstable_setSessionModel({ sessionId: newSession.sessionId, modelId: options.model }).catch(() =>
-          connection.setSessionConfigOption({ sessionId: newSession.sessionId, configId: "model", value: options.model! }),
-        ).catch((err) => {
-          this.emitEvent({
-            type: "activity",
-            sessionId,
-            kind: "stderr",
-            summary: `${this.info.name} did not accept model "${options.model}": ${extractErrorMessage(err, "unknown error")}`,
-          });
-        });
       }
     } catch (error) {
       child.kill();
@@ -885,7 +946,7 @@ export class AcpProvider implements CliProviderAdapter {
       if (result.stopReason === "cancelled") {
         this.emitEvent({ type: "session.error", sessionId, error: "Turn cancelled" });
       }
-      this.trackDanglingTerminals(state);
+      await this.trackDanglingTerminals(state);
       this.emitEvent({ type: "turn.completed", sessionId });
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "ACP prompt failed";
@@ -904,10 +965,15 @@ export class AcpProvider implements CliProviderAdapter {
    * they're spawned directly for the agent's `terminal/create` requests, not
    * run inside Jait's own PTY).
    */
-  private trackDanglingTerminals(state: AcpSessionState): void {
+  private async trackDanglingTerminals(state: AcpSessionState): Promise<void> {
+    // SDK 1.3 dispatches inbound client requests concurrently. Give any
+    // terminal/create request that preceded the prompt response one event-loop
+    // turn to populate the terminal map before handing background work off.
+    await new Promise<void>((resolvePendingRequests) => setImmediate(resolvePendingRequests));
     const threadId = state.session.threadId;
     for (const [terminalId, terminal] of state.client.terminals) {
-      if (!terminal.isRunning) continue;
+      if (!terminal.isRunning || state.client.trackedTerminalIds.has(terminalId)) continue;
+      state.client.trackedTerminalIds.add(terminalId);
       backgroundCommandMonitor.trackExternal({
         sessionId: threadId,
         terminalId,

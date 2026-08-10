@@ -138,6 +138,127 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpCompositeModelsWithConfigScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let lastSelection = "initial";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-composite-models",
+          models: {
+            currentModelId: "gpt-5.6-sol[low]",
+            availableModels: [
+              {
+                modelId: "gpt-5.6-sol[low]",
+                name: "GPT-5.6-Sol (low)",
+                description: "Fast responses"
+              },
+              {
+                modelId: "gpt-5.6-sol[high]",
+                name: "GPT-5.6-Sol (high)",
+                description: "Deep reasoning"
+              }
+            ]
+          },
+          configOptions: [
+            {
+              type: "select",
+              id: "model",
+              name: "Model",
+              category: "model",
+              currentValue: "gpt-5.6-sol",
+              options: [
+                {
+                  value: "gpt-5.6-sol",
+                  name: "GPT-5.6-Sol",
+                  description: "Frontier coding model"
+                }
+              ]
+            },
+            {
+              type: "select",
+              id: "reasoning_effort",
+              name: "Reasoning effort",
+              category: "thought_level",
+              currentValue: "low",
+              options: [
+                { value: "low", name: "Low", description: "Fast responses" },
+                { value: "high", name: "High", description: "Deep reasoning" }
+              ]
+            }
+          ]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const selectingModel = request.params.configId === "model"
+        && request.params.value === "gpt-5.6-sol[low]"
+        && lastSelection === "initial";
+      const selectingEffort = request.params.configId === "reasoning_effort"
+        && request.params.value === "high"
+        && lastSelection === "model";
+      const valid = selectingModel || selectingEffort;
+      if (selectingModel) lastSelection = "model";
+      if (selectingEffort) lastSelection = "effort";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Model must be selected before effort" } }
+      ) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+
+const fakeAcpAgentAuthScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "login", name: "Provider Login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "authenticate" || request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+
 const fakeAcpTerminalAuthScript = `
 if (process.argv.includes("--login")) {
   process.stdout.write([
@@ -913,6 +1034,31 @@ describe("AcpProvider auth", () => {
     }
   });
 
+  it("uses base model config when ACP also advertises composite model-effort IDs", async () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      providerType: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpCompositeModelsWithConfigScript],
+    });
+
+    await expect(provider.listModels()).resolves.toEqual([
+      {
+        id: "gpt-5.6-sol",
+        name: "GPT-5.6-Sol",
+        description: "Frontier coding model",
+        isDefault: true,
+        reasoningEffortSupported: true,
+        supportedReasoningEfforts: [
+          { reasoningEffort: "low", description: "Fast responses" },
+          { reasoningEffort: "high", description: "Deep reasoning" },
+        ],
+      },
+    ]);
+  });
+
   it("returns Codex fallback models when ACP model discovery times out", async () => {
     const provider = new AcpProvider({
       id: "codex",
@@ -1040,6 +1186,31 @@ describe("AcpProvider auth", () => {
       logout: false,
       deviceCode: false,
     });
+  });
+
+  it("reports a successful generic ACP login to Settings", async () => {
+    const provider = new AcpProvider({
+      id: "grok-build",
+      name: "Grok Build",
+      description: "Grok Build via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentAuthScript],
+    });
+
+    try {
+      await expect(provider.startLogin()).resolves.toMatchObject({
+        ok: true,
+        status: "started",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await expect(provider.getAuthStatus()).resolves.toMatchObject({
+        authenticated: true,
+        login: true,
+        logout: true,
+      });
+    } finally {
+      await provider.dispose();
+    }
   });
 
   it("allows custom ACP providers to opt out of Jait auth actions", () => {
@@ -1257,6 +1428,38 @@ process.stdin.on("data", (chunk) => {
 `;
 
 describe("AcpProvider session mode/model failures", () => {
+  it("applies explicit reasoning effort after a composite model selection", async () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      providerType: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpCompositeModelsWithConfigScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+
+    try {
+      const session = await provider.startSession({
+        threadId: "thread-1",
+        workingDirectory: process.cwd(),
+        model: "gpt-5.6-sol[low]",
+        reasoningEffort: "high",
+      });
+
+      expect(session.status).toBe("running");
+      expect(events.some((event) =>
+        event.type === "activity"
+        && "summary" in event
+        && event.summary.includes("did not accept")
+      )).toBe(false);
+    } finally {
+      unsubscribe();
+      await provider.dispose();
+    }
+  });
+
   it("applies the advertised thought-level config when starting a session", async () => {
     const provider = new AcpProvider({
       id: "claude-code",
@@ -1286,12 +1489,10 @@ describe("AcpProvider session mode/model failures", () => {
       await provider.dispose();
     }
   });
-  it("falls back to session/set_config_option for the model when session/set_model is unimplemented, without logging an error", async () => {
-    // Regression for: claude-agent-acp and pi-acp both reject the unstable
-    // session/set_model RPC ("Method not found"), so the model picked in
-    // Jait's UI silently never applied — the agent just ran on its own
-    // default model. Verified live that both agents DO accept
-    // session/set_config_option with configId "model" instead.
+  it("uses the stable session model config without logging an error", async () => {
+    // Current ACP exposes model selection through session/set_config_option.
+    // Claude Agent and pi ACP both accept configId "model", keeping the model
+    // selected in Jait's UI aligned with the agent session.
     const provider = new AcpProvider({
       id: "claude-code",
       name: "Claude Code",
