@@ -189,6 +189,44 @@ function formatLLMError(status: number, responseText: string): string {
   }
 }
 
+/**
+ * Turn a transport-level failure into something a user can act on.
+ *
+ * A backend that never answers throws from `fetch` rather than returning a
+ * status, so it never reaches {@link formatLLMError} and used to surface as a
+ * bare "fetch failed". That is least helpful exactly where it matters most:
+ * self-hosted backends (OmniRoute, Ollama) whose usual failure mode is simply
+ * not running. Name the endpoint and say what to do about it.
+ *
+ * Returns null for anything that is not a connection-class failure, so genuine
+ * bugs keep propagating instead of being dressed up as a network hiccup.
+ */
+export function formatConnectionError(
+  error: unknown,
+  llm: { backend?: string; openaiBaseUrl: string },
+): string | null {
+  const err = error as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  const code = err?.cause?.code;
+  const isTimeout = err?.name === "TimeoutError"
+    || (err?.name === "AbortError" && !err?.message?.includes("user"));
+  const isConnectionRefused = code === "ECONNREFUSED" || code === "ECONNRESET" || code === "EHOSTUNREACH";
+  const isDnsFailure = code === "ENOTFOUND" || code === "EAI_AGAIN";
+  if (!isTimeout && !isConnectionRefused && !isDnsFailure) return null;
+
+  const where = `${llm.backend ?? "the model backend"} at ${llm.openaiBaseUrl}`;
+  // Self-hosted backends are the ones the user can actually start again.
+  const selfHosted = llm.backend === "omniroute" || llm.backend === "ollama";
+  const hint = selfHosted
+    ? llm.backend === "omniroute"
+      ? "Start the OmniRoute router, or correct OMNIROUTE_BASE_URL in Settings → API keys. The \"Test connection\" button there checks it."
+      : "Start Ollama, or correct OLLAMA_URL in Settings → API keys."
+    : "Check your network connection and the configured base URL.";
+
+  if (isTimeout) return `No response from ${where} in time. ${hint}`;
+  if (isDnsFailure) return `Could not resolve the host for ${where}. ${hint}`;
+  return `Could not connect to ${where}. ${hint}`;
+}
+
 /** Detect whether an LLM error response indicates context-window overflow. */
 function isContextOverflowError(status: number, responseText: string): boolean {
   if (status !== 400 && status !== 413) return false;
@@ -2447,6 +2485,15 @@ export async function runAgentLoop(
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
+      }
+      // An unreachable backend is a configuration problem, not a crash — report
+      // it the same way an HTTP error is reported instead of throwing a raw
+      // "fetch failed" up the stack.
+      const connectionMessage = formatConnectionError(fetchErr, llm);
+      if (connectionMessage) {
+        log.error(`LLM transport failure: ${connectionMessage}`);
+        onEvent?.({ type: "error", message: connectionMessage });
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
       }
       throw fetchErr;
     }
