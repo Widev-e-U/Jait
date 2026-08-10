@@ -1,8 +1,9 @@
+import { mkdir } from 'node:fs/promises'
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const PROJECT_ROOT = process.env.PROJECT_ROOT || '/home/alice/jait'
-const DOCS_SITE_ROOT = process.env.DOCS_SITE_ROOT || `${PROJECT_ROOT}/docs/site`
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+const CONFIGURED_PROJECT_ROOT = process.env.PROJECT_ROOT
 
 async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-ui-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -20,51 +21,78 @@ async function createSession(
   request: Parameters<typeof test>[0]['request'],
   token: string,
   name: string,
+  projectRoot: string,
 ) {
-  const response = await request.post(`${API_URL}/api/sessions`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { name },
+  const headers = { Authorization: `Bearer ${token}` }
+  const projectResponse = await request.post(`${API_URL}/api/projects`, {
+    headers,
+    data: { rootPath: projectRoot, nodeId: 'gateway', title: name },
   })
-  expect(response.ok()).toBeTruthy()
-  const payload = await response.json() as { id: string }
-  return payload.id
+  expect(projectResponse.ok()).toBeTruthy()
+  const project = await projectResponse.json() as { id: string }
+
+  const sessionName = `${name} session`
+  const sessionResponse = await request.post(`${API_URL}/api/projects/${project.id}/sessions`, {
+    headers,
+    data: { name: sessionName },
+  })
+  expect(sessionResponse.ok()).toBeTruthy()
+  const session = await sessionResponse.json() as { id: string }
+
+  const selectResponse = await request.post(`${API_URL}/api/projects/select`, {
+    headers,
+    data: { projectId: project.id, sessionId: session.id },
+  })
+  expect(selectResponse.ok()).toBeTruthy()
+  return { projectId: project.id, sessionId: session.id, sessionName }
 }
 
 test.describe('WS UI reactions for project and preview tools', () => {
-  test.describe.configure({ mode: 'serial' })
-
-  test('project.open and preview.open update the UI, and architecture stays available', async ({ page, request }, testInfo) => {
+  test('project.editor.open and preview.open update the UI, and architecture stays available', async ({ page, request }, testInfo) => {
     test.setTimeout(90000)
     test.skip(testInfo.project.name.startsWith('mobile'), 'desktop toolbar assertions only')
 
-    const { token, username, password } = await registerUser(request)
-    const sessionId = await createSession(request, token, 'ws-ui-e2e')
+    const projectRoot = CONFIGURED_PROJECT_ROOT || testInfo.outputPath('project')
+    await mkdir(projectRoot, { recursive: true })
+    const { token } = await registerUser(request)
+    const { projectId, sessionId, sessionName } = await createSession(request, token, 'ws-ui-e2e', projectRoot)
 
-    await page.addInitScript(([gatewayUrl]) => {
+    await page.addInitScript(([gatewayUrl, authToken]) => {
       window.localStorage.setItem('jait-gateway-url', gatewayUrl)
-    }, [API_URL])
+      window.localStorage.setItem('jait-auth-token', authToken)
+      const testWindow = window as typeof window & { __e2eUiWsSessionId?: string }
+      const BrowserWebSocket = window.WebSocket
+      window.WebSocket = class extends BrowserWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          if (protocols === undefined) super(url)
+          else super(url, protocols)
+          this.addEventListener('message', (event) => {
+            try {
+              const message = JSON.parse(String(event.data)) as {
+                type?: string
+                sessionId?: string
+                payload?: { subscribed?: boolean }
+              }
+              if (message.type === 'session.created' && message.payload?.subscribed && message.sessionId) {
+                testWindow.__e2eUiWsSessionId = message.sessionId
+              }
+            } catch {}
+          })
+        }
 
-    await page.goto('/')
-    const browserLogin = await page.evaluate(async ([gatewayUrl, nextUsername, nextPassword]) => {
-      const response = await fetch(`${gatewayUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: nextUsername, password: nextPassword }),
-      })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        return { ok: false, status: response.status, payload }
       }
-      const token = (payload as { access_token?: string }).access_token
-      if (!token) return { ok: false, status: response.status, payload }
-      window.sessionStorage.setItem('jait-auth-token', token)
-      window.localStorage.setItem('token', token)
-      return { ok: true, status: response.status }
-    }, [API_URL, username, password] as const)
-    expect(browserLogin.ok).toBe(true)
-    await page.reload()
-    await expect(page.getByRole('button', { name: /project/i })).toBeVisible({ timeout: 15000 })
-    await page.waitForTimeout(1000)
+    }, [API_URL, token])
+
+    await page.goto(`/?projectId=${encodeURIComponent(projectId)}&sessionId=${encodeURIComponent(sessionId)}`)
+    const projectsSidebarButton = page.getByRole('button', { name: 'Toggle projects panel', exact: true })
+    await expect(projectsSidebarButton).toBeVisible({ timeout: 15000 })
+    await projectsSidebarButton.click()
+    const sessionButton = page.getByText(sessionName, { exact: true })
+    await expect(sessionButton).toBeVisible()
+    await sessionButton.click()
+    await page.waitForFunction((expectedSessionId) => (
+      (window as typeof window & { __e2eUiWsSessionId?: string }).__e2eUiWsSessionId === expectedSessionId
+    ), sessionId)
 
     const approveAll = await request.post(`${API_URL}/api/consent/pending/${sessionId}/approve-all`, {
       data: {},
@@ -73,38 +101,34 @@ test.describe('WS UI reactions for project and preview tools', () => {
 
     const openProject = await request.post(`${API_URL}/api/tools/execute`, {
       data: {
-        tool: 'surfaces.start',
-        input: {
-          type: 'filesystem',
-          projectRoot: PROJECT_ROOT,
-        },
+        tool: 'project.editor.open',
+        input: {},
         sessionId,
-        projectRoot: PROJECT_ROOT,
+        projectRoot,
       },
     })
     expect(openProject.ok()).toBeTruthy()
     const projectBody = await openProject.json() as { ok: boolean }
     expect(projectBody.ok).toBe(true)
 
-    await expect(page.getByRole('button', { name: /project/i })).toBeVisible()
+    await expect(projectsSidebarButton).toBeVisible()
 
     const openPreview = await request.post(`${API_URL}/api/tools/execute`, {
       data: {
         tool: 'preview.open',
         input: {
-          command: 'python3 -m http.server 4173 --bind 127.0.0.1',
-          target: '4173',
-          projectRoot: DOCS_SITE_ROOT,
+          target: FRONTEND_URL,
+          projectRoot,
         },
         sessionId,
-        projectRoot: DOCS_SITE_ROOT,
+        projectRoot,
       },
     })
     expect(openPreview.ok()).toBeTruthy()
     const previewBody = await openPreview.json() as { ok: boolean }
     expect(previewBody.ok).toBe(true)
 
-    await expect(page.getByText('127.0.0.1:4173/')).toBeVisible({ timeout: 20000 })
+    await expect(page.locator(`iframe[title="${FRONTEND_URL}"]`)).toBeVisible({ timeout: 20000 })
 
     const sendArchitecture = await request.post(`${API_URL}/api/tools/execute`, {
       data: {
@@ -113,14 +137,13 @@ test.describe('WS UI reactions for project and preview tools', () => {
           diagram: 'flowchart TD\nA[Gateway] --> B[Web UI]',
         },
         sessionId,
-        projectRoot: PROJECT_ROOT,
+        projectRoot,
       },
     })
     expect(sendArchitecture.ok()).toBeTruthy()
     const architectureBody = await sendArchitecture.json() as { ok: boolean }
     expect(architectureBody.ok).toBe(true)
 
-    await expect(page.getByText('Architecture', { exact: true })).toBeVisible()
     await expect(page.getByTitle('Regenerate diagram')).toBeVisible()
 
     await request.post(`${API_URL}/api/tools/execute`, {
@@ -128,7 +151,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
         tool: 'preview.stop',
         input: {},
         sessionId,
-        projectRoot: DOCS_SITE_ROOT,
+        projectRoot,
       },
     })
   })

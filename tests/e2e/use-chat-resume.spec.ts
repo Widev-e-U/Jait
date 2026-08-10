@@ -10,14 +10,14 @@ test.describe('useChat stream resume lifecycle', () => {
     await expect(page.getByTestId('history-loading')).toHaveText('false')
     await expect(page.getByTestId('message-count')).toHaveText('2')
 
-    await page.evaluate(() => {
-      window.dispatchEvent(new Event('focus'))
-      window.dispatchEvent(new PageTransitionEvent('pageshow'))
-      window.dispatchEvent(new Event('online'))
-      document.dispatchEvent(new Event('visibilitychange'))
-    })
-
-    await page.waitForTimeout(300)
-    await expect(page.getByTestId('stream-fetch-count')).toHaveText('1')
+    for (const eventName of ['focus', 'pageshow', 'online', 'visibilitychange'] as const) {
+      await page.evaluate((name) => {
+        if (name === 'visibilitychange') document.dispatchEvent(new Event(name))
+        else if (name === 'pageshow') window.dispatchEvent(new PageTransitionEvent(name))
+        else window.dispatchEvent(new Event(name))
+      }, eventName)
+      await page.waitForTimeout(100)
+      await expect(page.getByTestId('stream-fetch-count'), `${eventName} should not restart the active stream`).toHaveText('1')
+    }
   })
 })

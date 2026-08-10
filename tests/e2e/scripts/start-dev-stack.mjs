@@ -8,28 +8,30 @@ const repoRoot = resolve(scriptDir, '../../..')
 const gatewayDir = resolve(repoRoot, 'packages/gateway')
 const webDir = resolve(repoRoot, 'apps/web')
 
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3100'
-const gatewayUrl = process.env.API_URL || 'http://localhost:8000'
-const useLocalGateway = !process.env.API_URL
+const frontendUrl = process.env.FRONTEND_URL || 'http://127.0.0.1:3100'
+const gatewayUrl = process.env.API_URL || 'http://127.0.0.1:8100'
 const frontendPort = String(new URL(frontendUrl).port || (new URL(frontendUrl).protocol === 'https:' ? 443 : 80))
+const gatewayPort = String(new URL(gatewayUrl).port || (new URL(gatewayUrl).protocol === 'https:' ? 443 : 80))
 
 const children = []
 let shuttingDown = false
 let keepAlive = null
 
 function spawnServer(name, command, args, cwd, extraEnv = {}) {
+  const env = {
+    ...process.env,
+    ...extraEnv,
+  }
+  delete env.__JAIT_CLI
+
   const child = spawn(command, args, {
     cwd,
-    env: {
-      ...process.env,
-      ...extraEnv,
-    },
+    env,
     stdio: 'inherit',
   })
 
   child.on('exit', (code, signal) => {
     if (shuttingDown) return
-    if (code === 0) return
     const suffix = signal ? ` signal ${signal}` : ` code ${code ?? 'unknown'}`
     console.error(`[e2e] ${name} exited unexpectedly with${suffix}`)
     void shutdown(1)
@@ -103,20 +105,30 @@ process.on('SIGTERM', () => { void shutdown(0) })
 try {
   const frontendReady = await isUrlReady(frontendUrl)
   const gatewayHealthUrl = `${gatewayUrl}/health`
-  const gatewayReady = !useLocalGateway || await isUrlReady(gatewayHealthUrl)
+  const gatewayReady = await isUrlReady(gatewayHealthUrl)
 
-  if (useLocalGateway && !gatewayReady) {
-    spawnServer('gateway', 'bun', ['run', 'dev'], gatewayDir)
-    await waitForUrl(gatewayHealthUrl, 'gateway health')
+  if (frontendReady || gatewayReady) {
+    const occupied = [
+      frontendReady ? `frontend ${frontendUrl}` : null,
+      gatewayReady ? `gateway ${gatewayUrl}` : null,
+    ].filter(Boolean).join(' and ')
+    throw new Error(`Refusing to reuse an existing E2E server at ${occupied}. Stop it or set FRONTEND_URL and API_URL to use an external stack explicitly.`)
   }
 
-  if (!frontendReady) {
-    spawnServer('web', 'bun', ['run', 'dev'], webDir, {
-      JAIT_GATEWAY_URL: gatewayUrl,
-      PORT: frontendPort,
-    })
-    await waitForUrl(frontendUrl, 'frontend')
-  }
+  spawnServer('gateway', 'bun', ['src/index.ts'], gatewayDir, {
+    PORT: gatewayPort,
+    CORS_ORIGIN: frontendUrl,
+    NODE_ENV: 'test',
+  })
+  await waitForUrl(gatewayHealthUrl, 'gateway health')
+
+  spawnServer('web', 'bun', ['run', 'dev', '--host', '0.0.0.0'], webDir, {
+    JAIT_GATEWAY_URL: gatewayUrl,
+    VITE_WS_URL: gatewayUrl.replace(/^http/, 'ws'),
+    NODE_ENV: 'development',
+    PORT: frontendPort,
+  })
+  await waitForUrl(frontendUrl, 'frontend')
 
   // Keep the orchestration process alive until Playwright stops it.
   keepAlive = setInterval(() => {}, 60_000)

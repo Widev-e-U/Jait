@@ -51,49 +51,34 @@ export async function getTestToken(page: Page, identity: TestAuthIdentity): Prom
 }
 
 export async function authenticatePage(page: Page, token: string): Promise<void> {
-  await page.goto('/')
-  await page.evaluate((storedToken) => {
-    localStorage.setItem('token', storedToken)
+  await page.addInitScript((storedToken) => {
+    localStorage.setItem('jait-auth-token', storedToken)
   }, token)
-  await page.reload()
-  await page.waitForLoadState('domcontentloaded')
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Sign in' })).not.toBeVisible({ timeout: 15000 })
 }
 
-async function loginThroughUi(page: Page, identity: TestAuthIdentity): Promise<void> {
-  const dialog = page.getByRole('dialog', { name: 'Account' })
-  const dialogVisible = await dialog.isVisible().catch(() => false)
-  if (!dialogVisible) {
-    const signInButton = page.getByRole('button', { name: 'Sign in' })
-    if (!(await signInButton.isVisible().catch(() => false))) {
-      return
-    }
-    await signInButton.click()
-  }
-
-  await page.getByRole('textbox', { name: 'Username' }).fill(identity.username)
-  await page.getByRole('textbox', { name: 'Password' }).fill(identity.password)
-  await page.getByRole('button', { name: 'Login' }).click()
-  await expect(dialog).not.toBeVisible({ timeout: 15000 })
-}
-
-export async function cleanupTestJobs(page: Page, token: string): Promise<void> {
+export async function cleanupTestJobs(token: string): Promise<void> {
   let apiContext: Awaited<ReturnType<typeof playwrightRequest.newContext>> | null = null
   try {
     apiContext = await playwrightRequest.newContext()
-    const listResponse = await apiContext.get(`${API_URL}/jobs?include_disabled=true`, {
+    const listResponse = await apiContext.get(`${API_URL}/api/jobs?include_disabled=true`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
-    if (!listResponse.ok()) return
+    if (!listResponse.ok()) {
+      throw new Error(`Failed to list test jobs: HTTP ${listResponse.status()} ${await listResponse.text()}`)
+    }
 
     const data = await listResponse.json() as { items?: Array<{ id: string }> }
     for (const job of data.items ?? []) {
-      await apiContext.delete(`${API_URL}/jobs/${job.id}`, {
+      const deleteResponse = await apiContext.delete(`${API_URL}/api/jobs/${job.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!deleteResponse.ok()) {
+        throw new Error(`Failed to delete test job ${job.id}: HTTP ${deleteResponse.status()} ${await deleteResponse.text()}`)
+      }
     }
-  } catch (error) {
-    console.warn('Failed to cleanup test jobs:', error)
   } finally {
     await apiContext?.dispose()
   }
@@ -106,7 +91,7 @@ interface JobsFixtures {
 }
 
 export const test = base.extend<JobsFixtures>({
-  authIdentity: async ({}, use, testInfo) => {
+  authIdentity: async (_fixtures, use, testInfo) => {
     const suffix = `${testInfo.parallelIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     await use({
       username: `e2e-${suffix}`,
@@ -119,22 +104,9 @@ export const test = base.extend<JobsFixtures>({
     await use(token)
   },
 
-  authenticatedPage: async ({ page, apiToken, authIdentity }, use) => {
-    try {
-      await authenticatePage(page, apiToken)
-      await page.waitForTimeout(300)
-      const accountDialogVisible = await page.getByRole('dialog', { name: 'Account' }).isVisible().catch(() => false)
-      const signInVisible = await page.getByRole('button', { name: 'Sign in' }).isVisible().catch(() => false)
-      if (accountDialogVisible || signInVisible) {
-        await loginThroughUi(page, authIdentity)
-      }
-      await use(page)
-    } catch (error) {
-      console.warn('Auth setup failed, tests may fail:', error)
-      await use(page)
-    } finally {
-      await cleanupTestJobs(page, apiToken)
-    }
+  authenticatedPage: async ({ page, apiToken }, use) => {
+    await authenticatePage(page, apiToken)
+    await use(page)
   },
 })
 

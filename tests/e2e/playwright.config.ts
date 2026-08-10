@@ -4,10 +4,16 @@ import { defineConfig, devices } from '@playwright/test'
  * Playwright configuration for Jait E2E tests
  * @see https://playwright.dev/docs/test-configuration
  */
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3100'
-const shouldStartLocalStack = !process.env.FRONTEND_URL
+const configuredFrontendUrl = process.env.FRONTEND_URL
+const configuredApiUrl = process.env.API_URL
+const FRONTEND_URL = configuredFrontendUrl || 'http://127.0.0.1:3100'
+const API_URL = configuredApiUrl || (configuredFrontendUrl ? 'http://localhost:8000' : 'http://127.0.0.1:8100')
+const shouldStartLocalStack = !configuredFrontendUrl && !configuredApiUrl
 const includeFullBrowserMatrix = process.env.PLAYWRIGHT_ALL_BROWSERS === '1'
 const includeMobileMatrix = process.env.PLAYWRIGHT_MOBILE === '1'
+
+process.env.API_URL = API_URL
+process.env.FRONTEND_URL = FRONTEND_URL
 
 export default defineConfig({
   testDir: '.',
@@ -35,8 +41,8 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: FRONTEND_URL,
 
-    /* Collect trace when retrying the failed test */
-    trace: 'on-first-retry',
+    /* Keep a trace for local failures even when retries are disabled. */
+    trace: 'retain-on-failure',
 
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
@@ -47,16 +53,9 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    /* Setup project to seed auth state */
-    {
-      name: 'setup',
-      testMatch: /.*\.setup\.ts/,
-    },
-
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['setup'],
     },
 
     ...(includeFullBrowserMatrix
@@ -64,12 +63,10 @@ export default defineConfig({
           {
             name: 'firefox',
             use: { ...devices['Desktop Firefox'] },
-            dependencies: ['setup'],
           },
           {
             name: 'webkit',
             use: { ...devices['Desktop Safari'] },
-            dependencies: ['setup'],
           },
         ]
       : []),
@@ -79,7 +76,6 @@ export default defineConfig({
           {
             name: 'mobile-chrome',
             use: { ...devices['Pixel 5'] },
-            dependencies: ['setup'],
           },
         ]
       : []),
@@ -90,7 +86,7 @@ export default defineConfig({
     ? {
         command: 'node ./scripts/start-dev-stack.mjs',
         url: FRONTEND_URL,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         timeout: 120000,
       }
     : undefined,

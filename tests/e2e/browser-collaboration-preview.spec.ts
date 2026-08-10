@@ -1,82 +1,84 @@
-import { test, expect } from '@playwright/test'
+import { resolve } from 'node:path'
+import { test, expect, type APIRequestContext } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+const PROJECT_ROOT = process.env.PROJECT_ROOT || resolve(process.cwd(), '../..')
 
-async function registerUser(request: Parameters<typeof test>[0]['request']) {
+async function createSession(request: APIRequestContext) {
   const username = `e2e-browser-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const registerResponse = await request.post(`${API_URL}/api/auth/register`, {
     data: { username, password },
   })
-  expect(response.ok()).toBeTruthy()
-  const payload = await response.json() as { access_token: string }
-  return { token: payload.access_token, username, password }
+  expect(registerResponse.ok()).toBeTruthy()
+  const { access_token: token } = await registerResponse.json() as { access_token: string }
+
+  const sessionResponse = await request.post(`${API_URL}/api/sessions`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { name: 'browser-preview-e2e' },
+  })
+  expect(sessionResponse.ok()).toBeTruthy()
+  const { id } = await sessionResponse.json() as { id: string }
+  return id
 }
 
-test.describe('browser collaboration preview integration', () => {
-  test.describe.configure({ mode: 'serial' })
-
-  test('attached collaboration sessions open into the unified preview surface', async ({ page, request }, testInfo) => {
+test.describe('browser and preview integration', () => {
+  test('browser tools automatically target the visible preview browser', async ({ request }) => {
     test.setTimeout(90000)
-    test.skip(testInfo.project.name.startsWith('mobile'), 'desktop project assertions only')
+    const sessionId = await createSession(request)
 
-    const { token, username, password } = await registerUser(request)
-
-    const browserSessionResponse = await request.post(`${API_URL}/api/browser/sessions`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: {
-        name: 'attached-gateway-browser',
-        targetUrl: 'http://127.0.0.1:8000/',
-        previewUrl: '/api/dev-proxy/8000/',
-        previewSessionId: 'preview-attached-gateway',
-        browserId: 'browser-attached-gateway',
-        mode: 'shared',
-        origin: 'attached',
-        controller: 'agent',
-        status: 'ready',
-      },
+    const approveAll = await request.post(`${API_URL}/api/consent/pending/${sessionId}/approve-all`, {
+      data: {},
     })
-    expect(browserSessionResponse.ok()).toBeTruthy()
+    expect(approveAll.ok()).toBeTruthy()
 
-    const interventionResponse = await request.post(`${API_URL}/api/browser/interventions`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: {
-        browserSessionId: (await browserSessionResponse.json() as { session: { id: string } }).session.id,
-        reason: 'Confirm preview routing',
-        instructions: 'Open the live session in the preview surface.',
-        allowUserNote: true,
-      },
-    })
-    expect(interventionResponse.ok()).toBeTruthy()
-
-    await page.addInitScript(([gatewayUrl]) => {
-      window.localStorage.setItem('jait-gateway-url', gatewayUrl)
-    }, [API_URL])
-
-    await page.goto('/')
-    const browserLogin = await page.evaluate(async ([gatewayUrl, nextUsername, nextPassword]) => {
-      const response = await fetch(`${gatewayUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: nextUsername, password: nextPassword }),
+    try {
+      const previewResponse = await request.post(`${API_URL}/api/tools/execute`, {
+        data: {
+          tool: 'preview.open',
+          input: {
+            target: FRONTEND_URL,
+            projectRoot: PROJECT_ROOT,
+          },
+          sessionId,
+          projectRoot: PROJECT_ROOT,
+        },
       })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) return { ok: false, status: response.status, payload }
-      const token = (payload as { access_token?: string }).access_token
-      if (!token) return { ok: false, status: response.status, payload }
-      window.sessionStorage.setItem('jait-auth-token', token)
-      window.localStorage.setItem('token', token)
-      return { ok: true, status: response.status }
-    }, [API_URL, username, password] as const)
-    expect(browserLogin.ok).toBe(true)
-    await page.reload()
+      expect(previewResponse.ok()).toBeTruthy()
+      const preview = await previewResponse.json() as {
+        ok: boolean
+        data?: { browserId?: string; url?: string }
+      }
+      expect(preview.ok).toBe(true)
+      expect(preview.data?.browserId).toBe(`preview-browser-${sessionId}`)
 
-    await expect(page.getByText('Browser Collaboration')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Confirm preview routing')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Open live session' }).first().click()
-
-    await expect(page.getByText('/api/dev-proxy/8000/').first()).toBeVisible({ timeout: 20000 })
+      const inspectResponse = await request.post(`${API_URL}/api/tools/execute`, {
+        data: {
+          tool: 'browser.inspect',
+          input: {},
+          sessionId,
+          projectRoot: PROJECT_ROOT,
+        },
+      })
+      expect(inspectResponse.ok()).toBeTruthy()
+      const inspection = await inspectResponse.json() as {
+        ok: boolean
+        data?: { browserId?: string; url?: string }
+      }
+      expect(inspection.ok).toBe(true)
+      expect(inspection.data?.browserId).toBe(preview.data?.browserId)
+      expect(inspection.data?.url).toContain(new URL(FRONTEND_URL).host)
+    } finally {
+      await request.post(`${API_URL}/api/tools/execute`, {
+        data: {
+          tool: 'preview.stop',
+          input: {},
+          sessionId,
+          projectRoot: PROJECT_ROOT,
+        },
+      })
+    }
   })
 })

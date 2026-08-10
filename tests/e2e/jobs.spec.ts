@@ -1,24 +1,33 @@
 /**
  * E2E tests for the Jobs management UI
  */
-import { test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
+import { cleanupTestJobs, test, expect } from './fixtures'
 
-test.describe.configure({ mode: 'serial' })
+async function openJobsPage(page: Page): Promise<void> {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open navigation menu' }).click()
+  await page.getByRole('menuitem', { name: 'Jobs', exact: true }).click()
+}
+
+test.beforeEach(async ({ apiToken }) => {
+  await cleanupTestJobs(apiToken)
+})
+
+test.afterEach(async ({ apiToken }) => {
+  await cleanupTestJobs(apiToken)
+})
 
 test.describe('Jobs Page Navigation', () => {
   test('should navigate to jobs page when clicking Jobs tab', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/')
-    
-    // Click on Jobs tab in navigation
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     // Should see the jobs page header
     await expect(authenticatedPage.locator('h1:has-text("Scheduled Jobs")')).toBeVisible()
   })
 
   test('should show empty state when no jobs exist', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     // Should show empty state
     await expect(authenticatedPage.getByText('No scheduled jobs yet', { exact: true })).toBeVisible()
@@ -28,8 +37,7 @@ test.describe('Jobs Page Navigation', () => {
 
 test.describe('Create Job Dialog', () => {
   test.beforeEach(async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
   })
 
   test('should open create job dialog', async ({ authenticatedPage }) => {
@@ -91,8 +99,7 @@ test.describe('Create Job Dialog', () => {
 
 test.describe('Create Agent Task Job', () => {
   test.beforeEach(async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
   })
 
   test('should create an agent task job', async ({ authenticatedPage }) => {
@@ -121,7 +128,7 @@ test.describe('Job Card Actions', () => {
   // Helper to create a job via API before testing
   async function createTestJob(page: any, token: string) {
     const API_URL = process.env.API_URL || 'http://localhost:8000'
-    const response = await page.request.post(`${API_URL}/jobs`, {
+    const response = await page.request.post(`${API_URL}/api/jobs`, {
       headers: { Authorization: `Bearer ${token}` },
       data: {
         name: 'E2E Test Job',
@@ -142,8 +149,7 @@ test.describe('Job Card Actions', () => {
     // Create a job via API
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
     await expect(jobCard).toBeVisible()
@@ -155,8 +161,7 @@ test.describe('Job Card Actions', () => {
   test('should toggle job enabled state', async ({ authenticatedPage, apiToken }) => {
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
     const toggle = jobCard.locator('button[role="switch"]')
@@ -176,8 +181,7 @@ test.describe('Job Card Actions', () => {
   test('should trigger job immediately', async ({ authenticatedPage, apiToken }) => {
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     await authenticatedPage.getByTestId(`job-trigger-${job.id}`).click()
     
@@ -188,8 +192,7 @@ test.describe('Job Card Actions', () => {
   test('should open job history dialog', async ({ authenticatedPage, apiToken }) => {
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
@@ -202,8 +205,7 @@ test.describe('Job Card Actions', () => {
   test('should open edit dialog', async ({ authenticatedPage, apiToken }) => {
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     await authenticatedPage.getByTestId(`job-edit-${job.id}`).click()
     
@@ -215,8 +217,7 @@ test.describe('Job Card Actions', () => {
   test('should delete job with confirmation', async ({ authenticatedPage, apiToken }) => {
     const job = await createTestJob(authenticatedPage, apiToken)
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
     await expect(jobCard).toBeVisible()
@@ -233,7 +234,7 @@ test.describe('Job History Dialog', () => {
   test('should show empty state when no runs', async ({ authenticatedPage, apiToken }) => {
     // Create a job via API
     const API_URL = process.env.API_URL || 'http://localhost:8000'
-    const response = await authenticatedPage.request.post(`${API_URL}/jobs`, {
+    const response = await authenticatedPage.request.post(`${API_URL}/api/jobs`, {
       headers: { Authorization: `Bearer ${apiToken}` },
       data: {
         name: 'History Test Job',
@@ -246,8 +247,7 @@ test.describe('Job History Dialog', () => {
     })
     const job = await response.json()
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
@@ -257,7 +257,7 @@ test.describe('Job History Dialog', () => {
 
   test('should close history dialog', async ({ authenticatedPage, apiToken }) => {
     const API_URL = process.env.API_URL || 'http://localhost:8000'
-    const response = await authenticatedPage.request.post(`${API_URL}/jobs`, {
+    const response = await authenticatedPage.request.post(`${API_URL}/api/jobs`, {
       headers: { Authorization: `Bearer ${apiToken}` },
       data: {
         name: 'Close Test Job',
@@ -270,8 +270,7 @@ test.describe('Job History Dialog', () => {
     })
     const job = await response.json()
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
     // Close dialog
@@ -287,8 +286,7 @@ test.describe('Responsive Layout', () => {
     // Set mobile viewport
     await authenticatedPage.setViewportSize({ width: 375, height: 667 })
     
-    await authenticatedPage.goto('/')
-    await authenticatedPage.click('button:has-text("Jobs")')
+    await openJobsPage(authenticatedPage)
     
     // Jobs page should still be accessible
     await expect(authenticatedPage.locator('h1:has-text("Scheduled Jobs")')).toBeVisible()

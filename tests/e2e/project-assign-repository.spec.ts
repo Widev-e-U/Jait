@@ -2,8 +2,9 @@
  * E2E test for the `project.assign_repository` MCP tool.
  *
  * Verifies the rename from `workspace.assign_repository` → `project.assign_repository`:
- *   - The new name is registered and callable via the gateway's MCP HTTP endpoint.
- *   - The old `workspace.assign_repository` name is no longer registered.
+ *   - MCP discovery exposes the new name in underscore-safe wire format.
+ *   - The old workspace name is no longer exposed.
+ *   - The dotted internal name remains callable via the gateway's MCP HTTP endpoint.
  *   - The tool actually assigns/creates a repository for a project root that has a `.git` directory.
  */
 import { execSync } from 'node:child_process'
@@ -101,10 +102,10 @@ test.describe('project.assign_repository MCP tool', () => {
     expect(list.error, list.error?.message).toBeUndefined()
     const toolNames = list.result?.tools.map((tool) => tool.name) ?? []
 
-    expect(toolNames).toContain('project.assign_repository')
-    expect(toolNames).not.toContain('workspace.assign_repository')
+    expect(toolNames).toContain('project_assign_repository')
+    expect(toolNames).not.toContain('workspace_assign_repository')
 
-    const projectTool = list.result?.tools.find((tool) => tool.name === 'project.assign_repository')
+    const projectTool = list.result?.tools.find((tool) => tool.name === 'project_assign_repository')
     expect(projectTool?.description).toMatch(/project/i)
     expect(projectTool?.description).not.toMatch(/deprecated/i)
   })

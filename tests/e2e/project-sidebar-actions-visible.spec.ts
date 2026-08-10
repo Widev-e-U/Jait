@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const PROJECT_ROOT = process.env.PROJECT_ROOT || path.resolve(process.cwd(), '..')
+const PROJECT_ROOT = process.env.PROJECT_ROOT || path.resolve(process.cwd(), '../..')
 
 async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-sidebar-actions-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -100,33 +100,38 @@ test.describe('project sidebar actions', () => {
 
     await page.goto('/')
     await loginInBrowser(page, username, password)
-    await expect(page.getByText('Chats & Projects')).toBeVisible({ timeout: 15_000 })
+    const toggleProjects = page.getByRole('button', { name: 'Toggle projects panel', exact: true })
+    await expect(toggleProjects).toBeVisible({ timeout: 15_000 })
+    await toggleProjects.click()
 
-    const sidebar = page.locator('aside').first()
+    const sidebar = page.locator('aside').filter({
+      has: page.getByText(projectTitle, { exact: true }),
+    })
     await expect(sidebar).toBeVisible()
 
-    const projectRow = sidebar.locator('div.group').filter({
-      has: page.getByText(projectTitle, { exact: true }),
-    }).first()
-    await expect(projectRow).toBeVisible()
+    const projectActionsButton = sidebar.getByRole('button', { name: 'Project actions' })
+    const projectRow = projectActionsButton.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " group ")][1]')
     await projectRow.hover()
-
-    const changeDirectoryButton = projectRow.getByRole('button', { name: 'Change directory' })
-    const archiveProjectButton = projectRow.getByRole('button', { name: 'Archive project' })
-    await expect(changeDirectoryButton).toBeVisible()
-    await expect(archiveProjectButton).toBeVisible()
+    await expect(projectActionsButton).toBeVisible()
 
     const sidebarBox = await sidebar.boundingBox()
-    const rowBox = await projectRow.boundingBox()
+    const actionsButtonBox = await projectActionsButton.boundingBox()
     expect(sidebarBox).not.toBeNull()
-    expect(rowBox).not.toBeNull()
+    expect(actionsButtonBox).not.toBeNull()
+    assertWithinBounds(actionsButtonBox!, sidebarBox!)
 
-    for (const button of [changeDirectoryButton, archiveProjectButton]) {
-      await expect(button).toBeVisible()
-      const buttonBox = await button.boundingBox()
-      expect(buttonBox).not.toBeNull()
-      assertWithinBounds(buttonBox!, sidebarBox!)
-      assertWithinBounds(buttonBox!, rowBox!)
+    await projectActionsButton.focus()
+    await projectActionsButton.press('Enter')
+    const changeDirectoryAction = page.getByRole('menuitem', { name: 'Change directory' })
+    const archiveProjectAction = page.getByRole('menuitem', { name: 'Archive project' })
+    const viewport = page.viewportSize()
+    expect(viewport).not.toBeNull()
+
+    for (const action of [changeDirectoryAction, archiveProjectAction]) {
+      await expect(action).toBeVisible()
+      const actionBox = await action.boundingBox()
+      expect(actionBox).not.toBeNull()
+      assertWithinBounds(actionBox!, { x: 0, y: 0, width: viewport!.width, height: viewport!.height })
     }
   })
 })
