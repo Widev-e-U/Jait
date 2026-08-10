@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.702](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.702) — 2026-08-10
+- feat: real MCP SDK bridge, large-repo fast worktrees, session-scoped streams (`c1006dad`)
+
 ## [v0.1.701](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.701) — 2026-08-10
 - test(e2e): isolate dev stack and stabilize flaky specs (`099ecfd7`)
 - fix(gateway): one-round quarantine of repeated tools after duplicate-call nudges (`8fc8d398`)
