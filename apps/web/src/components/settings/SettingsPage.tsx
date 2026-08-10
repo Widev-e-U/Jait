@@ -395,9 +395,11 @@ export function SettingsPage({
     }
   }, [newProviderAccountNodeId, newProviderAccountType, remoteProviderNodes])
 
+  const selectedProviderAccountType = providerAccountTypes.find((type) => type.providerType === newProviderAccountType)
+
   const handleCreateProviderAccount = async () => {
     const label = newProviderAccountLabel.trim()
-    const accountType = providerAccountTypes.find((type) => type.providerType === newProviderAccountType)
+    const accountType = selectedProviderAccountType
     if (!label || !accountType) return
     setProviderAccountMutationBusy(true)
     setError(null)
@@ -1252,7 +1254,9 @@ export function SettingsPage({
                   </SelectTrigger>
                   <SelectContent>
                     {providerAccountTypes.map((type) => (
-                      <SelectItem key={type.providerType} value={type.providerType}>{type.name}</SelectItem>
+                      <SelectItem key={type.providerType} value={type.providerType}>
+                        {type.name}{type.version ? ` ${type.version}` : ''}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1283,6 +1287,14 @@ export function SettingsPage({
                   {providerAccountMutationBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
                   Add account
                 </Button>
+                {selectedProviderAccountType && (
+                  <p className="text-xs text-muted-foreground sm:col-span-4">
+                    {selectedProviderAccountType.description}
+                    {selectedProviderAccountType.distribution
+                      ? ` Installs on first use via ${selectedProviderAccountType.distribution}.`
+                      : ''}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 {providerAccounts.length === 0 && remoteProviderNodes.every((node) => (node.providerStatuses?.length ?? node.providers.length) === 0) && !providerAccountsLoading ? (

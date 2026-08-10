@@ -99,6 +99,11 @@ export interface ProviderAccountType {
   providerType: string
   name: string
   description: string
+  version?: string
+  distribution?: 'binary' | 'npx' | 'uvx'
+  icon?: string
+  website?: string
+  repository?: string
 }
 
 type ProviderModelsResponse = {
