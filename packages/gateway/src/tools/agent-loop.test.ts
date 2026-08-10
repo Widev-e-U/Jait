@@ -2156,9 +2156,9 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(sawRestoredRound).toBe(true);
   });
 
-  it("stops when a provider repeats a tool during its quarantine round", async () => {
+  it("keeps quarantining and recovers when a provider calls an unavailable tool", async () => {
     let fetchCalls = 0;
-    let sawQuarantinedRound = false;
+    let quarantinedRounds = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         tools?: Array<{ function?: { name?: string } }>;
@@ -2168,7 +2168,10 @@ describe("runAgentLoop tool-loop detection", () => {
       const args = { path: "tool-call-card.tsx", startLine: 3490, endLine: 3560 };
       if (readAvailable) return toolCallSSE(`call-read-${round}`, "read", args);
 
-      sawQuarantinedRound = true;
+      quarantinedRounds++;
+      if (quarantinedRounds > 1) {
+        return textResponse("Recovered after the unavailable call was rejected.");
+      }
       return toolCallWithContentSSE(
         `call-forbidden-read-${round}`,
         "read",
@@ -2212,11 +2215,12 @@ describe("runAgentLoop tool-loop detection", () => {
       },
     );
 
-    expect(sawQuarantinedRound).toBe(true);
-    expect(fetchCalls).toBe(6);
+    expect(quarantinedRounds).toBe(2);
+    expect(fetchCalls).toBe(7);
     expect(executedReads).toBe(3);
     expect(result.hitMaxRounds).toBe(false);
-    expect(result.content).toMatch(/Stopped: provider repeated a quarantined tool call \(read\)/);
+    expect(result.content).toBe("Recovered after the unavailable call was rejected.");
+    expect(result.content).not.toContain("Stopped:");
     expect(result.content).not.toContain("DSML");
   });
 
@@ -2588,7 +2592,7 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(assistantWithTools!.thinking!.endsWith("x".repeat(4000))).toBe(true);
   });
 
-  it("stops instead of replaying when a thinking-only round repeats the same reasoning verbatim", async () => {
+  it("recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim", async () => {
     // A thinking-only response has no visible text and no tool call, so it hits
     // empty-response recovery. Before the fix that recovery re-issued a
     // byte-identical request, the provider reproduced the same reasoning, and
@@ -2604,6 +2608,9 @@ describe("runAgentLoop tool-loop detection", () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       fetchCalls++;
+      if (fetchCalls === 3) {
+        return textResponse("Recovered after the repeated reasoning was rejected.");
+      }
       return new Response(new ReadableStream<Uint8Array>({
         start(controller) {
           const encoder = new TextEncoder();
@@ -2635,9 +2642,9 @@ describe("runAgentLoop tool-loop detection", () => {
       onEvent: (e) => events.push(e),
     });
 
-    // Gave up after the first replay rather than burning every retry.
-    expect(fetchCalls).toBe(2);
-    expect(result.content).toMatch(/kept repeating the same reasoning/i);
+    expect(fetchCalls).toBe(3);
+    expect(result.content).toBe("Recovered after the repeated reasoning was rejected.");
+    expect(result.content).not.toContain("Stopped:");
     expect(events.some((e) => e.type === "steering" && /repeated the same reasoning/i.test(e.message ?? ""))).toBe(true);
 
     // The reasoning is recorded once, not glued to itself.
