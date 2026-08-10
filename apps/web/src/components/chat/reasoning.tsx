@@ -12,7 +12,7 @@ interface ReasoningProps {
 }
 
 export function Reasoning({ content, isStreaming, duration, onOpenPath }: ReasoningProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(() => isStreaming && Boolean(content))
   const wasStreaming = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollRafRef = useRef<number | null>(null)
@@ -76,10 +76,7 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
               : 'border-border/60 bg-muted/30 text-muted-foreground',
           )}
         >
-          <AssistantMarkdown content={content} onOpenPath={onOpenPath} />
-          {isStreaming && (
-            <span className="inline-block w-1.5 h-3.5 bg-amber-400 animate-pulse ml-0.5 align-middle rounded-sm" />
-          )}
+          <AssistantMarkdown content={content} isStreaming={isStreaming} onOpenPath={onOpenPath} />
         </div>
       </CollapsibleContent>
     </Collapsible>

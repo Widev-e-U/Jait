@@ -493,6 +493,37 @@ export function useAutomation(enabled = true) {
     }
   }, [selectedThreadId, enabled])
 
+  // Re-fetch the currently selected thread + its activities on WS reconnect.
+  // Activities are otherwise fetched once per selection and cached, so a dropped
+  // WS (e.g. returning to a backgrounded tab) would leave the open thread stuck
+  // on a stale snapshot even though the Manager thread keeps running server-side.
+  const refreshSelectedThread = useCallback(async () => {
+    const threadId = selectedThreadIdRef.current
+    if (!enabled || !threadId) return
+    if (!getAuthToken()) return
+    try {
+      const [thread, acts] = await Promise.all([
+        agentsApi.getThread(threadId).catch(() => null),
+        agentsApi.getActivities(threadId),
+      ])
+      if (thread) {
+        setThreads(prev => prev.some(t => t.id === threadId)
+          ? prev.map(t => t.id === threadId ? thread : t)
+          : [thread, ...prev])
+      }
+      const sorted = sortActivities(acts)
+      activityCacheRef.current.set(threadId, sorted)
+      setActivities(sorted)
+      const todos = extractTodosFromActivities(sorted)
+      threadTodosRef.current.set(threadId, todos)
+      setSelectedThreadTodos(todos)
+    } catch {
+      /* keep current state if the re-fetch fails */
+    } finally {
+      setLoadingActivities(false)
+    }
+  }, [enabled])
+
   const hydrateThreadRuntime = useCallback(async (threadId: string) => {
     if (hydratingThreadIdsRef.current.has(threadId)) return
     hydratingThreadIdsRef.current.add(threadId)
@@ -978,6 +1009,7 @@ export function useAutomation(enabled = true) {
 
     // Actions
     refresh,
+    refreshSelectedThread,
     handleSend,
     handleSendToThread,
     handleStop,
