@@ -26,16 +26,17 @@ const OPENROUTER_MAX_MODELS = 100;
 const OMNIROUTE_MAX_MODELS = 150;
 
 /**
- * OmniRoute's routing aliases. They name a strategy rather than a model and are
- * not always present in /v1/models, so they are prepended unconditionally —
- * `auto` in particular is the one id that works on a fresh keyless install.
+ * Bare `auto` is accepted as a request model but is *not* returned by
+ * /v1/models (verified against OmniRoute 3.8.49), so it has to be added by
+ * hand or the one id that always works would be missing from the picker.
+ *
+ * The narrower strategies (`auto/coding`, `auto/best-reasoning`, `auto/cheap`,
+ * … — 38 of them in 3.8.49) are all listed by the catalogue itself and are
+ * deliberately not duplicated here: hardcoding names that shift between
+ * versions would eventually offer models the router no longer knows.
  */
 const OMNIROUTE_ROUTING_ALIASES: ProviderModelInfo[] = [
   { id: "auto", name: "auto", description: "Smart routing with tier fallback", isDefault: true },
-  { id: "auto/coding", name: "auto/coding", description: "Routed to coding-tuned models" },
-  { id: "auto/fast", name: "auto/fast", description: "Routed for lowest latency" },
-  { id: "auto/cheap", name: "auto/cheap", description: "Routed for lowest cost" },
-  { id: "auto/smart", name: "auto/smart", description: "Routed to the strongest available model" },
 ];
 
 /** OpenAI model ID prefixes that represent chat-completion-capable models. */

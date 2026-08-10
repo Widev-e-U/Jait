@@ -165,15 +165,9 @@ describe("fetchOmniRouteModels", () => {
 
     const models = await fetchOmniRouteModels("k", "http://localhost:20128/v1");
 
-    expect(models.slice(0, 5).map((m) => m.id)).toEqual([
-      "auto",
-      "auto/coding",
-      "auto/fast",
-      "auto/cheap",
-      "auto/smart",
-    ]);
-    expect(models[0].isDefault).toBe(true);
-    expect(models.slice(5).map((m) => m.id)).toEqual([
+    // Bare "auto" is usable but absent from /v1/models, so it is added by hand.
+    expect(models[0]).toMatchObject({ id: "auto", isDefault: true });
+    expect(models.slice(1).map((m) => m.id)).toEqual([
       "deepseek/deepseek-r1",
       "google/gemini-2.5-flash",
       "openai/gpt-4o",
@@ -181,17 +175,18 @@ describe("fetchOmniRouteModels", () => {
     expect(models.find((m) => m.id === "deepseek/deepseek-r1")?.reasoningEffortSupported).toBe(true);
   });
 
-  it("does not duplicate aliases already present in the catalogue", async () => {
+  it("does not duplicate auto if a future catalogue starts listing it", async () => {
     mockFetchOnce({ data: [{ id: "auto" }, { id: "auto/coding" }, { id: "openai/gpt-4o" }] });
     const models = await fetchOmniRouteModels("", "http://localhost:20128/v1");
     expect(models.filter((m) => m.id === "auto")).toHaveLength(1);
-    expect(models.filter((m) => m.id === "auto/coding")).toHaveLength(1);
+    // The narrower strategies come straight from the catalogue.
+    expect(models.map((m) => m.id)).toContain("auto/coding");
   });
 
   it("caps a very large catalogue", async () => {
     mockFetchOnce({ data: Array.from({ length: 400 }, (_, i) => ({ id: `vendor/model-${i}` })) });
     const models = await fetchOmniRouteModels("k", "http://localhost:20128/v1");
-    expect(models).toHaveLength(155); // 5 aliases + 150 catalogue entries
+    expect(models).toHaveLength(151); // "auto" + 150 catalogue entries
   });
 
   it("omits the Authorization header when no key is configured", async () => {

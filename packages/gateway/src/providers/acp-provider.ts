@@ -1346,12 +1346,14 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
     };
   }
 
+  const headers = Object.entries(server.headers ?? {}).map(([name, value]) => ({ name, value }));
+
   if (server.transport === "http") {
     return {
       type: "http",
       name: server.name,
       url: server.url ?? "",
-      headers: [],
+      headers,
     };
   }
 
@@ -1359,7 +1361,7 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
     type: "sse",
     name: server.name,
     url: server.url ?? "",
-    headers: [],
+    headers,
   };
 }
 

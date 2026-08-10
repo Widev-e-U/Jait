@@ -32,6 +32,11 @@ export async function callJaitLlmCompletion(
       messages,
       max_tokens: options.maxTokens ?? 256,
       temperature: options.temperature ?? 0.3,
+      // Explicit, not implied: OpenAI treats a missing `stream` as false, but
+      // OmniRoute defaults to streaming and answers with text/event-stream —
+      // which makes the res.json() below throw. Every caller here wants one
+      // complete response, so say so rather than relying on the backend's default.
+      stream: false,
     }),
     signal: options.signal,
   });

@@ -1,8 +1,24 @@
 # OmniRoute als AI-Provider in Jait
 
-Branch: `feat/omniroute-provider` — **Phasen 1–4 umgesetzt.** Phase 5 (OmniRoute-MCP) offen.
+Branch: `feat/omniroute-provider` — **Phasen 1–5 umgesetzt**, gegen OmniRoute 3.8.49 verifiziert.
 
-Abweichungen von der ursprünglichen Planung, die sich bei der Umsetzung ergeben haben:
+## Was der echte Router anders macht als die Doku
+
+Gemessen an einer lokalen Installation von `omniroute@3.8.49`, nicht aus der README abgeschrieben:
+
+| Doku sagt | Tatsächlich |
+| --- | --- |
+| Port 20128 | `serve --port` defaultet korrekt auf 20128, aber eine geerbte `PORT`-Env-Variable schlägt das — hier startete der Router auf 8000 und kollidierte mit dem Gateway |
+| Modell `auto` aufrufen | funktioniert, ist aber **nicht** in `/v1/models` gelistet |
+| Aliase `auto/coding`, `auto/fast`, … | existieren, dazu 34 weitere (`auto/best-reasoning`, `auto/coding:cheap`, `auto/claude-opus`, …) — alle im Katalog gelistet |
+| „OpenAI-compatible" | **`stream` defaultet auf true.** Ein Request ohne `stream`-Feld liefert `text/event-stream`, nicht JSON |
+| MCP unter `/api/mcp/stream` | Pfad stimmt, verlangt aber immer Auth (401 ohne Bearer) — anders als die Inferenz-API, die keyless bedient |
+
+Der `stream`-Default war ein echter Bug: `callJaitLlmCompletion()` schickt kein `stream`-Feld und ruft
+`res.json()` — gegen OmniRoute hätte das Thread-Titel-, Commit-Message- und Plan-Generierung geworfen.
+Fix: `stream: false` explizit senden. Gegen den laufenden Router fail-then-pass nachgewiesen.
+
+## Abweichungen von der ursprünglichen Planung
 
 - **Modell-Aliase bei nicht erreichbarem Router:** ursprünglich geplant war, `auto` & Co. immer anzuzeigen.
   Umgesetzt ist das Gegenteil — läuft der Router nicht, trägt die Gruppe nichts bei (wie Ollama). Modelle
@@ -14,6 +30,13 @@ Abweichungen von der ursprünglichen Planung, die sich bei der Umsetzung ergeben
   Subpath auf `dist/`, und Vitest aliast nur den Root. Value-Imports (`isJaitBackend`) müssen deshalb aus
   `@jait/shared` kommen — Type-only-Imports funktionieren über beide Wege.
 - **`OMNIROUTE_MODEL`** als dritter Settings-Key ergänzt (Fallback-Modell, wenn die UI keins gewählt hat).
+- **Hartkodierte Aliase auf `auto` reduziert.** Geplant waren fünf; der Katalog liefert die anderen vier
+  selbst, und Namen zu raten, die sich zwischen Versionen verschieben, produziert irgendwann tote Einträge.
+  `auto` bleibt hartkodiert, weil es funktioniert, aber nicht gelistet wird.
+- **Phase 5 braucht `McpServerRef.headers`.** `env` gilt nur für stdio-Subprozesse und ist über HTTP
+  bedeutungslos; `toAcpMcpServer()` hat `headers: []` bisher hart leer gelassen. Das Feld ist jetzt
+  durchgereicht — nützlich für jeden authentifizierten Remote-MCP-Server, nicht nur OmniRoute.
+- **Ohne `OMNIROUTE_API_KEY` wird der MCP-Ref weggelassen** statt kaputt übergeben.
 
 ## 1. Was OmniRoute ist (verifiziert)
 
@@ -197,13 +220,17 @@ dupliziert. Falls die eigene Zeile im Dropdown gewünscht ist, ist der billige W
 4. **Phase 4 (optional) — ACP durch OmniRoute**: Env-Injektion (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`,
    `OPENAI_BASE_URL`/`OPENAI_API_KEY`) für `claude-code` und `codex` in `loadAcpProviderConfigs()`, hinter einem
    expliziten Schalter (`JAIT_ACP_VIA_OMNIROUTE=1`), damit niemand versehentlich sein Claude-Abo umleitet.
-5. **Phase 5 (optional) — OmniRoute-MCP**: `http://localhost:20128/api/mcp/stream` als zusätzlicher MCP-Server
-   registrierbar machen. Unabhängig vom Rest, rein additiv.
+5. **Phase 5 — OmniRoute-MCP**: `…/api/mcp/stream` wird über `buildJaitMcpServerRefs()` an CLI-Agenten
+   mitgegeben, hinter `JAIT_OMNIROUTE_MCP=1` plus gesetztem `OMNIROUTE_API_KEY`. Endpoint-Pfad verifiziert
+   (401 statt 404), Header-Plumbing per Unit-Test; ein End-to-End-Lauf steht aus, weil dafür ein im
+   Dashboard angelegter Key nötig ist.
 
-## 6. Offene Punkte für den User
+## 6. Betrieb
 
-- Soll OmniRoute im Provider-Dropdown eine **eigene Zeile** bekommen (UI-Alias) oder reicht es als
-  Backend-Auswahl unter „Jait"? (Plan geht von Letzterem aus.)
-- Phase 4 (Claude Code / Codex durch OmniRoute routen) mitnehmen oder erstmal weglassen?
-- Läuft OmniRoute bei dir schon auf `localhost:20128`, oder auf einem anderen Host im Homelab? Das entscheidet,
-  ob der Default `localhost` bleibt oder konfiguriert werden muss.
+`omniroute serve --port 20128 --no-open`. **Wichtig:** eine im Environment gesetzte `PORT`-Variable schlägt
+den Default — in einer Jait-Shell (`PORT=8000`) startet der Router sonst auf 8000 und kollidiert mit dem
+Gateway. Entweder `env -u PORT` voranstellen oder `--port` immer explizit setzen.
+
+Danach in Jait: Settings → Jait LLM Backend → „OmniRoute". Ohne Key bedient der Router seine
+Free-Tier-Provider; für MCP (Phase 5) und die meisten Upstreams braucht es einen Key aus dem Dashboard
+unter `http://localhost:20128`.

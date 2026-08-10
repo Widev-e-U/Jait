@@ -17,6 +17,7 @@ import type {
 import {
   JAIT_CORE_MCP_SERVER_NAME,
   JAIT_DEFERRED_MCP_SERVER_NAME,
+  OMNIROUTE_MCP_SERVER_NAME,
 } from "./jait-mcp.js";
 
 export class ProviderRegistry {
@@ -121,11 +122,50 @@ export class ProviderRegistry {
     coreUrl.searchParams.set("toolSet", "core");
     deferredUrl.searchParams.set("toolSet", "deferred");
 
-    return [
+    const refs: McpServerRef[] = [
       { ...baseRef, name: JAIT_CORE_MCP_SERVER_NAME, url: coreUrl.toString() },
       { ...baseRef, name: JAIT_DEFERRED_MCP_SERVER_NAME, url: deferredUrl.toString() },
     ];
+
+    const omniroute = buildOmniRouteMcpServerRef();
+    if (omniroute) refs.push(omniroute);
+
+    return refs;
   }
+}
+
+/**
+ * OmniRoute exposes its own gateway (routing, providers, combos, cache,
+ * compression, memory) over MCP. Handing that server to CLI agents alongside
+ * Jait's own lets them inspect and steer the router they are being served by.
+ *
+ * Opt-in via JAIT_OMNIROUTE_MCP=1. Deliberately a separate switch from
+ * JAIT_ACP_VIA_OMNIROUTE: routing inference through the router and granting
+ * agents control over it are different decisions, and wanting one does not
+ * imply wanting the other.
+ *
+ * Unlike the inference API — which happily serves keyless free-tier providers —
+ * the MCP endpoint always requires authentication (verified: it answers 401
+ * without a bearer token). Without a key there is nothing useful to hand the
+ * agent, so the ref is omitted rather than handed over pre-broken.
+ */
+export function buildOmniRouteMcpServerRef(
+  env: NodeJS.ProcessEnv = process.env,
+): McpServerRef | null {
+  if (env.JAIT_OMNIROUTE_MCP?.trim().toLowerCase() !== "1") return null;
+  const key = env.OMNIROUTE_API_KEY?.trim();
+  if (!key) return null;
+  // OMNIROUTE_BASE_URL points at the OpenAI-compatible surface (…/v1); the MCP
+  // endpoint hangs off the router root instead.
+  const root = (env.OMNIROUTE_BASE_URL?.trim() || "http://localhost:20128/v1")
+    .replace(/\/+$/, "")
+    .replace(/\/v1$/, "");
+  return {
+    name: OMNIROUTE_MCP_SERVER_NAME,
+    transport: "http",
+    url: `${root}/api/mcp/stream`,
+    headers: { Authorization: `Bearer ${key}` },
+  };
 }
 
 export { AcpProvider, loadAcpProviderConfigs, type AcpProviderConfig } from "./acp-provider.js";
