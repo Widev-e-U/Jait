@@ -19,10 +19,21 @@ export const projects = sqliteTable(
     lastActiveAt: text("last_active_at").notNull(),
     status: text("status").default("active"),
     metadata: text("metadata"),
+    /** Parent folder, or null at the root. Only `kind: 'folder'` rows may be parents. */
+    parentId: text("parent_id"),
+    /** Extra context injected into the system prompt of every chat below this node. */
+    instructions: text("instructions"),
+    /** Free-text description shown in the UI. */
+    description: text("description"),
+    /** Palette token (e.g. "blue") or a `#rrggbb` value from the colour picker. */
+    color: text("color"),
+    /** 'workspace' (folder on disk) | 'folder' (pure chat category) */
+    kind: text("kind").notNull().default("workspace"),
   },
   (table) => [
     index("idx_projects_user_status").on(table.userId, table.status, table.lastActiveAt),
     index("idx_projects_user_root").on(table.userId, table.rootPath, table.nodeId),
+    index("idx_projects_parent").on(table.userId, table.parentId, table.status, table.lastActiveAt),
   ],
 );
 

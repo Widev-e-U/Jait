@@ -1285,4 +1285,38 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 53: Project folders — nesting, context, colour, description ──
+  //
+  // `kind` names the two things a project row can be, and follows the directory
+  // rather than being chosen:
+  //   'workspace' — has a root_path: editor, preview, repository
+  //   'folder'    — has none: a pure chat category
+  //
+  // Purely additive. Every column is nullable or defaulted, so existing
+  // projects keep their id, title, path, node, sessions and metadata, and come
+  // back as top-level rows because parent_id defaults to NULL.
+  {
+    id: 53,
+    name: "project_folders",
+    run(db) {
+      try { db.exec(`ALTER TABLE projects ADD COLUMN parent_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE projects ADD COLUMN instructions TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE projects ADD COLUMN description TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE projects ADD COLUMN color TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'workspace'`); } catch { /* exists */ }
+      // The DEFAULT above brands every existing row a workspace, but a project
+      // could always be created without a path — getOrCreateForRoot allows it.
+      // Those rows are folders by definition, and leaving them mislabelled
+      // would offer "Project settings" for something that owns no directory.
+      db.exec(
+        `UPDATE projects SET kind = 'folder'
+           WHERE (root_path IS NULL OR TRIM(root_path) = '') AND kind <> 'folder'`,
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_projects_parent
+           ON projects(user_id, parent_id, status, last_active_at)`,
+      );
+    },
+  },
+
 ];

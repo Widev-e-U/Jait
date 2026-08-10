@@ -33,6 +33,64 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("You are working in the project: /tmp/project");
   });
 
+  it("embeds folder context, outermost folder first", () => {
+    // What ProjectService.resolveInstructionChain produces for a project
+    // filed under Private > OSS.
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      projectRoot: "/tmp/project",
+      projectInstructions: "## Private\ncasual tone\n\n## OSS\nanswer in english",
+    });
+
+    expect(prompt).toContain("<projectInstructions>");
+    expect(prompt).toContain("casual tone");
+    expect(prompt).toContain("answer in english");
+    expect(prompt.indexOf("casual tone")).toBeLessThan(prompt.indexOf("answer in english"));
+  });
+
+  it("puts folder context after the global instruction file so it wins", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      projectRoot: "/tmp/project",
+      projectInstructions: "## Private\ncasual tone",
+    });
+
+    const globalIndex = prompt.indexOf("<globalJaitInstructions>");
+    if (globalIndex >= 0) {
+      expect(globalIndex).toBeLessThan(prompt.indexOf("<projectInstructions>"));
+    }
+  });
+
+  it("omits the block entirely when no folder sets context", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      projectRoot: "/tmp/project",
+    });
+
+    expect(prompt).not.toContain("<projectInstructions>");
+  });
+
+  it("reaches lightweight local models too", () => {
+    // The block sits outside the local-model compaction branch on purpose:
+    // the user typed these instructions and would notice their absence.
+    const prompt = buildSystemPrompt("agent", {
+      model: "llama3.2",
+      baseUrl: "http://localhost:11434/v1",
+      backend: "ollama",
+    }, {
+      projectRoot: "/tmp/project",
+      projectInstructions: "## Private\ncasual tone",
+    });
+
+    expect(prompt).toContain("casual tone");
+  });
+
   it("keeps local model prompts compact", () => {
     const prompt = buildSystemPrompt("agent", {
       model: "llama3.2",

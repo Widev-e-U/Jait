@@ -2255,7 +2255,8 @@ export function registerChatRoutes(
     const projectRecord = sessionRecord?.projectId
       ? projectService?.getById(sessionRecord.projectId, auth?.userId)
       : null;
-    const wsPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
+    const wsPath = projectService?.effectiveRootPath(projectRecord, auth?.userId)
+      ?? sessionRecord?.projectPath;
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
@@ -2505,9 +2506,14 @@ export function registerChatRoutes(
     const projectRecord = sessionRecord?.projectId
       ? projectService?.getById(sessionRecord.projectId, authUser.id)
       : null;
+    // A folder that only groups chats owns no directory; the nearest ancestor
+    // that does supplies it, so tools never silently run in the gateway's own
+    // working directory.
+    const projectRootPath = projectService?.effectiveRootPath(projectRecord, authUser.id)
+      ?? sessionRecord?.projectPath;
     const wsRoot = surfaceRegistry
-      ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
-      : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
+      ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
+      : (projectRootPath?.trim() || process.cwd());
     // Graphify: surface the saved project architecture graph so the agent
     // understands the codebase layout up front (generated via architecture.generate).
     let architectureGraph: string | undefined;
@@ -2519,11 +2525,18 @@ export function registerChatRoutes(
         architectureGraph = undefined;
       }
     }
+    // Instructions attached to the chat's folder and every folder above it.
+    // Resolved per turn (not cached) so an edit in the context dialog takes
+    // effect on the next message instead of after a reload.
+    const projectInstructions = sessionRecord?.projectId
+      ? projectService?.resolveInstructionChain(sessionRecord.projectId, authUser.id) ?? undefined
+      : undefined;
     const promptCtx: PromptContext = {
       projectRoot: wsRoot,
       skills: skillRegistry?.listEnabled(),
       architectureGraph,
       responseStyle,
+      ...(projectInstructions ? { projectInstructions } : {}),
       backend: llmRuntime.backend,
       platform: process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux",
       shell: process.platform === "win32" ? "PowerShell" : process.env.SHELL?.split("/").pop() ?? "bash",
@@ -2701,8 +2714,8 @@ export function registerChatRoutes(
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const cliWsRoot = surfaceRegistry
-          ? resolveProjectRoot(surfaceRegistry, sessionId, projectRecord?.rootPath ?? sessionRecord?.projectPath)
-          : ((projectRecord?.rootPath ?? sessionRecord?.projectPath)?.trim() || process.cwd());
+          ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
+          : (projectRootPath?.trim() || process.cwd());
 
         let cliProvider: CliProviderAdapter | null = null;
         let isRemote = false;
