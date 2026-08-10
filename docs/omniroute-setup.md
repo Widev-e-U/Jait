@@ -1,122 +1,132 @@
-# OmniRoute in Jait einrichten
+# Using OmniRoute with Jait
 
-[OmniRoute](https://github.com/diegosouzapw/OmniRoute) ist ein selbst gehosteter, OpenAI-kompatibler
-Router, der Anfragen an ~290 Upstream-Provider verteilt — viele davon mit Free Tier. Jait spricht ihn
-als ein zusätzliches LLM-Backend an, neben OpenAI, OpenRouter und Ollama.
+[OmniRoute](https://github.com/diegosouzapw/OmniRoute) is a self-hosted, OpenAI-compatible router
+that fans requests out to ~290 upstream providers, many with a free tier. Jait talks to it as one
+more LLM backend alongside OpenAI, OpenRouter and Ollama.
 
-**Jait liefert OmniRoute nicht mit.** Der Router ist eine eigenständige Anwendung von 3,4 GB mit
-eigener Datenbank, eigenem Dashboard und eigenem Update-Zyklus. Du betreibst ihn, wo du willst; Jait
-kennt davon nur eine URL. Der mitgelieferte Skill **„OmniRoute Setup"** führt dich durch die
-Einrichtung — frag im Chat einfach nach OmniRoute, dann übernimmt ein Modell den Rest.
+**Jait does not bundle OmniRoute.** It is a separate application with its own database, dashboard
+and release cycle, and it is an optional backend — Jait only ever knows a URL. The bundled
+**"OmniRoute Setup"** skill walks through the installation: ask about OmniRoute in a chat and an
+agent takes it from there.
 
-> Alle Angaben hier sind gegen **OmniRoute 3.8.49** geprüft, nicht aus der Doku übernommen.
+> Everything below was verified against **OmniRoute 3.8.49**, not copied from its documentation.
 
-## Schnellstart — Docker auf dem Jait-Host (empfohlen)
+## Quick start — Docker on the Jait host (recommended)
 
 ```bash
 docker run -d --name omniroute --restart unless-stopped --stop-timeout 40 \
   -p 127.0.0.1:20128:20128 -v omniroute-data:/app/data diegosouzapw/omniroute:latest
 ```
 
-Das `127.0.0.1:` bindet nur auf Loopback. Lass es weg, wenn andere Geräte den Router erreichen sollen —
-aber sei dir bewusst: die Inferenz-API antwortet **absichtlich ohne Authentifizierung**, ein offener
-Port ist damit ein offener LLM-Proxy im Netz.
+The `127.0.0.1:` prefix binds to loopback only. Drop it if other machines must reach the router —
+but be aware the inference API answers **without authentication by design**, so an exposed port is
+an open LLM proxy on your network.
 
-Prüfen:
+Verify:
 
 ```bash
 curl -s http://localhost:20128/v1/models | head -c 200
 ```
 
-## Alternative — npm auf dem Host
+The image is ~0.5 GB, considerably smaller than a global npm install of the same version.
+
+## Alternative — npm on the host
 
 ```bash
-npm i -g omniroute                                  # ~3 Minuten, 3,4 GB, 127k Dateien
+npm i -g omniroute                                  # ~3 minutes, 3.4 GB, 127k files
 env -u PORT omniroute serve --port 20128 --no-open
 ```
 
-Das `env -u PORT` ist kein Zierrat: **eine geerbte `PORT`-Variable schlägt `--port`.** Jait setzt
-`PORT=8000`, in einer Jait-Shell startet der Router deshalb auf 8000 und kollidiert mit dem Gateway.
+The `env -u PORT` is not decoration: **an inherited `PORT` variable overrides `--port`.** Jait sets
+`PORT=8000`, so inside a Jait shell the router starts on 8000 and collides with the gateway.
 
-Für Persistenz `omniroute autostart` (systemd-User-Service) oder `omniroute serve --daemon`. Ein
-`nohup` überlebt keinen Reboot.
+For persistence use `omniroute autostart` (systemd user service) or `omniroute serve --daemon`. A
+`nohup` does not survive a reboot.
 
-## Auf einem anderen Host
+## On a different host
 
-Gleiches Vorgehen, aber ohne `127.0.0.1:`-Prefix, und anschließend **vom Jait-Host aus** prüfen:
+Same as above, without the `127.0.0.1:` prefix, then verify **from the Jait host** rather than
+locally:
 
 ```bash
 curl -s http://<host>:20128/v1/models | head -c 200
 ```
 
-## Jait verbinden
+## Connecting Jait
 
 1. **Settings → API keys → OmniRoute**
-   - `OMNIROUTE_BASE_URL` — nur nötig, wenn nicht `http://localhost:20128/v1`. Muss auf `/v1` enden.
-   - `OMNIROUTE_API_KEY` — **optional**, leer lassen für den keyless Free Tier.
-   - `OMNIROUTE_MODEL` — optionales Fallback-Modell, wenn im Picker keins gewählt ist.
-2. **„Test connection"** klicken. Der Test läuft vom Gateway aus, nicht vom Browser — das ist die
-   Verbindung, die funktionieren muss.
-3. **Settings → Jait LLM Backend → „OmniRoute"**
-4. Im Model-Picker **`auto`** wählen.
+   - `OMNIROUTE_BASE_URL` — only needed if it is not `http://localhost:20128/v1`. Must end in `/v1`.
+   - `OMNIROUTE_API_KEY` — **optional**; leave empty to use the keyless free tier.
+   - `OMNIROUTE_MODEL` — optional fallback model when the picker has not selected one.
+2. Click **Test connection**. The probe runs from the gateway, not from your browser — that is the
+   connection that actually has to work.
+3. **Settings → Jait LLM Backend → "OmniRoute"**
+4. Pick **`auto`** in the model picker.
 
-Läuft das Gateway selbst in Docker, ist `localhost` der Container:
+If the gateway itself runs in Docker, `localhost` is the container:
 `OMNIROUTE_BASE_URL=http://host.docker.internal:20128/v1`.
 
-## Modelle
+## Models
 
-Der Katalog kommt live aus `/v1/models` und erscheint im Picker als eigene Gruppe „OmniRoute".
+The catalogue is fetched live from `/v1/models` and appears in the picker as its own "OmniRoute"
+group.
 
-- **`auto`** — der Router entscheidet pro Anfrage. Funktioniert, wird aber von `/v1/models` **nicht**
-  gelistet; Jait ergänzt es deshalb von Hand.
-- **`auto/coding`, `auto/best-reasoning`, `auto/cheap`, …** — 38 engere Strategien, alle im Katalog.
-- Konkrete Modell-IDs wie `openai/gpt-4o` oder `deepseek/deepseek-r1`.
+- **`auto`** — the router decides per request. It works, but is **not** listed by `/v1/models`, so
+  Jait adds it to the picker by hand.
+- **`auto/coding`, `auto/best-reasoning`, `auto/cheap`, …** — 38 narrower strategies, all listed.
+- Concrete model ids such as `openai/gpt-4o` or `deepseek/deepseek-r1`.
 
-Läuft der Router nicht, ist die Gruppe leer. Das ist Absicht: Modelle anzubieten, die garantiert nicht
-antworten, wäre irreführender als eine fehlende Gruppe.
+When the router is not running the group is empty. That is deliberate: offering models that cannot
+answer is more misleading than showing no group at all.
 
-## Optionale Schalter
+## Optional switches
 
-| Env | Wirkung |
+| Env | Effect |
 | --- | --- |
-| `JAIT_ACP_VIA_OMNIROUTE=1` | Leitet auch Claude Code und Codex über den Router (`ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`). **Umgeht damit dein bezahltes Claude-/ChatGPT-Abo** — bewusst opt-in. |
-| `JAIT_OMNIROUTE_MCP=1` | Gibt CLI-Agenten zusätzlich OmniRoutes eigenen MCP-Server (Routing, Provider, Combos, Cache, Memory). Braucht zwingend `OMNIROUTE_API_KEY`. |
+| `JAIT_ACP_VIA_OMNIROUTE=1` | Also routes the Claude Code and Codex CLI agents through the router (`ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`). **This bypasses a paid Claude/ChatGPT subscription**, so it is strictly opt-in. |
+| `JAIT_OMNIROUTE_MCP=1` | Additionally hands CLI agents OmniRoute's own MCP server (routing, providers, combos, cache, memory). Requires `OMNIROUTE_API_KEY`; without one Jait omits the server rather than handing over a ref that can only 401. |
 
-## Datenschutz
+## Privacy
 
-Der Router verteilt an bis zu ~290 Drittanbieter, bei einigen Free Tiers erlauben die ToS Training auf
-übermittelten Daten — das Projekt markiert 15 Provider selbst entsprechend. Jait-Chats enthalten
-Repository-Inhalte. Welche Upstreams benutzt werden, steuerst du im OmniRoute-Dashboard.
+The router forwards to up to ~290 third parties. Some free tiers permit training on submitted data —
+the project flags 15 providers accordingly. Jait chats contain repository contents. Which upstreams
+are used is controlled in the OmniRoute dashboard.
 
-## Fehlerbehebung
+## Where OmniRoute departs from "OpenAI-compatible"
 
-| Symptom | Ursache | Lösung |
+These three behaviours are the reason for specific handling in the gateway. They are easy to
+rediscover the hard way:
+
+- **`stream` defaults to true.** A request that omits the field returns `text/event-stream`, not
+  JSON. `callJaitLlmCompletion()` therefore sends `stream: false` explicitly; without it, thread
+  titles, commit messages and plan generation fail on a `res.json()` parse error.
+- **Model ids contain slashes** (`openai/gpt-4o`, `auto/coding`). `resolveJaitLlmConfig()` resolves
+  the `omniroute` branch **before** the OpenRouter heuristic, which keys off `includes("/")` and
+  would otherwise redirect every OmniRoute request to openrouter.ai.
+- **The MCP endpoint always authenticates**, unlike the inference API, and answers 401 without a
+  bearer token.
+
+Two more things that surprise people: bare `auto` is usable but unlisted (see Models above), and the
+router stores its database under the HOME of whatever process started it — `omniroute status` prints
+the real path.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
 | --- | --- | --- |
-| Keine OmniRoute-Gruppe im Picker | Router nicht erreichbar | „Test connection" in den Settings |
-| Router startet auf Port 8000 | geerbte `PORT`-Variable schlägt `--port` | `env -u PORT omniroute serve --port 20128` |
-| „Could not connect to omniroute at …" im Chat | Router läuft nicht | `docker start omniroute` bzw. Dienst starten |
-| Lokal ok, aus Jait-Container nicht | `localhost` ist der Container | `http://host.docker.internal:20128/v1` |
-| 401 beim MCP-Endpoint | MCP authentifiziert immer | Key im Dashboard anlegen, `OMNIROUTE_API_KEY` setzen |
-| Nach Reboot weg | mit `nohup` gestartet | `omniroute autostart` oder Docker-Variante |
-| Datenverzeichnis an unerwarteter Stelle | Router erbt das HOME des startenden Prozesses | `omniroute status` zeigt den echten Pfad |
+| No OmniRoute group in the picker | Router unreachable | Use **Test connection** in settings |
+| Router started on port 8000 | Inherited `PORT` beats `--port` | `env -u PORT omniroute serve --port 20128` |
+| "Could not connect to omniroute at …" in chat | Router not running | `docker start omniroute`, or start the service |
+| Works locally, not from Jait in Docker | `localhost` is the container | `http://host.docker.internal:20128/v1` |
+| 401 from the MCP endpoint | MCP always authenticates | Create a dashboard key, set `OMNIROUTE_API_KEY` |
+| Gone after a reboot | Started with `nohup` | `omniroute autostart`, or use Docker |
 
-## Wieder entfernen
+## Removing it
 
 ```bash
 docker rm -f omniroute && docker volume rm omniroute-data   # Docker
-npm rm -g omniroute                                          # npm, gibt ~3,4 GB frei
+npm rm -g omniroute                                          # npm, frees ~3.4 GB
 ```
 
-Danach **Settings → Jait LLM Backend** zurück auf OpenAI, OpenRouter oder Ollama stellen — sonst
-zeigen Chats weiter auf einen Router, den es nicht mehr gibt.
-
-## Technische Eigenheiten
-
-Falls du am Jait-Code arbeitest — diese drei Punkte weichen von „OpenAI-kompatibel" ab und sind der
-Grund für entsprechende Sonderbehandlung im Gateway:
-
-- **`stream` defaultet auf true.** Eine Anfrage ohne `stream`-Feld liefert `text/event-stream` statt
-  JSON. `callJaitLlmCompletion()` sendet deshalb explizit `stream: false`.
-- **Modell-IDs enthalten Slashes** (`openai/gpt-4o`). `resolveJaitLlmConfig()` muss den
-  `omniroute`-Zweig **vor** der OpenRouter-Heuristik auflösen, die auf `includes("/")` prüft.
-- **Der MCP-Endpoint verlangt immer Auth**, die Inferenz-API nicht.
+Then switch **Settings → Jait LLM Backend** back to OpenAI, OpenRouter or Ollama — otherwise chats
+keep targeting a router that no longer exists.
