@@ -90,6 +90,7 @@ async function buildApp(proxyProviderOp = vi.fn(async () => [] as unknown)) {
     list: () => accounts,
     get: (id: string) => accounts.find((account) => account.id === id) ?? null,
     listTypes: () => [],
+    getType: () => null,
   }
 
   const ws = {

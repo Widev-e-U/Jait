@@ -55,6 +55,7 @@ interface AppHeaderProps {
   handleApplyUpdate: any
   handleLogout: any
   handleThemeModeChange: any
+  isAuthLoading: boolean
   isAuthenticated: any
   isElectron: any
   isMaximized: any
@@ -99,6 +100,7 @@ export function AppHeader(props: AppHeaderProps) {
     handleApplyUpdate,
     handleLogout,
     handleThemeModeChange,
+    isAuthLoading,
     isAuthenticated,
     isElectron,
     isMaximized,
@@ -346,7 +348,9 @@ export function AppHeader(props: AppHeaderProps) {
             {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0.5 shrink-0">
-                {isAuthenticated ? (
+                {isAuthLoading ? (
+                  <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />
+                ) : isAuthenticated ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -412,7 +416,9 @@ export function AppHeader(props: AppHeaderProps) {
               </div>
             ) : (
             <>
-            {isAuthenticated ? (
+            {isAuthLoading ? (
+              <div className={`h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted ${isElectron ? 'mr-4' : ''}`} aria-label="Loading account" />
+            ) : isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isElectron ? 'mr-4' : ''}`}>

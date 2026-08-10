@@ -241,6 +241,14 @@ export class ToolRegistry {
     this.tools.set(tool.name, normalizeToolDefinition(tool));
   }
 
+  /**
+   * Remove a tool from the registry by name. Returns true if a tool was
+   * actually removed, false if no tool with that name was registered.
+   */
+  unregister(name: string): boolean {
+    return this.tools.delete(name);
+  }
+
   registerPluginTools(plugin: PluginDescriptor, tools: PluginToolDeclaration[]): void {
     const sourceMetadata = buildPluginToolSourceMetadata(plugin);
     for (const tool of tools) {

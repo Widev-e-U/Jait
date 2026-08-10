@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -9,6 +10,7 @@ import {
   shouldProcessResumeStreamEvent,
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
+  shouldProcessDirectStreamEvent,
   shouldForceMessageLifecycleRefresh,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
@@ -265,5 +267,35 @@ describe('shouldOwnDirectChatStream', () => {
       directStreamSessionId: null,
       hasActiveDirectStream: false,
     })).toBe(true)
+  })
+})
+
+describe('shouldProcessDirectStreamEvent', () => {
+  it('guards the production direct-stream loop before event dispatch', () => {
+    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+    const directStreamStart = source.indexOf('const response = await fetch(`${API_URL}/api/chat`')
+    const directStreamEnd = source.indexOf("data.type === 'done'", directStreamStart)
+    const directStreamBlock = source.slice(directStreamStart, directStreamEnd)
+
+    expect(directStreamBlock).toContain(
+      'if (!shouldProcessDirectStreamEvent(data.type, !isStale())) continue',
+    )
+  })
+
+  it('keeps session-scoped events inside the chat that owns the stream', () => {
+    expect(shouldProcessDirectStreamEvent('todo_list', true)).toBe(true)
+    expect(shouldProcessDirectStreamEvent('plan_complete', true)).toBe(true)
+
+    expect(shouldProcessDirectStreamEvent('todo_list', false)).toBe(false)
+    expect(shouldProcessDirectStreamEvent('plan_complete', false)).toBe(false)
+    expect(shouldProcessDirectStreamEvent('context_usage', false)).toBe(false)
+    expect(shouldProcessDirectStreamEvent('session_info', false)).toBe(false)
+    expect(shouldProcessDirectStreamEvent('file_changed', false)).toBe(false)
+  })
+
+  it('still lets stale streams finish their own lifecycle', () => {
+    expect(shouldProcessDirectStreamEvent('done', false)).toBe(true)
+    expect(shouldProcessDirectStreamEvent('queued', false)).toBe(true)
+    expect(shouldProcessDirectStreamEvent('error', false)).toBe(true)
   })
 })

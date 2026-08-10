@@ -20,6 +20,7 @@ let formatMcpHeaderText: typeof import('./tool-call-card')['formatMcpHeaderText'
 let getJaitMcpToolName: typeof import('./tool-call-card')['getJaitMcpToolName']
 let getJaitMcpToolArgs: typeof import('./tool-call-card')['getJaitMcpToolArgs']
 let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAgentActivity']
+let getNextSubAgentVisibleCount: typeof import('./tool-call-card')['getNextSubAgentVisibleCount']
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
 let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
@@ -56,6 +57,7 @@ beforeAll(async () => {
     getJaitMcpToolName,
     getJaitMcpToolArgs,
     getLatestSubAgentActivity,
+    getNextSubAgentVisibleCount,
     getToolInvocationLabels,
     shouldRenderToolCall,
     getToolSearchResultItems,
@@ -188,6 +190,14 @@ describe('sub-agent activity', () => {
     expect(getLatestSubAgentActivity('[sub-agent] Starting file.read...\n[sub-agent] ✓ Read src/app.ts\n')).toBe('Read src/app.ts')
   })
 
+  it('reveals every persisted page across repeated upward loads', () => {
+    const firstPage = getNextSubAgentVisibleCount(50, 24)
+    const secondPage = getNextSubAgentVisibleCount(50, firstPage)
+    const finalPage = getNextSubAgentVisibleCount(50, secondPage)
+
+    expect([firstPage, secondPage, finalPage]).toEqual([36, 48, 50])
+  })
+
   it('keeps the delegated mission sticky when child calls appear', () => {
     const call = {
       callId: 'agent-implementation',
@@ -220,6 +230,42 @@ describe('sub-agent activity', () => {
       expect(markup).toContain('file.read')
       expect(markup).toContain('terminal.run')
     }
+  })
+
+  it('lazy-loads persisted specialist history instead of mounting only an unpaged transcript', () => {
+    const segments = Array.from({ length: 30 }, (_, index) => ({
+      type: 'text' as const,
+      content: `persisted specialist part ${index + 1}`,
+    }))
+    const call = {
+      callId: 'agent-reloaded-history',
+      tool: 'spawn_agent',
+      args: { message: 'Inspect the entire persisted run.' },
+      status: 'running' as const,
+      result: {
+        ok: true,
+        message: 'persisted specialist part 30',
+        data: { segments },
+      },
+      startedAt: 1,
+      completedAt: 2,
+    }
+    const childCalls = [{
+      callId: 'agent-reloaded-child',
+      parentCallId: call.callId,
+      tool: 'file.read',
+      args: { path: 'README.md' },
+      status: 'success' as const,
+      result: { ok: true, message: 'Read README.md' },
+      startedAt: 1,
+      completedAt: 2,
+    }]
+
+    const markup = renderToStaticMarkup(createElement(ToolCallCard, { call, childCalls }))
+
+    expect(markup).toContain('Load earlier activity')
+    expect(markup).not.toContain('<p>persisted specialist part 1</p>')
+    expect(markup).toContain('<p>persisted specialist part 30</p>')
   })
 })
 

@@ -4226,6 +4226,7 @@ function App() {
               handleApplyUpdate={handleApplyUpdate}
               handleLogout={handleLogout}
               handleThemeModeChange={handleThemeModeChange}
+              isAuthLoading={authLoading}
               isAuthenticated={isAuthenticated}
               isElectron={isElectron}
               isMaximized={isMaximized}

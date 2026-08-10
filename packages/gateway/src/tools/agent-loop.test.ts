@@ -1638,6 +1638,35 @@ describe("runAgentLoop tool-loop detection", () => {
     return sseResponse([`data: ${payload}\n\n`, `data: ${finish}\n\n`, "data: [DONE]\n\n"]);
   }
 
+  function toolCallWithContentSSE(id: string, name: string, args: unknown, content: string): Response {
+    const contentPayload = JSON.stringify({ choices: [{ delta: { content } }] });
+    const toolPayload = JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id,
+                type: "function",
+                function: { name, arguments: JSON.stringify(args) },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const finish = JSON.stringify({
+      choices: [{ delta: {}, finish_reason: "tool_calls" }],
+    });
+    return sseResponse([
+      `data: ${contentPayload}\n\n`,
+      `data: ${toolPayload}\n\n`,
+      `data: ${finish}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  }
+
   function toolCallsSSE(calls: Array<{ id: string; name: string; args?: unknown }>): Response {
     const payload = JSON.stringify({
       choices: [
@@ -2125,6 +2154,70 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(executedTools).toEqual(["read", "read", "read", "search"]);
     expect(sawQuarantinedRound).toBe(true);
     expect(sawRestoredRound).toBe(true);
+  });
+
+  it("stops when a provider repeats a tool during its quarantine round", async () => {
+    let fetchCalls = 0;
+    let sawQuarantinedRound = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const readAvailable = (body.tools ?? []).some((tool) => tool.function?.name === "read");
+      const round = fetchCalls++;
+      const args = { path: "tool-call-card.tsx", startLine: 3490, endLine: 3560 };
+      if (readAvailable) return toolCallSSE(`call-read-${round}`, "read", args);
+
+      sawQuarantinedRound = true;
+      return toolCallWithContentSSE(
+        `call-forbidden-read-${round}`,
+        "read",
+        args,
+        "rth</｜DSML｜tool_calls>",
+      );
+    });
+
+    let executedReads = 0;
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "deepseek-v4-flash:0731-cloud",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the tool card stacking issue." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-provider-ignores-quarantine",
+        abort: new AbortController(),
+        maxRounds: 20,
+        mode: "agent",
+      },
+      async () => {
+        executedReads++;
+        return { ok: true, message: "read ok" };
+      },
+    );
+
+    expect(sawQuarantinedRound).toBe(true);
+    expect(fetchCalls).toBe(6);
+    expect(executedReads).toBe(3);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toMatch(/Stopped: provider repeated a quarantined tool call \(read\)/);
+    expect(result.content).not.toContain("DSML");
   });
 
   it("executes an identical tool call only once when the provider repeats it within one round", async () => {

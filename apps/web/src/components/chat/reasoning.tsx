@@ -72,7 +72,7 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
           className={cn(
             'mt-1 px-3 py-2.5 rounded-md border text-sm max-h-60 overflow-y-auto leading-relaxed',
             isStreaming
-              ? 'border-amber-500/25 bg-amber-500/[0.04] text-muted-foreground italic'
+              ? 'border-amber-500/25 bg-amber-500/[0.04] text-muted-foreground'
               : 'border-border/60 bg-muted/30 text-muted-foreground',
           )}
         >

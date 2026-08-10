@@ -2112,6 +2112,20 @@ export async function runAgentLoop(
   const executedToolCalls: ExecutedToolCall[] = [];
   const segments: MessageSegment[] = [];
   const queue = new ToolCallQueue();
+  const discardLatestContentText = (discardedContent: string): void => {
+    if (!discardedContent) return;
+    if (fullContent.endsWith(discardedContent)) {
+      fullContent = fullContent.slice(0, -discardedContent.length);
+    }
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment?.type !== "text" || !lastSegment.content.endsWith(discardedContent)) return;
+    const retainedContent = lastSegment.content.slice(0, -discardedContent.length);
+    if (retainedContent) {
+      segments[segments.length - 1] = { type: "text", content: retainedContent };
+    } else {
+      segments.pop();
+    }
+  };
   /** Tracks whether the turn's assistant message was already persisted via onPersist. */
   let persisted = false;
 
@@ -2520,6 +2534,46 @@ export async function runAgentLoop(
         );
       }
 
+      const ignoredQuarantineCalls = toolCalls.filter((toolCall) =>
+        roundQuarantinedToolNames.has(fromOpenAIName(toolCall.function.name))
+      );
+      if (ignoredQuarantineCalls.length > 0) {
+        const ignoredNames = [...new Set(
+          ignoredQuarantineCalls.map((toolCall) => fromOpenAIName(toolCall.function.name)),
+        )].join(", ");
+        discardLatestContentText(contentText);
+        const message =
+          `Provider repeated a quarantined tool call (${ignoredNames}); ending the turn to prevent a runaway loop`;
+        const stopMessage =
+          `\n\n[Stopped: provider repeated a quarantined tool call (${ignoredNames}) after Jait removed it from the available tools. The turn was ended to prevent a runaway loop.]`;
+        log.warn(`${message} for session ${sessionId}`);
+        onEvent?.({ type: "steering", message });
+        history.push({ role: "assistant", content: stopMessage });
+        fullContent += stopMessage;
+        segments.push({ type: "text", content: stopMessage });
+        onEvent?.({ type: "token", content: stopMessage });
+        if (fullContent || segments.length > 0) {
+          onPersist?.(
+            sessionId,
+            "assistant",
+            fullContent,
+            executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
+            JSON.stringify(segments),
+            thinkingText || undefined,
+          );
+          persisted = true;
+        }
+        return {
+          content: fullContent,
+          executedToolCalls,
+          segments,
+          rounds: round + 1,
+          aborted: false,
+          hitMaxRounds: false,
+          persisted,
+        };
+      }
+
       // ── Duplicate tool-call loop detection ──
       // If the model emits the exact same tool call(s) — same name(s), same
       // args — round after round, it's stuck: no new information is arriving
@@ -2589,12 +2643,13 @@ export async function runAgentLoop(
             const message =
               `Skipped repeated tool call (${names}); ` +
               `temporarily quarantining ${[...quarantinedNames].join(", ")} for the next model round`;
+            discardLatestContentText(contentText);
             log.warn(`${message} for session ${sessionId}`);
             onEvent?.({ type: "steering", message });
 
             history.push({
               role: "assistant",
-              content: contentText || "",
+              content: "",
               tool_calls: quarantinedCalls,
               thinking: capThinking(thinkingText),
             });
@@ -2661,7 +2716,7 @@ export async function runAgentLoop(
               `(intervention ${duplicateCallInterventions}/${MAX_DUPLICATE_CALL_INTERVENTIONS})`,
           );
           onEvent?.({ type: "steering", message: `Detected a repeated tool call (${names}) — redirecting` });
-          if (contentText) history.push({ role: "assistant", content: contentText });
+          discardLatestContentText(contentText);
           history.push({
             role: "system",
             content:

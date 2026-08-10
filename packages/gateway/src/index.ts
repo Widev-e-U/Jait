@@ -1132,6 +1132,8 @@ async function main() {
   };
 
   // UI state sync (client → server → DB → other clients)
+  ws.canAccessSession = (sid, userId) => Boolean(userId && sessionService.getById(sid, userId));
+
   ws.onUIStateUpdate = (sid, key, value, clientId) => {
     try {
       sessionState.set(sid, { [key]: value });

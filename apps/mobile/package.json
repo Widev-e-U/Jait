@@ -20,11 +20,11 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
-    "@capacitor/app": "^6.0.0",
-    "@capacitor/core": "^6.2.0",
-    "@capacitor/filesystem": "^6.0.0",
-    "@capacitor/keyboard": "6",
-    "@capacitor/screen-reader": "^6.0.0",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/keyboard": "^6.0.4",
+    "@capacitor/screen-reader": "^6.0.4",
     "@jait/api-client": "workspace:*",
     "@jait/shared": "workspace:*",
     "@jait/ui-shared": "workspace:*",
@@ -40,10 +40,10 @@
     "react-native": "0.74.5"
   },
   "devDependencies": {
-    "@types/react": "^18.3.1",
-    "typescript": "^5.7.3",
-    "@capacitor/cli": "^6.2.0",
-    "@capacitor/android": "^6.2.0",
-    "@capacitor/ios": "^6.2.0"
+    "@types/react": "^18.3.31",
+    "typescript": "^5.9.3",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/ios": "^6.2.1"
   }
 }
