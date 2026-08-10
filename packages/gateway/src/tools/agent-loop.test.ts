@@ -1680,13 +1680,21 @@ describe("runAgentLoop tool-loop detection", () => {
     ]);
   }
 
-  it("stops a ping-pong loop that alternates the same two tool calls", async () => {
+  it("quarantines a ping-pong loop and lets the provider recover", async () => {
     let fetchCalls = 0;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const name = fetchCalls % 2 === 0 ? "file_read" : "file_write";
-      const response = toolCallSSE(`call-${fetchCalls}`, name, {});
-      fetchCalls++;
-      return response;
+    let sawQuarantinedRound = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const toolNames = new Set((body.tools ?? []).map((tool) => tool.function?.name));
+      const round = fetchCalls++;
+      if (!toolNames.has("file_read") || !toolNames.has("file_write")) {
+        sawQuarantinedRound = true;
+        return textResponse("Recovered from the ping-pong loop.");
+      }
+      const name = round % 2 === 0 ? "file_read" : "file_write";
+      return toolCallSSE(`call-${round}`, name, {});
     });
 
     const history: AgentMessage[] = [
@@ -1732,7 +1740,9 @@ describe("runAgentLoop tool-loop detection", () => {
 
     expect(result.hitMaxRounds).toBe(false);
     expect(fetchCalls).toBeLessThan(40);
-    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
+    expect(result.content).toBe("Recovered from the ping-pong loop.");
+    expect(result.content).not.toMatch(/Stopped: repeated the same tool call/);
+    expect(sawQuarantinedRound).toBe(true);
   });
 
   it("without maxRounds, ends normally when the model answers before the safety backstop", async () => {
@@ -2026,19 +2036,37 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).not.toMatch(/Stopped/);
   });
 
-  it("stops a stuck loop that keeps re-issuing the exact same tool call (name + args)", async () => {
-    // Reproduces a real incident: a coordinator re-read the identical
-    // line range of the same file 20 rounds in a row with no new information
-    // arriving, until the underlying model degenerated into garbage output.
-    // Unlike the narrow-read/near-identical tests above, this call is
-    // byte-identical every round — the one signal safe enough to act on.
+  it("quarantines an ignored duplicate call, continues with another tool, then restores it", async () => {
+    // Reproduces the stuck chat: the provider keeps requesting the exact same
+    // read even after the loop guard redirects it. Recovery must not execute
+    // that read again or end the turn.
     let fetchCalls = 0;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      fetchCalls++;
-      return toolCallSSE("call-stuck", "read", { path: "server.js", startLine: 1600, endLine: 1944 });
+    let sawQuarantinedRound = false;
+    let sawRestoredRound = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const readAvailable = (body.tools ?? []).some((tool) => tool.function?.name === "read");
+      const round = fetchCalls++;
+
+      if (round < 5) {
+        return toolCallSSE(`call-stuck-${round}`, "read", {
+          path: "server.js",
+          startLine: 1600,
+          endLine: 1944,
+        });
+      }
+      if (round === 5) {
+        sawQuarantinedRound = !readAvailable;
+        return toolCallSSE("call-search", "search", { pattern: "approval_required" });
+      }
+      sawRestoredRound = readAvailable;
+      return textResponse("Recovered with a different approach.");
     });
 
-    let executedCount = 0;
+    const executedTools: string[] = [];
+    let repeatedReadExecutedAfterRedirect = false;
     const events: AgentLoopEvent[] = [];
 
     const result = await runAgentLoop(
@@ -2062,27 +2090,41 @@ describe("runAgentLoop tool-loop detection", () => {
               parameters: { type: "object", properties: { path: { type: "string" } } },
             },
           },
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: { pattern: { type: "string" } } },
+            },
+          },
         ],
         hasTools: true,
         sessionId: "session-stuck-loop",
         abort: new AbortController(),
-        maxRounds: 40, // generous backstop — detection should fire well before this
+        maxRounds: 40,
         mode: "agent",
         onEvent: (event) => events.push(event),
       },
-      async () => {
-        executedCount++;
-        return { ok: true, message: "read ok" };
+      async (name) => {
+        if (
+          name === "read" &&
+          events.some((event) => event.type === "steering" && /repeated tool call/.test(event.message ?? ""))
+        ) {
+          repeatedReadExecutedAfterRedirect = true;
+        }
+        executedTools.push(name);
+        return { ok: true, message: `${name} ok` };
       },
     );
 
-    // Detection fires (nudged twice, then hard-stops) long before the 40-round backstop.
-    expect(fetchCalls).toBeLessThan(40);
     expect(result.hitMaxRounds).toBe(false);
-    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
-    // Only the rounds before each nudge actually executed the duplicate call.
-    expect(executedCount).toBeLessThan(fetchCalls);
-    expect(events.some((e) => e.type === "steering" && /repeated tool call/.test(e.message ?? ""))).toBe(true);
+    expect(result.content).toBe("Recovered with a different approach.");
+    expect(result.content).not.toMatch(/Stopped: repeated the same tool call/);
+    expect(repeatedReadExecutedAfterRedirect).toBe(false);
+    expect(executedTools).toEqual(["read", "read", "read", "search"]);
+    expect(sawQuarantinedRound).toBe(true);
+    expect(sawRestoredRound).toBe(true);
   });
 
   it("executes an identical tool call only once when the provider repeats it within one round", async () => {
@@ -2144,10 +2186,19 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(events.some((event) => event.type === "steering" && /duplicate tool calls/i.test(event.message ?? ""))).toBe(true);
   });
 
-  it("stops a repeated call hidden inside otherwise changing tool batches", async () => {
+  it("quarantines a repeated call hidden inside otherwise changing tool batches", async () => {
     let fetchCalls = 0;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    let sawQuarantinedRound = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const readAvailable = (body.tools ?? []).some((tool) => tool.function?.name === "read");
       const round = fetchCalls++;
+      if (!readAvailable) {
+        sawQuarantinedRound = true;
+        return textResponse("Recovered from the changing batch loop.");
+      }
       return toolCallsSSE([
         {
           id: `call-repeated-${round}`,
@@ -2203,7 +2254,9 @@ describe("runAgentLoop tool-loop detection", () => {
 
     expect(fetchCalls).toBeLessThan(40);
     expect(result.hitMaxRounds).toBe(false);
-    expect(result.content).toMatch(/Stopped: repeated the same tool call/);
+    expect(result.content).toBe("Recovered from the changing batch loop.");
+    expect(result.content).not.toMatch(/Stopped: repeated the same tool call/);
+    expect(sawQuarantinedRound).toBe(true);
   });
 
   it("continues through an invisible checkpoint when the caller omits maxRounds", async () => {

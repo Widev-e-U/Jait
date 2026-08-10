@@ -1406,7 +1406,7 @@ const MAX_LENGTH_CONTINUATIONS = 3;
  * file chunk over and over with no new information arriving).
  */
 const MAX_DUPLICATE_CALL_STREAK = 3;
-/** Max times we nudge a duplicate-call loop before giving up and ending the turn. */
+/** Max nudges before escalating a duplicate-call loop to one-round tool quarantine. */
 const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
 const MAX_SAME_TOOL_CALLS_PER_TURN = 6;
 const MAX_TOOL_CALLS_PER_ROUND = 64;
@@ -2139,6 +2139,10 @@ export async function runAgentLoop(
   let duplicateCallStreak = 0;
   /** Times we've nudged the model to break out of a duplicate-call loop. */
   let duplicateCallInterventions = 0;
+  /** Signatures rejected by the latest duplicate-call intervention. */
+  let duplicateInterventionSignatures = new Set<string>();
+  /** Internal tool names hidden from the next provider round after a loop. */
+  let quarantinedToolNames = new Set<string>();
   const toolCallOccurrences = new Map<string, number>();
   /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
   let overflowRecoveryAttempted = false;
@@ -2260,6 +2264,11 @@ export async function runAgentLoop(
     // OpenAI-compatible /v1 endpoint silently ignores it and pins the model to
     // the server's default context, truncating long conversations mid-answer.
     const isOllama = llm.backend === "ollama";
+    const roundQuarantinedToolNames = quarantinedToolNames;
+    quarantinedToolNames = new Set<string>();
+    const roundToolSchemas = roundQuarantinedToolNames.size > 0
+      ? activeSchemas.filter((schema) => !roundQuarantinedToolNames.has(fromOpenAIName(schema.function.name)))
+      : activeSchemas;
     const reqBody: Record<string, unknown> = isOllama
       ? {
           model: llm.openaiModel,
@@ -2279,14 +2288,14 @@ export async function runAgentLoop(
     if (!isOllama && auth?.reasoningEffort) {
       reqBody.reasoning_effort = auth.reasoningEffort;
     }
-    if (hasTools) {
-      reqBody.tools = activeSchemas;
+    if (hasTools && roundToolSchemas.length > 0) {
+      reqBody.tools = roundToolSchemas;
       if (!isOllama) reqBody.tool_choice = "auto";
     }
     // Snapshot context_usage for inclusion in round metrics
     let roundContextUsage: RoundMetrics["contextUsage"] | undefined;
     if (contextWindow > 0) {
-      const snap = computeContextUsage(history, activeSchemas, contextWindow);
+      const snap = computeContextUsage(history, roundToolSchemas, contextWindow);
       roundContextUsage = snap;
     }
 
@@ -2296,7 +2305,9 @@ export async function runAgentLoop(
       createdAt: new Date().toISOString(),
       model: llm.openaiModel,
       messages: reqBody.messages as ReturnType<typeof serializeMessages>,
-      ...(hasTools ? { tools: activeSchemas, tool_choice: "auto" as const } : {}),
+      ...(hasTools && roundToolSchemas.length > 0
+        ? { tools: roundToolSchemas, tool_choice: "auto" as const }
+        : {}),
     };
     onContext?.(currentRound);
 
@@ -2306,7 +2317,7 @@ export async function runAgentLoop(
     {
       const bodyJson = JSON.stringify(reqBody);
       const sysMsgLen = history.find(m => m.role === "system")?.content?.length ?? 0;
-      log.info(`LLM request round=${round + 1} model=${llm.openaiModel} bodySize=${bodyJson.length} sysPromptChars=${sysMsgLen} tools=${activeSchemas.length} → ${llm.openaiBaseUrl}`);
+      log.info(`LLM request round=${round + 1} model=${llm.openaiModel} bodySize=${bodyJson.length} sysPromptChars=${sysMsgLen} tools=${roundToolSchemas.length} → ${llm.openaiBaseUrl}`);
     }
 
     let contentText = "";
@@ -2514,10 +2525,16 @@ export async function runAgentLoop(
       // args — round after round, it's stuck: no new information is arriving
       // to change its decision, so letting it repeat indefinitely just burns
       // rounds/context until the provider degenerates into garbage output.
-      // Nudge it to break out; if it ignores the nudge, end the turn before
-      // the safety round backstop is needed.
+      // Nudge it to break out; if it ignores the nudge, skip the exact
+      // duplicate and quarantine that tool for one provider round.
       {
         const currentCallSignatures = toolCalls.map(toolCallSignature);
+        const ignoredInterventionSignatures = new Set(
+          currentCallSignatures.filter((signature) => duplicateInterventionSignatures.has(signature)),
+        );
+        if (duplicateInterventionSignatures.size > 0 && ignoredInterventionSignatures.size === 0) {
+          duplicateInterventionSignatures.clear();
+        }
         const callSignature = JSON.stringify([...currentCallSignatures].sort());
         if (callSignature === lastToolCallSignature) {
           duplicateCallStreak++;
@@ -2533,9 +2550,20 @@ export async function runAgentLoop(
           if (occurrences >= MAX_SAME_TOOL_CALLS_PER_TURN) repeatedAcrossTurn.add(signature);
         }
 
-        if (duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK || repeatedAcrossTurn.size > 0) {
+        if (
+          duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK ||
+          repeatedAcrossTurn.size > 0 ||
+          ignoredInterventionSignatures.size > 0
+        ) {
+          const repeatedSignatures = new Set([
+            ...repeatedAcrossTurn,
+            ...ignoredInterventionSignatures,
+          ]);
+          const loopSignatures = repeatedSignatures.size > 0
+            ? repeatedSignatures
+            : new Set(currentCallSignatures);
           const repeatedNames = toolCalls
-            .filter((toolCall) => repeatedAcrossTurn.has(toolCallSignature(toolCall)))
+            .filter((toolCall) => loopSignatures.has(toolCallSignature(toolCall)))
             .map((toolCall) => fromOpenAIName(toolCall.function.name));
           const names = [...new Set(
             repeatedNames.length > 0
@@ -2543,25 +2571,89 @@ export async function runAgentLoop(
               : toolCalls.map((toolCall) => fromOpenAIName(toolCall.function.name)),
           )].join(", ");
 
-          if (duplicateCallInterventions >= MAX_DUPLICATE_CALL_INTERVENTIONS) {
-            log.warn(
-              `Agent loop stuck: tool call (${names}) kept recurring without progress, ` +
-                `${duplicateCallInterventions} nudge(s) ignored — ending turn for session ${sessionId}`,
+          if (
+            ignoredInterventionSignatures.size > 0 ||
+            duplicateCallInterventions >= MAX_DUPLICATE_CALL_INTERVENTIONS
+          ) {
+            const quarantinedCalls = toolCalls.filter((toolCall) =>
+              loopSignatures.has(toolCallSignature(toolCall))
             );
-            const msg = `\n\n[Stopped: repeated the same tool call (${names}) with no new progress, even after being asked to change approach. Try narrowing or rephrasing the request.]`;
-            if (contentText) history.push({ role: "assistant", content: contentText });
-            history.push({ role: "assistant", content: msg });
-            fullContent += msg;
-            segments.push({ type: "text", content: msg });
-            onEvent?.({ type: "token", content: msg });
-            if (fullContent || segments.length > 0) {
-              onPersist?.(sessionId, "assistant", fullContent, undefined, JSON.stringify(segments), thinkingText || undefined);
-              persisted = true;
+            const quarantinedNames = new Set(
+              quarantinedCalls.map((toolCall) => fromOpenAIName(toolCall.function.name)),
+            );
+            quarantinedToolNames = quarantinedNames;
+            duplicateInterventionSignatures = new Set(loopSignatures);
+            duplicateCallStreak = 0;
+            for (const signature of loopSignatures) toolCallOccurrences.set(signature, 0);
+
+            const message =
+              `Skipped repeated tool call (${names}); ` +
+              `temporarily quarantining ${[...quarantinedNames].join(", ")} for the next model round`;
+            log.warn(`${message} for session ${sessionId}`);
+            onEvent?.({ type: "steering", message });
+
+            history.push({
+              role: "assistant",
+              content: contentText || "",
+              tool_calls: quarantinedCalls,
+              thinking: capThinking(thinkingText),
+            });
+            const callIds: string[] = [];
+            for (const toolCall of quarantinedCalls) {
+              const tool = fromOpenAIName(toolCall.function.name);
+              let args: unknown;
+              try { args = JSON.parse(toolCall.function.arguments); } catch { args = {}; }
+              const resultData = { quarantined: true, reason: "duplicate_call" };
+              const now = Date.now();
+              callIds.push(toolCall.id);
+              executedToolCalls.push({
+                callId: toolCall.id,
+                tool,
+                args,
+                ok: false,
+                message,
+                data: resultData,
+                startedAt: now,
+                completedAt: now,
+              });
+              history.push({
+                role: "tool",
+                content: JSON.stringify({ ok: false, message, data: resultData }),
+                tool_call_id: toolCall.id,
+                name: toolCall.function.name,
+              });
+              onEvent?.({
+                type: "tool_result",
+                call_id: toolCall.id,
+                tool,
+                ok: false,
+                message,
+                data: resultData,
+              });
             }
-            return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
+            if (callIds.length > 0) {
+              const lastSegment = segments[segments.length - 1];
+              if (lastSegment?.type === "toolGroup") {
+                segments[segments.length - 1] = {
+                  type: "toolGroup",
+                  callIds: [...new Set([...lastSegment.callIds, ...callIds])],
+                };
+              } else {
+                segments.push({ type: "toolGroup", callIds });
+              }
+            }
+            history.push({
+              role: "system",
+              content:
+                `The exact repeated call was skipped because its result is already in the conversation. ` +
+                `The tool(s) ${[...quarantinedNames].join(", ")} are unavailable for your next response only. ` +
+                `Keep working: use another available tool, change strategy, delegate, or answer from the evidence already collected. Do not repeat the skipped call.`,
+            });
+            continue;
           }
 
           duplicateCallInterventions++;
+          duplicateInterventionSignatures = new Set(loopSignatures);
           duplicateCallStreak = 0;
           for (const signature of currentCallSignatures) toolCallOccurrences.set(signature, 0);
           log.warn(
