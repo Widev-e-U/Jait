@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.701](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.701) — 2026-08-10
+- test(e2e): isolate dev stack and stabilize flaky specs (`099ecfd7`)
+- fix(gateway): one-round quarantine of repeated tools after duplicate-call nudges (`8fc8d398`)
+- fix(web): clickable paths in reasoning, secret tool-card, preview routing, ws env (`92f262db`)
+- feat(web): surface ACP provider version, distribution and description in settings (`ea1bde5f`)
+- feat(gateway): registry-driven ACP provider catalog with first-use installs (`2a572eef`)
+- test(gateway): make streaming cadence assertion deterministic (`e3e29fcd`)
+
 ## [v0.1.700](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.700) — 2026-08-09
 - fix: stabilize chat startup and session streaming (`10077c8e`)
 
