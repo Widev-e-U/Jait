@@ -1623,6 +1623,36 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
+/**
+ * Env overlay that points a CLI agent's own HTTP client at a local OmniRoute
+ * router instead of the vendor API. OmniRoute serves both an OpenAI-compatible
+ * `/v1` and an Anthropic-compatible surface at the root, so Codex and Claude
+ * Code each need their respective pair.
+ *
+ * Opt-in only. Enabling it by default would silently redirect a user's paid
+ * Claude/ChatGPT subscription through a third-party router the moment the
+ * router happens to be installed — never something to infer.
+ */
+export function omnirouteAcpEnv(
+  providerType: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> | undefined {
+  if (env.JAIT_ACP_VIA_OMNIROUTE?.trim().toLowerCase() !== "1") return undefined;
+  const openaiBaseUrl = (env.OMNIROUTE_BASE_URL?.trim() || "http://localhost:20128/v1").replace(/\/+$/, "");
+  // The Anthropic surface lives at the router root, not under /v1 — the CLI
+  // appends /v1/messages itself.
+  const anthropicBaseUrl = openaiBaseUrl.replace(/\/v1$/, "");
+  const key = env.OMNIROUTE_API_KEY?.trim() || "omniroute";
+
+  if (providerType === "claude-code") {
+    return { ANTHROPIC_BASE_URL: anthropicBaseUrl, ANTHROPIC_AUTH_TOKEN: key };
+  }
+  if (providerType === "codex") {
+    return { OPENAI_BASE_URL: openaiBaseUrl, OPENAI_API_KEY: key };
+  }
+  return undefined;
+}
+
 export function loadAcpProviderConfigs(): AcpProviderConfig[] {
   const defaults: AcpProviderConfig[] = [
     {
@@ -1633,6 +1663,7 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       args: ["-y", "@agentclientprotocol/codex-acp"],
       env: {
         CODEX_CONFIG: mergeJaitCodexConfig(process.env.CODEX_CONFIG),
+        ...omnirouteAcpEnv("codex"),
       },
     },
     {
@@ -1641,6 +1672,7 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       description: "Claude Code via Agent Client Protocol",
       command: "npx",
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+      ...(omnirouteAcpEnv("claude-code") ? { env: omnirouteAcpEnv("claude-code") } : {}),
     },
     {
       id: "cursor",

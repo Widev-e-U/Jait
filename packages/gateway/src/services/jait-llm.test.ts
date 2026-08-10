@@ -69,6 +69,55 @@ describe("resolveJaitLlmConfig", () => {
     ).toThrow(JaitConfigError);
   });
 
+  it("routes the omniroute backend to the local router, not OpenRouter", () => {
+    // Regression guard: OmniRoute model ids almost always contain a slash
+    // ("openai/gpt-4o", "auto/coding"). The OpenRouter branch keys off
+    // `requestedModel.includes("/")`, so without an explicit omniroute
+    // early-return every OmniRoute request would silently be sent to
+    // openrouter.ai — with the user's OpenRouter key, or none at all.
+    const llm = resolveJaitLlmConfig({
+      config,
+      apiKeys: { OPENROUTER_API_KEY: "or-key" },
+      requestedModel: "openai/gpt-4o",
+      jaitBackend: "omniroute",
+    });
+
+    expect(llm.backend).toBe("omniroute");
+    expect(llm.openaiBaseUrl).toBe("http://localhost:20128/v1");
+    expect(llm.openaiModel).toBe("openai/gpt-4o");
+  });
+
+  it("does not apply OpenRouter model aliases to omniroute models", () => {
+    const llm = resolveJaitLlmConfig({
+      config,
+      requestedModel: "gpt-4o",
+      jaitBackend: "omniroute",
+    });
+
+    expect(llm.openaiModel).toBe("gpt-4o");
+  });
+
+  it("defaults the omniroute model to the router's own auto strategy", () => {
+    const llm = resolveJaitLlmConfig({ config, jaitBackend: "omniroute" });
+
+    expect(llm.openaiModel).toBe("auto");
+    // Placeholder key: OmniRoute serves keyless free-tier providers, but an
+    // empty bearer breaks some upstreams.
+    expect(llm.openaiApiKey).toBe("omniroute");
+  });
+
+  it("prefers per-user OmniRoute settings over the gateway config", () => {
+    const llm = resolveJaitLlmConfig({
+      config: { ...config, omnirouteBaseUrl: "http://gateway:20128/v1", omnirouteApiKey: "cfg-key" },
+      apiKeys: { OMNIROUTE_BASE_URL: "http://nas:20128/v1/", OMNIROUTE_API_KEY: "user-key" },
+      requestedModel: "auto/coding",
+      jaitBackend: "omniroute",
+    });
+
+    expect(llm.openaiBaseUrl).toBe("http://nas:20128/v1");
+    expect(llm.openaiApiKey).toBe("user-key");
+  });
+
   it("rejects bare Claude Code CLI aliases for non-Ollama backends too", () => {
     for (const alias of ["default", "fable", "sonnet", "opus", "haiku", "opusplan"]) {
       expect(() =>

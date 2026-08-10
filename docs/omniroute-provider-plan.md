@@ -1,6 +1,19 @@
 # OmniRoute als AI-Provider in Jait
 
-Branch: `feat/omniroute-provider`
+Branch: `feat/omniroute-provider` — **Phasen 1–4 umgesetzt.** Phase 5 (OmniRoute-MCP) offen.
+
+Abweichungen von der ursprünglichen Planung, die sich bei der Umsetzung ergeben haben:
+
+- **Modell-Aliase bei nicht erreichbarem Router:** ursprünglich geplant war, `auto` & Co. immer anzuzeigen.
+  Umgesetzt ist das Gegenteil — läuft der Router nicht, trägt die Gruppe nichts bei (wie Ollama). Modelle
+  anzubieten, die garantiert nicht antworten, ist schlechter als eine leere Gruppe.
+- **`JaitBackend` liegt jetzt in `packages/shared/src/types/thread.ts`** samt `JAIT_BACKENDS` und
+  `isJaitBackend()`. Gateway (`services/users.ts`, `routes/auth.ts`) und Web (`hooks/useAuth.ts`)
+  re-exportieren nur noch. Die handgepflegte `JAIT_BACKEND_VALUES`-Set in `auth.ts` ist entfallen.
+- **Import-Pfad:** `@jait/shared/types` löst nur im Typecheck auf (tsconfig-paths); zur Laufzeit zeigt der
+  Subpath auf `dist/`, und Vitest aliast nur den Root. Value-Imports (`isJaitBackend`) müssen deshalb aus
+  `@jait/shared` kommen — Type-only-Imports funktionieren über beide Wege.
+- **`OMNIROUTE_MODEL`** als dritter Settings-Key ergänzt (Fallback-Modell, wenn die UI keins gewählt hat).
 
 ## 1. Was OmniRoute ist (verifiziert)
 

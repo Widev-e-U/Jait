@@ -1,13 +1,15 @@
 import { createContext, createElement, useState, useEffect, useCallback, useContext, type ReactNode } from 'react'
 import { clearAuthToken, getAuthToken, setAuthToken, initAuthToken, clearAuthCookie } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
+import type { JaitBackend } from '@jait/shared'
 
 const API_URL = getApiUrl()
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'wyoming' | 'whisper' | 'gpt' | 'elevenlabs'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
-export type JaitBackend = 'openai' | 'openrouter' | 'ollama'
+/** Single source of truth lives in @jait/shared — re-exported so the UI can never drift from the gateway's validation. */
+export type { JaitBackend }
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
 interface User {

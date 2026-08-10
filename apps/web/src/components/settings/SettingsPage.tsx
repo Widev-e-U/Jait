@@ -52,6 +52,7 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'Ollama', fields: ['OLLAMA_URL', 'OLLAMA_MODEL'] },
   { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
   { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
+  { label: 'OmniRoute', fields: ['OMNIROUTE_BASE_URL', 'OMNIROUTE_API_KEY', 'OMNIROUTE_MODEL'] },
   { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
   { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
   { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
@@ -1164,6 +1165,7 @@ export function SettingsPage({
                     <SelectItem value="openai">OpenAI (direct)</SelectItem>
                     <SelectItem value="openrouter">OpenRouter</SelectItem>
                     <SelectItem value="ollama">Ollama (local)</SelectItem>
+                    <SelectItem value="omniroute">OmniRoute (local router)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1171,8 +1173,17 @@ export function SettingsPage({
                     ? 'Models will be fetched from OpenRouter. Set your OPENROUTER_API_KEY in the API tab.'
                     : jaitBackend === 'ollama'
                       ? 'Models will be fetched from your local Ollama instance. Set OLLAMA_URL in the API tab if not running on localhost:11434.'
-                      : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
+                      : jaitBackend === 'omniroute'
+                        ? 'Models come from the OmniRoute router running on your machine (default http://localhost:20128/v1). The API key is optional. Pick the "auto" model to let OmniRoute route each request itself.'
+                        : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
                 </p>
+                {jaitBackend === 'omniroute' && (
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">
+                    OmniRoute forwards requests to up to ~290 third-party providers, some of whose free tiers allow
+                    training on submitted data. Chats include your repository contents — pick your providers in the
+                    OmniRoute dashboard accordingly.
+                  </p>
+                )}
               </div>
               <div className="max-w-sm">
                 <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Agent checkpoint interval</Label>

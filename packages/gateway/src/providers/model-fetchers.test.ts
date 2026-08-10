@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fetchOllamaModels,
+  fetchOmniRouteModels,
   fetchOpenAIModels,
   fetchOpenRouterModels,
   isChatCapableOpenAIModelId,
@@ -147,6 +148,81 @@ describe("fetchOpenRouterModels", () => {
     await fetchOpenRouterModels("k");
     await fetchOpenRouterModels("k");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fetchOmniRouteModels", () => {
+  it("keeps non-OpenAI model ids and prepends the routing aliases", async () => {
+    // The OpenAI fetcher filters to gpt-*/o* prefixes; applying that here would
+    // discard almost all of OmniRoute's ~290-provider catalogue.
+    mockFetchOnce({
+      data: [
+        { id: "deepseek/deepseek-r1", owned_by: "deepseek" },
+        { id: "google/gemini-2.5-flash" },
+        { id: "openai/gpt-4o" },
+      ],
+    });
+
+    const models = await fetchOmniRouteModels("k", "http://localhost:20128/v1");
+
+    expect(models.slice(0, 5).map((m) => m.id)).toEqual([
+      "auto",
+      "auto/coding",
+      "auto/fast",
+      "auto/cheap",
+      "auto/smart",
+    ]);
+    expect(models[0].isDefault).toBe(true);
+    expect(models.slice(5).map((m) => m.id)).toEqual([
+      "deepseek/deepseek-r1",
+      "google/gemini-2.5-flash",
+      "openai/gpt-4o",
+    ]);
+    expect(models.find((m) => m.id === "deepseek/deepseek-r1")?.reasoningEffortSupported).toBe(true);
+  });
+
+  it("does not duplicate aliases already present in the catalogue", async () => {
+    mockFetchOnce({ data: [{ id: "auto" }, { id: "auto/coding" }, { id: "openai/gpt-4o" }] });
+    const models = await fetchOmniRouteModels("", "http://localhost:20128/v1");
+    expect(models.filter((m) => m.id === "auto")).toHaveLength(1);
+    expect(models.filter((m) => m.id === "auto/coding")).toHaveLength(1);
+  });
+
+  it("caps a very large catalogue", async () => {
+    mockFetchOnce({ data: Array.from({ length: 400 }, (_, i) => ({ id: `vendor/model-${i}` })) });
+    const models = await fetchOmniRouteModels("k", "http://localhost:20128/v1");
+    expect(models).toHaveLength(155); // 5 aliases + 150 catalogue entries
+  });
+
+  it("omits the Authorization header when no key is configured", async () => {
+    // OmniRoute works keyless against its free-tier providers.
+    const fetchMock = mockFetchOnce({ data: [] });
+    await fetchOmniRouteModels("", "http://localhost:20128/v1/");
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", expect.objectContaining({ headers: {} }));
+  });
+
+  it("returns nothing when the router is not running, rather than dead aliases", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    await expect(fetchOmniRouteModels("k", "http://localhost:20128/v1")).resolves.toEqual([]);
+  });
+
+  it("returns empty array on non-ok response", async () => {
+    mockFetchOnce({}, { status: 503 });
+    await expect(fetchOmniRouteModels("k", "http://localhost:20128/v1")).resolves.toEqual([]);
+  });
+
+  it("isolates cache by base URL", async () => {
+    const fetchMock1 = mockFetchOnce({ data: [{ id: "vendor/a" }] });
+    await fetchOmniRouteModels("k", "http://localhost:20128/v1");
+    await fetchOmniRouteModels("k", "http://localhost:20128/v1");
+    expect(fetchMock1).toHaveBeenCalledTimes(1);
+
+    const fetchMock2 = mockFetchOnce({ data: [{ id: "vendor/b" }] });
+    const result = await fetchOmniRouteModels("k", "http://nas:20128/v1");
+    expect(fetchMock2).toHaveBeenCalledTimes(1);
+    expect(result.map((m) => m.id)).toContain("vendor/b");
   });
 });
 
