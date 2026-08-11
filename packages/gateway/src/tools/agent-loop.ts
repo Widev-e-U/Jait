@@ -619,6 +619,110 @@ export function serializeMessagesForOllama(messages: AgentMessage[]) {
   });
 }
 
+// ── Runaway repetition guard ─────────────────────────────────────────
+// A model can fall into a degenerate loop and emit the same sentence or
+// paragraph over and over until it exhausts the output budget. Nothing
+// upstream stops that: the answer streams out as a wall of duplicated text,
+// and the truncation recovery further down then *resumes* the loop for
+// another few thousand tokens. These helpers spot the pattern mid-stream so
+// the turn can be cut short instead.
+
+/** Don't judge anything shorter than this — short answers repeat legitimately. */
+const MIN_REPETITION_SCAN_CHARS = 600;
+/** Minimum verbatim back-to-back copies of a unit before it counts as a loop. */
+const MIN_REPETITION_COPIES = 8;
+/** …and those copies must also span at least this many characters in total. */
+const MIN_REPETITION_SPAN_CHARS = 600;
+/** Only the trailing window is inspected, so the scan cost stays bounded. */
+const REPETITION_SCAN_WINDOW_CHARS = 16_000;
+/** Tail slice used to locate the previous occurrence of the repeating unit. */
+const REPETITION_PROBE_CHARS = 48;
+/** Re-run the scan at most once per this many newly streamed characters. */
+const REPETITION_CHECK_INTERVAL_CHARS = 256;
+
+interface DegenerateRepetition {
+  /** The repeating unit. */
+  unit: string;
+  /** How many consecutive verbatim copies of it end the text. */
+  copies: number;
+  /** Index in the text where the repeated run starts. */
+  startIndex: number;
+}
+
+/**
+ * Detect that `text` ends in a runaway verbatim repetition.
+ *
+ * The period is found by locating the previous occurrence of the final
+ * {@link REPETITION_PROBE_CHARS} characters, then verifying the tail really is
+ * periodic at that distance. Requiring both a copy count *and* a total span
+ * keeps ordinary repetition (a bulleted list, a repeated table cell, "ha ha
+ * ha") under the threshold while still catching loops that run for thousands
+ * of tokens.
+ */
+function findDegenerateRepetition(text: string): DegenerateRepetition | null {
+  if (text.length < MIN_REPETITION_SCAN_CHARS) return null;
+  const window = text.length > REPETITION_SCAN_WINDOW_CHARS
+    ? text.slice(-REPETITION_SCAN_WINDOW_CHARS)
+    : text;
+  if (window.length <= REPETITION_PROBE_CHARS) return null;
+
+  const probeStart = window.length - REPETITION_PROBE_CHARS;
+  const previous = window.lastIndexOf(window.slice(probeStart), probeStart - 1);
+  if (previous < 0) return null;
+
+  const period = probeStart - previous;
+  const requiredCopies = Math.max(
+    MIN_REPETITION_COPIES,
+    Math.ceil(MIN_REPETITION_SPAN_CHARS / period),
+  );
+  const span = period * requiredCopies;
+  if (window.length < span) return null;
+
+  const unit = window.slice(window.length - span, window.length - span + period);
+  for (let offset = window.length - span + period; offset < window.length; offset += period) {
+    if (window.slice(offset, offset + period) !== unit) return null;
+  }
+
+  // Walk back through the full text (not just the window) so callers can trim
+  // the entire repeated run, however long it has been going.
+  let startIndex = text.length - span;
+  while (startIndex - period >= 0 && text.slice(startIndex - period, startIndex) === unit) {
+    startIndex -= period;
+  }
+  return { unit, copies: (text.length - startIndex) / period, startIndex };
+}
+
+/**
+ * Collapse a runaway repetition to two copies. Used for the history entry so a
+ * later round (or a resumed session) doesn't re-read the wall of text and
+ * pattern-match its way straight back into the same loop.
+ */
+function trimDegenerateRepetition(text: string): string {
+  const repetition = findDegenerateRepetition(text);
+  if (!repetition) return text;
+  return text.slice(0, repetition.startIndex)
+    + repetition.unit.repeat(2)
+    + `\n[… ${repetition.copies - 2} further identical repetitions removed …]`;
+}
+
+/** Tag a guard hit with the stream it came from, or drop it when there was none. */
+function markRepetition(
+  repetition: DegenerateRepetition | null,
+  source: "content" | "thinking",
+): (DegenerateRepetition & { source: "content" | "thinking" }) | undefined {
+  return repetition ? { ...repetition, source } : undefined;
+}
+
+/** Stateful, throttled {@link findDegenerateRepetition} for use while streaming. */
+function createRepetitionGuard(): (text: string) => DegenerateRepetition | null {
+  let scannedLength = 0;
+  return (text) => {
+    if (text.length - scannedLength < REPETITION_CHECK_INTERVAL_CHARS) return null;
+    scannedLength = text.length;
+    return findDegenerateRepetition(text);
+  };
+}
+
 /**
  * Parse ollama's native /api/chat NDJSON stream into the same shape as
  * {@link parseOpenAIStream}, so the agent loop is endpoint-agnostic.
@@ -636,8 +740,11 @@ export async function parseOllamaStream(
   let usage: ParsedStream["usage"] | undefined;
   let sawDone = false;
   let interrupted = false;
+  let repetition: ParsedStream["repetition"];
   const toolCalls: OpenAIToolCall[] = [];
   const extractThinking = createThinkingExtractor();
+  const contentRepetitionGuard = createRepetitionGuard();
+  const thinkingRepetitionGuard = createRepetitionGuard();
 
   const processLine = (line: string) => {
     const trimmed = line.trim();
@@ -661,16 +768,19 @@ export async function parseOllamaStream(
       if (thinking) {
         thinkingText += thinking;
         onEvent?.({ type: "thinking", content: thinking });
+        repetition ??= markRepetition(thinkingRepetitionGuard(thinkingText), "thinking");
       }
       if (message.content) {
         const { cleanDelta, thinkingDelta } = extractThinking(message.content);
         if (cleanDelta) {
           contentText += cleanDelta;
           onEvent?.({ type: "token", content: cleanDelta });
+          repetition ??= markRepetition(contentRepetitionGuard(contentText), "content");
         }
         if (thinkingDelta) {
           thinkingText += thinkingDelta;
           onEvent?.({ type: "thinking", content: thinkingDelta });
+          repetition ??= markRepetition(thinkingRepetitionGuard(thinkingText), "thinking");
         }
       }
       if (Array.isArray(message.tool_calls)) {
@@ -722,9 +832,13 @@ export async function parseOllamaStream(
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
     for (const line of lines) processLine(line);
+    if (repetition) break;
   }
 
-  if (!sawDone && !interrupted) {
+  if (repetition) {
+    finishReason = "repetition";
+    await reader.cancel().catch(() => {});
+  } else if (!sawDone && !interrupted) {
     throw new Error("Ollama stream ended before its terminal done chunk");
   }
 
@@ -732,7 +846,7 @@ export async function parseOllamaStream(
   // to the OpenAI convention the loop expects.
   if (toolCalls.length > 0 && finishReason === "stop") finishReason = "tool_calls";
 
-  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted };
+  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted, repetition };
 }
 
 // ── Build OpenAI tool schemas ────────────────────────────────────────
@@ -907,6 +1021,11 @@ interface ParsedStream {
   interrupted?: boolean;
   /** Token usage reported by the provider (from the final chunk). */
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  /**
+   * Set when the stream was cut short because the model started repeating
+   * itself verbatim. `finishReason` is "repetition" in that case.
+   */
+  repetition?: DegenerateRepetition & { source: "content" | "thinking" };
 }
 
 export async function parseOpenAIStream(
@@ -921,7 +1040,10 @@ export async function parseOpenAIStream(
   let finishReason: string | null = null;
   let usage: ParsedStream["usage"] | undefined;
   let interrupted = false;
+  let repetition: ParsedStream["repetition"];
   const extractThinking = createThinkingExtractor();
+  const contentRepetitionGuard = createRepetitionGuard();
+  const thinkingRepetitionGuard = createRepetitionGuard();
 
   const toolCallMap = new Map<
     number,
@@ -961,6 +1083,7 @@ export async function parseOpenAIStream(
       if (reasoningToken) {
         thinkingText += reasoningToken;
         onEvent?.({ type: "thinking", content: reasoningToken });
+        repetition ??= markRepetition(thinkingRepetitionGuard(thinkingText), "thinking");
       }
 
       // Text content — strip any inline <thinking> envelope the model emitted
@@ -969,10 +1092,12 @@ export async function parseOpenAIStream(
         if (cleanDelta) {
           contentText += cleanDelta;
           onEvent?.({ type: "token", content: cleanDelta });
+          repetition ??= markRepetition(contentRepetitionGuard(contentText), "content");
         }
         if (thinkingDelta) {
           thinkingText += thinkingDelta;
           onEvent?.({ type: "thinking", content: thinkingDelta });
+          repetition ??= markRepetition(thinkingRepetitionGuard(thinkingText), "thinking");
         }
       }
 
@@ -1074,13 +1199,19 @@ export async function parseOpenAIStream(
     for (const line of lines) {
       processLine(line);
     }
+    if (repetition) break;
+  }
+
+  if (repetition) {
+    finishReason = "repetition";
+    await reader.cancel().catch(() => {});
   }
 
   const toolCalls = [...toolCallMap.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, tc]) => tc);
 
-  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted };
+  return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted, repetition };
 }
 
 // ── Execute a single tool call with validation + retry ───────────────
@@ -1379,6 +1510,8 @@ function failedToolCallOutcome(
 export const __testUtils = {
   buildStructuredConversationSummary,
   executeOneToolCall,
+  findDegenerateRepetition,
+  trimDegenerateRepetition,
   isTransientFailure,
   isSubstantiveUserMessage,
   pruneHistory,
@@ -1471,6 +1604,121 @@ function toolCallSignature(toolCall: OpenAIToolCall): string {
   }
   return JSON.stringify({ name: fromOpenAIName(toolCall.function.name), args });
 }
+
+/** Consecutive near-redundant ranged reads allowed before redirecting the model. */
+const MAX_LOW_PROGRESS_READ_STREAK = 8;
+/** A ranged read must add this fraction of new lines to count as progress. */
+const MIN_READ_PROGRESS_RATIO = 0.25;
+
+interface ReadRange {
+  target: string;
+  toolName: string;
+  startLine: number;
+  endLine: number;
+}
+
+interface ReadCoverageState {
+  intervals: Array<[number, number]>;
+  lowProgressStreak: number;
+}
+
+function parseReadRange(toolCall: OpenAIToolCall): ReadRange | null {
+  const toolName = fromOpenAIName(toolCall.function.name);
+  if (toolName !== "read" && !toolName.endsWith(".read")) return null;
+
+  let args: Record<string, unknown>;
+  try {
+    args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const path = typeof args.path === "string" ? args.path.trim() : "";
+  const startLine = Number(args.startLine);
+  const endLine = Number(args.endLine);
+  if (
+    !path ||
+    !Number.isInteger(startLine) ||
+    !Number.isInteger(endLine) ||
+    startLine < 1 ||
+    endLine < startLine
+  ) {
+    return null;
+  }
+
+  const normalizedPath = path.replaceAll("\\", "/").replace(/\/+/g, "/");
+  return {
+    target: `${toolName}:${normalizedPath}`,
+    toolName,
+    startLine,
+    endLine,
+  };
+}
+
+function coveredLineCount(
+  intervals: Array<[number, number]>,
+  startLine: number,
+  endLine: number,
+): number {
+  let covered = 0;
+  for (const [coveredStart, coveredEnd] of intervals) {
+    const overlapStart = Math.max(startLine, coveredStart);
+    const overlapEnd = Math.min(endLine, coveredEnd);
+    if (overlapStart <= overlapEnd) covered += overlapEnd - overlapStart + 1;
+  }
+  return covered;
+}
+
+function mergeReadInterval(
+  intervals: Array<[number, number]>,
+  startLine: number,
+  endLine: number,
+): Array<[number, number]> {
+  const merged: Array<[number, number]> = [];
+  let nextStart = startLine;
+  let nextEnd = endLine;
+  let inserted = false;
+
+  for (const [coveredStart, coveredEnd] of intervals) {
+    if (coveredEnd + 1 < nextStart) {
+      merged.push([coveredStart, coveredEnd]);
+    } else if (nextEnd + 1 < coveredStart) {
+      if (!inserted) {
+        merged.push([nextStart, nextEnd]);
+        inserted = true;
+      }
+      merged.push([coveredStart, coveredEnd]);
+    } else {
+      nextStart = Math.min(nextStart, coveredStart);
+      nextEnd = Math.max(nextEnd, coveredEnd);
+    }
+  }
+
+  if (!inserted) merged.push([nextStart, nextEnd]);
+  return merged;
+}
+
+function trackReadProgress(
+  coverageByTarget: Map<string, ReadCoverageState>,
+  toolCall: OpenAIToolCall,
+): (ReadRange & { lowProgressStreak: number }) | null {
+  const range = parseReadRange(toolCall);
+  if (!range) return null;
+
+  const state = coverageByTarget.get(range.target) ?? {
+    intervals: [],
+    lowProgressStreak: 0,
+  };
+  const span = range.endLine - range.startLine + 1;
+  const newLines = span - coveredLineCount(state.intervals, range.startLine, range.endLine);
+  const lowProgress = state.intervals.length > 0 && newLines / span < MIN_READ_PROGRESS_RATIO;
+  state.lowProgressStreak = lowProgress ? state.lowProgressStreak + 1 : 0;
+  state.intervals = mergeReadInterval(state.intervals, range.startLine, range.endLine);
+  coverageByTarget.set(range.target, state);
+
+  return { ...range, lowProgressStreak: state.lowProgressStreak };
+}
+
 /**
  * Swarm mode only: max direct read/search-style calls the coordinator may
  * make before it has delegated anything to a specialist, before we force
@@ -2196,6 +2444,7 @@ export async function runAgentLoop(
   /** Internal tool names hidden from the next provider round after a loop. */
   let quarantinedToolNames = new Set<string>();
   const toolCallOccurrences = new Map<string, number>();
+  const readCoverageByTarget = new Map<string, ReadCoverageState>();
   /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
   let overflowRecoveryAttempted = false;
   /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
@@ -2377,6 +2626,7 @@ export async function runAgentLoop(
     let toolCalls: OpenAIToolCall[] = [];
     let finishReason: string | null = null;
     let streamInterrupted = false;
+    let repetitionStop: ParsedStream["repetition"];
 
     try {
       // Use a generous timeout (10 min) for LLM streaming — slow local models
@@ -2459,6 +2709,7 @@ export async function runAgentLoop(
       thinkingText = parsed.thinkingText;
       toolCalls = parsed.toolCalls;
       finishReason = parsed.finishReason;
+      repetitionStop = parsed.repetition;
 
       // Attach metrics to the round now that streaming is complete
       const durationMs = Date.now() - llmStartTime;
@@ -2539,6 +2790,55 @@ export async function runAgentLoop(
         segments,
         rounds: round + 1,
         aborted: true,
+        hitMaxRounds: false,
+        persisted,
+      };
+    }
+
+    // ── Runaway repetition → end the turn ──
+    // The stream parser cut the response off as soon as the model started
+    // emitting the same block over and over. Anything that "keeps going" from
+    // here — another tool round, or the truncation recovery below — just
+    // resumes the loop and burns the rest of the output budget, which is how a
+    // single degenerate response turned into thousands of duplicated lines.
+    // Stop with what we have and tell the user why.
+    if (repetitionStop) {
+      const repeated = repetitionStop.source === "thinking" ? "reasoning" : "text";
+      log.warn(
+        `Runaway repetition in ${repetitionStop.source} for session ${sessionId}: `
+          + `${repetitionStop.copies} identical copies of a ${repetitionStop.unit.length}-char block — ending the turn`,
+      );
+      onEvent?.({ type: "steering", message: `Model started repeating its ${repeated} — stopping the response` });
+      const notice = `\n\n[Stopped: the model repeated the same ${repeated} ${repetitionStop.copies} times and was cut off. `
+        + `This reply is incomplete — retry, or rephrase the request.]`;
+      onEvent?.({ type: "token", content: notice });
+      fullContent += notice;
+      const lastSegment = segments[segments.length - 1];
+      if (lastSegment?.type === "text") {
+        segments[segments.length - 1] = { type: "text", content: lastSegment.content + notice };
+      } else {
+        segments.push({ type: "text", content: notice });
+      }
+      // History keeps a collapsed copy: replaying the wall of duplicated text
+      // into the next request is the surest way to trigger the loop again.
+      if (contentText) {
+        history.push({ role: "assistant", content: trimDegenerateRepetition(contentText) });
+      }
+      onPersist?.(
+        sessionId,
+        "assistant",
+        fullContent,
+        executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
+        segments.length > 0 ? JSON.stringify(segments) : undefined,
+        capThinking(thinkingText) || undefined,
+      );
+      persisted = true;
+      return {
+        content: fullContent,
+        executedToolCalls,
+        segments,
+        rounds: round + 1,
+        aborted: false,
         hitMaxRounds: false,
         persisted,
       };
@@ -2660,6 +2960,38 @@ export async function runAgentLoop(
           !roundQuarantinedToolNames.has(fromOpenAIName(toolCall.function.name))
         );
         if (toolCalls.length === 0) continue;
+      }
+
+      // ── Overlapping read-range loop detection ──
+      // Exact signatures cannot catch a model orbiting the same file window
+      // while shifting startLine/endLine by a few lines. Track actual coverage
+      // per file and intervene only after several consecutive calls add almost
+      // no new lines. This preserves normal pagination and a small number of
+      // defensive re-reads while bounding range jitter.
+      const stalledReads = toolCalls
+        .map((toolCall) => trackReadProgress(readCoverageByTarget, toolCall))
+        .filter((read): read is ReadRange & { lowProgressStreak: number } =>
+          read !== null && read.lowProgressStreak >= MAX_LOW_PROGRESS_READ_STREAK
+        );
+      if (stalledReads.length > 0) {
+        const stalledTargets = [...new Set(stalledReads.map((read) => read.target))];
+        const stalledToolNames = new Set(stalledReads.map((read) => read.toolName));
+        quarantinedToolNames = stalledToolNames;
+        discardLatestContentText(contentText);
+        const message =
+          `Detected repeated overlapping reads with negligible new coverage (${stalledTargets.join(", ")}); `
+          + `temporarily quarantining ${[...stalledToolNames].join(", ")} for the next model round`;
+        log.warn(`${message} for session ${sessionId}`);
+        onEvent?.({ type: "steering", message });
+        history.push({
+          role: "system",
+          content:
+            `You repeatedly read overlapping line ranges from the same file without gaining meaningful new coverage. `
+            + `Jait skipped the latest redundant read and made ${[...stalledToolNames].join(", ")} unavailable for your next response. `
+            + `Use the results already in the conversation, choose a different tool or file, or answer the user. `
+            + `If more of this file is genuinely needed later, read a substantially new non-overlapping range.`,
+        });
+        continue;
       }
 
       // ── Duplicate tool-call loop detection ──
@@ -3142,24 +3474,40 @@ export async function runAgentLoop(
       toolCalls.length === 0 &&
       lengthContinuations < MAX_LENGTH_CONTINUATIONS
     ) {
-      lengthContinuations++;
-      log.warn(
-        `Response truncated (finish_reason="length") — auto-continuing ${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS} for session ${sessionId}`,
-      );
-      onEvent?.({
-        type: "steering",
-        message: `Response hit the output token limit — continuing (${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS})`,
-      });
-      // Preserve whatever visible text arrived so the model can resume after it.
-      if (contentText) {
-        history.push({ role: "assistant", content: contentText });
+      // A model that ran out of budget while looping is not going to "resume"
+      // into anything useful. Checking the whole turn (not just this round)
+      // catches a loop that only became obvious across continuations, e.g. one
+      // whose repeating unit is longer than a single response.
+      const degenerate = findDegenerateRepetition(fullContent);
+      if (degenerate) {
+        log.warn(
+          `Response hit the output token limit while repeating itself `
+            + `(${degenerate.copies} copies) for session ${sessionId} — not continuing`,
+        );
+        onEvent?.({
+          type: "steering",
+          message: "Response hit the output token limit while repeating itself — stopping",
+        });
+      } else {
+        lengthContinuations++;
+        log.warn(
+          `Response truncated (finish_reason="length") — auto-continuing ${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS} for session ${sessionId}`,
+        );
+        onEvent?.({
+          type: "steering",
+          message: `Response hit the output token limit — continuing (${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS})`,
+        });
+        // Preserve whatever visible text arrived so the model can resume after it.
+        if (contentText) {
+          history.push({ role: "assistant", content: contentText });
+        }
+        history.push({
+          role: "system",
+          content:
+            "Your previous response was cut off because it reached the output token limit. Resume exactly where you left off — do not repeat any text you already produced, do not restart, and do not re-summarize. Continue seamlessly from the final character of your previous output.",
+        });
+        continue;
       }
-      history.push({
-        role: "system",
-        content:
-          "Your previous response was cut off because it reached the output token limit. Resume exactly where you left off — do not repeat any text you already produced, do not restart, and do not re-summarize. Continue seamlessly from the final character of your previous output.",
-      });
-      continue;
     }
 
     if (!contentText.trim() && toolCalls.length === 0) {

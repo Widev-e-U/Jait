@@ -101,7 +101,7 @@ function makeContext(
 function createSelectedProviderContext(
   db: Awaited<ReturnType<typeof openDatabase>>["db"],
   providerId: "jait" | "codex" | "claude-code",
-  options: { model?: string; runtimeMode?: "full-access" | "supervised" } = {},
+  options: { model?: string; reasoningEffort?: string; runtimeMode?: "full-access" | "supervised" } = {},
 ) {
   const userService = new UserService(db);
   const user = userService.createUser(`user-${providerId}-${Math.random()}`, "password");
@@ -114,6 +114,9 @@ function createSelectedProviderContext(
   }
   if (options.model) {
     state["chat.cliModels"] = { [providerId]: options.model };
+  }
+  if (options.reasoningEffort) {
+    state["chat.reasoningEffort"] = options.reasoningEffort;
   }
   if (Object.keys(state).length > 0) {
     sessionState.set("s-thread-tools", state);
@@ -131,9 +134,14 @@ describe("thread.control tool", () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const { userService, sessionState, context } = createSelectedProviderContext(
+        db,
+        "codex",
+        { reasoningEffort: "high" },
+      );
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -154,9 +162,13 @@ describe("thread.control tool", () => {
 
       expect(result.ok).toBe(true);
       expect(result.message).toBe("Thread created and started");
-      const data = result.data as { thread: { providerSessionId: string | null; status: string } };
+      const data = result.data as {
+        thread: { providerSessionId: string | null; reasoningEffort: string | null; status: string };
+      };
       expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(data.thread.reasoningEffort).toBe("high");
       expect(data.thread.status).toBe("running");
+      expect(provider.lastStartOptions?.reasoningEffort).toBe("high");
     } finally {
       sqlite.close();
     }

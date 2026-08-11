@@ -24,6 +24,7 @@ import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable } from "../db/schema.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
+import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
@@ -548,27 +549,6 @@ function shouldIncludeContactMemories(content: string): boolean {
   return /\b(based on what you know|remember|preference|preferences|prefer|my usual|about me|what do you know)\b/i.test(content);
 }
 
-function memoryRelevanceTokens(content: string): Set<string> {
-  return new Set(
-    content
-      .toLowerCase()
-      .split(/[^a-z0-9_äöüß]+/i)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 4)
-      .filter((token) => !["this", "that", "with", "from", "have", "your", "what", "when", "where", "which", "there", "their", "about", "should", "would", "could", "please", "help"].includes(token)),
-  );
-}
-
-function hasLexicalMemoryOverlap(query: string, content: string): boolean {
-  const queryTokens = memoryRelevanceTokens(query);
-  if (queryTokens.size === 0) return false;
-  const contentTokens = memoryRelevanceTokens(content);
-  for (const token of queryTokens) {
-    if (contentTokens.has(token)) return true;
-  }
-  return false;
-}
-
 function memorySourceLabel(entry: MemoryEntry): string {
   if (entry.source.type === "pre_compaction") {
     return "memory compact"
@@ -618,7 +598,6 @@ async function retrieveRelevantMemoryContext(
   const includeBroadMemory = shouldIncludeContactMemories(query);
   for (const entry of projectMemories) {
     if (!isSourceVisible(entry)) continue;
-    if (!includeBroadMemory && !hasLexicalMemoryOverlap(query, entry.content)) continue;
     byId.set(entry.id, entry);
   }
 
@@ -978,9 +957,11 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
         ? record.runtimeMode
         : undefined,
       model: typeof record.model === "string" ? record.model : null,
-      reasoningEffort: typeof record.reasoningEffort === "string" && record.reasoningEffort.trim()
-        ? record.reasoningEffort.trim()
-        : null,
+      ...(Object.prototype.hasOwnProperty.call(record, "reasoningEffort")
+        ? { reasoningEffort: typeof record.reasoningEffort === "string" && record.reasoningEffort.trim()
+            ? record.reasoningEffort.trim()
+            : null }
+        : {}),
       responseStyle: isResponseStyle(record.responseStyle) ? record.responseStyle : undefined,
       attachments: Array.isArray(record.attachments)
         ? record.attachments.flatMap((attachment) => {
@@ -1249,7 +1230,7 @@ const activeCliSessions = new Map<string, {
   providerId: ProviderId;
   runtimeMode: RuntimeMode;
   model?: string;
-  reasoningEffort?: string;
+  reasoningEffort?: string | null;
   providerSessionId: string;
   provider: CliProviderAdapter;
   /**
@@ -1263,6 +1244,32 @@ const activeCliSessions = new Map<string, {
    */
   remoteClientId?: string;
 }>();
+
+const activeCliTurns = new Set<string>();
+
+function stopAndDeleteActiveCliSession(sessionId: string): boolean {
+  const activeCliSession = activeCliSessions.get(sessionId);
+  if (!activeCliSession) return false;
+  activeCliSessions.delete(sessionId);
+
+  const stopOperations: Promise<unknown>[] = [];
+  try {
+    stopOperations.push(
+      Promise.resolve(
+        activeCliSession.provider.interruptTurn(activeCliSession.providerSessionId),
+      ),
+    );
+  } catch { /* best effort */ }
+  try {
+    stopOperations.push(
+      Promise.resolve(
+        activeCliSession.provider.stopSession(activeCliSession.providerSessionId),
+      ),
+    );
+  } catch { /* best effort */ }
+  void Promise.allSettled(stopOperations);
+  return true;
+}
 
 function parseRuntimeMode(raw: unknown): RuntimeMode {
   return raw === "supervised" ? "supervised" : "full-access";
@@ -1613,6 +1620,35 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function createAbortError(): Error {
+  const error = new Error("Cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+async function waitForCliProviderRequest<T>(
+  request: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  if (signal.aborted) throw createAbortError();
+
+  let onAbort: (() => void) | null = null;
+  const abortPromise = new Promise<never>((_, reject) => {
+    onAbort = () => reject(createAbortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+  try {
+    return await Promise.race([request(), abortPromise]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
 function buildVisibleHistoryEntries(
   sessionId: string,
   history: ChatMessage[],
@@ -1809,7 +1845,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
         sessionId,
         role,
         content,
-        toolCalls: toolCalls ?? null,
+        toolCalls: serializePersistedToolCalls(toolCalls),
         segments: segments ?? null,
         contextFlow: contextFlow ?? null,
         thinking: thinking ?? null,
@@ -1834,6 +1870,7 @@ export const __chatTestUtils = {
   accumulateToolResult,
   getOrCreateAccumulator,
   serializePersistedContextFlow,
+  serializePersistedToolCalls,
 };
 
 export interface ChatRouteDeps {
@@ -2023,7 +2060,9 @@ export function registerChatRoutes(
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
             ...(nextMessage.model ? { model: nextMessage.model } : {}),
-            ...(nextMessage.reasoningEffort ? { reasoningEffort: nextMessage.reasoningEffort } : {}),
+            ...(Object.prototype.hasOwnProperty.call(nextMessage, "reasoningEffort")
+              ? { reasoningEffort: nextMessage.reasoningEffort ?? null }
+              : {}),
             ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
             ...(nextMessage.attachments?.length ? { attachments: nextMessage.attachments } : {}),
             _queuedDrain: true,
@@ -2098,6 +2137,7 @@ export function registerChatRoutes(
           userId: user.id,
           userService,
           sessionState: sessionStateService,
+          sessionMetadata: session.metadata,
         }),
       });
     } catch (err) {
@@ -2197,7 +2237,7 @@ export function registerChatRoutes(
           sessionId,
           role,
           content,
-          toolCalls: toolCalls ?? null,
+          toolCalls: serializePersistedToolCalls(toolCalls),
           segments: segments ?? null,
           contextFlow: contextFlow ?? null,
           thinking: thinking ?? null,
@@ -2319,12 +2359,18 @@ export function registerChatRoutes(
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    const hasRequestReasoningEffort = Object.prototype.hasOwnProperty.call(body, "reasoningEffort");
     const rawReasoningEffort = typeof body["reasoningEffort"] === "string"
       ? (body["reasoningEffort"] as string).trim()
       : "";
-    const requestReasoningEffort = /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(rawReasoningEffort)
+    const normalizedRequestReasoningEffort = /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(rawReasoningEffort)
       ? rawReasoningEffort
       : undefined;
+    const requestReasoningEffort = body["reasoningEffort"] === null
+      ? null
+      : normalizedRequestReasoningEffort;
+    const requestReasoningEffortProvided = hasRequestReasoningEffort
+      && requestReasoningEffort !== undefined;
     let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
@@ -2407,7 +2453,7 @@ export function registerChatRoutes(
           ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
           ...(responseStyle !== "normal" ? { responseStyle } : {}),
           ...(requestBodyModel ? { model: requestBodyModel } : {}),
-          ...(requestReasoningEffort ? { reasoningEffort: requestReasoningEffort } : {}),
+          ...(requestReasoningEffortProvided ? { reasoningEffort: requestReasoningEffort } : {}),
           ...(displaySegments ? { displaySegments } : {}),
           ...(attachments.length ? { attachments } : {}),
         };
@@ -2619,6 +2665,14 @@ export function registerChatRoutes(
     // order on reload because the rows share createdAt down to the millisecond).
     let loopPersisted = false;
     let assistantTurnPersisted = false;
+    let cliEventUnsubscribe: (() => void) | null = null;
+    let cliTurnDoneUnsubscribe: (() => void) | null = null;
+    const cleanupCliListeners = () => {
+      cliTurnDoneUnsubscribe?.();
+      cliTurnDoneUnsubscribe = null;
+      cliEventUnsubscribe?.();
+      cliEventUnsubscribe = null;
+    };
     activeStreams.add(sessionId);
     ws?.broadcastToUser(authUser.id, {
       type: "session.streaming",
@@ -2765,7 +2819,10 @@ export function registerChatRoutes(
 
         const runtimeMode = resolveProviderRuntimeMode(cliProvider, requestRuntimeMode);
 
-        const available = await cliProvider.checkAvailability();
+        const available = await waitForCliProviderRequest(
+          () => cliProvider!.checkAvailability(),
+          streamAbort.signal,
+        );
         if (!available) {
           // Provider is offline or not installed — fall back to Jait
           const reason = cliProvider.info.unavailableReason ?? "CLI not found";
@@ -2837,19 +2894,29 @@ export function registerChatRoutes(
             if (!remoteConnectionUnchanged) {
               console.warn(`[chat/cli] Remote node reconnected since session ${cachedCliSession.providerSessionId} was started — discarding stale session for ${sessionId}`);
             }
-            try { await cachedCliSession.provider.stopSession(cachedCliSession.providerSessionId); } catch { /* best effort */ }
+            try {
+              await waitForCliProviderRequest(
+                () => cachedCliSession.provider.stopSession(cachedCliSession.providerSessionId),
+                streamAbort.signal,
+              );
+            } catch (error) {
+              if (isAbortError(error)) throw error;
+            }
             activeCliSessions.delete(sessionId);
           }
 
-          const session = await cliProvider.startSession({
-            threadId: sessionId,
-            workingDirectory: cliWsRoot,
-            mode: runtimeMode,
-            model: requestBodyModel || undefined,
-            reasoningEffort: requestReasoningEffort,
-            mcpServers,
-          });
-          providerSessionId = session.id;
+          const sessionResult = await waitForCliProviderRequest(
+            () => cliProvider!.startSession({
+              threadId: sessionId,
+              workingDirectory: cliWsRoot,
+              mode: runtimeMode,
+              model: requestBodyModel || undefined,
+              reasoningEffort: requestReasoningEffort ?? undefined,
+              mcpServers,
+            }),
+            streamAbort.signal,
+          );
+          providerSessionId = sessionResult.id;
           isNewCliSession = true;
           activeCliSessions.set(sessionId, {
             providerId: requestProvider,
@@ -2918,7 +2985,8 @@ export function registerChatRoutes(
           }
         };
 
-        const unsubscribe = cliProvider.onEvent((event: ProviderEvent) => {
+        activeCliTurns.add(sessionId);
+        cliEventUnsubscribe = cliProvider.onEvent((event: ProviderEvent) => {
           if (event.sessionId !== providerSessionId) {
             return;
           }
@@ -3107,20 +3175,23 @@ export function registerChatRoutes(
         // miss a synchronous turn.completed emitted inside sendTurn().
         let turnDoneResolve: (() => void) | null = null;
         const turnDonePromise = new Promise<void>((resolve) => { turnDoneResolve = resolve; });
-        const checkDone = cliProvider!.onEvent((event: ProviderEvent) => {
+        const resolveTurnDone = () => {
+          cliTurnDoneUnsubscribe?.();
+          cliTurnDoneUnsubscribe = null;
+          const resolve = turnDoneResolve;
+          turnDoneResolve = null;
+          resolve?.();
+        };
+        cliTurnDoneUnsubscribe = cliProvider!.onEvent((event: ProviderEvent) => {
           if (event.sessionId !== providerSessionId) return;
-          if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
-            if (event.type === "session.error") {
-              activeCliSessions.delete(sessionId);
-            }
-            checkDone();
-            turnDoneResolve?.();
+          if (
+            event.type === "session.completed"
+            || event.type === "session.error"
+            || event.type === "turn.completed"
+          ) {
+            if (event.type === "session.error") activeCliSessions.delete(sessionId);
+            resolveTurnDone();
           }
-        });
-        streamAbort.signal.addEventListener("abort", () => {
-          cliProvider!.interruptTurn(providerSessionId).catch(() => {});
-          checkDone();
-          turnDoneResolve?.();
         });
 
         // Send the turn — with recovery if the cached session died between messages
@@ -3152,12 +3223,17 @@ export function registerChatRoutes(
             recentContextBlock,
           );
           contextFlowJson = serializePersistedContextFlow(cliContextFlow);
-          await cliProvider.sendTurn(providerSessionId, cliContent);
+          await waitForCliProviderRequest(
+            () => cliProvider!.sendTurn(providerSessionId, cliContent),
+            streamAbort.signal,
+          );
         } catch (sendErr) {
+          if (isAbortError(sendErr)) throw sendErr;
           const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
           if (isNonRecoverableProviderRequestError(sendErr)) {
             console.warn(`[chat/cli] sendTurn rejected without recovery: ${providerErrorMessage}`);
-            checkDone();
+            cliTurnDoneUnsubscribe?.();
+            cliTurnDoneUnsubscribe = null;
             throw new Error(providerErrorMessage);
           }
 
@@ -3165,17 +3241,21 @@ export function registerChatRoutes(
           console.warn(`[chat/cli] sendTurn failed on cached session, recovering:`, sendErr);
           activeCliSessions.delete(sessionId);
           // Unsubscribe stale listener before recovery creates a new session
-          checkDone();
+          cliTurnDoneUnsubscribe?.();
+          cliTurnDoneUnsubscribe = null;
 
-          const freshSession = await cliProvider.startSession({
-            threadId: sessionId,
-            workingDirectory: cliWsRoot,
-            mode: runtimeMode,
-            model: requestBodyModel || undefined,
-            reasoningEffort: requestReasoningEffort,
-            mcpServers,
-          });
-          providerSessionId = freshSession.id;
+          const freshSessionResult = await waitForCliProviderRequest(
+            () => cliProvider!.startSession({
+              threadId: sessionId,
+              workingDirectory: cliWsRoot,
+              mode: runtimeMode,
+              model: requestBodyModel || undefined,
+              reasoningEffort: requestReasoningEffort ?? undefined,
+              mcpServers,
+            }),
+            streamAbort.signal,
+          );
+          providerSessionId = freshSessionResult.id;
           activeCliSessions.set(sessionId, {
             providerId: requestProvider,
             runtimeMode,
@@ -3188,14 +3268,15 @@ export function registerChatRoutes(
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
 
           // Re-register listener for the new session
-          const checkDone2 = cliProvider!.onEvent((event: ProviderEvent) => {
+          cliTurnDoneUnsubscribe = cliProvider!.onEvent((event: ProviderEvent) => {
             if (event.sessionId !== providerSessionId) return;
-            if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
-              if (event.type === "session.error") {
-                activeCliSessions.delete(sessionId);
-              }
-              checkDone2();
-              turnDoneResolve?.();
+            if (
+              event.type === "session.completed"
+              || event.type === "session.error"
+              || event.type === "turn.completed"
+            ) {
+              if (event.type === "session.error") activeCliSessions.delete(sessionId);
+              resolveTurnDone();
             }
           });
 
@@ -3232,15 +3313,22 @@ export function registerChatRoutes(
           );
           contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           try {
-            await cliProvider.sendTurn(providerSessionId, recoveryContent);
+            await waitForCliProviderRequest(
+              () => cliProvider!.sendTurn(providerSessionId, recoveryContent),
+              streamAbort.signal,
+            );
           } catch (recoveryError) {
+            if (isAbortError(recoveryError)) throw recoveryError;
             throw new Error(getProviderRequestErrorMessage(recoveryError));
           }
         }
 
         // Wait for the turn-completion event (may already be resolved if
         // turn.completed fired synchronously inside sendTurn)
-        await turnDonePromise;
+        await waitForCliProviderRequest(
+          () => turnDonePromise,
+          streamAbort.signal,
+        );
 
         // ── Drain steering messages: send follow-up turns for any messages
         // injected via the /steer endpoint while the CLI provider was running. ──
@@ -3279,11 +3367,24 @@ export function registerChatRoutes(
             }
           });
 
-          await cliProvider!.sendTurn(providerSessionId, steerContent);
-          await steerDonePromise;
+          try {
+            await waitForCliProviderRequest(
+              () => cliProvider!.sendTurn(providerSessionId, steerContent),
+              streamAbort.signal,
+            );
+            await waitForCliProviderRequest(
+              () => steerDonePromise,
+              streamAbort.signal,
+            );
+          } catch (steerError) {
+            if (!isAbortError(steerError)) throw steerError;
+            break;
+          } finally {
+            unsubSteerDone();
+          }
         }
 
-        unsubscribe();
+        cleanupCliListeners();
         fullContent = contentChunks.join("");
 
         // Attach estimated metrics to the CLI turn's context flow now that the
@@ -3459,7 +3560,9 @@ export function registerChatRoutes(
                 model: requestBodyModel || undefined,
                 jaitBackend,
                 runtimeMode: requestRuntimeMode ?? undefined,
-                reasoningEffort: userSettings?.reasoningEffort ?? undefined,
+                reasoningEffort: requestReasoningEffortProvided
+                  ? requestReasoningEffort ?? undefined
+                  : userSettings?.reasoningEffort ?? undefined,
               },
               abort: streamAbort,
               maxRounds: resolveMaxToolRounds(userSettings?.apiKeys, config.agentMaxRounds),
@@ -3543,10 +3646,11 @@ export function registerChatRoutes(
         }
       }
     } catch (err) {
+      cleanupCliListeners();
       // The OpenAI agentic loop now handles AbortError internally and returns
-      // partial results.  This catch only fires for non-abort errors (OpenAI)
+      // partial results. This catch only fires for non-abort errors (OpenAI)
       // or for Ollama stream errors (including abort).
-      const wasCancelled = err instanceof Error && err.name === "AbortError";
+      const wasCancelled = isAbortError(err);
       if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
 
       // Save the live accumulator for real (non-cancel) errors. The loop result
@@ -3639,6 +3743,8 @@ export function registerChatRoutes(
     clearInterval(keepalive);
 
     activeStreams.delete(sessionId);
+    activeCliTurns.delete(sessionId);
+    cleanupCliListeners();
     ws?.broadcastToUser(authUser.id, {
       type: "session.streaming",
       sessionId,
@@ -3732,6 +3838,9 @@ export function registerChatRoutes(
     }
     const controller = sessionAbortControllers.get(sessionId);
     if (controller) {
+      if (activeCliTurns.has(sessionId)) {
+        stopAndDeleteActiveCliSession(sessionId);
+      }
       controller.abort();
       return { ok: true, cancelled: true };
     }
@@ -3760,7 +3869,12 @@ export function registerChatRoutes(
     }
     if (activeStreams.has(sessionId)) {
       const controller = sessionAbortControllers.get(sessionId);
-      if (controller) controller.abort();
+      if (controller) {
+        if (activeCliTurns.has(sessionId)) {
+          stopAndDeleteActiveCliSession(sessionId);
+        }
+        controller.abort();
+      }
       const deadline = Date.now() + 5000;
       while (activeStreams.has(sessionId) && Date.now() < deadline) {
         await sleep(50);
@@ -3823,7 +3937,13 @@ export function registerChatRoutes(
           bestIndex = i;
         }
       }
-      if (bestIndex !== -1) targetVisibleIndex = bestIndex;
+      if (bestIndex === -1) {
+        return reply.status(409).send({
+          error: "CONFLICT",
+          details: "The message changed or is no longer present; refresh the chat before editing it",
+        });
+      }
+      targetVisibleIndex = bestIndex;
     }
 
     const target = visibleEntries[targetVisibleIndex]!;
@@ -4155,7 +4275,7 @@ export function registerChatRoutes(
 
     // Persist updated history entry
     if (db) {
-      const tcJson = JSON.stringify(executed);
+      const tcJson = serializePersistedToolCalls(JSON.stringify(executed));
       // Find the last assistant message and update its tool calls
       const rows = db
         .select()

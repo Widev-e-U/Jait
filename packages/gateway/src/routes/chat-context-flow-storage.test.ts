@@ -3,7 +3,30 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { __chatTestUtils } from "./chat.js";
 
-describe("persisted context-flow size guard", () => {
+describe("chat persistence size guards", () => {
+  it("bounds persisted tool-call output while retaining call metadata", () => {
+    const stored = __chatTestUtils.serializePersistedToolCalls(JSON.stringify([{
+      callId: "call-large",
+      tool: "terminal.run",
+      status: "completed",
+      ok: true,
+      message: "done",
+      output: "x".repeat(2_000_000),
+    }]));
+    const parsed = JSON.parse(stored!) as Array<Record<string, unknown>>;
+
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.every((entry) => entry && typeof entry === "object")).toBe(true);
+    expect(Buffer.byteLength(stored!, "utf8")).toBeLessThanOrEqual(512_000);
+    expect(parsed[0]).toMatchObject({
+      callId: "call-large",
+      tool: "terminal.run",
+      status: "completed",
+      ok: true,
+      message: "done",
+    });
+  });
+
   it("does not let completion-time metrics reserialize uncapped rounds", () => {
     const source = readFileSync(
       fileURLToPath(new URL("./chat.ts", import.meta.url)),

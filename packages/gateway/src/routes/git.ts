@@ -23,6 +23,11 @@ import { getForge, getForgeForRemote } from "../services/git-forge.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 import type { UserService, JaitBackend } from "../services/users.js";
+import type { UserSecretService } from "../services/user-secrets.js";
+import {
+  GITHUB_TOKEN_SECRET_KEY,
+  GITHUB_TOKEN_SECRET_TYPE,
+} from "../services/github-pull-requests.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { resolveJaitLlmConfig, callJaitLlmCompletion } from "../services/jait-llm.js";
 import type { ProviderId, CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
@@ -75,6 +80,7 @@ interface GitRouteDeps {
   ws?: WsControlPlane;
   userService?: UserService;
   providerRegistry?: ProviderRegistry;
+  userSecretService?: UserSecretService;
 }
 
 function normalizeGitRouteDeps(deps?: WsControlPlane | GitRouteDeps): GitRouteDeps {
@@ -159,7 +165,7 @@ async function generateCommitMessageWithCliProvider(
 
 export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?: WsControlPlane | GitRouteDeps): void {
   const git = new GitService();
-  const { ws, userService, providerRegistry } = normalizeGitRouteDeps(deps);
+  const { ws, userService, providerRegistry, userSecretService } = normalizeGitRouteDeps(deps);
 
   /** Git status for a given cwd */
   app.post("/api/git/status", async (request, reply) => {
@@ -912,48 +918,25 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     const cwd = body.cwd ?? "";
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request)) : findAnyRemoteNode(ws);
-      if (remoteNodeId && ws) {
-        const result = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean; username: string | null }>(
-          remoteNodeId, "gh-check", {}, 15_000,
-        );
-        return result;
+      const forge = getForge("github");
+      if (!forge) {
+        return { installed: false, authenticated: false, username: null };
       }
-      // Local check
-      const { exec: execCmd } = await import("node:child_process");
-      const { promisify } = await import("node:util");
-      const execP = promisify(execCmd);
-      const { GH_TOKEN: _gt, GITHUB_TOKEN: _ght, ...ghCheckEnv } = process.env;
-
-      let installed = false;
-      let authenticated = false;
-      let username: string | null = null;
-
-      try {
-        await execP("gh --version", { timeout: 5_000 });
-        installed = true;
-      } catch { /* not installed */ }
-
-      if (installed) {
-        try {
-          const { stdout, stderr } = await execP("gh auth status", { timeout: 10_000, env: ghCheckEnv });
-          const out = (stdout ?? "") + (stderr ?? "");
-          if (out.includes("Logged in")) {
-            authenticated = true;
-            const match = out.match(/Logged in to .+ account (\S+)/);
-            if (match?.[1]) username = match[1];
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? (err as { stderr?: string }).stderr ?? err.message : "";
-          if (msg.includes("Logged in")) {
-            authenticated = true;
-            const match = msg.match(/Logged in to .+ account (\S+)/);
-            if (match?.[1]) username = match[1];
-          }
-        }
+      const installed = await forge.checkCliAvailable(cwd || process.cwd());
+      const token = userSecretService?.getValue(
+        authUser.id,
+        GITHUB_TOKEN_SECRET_TYPE,
+        GITHUB_TOKEN_SECRET_KEY,
+      ) ?? null;
+      if (!installed || !token) {
+        return { installed, authenticated: false, username: null };
       }
-
-      return { installed, authenticated, username };
+      const result = await forge.loginWithToken(token, cwd || process.cwd());
+      return {
+        installed,
+        authenticated: result.authenticated,
+        username: result.username ?? null,
+      };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "gh status check failed" });
     }
@@ -997,32 +980,25 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd, getRequestedGitNodeId(request)) : findAnyRemoteNode(ws);
-      if (remoteNodeId && ws) {
-        const result = await ws.proxyFsOp<{ ok: boolean; username: string | null }>(
-          remoteNodeId, "gh-auth-token", { token }, 30_000,
-        );
-        return result;
+      if (!userSecretService) {
+        return reply.status(503).send({ error: "User secret store is unavailable" });
       }
-      // Local auth
-      const { execSync } = await import("node:child_process");
-      const { GH_TOKEN: _gt2, GITHUB_TOKEN: _ght2, ...cleanEnv } = process.env;
-
-      execSync("gh auth login --with-token", {
-        input: token,
-        timeout: 30_000,
-        env: cleanEnv,
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
+      const forge = getForge("github");
+      if (!forge) {
+        return reply.status(503).send({ error: "GitHub integration is unavailable" });
+      }
+      const result = await forge.loginWithToken(token, cwd || process.cwd());
+      if (!result.authenticated) {
+        return reply.status(401).send({ error: result.error ?? "GitHub authentication failed" });
+      }
+      userSecretService.save({
+        userId: authUser.id,
+        type: GITHUB_TOKEN_SECRET_TYPE,
+        key: GITHUB_TOKEN_SECRET_KEY,
+        label: "GitHub personal access token",
+        value: token,
       });
-
-      let username: string | null = null;
-      try {
-        const out = execSync("gh api user --jq .login", { timeout: 10_000, env: cleanEnv, windowsHide: true });
-        username = out.toString().trim() || null;
-      } catch { /* */ }
-
-      return { ok: true, username };
+      return { ok: true, username: result.username ?? null };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "gh auth failed" });
     }
@@ -1054,7 +1030,18 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       }
 
       const installed = await forge.checkCliAvailable(cwd || process.cwd());
-      const authResult = await forge.checkAuth(cwd || process.cwd());
+      const githubToken = provider === "github"
+        ? userSecretService?.getValue(
+          authUser.id,
+          GITHUB_TOKEN_SECRET_TYPE,
+          GITHUB_TOKEN_SECRET_KEY,
+        ) ?? null
+        : null;
+      const authResult = provider === "github"
+        ? (githubToken
+          ? await forge.loginWithToken(githubToken, cwd || process.cwd())
+          : { authenticated: false, error: "GitHub is not connected for this account." })
+        : await forge.checkAuth(cwd || process.cwd());
 
       return {
         provider,
@@ -1088,8 +1075,20 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (!forge) {
         return reply.status(400).send({ error: "Cannot determine forge provider from remote URL" });
       }
+      if (parsed?.provider === "github" && !userSecretService) {
+        return reply.status(503).send({ error: "User secret store is unavailable" });
+      }
 
       const result = await forge.loginWithToken(token, cwd || process.cwd());
+      if (result.authenticated && parsed?.provider === "github") {
+        userSecretService!.save({
+          userId: authUser.id,
+          type: GITHUB_TOKEN_SECRET_TYPE,
+          key: GITHUB_TOKEN_SECRET_KEY,
+          label: "GitHub personal access token",
+          value: token,
+        });
+      }
       return { ok: result.authenticated, username: result.username ?? null, error: result.error };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "forge auth failed" });

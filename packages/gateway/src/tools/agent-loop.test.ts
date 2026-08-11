@@ -431,6 +431,162 @@ describe("parseOpenAIStream", () => {
   });
 });
 
+// The repeating unit used across the repetition tests: long enough to be
+// unambiguous, short enough that a handful of copies stays readable.
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+
+describe("findDegenerateRepetition", () => {
+  it("ignores text that merely reuses a phrase", () => {
+    const text = "Checked the selector.\n".repeat(4)
+      + "Here is what actually changed in the provider panel and why it matters. ".repeat(6);
+    expect(__testUtils.findDegenerateRepetition(text)).toBeNull();
+  });
+
+  it("ignores a short answer even when it is entirely repetitive", () => {
+    expect(__testUtils.findDegenerateRepetition("no. ".repeat(20))).toBeNull();
+  });
+
+  it("reports the unit and full copy count of a runaway loop", () => {
+    const repetition = __testUtils.findDegenerateRepetition("Let me re-read it.\n" + LOOP_UNIT.repeat(40));
+
+    expect(repetition).not.toBeNull();
+    expect(repetition!.unit).toBe(LOOP_UNIT);
+    expect(repetition!.copies).toBe(40);
+    expect(repetition!.startIndex).toBe("Let me re-read it.\n".length);
+  });
+
+  it("counts copies beyond the trailing scan window", () => {
+    // 20k characters of loop — more than the 16k window the scan inspects.
+    const copies = Math.ceil(20_000 / LOOP_UNIT.length);
+    const repetition = __testUtils.findDegenerateRepetition(LOOP_UNIT.repeat(copies));
+
+    expect(repetition!.copies).toBe(copies);
+    expect(repetition!.startIndex).toBe(0);
+  });
+
+  it("collapses the repeated run when trimming", () => {
+    const trimmed = __testUtils.trimDegenerateRepetition("Preamble.\n" + LOOP_UNIT.repeat(40));
+
+    expect(trimmed.startsWith("Preamble.\n" + LOOP_UNIT.repeat(2))).toBe(true);
+    expect(trimmed).toContain("38 further identical repetitions removed");
+    expect(trimmed.length).toBeLessThan(LOOP_UNIT.length * 5);
+  });
+});
+
+describe("stream repetition guard", () => {
+  it("cuts an OpenAI stream short once the model loops", async () => {
+    const chunks = [
+      ...Array.from(
+        { length: 60 },
+        () => `data: {"choices":[{"delta":{"content":${JSON.stringify(LOOP_UNIT)}}}]}\n`,
+      ),
+      'data: {"choices":[{"delta":{"content":"NEVER-REACHED"}}]}\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n',
+    ];
+    const parsed = await parseOpenAIStream(streamReader(chunks));
+
+    expect(parsed.repetition?.source).toBe("content");
+    expect(parsed.finishReason).toBe("repetition");
+    expect(parsed.contentText).not.toContain("NEVER-REACHED");
+    // Cut off well before the 60 copies the provider was still sending.
+    expect(parsed.contentText.length).toBeLessThan(LOOP_UNIT.length * 40);
+  });
+
+  it("cuts an ollama stream short on a reasoning loop", async () => {
+    const chunks = [
+      ...Array.from(
+        { length: 60 },
+        () => `${JSON.stringify({ message: { thinking: LOOP_UNIT } })}\n`,
+      ),
+      `${JSON.stringify({ message: { thinking: "NEVER-REACHED" }, done: true, done_reason: "stop" })}\n`,
+    ];
+    const parsed = await parseOllamaStream(streamReader(chunks));
+
+    expect(parsed.repetition?.source).toBe("thinking");
+    expect(parsed.finishReason).toBe("repetition");
+    expect(parsed.thinkingText).not.toContain("NEVER-REACHED");
+  });
+
+  it("leaves a normal ollama stream alone", async () => {
+    const parsed = await parseOllamaStream(streamReader([
+      `${JSON.stringify({ message: { content: "All done." } })}\n`,
+      `${JSON.stringify({ done: true, done_reason: "stop" })}\n`,
+    ]));
+
+    expect(parsed.repetition).toBeUndefined();
+    expect(parsed.finishReason).toBe("stop");
+  });
+});
+
+describe("runAgentLoop repetition containment", () => {
+  function loopingResponse(): string[] {
+    return [
+      ...Array.from(
+        { length: 60 },
+        () => `data: {"choices":[{"delta":{"content":${JSON.stringify(LOOP_UNIT)}}}]}\n`,
+      ),
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n',
+      "data: [DONE]\n\n",
+    ];
+  }
+
+  it("ends the turn instead of auto-continuing a looping response", async () => {
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of loopingResponse()) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Fix the provider selector." },
+    ];
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-repetition",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    // The old behaviour was three more `finish_reason: "length"` continuations,
+    // each resuming the loop for another few thousand tokens.
+    expect(fetchCalls).toBe(1);
+    expect(result.aborted).toBe(false);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toContain("[Stopped: the model repeated the same text");
+    expect(events.some((event) =>
+      event.type === "steering" && event.message.includes("repeating its text")
+    )).toBe(true);
+
+    // History keeps a collapsed copy so a follow-up round can't read the wall
+    // of duplicated text and fall straight back into the loop.
+    const assistantTurn = history.at(-1)!;
+    expect(assistantTurn.role).toBe("assistant");
+    expect(assistantTurn.content).toContain("further identical repetitions removed");
+    expect(assistantTurn.content.length).toBeLessThan(LOOP_UNIT.length * 5);
+  });
+});
+
 describe("repairToolCallHistory", () => {
   it("inserts synthetic tool results before a user turn when a tool call was interrupted", () => {
     const history: AgentMessage[] = [
@@ -1881,24 +2037,30 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).not.toMatch(/Stopped/);
   });
 
-  it("tolerates repeated narrow overlapping re-reads of the same file (trust the model)", async () => {
-    // pi-style, data-driven: no narrow-read counter exists. The model is
-    // trusted to decide how it reads; repeated small overlapping slices of
-    // the same file are executed and fed back, never flagged or stopped.
+  it("redirects a range-jitter read loop before it can consume the turn", async () => {
     const ranges: Array<[number, number]> = [
-      [1, 200], // broad first read — seeds coverage, no streak
+      [1, 200],
       [50, 60], [55, 62], [52, 58], [51, 61], [53, 59], [50, 60], [54, 60],
       [56, 61], [50, 59], [52, 60], [55, 60], [51, 58], [53, 61], [50, 62],
     ];
     let callIdx = 0;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    let sawQuarantinedRound = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const readAvailable = (body.tools ?? []).some((tool) => tool.function?.name === "read");
+      if (!readAvailable) {
+        sawQuarantinedRound = true;
+        return textResponse("Recovered after the redundant reads were blocked.");
+      }
       if (callIdx < ranges.length) {
         const [startLine, endLine] = ranges[callIdx]!;
         const response = toolCallSSE(`call-${callIdx + 1}`, "read", { path: "big.ts", startLine, endLine });
         callIdx++;
         return response;
       }
-      return textResponse("Done.");
+      return textResponse("Guard failed to detect the loop.");
     });
 
     const result = await runAgentLoop(
@@ -1939,9 +2101,9 @@ describe("runAgentLoop tool-loop detection", () => {
     );
 
     expect(result.hitMaxRounds).toBe(false);
-    // All 14 scripted narrow reads ran to completion; the model's answer ended the turn.
-    expect(callIdx).toBe(ranges.length);
-    expect(result.content).toBe("Done.");
+    expect(sawQuarantinedRound).toBe(true);
+    expect(callIdx).toBeLessThan(ranges.length);
+    expect(result.content).toBe("Recovered after the redundant reads were blocked.");
   });
 
   it("tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)", async () => {
@@ -2527,7 +2689,12 @@ describe("runAgentLoop tool-loop detection", () => {
   });
 
   it("caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly", async () => {
-    const longThinking = "x".repeat(5_000);
+    // Filler that is long but not a verbatim loop — `"x".repeat(5000)` would
+    // (correctly) trip the runaway-repetition guard instead of exercising the cap.
+    const longThinking = Array.from(
+      { length: 250 },
+      (_, step) => `Step ${step}: inspect branch ${step % 7} of the call graph.`,
+    ).join(" ");
     const responses = [
       [
         `data: {"choices":[{"delta":{"content":"<thinking>${longThinking}</thinking>"}}]}\n\n`,
@@ -2586,10 +2753,11 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).toBe("Done.");
     const assistantWithTools = history.find((m) => m.role === "assistant" && m.tool_calls);
     expect(assistantWithTools?.thinking).toBeDefined();
-    // 1 ellipsis + 4000 tail chars — capped, not the full 5000.
+    // 1 ellipsis + 4000 tail chars — capped, not the full reasoning block.
+    expect(longThinking.length).toBeGreaterThan(4_000);
     expect(assistantWithTools!.thinking!.length).toBe(4001);
     // The tail is preserved (reasoning continuity), not the head.
-    expect(assistantWithTools!.thinking!.endsWith("x".repeat(4000))).toBe(true);
+    expect(assistantWithTools!.thinking!.endsWith(longThinking.slice(-4_000))).toBe(true);
   });
 
   it("recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim", async () => {

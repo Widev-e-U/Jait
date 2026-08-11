@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, sta
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
-import { resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
+import { resolveRemoteCodexModelDiscoveryArgs, resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
 import { normalizeBrowserUrl } from "./browser-navigation.js";
 const { autoUpdater } = electronUpdater;
 
@@ -1988,7 +1988,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       }
 
       const cmd = "codex";
-      const args = ["app-server", ...buildDesktopCodexMcpArgs(getDesktopJaitMcpServers())];
+      const args = resolveRemoteCodexModelDiscoveryArgs();
 
       const child = spawn(cmd, args, {
         cwd: process.cwd(),
@@ -2024,6 +2024,25 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         if (trimmed) console.error(`[codex-remote:list-models] stderr: ${trimmed}`);
       });
 
+      const rejectPendingModelRequests = (error: Error) => {
+        const providerError = appendProviderStderr(error, tmpSess);
+        for (const pending of tmpSess.pendingRpc.values()) {
+          clearTimeout(pending.timer);
+          pending.reject(providerError);
+        }
+        tmpSess.pendingRpc.clear();
+      };
+
+      child.on("error", (error) => {
+        rejectPendingModelRequests(error);
+      });
+      child.on("exit", (code, signal) => {
+        if (tmpSess.pendingRpc.size === 0) return;
+        rejectPendingModelRequests(new Error(
+          `Codex model discovery exited${code != null ? ` (code ${code})` : ""}${signal ? ` signal ${signal}` : ""}`,
+        ));
+      });
+
       const rl = createInterface({ input: child.stdout! });
       rl.on("line", (line) => {
         try {
@@ -2048,6 +2067,8 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         rpcNotify(tmpSess, "initialized");
         const result = await rpcSend(tmpSess, "model/list", {}, 45_000);
         return result;
+      } catch (error) {
+        throw appendProviderStderr(error instanceof Error ? error : new Error(String(error)), tmpSess);
       } finally {
         killProcessTree(child);
       }
@@ -2142,7 +2163,7 @@ async function assertReadableSize(filePath: string, maxBytes: number): Promise<v
 }
 
 ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
-  const { resolve, dirname, join, relative } = await import("node:path");
+  const { resolve, dirname, join } = await import("node:path");
 
   /** Build a clean env with GH_TOKEN/GITHUB_TOKEN removed so gh uses stored keyring credentials. */
   const ghCleanEnv = (): NodeJS.ProcessEnv => {
@@ -2150,62 +2171,17 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
     return rest;
   };
 
-  const runProjectSearch = async (
-    projectRoot: string,
-    query: string,
-    mode: "files" | "content",
-    maxResults: number,
-  ) => {
-    const { exec } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const execAsync = promisify(exec);
-    const safeDir = projectRoot.replace(/"/g, '\\"');
-    const safeQuery = query.replace(/"/g, '\\"');
-    const isWin = process.platform === "win32";
-
-    try {
-      if (mode === "content") {
-        let cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>${isWin ? "nul" : "/dev/null"}`;
-        if (isWin) {
-          cmd += ` || findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*" 2>nul`;
-        } else {
-          cmd += ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
-        }
-
-        const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-        const matches = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((line) => {
-          const match = line.match(/^(.+?):(\d+):(.*)$/);
-          if (!match) return null;
-          return {
-            file: relative(projectRoot, match[1]!).replace(/\\/g, "/"),
-            line: parseInt(match[2]!, 10),
-            content: match[3]!.trim(),
-          };
-        }).filter(Boolean);
-        return { query, mode, matches };
-      }
-
-      const cleanedQuery = query.replace(/[*?[\]]/g, "").trim();
-      if (!cleanedQuery) return { query, mode, files: [] };
-      const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
-      const cmd = isWin
-        ? `(rg --files "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}")`
-        : `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
-      const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-      const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
-        const relPath = relative(projectRoot, absPath.trim()).replace(/\\/g, "/");
-        return { path: relPath, name: relPath.split("/").pop() || relPath };
-      });
-      return { query, mode, files };
-    } catch (err: unknown) {
-      const stderr = (err as { stderr?: string })?.stderr || "";
-      if (stderr && !stderr.includes("No such file")) {
-        throw new Error(stderr.slice(0, 200));
-      }
-      return mode === "content"
-        ? { query, mode, matches: [] }
-        : { query, mode, files: [] };
-    }
+  const runProjectSearch = async (options: {
+    root: string;
+    query: string;
+    mode: "files" | "content";
+    limit: number;
+    include?: string;
+    isRegexp?: boolean;
+    includeIgnoredFiles?: boolean;
+  }) => {
+    const { runDesktopProjectSearch } = await import("./project-search.js");
+    return runDesktopProjectSearch(options);
   };
 
   switch (op) {
@@ -2274,11 +2250,25 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       return revealInExplorer(params.path as string, shell);
     }
     case "search-project": {
-      const projectRoot = resolve(params.path as string);
+      const baseCwd = typeof params.cwd === "string" ? resolve(params.cwd) : process.cwd();
+      const { resolveDesktopSearchRoot } = await import("./project-search.js");
+      const projectRoot = resolveDesktopSearchRoot(baseCwd, String(params.path ?? "."));
       const query = String(params.query ?? "");
-      const mode = params.mode === "content" ? "content" : "files";
-      const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 200);
-      return runProjectSearch(projectRoot, query, mode, limit);
+      const mode = params.mode === "content"
+        ? "content"
+        : params.mode === "files"
+          ? "files"
+          : null;
+      if (!mode) throw new Error('Search mode must be "files" or "content".');
+      return runProjectSearch({
+        root: projectRoot,
+        query,
+        mode,
+        limit: Number(params.limit ?? 50),
+        include: typeof params.include === "string" ? params.include : undefined,
+        isRegexp: params.isRegexp === true,
+        includeIgnoredFiles: params.includeIgnoredFiles === true,
+      });
     }
     case "git": {
       // Run a git command in a given cwd — used by the gateway to proxy git ops
@@ -3382,37 +3372,46 @@ ipcMain.handle("desktop:tool-op", async (
     case "search":
     case "file.search": {
       const pattern = String(args.pattern ?? args.query ?? "");
-      const searchPath = resolve(String(args.path ?? cwd));
       if (!pattern) return { ok: false, message: "No search pattern provided" };
+      const mode = args.mode === undefined || args.mode === "content"
+        ? "content"
+        : args.mode === "files"
+          ? "files"
+          : null;
+      if (!mode) {
+        return { ok: false, message: 'Search mode must be "files" or "content".' };
+      }
       try {
-        // Use git grep if inside a repo, otherwise use findstr/grep
-        const isGitRepo = await execP("git rev-parse --is-inside-work-tree", {
-          cwd: searchPath, timeout: 5000,
-        }).then(() => true).catch(() => false);
-
-        let output: string;
-        if (isGitRepo) {
-          const { stdout } = await execP(
-            `git grep -n -I --max-count=50 ${JSON.stringify(pattern)}`,
-            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
-          );
-          output = stdout.trim();
-        } else if (process.platform === "win32") {
-          const { stdout } = await execP(
-            `findstr /s /n /i ${JSON.stringify(pattern)} *`,
-            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
-          );
-          output = stdout.trim();
-        } else {
-          const { stdout } = await execP(
-            `grep -rn --max-count=50 ${JSON.stringify(pattern)} .`,
-            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
-          );
-          output = stdout.trim();
-        }
-        return { ok: true, message: output || "No matches found" };
-      } catch {
-        return { ok: true, message: "No matches found" };
+        const {
+          resolveDesktopSearchRoot,
+          runDesktopProjectSearch,
+        } = await import("./project-search.js");
+        const searchRoot = resolveDesktopSearchRoot(cwd, String(args.path ?? "."));
+        const result = await runDesktopProjectSearch({
+          root: searchRoot,
+          query: pattern,
+          mode,
+          limit: Number(args.limit ?? 50),
+          include: typeof args.include === "string" ? args.include : undefined,
+          isRegexp: args.isRegexp === true,
+          includeIgnoredFiles: args.includeIgnoredFiles === true,
+        });
+        const rows = result.mode === "content"
+          ? result.matches.map((match) => `${match.file}:${match.line}:${match.content}`)
+          : result.files.map((file) => file.path);
+        const suffix = result.limited ? "\nResults were limited." : "";
+        return {
+          ok: true,
+          message: rows.length > 0
+            ? `${rows.join("\n")}${suffix}`
+            : `No matches found${suffix}`,
+          data: result,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          message: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
+        };
       }
     }
 

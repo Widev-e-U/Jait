@@ -99,6 +99,7 @@ interface JaitSessionState {
   threadId: string;
   workingDirectory: string;
   model?: string;
+  reasoningEffort?: string;
   userId?: string;
   history: Array<{
     role: "user" | "assistant" | "system" | "tool";
@@ -195,6 +196,7 @@ export class JaitProvider implements CliProviderAdapter {
       threadId: options.threadId,
       workingDirectory: options.workingDirectory,
       model: options.model,
+      reasoningEffort: options.reasoningEffort,
       userId,
       history: [{ role: "system", content: prompt }],
       activatedToolNames: new Set(),
@@ -257,6 +259,7 @@ export class JaitProvider implements CliProviderAdapter {
               model: llm.openaiModel,
               jaitBackend: llm.backend,
               runtimeMode: state.session.runtimeMode,
+              reasoningEffort: state.reasoningEffort,
             },
             abort,
             maxRounds: this.resolveMaxRounds(userSettings?.apiKeys),

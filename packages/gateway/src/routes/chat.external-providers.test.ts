@@ -117,9 +117,7 @@ class MockChatProvider implements CliProviderAdapter {
     return true;
   }
 
-  async interruptTurn(): Promise<void> {
-    return;
-  }
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
 
   async respondToApproval(): Promise<void> {
     return;
@@ -128,6 +126,10 @@ class MockChatProvider implements CliProviderAdapter {
   onEvent(handler: (event: ProviderEvent) => void): () => void {
     this.emitter.on("event", handler);
     return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
   }
 
   protected emitForTest(event: ProviderEvent): void {
@@ -197,6 +199,31 @@ class MockCancelledChatProvider extends MockChatProvider {
 
   override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
     this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
   });
 }
 
@@ -808,6 +835,169 @@ describe("chat external provider runtime mode selection", () => {
 
     await app.close();
     sqlite.close();
+  });
+
+  it("clears streaming when cancellation interrupts a hung provider sendTurn request", { timeout: 10_000 }, async () => {
+    const provider = new MockHangingSendTurnChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const sessionService = new SessionService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("hung-cancel-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Hung Cancellation" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      providerRegistry,
+      sessionService,
+      userService,
+    });
+
+    const responsePromise = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "start a turn whose provider request hangs",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    try {
+      await waitForAssertion(() => expect(provider.sendTurn).toHaveBeenCalledTimes(1));
+
+      const cancelResponse = await app.inject({
+        method: "POST",
+        url: `/api/sessions/${session.id}/cancel`,
+        headers,
+      });
+      expect(cancelResponse.statusCode).toBe(200);
+      expect(cancelResponse.json()).toMatchObject({ ok: true, cancelled: true });
+
+      await Promise.race([
+        responsePromise,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Timed out waiting for cancelled chat response")), 500);
+        }),
+      ]);
+
+      expect(provider.interruptTurn).toHaveBeenCalledWith("mock-session-1");
+      expect(provider.stopSession).toHaveBeenCalledWith("mock-session-1");
+      expect(provider.listenerCountForTest()).toBe(0);
+
+      const approvalResponse = await app.inject({
+        method: "POST",
+        url: `/api/sessions/${session.id}/approve`,
+        headers,
+        payload: { requestId: "stale-request", approved: true },
+      });
+      expect(approvalResponse.statusCode).toBe(409);
+
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers,
+      });
+      expect(messagesResponse.statusCode).toBe(200);
+      expect(messagesResponse.json()).toMatchObject({ streaming: false });
+    } finally {
+      provider.release();
+      await responsePromise;
+      await app.close();
+      sqlite.close();
+    }
+  });
+
+  it("stops a hung CLI session before restart and starts a fresh provider session", { timeout: 10_000 }, async () => {
+    const provider = new MockHangingFirstTurnChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const sessionService = new SessionService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("hung-restart-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Hung Restart" });
+    const token = await signAuthToken(
+      { id: user.id, username: user.username },
+      testConfig.jwtSecret,
+    );
+    const headers = { authorization: `Bearer ${token}` };
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      providerRegistry,
+      sessionService,
+      userService,
+    });
+
+    const firstResponsePromise = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "replace this hung turn",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    try {
+      await waitForAssertion(() => expect(provider.sendTurn).toHaveBeenCalledTimes(1));
+      const restartResponse = await Promise.race([
+        app.inject({
+          method: "POST",
+          url: `/api/sessions/${session.id}/restart-from`,
+          headers,
+          payload: {
+            messageFromEnd: 0,
+            expectedContent: "replace this hung turn",
+          },
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Timed out waiting for restart")), 1_000);
+        }),
+      ]);
+
+      expect(restartResponse.statusCode).toBe(200);
+      await firstResponsePromise;
+      expect(provider.interruptTurn).toHaveBeenCalledWith("mock-session-1");
+      expect(provider.stopSession).toHaveBeenCalledWith("mock-session-1");
+      expect(provider.listenerCountForTest()).toBe(0);
+
+      const secondResponse = await app.inject({
+        method: "POST",
+        url: "/api/chat",
+        headers,
+        payload: {
+          content: "run after restart",
+          sessionId: session.id,
+          provider: "codex",
+          runtimeMode: "full-access",
+        },
+      });
+      expect(secondResponse.statusCode).toBe(200);
+      expect(secondResponse.body).toContain("restarted");
+      expect(provider.startSession).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn.mock.calls.map(([providerSessionId]) => providerSessionId)).toEqual([
+        "mock-session-1",
+        "mock-session-2",
+      ]);
+      expect(provider.listenerCountForTest()).toBe(0);
+    } finally {
+      await app.close();
+      sqlite.close();
+    }
   });
 
   it("captures estimated metrics for external-provider turns and serves them via the context-flow endpoint", { timeout: 30_000 }, async () => {

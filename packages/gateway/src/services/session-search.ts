@@ -91,6 +91,26 @@ function mergeActivityContent(summary: string, payload: string | null): string {
   return `${summary}\n${payload}`;
 }
 
+/** Damping constant for reciprocal rank fusion; 60 is the value from the original paper. */
+const RRF_K = 60;
+
+/**
+ * Merges results that were ranked by different FTS indexes.
+ *
+ * bm25() scores are only meaningful relative to the index that produced them —
+ * `messages_fts` and `agent_thread_activities_fts` have different corpus sizes and
+ * average document lengths, so comparing their raw scores lets whichever index happens
+ * to run "colder" dominate the merged list. Fusing on rank instead of score keeps each
+ * index's own ordering intact and interleaves them fairly.
+ */
+function fuseByRank(rankedLists: SessionSearchResult[][]): SessionSearchResult[] {
+  const fused = rankedLists.flatMap((list) =>
+    list.map((result, index) => ({ ...result, score: 1 / (RRF_K + index + 1) })),
+  );
+
+  return fused.sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt));
+}
+
 export class SessionSearchService {
   constructor(private readonly sqlite: SqliteDatabase) {}
 
@@ -101,18 +121,16 @@ export class SessionSearchService {
     const limit = normalizeLimit(options.limit);
     const includeMessages = options.includeMessages !== false;
     const includeThreadActivities = options.includeThreadActivities !== false;
-    const rows: SessionSearchResult[] = [];
+    const ranked: SessionSearchResult[][] = [];
 
     if (includeMessages) {
-      rows.push(...this.searchMessages(ftsQuery, options, limit));
+      ranked.push(this.searchMessages(ftsQuery, options, limit));
     }
     if (includeThreadActivities) {
-      rows.push(...this.searchThreadActivities(ftsQuery, options, limit));
+      ranked.push(this.searchThreadActivities(ftsQuery, options, limit));
     }
 
-    return rows
-      .sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+    return fuseByRank(ranked).slice(0, limit);
   }
 
   private searchMessages(
@@ -179,6 +197,7 @@ export class SessionSearchService {
       JOIN agent_thread_activities a ON a.id = agent_thread_activities_fts.activity_id
       JOIN agent_threads t ON t.id = a.thread_id
       WHERE agent_thread_activities_fts MATCH ?
+        AND a.kind IN ('message', 'tool.result', 'tool.error', 'error')
         AND (? IS NULL OR t.user_id = ?)
         AND (? IS NULL OR t.session_id = ?)
         AND (? IS NULL OR a.thread_id = ?)

@@ -5,7 +5,19 @@ import type { UserService } from "./users.js";
 export interface ThreadSelectionDefaults {
   providerId?: ProviderId;
   model?: string;
+  reasoningEffort?: string;
   runtimeMode?: RuntimeMode;
+}
+
+/**
+ * Reasoning-effort values are provider-defined ("high", "xhigh", "max", …), so
+ * they're validated by shape rather than against a fixed list. Anything else
+ * is dropped instead of being forwarded to a CLI as a bogus option.
+ */
+export function normalizeReasoningEffort(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(trimmed) ? trimmed : undefined;
 }
 
 interface ResolveThreadSelectionDefaultsOptions {
@@ -28,7 +40,11 @@ export function resolveThreadSelectionDefaults(
     return { providerId };
   }
 
-  const state = options.sessionState.get(sessionId, ["chat.providerRuntimeMode", "chat.cliModels"]);
+  const state = options.sessionState.get(sessionId, [
+    "chat.providerRuntimeMode",
+    "chat.cliModels",
+    "chat.reasoningEffort",
+  ]);
   const runtimeMode = state["chat.providerRuntimeMode"] === "full-access" || state["chat.providerRuntimeMode"] === "supervised"
     ? state["chat.providerRuntimeMode"]
     : undefined;
@@ -45,6 +61,9 @@ export function resolveThreadSelectionDefaults(
   return {
     providerId,
     model,
+    // A thread spawned from a chat inherits that chat's effort unless the
+    // create request names one explicitly.
+    reasoningEffort: normalizeReasoningEffort(state["chat.reasoningEffort"]),
     runtimeMode,
   };
 }

@@ -44,12 +44,68 @@ function mockOperations(): PullRequestOperations {
     comment: vi.fn(async () => undefined),
     review: vi.fn(async () => undefined),
     merge: vi.fn(async () => undefined),
+    resolveConflicts: vi.fn(async () => ({ status: "merged" })),
     setState: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined),
   };
 }
 
 describe("pull request routes", () => {
+  it("resolves pull request operations per authenticated user", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const repoService = new RepositoryService(db);
+    const userOneOperations = mockOperations();
+    const userTwoOperations = mockOperations();
+    const pullRequestServiceForUser = vi.fn((userId: string) => (
+      userId === "user-1" ? userOneOperations : userTwoOperations
+    ));
+    registerPullRequestRoutes(app, config, { repoService, pullRequestServiceForUser });
+
+    const userOneRepo = repoService.create({
+      userId: "user-1",
+      name: "repo-one",
+      localPath: process.cwd(),
+      githubUrl: "https://github.com/acme/repo-one",
+    });
+    const userTwoRepo = repoService.create({
+      userId: "user-2",
+      name: "repo-two",
+      localPath: process.cwd(),
+      githubUrl: "https://github.com/acme/repo-two",
+    });
+
+    const userOneResponse = await app.inject({
+      method: "GET",
+      url: `/api/repos/${userOneRepo.id}/pull-requests`,
+      headers: await authHeader(config.jwtSecret, "user-1"),
+    });
+    const userTwoResponse = await app.inject({
+      method: "GET",
+      url: `/api/repos/${userTwoRepo.id}/pull-requests`,
+      headers: await authHeader(config.jwtSecret, "user-2"),
+    });
+
+    expect([userOneResponse.statusCode, userTwoResponse.statusCode]).toEqual([200, 200]);
+    expect(pullRequestServiceForUser).toHaveBeenNthCalledWith(1, "user-1");
+    expect(pullRequestServiceForUser).toHaveBeenNthCalledWith(2, "user-2");
+    expect(userOneOperations.list).toHaveBeenCalledWith(
+      "https://github.com/acme/repo-one",
+      "open",
+      50,
+    );
+    expect(userTwoOperations.list).toHaveBeenCalledWith(
+      "https://github.com/acme/repo-two",
+      "open",
+      50,
+    );
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("lists PRs only for an owned repository", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -159,6 +215,64 @@ describe("pull request routes", () => {
       42,
       "closed",
     );
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("forwards conflict resolution and validates resolution sides", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const repoService = new RepositoryService(db);
+    const pullRequestService = mockOperations();
+    registerPullRequestRoutes(app, config, { repoService, pullRequestService });
+
+    const repo = repoService.create({
+      userId: "user-1",
+      name: "repo",
+      localPath: process.cwd(),
+      githubUrl: "https://github.com/acme/repo",
+    });
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const baseUrl = `/api/repos/${repo.id}/pull-requests/42`;
+
+    const prepare = await app.inject({
+      method: "POST",
+      url: `${baseUrl}/resolve-conflicts`,
+      headers,
+      payload: {},
+    });
+    expect(prepare.statusCode).toBe(200);
+    expect(prepare.json()).toEqual({ status: "merged" });
+    expect(pullRequestService.resolveConflicts).toHaveBeenCalledWith(
+      "https://github.com/acme/repo",
+      42,
+      undefined,
+    );
+
+    const apply = await app.inject({
+      method: "POST",
+      url: `${baseUrl}/resolve-conflicts`,
+      headers,
+      payload: { resolution: { "src/a.ts": "ours", "src/b.ts": "theirs" } },
+    });
+    expect(apply.statusCode).toBe(200);
+    expect(pullRequestService.resolveConflicts).toHaveBeenLastCalledWith(
+      "https://github.com/acme/repo",
+      42,
+      { "src/a.ts": "ours", "src/b.ts": "theirs" },
+    );
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: `${baseUrl}/resolve-conflicts`,
+      headers,
+      payload: { resolution: { "src/a.ts": "neither" } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(pullRequestService.resolveConflicts).toHaveBeenCalledTimes(2);
 
     await app.close();
     sqlite.close();

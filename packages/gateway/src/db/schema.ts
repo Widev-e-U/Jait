@@ -180,6 +180,7 @@ export const auditLog = sqliteTable(
   },
   (table) => [
     index("idx_audit_action_id").on(table.actionId),
+    index("idx_audit_timestamp").on(table.timestamp),
     index("idx_audit_session").on(table.sessionId, table.timestamp),
     index("idx_audit_surface").on(table.surfaceType, table.timestamp),
     index("idx_audit_device").on(table.deviceId, table.timestamp),
@@ -222,7 +223,6 @@ export const memories = sqliteTable(
     sourceType: text("source_type").notNull(),
     sourceId: text("source_id").notNull(),
     sourceSurface: text("source_surface").notNull(),
-    embedding: text("embedding").notNull(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     expiresAt: text("expires_at"),
@@ -349,6 +349,7 @@ export const messages = sqliteTable(
   },
   (table) => [
     index("idx_messages_session").on(table.sessionId, table.createdAt),
+    index("idx_messages_created_at").on(table.createdAt),
   ],
 );
 
@@ -447,6 +448,7 @@ export const agentThreads = sqliteTable(
     title: text("title").notNull(),
     providerId: text("provider_id").notNull(), // "jait" | "codex" | "claude-code"
     model: text("model"),
+    reasoningEffort: text("reasoning_effort"), // Provider-specific effort ("high", "xhigh", …)
     runtimeMode: text("runtime_mode").notNull().default("full-access"), // "full-access" | "supervised"
     kind: text("kind").notNull().default("delivery"), // delivery | delegation
     skillIds: text("skill_ids"), // JSON string[] override; null => use global enabled skills
@@ -491,6 +493,7 @@ export const agentThreadActivities = sqliteTable(
   },
   (table) => [
     index("idx_agent_thread_activities_thread").on(table.threadId, table.createdAt),
+    index("idx_agent_thread_activities_kind_created_at").on(table.kind, table.createdAt),
   ],
 );
 

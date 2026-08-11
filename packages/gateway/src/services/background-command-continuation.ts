@@ -1,5 +1,5 @@
 import type { ProviderId, RuntimeMode } from "../providers/contracts.js";
-import { resolveThreadSelectionDefaults } from "./thread-defaults.js";
+import { normalizeReasoningEffort, resolveThreadSelectionDefaults } from "./thread-defaults.js";
 import type { SessionStateService } from "./session-state.js";
 import type { UserService } from "./users.js";
 
@@ -11,6 +11,25 @@ export interface BackgroundCommandContinuationPayload {
   provider?: Exclude<ProviderId, "jait">;
   runtimeMode?: RuntimeMode;
   model?: string;
+  reasoningEffort?: string | null;
+}
+
+function readPersistedReasoningEffort(metadataValue: unknown): string | null | undefined {
+  let metadata = metadataValue;
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const chat = (metadata as Record<string, unknown>)["chat"];
+  if (!chat || typeof chat !== "object" || Array.isArray(chat)) return undefined;
+  const chatRecord = chat as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(chatRecord, "reasoningEffort")) return undefined;
+  if (chatRecord["reasoningEffort"] === null) return null;
+  return normalizeReasoningEffort(chatRecord["reasoningEffort"]);
 }
 
 export function buildBackgroundCommandContinuationPayload(options: {
@@ -21,6 +40,7 @@ export function buildBackgroundCommandContinuationPayload(options: {
   userId: string;
   userService: UserService;
   sessionState?: SessionStateService;
+  sessionMetadata?: unknown;
 }): BackgroundCommandContinuationPayload {
   const defaults = resolveThreadSelectionDefaults({
     userId: options.userId,
@@ -29,11 +49,18 @@ export function buildBackgroundCommandContinuationPayload(options: {
     sessionState: options.sessionState,
   });
   const provider = defaults.providerId ?? "jait";
+  const persistedReasoningEffort = readPersistedReasoningEffort(options.sessionMetadata);
+  const reasoningEffort = persistedReasoningEffort !== undefined
+    ? persistedReasoningEffort
+    : defaults.reasoningEffort
+      ?? normalizeReasoningEffort(options.userService.getSettings(options.userId).reasoningEffort)
+      ?? null;
 
   return {
     sessionId: options.sessionId,
     _systemNotification: options.notification,
     ...(options.notice ? { _systemNotice: options.notice } : {}),
+    reasoningEffort,
     ...(provider !== "jait"
       ? {
           provider,

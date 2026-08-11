@@ -28,6 +28,7 @@ import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
+import { shouldShowProviderLoginAction } from './provider-account-actions'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
 import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
@@ -1425,7 +1426,7 @@ export function SettingsPage({
                         )}
                       </div>
                       <div className="flex w-full gap-2 sm:w-auto">
-                        {auth?.login && (
+                        {shouldShowProviderLoginAction(auth) && (
                           <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(providerId) }} disabled={busy || providerLogoutBusy !== null}>
                             {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
                             Login

@@ -1319,4 +1319,128 @@ export const migrations: Migration[] = [
     },
   },
 
+  // Migration IDs 53 and 54 have already been used by released/development
+  // databases (53 was project_folders and 54 removed memories.embedding).
+  // Never reuse them: the runner keys applied migrations by ID.
+  // ─── 054: Drop unused memory embedding column ─────────────────────
+  {
+    id: 54,
+    name: "memories_drop_embedding",
+    run(db) {
+      // Held a JSON token-count map that memory search no longer reads: ranking is
+      // BM25 over `content`, which derives the same statistics at query time and with
+      // corpus-wide IDF the column never had. Dropping loses nothing recomputable.
+      try { db.exec(`ALTER TABLE memories DROP COLUMN embedding`); } catch { /* already dropped */ }
+    },
+  },
+
+  // ─── 55: Per-thread reasoning effort ─────────────────────────────
+  {
+    id: 55,
+    name: "agent_threads_reasoning_effort",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN reasoning_effort TEXT`); } catch { /* exists */ }
+    },
+  },
+
+  // ─── 56: Restore legacy memory-column compatibility ─────────────
+  {
+    id: 56,
+    name: "memories_restore_legacy_embedding",
+    run(db) {
+      // v0.1.703 selects every column from memories, including embedding. A
+      // database may be opened by that installed gateway after a development
+      // build has applied migration 54, so retain a harmless compatibility
+      // column during rolling/local upgrades. BM25 code does not read it.
+      try { db.exec(`ALTER TABLE memories ADD COLUMN embedding TEXT NOT NULL DEFAULT '{}'`); } catch { /* exists */ }
+    },
+  },
+
+  // ─── 57: Keep new session-search FTS writes focused on durable activity ──
+  {
+    id: 57,
+    name: "session_search_filter_activity_noise",
+    run(db) {
+      // The existing activity FTS index can be multiple gigabytes. Rebuilding it
+      // synchronously here would block gateway startup, so this migration changes
+      // the write path only. SessionSearchService also filters against the base
+      // activity kind; DatabaseRetentionService removes legacy noise incrementally.
+      db.exec(`DROP TRIGGER IF EXISTS agent_thread_activities_fts_ai`);
+      db.exec(`DROP TRIGGER IF EXISTS agent_thread_activities_fts_ad`);
+      db.exec(`DROP TRIGGER IF EXISTS agent_thread_activities_fts_au`);
+
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS agent_thread_activities_fts USING fts5(
+          body,
+          kind UNINDEXED,
+          thread_id UNINDEXED,
+          activity_id UNINDEXED,
+          created_at UNINDEXED
+        )
+      `);
+
+      db.exec(`
+        CREATE TRIGGER agent_thread_activities_fts_ai
+        AFTER INSERT ON agent_thread_activities
+        WHEN new.kind IN ('message', 'tool.result', 'tool.error', 'error')
+        BEGIN
+          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)
+          VALUES (
+            new.rowid,
+            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,
+            new.kind,
+            new.thread_id,
+            new.id,
+            new.created_at
+          );
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER agent_thread_activities_fts_ad
+        AFTER DELETE ON agent_thread_activities
+        BEGIN
+          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER agent_thread_activities_fts_au
+        AFTER UPDATE ON agent_thread_activities
+        BEGIN
+          DELETE FROM agent_thread_activities_fts WHERE rowid = old.rowid;
+          INSERT INTO agent_thread_activities_fts(rowid, body, kind, thread_id, activity_id, created_at)
+          SELECT
+            new.rowid,
+            new.summary || CASE WHEN new.payload IS NOT NULL AND new.payload != '' THEN ' ' || new.payload ELSE '' END,
+            new.kind,
+            new.thread_id,
+            new.id,
+            new.created_at
+          WHERE new.kind IN ('message', 'tool.result', 'tool.error', 'error');
+        END
+      `);
+    },
+  },
+
+  // ─── 58: Retention query indexes and side-column-safe message FTS ──
+  {
+    id: 58,
+    name: "database_retention_indexes",
+    run(db) {
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_kind_created_at ON agent_thread_activities(kind, created_at)`);
+
+      db.exec(`DROP TRIGGER IF EXISTS messages_fts_au`);
+      db.exec(`
+        CREATE TRIGGER messages_fts_au
+        AFTER UPDATE OF content, role, session_id, id, created_at ON messages
+        BEGIN
+          DELETE FROM messages_fts WHERE rowid = old.rowid;
+          INSERT INTO messages_fts(rowid, body, role, session_id, message_id, created_at)
+          VALUES (new.rowid, new.content, new.role, new.session_id, new.id, new.created_at);
+        END
+      `);
+    },
+  },
+
 ];

@@ -12,6 +12,18 @@ export function shouldRenderSessionSidebar(showSidebar: boolean): boolean {
   return showSidebar
 }
 
+export function resolveProjectPanelOpenAfterChatSelection({
+  isMobile,
+  focusChat,
+  requestedOpen,
+}: {
+  isMobile: boolean
+  focusChat: boolean
+  requestedOpen: boolean
+}): boolean {
+  return isMobile && focusChat ? false : requestedOpen
+}
+
 export function getMobileProjectActiveTarget(
   state: MobileProjectControlState,
 ): MobileProjectTarget | null {

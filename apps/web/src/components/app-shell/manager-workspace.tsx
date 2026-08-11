@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { inferThreadRepositoryName } from '@/lib/automation-repositories'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { ResponseStyle } from '@jait/shared'
 
 interface ManagerWorkspaceProps {
@@ -24,6 +25,7 @@ interface ManagerWorkspaceProps {
   availableSkills: any[]
   chatProvider: ProviderId
   chatProviderRuntimeMode: RuntimeMode
+  chatReasoningEffort: SessionReasoningEffort | null
   chatResponseStyle: ResponseStyle
   cliModel: string | null
   inputValueRef: RefObject<string>
@@ -56,6 +58,7 @@ interface ManagerWorkspaceProps {
   onOpenMessagePath: (path: string) => void
   onProviderChange: (provider: ProviderId) => void
   onProviderRuntimeModeChange: (mode: RuntimeMode) => void
+  onReasoningEffortChange: (reasoningEffort: SessionReasoningEffort | null) => void
   onRefreshThreads: () => void
   onRemoveRepository: (repoId: string) => void
   onReorderManagerQueueItem: (threadId: string, sourceId: string, targetId: string | null, placement: any) => void
@@ -83,6 +86,7 @@ export function ManagerWorkspace({
   availableSkills,
   chatProvider,
   chatProviderRuntimeMode,
+  chatReasoningEffort,
   chatResponseStyle,
   cliModel,
   inputValueRef,
@@ -115,6 +119,7 @@ export function ManagerWorkspace({
   onOpenMessagePath,
   onProviderChange,
   onProviderRuntimeModeChange,
+  onReasoningEffortChange,
   onRefreshThreads,
   onRemoveRepository,
   onReorderManagerQueueItem,
@@ -302,6 +307,8 @@ export function ManagerWorkspace({
                           onProviderChange={onProviderChange}
                           providerRuntimeMode={chatProviderRuntimeMode}
                           onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                          reasoningEffort={chatReasoningEffort}
+                          onReasoningEffortChange={onReasoningEffortChange}
                           cliModel={cliModel}
                           onCliModelChange={onCliModelChange}
                           repoRuntime={selectedThreadRepoRuntime}
@@ -377,6 +384,8 @@ export function ManagerWorkspace({
                     onProviderChange={onProviderChange}
                     providerRuntimeMode={chatProviderRuntimeMode}
                     onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                    reasoningEffort={chatReasoningEffort}
+                    onReasoningEffortChange={onReasoningEffortChange}
                     cliModel={cliModel}
                     onCliModelChange={onCliModelChange}
                     repoRuntime={selectedRepoRuntime}

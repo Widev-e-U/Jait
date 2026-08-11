@@ -17,13 +17,21 @@
 import { WebSocket } from "ws";
 import { readFile, writeFile, mkdir, readdir, stat as fsStat, access } from "node:fs/promises";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve, dirname, relative } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { homedir, hostname, platform } from "node:os";
 import { randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
 import { TerminalSurface } from "../surfaces/terminal.js";
+import type { ToolResult } from "../tools/contracts.js";
+import {
+  PROJECT_SEARCH_DEFAULT_RESULTS,
+  ProjectSearchUnavailableError,
+  normalizeProjectSearchLimit,
+  searchProject,
+  type ProjectSearchMode,
+} from "./project-search.js";
 
 const execAsync = promisify(exec);
 
@@ -104,6 +112,146 @@ function toWsUrl(input: string, token?: string): string {
   url = url.replace(/\/+$/, "");
   if (token) url += `?token=${encodeURIComponent(token)}`;
   return url;
+}
+
+export type PrimaryProjectSearchResult =
+  | {
+      query: string;
+      mode: "files";
+      files: Array<{ path: string; name: string }>;
+      limited: boolean;
+    }
+  | {
+      query: string;
+      mode: "content";
+      matches: Array<{ file: string; line: number; content: string }>;
+      limited: boolean;
+    };
+
+export async function runPrimaryProjectSearch(options: {
+  root: string;
+  query: string;
+  mode: ProjectSearchMode;
+  limit?: number;
+  include?: string;
+  isRegexp?: boolean;
+  includeIgnoredFiles?: boolean;
+}): Promise<PrimaryProjectSearchResult> {
+  const result = await searchProject(options);
+  if (result.mode === "files") {
+    return {
+      query: result.query,
+      mode: result.mode,
+      limited: result.limited,
+      files: result.files.map(({ relativePath, name }) => ({ path: relativePath, name })),
+    };
+  }
+  return {
+    query: result.query,
+    mode: result.mode,
+    limited: result.limited,
+    matches: result.matches.map(({ relativePath, line, content }) => ({
+      file: relativePath,
+      line,
+      content,
+    })),
+  };
+}
+
+export async function runPrimarySearchTool(
+  args: Record<string, unknown>,
+  projectRoot?: string,
+): Promise<ToolResult> {
+  const pattern = String(args["pattern"] ?? args["query"] ?? "");
+  const mode: ProjectSearchMode = args["mode"] === "files" ? "files" : "content";
+  const baseRoot = resolve(projectRoot ?? homedir());
+  const requestedPath = typeof args["path"] === "string" ? args["path"] : "";
+  const root = requestedPath ? resolve(baseRoot, requestedPath) : baseRoot;
+
+  try {
+    const limit = normalizeProjectSearchLimit(args["limit"], PROJECT_SEARCH_DEFAULT_RESULTS);
+    const include = typeof args["include"] === "string" ? args["include"] : undefined;
+    const includeIgnoredFiles = args["includeIgnoredFiles"] === true;
+    if (mode === "files") {
+      const result = await searchProject({
+        root,
+        query: pattern,
+        mode,
+        limit,
+        includeIgnoredFiles,
+      });
+      if (result.mode !== "files") throw new Error("Unexpected project search mode");
+      const files = result.files.map((file) => file.path);
+      const suffix = result.limited
+        ? ` (stopped at the ${limit}-result limit — narrow the pattern to see the rest)`
+        : "";
+      return {
+        ok: true,
+        message: files.length === 0
+          ? `No files matching "${pattern}"`
+          : `Found ${files.length} file${files.length === 1 ? "" : "s"} matching "${pattern}"${suffix}`,
+        data: { pattern, files },
+      };
+    }
+
+    const runContentSearch = (isRegexp: boolean) => searchProject({
+      root,
+      query: pattern,
+      mode,
+      limit,
+      include,
+      isRegexp,
+      includeIgnoredFiles,
+    });
+    const initialMode = args["isRegexp"] === true;
+    let retriedAs: "regex" | "literal" | null = null;
+    let result;
+    try {
+      result = await runContentSearch(initialMode);
+    } catch (error) {
+      const initialRegexUnavailable =
+        initialMode
+        && error instanceof ProjectSearchUnavailableError
+        && error.reason === "regexp_requires_rg";
+      if (!initialRegexUnavailable) throw error;
+      const literalRetry = await runContentSearch(false);
+      if (literalRetry.mode !== "content") throw new Error("Unexpected project search mode");
+      if (literalRetry.matches.length === 0) throw error;
+      result = literalRetry;
+      retriedAs = "literal";
+    }
+    if (result.mode !== "content") throw new Error("Unexpected project search mode");
+    if (result.matches.length === 0 && !retriedAs) {
+      try {
+        const retry = await runContentSearch(!initialMode);
+        if (retry.mode !== "content") throw new Error("Unexpected project search mode");
+        if (retry.matches.length > 0) {
+          result = retry;
+          retriedAs = initialMode ? "literal" : "regex";
+        }
+      } catch (error) {
+        const unavailableImplicitRegex =
+          !initialMode
+          && error instanceof ProjectSearchUnavailableError
+          && error.reason === "regexp_requires_rg";
+        if (!unavailableImplicitRegex) throw error;
+      }
+    }
+    const matches = result.matches.map(({ file, line, content }) => ({ file, line, content }));
+    const limitSuffix = result.limited
+      ? ` (stopped at the ${limit}-result limit — narrow the pattern to see the rest)`
+      : "";
+    const retrySuffix = retriedAs ? ` (retried as ${retriedAs})` : "";
+    return {
+      ok: true,
+      message: matches.length === 0
+        ? `No matches for "${pattern}"`
+        : `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"${limitSuffix}${retrySuffix}`,
+      data: { pattern, matches },
+    };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Search failed" };
+  }
 }
 
 export class PrimaryLink {
@@ -428,12 +576,13 @@ export class PrimaryLink {
         return raw.map((d) => ({ name: d.name, path: join(dirPath, d.name), type: d.isDirectory() ? "dir" : "file" }));
       }
       case "search-project": {
-        return this.searchProject(
-          resolve(params["path"] as string),
-          String(params["query"] ?? ""),
-          params["mode"] === "content" ? "content" : "files",
-          Math.min(Math.max(Number(params["limit"]) || 50, 1), 200),
-        );
+        return runPrimaryProjectSearch({
+          root: resolve(params["path"] as string),
+          query: String(params["query"] ?? ""),
+          mode: params["mode"] === "content" ? "content" : "files",
+          limit: normalizeProjectSearchLimit(params["limit"], 50),
+          includeIgnoredFiles: params["includeIgnoredFiles"] === true,
+        });
       }
       case "git": {
         const cwd = resolve(params["cwd"] as string);
@@ -497,16 +646,7 @@ export class PrimaryLink {
       }
       case "search":
       case "file.search":
-        return {
-          ok: true,
-          message: "Search completed",
-          data: await this.searchProject(
-            resolve(String(args["path"] ?? projectRoot ?? homedir())),
-            String(args["query"] ?? args["pattern"] ?? ""),
-            args["mode"] === "content" ? "content" : "files",
-            Math.min(Math.max(Number(args["limit"]) || 50, 1), 200),
-          ),
-        };
+        return runPrimarySearchTool(args, projectRoot);
       case "os.query": {
         const os = await import("node:os");
         return {
@@ -573,42 +713,7 @@ export class PrimaryLink {
     }
   }
 
-  private async searchProject(
-    projectRoot: string,
-    query: string,
-    mode: "files" | "content",
-    maxResults: number,
-  ): Promise<unknown> {
-    const safeDir = projectRoot.replace(/"/g, '\\"');
-    const safeQuery = query.replace(/"/g, '\\"');
-    try {
-      if (mode === "content") {
-        const cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`
-          + ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
-        const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-        const matches = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((line) => {
-          const m = line.match(/^(.+?):(\d+):(.*)$/);
-          if (!m) return null;
-          return { file: relative(projectRoot, m[1]!).replace(/\\/g, "/"), line: parseInt(m[2]!, 10), content: m[3]!.trim() };
-        }).filter(Boolean);
-        return { query, mode, matches };
-      }
-      const cleaned = query.replace(/[*?[\]]/g, "").trim();
-      if (!cleaned) return { query, mode, files: [] };
-      const safeFileQuery = cleaned.replace(/"/g, '\\"');
-      const cmd = `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
-      const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-      const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
-        const relPath = relative(projectRoot, absPath.trim()).replace(/\\/g, "/");
-        return { path: relPath, name: relPath.split("/").pop() || relPath };
-      });
-      return { query, mode, files };
-    } catch (err: unknown) {
-      const stderr = (err as { stderr?: string })?.stderr || "";
-      if (stderr && !stderr.includes("No such file")) throw new Error(stderr.slice(0, 200));
-      return mode === "content" ? { query, mode, matches: [] } : { query, mode, files: [] };
-    }
-  }
+
 }
 
 function errMsg(err: unknown): string {

@@ -100,7 +100,7 @@ describe("fresh onboarding", () => {
     // Every column defined in the Drizzle schema must exist
     const expectedColumns = [
       "id", "user_id", "session_id", "title", "provider_id",
-      "model", "runtime_mode", "kind", "working_directory", "branch",
+      "model", "reasoning_effort", "runtime_mode", "kind", "working_directory", "branch",
       "status", "provider_session_id", "error", "pr_url", "pr_number",
       "pr_title", "pr_base_branch", "pr_state", "execution_node_id", "execution_node_name",
       "skill_ids", "routing_plan", "change_files", "change_insertions",
@@ -219,6 +219,83 @@ describe("message context metadata migration", () => {
       SELECT message_id AS messageId, has_memory_provenance AS hasMemoryProvenance
       FROM message_context_metadata
     `).all()).toEqual([{ messageId: "message-with-memory", hasMemoryProvenance: 1 }]);
+  });
+
+  it("drops the memory embedding column without losing stored memories", () => {
+    applyMigrationsThrough(53);
+
+    const now = "2026-08-11T09:00:00.000Z";
+    sqlite.prepare(`
+      INSERT INTO memories (id, scope, content, source_type, source_id, source_surface, embedding, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "memory-keep",
+      "project",
+      "Ranking uses BM25 over memory content.",
+      "chat",
+      "session-1",
+      "chat",
+      JSON.stringify({ ranking: 1, bm25: 1 }),
+      now,
+      now,
+    );
+
+    const migration = migrations.find((entry) => entry.id === 54);
+    expect(migration).toBeDefined();
+    if (!migration) return;
+    migration.run(sqlite);
+    // Re-running must not fail: the column is already gone.
+    migration.run(sqlite);
+
+    expect(sqlite.prepare(`
+      SELECT id, scope, content FROM memories
+    `).all()).toEqual([{
+      id: "memory-keep",
+      scope: "project",
+      content: "Ranking uses BM25 over memory content.",
+    }]);
+
+    const columns = sqlite.prepare(`PRAGMA table_info(memories)`).all() as { name: string }[];
+    expect(columns.map((column) => column.name)).not.toContain("embedding");
+  });
+
+  it("restores the legacy embedding column for older gateways without losing memories", () => {
+    applyMigrationsThrough(54);
+
+    const now = "2026-08-11T09:00:00.000Z";
+    sqlite.prepare(`
+      INSERT INTO memories (id, scope, content, source_type, source_id, source_surface, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "memory-compatible",
+      "project",
+      "Ranking uses BM25 over memory content.",
+      "chat",
+      "session-1",
+      "chat",
+      now,
+      now,
+    );
+
+    const migration = migrations.find((entry) => entry.id === 56);
+    expect(migration).toBeDefined();
+    if (!migration) return;
+    migration.run(sqlite);
+    migration.run(sqlite);
+
+    expect(sqlite.prepare(`
+      SELECT id, content, embedding FROM memories
+    `).all()).toEqual([{
+      id: "memory-compatible",
+      content: "Ranking uses BM25 over memory content.",
+      embedding: "{}",
+    }]);
+  });
+
+  it("does not reuse migration IDs already present in deployed databases", () => {
+    const ids = migrations.map((migration) => migration.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(migrations.find((migration) => migration.name === "agent_threads_reasoning_effort")?.id).toBe(55);
   });
 });
 

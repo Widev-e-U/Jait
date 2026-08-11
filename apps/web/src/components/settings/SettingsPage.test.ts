@@ -2,6 +2,7 @@ import { createElement, Fragment } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { shouldShowProviderLoginAction } from './provider-account-actions'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 
 describe('highlightSearchMatch', () => {
@@ -22,5 +23,25 @@ describe('highlightSearchMatch', () => {
     )
 
     expect(markup).toBe('Session archive')
+  })
+})
+
+describe('shouldShowProviderLoginAction', () => {
+  it('hides login for an authenticated Codex account that supports login', () => {
+    expect(shouldShowProviderLoginAction({
+      login: true,
+      logout: true,
+      deviceCode: false,
+      authenticated: true,
+    })).toBe(false)
+  })
+
+  it('shows login for a signed-out account that supports login', () => {
+    expect(shouldShowProviderLoginAction({
+      login: true,
+      logout: false,
+      deviceCode: false,
+      authenticated: false,
+    })).toBe(true)
   })
 })

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  PullRequestConflictFile,
+  PullRequestConflictSide,
   PullRequestDetail,
   PullRequestDiff,
   PullRequestListState,
@@ -8,12 +10,15 @@ import type {
   PullRequestSummary,
 } from '@jait/shared'
 import {
+  AlertTriangle,
   Check,
   CheckCircle2,
   CircleDot,
   Clock3,
   Code2,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileCode2,
   GitCommitHorizontal,
   GitMerge,
@@ -225,6 +230,10 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
+  const [resolveState, setResolveState] = useState<'idle' | 'preparing' | 'conflicts' | 'applying'>('idle')
+  const [conflictFiles, setConflictFiles] = useState<PullRequestConflictFile[]>([])
+  const [resolutions, setResolutions] = useState<Record<string, PullRequestConflictSide>>({})
+  const [previewPath, setPreviewPath] = useState<string | null>(null)
 
   useEffect(() => {
     if (!deepLinkHandledRef.current && deepLink) {
@@ -294,6 +303,10 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
   useEffect(() => {
     setDiff(null)
     setEditing(false)
+    setResolveState('idle')
+    setConflictFiles([])
+    setResolutions({})
+    setPreviewPath(null)
     void refreshDetail()
   }, [refreshDetail])
 
@@ -411,6 +424,54 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
       () => pullRequestsApi.merge(repositoryId, detail.number, mergeMethod),
       'Pull request merged',
     )
+  }
+
+  const startResolve = async () => {
+    if (!detail) return
+    setResolveState('preparing')
+    setConflictFiles([])
+    setResolutions({})
+    setPreviewPath(null)
+    try {
+      const result = await pullRequestsApi.resolveConflicts(repositoryId, detail.number)
+      if (result.status === 'merged') {
+        toast.success('Conflicts resolved', { description: result.message })
+        setResolveState('idle')
+        await reloadAfterAction()
+      } else if (result.status === 'conflicts') {
+        setConflictFiles(result.files ?? [])
+        setResolutions(Object.fromEntries(
+          (result.files ?? []).map((file) => [file.path, 'ours' as const]),
+        ))
+        setResolveState('conflicts')
+      } else {
+        setResolveState('idle')
+      }
+    } catch (requestError) {
+      setResolveState('idle')
+      toast.error('Could not resolve conflicts', {
+        description: requestError instanceof Error ? requestError.message : undefined,
+      })
+    }
+  }
+
+  const applyResolution = async () => {
+    if (!detail) return
+    setResolveState('applying')
+    try {
+      const result = await pullRequestsApi.resolveConflicts(repositoryId, detail.number, resolutions)
+      toast.success('Conflicts resolved', { description: result.message })
+      setResolveState('idle')
+      setConflictFiles([])
+      setResolutions({})
+      setPreviewPath(null)
+      await reloadAfterAction()
+    } catch (requestError) {
+      setResolveState('conflicts')
+      toast.error('Could not apply resolution', {
+        description: requestError instanceof Error ? requestError.message : undefined,
+      })
+    }
   }
 
   if (!githubRepositories.length) {
@@ -596,7 +657,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
                                 <SelectItem value="rebase">Rebase merge</SelectItem>
                               </SelectContent>
                             </Select>
-                            <Button size="sm" className="h-8" onClick={() => void merge()} disabled={action !== null || detail.isDraft}>
+                            <Button size="sm" className="h-8" onClick={() => void merge()} disabled={action !== null || detail.isDraft || detail.mergeable !== 'MERGEABLE'}>
                               {action === 'Merge' ? <Loader2 className="animate-spin" /> : <GitMerge className="h-3.5 w-3.5" />}
                               Merge
                             </Button>
@@ -619,6 +680,107 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
                         <span className="ml-auto text-xs text-muted-foreground">
                           {detail.mergeable && `Mergeable: ${detail.mergeable.toLowerCase()}`}
                         </span>
+                      </div>
+                    )}
+
+                    {detail.state === 'OPEN' && detail.mergeable === 'CONFLICTING' && (
+                      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <div className="min-w-0 flex-1 text-sm">
+                          <p className="font-medium text-amber-800 dark:text-amber-300">
+                            This branch has conflicts with <code>{detail.baseBranch}</code>
+                          </p>
+                          <p className="text-xs text-amber-700/80 dark:text-amber-300/70">
+                            Merge {detail.baseBranch} into {detail.headBranch} to make this pull request mergeable.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          onClick={() => void startResolve()}
+                          disabled={action !== null || resolveState === 'preparing'}
+                        >
+                          {resolveState === 'preparing'
+                            ? <Loader2 className="animate-spin" />
+                            : <GitMerge className="h-3.5 w-3.5" />}
+                          {resolveState === 'preparing' ? 'Merging…' : 'Resolve conflicts'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {(resolveState === 'conflicts' || resolveState === 'applying') && conflictFiles.length > 0 && (
+                      <div className="mt-4 rounded-xl border bg-card p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-sm font-medium">
+                            Resolve {conflictFiles.length} conflicted {conflictFiles.length === 1 ? 'file' : 'files'}
+                          </h3>
+                          <Button
+                            size="sm"
+                            className="h-8"
+                            onClick={() => void applyResolution()}
+                            disabled={action !== null || resolveState === 'applying'}
+                          >
+                            {resolveState === 'applying'
+                              ? <Loader2 className="animate-spin" />
+                              : <Check className="h-3.5 w-3.5" />}
+                            {resolveState === 'applying' ? 'Applying…' : 'Apply resolution'}
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          {conflictFiles.map((file) => (
+                            <div key={file.path} className="rounded-lg border p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <code className="min-w-0 flex-1 truncate text-xs">{file.path}</code>
+                                {file.binary && <Badge variant="secondary">binary</Badge>}
+                                <Select
+                                  value={resolutions[file.path] ?? 'ours'}
+                                  onValueChange={(value) => setResolutions((current) => ({
+                                    ...current,
+                                    [file.path]: value as PullRequestConflictSide,
+                                  }))}
+                                >
+                                  <SelectTrigger className="h-8 w-48">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="ours">Keep PR version</SelectItem>
+                                    <SelectItem value="theirs">Keep {detail.baseBranch} version</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {!file.binary && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => setPreviewPath(previewPath === file.path ? null : file.path)}
+                                  >
+                                    {previewPath === file.path
+                                      ? <EyeOff className="h-3.5 w-3.5" />
+                                      : <Eye className="h-3.5 w-3.5" />}
+                                    {previewPath === file.path ? 'Hide' : 'Preview'}
+                                  </Button>
+                                )}
+                              </div>
+                              {!file.binary && previewPath === file.path && (
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  <div className="min-w-0">
+                                    <p className="mb-1 text-xs font-medium text-muted-foreground">PR version</p>
+                                    <pre className="max-h-48 overflow-auto rounded border bg-zinc-950 p-2 text-xs leading-5 text-zinc-100">
+                                      <code>{file.ours || '(deleted on this side)'}</code>
+                                    </pre>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="mb-1 text-xs font-medium text-muted-foreground">{detail.baseBranch} version</p>
+                                    <pre className="max-h-48 overflow-auto rounded border bg-zinc-950 p-2 text-xs leading-5 text-zinc-100">
+                                      <code>{file.theirs || '(deleted on this side)'}</code>
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </>

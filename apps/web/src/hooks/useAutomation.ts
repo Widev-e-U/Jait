@@ -117,6 +117,18 @@ function mergeRemoteProviders(fromGateway: RemoteProviderInfo[], nodes: NodeStat
   })
 }
 
+/**
+ * Which provider/model/effort a thread turn runs with. Grouped rather than
+ * passed as four positional arguments so adding a dimension (reasoning effort
+ * was the fourth) can't silently shift the arguments after it.
+ */
+export interface ThreadSendSelection {
+  providerId?: ProviderId
+  runtimeMode?: RuntimeMode
+  model?: string | null
+  reasoningEffort?: string | null
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
@@ -754,12 +766,16 @@ export function useAutomation(enabled = true) {
     async (
       threadId: string | null,
       text: string,
-      providerId: ProviderId = 'jait',
-      runtimeMode: RuntimeMode = 'full-access',
-      model?: string | null,
+      selection: ThreadSendSelection = {},
       metadata: ThreadMessageMetadata = {},
       repositoryId?: string | null,
     ) => {
+      const {
+        providerId = 'jait',
+        runtimeMode = 'full-access',
+        model,
+        reasoningEffort,
+      } = selection
       if (!text.trim()) return
       const targetThread = threadId
         ? threads.find((thread) => thread.id === threadId) ?? null
@@ -869,6 +885,7 @@ export function useAutomation(enabled = true) {
               providerId,
               runtimeMode,
               ...(model ? { model } : {}),
+              ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
               kind: 'delivery',
               workingDirectory: worktreePath ?? repo.localPath,
               branch: branchName,
@@ -919,15 +936,15 @@ export function useAutomation(enabled = true) {
   )
 
   const handleSend = useCallback(
-    async (text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata, repositoryId?: string | null) => {
-      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, runtimeMode, model, metadata, repositoryId)
+    async (text: string, selection?: ThreadSendSelection, metadata?: ThreadMessageMetadata, repositoryId?: string | null) => {
+      await sendThreadMessage(selectedThread?.id ?? null, text, selection, metadata, repositoryId)
     },
     [selectedThread?.id, sendThreadMessage],
   )
 
   const handleSendToThread = useCallback(
-    async (threadId: string, text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata) => {
-      await sendThreadMessage(threadId, text, providerId, runtimeMode, model, metadata)
+    async (threadId: string, text: string, selection?: ThreadSendSelection, metadata?: ThreadMessageMetadata) => {
+      await sendThreadMessage(threadId, text, selection, metadata)
     },
     [sendThreadMessage],
   )

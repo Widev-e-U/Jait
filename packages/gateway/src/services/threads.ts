@@ -10,6 +10,7 @@ import { and, eq, desc, gt } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { limitUtf8, serializeBoundedJson } from "../lib/bounded-json.js";
 import type { ProviderEvent } from "../providers/contracts.js";
 import type {
   CreateThreadParams,
@@ -17,6 +18,20 @@ import type {
   ThreadActivity,
   UpdateThreadParams,
 } from "@jait/shared/types";
+
+const MAX_ACTIVITY_PAYLOAD_BYTES = 512_000;
+const MAX_ACTIVITY_SUMMARY_BYTES = 8_000;
+const TRANSIENT_ACTIVITY_KINDS = new Set([
+  "thinking",
+  "agent_thought_chunk",
+  "codex/event/agent_reasoning_delta",
+  "codex/event/exec_command_output_delta",
+  "codex/event/reasoning_content_delta",
+]);
+
+function isTransientActivityKind(kind: string): boolean {
+  return TRANSIENT_ACTIVITY_KINDS.has(kind);
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -73,6 +88,8 @@ function hydrateThreadRow(row: ThreadRowRecord | undefined): ThreadRow | undefin
 // ── Service ──────────────────────────────────────────────────────────
 
 export class ThreadService {
+  private pendingContextFlows = new Map<string, { summary: string; payload?: unknown }>();
+
   constructor(private db: JaitDB) {}
 
   // ── CRUD ─────────────────────────────────────────────────────────
@@ -89,6 +106,7 @@ export class ThreadService {
         title: params.title,
         providerId: params.providerId,
         model: params.model ?? null,
+        reasoningEffort: params.reasoningEffort ?? null,
         runtimeMode: params.runtimeMode ?? "full-access",
         kind: params.kind ?? "delivery",
         skillIds: serializeSkillIds(params.skillIds) ?? null,
@@ -159,6 +177,7 @@ export class ThreadService {
     if (params.title !== undefined) updates.title = params.title;
     if (params.providerId !== undefined) updates.providerId = params.providerId;
     if (params.model !== undefined) updates.model = params.model;
+    if (params.reasoningEffort !== undefined) updates.reasoningEffort = params.reasoningEffort;
     if (params.runtimeMode !== undefined) updates.runtimeMode = params.runtimeMode;
     if (params.kind !== undefined) updates.kind = params.kind;
     if (params.skillIds !== undefined) updates.skillIds = serializeSkillIds(params.skillIds) ?? null;
@@ -188,6 +207,7 @@ export class ThreadService {
   }
 
   delete(id: string): void {
+    this.pendingContextFlows.delete(id);
     // Delete activities first, then the thread
     this.db
       .delete(agentThreadActivities)
@@ -258,18 +278,19 @@ export class ThreadService {
   ): ThreadActivity {
     const id = uuidv7();
     const now = new Date().toISOString();
+    const persistedSummary = limitUtf8(summary, MAX_ACTIVITY_SUMMARY_BYTES);
     this.db
       .insert(agentThreadActivities)
       .values({
         id,
         threadId,
         kind,
-        summary,
-        payload: payload != null ? JSON.stringify(payload) : null,
+        summary: persistedSummary,
+        payload: payload != null ? serializeBoundedJson(payload, MAX_ACTIVITY_PAYLOAD_BYTES) : null,
         createdAt: now,
       })
       .run();
-    return { id, threadId, kind, summary, payload, createdAt: now };
+    return { id, threadId, kind, summary: persistedSummary, payload, createdAt: now };
   }
 
   getActivities(
@@ -306,13 +327,37 @@ export class ThreadService {
 
   // ── Provider event → activity log mapping ───────────────────────
 
+  private transientActivity(
+    threadId: string,
+    kind: string,
+    summary: string,
+    payload?: unknown,
+  ): ThreadActivity {
+    return {
+      id: uuidv7(),
+      threadId,
+      kind,
+      summary,
+      payload,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  private flushPendingContextFlow(threadId: string): ThreadActivity | undefined {
+    const pending = this.pendingContextFlows.get(threadId);
+    if (!pending) return undefined;
+    this.pendingContextFlows.delete(threadId);
+    return this.addActivity(threadId, "context_flow", pending.summary, pending.payload);
+  }
+
   logProviderEvent(threadId: string, event: ProviderEvent): ThreadActivity | undefined {
     switch (event.type) {
       case "token":
         // Don't log individual tokens — too noisy
         return undefined;
       case "turn.started":
-        // Don't log turn.started — it's handled by the route for status transitions
+        // Don't log turn.started — it's handled by the route for status transitions.
+        this.pendingContextFlows.delete(threadId);
         return undefined;
       case "tool.start":
         return this.addActivity(threadId, "tool.start", `Using ${event.tool}`, {
@@ -348,15 +393,30 @@ export class ThreadService {
           content: event.content,
         });
       case "session.started":
+        this.pendingContextFlows.delete(threadId);
         return this.addActivity(threadId, "session", "Session started");
       case "turn.completed":
+        this.flushPendingContextFlow(threadId);
         return this.addActivity(threadId, "session", "Turn completed — ready for input");
       case "session.completed":
+        this.flushPendingContextFlow(threadId);
         return this.addActivity(threadId, "session", "Session completed");
       case "session.error":
+        this.flushPendingContextFlow(threadId);
         return this.addActivity(threadId, "error", event.error);
-      case "activity":
+      case "activity": {
+        if (event.kind === "context_flow") {
+          this.pendingContextFlows.set(threadId, {
+            summary: event.summary,
+            payload: event.payload,
+          });
+          return this.transientActivity(threadId, event.kind, event.summary, event.payload);
+        }
+        if (isTransientActivityKind(event.kind)) {
+          return this.transientActivity(threadId, event.kind, event.summary, event.payload);
+        }
         return this.addActivity(threadId, event.kind, event.summary, event.payload);
+      }
       default:
         return undefined;
     }

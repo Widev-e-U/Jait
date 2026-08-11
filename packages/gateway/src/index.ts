@@ -75,6 +75,7 @@ import { resolveJaitLlmConfig } from "./services/jait-llm.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
 import { ChatTracesService } from "./services/chat-traces.js";
+import { DatabaseRetentionService } from "./services/database-retention.js";
 
 
 /**
@@ -186,6 +187,7 @@ async function main() {
   const threadService = new ThreadService(db);
   const sessionSearchService = new SessionSearchService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
+  const databaseRetention = new DatabaseRetentionService(sqlite);
 
   // ── Recover threads stuck in "running" from a previous crash/restart ──
   const staleThreads = threadService.listRunning();
@@ -1338,6 +1340,7 @@ async function main() {
 
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
+  databaseRetention.start();
 
   // Auto-start channels (e.g. WhatsApp) that were previously enabled.
   void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));
@@ -1444,6 +1447,7 @@ async function main() {
       clearInterval(terminalReaperInterval);
       scheduler.stop();
       threadReviewSync.stop();
+      databaseRetention.stop();
       primaryLink?.stop();
       ws.stop();
       await server.close();

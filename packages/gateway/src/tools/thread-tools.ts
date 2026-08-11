@@ -333,6 +333,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return {
       providerId: contextProviderId ?? (defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null),
       model: (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined) ?? defaults.model,
+      reasoningEffort: defaults.reasoningEffort,
       runtimeMode:
         (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined)
         ?? defaults.runtimeMode,
@@ -560,6 +561,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         workingDirectory: effectiveThread.workingDirectory ?? process.cwd(),
         mode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
         model: effectiveThread.model ?? context.model ?? undefined,
+        reasoningEffort: effectiveThread.reasoningEffort ?? undefined,
         mcpServers,
       });
 
@@ -940,6 +942,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               title: input.title?.trim() || normalizeGeneratedThreadTitle(prompt, "New Thread"),
               providerId: selectedProviderId,
               model: input.model ?? selectedDefaults.model,
+              reasoningEffort: selectedDefaults.reasoningEffort,
               runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
               workingDirectory: input.workingDirectory,
@@ -1034,6 +1037,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 title: spec.title?.trim() || "New Thread",
                 providerId: selectedProviderId,
                 model: spec.model ?? input.model ?? selectedDefaults.model,
+                reasoningEffort: selectedDefaults.reasoningEffort,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
                 workingDirectory: spec.workingDirectory ?? input.workingDirectory ?? context.projectRoot,

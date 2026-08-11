@@ -192,6 +192,8 @@ export interface ThreadInfo {
   title: string;
   providerId: ProviderId;
   model: string | null;
+  /** Provider-specific reasoning/thinking effort this thread runs with. */
+  reasoningEffort: string | null;
   runtimeMode: RuntimeMode;
   kind: ThreadKind;
   skillIds: string[] | null;
@@ -253,6 +255,7 @@ export interface CreateThreadRequest {
   title: string;
   providerId: ProviderId;
   model?: string;
+  reasoningEffort?: string | null;
   runtimeMode?: RuntimeMode;
   kind?: ThreadKind;
   skillIds?: string[] | null;
@@ -268,6 +271,7 @@ export interface CreateThreadParams extends CreateThreadRequest {
 export interface UpdateThreadRequest {
   title?: string;
   model?: string;
+  reasoningEffort?: string | null;
   runtimeMode?: RuntimeMode;
   kind?: ThreadKind;
   skillIds?: string[] | null;

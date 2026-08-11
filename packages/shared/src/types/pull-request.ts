@@ -86,3 +86,24 @@ export interface PullRequestDiff {
 export type PullRequestReviewEvent = "approve" | "comment" | "request_changes";
 
 export type PullRequestMergeMethod = "merge" | "squash" | "rebase";
+
+export interface PullRequestConflictFile {
+  path: string;
+  /** True when the file is binary and its sides cannot be previewed as text. */
+  binary: boolean;
+  /** Content from the PR head branch ("ours"). Empty when deleted on that side. */
+  ours: string;
+  /** Content from the base branch ("theirs"). Empty when deleted on that side. */
+  theirs: string;
+}
+
+export type PullRequestConflictSide = "ours" | "theirs";
+
+export interface PullRequestResolveResult {
+  /** merged: base was merged into the head branch cleanly and pushed. */
+  /** conflicts: base merge produced conflicts; `files` lists them. */
+  /** pushed: the supplied resolutions were applied, committed, and pushed. */
+  status: "merged" | "conflicts" | "pushed";
+  files?: PullRequestConflictFile[];
+  message?: string;
+}

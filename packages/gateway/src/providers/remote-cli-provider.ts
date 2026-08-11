@@ -201,20 +201,16 @@ export class RemoteCliProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    try {
-      const result = await this.ws.proxyProviderOp<ProviderModelInfo[]>(
-        this.nodeId,
-        "list-models",
-        { providerId: this.id, providerType: this.providerType },
-        90_000,
-      );
-      if (this.providerType === "codex") {
-        return normalizeCodexModelList(result);
-      }
-      return Array.isArray(result) ? result : [];
-    } catch {
-      return [];
+    const result = await this.ws.proxyProviderOp<ProviderModelInfo[]>(
+      this.nodeId,
+      "list-models",
+      { providerId: this.id, providerType: this.providerType },
+      90_000,
+    );
+    if (this.providerType === "codex") {
+      return normalizeCodexModelList(result);
     }
+    return Array.isArray(result) ? result : [];
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {

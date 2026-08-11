@@ -16,6 +16,7 @@ import { useAuth, type JaitBackend, type ReasoningEffort } from '@/hooks/useAuth
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
+import { resolveActiveModel, resolveReasoningEffortOptions } from '@/lib/reasoning-effort-options'
 import { GATEWAY_NODE_ID, resolveScopedProviderSelection, scopeProviders } from '@/lib/provider-scope'
 import {
   readProjectReasoningEffortSelection,
@@ -71,22 +72,8 @@ interface ModelDef {
   }>
 }
 
-const DEFAULT_REASONING_EFFORTS: Array<{ value: ReasoningEffort; label: string; hint: string }> = [
-  { value: 'minimal', label: 'Minimal', hint: 'Fastest, least thinking' },
-  { value: 'low', label: 'Low', hint: 'Brief reasoning' },
-  { value: 'medium', label: 'Medium', hint: 'Balanced' },
-  { value: 'high', label: 'High', hint: 'Deepest reasoning' },
-]
-
 function isNativeReasoningEffort(value: string): value is ReasoningEffort {
   return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high'
-}
-
-function formatReasoningEffortLabel(value: string): string {
-  return value
-    .split(/[-_]/)
-    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
-    .join(' ')
 }
 
 interface ProviderDef {
@@ -542,19 +529,9 @@ export function ProviderModelSelector({
     updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
   }, [controlledReasoningEffort, projectId, provider, reasoningEffort, updateSettings])
 
-  const activeModelDef = model
-    ? models.find((entry) => entry.id === model) ?? null
-    : models.find((entry) => entry.isDefault) ?? models[0] ?? null
-  const reasoningEfforts = activeModelDef?.supportedReasoningEfforts?.length
-    ? activeModelDef.supportedReasoningEfforts.map((effort) => ({
-        value: effort.reasoningEffort,
-        label: formatReasoningEffortLabel(effort.reasoningEffort),
-        hint: effort.description ?? `Use ${formatReasoningEffortLabel(effort.reasoningEffort).toLowerCase()} reasoning`,
-      }))
-    : DEFAULT_REASONING_EFFORTS
-  const modelSupportsReasoning = Boolean(
-    activeModelDef?.reasoningEffortSupported || activeModelDef?.supportedReasoningEfforts?.length,
-  )
+  const activeModelDef = resolveActiveModel(models, model)
+  const reasoningEfforts = resolveReasoningEffortOptions(activeModelDef)
+  const modelSupportsReasoning = reasoningEfforts !== null
 
   const handleReasoningEffortChange = (next: SessionReasoningEffort | null) => {
     saveProjectReasoningEffortSelection(projectId, provider, next)
@@ -860,7 +837,7 @@ export function ProviderModelSelector({
               <span className="text-muted-foreground">Default</span>
               {reasoningEffort === null && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
             </button>
-            {reasoningEfforts.map((effort) => {
+            {reasoningEfforts!.map((effort) => {
               const active = reasoningEffort === effort.value
               return (
                 <button

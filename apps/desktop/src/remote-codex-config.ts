@@ -6,6 +6,10 @@ export interface RemoteCodexThreadConfig {
   sandbox: RemoteCodexSandboxMode
 }
 
+export function resolveRemoteCodexModelDiscoveryArgs(): string[] {
+  return ['app-server']
+}
+
 export function resolveRemoteCodexThreadConfig(mode: string): RemoteCodexThreadConfig {
   const hasFullAccess = mode === 'full-access'
   return {

@@ -512,6 +512,12 @@ export function formatChatHttpError(status: number, context: ChatHttpErrorContex
   return `HTTP ${status}`
 }
 
+export function buildReasoningEffortRequestField(
+  reasoningEffort: string | null | undefined,
+): { reasoningEffort?: string | null } {
+  return reasoningEffort === undefined ? {} : { reasoningEffort }
+}
+
 interface SendMessageOptions {
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
@@ -1621,7 +1627,7 @@ export function useChat(
         ...(options.provider && options.provider !== 'jait' && options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
         ...(options.responseStyle && options.responseStyle !== 'normal' ? { responseStyle: options.responseStyle } : {}),
         ...(options.model ? { model: options.model } : {}),
-        ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
+        ...buildReasoningEffortRequestField(options.reasoningEffort),
         ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
         ...(outboundAttachments?.length ? { attachments: outboundAttachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
       }
@@ -2320,7 +2326,7 @@ export function useChat(
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId
-    if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current) return
+    if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current) return false
     restartInFlightRef.current = true
 
     try {
@@ -2372,7 +2378,7 @@ export function useChat(
       if (res.status === 401) {
         const data = await res.json().catch(() => ({})) as { detail?: string }
         if (data.detail === 'login_required') notifyLoginRequired?.()
-        return
+        return false
       }
 
       if (!res.ok) {
@@ -2399,7 +2405,7 @@ export function useChat(
         }
       })
 
-      await sendMessage(editedContent.trim(), {
+      const sendResult = await sendMessage(editedContent.trim(), {
         token: effectiveToken,
         sessionId: requestSessionId,
         mode: options.mode,
@@ -2412,12 +2418,14 @@ export function useChat(
         displaySegments: options.displaySegments,
         onLoginRequired: notifyLoginRequired,
       })
+      return sendResult === 'sent' || sendResult === 'queued'
     } catch (error) {
       setState(prev => ({
         ...prev,
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to restart from message',
       }))
+      return false
     } finally {
       restartInFlightRef.current = false
     }

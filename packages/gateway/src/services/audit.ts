@@ -5,6 +5,9 @@ import { eq } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { auditLog } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { serializeBoundedJson } from "../lib/bounded-json.js";
+
+const MAX_AUDIT_FIELD_BYTES = 128_000;
 
 export interface AuditEntry {
   sessionId?: string;
@@ -38,9 +41,9 @@ export class AuditWriter {
       actionId: entry.actionId,
       actionType: entry.actionType,
       toolName: entry.toolName ?? null,
-      inputs: entry.inputs ? JSON.stringify(entry.inputs) : null,
-      outputs: entry.outputs ? JSON.stringify(entry.outputs) : null,
-      sideEffects: entry.sideEffects ? JSON.stringify(entry.sideEffects) : null,
+      inputs: entry.inputs != null ? serializeBoundedJson(entry.inputs, MAX_AUDIT_FIELD_BYTES) : null,
+      outputs: entry.outputs != null ? serializeBoundedJson(entry.outputs, MAX_AUDIT_FIELD_BYTES) : null,
+      sideEffects: entry.sideEffects != null ? serializeBoundedJson(entry.sideEffects, MAX_AUDIT_FIELD_BYTES) : null,
       signature: null,
       parentActionId: entry.parentActionId ?? null,
       status: entry.status,

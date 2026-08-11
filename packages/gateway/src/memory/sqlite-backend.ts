@@ -13,7 +13,6 @@ function toMemoryEntry(row: typeof schema.memories.$inferSelect): MemoryEntry {
       id: row.sourceId,
       surface: row.sourceSurface,
     },
-    embedding: JSON.parse(row.embedding) as Record<string, number>,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     expiresAt: row.expiresAt ?? undefined,
@@ -31,7 +30,6 @@ export class SqliteMemoryBackend implements MemoryBackend {
       sourceType: entry.source.type,
       sourceId: entry.source.id,
       sourceSurface: entry.source.surface,
-      embedding: JSON.stringify(entry.embedding),
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
       expiresAt: entry.expiresAt ?? null,
@@ -47,7 +45,6 @@ export class SqliteMemoryBackend implements MemoryBackend {
         sourceType: entry.source.type,
         sourceId: entry.source.id,
         sourceSurface: entry.source.surface,
-        embedding: JSON.stringify(entry.embedding),
         updatedAt: entry.updatedAt,
         expiresAt: entry.expiresAt ?? null,
       })

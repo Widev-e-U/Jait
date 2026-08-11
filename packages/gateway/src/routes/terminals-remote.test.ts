@@ -95,10 +95,13 @@ describe("POST /api/terminals with remote nodeId", () => {
   let surfaceRegistry: SurfaceRegistry;
   let plane: WsControlPlane;
   let token: string;
+  let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 
   beforeAll(async () => {
     const config = makeConfig();
-    const { db, sqlite } = await openDatabase();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
     migrateDatabase(sqlite);
 
     const sessions = new SessionService(db);
@@ -181,6 +184,7 @@ describe("POST /api/terminals with remote nodeId", () => {
     await surfaceRegistry.stopAll("test-cleanup");
     plane.stop();
     await app?.close();
+    sqlite?.close();
   });
 
   it("creates a remote terminal, proxies start to the node, and broadcasts output to subscribers", async () => {

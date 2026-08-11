@@ -33,10 +33,13 @@ describe("POST /api/project/reveal", () => {
   let surfaceRegistry: SurfaceRegistry;
   let writableTestRoot: string;
   let nestedFile: string;
+  let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 
   beforeAll(async () => {
     const config = loadConfig();
-    const { db, sqlite } = await openDatabase();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
     migrateDatabase(sqlite);
 
     const sessions = new SessionService(db);
@@ -85,6 +88,7 @@ describe("POST /api/project/reveal", () => {
   afterAll(async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
+    sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   });
 

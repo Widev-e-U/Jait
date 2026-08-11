@@ -92,6 +92,11 @@ import type { AssistantProfileService } from "./services/assistant-profiles.js";
 import type { SecretInputService } from "./services/secret-input.js";
 import type { UserQuestionService } from "./services/user-questions.js";
 import type { UserSecretService } from "./services/user-secrets.js";
+import {
+  GITHUB_TOKEN_SECRET_KEY,
+  GITHUB_TOKEN_SECRET_TYPE,
+  GitHubPullRequestService,
+} from "./services/github-pull-requests.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -302,7 +307,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   if (deps.surfaceRegistry) {
-    registerProjectRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.projectService, deps.projectState);
+    registerProjectRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.projectService, deps.projectState, config);
   }
 
   // Git API routes
@@ -310,6 +315,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     ws: deps.ws,
     userService: deps.userService,
     providerRegistry: deps.providerRegistry,
+    userSecretService: deps.userSecretService,
   });
 
   // Agent threads + provider routes
@@ -346,7 +352,18 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       projectService: deps.projectService,
       gitService: deps.gitService,
     });
-    registerPullRequestRoutes(app, config, { repoService: deps.repoService });
+    registerPullRequestRoutes(app, config, {
+      repoService: deps.repoService,
+      pullRequestServiceForUser: (userId) => new GitHubPullRequestService(
+        undefined,
+        undefined,
+        deps.userSecretService?.getValue(
+          userId,
+          GITHUB_TOKEN_SECRET_TYPE,
+          GITHUB_TOKEN_SECRET_KEY,
+        ) ?? null,
+      ),
+    });
   }
 
   // Automation plan routes

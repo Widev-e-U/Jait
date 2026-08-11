@@ -6,10 +6,10 @@
  * directly through child_process on the gateway.
  */
 
-import { exec as execCb } from "node:child_process";
-import { readFile, writeFile, unlink, mkdir, rm, readdir, stat } from "node:fs/promises";
+import { exec as execCb, spawn } from "node:child_process";
+import { readFile, writeFile, unlink, mkdir, rm, readdir, stat, lstat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
 function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -276,6 +276,114 @@ async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pr
   });
 }
 
+export { gitExec };
+
+export async function gitExecRaw(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
+  const { stdout } = await exec(`git ${args}`, { cwd, timeout });
+  return stdout;
+}
+
+export interface GitArgExecOptions {
+  env?: NodeJS.ProcessEnv;
+  redactions?: readonly string[];
+  maxOutputBytes?: number;
+}
+
+const DEFAULT_ARG_OUTPUT_BYTES = 16 * 1024 * 1024;
+
+function redactCommandError(value: string, secrets: readonly string[] = []): string {
+  let redacted = value.replace(/https:\/\/[^@\s/]+@/gi, "https://[REDACTED]@");
+  for (const secret of secrets) {
+    if (secret) redacted = redacted.split(secret).join("[REDACTED]");
+  }
+  return redacted;
+}
+
+function execArgs(
+  command: string,
+  args: string[],
+  options: { cwd: string; timeout: number } & GitArgExecOptions,
+): Promise<{ stdout: Buffer; stderr: Buffer }> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env ?? process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_ARG_OUTPUT_BYTES;
+    let outputBytes = 0;
+    let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (error) reject(error);
+      else resolvePromise({ stdout: Buffer.concat(stdoutChunks), stderr: Buffer.concat(stderrChunks) });
+    };
+    const append = (target: Buffer[], chunk: Buffer) => {
+      if (settled) return;
+      outputBytes += chunk.length;
+      if (outputBytes > maxOutputBytes) {
+        child.kill("SIGTERM");
+        finish(new Error(`${command} produced too much output.`));
+        return;
+      }
+      target.push(chunk);
+    };
+
+    child.stdout.on("data", (chunk: Buffer) => append(stdoutChunks, chunk));
+    child.stderr.on("data", (chunk: Buffer) => append(stderrChunks, chunk));
+    child.on("error", (error) => finish(new Error(
+      redactCommandError(error.message, options.redactions),
+    )));
+    child.on("close", (code) => {
+      if (settled) return;
+      if (code !== 0) {
+        const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
+        finish(new Error(redactCommandError(
+          stderr || `${command} exited with code ${code ?? "unknown"}.`,
+          options.redactions,
+        )));
+        return;
+      }
+      finish();
+    });
+    timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      finish(new Error(`${command} command timed out.`));
+    }, options.timeout);
+  });
+}
+
+export async function gitExecArgs(
+  cwd: string,
+  args: string[],
+  timeout = DEFAULT_TIMEOUT,
+  options: GitArgExecOptions = {},
+): Promise<string> {
+  return withGitLock(cwd, async () => {
+    const { stdout } = await execArgs("git", args, { cwd, timeout, ...options });
+    return trimCommandOutput(stdout.toString("utf8"));
+  });
+}
+
+export async function gitExecBufferArgs(
+  cwd: string,
+  args: string[],
+  timeout = DEFAULT_TIMEOUT,
+  options: GitArgExecOptions = {},
+): Promise<Buffer> {
+  return withGitLock(cwd, async () => {
+    const { stdout } = await execArgs("git", args, { cwd, timeout, ...options });
+    return stdout;
+  });
+}
+
 function gitRevisionPath(filePath: string): string {
   const normalized = filePath.replace(/\\/g, "/").replace(/^\.\/+/, "");
   return `./${normalized}`;
@@ -286,10 +394,29 @@ function ghCleanEnv(): NodeJS.ProcessEnv {
   return rest;
 }
 
+export async function ghExecArgs(
+  cwd: string,
+  args: string[],
+  timeout = DEFAULT_TIMEOUT,
+  options: GitArgExecOptions = {},
+): Promise<string> {
+  return withGitLock(cwd, async () => {
+    const { stdout } = await execArgs("gh", args, {
+      cwd,
+      timeout,
+      ...options,
+      env: options.env ?? ghCleanEnv(),
+    });
+    return trimCommandOutput(stdout.toString("utf8"));
+  });
+}
+
 async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
   const { stdout } = await exec(`gh ${args}`, { cwd, timeout, env: ghCleanEnv() });
   return trimCommandOutput(stdout);
 }
+
+export { ghExec };
 
 async function ghAvailable(cwd: string): Promise<boolean> {
   try {
@@ -1361,26 +1488,71 @@ export class GitService {
     repoUrl: string,
     repoName: string,
     defaultBranch = "main",
+    options: GitArgExecOptions = {},
   ): Promise<string> {
-    const clonePath = join(homedir(), ".jait", "clones", repoName);
+    if (!/^[a-zA-Z0-9._-]+$/.test(repoName) || repoName === "." || repoName === "..") {
+      throw new Error("Repository name is not safe for a local clone path.");
+    }
 
-    if (existsSync(join(clonePath, ".git"))) {
-      // Already cloned — fetch latest
-      await gitExec(clonePath, "fetch origin", 60_000);
-      await gitExec(clonePath, `checkout "${defaultBranch}"`, 30_000).catch(() => {});
-      await gitExec(clonePath, `reset --hard "origin/${defaultBranch}"`, 30_000).catch(() => {});
+    const clonesRoot = join(homedir(), ".jait", "clones");
+    const clonePath = resolve(clonesRoot, repoName);
+    const relativeClonePath = relative(clonesRoot, clonePath);
+    if (!relativeClonePath || relativeClonePath.startsWith("..") || relativeClonePath.includes("://")) {
+      throw new Error("Repository clone path escapes the configured clone directory.");
+    }
+
+    let sanitizedRepoUrl = repoUrl;
+    try {
+      const parsedUrl = new URL(repoUrl);
+      if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+        parsedUrl.username = "";
+        parsedUrl.password = "";
+        sanitizedRepoUrl = parsedUrl.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // SCP-style SSH remotes are not URL-parseable and contain no HTTP credentials.
+    }
+
+    await mkdir(clonesRoot, { recursive: true });
+    const cloneEntry = await lstat(clonePath).catch(() => null);
+    if (cloneEntry?.isSymbolicLink()) {
+      throw new Error("Repository clone path must not be a symbolic link.");
+    }
+
+    const gitEntry = await lstat(join(clonePath, ".git")).catch(() => null);
+    if (gitEntry?.isSymbolicLink()) {
+      throw new Error("Repository Git directory must not be a symbolic link.");
+    }
+    if (gitEntry && !gitEntry.isDirectory()) {
+      throw new Error("Repository Git directory must be a directory.");
+    }
+
+    if (gitEntry) {
+      await gitExecArgs(clonePath, ["remote", "set-url", "origin", sanitizedRepoUrl], 30_000);
+      await gitExecArgs(clonePath, ["fetch", "origin"], 60_000, options);
+      await gitExecArgs(
+        clonePath,
+        ["checkout", "--detach", `refs/remotes/origin/${defaultBranch}`],
+        30_000,
+      ).catch(() => {});
+      await gitExecArgs(
+        clonePath,
+        ["reset", "--hard", `refs/remotes/origin/${defaultBranch}`],
+        30_000,
+      ).catch(() => {});
       return clonePath;
     }
 
-    // Fresh clone
-    await mkdir(join(clonePath, ".."), { recursive: true });
-    const { exec: execP } = await import("node:child_process");
-    const { promisify: pfy } = await import("node:util");
-    const run = pfy(execP);
-    await run(`git clone --branch "${defaultBranch}" "${repoUrl}" "${clonePath}"`, {
-      timeout: 120_000,
-    });
+    if (cloneEntry) {
+      throw new Error("Repository clone destination already exists and is not a Git clone.");
+    }
 
+    await gitExecArgs(
+      clonesRoot,
+      ["clone", "--branch", defaultBranch, "--", sanitizedRepoUrl, clonePath],
+      120_000,
+      options,
+    );
     return clonePath;
   }
 

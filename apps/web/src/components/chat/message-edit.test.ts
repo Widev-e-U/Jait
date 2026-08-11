@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { createUserMessageEditSubmission } from './message-edit'
 import {
+  getMobileUserMessageEditTop,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
+  shouldShowNormalChatComposer,
 } from './message-edit-layout'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 
@@ -64,14 +66,27 @@ describe('message edit submission', () => {
 })
 
 describe('message edit mobile layout', () => {
-  it('centers the edit composer above the mobile keyboard instead of inline with the message', () => {
+  it('centers the edited user message in the visible mobile viewport', () => {
     const classes = getUserMessageEditComposerShellClassName()
 
     expect(classes).toContain('fixed')
     expect(classes).toContain('left-1/2')
+    expect(classes).toContain('top-1/2')
     expect(classes).toContain('-translate-x-1/2')
-    expect(classes).toContain('bottom-[max(0.75rem,env(safe-area-inset-bottom))]')
+    expect(classes).toContain('-translate-y-1/2')
+    expect(classes).not.toContain('bottom-[')
     expect(classes).toContain('w-[min(42rem,calc(100vw-1rem))]')
+  })
+
+  it('uses the visual viewport center so the edited message stays above the keyboard', () => {
+    expect(getMobileUserMessageEditTop({ offsetTop: 40, height: 500 }, 900)).toBe(290)
+    expect(getMobileUserMessageEditTop(null, 900)).toBe(450)
+  })
+
+  it('hides the normal composer only while a mobile message edit owns input focus', () => {
+    expect(shouldShowNormalChatComposer(true, 'message-1')).toBe(false)
+    expect(shouldShowNormalChatComposer(true, null)).toBe(true)
+    expect(shouldShowNormalChatComposer(false, 'message-1')).toBe(true)
   })
 
   it('renders the floating mobile composer as an opaque card so messages do not bleed through', () => {

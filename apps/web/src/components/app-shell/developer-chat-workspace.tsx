@@ -1,8 +1,9 @@
 import { AlertTriangle, FolderOpen } from 'lucide-react'
-import { useMemo, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
+import { shouldShowNormalChatComposer } from '@/components/chat/message-edit-layout'
 import { GitDiffIndicator } from '@/components/chat/git-diff-indicator'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
@@ -221,6 +222,16 @@ export function DeveloperChatWorkspace({
   onVoiceInput,
   renderInlineSecretPrompt,
 }: DeveloperChatWorkspaceProps) {
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const handleMessageEditingChange = useCallback((messageId: string, editing: boolean) => {
+    setEditingMessageId((current) => editing ? messageId : current === messageId ? null : current)
+  }, [])
+  const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId)
+
+  useEffect(() => {
+    setEditingMessageId(null)
+  }, [activeSessionId])
+
   if (!hasMessages) {
     return (
       <div
@@ -327,6 +338,8 @@ export function DeveloperChatWorkspace({
     renderInlineSecretPrompt,
     onApprovalResponse,
     onEditPreviousMessage,
+    editingMessageId,
+    handleMessageEditingChange,
     editComposerBag,
     onOpenMessagePath,
     onChangedFileClick,
@@ -423,6 +436,8 @@ export function DeveloperChatWorkspace({
           renderInlineSecretPrompt={renderInlineSecretPrompt}
           onApprovalResponse={onApprovalResponse}
           onEditMessage={onEditPreviousMessage}
+          editing={editingMessageId === msg.id}
+          onEditingChange={handleMessageEditingChange}
           editComposer={editComposerBag}
           onOpenPath={onOpenMessagePath}
           onOpenDiff={onChangedFileClick}
@@ -530,7 +545,8 @@ export function DeveloperChatWorkspace({
             </Conversation>
           </ErrorBoundary>
 
-          <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
+          {showNormalComposer && (
+            <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
             <div className="mx-auto w-full max-w-4xl space-y-1.5">
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
@@ -647,6 +663,7 @@ export function DeveloperChatWorkspace({
               {developerComposerControlRow}
             </div>
           </div>
+          )}
         </>
       )}
     </div>

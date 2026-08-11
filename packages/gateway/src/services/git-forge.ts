@@ -164,20 +164,19 @@ export class GitHubForge implements GitForge {
 
   async loginWithToken(token: string, cwd: string): Promise<ForgeAuthResult> {
     try {
-      const { spawn } = await import("node:child_process");
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn("gh", ["auth", "login", "--with-token"], {
-          cwd, stdio: "pipe", shell: true, env: cleanGhEnv(), windowsHide: true,
-        });
-        child.stdin.write(token);
-        child.stdin.end();
-        child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`gh auth failed (code ${code})`)));
-        child.on("error", reject);
-      });
-      const username = await cliExec('gh api user --jq ".login"', cwd, 10_000, cleanGhEnv()).catch(() => "");
+      const username = await cliExec(
+        'gh api user --jq ".login"',
+        cwd,
+        10_000,
+        { ...cleanGhEnv(), GH_TOKEN: token },
+      );
       return { authenticated: true, username: username || undefined };
     } catch (err) {
-      return { authenticated: false, error: err instanceof Error ? err.message : String(err) };
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        authenticated: false,
+        error: message.split(token).join("[REDACTED]"),
+      };
     }
   }
 

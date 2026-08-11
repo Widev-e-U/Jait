@@ -4,9 +4,12 @@ import { buildBackgroundCommandContinuationPayload } from "./background-command-
 import type { SessionStateService } from "./session-state.js";
 import type { UserService } from "./users.js";
 
-function userService(provider: "jait" | "codex" | "claude-code"): UserService {
+function userService(
+  provider: "jait" | "codex" | "claude-code",
+  reasoningEffort?: string,
+): UserService {
   return {
-    getSettings: () => ({ chatProvider: provider }),
+    getSettings: () => ({ chatProvider: provider, reasoningEffort }),
   } as unknown as UserService;
 }
 
@@ -26,6 +29,7 @@ describe("buildBackgroundCommandContinuationPayload", () => {
     })).toEqual({
       sessionId: "session-1",
       _systemNotification: "tests passed",
+      reasoningEffort: null,
     });
   });
 
@@ -45,6 +49,27 @@ describe("buildBackgroundCommandContinuationPayload", () => {
       provider: "codex",
       runtimeMode: "full-access",
       model: "gpt-5.4",
+      reasoningEffort: null,
     });
+  });
+
+  it("preserves an explicit per-session default over later user settings", () => {
+    expect(buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("jait", "low"),
+      sessionMetadata: JSON.stringify({ chat: { reasoningEffort: null } }),
+    })).toMatchObject({ reasoningEffort: null });
+  });
+
+  it("preserves a persisted per-session effort", () => {
+    expect(buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("jait", "low"),
+      sessionMetadata: { chat: { reasoningEffort: "high" } },
+    })).toMatchObject({ reasoningEffort: "high" });
   });
 });

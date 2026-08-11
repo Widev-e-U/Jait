@@ -1,8 +1,10 @@
 import type {
+  PullRequestConflictSide,
   PullRequestDetail,
   PullRequestDiff,
   PullRequestListState,
   PullRequestMergeMethod,
+  PullRequestResolveResult,
   PullRequestReviewEvent,
   PullRequestSummary,
 } from '@jait/shared'
@@ -89,6 +91,18 @@ export const pullRequestsApi = {
       method: 'POST',
       headers: headers(true),
       body: JSON.stringify({ method, deleteBranch: true }),
+    })
+  },
+
+  resolveConflicts(
+    repoId: string,
+    number: number,
+    resolution?: Record<string, PullRequestConflictSide>,
+  ): Promise<PullRequestResolveResult> {
+    return request(repoPath(repoId, `/${number}/resolve-conflicts`), {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({ resolution }),
     })
   },
 

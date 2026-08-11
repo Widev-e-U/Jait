@@ -18,6 +18,51 @@ const testConfig = {
 };
 
 describe("chat restart from message", () => {
+  it("rejects a stale edit target instead of truncating and appending a new turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("restart-stale-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Stale Restart" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const now = new Date("2026-04-25T00:00:00.000Z");
+
+    db.insert(messages).values([
+      { id: "m1", sessionId: session.id, role: "user", content: "original", createdAt: now.toISOString() },
+      { id: "m2", sessionId: session.id, role: "assistant", content: "answer", createdAt: new Date(now.getTime() + 1).toISOString() },
+    ]).run();
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/restart-from`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        messageId: `${session.id}-0`,
+        expectedContent: "content no longer present in this session",
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    const remaining = db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, session.id))
+      .orderBy(messages.createdAt)
+      .all();
+    expect(remaining.map((row) => row.id)).toEqual(["m1", "m2"]);
+
+    await app.close();
+  });
+
   it("deletes persisted rows from the selected user message, not from the visible index", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

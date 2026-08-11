@@ -3,7 +3,7 @@ import type { WsControlPlane } from "../ws.js";
 import { RemoteCliProvider } from "./remote-cli-provider.js";
 import type { ProviderEvent } from "./contracts.js";
 
-function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: unknown; stopSessionResult?: unknown } = {}) {
+function createMockWs(options: { listModelsResult?: unknown; listModelsError?: Error; sendTurnResult?: unknown; stopSessionResult?: unknown } = {}) {
   let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
   let remoteHandlerSetCount = 0;
 
@@ -15,6 +15,7 @@ function createMockWs(options: { listModelsResult?: unknown; sendTurnResult?: un
     })),
     proxyProviderOp: vi.fn(async (_nodeId: string, op: string) => {
       if (op === "list-models") {
+        if (options.listModelsError) throw options.listModelsError;
         return options.listModelsResult ?? [];
       }
       if (op === "start-session") {
@@ -97,6 +98,15 @@ describe("RemoteCliProvider", () => {
         ],
       },
     ]);
+  });
+
+  it("preserves model discovery errors returned by Windows desktop nodes", async () => {
+    const { ws } = createMockWs({
+      listModelsError: new Error("Codex model discovery exited (code 1) - provider stderr: invalid config"),
+    });
+    const provider = new RemoteCliProvider(ws, "node-1", "windows-codex", "codex");
+
+    await expect(provider.listModels()).rejects.toThrow("provider stderr: invalid config");
   });
 
   it("installs one shared remote event dispatcher per websocket", async () => {

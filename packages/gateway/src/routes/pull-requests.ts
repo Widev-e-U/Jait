@@ -1,15 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
+  PullRequestConflictSide,
   PullRequestDetail,
   PullRequestDiff,
   PullRequestListState,
   PullRequestMergeMethod,
+  PullRequestResolveResult,
   PullRequestReviewEvent,
   PullRequestSummary,
 } from "@jait/shared";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
-import { GitHubPullRequestService } from "../services/github-pull-requests.js";
 import type { RepositoryService, RepoRow } from "../services/repositories.js";
 
 export interface PullRequestOperations {
@@ -29,6 +30,11 @@ export interface PullRequestOperations {
     method: PullRequestMergeMethod,
     deleteBranch: boolean,
   ): Promise<void>;
+  resolveConflicts(
+    remoteUrl: string | null,
+    number: number,
+    resolution?: Record<string, PullRequestConflictSide>,
+  ): Promise<PullRequestResolveResult>;
   setState(remoteUrl: string | null, number: number, state: "open" | "closed"): Promise<void>;
   update(
     remoteUrl: string | null,
@@ -40,6 +46,7 @@ export interface PullRequestOperations {
 export interface PullRequestRouteDeps {
   repoService: RepositoryService;
   pullRequestService?: PullRequestOperations;
+  pullRequestServiceForUser?: (userId: string) => PullRequestOperations;
 }
 
 function parseNumber(value: string): number | null {
@@ -59,13 +66,11 @@ export function registerPullRequestRoutes(
   config: AppConfig,
   deps: PullRequestRouteDeps,
 ): void {
-  const service = deps.pullRequestService ?? new GitHubPullRequestService();
-
   async function ownedRepo(
     request: FastifyRequest,
     reply: FastifyReply,
     repoId: string,
-  ): Promise<RepoRow | null> {
+  ): Promise<{ repo: RepoRow; service: PullRequestOperations } | null> {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return null;
     const repo = deps.repoService.getById(repoId);
@@ -73,14 +78,20 @@ export function registerPullRequestRoutes(
       reply.status(404).send({ error: "Repository not found" });
       return null;
     }
-    return repo;
+    const service = deps.pullRequestService ?? deps.pullRequestServiceForUser?.(user.id);
+    if (!service) {
+      reply.status(503).send({ error: "GitHub pull request service is unavailable" });
+      return null;
+    }
+    return { repo, service };
   }
 
   app.get<{ Params: { id: string }; Querystring: { state?: string; limit?: string } }>(
     "/api/repos/:id/pull-requests",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const requestedState = request.query.state ?? "open";
       const listState: PullRequestListState = ["open", "closed", "merged", "all"].includes(requestedState)
         ? requestedState as PullRequestListState
@@ -101,8 +112,9 @@ export function registerPullRequestRoutes(
   app.get<{ Params: { id: string; number: string } }>(
     "/api/repos/:id/pull-requests/:number",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
       try {
@@ -116,8 +128,9 @@ export function registerPullRequestRoutes(
   app.get<{ Params: { id: string; number: string } }>(
     "/api/repos/:id/pull-requests/:number/diff",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
       try {
@@ -131,8 +144,9 @@ export function registerPullRequestRoutes(
   app.post<{ Params: { id: string; number: string }; Body: { body?: string } }>(
     "/api/repos/:id/pull-requests/:number/comments",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       const body = request.body?.body?.trim();
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
@@ -152,8 +166,9 @@ export function registerPullRequestRoutes(
   }>(
     "/api/repos/:id/pull-requests/:number/reviews",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       const event = request.body?.event;
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
@@ -175,8 +190,9 @@ export function registerPullRequestRoutes(
   }>(
     "/api/repos/:id/pull-requests/:number/merge",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       const method = request.body?.method ?? "squash";
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
@@ -197,14 +213,43 @@ export function registerPullRequestRoutes(
     },
   );
 
+  app.post<{
+    Params: { id: string; number: string };
+    Body: { resolution?: Record<string, PullRequestConflictSide> };
+  }>(
+    "/api/repos/:id/pull-requests/:number/resolve-conflicts",
+    async (request, reply) => {
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
+      const number = parseNumber(request.params.number);
+      if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
+      const resolution = request.body?.resolution;
+      if (resolution !== undefined) {
+        const invalid = Object.entries(resolution).some(
+          ([, side]) => side !== "ours" && side !== "theirs",
+        );
+        if (invalid) {
+          return reply.status(400).send({ error: "Invalid conflict resolution side" });
+        }
+      }
+      try {
+        return await service.resolveConflicts(repo.githubUrl, number, resolution);
+      } catch (error) {
+        return sendError(reply, error);
+      }
+    },
+  );
+
   app.patch<{
     Params: { id: string; number: string };
     Body: { state?: "open" | "closed"; title?: string; body?: string };
   }>(
     "/api/repos/:id/pull-requests/:number",
     async (request, reply) => {
-      const repo = await ownedRepo(request, reply, request.params.id);
-      if (!repo) return;
+      const owned = await ownedRepo(request, reply, request.params.id);
+      if (!owned) return;
+      const { repo, service } = owned;
       const number = parseNumber(request.params.number);
       if (!number) return reply.status(400).send({ error: "Invalid pull request number" });
 

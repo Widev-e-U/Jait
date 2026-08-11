@@ -19,13 +19,11 @@ import { ProjectStateService } from "../services/project-state.js";
 import { SurfaceRegistry, FileSystemSurfaceFactory } from "../surfaces/index.js";
 import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
-import { homedir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-// Use a known directory that exists on the system
-const TEST_DIR = join(homedir(), ".jait");
 
 describe("POST /api/project/open", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
@@ -38,11 +36,14 @@ describe("POST /api/project/open", () => {
   let projectState: ProjectStateService;
   let users: UserService;
   let writableTestRoot: string;
+  let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let writableTestFile: string;
 
   beforeAll(async () => {
     const config = loadConfig();
-    const { db, sqlite } = await openDatabase();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
     migrateDatabase(sqlite);
 
     sessions = new SessionService(db);
@@ -52,6 +53,10 @@ describe("POST /api/project/open", () => {
     projectState = new ProjectStateService(db);
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    writableTestRoot = await mkdtemp(join(tmpdir(), "jait-project-route-"));
+    execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
+    await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
     const ws = new WsControlPlane(config);
 
@@ -93,7 +98,6 @@ describe("POST /api/project/open", () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(tmpdir(), "jait-project-route-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
@@ -102,6 +106,7 @@ describe("POST /api/project/open", () => {
   afterAll(async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
+    sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   });
 
@@ -109,13 +114,13 @@ describe("POST /api/project/open", () => {
     const res = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
 
     expect(res.ok).toBe(true);
     const data = (await res.json()) as { surfaceId: string; projectRoot: string };
     expect(data.surfaceId).toMatch(/^filesystem-/);
-    expect(data.projectRoot).toBe(TEST_DIR);
+    expect(data.projectRoot).toBe(writableTestRoot);
   });
 
   it("should make files browsable via GET /api/project/list", async () => {
@@ -123,18 +128,18 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
     // Now list the directory
     const listRes = await fetch(
-      `${address}/api/project/list?path=${encodeURIComponent(TEST_DIR)}&surfaceId=${surfaceId}`,
+      `${address}/api/project/list?path=${encodeURIComponent(writableTestRoot)}&surfaceId=${surfaceId}`,
     );
 
     expect(listRes.ok).toBe(true);
     const listData = (await listRes.json()) as { path: string; entries: unknown[] };
-    expect(listData.path).toBe(TEST_DIR);
+    expect(listData.path).toBe(writableTestRoot);
     expect(Array.isArray(listData.entries)).toBe(true);
     // ~/.jait should have at least the data directory
     expect(listData.entries.length).toBeGreaterThan(0);
@@ -144,7 +149,7 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
@@ -152,7 +157,7 @@ describe("POST /api/project/open", () => {
     const state = sessionState.get(sessionId, ["project.panel"]);
     expect(state["project.panel"]).toEqual({
       open: true,
-      remotePath: TEST_DIR,
+      remotePath: writableTestRoot,
       surfaceId,
       nodeId: "gateway",
     });
@@ -163,19 +168,19 @@ describe("POST /api/project/open", () => {
     const project = projects.create({
       userId: user.id,
       title: "jait",
-      rootPath: TEST_DIR,
+      rootPath: writableTestRoot,
       nodeId: "gateway",
     });
     const session = sessions.create({
       userId: user.id,
       projectId: project.id,
-      projectPath: TEST_DIR,
+      projectPath: writableTestRoot,
       name: "Current chat",
     });
     projectState.set(project.id, {
       "project.ui": {
-        panel: { open: false, remotePath: TEST_DIR, surfaceId: "old-surface", nodeId: "gateway" },
-        tabs: { remoteRoot: TEST_DIR, tabs: [], activePath: null, activePreview: null },
+        panel: { open: false, remotePath: writableTestRoot, surfaceId: "old-surface", nodeId: "gateway" },
+        tabs: { remoteRoot: writableTestRoot, tabs: [], activePath: null, activePreview: null },
         layout: { tree: false, editor: true },
         terminal: { open: true },
         preview: null,
@@ -185,15 +190,15 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId: session.id }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
     });
     const { surfaceId, panelOpen } = (await openRes.json()) as { surfaceId: string; panelOpen: boolean };
 
     expect(panelOpen).toBe(false);
     const state = projectState.get(project.id, ["project.ui"]);
     expect(state["project.ui"]).toEqual({
-      panel: { open: false, remotePath: TEST_DIR, surfaceId, nodeId: "gateway" },
-      tabs: { remoteRoot: TEST_DIR, tabs: [], activePath: null, activePreview: null },
+      panel: { open: false, remotePath: writableTestRoot, surfaceId, nodeId: "gateway" },
+      tabs: { remoteRoot: writableTestRoot, tabs: [], activePath: null, activePreview: null },
       layout: { tree: false, editor: true },
       terminal: { open: true },
       preview: null,
@@ -205,18 +210,18 @@ describe("POST /api/project/open", () => {
     const project = projects.create({
       userId: user.id,
       title: "jait",
-      rootPath: TEST_DIR,
+      rootPath: writableTestRoot,
       nodeId: "gateway",
     });
     const session = sessions.create({
       userId: user.id,
       projectId: project.id,
-      projectPath: TEST_DIR,
+      projectPath: writableTestRoot,
       name: "Current chat",
     });
     projectState.set(project.id, {
       "project.ui": {
-        panel: { open: false, remotePath: TEST_DIR, nodeId: "gateway" },
+        panel: { open: false, remotePath: writableTestRoot, nodeId: "gateway" },
         tabs: null,
         layout: { tree: true, editor: false },
         terminal: null,
@@ -227,7 +232,7 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId: session.id, openPanel: true }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId: session.id, openPanel: true }),
     });
     const data = (await openRes.json()) as { surfaceId: string; panelOpen: boolean };
 
@@ -256,7 +261,7 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
@@ -313,18 +318,38 @@ describe("POST /api/project/open", () => {
 
   it("should return filename and content search results via GET /api/project/search", async () => {
     const searchFile = join(writableTestRoot, "nested", "unique-search-target.ts");
-    const searchSessionId = `test-session-search-${Date.now()}`;
     await writeFile(searchFile, "const UNIQUE_SEARCH_TOKEN = 'project-search-regression';\n", "utf-8");
+
+    const authResponse = await fetch(`${address}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: `project-search-${Date.now()}`,
+        password: "password123",
+      }),
+    });
+    const { access_token: accessToken, user } = (await authResponse.json()) as {
+      access_token: string;
+      user: { id: string };
+    };
+    const searchHeaders = { Authorization: `Bearer ${accessToken}` };
+    const searchSession = sessions.create({ userId: user.id, name: "Project search" });
 
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: writableTestRoot, sessionId: searchSessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId: searchSession.id }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
+    const unauthorizedSearch = await fetch(
+      `${address}/api/project/search?query=unique-search-target&mode=files&surfaceId=${encodeURIComponent(surfaceId)}`,
+    );
+    expect(unauthorizedSearch.status).toBe(401);
+
     const fileSearchRes = await fetch(
       `${address}/api/project/search?query=${encodeURIComponent("unique-search-target")}&mode=files&surfaceId=${encodeURIComponent(surfaceId)}`,
+      { headers: searchHeaders },
     );
     expect(fileSearchRes.ok).toBe(true);
     const fileSearchData = (await fileSearchRes.json()) as { files: { path: string; name: string }[] };
@@ -335,6 +360,7 @@ describe("POST /api/project/open", () => {
 
     const contentSearchRes = await fetch(
       `${address}/api/project/search?query=${encodeURIComponent("project-search-regression")}&mode=content&surfaceId=${encodeURIComponent(surfaceId)}`,
+      { headers: searchHeaders },
     );
     expect(contentSearchRes.ok).toBe(true);
     const contentSearchData = (await contentSearchRes.json()) as { matches: { file: string; line: number; content: string }[] };
@@ -369,15 +395,17 @@ describe("POST /api/project/open", () => {
     const res1 = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId: first } = (await res1.json()) as { surfaceId: string };
 
     // Open a different project (same session)
+    const secondProjectRoot = join(writableTestRoot, "second-project");
+    await mkdir(secondProjectRoot, { recursive: true });
     const res2 = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: homedir(), sessionId }),
+      body: JSON.stringify({ path: secondProjectRoot, sessionId }),
     });
     const { surfaceId: second } = (await res2.json()) as { surfaceId: string };
 
@@ -393,7 +421,7 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
@@ -402,7 +430,7 @@ describe("POST /api/project/open", () => {
     const state = sessionState.get(sessionId, ["project.panel"]);
     expect(state["project.panel"]).toEqual({
       open: true,
-      remotePath: TEST_DIR,
+      remotePath: writableTestRoot,
       surfaceId,
       nodeId: "gateway",
     });

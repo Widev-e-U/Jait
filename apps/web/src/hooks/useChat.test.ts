@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyResumeSnapshotSeq,
+  buildReasoningEffortRequestField,
   formatChatHttpError,
   getVisibleChangedFiles,
   isResumeStreamRunCurrent,
@@ -33,6 +34,14 @@ describe('formatChatHttpError', () => {
 
   it('keeps a generic fallback for non-image HTTP failures', () => {
     expect(formatChatHttpError(500)).toBe('HTTP 500')
+  })
+})
+
+describe('buildReasoningEffortRequestField', () => {
+  it('preserves explicit selections and explicit default while omitting absent values', () => {
+    expect(buildReasoningEffortRequestField('high')).toEqual({ reasoningEffort: 'high' })
+    expect(buildReasoningEffortRequestField(null)).toEqual({ reasoningEffort: null })
+    expect(buildReasoningEffortRequestField(undefined)).toEqual({})
   })
 })
 

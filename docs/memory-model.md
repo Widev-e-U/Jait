@@ -20,7 +20,7 @@ Retrieval should be scoped before it is broad:
 
 - Coding work defaults to project-scoped memory.
 - Contact or global memories are included only when the user asks about personal preferences, prior facts, or "based on what you know" context.
-- Search combines lexical matches, tags, scope, recency, reminder status, and embedding similarity where available.
+- Memory search applies scope first, ranks the remaining corpus with BM25, filters weak relative matches, and uses recency only as a tie-breaker. Jait does not persist pseudo-vector token maps or require a dense-vector index for the current corpus size.
 - Per-turn prompt injection should use a compact `<relevant_memory>` block with source IDs.
 - The default target is 3-5 highly relevant memories, bounded by a strict token budget rather than a global memory dump.
 

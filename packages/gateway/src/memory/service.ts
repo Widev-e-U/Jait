@@ -2,7 +2,16 @@ import { mkdirSync, appendFileSync, existsSync, readFileSync, writeFileSync } fr
 import { dirname, join } from "node:path";
 import { nanoid } from "nanoid";
 import type { MemoryBackend, MemoryEntry, MemoryScope, MemoryService, SaveMemoryInput } from "./contracts.js";
-import { cosineSimilarity, embedText } from "./embeddings.js";
+import { bm25Rank } from "./scoring.js";
+
+/**
+ * Share of the top BM25 score a memory must reach to be considered a real match.
+ * Measured against a representative corpus: a memory sharing only a broad domain
+ * term ("app", "gateway") with the query lands around 0.4 of the best score, so the
+ * cutoff sits above that. Retrieved memories are pasted into the prompt, where a
+ * wrong one actively misleads — precision is worth more here than recall.
+ */
+const MIN_RELATIVE_RELEVANCE = 0.5;
 
 export interface MemoryEngineOptions {
   backend: MemoryBackend;
@@ -107,7 +116,6 @@ export class MemoryEngine implements MemoryService {
       scope: input.scope,
       content: input.content,
       source: input.source,
-      embedding: embedText(input.content),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       expiresAt: input.expiresAt,
@@ -128,21 +136,23 @@ export class MemoryEngine implements MemoryService {
   async search(query: string, limit = 5, scope?: MemoryScope): Promise<MemoryEntry[]> {
     await this.backend.forgetExpired();
     const entries = await this.backend.list(scope);
-    const qv = embedText(query);
 
-    return entries
-      .map((entry) => {
-        const vectorScore = cosineSimilarity(qv, entry.embedding);
-        const lexicalScore = lexicalSimilarity(query, entry.content);
-        const freshness = recencyScore(entry.updatedAt);
-        const relevance = vectorScore * 0.65 + lexicalScore * 0.25;
-        return {
-          entry,
-          relevance,
-          score: relevance + freshness * 0.1,
-        };
-      })
-      .filter((item) => item.relevance > 0)
+    const ranked = bm25Rank(query, entries.map((entry) => ({ item: entry, text: entry.content })));
+    const best = ranked.reduce((max, item) => Math.max(max, item.score), 0);
+    if (best <= 0) return [];
+
+    // Anything far below the best match is a coincidental term overlap, not a hit.
+    const cutoff = best * MIN_RELATIVE_RELEVANCE;
+    // Freshness is scaled against the top score so it breaks ties between comparable
+    // matches without ever promoting a weak memory just for being recent.
+    const freshnessWeight = best * 0.1;
+
+    return ranked
+      .filter((item) => item.score >= cutoff)
+      .map((item) => ({
+        entry: item.item,
+        score: item.score + recencyScore(item.item.updatedAt) * freshnessWeight,
+      }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map((item) => item.entry);

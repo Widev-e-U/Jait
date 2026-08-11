@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -16,6 +18,7 @@ const gatewayPort = String(new URL(gatewayUrl).port || (new URL(gatewayUrl).prot
 const children = []
 let shuttingDown = false
 let keepAlive = null
+let e2eStateDir = null
 
 function spawnServer(name, command, args, cwd, extraEnv = {}) {
   const env = {
@@ -96,6 +99,11 @@ async function shutdown(exitCode = 0) {
     }
   }
 
+  if (e2eStateDir) {
+    await rm(e2eStateDir, { recursive: true, force: true })
+    e2eStateDir = null
+  }
+
   process.exit(exitCode)
 }
 
@@ -115,10 +123,13 @@ try {
     throw new Error(`Refusing to reuse an existing E2E server at ${occupied}. Stop it or set FRONTEND_URL and API_URL to use an external stack explicitly.`)
   }
 
+  e2eStateDir = await mkdtemp(resolve(tmpdir(), 'jait-e2e-'))
+
   spawnServer('gateway', 'bun', ['src/index.ts'], gatewayDir, {
     PORT: gatewayPort,
     CORS_ORIGIN: frontendUrl,
     NODE_ENV: 'test',
+    JAIT_DB_PATH: resolve(e2eStateDir, 'jait.db'),
   })
   await waitForUrl(gatewayHealthUrl, 'gateway health')
 

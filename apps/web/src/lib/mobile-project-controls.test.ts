@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { getMobileProjectActiveTarget, isMobileProjectTargetActive, shouldRenderSessionSidebar } from './mobile-project-controls'
+import {
+  getMobileProjectActiveTarget,
+  isMobileProjectTargetActive,
+  resolveProjectPanelOpenAfterChatSelection,
+  shouldRenderSessionSidebar,
+} from './mobile-project-controls'
 
 describe('mobile project controls', () => {
   it('returns the terminal target when terminal fullscreen is open', () => {
@@ -100,5 +105,26 @@ describe('mobile project controls', () => {
   it('renders the session sidebar only when explicitly open', () => {
     expect(shouldRenderSessionSidebar(false)).toBe(false)
     expect(shouldRenderSessionSidebar(true)).toBe(true)
+  })
+
+  it('keeps the chat visible after selecting a chat on mobile', () => {
+    expect(resolveProjectPanelOpenAfterChatSelection({
+      isMobile: true,
+      focusChat: true,
+      requestedOpen: true,
+    })).toBe(false)
+  })
+
+  it('preserves project panel behavior outside mobile chat selection', () => {
+    expect(resolveProjectPanelOpenAfterChatSelection({
+      isMobile: false,
+      focusChat: true,
+      requestedOpen: true,
+    })).toBe(true)
+    expect(resolveProjectPanelOpenAfterChatSelection({
+      isMobile: true,
+      focusChat: false,
+      requestedOpen: true,
+    })).toBe(true)
   })
 })

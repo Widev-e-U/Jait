@@ -230,9 +230,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               },
               expiresAt,
             });
-            // Return only essential fields — omit embedding to save context tokens.
-            const { embedding: _emb, ...compactEntry } = entry;
-            return { ok: true, message: `Saved memory ${entry.id}`, data: { id: compactEntry.id, scope: compactEntry.scope } };
+            return { ok: true, message: `Saved memory ${entry.id}`, data: { id: entry.id, scope: entry.scope } };
           }
 
           case "reminder.save": {

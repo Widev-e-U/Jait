@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRemoteCodexThreadConfig } from './remote-codex-config.js'
+import {
+  resolveRemoteCodexModelDiscoveryArgs,
+  resolveRemoteCodexThreadConfig,
+} from './remote-codex-config.js'
+
+describe('resolveRemoteCodexModelDiscoveryArgs', () => {
+  it('starts app-server without session-only MCP config overrides', () => {
+    expect(resolveRemoteCodexModelDiscoveryArgs()).toEqual(['app-server'])
+  })
+})
 
 describe('resolveRemoteCodexThreadConfig', () => {
   it('uses current Codex app-server values for supervised sessions', () => {

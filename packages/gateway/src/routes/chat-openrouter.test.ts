@@ -4,6 +4,7 @@ import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
+import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
 import type { MemoryEntry, MemoryScope, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
@@ -88,7 +89,6 @@ function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
     scope: "project",
     content: "The project prefers compact todo controls with icon-only status and priority selectors.",
     source: { type: "test", id: "session-1", surface: "chat" },
-    embedding: {},
     createdAt: "2026-05-24T00:00:00.000Z",
     updatedAt: "2026-05-24T00:00:00.000Z",
     ...overrides,
@@ -161,6 +161,139 @@ describe("chat route OpenRouter backend selection", () => {
 
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it("uses per-request reasoning effort while preserving explicit Default", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("openrouter-effort-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "OpenRouter Effort Session" });
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      reasoningEffort: "low",
+      apiKeys: { OPENROUTER_API_KEY: "openrouter-test-key" },
+    });
+
+    const bodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return createOpenAIStreamResponse();
+    }) as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+    });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const send = (content: string, reasoningEffort: string | null | undefined) => app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content,
+        sessionId: session.id,
+        model: "gpt-4o",
+        ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+      },
+    });
+
+    expect((await send("explicit high", "high")).statusCode).toBe(200);
+    expect((await send("explicit default", null)).statusCode).toBe(200);
+    expect((await send("fallback", undefined)).statusCode).toBe(200);
+
+    expect(bodies[0]?.["reasoning_effort"]).toBe("high");
+    expect(Object.hasOwn(bodies[1] ?? {}, "reasoning_effort")).toBe(false);
+    expect(bodies[2]?.["reasoning_effort"]).toBe("low");
+
+    await app.close();
+  });
+
+  it("preserves an explicit Default through queued native turns", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const user = userService.createUser("openrouter-queued-effort-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queued Effort Session" });
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      reasoningEffort: "low",
+      apiKeys: { OPENROUTER_API_KEY: "openrouter-test-key" },
+    });
+
+    const controlledStream = createControlledOpenAIStreamResponse();
+    const bodies: Array<Record<string, unknown>> = [];
+    let resolveFirstFetch = () => {};
+    const firstFetchStarted = new Promise<void>((resolve) => {
+      resolveFirstFetch = resolve;
+    });
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      resolveFirstFetch();
+      return bodies.length === 1 ? controlledStream.response : createOpenAIStreamResponse();
+    }) as typeof fetch;
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+      sessionState,
+    });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const firstResponse = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: "slow queued effort turn",
+        sessionId: session.id,
+        model: "gpt-4o",
+        reasoningEffort: "high",
+      },
+    });
+    await firstFetchStarted;
+
+    const queuedResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: "queued explicit default",
+        sessionId: session.id,
+        model: "gpt-4o",
+        reasoningEffort: null,
+      },
+    });
+    expect(queuedResponse.statusCode).toBe(202);
+
+    const queued = sessionState.get(session.id, ["queued_messages"])["queued_messages"] as Array<Record<string, unknown>>;
+    expect(queued).toHaveLength(1);
+    expect(Object.hasOwn(queued[0] ?? {}, "reasoningEffort")).toBe(true);
+    expect(queued[0]?.["reasoningEffort"]).toBeNull();
+
+    controlledStream.releaseSecondChunk();
+    await firstResponse;
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    for (let attempt = 0; attempt < 20 && bodies.length < 2; attempt += 1) {
+      await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]?.["reasoning_effort"]).toBe("high");
+    expect(Object.hasOwn(bodies[1] ?? {}, "reasoning_effort")).toBe(false);
 
     await app.close();
   });

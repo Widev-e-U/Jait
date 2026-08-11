@@ -52,7 +52,7 @@ describe("MemoryEngine", () => {
     expect(backend.entries[0]?.createdAt).toBe(first.createdAt);
   });
 
-  it("combines lexical, vector, and recency ranking for search", async () => {
+  it("combines BM25 relevance, importance, and recency for search", async () => {
     const backend = new InMemoryBackend();
     const memory = new MemoryEngine({ backend });
 
@@ -90,6 +90,63 @@ describe("MemoryEngine", () => {
     const results = await memory.search("database migration rollback", 5, "project");
 
     expect(results).toHaveLength(0);
+  });
+
+  it("does not retrieve a memory that only shares a corpus-wide term", async () => {
+    const backend = new InMemoryBackend();
+    const memory = new MemoryEngine({ backend });
+
+    for (const content of [
+      "The app deploys from main after CI passes.",
+      "The app renders markdown reasoning in the chat surface.",
+      "The app stores provider keys in the gateway config.",
+      "The app uses pnpm workspaces in a monorepo.",
+      "Do not commit generated files in the web dist folder.",
+      "This project keeps API contracts in packages/shared.",
+      "Preview sessions run in a managed Chromium browser.",
+      "What the gateway serves in production is the bundled SPA.",
+      "Consent prompts appear in the app before risky tool calls.",
+      "Migrations are applied in order at gateway startup.",
+    ]) {
+      await memory.save({ scope: "project", content, source: { type: "chat", id: content, surface: "chat" } });
+    }
+    const unrelated = await memory.save({
+      scope: "project",
+      content: "The Tizen app stream skipped ahead because of a double-backslash regex bug.",
+      source: { type: "chat", id: "tizen", surface: "chat" },
+    });
+    const relevant = await memory.save({
+      scope: "project",
+      content: "Ranking uses BM25 so rare terms outweigh common ones.",
+      source: { type: "chat", id: "bm25", surface: "chat" },
+    });
+
+    const results = await memory.search("what does bm25 do in this app", 5, "project");
+
+    expect(results.map((entry) => entry.id)).toEqual([relevant.id]);
+    expect(results.map((entry) => entry.id)).not.toContain(unrelated.id);
+  });
+
+  it("does not let recency outrank a stronger term match", async () => {
+    const backend = new InMemoryBackend();
+    const memory = new MemoryEngine({ backend });
+
+    const strong = await memory.save({
+      scope: "project",
+      content: "Release checklist lives in docs/release.md.",
+      source: { type: "chat", id: "strong", surface: "chat" },
+    });
+    backend.entries[0] = { ...strong, updatedAt: "2020-01-01T00:00:00.000Z" };
+
+    await memory.save({
+      scope: "project",
+      content: "The checklist for onboarding new contributors is in the wiki.",
+      source: { type: "chat", id: "recent", surface: "chat" },
+    });
+
+    const results = await memory.search("release checklist docs", 2, "project");
+
+    expect(results[0]?.id).toBe(strong.id);
   });
 
   it("extracts durable facts before pre-compaction and skips transient turns", async () => {

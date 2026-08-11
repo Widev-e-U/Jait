@@ -130,7 +130,10 @@ import {
   normalizeHydratedProjectLayout,
   showMobileProjectPane,
 } from '@/lib/mobile-project-layout'
-import { getMobileProjectActiveTarget } from '@/lib/mobile-project-controls'
+import {
+  getMobileProjectActiveTarget,
+  resolveProjectPanelOpenAfterChatSelection,
+} from '@/lib/mobile-project-controls'
 import { shouldProcessQueuedMessage, shouldPromptBeforeProcessingQueuedMessage } from '@/lib/chat-queue-decision'
 import {
   formatLineRange,
@@ -194,6 +197,7 @@ type ManagerQueuedMessage = QueuedChatMessage & {
   providerId: ProviderId
   runtimeMode?: RuntimeMode
   model?: string | null
+  reasoningEffort?: string | null
 }
 
 type SavedQueuedMessage = QueuedChatMessage & {
@@ -294,6 +298,7 @@ function App() {
   const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
   const [chatReasoningEffort, setChatReasoningEffort] = useState<SessionReasoningEffort | null>(null)
   const [managerProviderRuntimeMode, setManagerProviderRuntimeMode] = useState<RuntimeMode>('full-access')
+  const [managerReasoningEffort, setManagerReasoningEffort] = useState<SessionReasoningEffort | null>(null)
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
     () => loadLegacyCliModelsByProvider('jait')
   )
@@ -303,6 +308,7 @@ function App() {
   const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
   const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
   const threadCliModel = viewMode === 'manager' ? managerCliModel : cliModel
+  const threadReasoningEffort = viewMode === 'manager' ? managerReasoningEffort : chatReasoningEffort
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
   const isElectron = !!(window as any).jaitDesktop
@@ -2186,8 +2192,17 @@ function App() {
 
   const handleManagerProviderChange = useCallback((provider: ProviderId) => {
     setManagerProvider(provider)
+    // Mirror the chat side: each provider remembers its own effort, so
+    // switching providers restores that provider's pick instead of carrying a
+    // value the new provider may not even accept.
+    setManagerReasoningEffort(readProjectReasoningEffortSelection(activeProjectId, provider) ?? null)
     saveProjectManagerProviderSelection(activeProjectId, provider)
   }, [activeProjectId, setManagerProvider])
+
+  const handleManagerReasoningEffortChange = useCallback((reasoningEffort: SessionReasoningEffort | null) => {
+    setManagerReasoningEffort(reasoningEffort)
+    saveProjectReasoningEffortSelection(activeProjectId, managerProvider, reasoningEffort)
+  }, [activeProjectId, managerProvider])
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -2397,6 +2412,18 @@ function App() {
     applyProjectLayout,
   })
 
+  const handleMobileChatClick = useCallback(() => {
+    if (showTerminal) {
+      closeTerminalPanel()
+    }
+    if (showProject) {
+      closeProjectPanel()
+    }
+    setCurrentView('chat')
+    setShowSidebar(false)
+    setShowMobileToolbar(false)
+  }, [closeTerminalPanel, closeProjectPanel, showTerminal, showProject])
+
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
   const openRemoteProjectOnGateway = useCallback(async (
@@ -2472,7 +2499,11 @@ function App() {
 
   // Wrap switchProject so clicking a project also opens its remote directory
   // and shows the correct files/session in the editor.
-  const handleSwitchProject = useCallback(async (projectId: string, sessionId?: string) => {
+  const handleSwitchProject = useCallback(async (
+    projectId: string,
+    sessionId?: string,
+    focusChatOnMobile = false,
+  ) => {
     const project = projects.find((entry) => entry.id === projectId) ?? await loadProject(projectId)
     if (!project) return
 
@@ -2536,10 +2567,20 @@ function App() {
     // session-scoped and may arrive before the WS re-subscribes to the new session.
     if (project.rootPath) {
       try {
+        const openPanel = resolveProjectPanelOpenAfterChatSelection({
+          isMobile,
+          focusChat: focusChatOnMobile,
+          requestedOpen: true,
+        })
         const res = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: project.rootPath, sessionId: nextSessionId, nodeId: project.nodeId || 'gateway' }),
+          body: JSON.stringify({
+            path: project.rootPath,
+            sessionId: nextSessionId,
+            nodeId: project.nodeId || 'gateway',
+            openPanel,
+          }),
         })
         if (requestId !== projectSwitchRequestRef.current) return
         if (!res.ok) {
@@ -2551,7 +2592,11 @@ function App() {
         if (requestId !== projectSwitchRequestRef.current) return
         const resolvedNodeId = data.nodeId || project.nodeId || undefined
         setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId })
-        const panelOpen = data.panelOpen !== false
+        const panelOpen = resolveProjectPanelOpenAfterChatSelection({
+          isMobile,
+          focusChat: focusChatOnMobile,
+          requestedOpen: data.panelOpen !== false,
+        })
         showProjectRef.current = panelOpen
         setShowProject(panelOpen)
       } catch (e) {
@@ -2567,28 +2612,28 @@ function App() {
     const knownSession = personalSessions.find((session) => session.id === sessionId)
     const session = knownSession ?? await loadSession(sessionId)
     if (!session || session.projectId) return
-    if (isMobile) setShowSidebar(false)
+    if (isMobile) handleMobileChatClick()
     switchSession(null, sessionId)
-  }, [isMobile, loadSession, personalSessions, switchSession])
+  }, [handleMobileChatClick, isMobile, loadSession, personalSessions, switchSession])
 
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
+    if (isMobile) handleMobileChatClick()
     if (projectId === activeProjectId) {
       if (sessionId === activeSessionId) return
-      if (isMobile) setShowSidebar(false)
       // If the project's editor surface isn't open yet (e.g. right after a
       // page load where only the project id was restored), open it so the
       // editor / preview / architecture controls are available. Otherwise
       // selecting a chat of an already-active project looks like a plain
       // chat with no project controls.
       if (!activeProjectRef.current) {
-        void handleSwitchProject(projectId, sessionId)
+        void handleSwitchProject(projectId, sessionId, true)
         return
       }
       switchSession(projectId, sessionId)
       return
     }
-    void handleSwitchProject(projectId, sessionId)
-  }, [activeProjectId, activeSessionId, isMobile, switchSession, handleSwitchProject])
+    void handleSwitchProject(projectId, sessionId, true)
+  }, [activeProjectId, activeSessionId, handleMobileChatClick, isMobile, switchSession, handleSwitchProject])
 
   // The "+" opens the same dialog the folder button used to, rather than the raw
   // file explorer. One form creates both: leave the directory empty for a
@@ -3023,12 +3068,16 @@ function App() {
 
   // Sync manager provider from the per-project cache so it survives reloads
   // and project switches (the manager provider is not a global server setting).
+  // The reasoning effort rides along: it is stored per provider, so it has to
+  // be restored for whichever provider this project ends up on.
   useEffect(() => {
     if (authLoading) return
     const cachedProjectManagerProvider = readProjectManagerProviderSelection(activeProjectId)
+    const restoredProvider = cachedProjectManagerProvider as ProviderId | null ?? managerProvider
     if (cachedProjectManagerProvider && cachedProjectManagerProvider !== managerProvider) {
-      setManagerProvider(cachedProjectManagerProvider as ProviderId)
+      setManagerProvider(restoredProvider)
     }
+    setManagerReasoningEffort(readProjectReasoningEffortSelection(activeProjectId, restoredProvider) ?? null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId, authLoading])
 
@@ -3514,6 +3563,7 @@ function App() {
         providerId: threadProvider,
         runtimeMode: threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
         model: threadCliModel ?? undefined,
+        reasoningEffort: threadReasoningEffort,
         queuedAt: Date.now(),
       })
       setInputValue('')
@@ -3524,9 +3574,12 @@ function App() {
     setInputSegments(undefined)
     await automation.handleSend(
       promptWithUploads,
-      threadProvider,
-      threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
-      threadCliModel ?? undefined,
+      {
+        providerId: threadProvider,
+        runtimeMode: threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
+        model: threadCliModel ?? undefined,
+        reasoningEffort: threadReasoningEffort,
+      },
       {
         displayContent,
         referencedFiles: prepared?.referencedFiles,
@@ -3820,11 +3873,12 @@ function App() {
       providerId: managerProvider,
       runtimeMode: managerProvider !== 'jait' ? managerProviderRuntimeMode : undefined,
       model: managerCliModel ?? undefined,
+      reasoningEffort: managerReasoningEffort,
       queuedAt: Date.now(),
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [automation.selectedThread, enqueueManagerMessage, managerCliModel, managerProvider, managerProviderRuntimeMode, preparePromptSubmission, setInputValue])
+  }, [automation.selectedThread, enqueueManagerMessage, managerCliModel, managerProvider, managerProviderRuntimeMode, managerReasoningEffort, preparePromptSubmission, setInputValue])
 
   useEffect(() => {
     if (activeSessionId) return
@@ -3860,9 +3914,12 @@ function App() {
       void automation.handleSendToThread(
         threadId,
         nextItem.fullContent,
-        nextItem.providerId,
-        nextItem.runtimeMode,
-        nextItem.model,
+        {
+          providerId: nextItem.providerId,
+          runtimeMode: nextItem.runtimeMode,
+          model: nextItem.model,
+          reasoningEffort: nextItem.reasoningEffort,
+        },
         {
           displayContent: nextItem.displayContent ?? nextItem.content,
           referencedFiles: nextItem.referencedFiles,
@@ -3935,11 +3992,11 @@ function App() {
       originalContent?: string
     },
   ) => {
-    if (!activeSessionId || !token) return
+    if (!activeSessionId || !token) return false
     const prepared = await preparePromptSubmission(newContent, metadata?.referencedFiles, metadata?.displaySegments)
-    if (!prepared) return
+    if (!prepared) return false
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
-    await restartFromMessage(messageId, prepared.promptWithReferences, messageIndex, messageFromEnd, {
+    return restartFromMessage(messageId, prepared.promptWithReferences, messageIndex, messageFromEnd, {
       token,
       sessionId: activeSessionId,
       mode: outboundMode,
@@ -4193,21 +4250,6 @@ function App() {
     showProjectEditor,
     treeTab: mobileTreeTab,
   }), [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree])
-
-  // Escape hatch for mobile: collapse any fullscreen project/terminal pane so
-  // the chat workspace becomes visible again. Replaces the old floating-strip
-  // Chat button that was removed when the slide-in drawer took over.
-  const handleMobileChatClick = useCallback(() => {
-    if (showTerminal) {
-      closeTerminalPanel()
-    }
-    if (showProject) {
-      closeProjectPanel()
-    }
-    setShowSidebar(false)
-    setShowMobileToolbar(false)
-  }, [closeTerminalPanel, closeProjectPanel, showTerminal, showProject])
-
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -4651,6 +4693,7 @@ function App() {
                 availableSkills={availableSkills}
                 chatProvider={managerProvider}
                 chatProviderRuntimeMode={managerProviderRuntimeMode}
+                chatReasoningEffort={managerReasoningEffort}
                 chatResponseStyle={chatResponseStyle}
                 cliModel={managerCliModel}
                 inputValueRef={inputValueRef}
@@ -4683,6 +4726,7 @@ function App() {
                 onOpenMessagePath={handleOpenMessagePath}
                 onProviderChange={handleManagerProviderChange}
                 onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
+                onReasoningEffortChange={handleManagerReasoningEffortChange}
                 onRefreshThreads={() => { void automation.refresh() }}
                 onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
                 onReorderManagerQueueItem={reorderManagerQueueItem}

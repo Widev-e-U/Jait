@@ -19,6 +19,21 @@ export function defaultDbPath(): string {
   return join(homedir(), ".jait", "data", "jait.db");
 }
 
+export function resolveDatabasePath(
+  dbPath?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (dbPath) return dbPath;
+  const configured = env["JAIT_DB_PATH"]?.trim();
+  if (configured) return configured;
+  if (env["NODE_ENV"] === "test") {
+    throw new Error(
+      "Refusing to open the default Jait database in test mode. Pass ':memory:' or set JAIT_DB_PATH.",
+    );
+  }
+  return defaultDbPath();
+}
+
 /**
  * Open (or create) the SQLite database and run table creation.
  *
@@ -26,7 +41,7 @@ export function defaultDbPath(): string {
  * @returns { db, sqlite } — drizzle instance + raw SQLite handle
  */
 export async function openDatabase(dbPath?: string): Promise<{ db: JaitDB; sqlite: SqliteDatabase }> {
-  const resolvedPath = dbPath ?? defaultDbPath();
+  const resolvedPath = resolveDatabasePath(dbPath);
 
   // Ensure the directory exists (no-op for :memory:)
   if (resolvedPath !== ":memory:") {
@@ -71,7 +86,9 @@ export function migrateDatabase(sqlite: SqliteDatabase) {
   );
 
   let ran = 0;
-  for (const migration of migrations) {
+  // Execute by ID even if concurrent branches append migrations in a different
+  // source order. The ID is the durable ordering contract stored in the DB.
+  for (const migration of [...migrations].sort((a, b) => a.id - b.id)) {
     if (applied.has(migration.id)) continue;
 
     try {
@@ -94,7 +111,8 @@ export function migrateDatabase(sqlite: SqliteDatabase) {
   }
 
   if (ran > 0) {
-    console.log(`  ${ran} migration(s) applied (schema now at v${migrations.length}).`);
+    const schemaVersion = Math.max(...migrations.map((migration) => migration.id));
+    console.log(`  ${ran} migration(s) applied (schema now at v${schemaVersion}).`);
   }
 
   // Safety net: verify expected columns exist even if migrations were
@@ -115,6 +133,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
   const expectedColumns: Record<string, Record<string, string>> = {
     agent_threads: {
       kind: "TEXT NOT NULL DEFAULT 'delivery'",
+      reasoning_effort: "TEXT",
       pr_url: "TEXT",
       pr_number: "INTEGER",
       pr_title: "TEXT",

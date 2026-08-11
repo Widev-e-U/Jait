@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveThreadSelectionDefaults } from "./thread-defaults.js";
+import { normalizeReasoningEffort, resolveThreadSelectionDefaults } from "./thread-defaults.js";
 import type { SessionStateService } from "./session-state.js";
 import type { UserService, UserSettingsRecord } from "./users.js";
 
@@ -166,5 +166,49 @@ describe("resolveThreadSelectionDefaults", () => {
     });
 
     expect(receivedSessionId).toBe("session-7");
+  });
+  it("inherits the chat's reasoning effort so a spawned thread runs at the same level", () => {
+    const result = resolveThreadSelectionDefaults({
+      userId: "user-1",
+      sessionId: "session-1",
+      userService: makeUserService("claude-code"),
+      sessionState: makeSessionState({
+        "chat.reasoningEffort": "xhigh",
+      }),
+    });
+
+    expect(result.reasoningEffort).toBe("xhigh");
+  });
+
+  it("drops a malformed reasoning effort instead of passing it to the CLI", () => {
+    const result = resolveThreadSelectionDefaults({
+      userId: "user-1",
+      sessionId: "session-1",
+      userService: makeUserService("claude-code"),
+      sessionState: makeSessionState({
+        "chat.reasoningEffort": "high; rm -rf /",
+      }),
+    });
+
+    expect(result.reasoningEffort).toBeUndefined();
+  });
+});
+
+describe("normalizeReasoningEffort", () => {
+  it("accepts provider-defined values, not just the OpenAI set", () => {
+    expect(normalizeReasoningEffort("high")).toBe("high");
+    expect(normalizeReasoningEffort("  xhigh  ")).toBe("xhigh");
+    expect(normalizeReasoningEffort("max")).toBe("max");
+    expect(normalizeReasoningEffort("thought-level.2")).toBe("thought-level.2");
+  });
+
+  it("rejects anything that isn't a plain option token", () => {
+    expect(normalizeReasoningEffort("")).toBeUndefined();
+    expect(normalizeReasoningEffort("   ")).toBeUndefined();
+    expect(normalizeReasoningEffort("-leading-dash")).toBeUndefined();
+    expect(normalizeReasoningEffort("has space")).toBeUndefined();
+    expect(normalizeReasoningEffort("x".repeat(65))).toBeUndefined();
+    expect(normalizeReasoningEffort(null)).toBeUndefined();
+    expect(normalizeReasoningEffort(7)).toBeUndefined();
   });
 });

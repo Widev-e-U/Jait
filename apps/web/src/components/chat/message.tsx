@@ -36,6 +36,7 @@ import { getMemoryFeedbackLabel, type MemoryFeedbackKind } from '@/lib/memory-fe
 import type { ResponseStyle } from '@jait/shared'
 import { hasRenderableUserMessageContent } from './message-render-state'
 import {
+  getMobileUserMessageEditTop,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
 } from './message-edit-layout'
@@ -103,7 +104,10 @@ interface MessageProps {
       /** Raw, unedited content of this message, for server-side target verification. */
       originalContent?: string
     },
-  ) => Promise<void> | void
+  ) => Promise<boolean | void> | boolean | void
+  /** Controlled edit ownership used to hide the normal mobile composer. */
+  editing?: boolean
+  onEditingChange?: (messageId: string, editing: boolean) => void
   editComposer?: {
     onVoiceInput?: () => void
     voiceRecording?: boolean
@@ -182,6 +186,8 @@ function MessageInner({
   renderInlineSecretPrompt,
   onApprovalResponse,
   onEditMessage,
+  editing: controlledEditing,
+  onEditingChange,
   editComposer,
   onOpenPath,
   onOpenDiff,
@@ -254,7 +260,12 @@ function MessageInner({
 
   const [copied, setCopied] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
+  const [localEditing, setLocalEditing] = useState(false)
+  const isEditing = controlledEditing ?? localEditing
+  const setEditing = useCallback((editing: boolean) => {
+    setLocalEditing(editing)
+    if (messageId) onEditingChange?.(messageId, editing)
+  }, [messageId, onEditingChange])
   const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [contextOpen, setContextOpen] = useState(false)
@@ -300,15 +311,8 @@ function MessageInner({
   const memoryFeedbackTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
-  // Root wrapper of the whole message bubble. Scrolled into view on mobile so
-  // the message being edited stays visible above the floating edit composer /
-  // keyboard instead of being pushed out of the viewport when the keyboard opens.
-  const messageRootRef = useRef<HTMLDivElement | null>(null)
-  // Height (px) of the on-screen keyboard, derived from the visual viewport on
-  // mobile. Used to keep the floating edit composer sitting just above the
-  // keyboard even on browsers where `position: fixed; bottom` would otherwise
-  // slide the composer underneath it.
-  const [mobileKeyboardInset, setMobileKeyboardInset] = useState(0)
+  // Center of the visual viewport (the area above the on-screen keyboard).
+  const [mobileEditTop, setMobileEditTop] = useState<number | null>(null)
 
   useEffect(() => {
     return () => {
@@ -430,20 +434,15 @@ function MessageInner({
 
   const isMobile = useIsMobile()
 
-  // Track the on-screen keyboard height via the visual viewport so the floating
-  // edit composer can be pinned just above the keyboard on mobile.
+  // Center the edited user message in the visual viewport — the visible area
+  // above the software keyboard — without scrolling the transcript underneath.
   useEffect(() => {
     if (!isEditing || !isMobile) {
-      setMobileKeyboardInset(0)
+      setMobileEditTop(null)
       return
     }
     const update = () => {
-      const vv = window.visualViewport
-      if (!vv) return
-      // When the keyboard is up the visual viewport is shorter than the layout
-      // viewport; the difference is (close to) the keyboard height.
-      const inset = Math.max(0, window.innerHeight - vv.height)
-      setMobileKeyboardInset(inset)
+      setMobileEditTop(getMobileUserMessageEditTop(window.visualViewport, window.innerHeight))
     }
     update()
     window.visualViewport?.addEventListener?.('resize', update)
@@ -455,28 +454,6 @@ function MessageInner({
       window.removeEventListener('resize', update)
     }
   }, [isEditing, isMobile])
-
-  // On mobile, keep the message being edited in view. The floating edit composer
-  // is fixed to the bottom of the screen (above the keyboard), so without this
-  // the message gets pushed up out of the viewport by the keyboard / chat input
-  // and the user can't see what they're editing.
-  const revealEditingMessageInView = useCallback(() => {
-    if (!isEditing || !isMobile) return
-    const el = messageRootRef.current
-    if (!el) return
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [isEditing, isMobile])
-
-  useEffect(() => {
-    if (!isEditing || !isMobile) return
-    revealEditingMessageInView()
-    window.addEventListener('resize', revealEditingMessageInView)
-    window.visualViewport?.addEventListener?.('resize', revealEditingMessageInView)
-    return () => {
-      window.removeEventListener('resize', revealEditingMessageInView)
-      window.visualViewport?.removeEventListener?.('resize', revealEditingMessageInView)
-    }
-  }, [isEditing, isMobile, revealEditingMessageInView])
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
@@ -489,14 +466,14 @@ function MessageInner({
     if (!canEdit || isSavingEdit) return
     setEditDraft(userDisplayText)
     setEditSegments(userDisplaySegments)
-    setIsEditing(true)
-  }, [canEdit, isSavingEdit, userDisplaySegments, userDisplayText])
+    setEditing(true)
+  }, [canEdit, isSavingEdit, setEditing, userDisplaySegments, userDisplayText])
 
   const cancelEditing = useCallback(() => {
     setEditDraft(userDisplayText)
     setEditSegments(userDisplaySegments)
-    setIsEditing(false)
-  }, [userDisplaySegments, userDisplayText])
+    setEditing(false)
+  }, [setEditing, userDisplaySegments, userDisplayText])
 
   const handleUserBubbleClick = () => {
     if (!canEdit || isEditing) return
@@ -512,24 +489,29 @@ function MessageInner({
 
     setOptimisticUserDisplayText(submission.text)
     setOptimisticUserDisplaySegments(submission.displaySegments)
-    setIsEditing(false)
     setIsSavingEdit(true)
     try {
-      await onEditMessage(messageId, submission.text, messageIndex, messageFromEnd, {
+      const replaced = await onEditMessage(messageId, submission.text, messageIndex, messageFromEnd, {
         referencedFiles: submission.referencedFiles,
         displaySegments: submission.displaySegments,
         originalContent: content,
       })
+      if (replaced === false) {
+        setOptimisticUserDisplayText(null)
+        setOptimisticUserDisplaySegments(null)
+      } else {
+        setEditing(false)
+      }
     } catch (error) {
       setOptimisticUserDisplayText(null)
       setOptimisticUserDisplaySegments(null)
-      setIsEditing(true)
       throw error
     } finally {
       setIsSavingEdit(false)
     }
   }, [
     canEdit,
+    content,
     editDraft,
     editSegments,
     isSavingEdit,
@@ -537,6 +519,8 @@ function MessageInner({
     messageFromEnd,
     messageIndex,
     onEditMessage,
+    setEditing,
+    userDisplaySegments,
   ])
 
   const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {
@@ -783,7 +767,7 @@ function MessageInner({
 
   return (
     <>
-    <div ref={messageRootRef} className="w-full">
+    <div className="w-full">
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn(
         'min-w-0 space-y-2',
@@ -857,8 +841,8 @@ function MessageInner({
                   <div
                     className={getUserMessageEditComposerShellClassName()}
                     style={
-                      isMobile && mobileKeyboardInset > 0
-                        ? { bottom: mobileKeyboardInset + 12 }
+                      isMobile && mobileEditTop != null
+                        ? { top: mobileEditTop }
                         : undefined
                     }
                     onClick={(event) => event.stopPropagation()}

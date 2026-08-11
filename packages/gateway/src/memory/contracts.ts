@@ -11,7 +11,6 @@ export interface MemoryEntry {
   scope: MemoryScope;
   content: string;
   source: MemorySource;
-  embedding: Record<string, number>;
   createdAt: string;
   updatedAt: string;
   expiresAt?: string;

@@ -64,8 +64,11 @@ class MockThreadProvider implements CliProviderAdapter {
     return true;
   }
 
+  readonly startSessionCalls: StartSessionOptions[] = [];
+
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
     const sessionId = "mock-session-1";
+    this.startSessionCalls.push(options);
     this.emit({ type: "session.started", sessionId });
     return {
       id: sessionId,
@@ -219,6 +222,120 @@ describe("thread routes", () => {
       status: "idle",
       providerSessionId: null,
     });
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("carries the requested reasoning effort from create through to the provider session", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("effort-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "claude-code" });
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("claude-code");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, { threadService, providerRegistry, userService: users });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: {
+        title: "Helper",
+        providerId: "claude-code",
+        reasoningEffort: "xhigh",
+        workingDirectory: process.cwd(),
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ reasoningEffort: "xhigh" });
+
+    const started = await app.inject({
+      method: "POST",
+      url: `/api/threads/${created.json().id}/start`,
+      headers,
+      payload: { message: "inspect ui", titleTask: "" },
+    });
+
+    expect(started.statusCode).toBe(200);
+    await waitFor(() => provider.startSessionCalls.length >= 1);
+    expect(provider.startSessionCalls[0]?.reasoningEffort).toBe("xhigh");
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("inherits the chat's reasoning effort when create doesn't name one", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const sessionState = new SessionStateService(db);
+    const user = users.createUser("effort-inherit-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "codex" });
+    sessionState.set("session-effort", { "chat.reasoningEffort": "high" });
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider("codex"));
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      userService: users,
+      sessionState,
+    });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", sessionId: "session-effort" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ reasoningEffort: "high" });
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("rejects a malformed reasoning effort rather than forwarding it", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("effort-bad-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "codex" });
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider("codex"));
+
+    registerThreadRoutes(app, config, { threadService, providerRegistry, userService: users });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", providerId: "codex", reasoningEffort: "high --dangerously" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().reasoningEffort).toBeNull();
 
     await app.close();
     sqlite.close();

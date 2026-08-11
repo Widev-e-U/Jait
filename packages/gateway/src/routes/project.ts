@@ -8,182 +8,32 @@
 
 import { resolveProjectPanelOpen } from "@jait/shared";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { exec } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import type { AppConfig } from "../config.js";
+import { execFile } from "node:child_process";
 import { platform } from "node:os";
-import { join, relative, dirname } from "node:path";
+import { join, dirname } from "node:path";
 import { promisify } from "node:util";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
+import { requireAuth } from "../security/http-auth.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ProjectService } from "../services/projects.js";
 import type { ProjectStateService } from "../services/project-state.js";
+import {
+  normalizeProjectSearchLimit,
+  projectSearchCandidateLimit,
+  rankProjectContentMatches,
+  rankProjectFilePaths,
+  searchProject,
+} from "../services/project-search.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
-const execAsync = promisify(exec);
-
-const SEARCH_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".json", ".css", ".scss", ".html", ".md", ".yaml", ".yml",
-  ".svelte", ".vue", ".py", ".rs", ".go", ".java", ".c", ".cpp", ".h",
-  ".sh", ".toml", ".env", ".txt",
-]);
-const SKIP_SEARCH_DIRS = new Set([
-  "node_modules", ".git", "dist", "build", "release", ".next", ".nuxt", ".output",
-  "coverage", ".turbo", ".cache", "__pycache__", ".svelte-kit", "web-dist",
-]);
-
-/** Pure-Node content search fallback when rg is not installed. */
-async function nodeContentSearch(root: string, query: string, maxResults: number): Promise<string> {
-  const lowerQuery = query.toLowerCase();
-  const results: string[] = [];
-
-  async function walk(dir: string) {
-    if (results.length >= maxResults) return;
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      if (results.length >= maxResults) return;
-      if (entry.isDirectory()) {
-        if (!SKIP_SEARCH_DIRS.has(entry.name)) await walk(join(dir, entry.name));
-      } else if (entry.isFile()) {
-        const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()! : "";
-        if (!SEARCH_EXTENSIONS.has(ext.toLowerCase())) continue;
-        const filePath = join(dir, entry.name);
-        try {
-          const content = await readFile(filePath, "utf-8");
-          const lines = content.split("\n");
-          for (let i = 0; i < lines.length && results.length < maxResults; i++) {
-            if (lines[i]!.toLowerCase().includes(lowerQuery)) {
-              results.push(`${filePath}:${i + 1}:${lines[i]}`);
-            }
-          }
-        } catch { /* skip unreadable files */ }
-      }
-    }
-  }
-
-  await walk(root);
-  return results.join("\n");
-}
-
-/** Pure-Node file name search fallback when rg is not installed. */
-async function nodeFileSearch(root: string, query: string, maxResults: number): Promise<string> {
-  const lowerQuery = query.toLowerCase();
-  const results: string[] = [];
-
-  async function walk(dir: string) {
-    if (results.length >= maxResults) return;
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      if (results.length >= maxResults) return;
-      if (entry.isDirectory()) {
-        if (!SKIP_SEARCH_DIRS.has(entry.name)) await walk(join(dir, entry.name));
-      } else if (entry.isFile()) {
-        if (entry.name.toLowerCase().includes(lowerQuery)) {
-          results.push(join(dir, entry.name));
-        }
-      }
-    }
-  }
-
-  await walk(root);
-  return results.join("\n");
-}
-
-async function runProjectSearch(
-  projectRoot: string,
-  query: string,
-  mode: "files" | "content",
-  maxResults: number,
-) {
-  const isWin = platform() === "win32";
-  const safeDir = projectRoot.replace(/"/g, '\\"');
-  const safeQuery = query.replace(/"/g, '\\"');
-  const execOpts = { timeout: 15_000, maxBuffer: 2 * 1024 * 1024, cwd: projectRoot };
-
-  try {
-    if (mode === "content") {
-      let stdout = "";
-
-      // Strategy: rg (fast, respects .gitignore) > Node.js fallback
-      try {
-        ({ stdout } = await execAsync(
-          `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}"`,
-          execOpts,
-        ));
-      } catch {
-        // rg not available — use Node.js-based search
-        stdout = await nodeContentSearch(projectRoot, query, maxResults);
-      }
-
-      const lines = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults);
-      const matches = lines.map((line) => {
-        const match = line.match(/^(.+?):(\d+):(.*)$/);
-        if (!match) return null;
-        const absPath = match[1]!;
-        const relPath = absPath.includes(projectRoot.replace(/\\/g, "/")) || absPath.includes(projectRoot)
-          ? relative(projectRoot, absPath).replace(/\\/g, "/")
-          : absPath.replace(/\\/g, "/");
-        return { file: relPath, line: parseInt(match[2]!, 10), content: match[3]!.trim() };
-      }).filter(Boolean);
-
-      return { query, mode, matches };
-    }
-
-    const cleanedQuery = query.replace(/[*?[\]]/g, "").trim();
-    if (!cleanedQuery) {
-      return { query, mode, files: [] };
-    }
-    const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
-
-    let stdout = "";
-
-    // Strategy: rg --files (fast, respects .gitignore) > Node.js fallback
-    try {
-      if (isWin) {
-        ({ stdout } = await execAsync(
-          `rg --files "${safeDir}" | findstr /i /l "${safeFileQuery}"`,
-          execOpts,
-        ));
-      } else {
-        ({ stdout } = await execAsync(
-          `(rg --files "${safeDir}" 2>/dev/null || find "${safeDir}" -type f 2>/dev/null) | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`,
-          execOpts,
-        ));
-      }
-    } catch {
-      // rg not available — use Node.js-based search
-      stdout = await nodeFileSearch(projectRoot, cleanedQuery, maxResults);
-    }
-
-    const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((rawPath) => {
-      const trimmed = rawPath.trim();
-      // git ls-files returns relative paths; others return absolute
-      const relPath = trimmed.includes(projectRoot.replace(/\\/g, "/")) || trimmed.includes(projectRoot)
-        ? relative(projectRoot, trimmed).replace(/\\/g, "/")
-        : trimmed.replace(/\\/g, "/");
-      const name = relPath.split("/").pop() || relPath;
-      return { path: relPath, name };
-    });
-
-    return { query, mode, files };
-  } catch (err: unknown) {
-    const stderr = (err as { stderr?: string })?.stderr || "";
-    if (stderr && !stderr.includes("No such file")) {
-      throw new Error(stderr.slice(0, 200));
-    }
-    return mode === "content"
-      ? { query, mode, matches: [] }
-      : { query, mode, files: [] };
-  }
-}
+const execFileAsync = promisify(execFile);
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -212,6 +62,30 @@ function findFsSurface(
   // Find the first running filesystem surface
   for (const s of registry.listSurfaces()) {
     if ((s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") return s;
+  }
+  return null;
+}
+
+function findUserFsSurface(
+  registry: SurfaceRegistry,
+  sessionService: SessionService,
+  userId: string,
+  surfaceId?: string,
+): AnyFsSurface | null {
+  if (surfaceId) {
+    const surface = findFsSurface(registry, surfaceId);
+    if (!surface) return null;
+    const sessionId = surface.snapshot().sessionId;
+    return sessionId && sessionService.getById(sessionId, userId) ? surface : null;
+  }
+
+  for (const surface of registry.listSurfaces()) {
+    if (!(
+      (surface instanceof FileSystemSurface || surface instanceof RemoteFileSystemSurface)
+      && surface.state === "running"
+    )) continue;
+    const sessionId = surface.snapshot().sessionId;
+    if (sessionId && sessionService.getById(sessionId, userId)) return surface;
   }
   return null;
 }
@@ -256,6 +130,7 @@ export function registerProjectRoutes(
   ws?: WsControlPlane,
   projectService?: ProjectService,
   projectState?: ProjectStateService,
+  config?: AppConfig,
 ) {
   // GET /api/project/info — returns the active project root + surface ID
   app.get("/api/project/info", async (_req, reply) => {
@@ -822,19 +697,18 @@ export function registerProjectRoutes(
       const absPath = targetPath.startsWith(projectRoot) ? targetPath : join(projectRoot, targetPath);
       const isWin = platform() === "win32";
       const isMac = platform() === "darwin";
-      const escaped = absPath.replace(/"/g, '\\"');
       if (isWin) {
         // `explorer /select,"path"` highlights a file; for a directory it opens it.
-        await execAsync(`explorer /select,"${escaped}"`, { timeout: 5_000 });
+        await execFileAsync("explorer", ["/select,", absPath], { timeout: 5_000 });
       } else if (isMac) {
         // `open -R` reveals the file in Finder; for a directory it opens it.
-        await execAsync(`open -R "${escaped}"`, { timeout: 5_000 });
+        await execFileAsync("open", ["-R", absPath], { timeout: 5_000 });
       } else {
         // Linux: open the containing directory (xdg-open doesn't support selection).
         const { stat: fsStat } = await import("node:fs/promises");
         const info = await fsStat(absPath);
         const dirToOpen = info.isDirectory() ? absPath : dirname(absPath);
-        await execAsync(`xdg-open "${dirToOpen.replace(/"/g, '\\"')}"`, { timeout: 5_000 });
+        await execFileAsync("xdg-open", [dirToOpen], { timeout: 5_000 });
       }
       return { ok: true };
     } catch (err: unknown) {
@@ -846,15 +720,55 @@ export function registerProjectRoutes(
   // GET /api/project/search?query=&mode=&limit=&surfaceId=
   // mode: "files" (filename search) | "content" (grep/ripgrep content search)
   app.get("/api/project/search", async (req, reply) => {
-    const { query, mode = "files", limit: limitStr, surfaceId } = req.query as {
-      query?: string; mode?: string; limit?: string; surfaceId?: string;
+    let authenticatedUserId: string | null = null;
+    if (config) {
+      const authUser = await requireAuth(req, reply, config.jwtSecret);
+      if (!authUser) return;
+      authenticatedUserId = authUser.id;
+    }
+    const {
+      query,
+      mode = "files",
+      limit: limitValue,
+      surfaceId,
+      includeIgnoredFiles,
+    } = req.query as {
+      query?: string;
+      mode?: string;
+      limit?: string;
+      surfaceId?: string;
+      includeIgnoredFiles?: string;
     };
     if (!query) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "query is required" });
     }
-    const maxResults = Math.min(Math.max(parseInt(limitStr || "50", 10) || 50, 1), 200);
+    if (mode !== "files" && mode !== "content") {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: 'mode must be "files" or "content"',
+      });
+    }
 
-    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    let maxResults: number;
+    try {
+      maxResults = normalizeProjectSearchLimit(limitValue, 50);
+    } catch (error) {
+      return reply.status(400).send({
+        error: "VALIDATION_ERROR",
+        message: error instanceof Error ? error.message : "limit is invalid",
+      });
+    }
+    const includeIgnored = includeIgnoredFiles === "true";
+
+    if (authenticatedUserId && !sessionService) {
+      return reply.status(503).send({
+        error: "AUTHORIZATION_UNAVAILABLE",
+        message: "Project search authorization is unavailable",
+      });
+    }
+    const fs = authenticatedUserId
+      ? findUserFsSurface(surfaceRegistry, sessionService!, authenticatedUserId, surfaceId)
+      : findFsSurface(surfaceRegistry, surfaceId);
     if (!fs) {
       return reply.status(404).send({ error: "NO_PROJECT", message: "No filesystem surface is running" });
     }
@@ -870,18 +784,85 @@ export function registerProjectRoutes(
         if (!nodeId || !ws) {
           return reply.status(501).send({ error: "NOT_SUPPORTED", message: "Project search is not available for this remote project" });
         }
-        const result = await ws.proxyFsOp(nodeId, "search-project", {
+        const remoteLimit = projectSearchCandidateLimit(maxResults);
+        const remoteResult = await ws.proxyFsOp<{
+          limited?: boolean;
+          files?: Array<{ path: string; name?: string }>;
+          matches?: Array<{ file: string; line: number; content: string }>;
+        }>(nodeId, "search-project", {
           path: projectRoot,
           query,
           mode,
-          limit: maxResults,
+          limit: remoteLimit,
+          includeIgnoredFiles: includeIgnored,
         }, 20_000);
-        return result;
+
+        if (mode === "content") {
+          const candidates = (remoteResult.matches ?? []).map((match) => ({
+            relativePath: match.file.replace(/\\/g, "/"),
+            line: match.line,
+            content: match.content,
+          }));
+          const matches = rankProjectContentMatches(candidates, query, maxResults);
+          return {
+            query,
+            mode,
+            limited: Boolean(remoteResult.limited) || candidates.length > maxResults,
+            matches: matches.map(({ relativePath, line, content }) => ({
+              file: relativePath,
+              line,
+              content,
+            })),
+          };
+        }
+
+        const candidates = (remoteResult.files ?? []).map((file) =>
+          file.path.replace(/\\/g, "/")
+        );
+        const files = rankProjectFilePaths(candidates, query, maxResults);
+        return {
+          query,
+          mode,
+          limited: Boolean(remoteResult.limited) || candidates.length > maxResults,
+          files: files.map(({ relativePath }) => ({
+            path: relativePath,
+            name: relativePath.split("/").pop() || relativePath,
+          })),
+        };
       }
-      return await runProjectSearch(projectRoot, query, mode === "content" ? "content" : "files", maxResults);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Search failed";
+
+      const result = await searchProject({
+        root: projectRoot,
+        query,
+        mode,
+        limit: maxResults,
+        includeIgnoredFiles: includeIgnored,
+      });
+      if (result.mode === "content") {
+        return {
+          query,
+          mode,
+          limited: result.limited,
+          matches: result.matches.map(({ relativePath, line, content }) => ({
+            file: relativePath,
+            line,
+            content,
+          })),
+        };
+      }
+      return {
+        query,
+        mode,
+        limited: result.limited,
+        files: result.files.map(({ relativePath, name }) => ({
+          path: relativePath,
+          name,
+        })),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Search failed";
       return reply.status(500).send({ error: "SEARCH_FAILED", message });
     }
   });
+
 }

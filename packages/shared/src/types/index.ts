@@ -147,6 +147,9 @@ export type {
   PullRequestDiff,
   PullRequestReviewEvent,
   PullRequestMergeMethod,
+  PullRequestConflictFile,
+  PullRequestConflictSide,
+  PullRequestResolveResult,
 } from "./pull-request.js";
 
 export type {

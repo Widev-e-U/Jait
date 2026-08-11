@@ -1,4 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const runAgentLoopMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../tools/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../tools/index.js")>()),
+  runAgentLoop: runAgentLoopMock,
+}));
 import type { ToolContext } from "../tools/contracts.js";
 import { JaitProvider, prepareJaitThreadSandboxToolInput } from "./jait-provider.js";
 
@@ -27,6 +34,38 @@ describe("prepareJaitThreadSandboxToolInput", () => {
   it("leaves non-command tools unchanged", () => {
     const input = { path: "packages/gateway/src/providers/jait-provider.ts" };
     expect(prepareJaitThreadSandboxToolInput("file.read", input)).toBe(input);
+  });
+});
+
+describe("JaitProvider reasoning effort", () => {
+  it("carries the session selection into the native agent loop", async () => {
+    runAgentLoopMock.mockResolvedValueOnce({ content: "ok", executedToolCalls: [] });
+    const provider = new JaitProvider({
+      config: {
+        openaiApiKey: "test",
+        openaiBaseUrl: "http://localhost:11434/v1",
+        openaiModel: "test",
+        ollamaUrl: "http://localhost:11434",
+        ollamaModel: "test",
+        ollamaContextWindow: 0,
+        agentMaxRounds: 0,
+      } as any,
+      threadService: { getById: () => ({ userId: "user-1" }) } as any,
+      userService: {
+        getSettings: () => ({ apiKeys: {}, jaitBackend: "ollama" }),
+      } as any,
+    });
+
+    const session = await provider.startSession({
+      threadId: "thread-1",
+      workingDirectory: "/repo-worktree",
+      mode: "full-access",
+      reasoningEffort: "high",
+    });
+    await provider.sendTurn(session.id, "test");
+
+    expect(runAgentLoopMock).toHaveBeenCalledOnce();
+    expect(runAgentLoopMock.mock.calls[0]?.[0].auth.reasoningEffort).toBe("high");
   });
 });
 

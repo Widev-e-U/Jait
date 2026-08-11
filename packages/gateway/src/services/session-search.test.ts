@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { messages } from "../db/schema.js";
 import { SessionSearchService, buildFtsQuery } from "./session-search.js";
+import { ChatTracesService } from "./chat-traces.js";
 import { SessionService } from "./sessions.js";
 import { ThreadService } from "./threads.js";
 
@@ -114,6 +115,64 @@ describe("SessionSearchService", () => {
 
       db.delete(messages).where(eq(messages.id, "msg-update")).run();
       expect(search.search({ query: "durable session", userId: "user-1" })).toEqual([]);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("indexes durable thread activity while excluding streaming and context-flow noise", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const sessionService = new SessionService(db);
+      const threadService = new ThreadService(db);
+      const search = new SessionSearchService(sqlite);
+      const session = sessionService.create({ userId: "user-1", name: "Focused activity search" });
+      const thread = threadService.create({
+        userId: "user-1",
+        sessionId: session.id,
+        title: "Searchable thread",
+        providerId: "jait",
+      });
+
+      const durable = threadService.addActivity(thread.id, "tool.result", "Migration inspection completed", {
+        content: "durableresultmarker appears in the final tool result",
+      });
+      const noisy = threadService.addActivity(thread.id, "context_flow", "Outbound context snapshot", {
+        content: "contextpollutionmarker appears in a diagnostic context dump",
+      });
+      threadService.addActivity(thread.id, "codex/event/exec_command_output_delta", "stream chunk", {
+        content: "streamfragmentmarker appears in transient output",
+      });
+
+      expect(search.search({ query: "durableresultmarker", userId: "user-1" })).toEqual([
+        expect.objectContaining({ id: durable.id, kind: "tool.result" }),
+      ]);
+      expect(search.search({ query: "contextpollutionmarker", userId: "user-1" })).toEqual([]);
+      expect(search.search({ query: "streamfragmentmarker", userId: "user-1" })).toEqual([]);
+
+      const trace = new ChatTracesService(sqlite).traces({
+        chatId: session.id,
+        userId: "user-1",
+        includeMessages: false,
+      });
+      expect(trace.threads[0]?.activities).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: noisy.id,
+          kind: "context_flow",
+          payload: expect.objectContaining({
+            content: expect.stringContaining("contextpollutionmarker"),
+          }),
+        }),
+      ]));
+
+      sqlite.prepare(`UPDATE agent_thread_activities SET kind = 'message' WHERE id = ?`).run(noisy.id);
+      expect(search.search({ query: "contextpollutionmarker", userId: "user-1" })).toEqual([
+        expect.objectContaining({ id: noisy.id, kind: "message" }),
+      ]);
+
+      sqlite.prepare(`UPDATE agent_thread_activities SET kind = 'context_flow' WHERE id = ?`).run(durable.id);
+      expect(search.search({ query: "durableresultmarker", userId: "user-1" })).toEqual([]);
     } finally {
       sqlite.close();
     }

@@ -27,7 +27,7 @@ import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { SessionStateService } from "../services/session-state.js";
-import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
+import { normalizeReasoningEffort, resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
 import { assertOwnership } from "../security/ownership.js";
@@ -135,6 +135,7 @@ interface QueuedThreadMessage {
   providerId?: ProviderId;
   runtimeMode?: "full-access" | "supervised";
   model?: string | null;
+  reasoningEffort?: string | null;
   queuedAt?: number;
 }
 
@@ -176,6 +177,7 @@ function parseQueuedThreadMessagesState(raw: unknown): QueuedThreadMessagesState
           ? record["runtimeMode"]
           : undefined,
         model: typeof record["model"] === "string" ? record["model"] : null,
+        reasoningEffort: normalizeReasoningEffort(record["reasoningEffort"]) ?? null,
         queuedAt: typeof record["queuedAt"] === "number" ? record["queuedAt"] : undefined,
       });
     }
@@ -248,6 +250,7 @@ export function registerThreadRoutes(
           title: thread.title,
           providerId: thread.providerId as ThreadInfo["providerId"],
           model: thread.model,
+          reasoningEffort: thread.reasoningEffort,
           runtimeMode: thread.runtimeMode as ThreadInfo["runtimeMode"],
           kind: thread.kind as ThreadInfo["kind"],
           workingDirectory: thread.workingDirectory,
@@ -806,6 +809,9 @@ export function registerThreadRoutes(
       title: typeof body["title"] === "string" ? body["title"] : "New Thread",
       providerId: resolvedProvider.providerId,
       model: typeof body["model"] === "string" ? body["model"] : defaults.model,
+      reasoningEffort: body["reasoningEffort"] === null
+        ? null
+        : normalizeReasoningEffort(body["reasoningEffort"]) ?? defaults.reasoningEffort ?? null,
       runtimeMode:
         body["runtimeMode"] === "supervised"
           ? "supervised"
@@ -875,6 +881,7 @@ export function registerThreadRoutes(
       title: typeof body["title"] === "string" ? body["title"] : undefined,
       providerId,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
+      reasoningEffort: body["reasoningEffort"] === null ? null : normalizeReasoningEffort(body["reasoningEffort"]),
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
       kind: body["kind"] === "delegation" ? "delegation" : body["kind"] === "delivery" ? "delivery" : undefined,
       skillIds: parseSkillIds(body["skillIds"]),
@@ -1099,6 +1106,7 @@ export function registerThreadRoutes(
         workingDirectory,
         mode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
         model: thread.model ?? undefined,
+        reasoningEffort: thread.reasoningEffort ?? undefined,
         mcpServers,
       });
 
@@ -1795,6 +1803,7 @@ export function registerThreadRoutes(
                 workingDirectory: wdir,
                 mode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
                 model: thread.model ?? undefined,
+                reasoningEffort: thread.reasoningEffort ?? undefined,
                 mcpServers,
               });
 

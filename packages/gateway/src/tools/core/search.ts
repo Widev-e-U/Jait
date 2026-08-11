@@ -1,70 +1,21 @@
 /**
  * search — Search files in the project by content or name.
  *
- * Inspired by VS Code Copilot's grep_search + file_search:
- * - `isRegexp` flag for explicit regex vs literal mode
- * - Auto-retry with opposite mode if no results found
- * - `includeIgnoredFiles` to search in gitignored dirs (node_modules, etc.)
- * - Hard cap on max results (200)
- * - Rich description with regex alternation tips
- * - Timeout protection (20s)
+ * Search execution and ranking are shared with the project REST API. Commands
+ * are launched with argv vectors, candidates are collected before ranking, and
+ * only the final ranked results are capped for model context.
  */
 
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
+import {
+  PROJECT_SEARCH_DEFAULT_RESULTS,
+  PROJECT_SEARCH_MAX_RESULTS,
+  ProjectSearchUnavailableError,
+  normalizeProjectSearchLimit,
+  searchProject,
+} from "../../services/project-search.js";
 import { resolveProjectRoot } from "./get-fs.js";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-import { platform } from "node:os";
-
-const execAsync = promisify(exec);
-
-/** Absolute maximum results to prevent context blowup. */
-const MAX_RESULTS_CAP = 200;
-/** Default number of results when not specified. */
-const DEFAULT_MAX_RESULTS = 20;
-/** Search timeout in ms. */
-const SEARCH_TIMEOUT = 20_000;
-/** Child-process stdout buffer cap. Raised above the old 2MB so a single
- *  very long matched line (e.g. in a minified `.map`/bundle) doesn't overflow. */
-const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
-/** Cap each matched line's content so a huge one-line file can't blow up context. */
-const MAX_LINE_CONTENT = 500;
-
-function isNoMatchesExit(err: unknown): err is { code?: number | string; stdout?: string } {
-  if (!err || typeof err !== "object") return false;
-  const code = (err as { code?: number | string }).code;
-  return code === 1 || code === "1";
-}
-
-/** Normalize a matched line: strip trailing newline and cap its length so
- *  minified/bundled files (single huge line) don't flood the context. */
-function truncateLine(line: string): string {
-  const trimmed = line.replace(/\r?$/, "").trim();
-  if (trimmed.length <= MAX_LINE_CONTENT) return trimmed;
-  return trimmed.slice(0, MAX_LINE_CONTENT) + `… (truncated, ${trimmed.length - MAX_LINE_CONTENT} more chars)`;
-}
-
-async function runSearchCommand(cmd: string): Promise<string> {
-  try {
-    const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: MAX_BUFFER_BYTES });
-    return stdout;
-  } catch (err) {
-    if (isNoMatchesExit(err)) {
-      return err.stdout ?? "";
-    }
-    // A match on a single line larger than MAX_BUFFER_BYTES overflows exec's
-    // buffer. Surface a clear message instead of the raw "maxBuffer exceeded".
-    const code = (err as { code?: string })?.code;
-    if (code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-      throw new Error(
-        `Search produced too much output (a matching line exceeded the ${MAX_BUFFER_BYTES / 1024 / 1024}MB buffer). ` +
-          `Try narrowing the pattern or path, or adding an include glob (e.g. "*.ts") to skip minified files.`,
-      );
-    }
-    throw err;
-  }
-}
 
 interface SearchInput {
   /** The search pattern (text or regex) */
@@ -79,20 +30,39 @@ interface SearchInput {
   include?: string;
   /** Maximum number of results (default: 20, max: 200) */
   limit?: number;
-  /** Whether to include files normally ignored by .gitignore (default: false).
-   *  Warning: this may be slower. Only set when you need to search in
-   *  node_modules, build outputs, or other ignored directories. */
+  /** Whether to include files normally ignored by .gitignore (default: false). */
   includeIgnoredFiles?: boolean;
+}
+
+function contentResultMessage(
+  pattern: string,
+  count: number,
+  limit: number,
+  limited: boolean,
+): string {
+  if (count === 0) return `No matches for "${pattern}"`;
+  const suffix = limited
+    ? ` (stopped at the ${limit}-result limit — narrow the pattern to see the rest)`
+    : "";
+  return `Found ${count} match${count === 1 ? "" : "es"} for "${pattern}"${suffix}`;
+}
+
+function fileResultMessage(pattern: string, count: number, limit: number, limited: boolean): string {
+  if (count === 0) return `No files matching "${pattern}"`;
+  const suffix = limited
+    ? ` (stopped at the ${limit}-result limit — narrow the pattern to see the rest)`
+    : "";
+  return `Found ${count} file${count === 1 ? "" : "s"} matching "${pattern}"${suffix}`;
 }
 
 export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<SearchInput> {
   return {
     name: "search",
     description:
-      "Search for files or text in the project. " +
-      'mode="content" (default): grep through file contents, returns matching lines. ' +
-      'mode="files": find files by name substring. ' +
-      "Use isRegexp for regex patterns (e.g. 'word1|word2' for alternation).",
+      "Search for files or text in the project. "
+      + 'mode="content" (default): grep through file contents and rank definitions/source files first. '
+      + 'mode="files": rank filename and path matches. '
+      + "Use isRegexp for regex patterns (e.g. 'word1|word2' for alternation).",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -122,7 +92,8 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
         },
         limit: {
           type: "number",
-          description: `Max results (default: ${DEFAULT_MAX_RESULTS}, max: ${MAX_RESULTS_CAP}).`,
+          description:
+            `Max results (default: ${PROJECT_SEARCH_DEFAULT_RESULTS}, max: ${PROJECT_SEARCH_MAX_RESULTS}).`,
         },
         includeIgnoredFiles: {
           type: "boolean",
@@ -133,137 +104,89 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
     },
     async execute(input: SearchInput, context: ToolContext): Promise<ToolResult> {
       const effectiveRoot = resolveProjectRoot(registry, context.sessionId, context.projectRoot);
-      const searchDir = input.path || effectiveRoot;
-      const limit = Math.min(input.limit ?? DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP);
-      const mode = input.mode ?? "content";
+      const searchRoot = input.path || effectiveRoot;
 
       try {
+        const limit = normalizeProjectSearchLimit(input.limit);
+        const mode = input.mode ?? "content";
         if (mode === "files") {
-          return await searchFiles(searchDir, input.pattern, limit);
+          const result = await searchProject({
+            root: searchRoot,
+            query: input.pattern,
+            mode: "files",
+            limit,
+            includeIgnoredFiles: input.includeIgnoredFiles,
+          });
+          if (result.mode !== "files") throw new Error("Unexpected project search mode");
+          const files = result.files.map((file) => file.path);
+          return {
+            ok: true,
+            message: fileResultMessage(input.pattern, files.length, limit, result.limited),
+            data: { pattern: input.pattern, files },
+          };
         }
 
-        // Try content search with the given regex mode
-        const result = await searchContent(
-          searchDir, input.pattern, input.include, limit,
-          input.isRegexp ?? false, input.includeIgnoredFiles ?? false,
-        );
+        const runContentSearch = async (isRegexp: boolean) => {
+          const result = await searchProject({
+            root: searchRoot,
+            query: input.pattern,
+            mode: "content",
+            limit,
+            include: input.include,
+            isRegexp,
+            includeIgnoredFiles: input.includeIgnoredFiles,
+          });
+          if (result.mode !== "content") throw new Error("Unexpected project search mode");
+          return result;
+        };
 
-        // Auto-retry with opposite mode if no results (Copilot pattern)
-        if (result.ok && (result.data as any)?.matches?.length === 0) {
-          const retryResult = await searchContent(
-            searchDir, input.pattern, input.include, limit,
-            !(input.isRegexp ?? false), input.includeIgnoredFiles ?? false,
-          );
-          if ((retryResult.data as any)?.matches?.length > 0) {
-            return {
-              ...retryResult,
-              message: retryResult.message + ` (retried as ${!(input.isRegexp ?? false) ? "regex" : "literal"})`,
-            };
+        const initialMode = input.isRegexp ?? false;
+        let retriedAs: "regex" | "literal" | null = null;
+        let result;
+        try {
+          result = await runContentSearch(initialMode);
+        } catch (error) {
+          const initialRegexUnavailable =
+            initialMode
+            && error instanceof ProjectSearchUnavailableError
+            && error.reason === "regexp_requires_rg";
+          if (!initialRegexUnavailable) throw error;
+          const literalRetry = await runContentSearch(false);
+          if (literalRetry.matches.length === 0) throw error;
+          result = literalRetry;
+          retriedAs = "literal";
+        }
+        if (result.matches.length === 0 && !retriedAs) {
+          try {
+            const retry = await runContentSearch(!initialMode);
+            if (retry.matches.length > 0) {
+              result = retry;
+              retriedAs = initialMode ? "literal" : "regex";
+            }
+          } catch (error) {
+            const optionalRegexRetryUnavailable =
+              !initialMode
+              && error instanceof ProjectSearchUnavailableError
+              && error.reason === "regexp_requires_rg";
+            if (!optionalRegexRetryUnavailable) throw error;
           }
         }
 
-        return result;
-      } catch (err) {
+        const matches = result.matches.map(({ file, line, content }) => ({ file, line, content }));
+        const retrySuffix = retriedAs ? ` (retried as ${retriedAs})` : "";
+        return {
+          ok: true,
+          message:
+            contentResultMessage(input.pattern, matches.length, limit, result.limited)
+            + retrySuffix,
+          data: { pattern: input.pattern, matches },
+        };
+      } catch (error) {
         return {
           ok: false,
-          message: err instanceof Error ? err.message : "Search failed",
+          message: error instanceof Error ? error.message : "Search failed",
         };
       }
     },
-  };
-}
-
-async function searchContent(
-  dir: string,
-  pattern: string,
-  include: string | undefined,
-  limit: number,
-  isRegexp: boolean,
-  includeIgnored: boolean,
-): Promise<ToolResult> {
-  const isWin = platform() === "win32";
-
-  // Escape pattern for shell safety
-  const safePattern = pattern.replace(/"/g, '\\"');
-  const safeDir = dir.replace(/"/g, '\\"');
-
-  let cmd: string;
-  if (isWin) {
-    // Prefer ripgrep (fast, handles .gitignore)
-    const regexpFlag = isRegexp ? "" : "--fixed-strings";
-    const includeArg = include ? `--glob "${include}"` : "";
-    const ignoreArg = includeIgnored ? "--no-ignore" : "";
-    cmd = `rg --no-heading --line-number --max-count ${limit} --ignore-case ${regexpFlag} ${includeArg} ${ignoreArg} -- "${safePattern}" "${safeDir}" 2>nul`;
-    // Fallback to findstr if rg not installed
-    cmd += ` || findstr /s /n /i /c:"${safePattern}" "${safeDir}\\${include || "*"}" 2>nul`;
-  } else {
-    const regexpFlag = isRegexp ? "" : "--fixed-strings";
-    const includeArg = include ? `--glob "${include}"` : "";
-    const ignoreArg = includeIgnored ? "--no-ignore" : "";
-    cmd = `rg --no-heading --line-number --max-count ${limit} --ignore-case ${regexpFlag} ${includeArg} ${ignoreArg} -- "${safePattern}" "${safeDir}" 2>/dev/null`;
-    // Fallback to grep
-    const grepInclude = include ? `--include="${include}"` : "";
-    const grepRegexp = isRegexp ? "-E" : "-F";
-    cmd += ` || grep -rn -i ${grepRegexp} --max-count=${limit} ${grepInclude} -- "${safePattern}" "${safeDir}" 2>/dev/null`;
-  }
-
-  const stdout = await runSearchCommand(cmd);
-  const lines = stdout.trim().split("\n").filter(Boolean).slice(0, limit);
-
-  if (lines.length === 0) {
-    return { ok: true, message: `No matches for "${pattern}"`, data: { matches: [] } };
-  }
-
-  const matches = lines.map((line) => {
-    // Parse "file:line:content" format
-    const m = line.match(/^(.+?):(\d+):(.*)$/);
-    if (m) {
-      return { file: m[1]!, line: parseInt(m[2]!, 10), content: truncateLine(m[3]!) };
-    }
-    return { file: "", line: 0, content: truncateLine(line) };
-  });
-
-  return {
-    ok: true,
-    message: `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"`,
-    data: { pattern, matches },
-  };
-}
-
-async function searchFiles(
-  dir: string,
-  pattern: string,
-  limit: number,
-): Promise<ToolResult> {
-  const isWin = platform() === "win32";
-  const safeDir = dir.replace(/"/g, '\\"');
-  // Strip glob wildcards — the LLM sometimes passes "*readme*" instead of "readme".
-  // findstr and rg treat * as regex (0+ of prev char), which breaks matching.
-  const cleanedPattern = pattern.replace(/[*?[\]]/g, "");
-  if (!cleanedPattern) {
-    return { ok: true, message: `No files matching "${pattern}" (empty after cleaning)`, data: { files: [] } };
-  }
-  const safePattern = cleanedPattern.replace(/"/g, '\\"');
-
-  let cmd: string;
-  if (isWin) {
-    // Try ripgrep (respects .gitignore) then fall back to dir+findstr.
-    // The `|| (...)` ensures the fallback runs when rg is not installed.
-    cmd = `(rg --files "${safeDir}" 2>nul | findstr /i "${safePattern}") || (dir /s /b "${safeDir}" 2>nul | findstr /i "${safePattern}")`;
-  } else {
-    cmd = `find "${safeDir}" -type f -iname "*${safePattern}*" 2>/dev/null | head -n ${limit}`;
-  }
-
-  const stdout = await runSearchCommand(cmd);
-  const files = stdout.trim().split("\n").filter(Boolean).slice(0, limit);
-
-  if (files.length === 0) {
-    return { ok: true, message: `No files matching "${pattern}"`, data: { files: [] } };
-  }
-
-  return {
-    ok: true,
-    message: `Found ${files.length} file${files.length === 1 ? "" : "s"} matching "${pattern}"`,
-    data: { pattern, files },
   };
 }
