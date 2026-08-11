@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import type { JaitBackend } from "@jait/shared/types";
 import type { JaitDB } from "../db/connection.js";
 import { messages, sessions, userSettings, users } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -7,7 +8,8 @@ import { uuidv7 } from "../db/uuidv7.js";
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "wyoming" | "whisper" | "gpt" | "elevenlabs";
 export type ChatProvider = string;
-export type JaitBackend = "openai" | "openrouter" | "ollama";
+/** Re-exported from @jait/shared so gateway and web validate the same set. */
+export type { JaitBackend };
 /** Reasoning effort levels for reasoning-capable models (OpenAI o-series / GPT-5, etc). */
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
 

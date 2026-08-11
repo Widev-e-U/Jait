@@ -63,7 +63,7 @@ export const userSettings = sqliteTable("user_settings", {
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming' | 'gpt' | 'elevenlabs'
   chatProvider: text("chat_provider").notNull().default("jait"),
-  jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
+  jaitBackend: text("jait_backend").notNull().default("openai"), // JaitBackend: 'openai' | 'openrouter' | 'ollama' | 'omniroute'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids
   selectedModel: text("selected_model"), // last model id picked in the UI; used by background channels (e.g. WhatsApp)
   reasoningEffort: text("reasoning_effort"), // 'minimal' | 'low' | 'medium' | 'high' | null (only for reasoning-capable models)

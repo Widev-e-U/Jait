@@ -69,9 +69,10 @@ export type {
   ScreenShareStopRequest,
 } from "./screen-share.js";
 
-export { providerTypeFromId } from "./thread.js";
+export { providerTypeFromId, JAIT_BACKENDS, isJaitBackend } from "./thread.js";
 
 export type {
+  JaitBackend,
   ProviderId,
   ProviderInfo,
   ProviderAuthCapabilities,

@@ -2,13 +2,14 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
+import { AcpProvider, loadAcpProviderConfigs, omnirouteAcpEnv } from "./acp-provider.js";
 import type { ProviderAuthStatus, ProviderEvent } from "./contracts.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAcpViaOmniRoute = process.env.JAIT_ACP_VIA_OMNIROUTE;
 
 const fakeAcpAgentScript = `
 process.stdin.setEncoding("utf8");
@@ -326,6 +327,13 @@ afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
   } else {
     process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+  }
+  // Vitest pools workers across files, so leaking this would silently reroute
+  // ACP providers in unrelated suites.
+  if (originalAcpViaOmniRoute === undefined) {
+    delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+  } else {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = originalAcpViaOmniRoute;
   }
 });
 
@@ -828,6 +836,83 @@ describe("AcpProvider Claude Code progressive tool updates", () => {
     expect(args.path).toBe("/x/notes.txt");
     expect(args.search).toBe("hello world");
     expect(args.replace).toBe("goodbye world");
+  });
+});
+
+describe("omnirouteAcpEnv", () => {
+  it("stays out of the way unless explicitly switched on", () => {
+    // Enabling this by default would silently redirect a user's paid Claude or
+    // ChatGPT subscription through a third-party router the moment the router
+    // happened to be installed.
+    expect(omnirouteAcpEnv("claude-code", {})).toBeUndefined();
+    expect(omnirouteAcpEnv("codex", { JAIT_ACP_VIA_OMNIROUTE: "0" })).toBeUndefined();
+    expect(loadAcpProviderConfigs().find((c) => c.id === "claude-code")?.env).toBeUndefined();
+  });
+
+  it("applies to a provider built from a registry definition, not just the local defaults", () => {
+    // Regression: codex/claude-code definitions normally come from the ACP
+    // registry, and mergeFallbackDefinitions() lets the registry entry win. An
+    // overlay attached to loadAcpProviderConfigs() is therefore dropped on the
+    // real path, making JAIT_ACP_VIA_OMNIROUTE silently do nothing.
+    process.env.JAIT_ACP_VIA_OMNIROUTE = "1";
+    try {
+      const fromRegistry = new AcpProvider({
+        id: "claude-code",
+        name: "Claude Code",
+        description: "from registry, carries no env of its own",
+        command: "npx",
+        args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+      });
+
+      expect((fromRegistry as unknown as { config: { env?: Record<string, string> } }).config.env)
+        .toMatchObject({ ANTHROPIC_BASE_URL: "http://localhost:20128" });
+    } finally {
+      delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+    }
+  });
+
+  it("keeps CODEX_CONFIG alongside the OmniRoute overlay", () => {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = "1";
+    try {
+      const codex = new AcpProvider({
+        id: "codex",
+        name: "Codex",
+        description: "from registry",
+        command: "npx",
+        args: ["-y", "@agentclientprotocol/codex-acp"],
+      });
+
+      const env = (codex as unknown as { config: { env?: Record<string, string> } }).config.env ?? {};
+      expect(env.OPENAI_BASE_URL).toBe("http://localhost:20128/v1");
+      expect(env.CODEX_CONFIG).toBeTruthy();
+    } finally {
+      delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+    }
+  });
+
+  it("points Claude Code at the router root, not the /v1 surface", () => {
+    // The Anthropic-compatible endpoint lives at the router root — the CLI
+    // appends /v1/messages itself, so passing …/v1 would yield /v1/v1/messages.
+    expect(omnirouteAcpEnv("claude-code", {
+      JAIT_ACP_VIA_OMNIROUTE: "1",
+      OMNIROUTE_BASE_URL: "http://localhost:20128/v1",
+      OMNIROUTE_API_KEY: "sk-omni",
+    })).toEqual({
+      ANTHROPIC_BASE_URL: "http://localhost:20128",
+      ANTHROPIC_AUTH_TOKEN: "sk-omni",
+    });
+  });
+
+  it("points Codex at the OpenAI-compatible /v1 surface", () => {
+    expect(omnirouteAcpEnv("codex", { JAIT_ACP_VIA_OMNIROUTE: "1" })).toEqual({
+      OPENAI_BASE_URL: "http://localhost:20128/v1",
+      OPENAI_API_KEY: "omniroute",
+    });
+  });
+
+  it("leaves providers without a vendor-endpoint override alone", () => {
+    expect(omnirouteAcpEnv("cursor", { JAIT_ACP_VIA_OMNIROUTE: "1" })).toBeUndefined();
+    expect(omnirouteAcpEnv("pi", { JAIT_ACP_VIA_OMNIROUTE: "1" })).toBeUndefined();
   });
 });
 

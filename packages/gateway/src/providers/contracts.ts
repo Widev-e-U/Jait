@@ -176,4 +176,10 @@ export interface McpServerRef {
   url?: string;
   /** Env vars for the MCP server process */
   env?: Record<string, string>;
+  /**
+   * For http/sse: headers to send with every request — the only way to
+   * authenticate a remote MCP server, since `env` applies to spawned stdio
+   * processes and means nothing over HTTP.
+   */
+  headers?: Record<string, string>;
 }

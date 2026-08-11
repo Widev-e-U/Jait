@@ -1,7 +1,11 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode, SttProvider, ChatProvider, JaitBackend, ReasoningEffort } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider, ChatProvider, ReasoningEffort } from "../services/users.js";
 import { REASONING_EFFORT_VALUES } from "../services/users.js";
+// Root entrypoint, not the "/types" subpath: that one resolves to dist/ at
+// runtime and only the root is aliased for Vitest, so a value import here
+// (isJaitBackend) would fail to resolve under test.
+import { isJaitBackend, type JaitBackend } from "@jait/shared";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
@@ -28,7 +32,6 @@ function clearAuthCookie(reply: FastifyReply): void {
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper", "gpt", "elevenlabs"]);
-const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter", "ollama"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -194,8 +197,8 @@ export function registerAuthRoutes(
       patch.chatProvider = body.chat_provider.trim();
     }
 
-    if (typeof body.jait_backend === "string" && JAIT_BACKEND_VALUES.has(body.jait_backend as JaitBackend)) {
-      patch.jaitBackend = body.jait_backend as JaitBackend;
+    if (isJaitBackend(body.jait_backend)) {
+      patch.jaitBackend = body.jait_backend;
     }
 
     if (Array.isArray(body.recent_models)) {
@@ -270,6 +273,8 @@ export function registerAuthRoutes(
       BRAVE_API_KEY: "BRAVE_API_KEY",
       PERPLEXITY_API_KEY: "PERPLEXITY_API_KEY",
       OPENROUTER_API_KEY: "OPENROUTER_API_KEY",
+      OMNIROUTE_BASE_URL: "OMNIROUTE_BASE_URL",
+      OMNIROUTE_API_KEY: "OMNIROUTE_API_KEY",
       XAI_API_KEY: "XAI_API_KEY",
       GEMINI_API_KEY: "GEMINI_API_KEY",
       MOONSHOT_API_KEY: "MOONSHOT_API_KEY",

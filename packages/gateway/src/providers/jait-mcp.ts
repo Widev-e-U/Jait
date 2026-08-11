@@ -1,6 +1,7 @@
 export const JAIT_CORE_MCP_SERVER_NAME = "jait_core";
 export const JAIT_DEFERRED_MCP_SERVER_NAME = "jait";
 export const JAIT_CORE_CODE_MODE_NAMESPACE = "mcp__jait_core";
+export const OMNIROUTE_MCP_SERVER_NAME = "omniroute";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

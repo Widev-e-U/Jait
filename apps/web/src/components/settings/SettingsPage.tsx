@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy, Watch } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy, Watch, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -26,6 +26,7 @@ import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
+import { cn } from '@/lib/utils'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
@@ -52,6 +53,7 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'Ollama', fields: ['OLLAMA_URL', 'OLLAMA_MODEL'] },
   { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
   { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
+  { label: 'OmniRoute', fields: ['OMNIROUTE_BASE_URL', 'OMNIROUTE_API_KEY', 'OMNIROUTE_MODEL'] },
   { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
   { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
   { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
@@ -227,6 +229,8 @@ export function SettingsPage({
   const [newProviderAccountLabel, setNewProviderAccountLabel] = useState('')
   const [providerAccountMutationBusy, setProviderAccountMutationBusy] = useState(false)
   const [providerAccountsLoading, setProviderAccountsLoading] = useState(false)
+  const [omniRouteTesting, setOmniRouteTesting] = useState(false)
+  const [omniRouteResult, setOmniRouteResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [providerLogoutBusy, setProviderLogoutBusy] = useState<ProviderId | null>(null)
   const [providerLoginBusy, setProviderLoginBusy] = useState<ProviderId | null>(null)
   const [providerLoginInstructions, setProviderLoginInstructions] = useState<{
@@ -580,6 +584,48 @@ export function SettingsPage({
     })()
     return () => { cancelled = true }
   }, [token])
+
+  /**
+   * Probe the OmniRoute router via the gateway. Sends the *draft* values so the
+   * user can verify a base URL before committing it — the whole point is to find
+   * out whether it works, which is awkward if you must save a wrong value first.
+   */
+  const handleTestOmniRoute = useCallback(async () => {
+    setOmniRouteTesting(true)
+    setOmniRouteResult(null)
+    try {
+      const res = await fetch(`${API_URL}/api/providers/omniroute/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          base_url: draft.OMNIROUTE_BASE_URL ?? '',
+          api_key: draft.OMNIROUTE_API_KEY ?? '',
+        }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        error?: string
+        modelCount?: number
+        latencyMs?: number
+        sampleModels?: string[]
+        authenticated?: boolean
+      }
+      if (data.ok) {
+        const sample = data.sampleModels?.length ? ` (e.g. ${data.sampleModels.join(', ')})` : ''
+        const auth = data.authenticated ? 'with API key' : 'keyless'
+        setOmniRouteResult({
+          ok: true,
+          message: `Reachable in ${data.latencyMs}ms — ${data.modelCount} models, ${auth}${sample}`,
+        })
+      } else {
+        setOmniRouteResult({ ok: false, message: data.error ?? 'Connection failed' })
+      }
+    } catch (err) {
+      setOmniRouteResult({ ok: false, message: err instanceof Error ? err.message : 'Connection failed' })
+    } finally {
+      setOmniRouteTesting(false)
+    }
+  }, [token, draft.OMNIROUTE_BASE_URL, draft.OMNIROUTE_API_KEY])
 
   const toggleVisibility = useCallback((field: string) => {
     setVisible((prev) => ({ ...prev, [field]: !prev[field] }))
@@ -1164,6 +1210,7 @@ export function SettingsPage({
                     <SelectItem value="openai">OpenAI (direct)</SelectItem>
                     <SelectItem value="openrouter">OpenRouter</SelectItem>
                     <SelectItem value="ollama">Ollama (local)</SelectItem>
+                    <SelectItem value="omniroute">OmniRoute (local router)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1171,8 +1218,17 @@ export function SettingsPage({
                     ? 'Models will be fetched from OpenRouter. Set your OPENROUTER_API_KEY in the API tab.'
                     : jaitBackend === 'ollama'
                       ? 'Models will be fetched from your local Ollama instance. Set OLLAMA_URL in the API tab if not running on localhost:11434.'
-                      : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
+                      : jaitBackend === 'omniroute'
+                        ? 'Models come from the OmniRoute router running on your machine (default http://localhost:20128/v1). The API key is optional. Pick the "auto" model to let OmniRoute route each request itself.'
+                        : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
                 </p>
+                {jaitBackend === 'omniroute' && (
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">
+                    OmniRoute forwards requests to up to ~290 third-party providers, some of whose free tiers allow
+                    training on submitted data. Chats include your repository contents — pick your providers in the
+                    OmniRoute dashboard accordingly.
+                  </p>
+                )}
               </div>
               <div className="max-w-sm">
                 <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Agent checkpoint interval</Label>
@@ -1592,6 +1648,32 @@ export function SettingsPage({
                       )
                     })}
                   </div>
+                  {group.label === 'OmniRoute' && (
+                    <div className="border-t px-5 py-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void handleTestOmniRoute() }}
+                          disabled={omniRouteTesting}
+                        >
+                          {omniRouteTesting
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            : <Network className="mr-1.5 h-3.5 w-3.5" />}
+                          Test connection
+                        </Button>
+                        {omniRouteResult && (
+                          <span className={cn('text-sm', omniRouteResult.ok ? 'text-emerald-600 dark:text-emerald-500' : 'text-destructive')}>
+                            {omniRouteResult.message}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Probed from the gateway, not your browser — that is the connection that
+                        actually has to work. Tests the values shown above, saved or not.
+                      </p>
+                    </div>
+                  )}
                 </CollapsibleContent>
               </Card>
             </Collapsible>

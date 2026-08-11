@@ -9,6 +9,7 @@
  *   POST   /api/providers/:id/auth/login   — start provider login
  *   POST   /api/providers/:id/auth/logout  — log out provider
  *   GET    /api/providers/:id/models       — list models for a provider
+ *   POST   /api/providers/omniroute/test   — probe a self-hosted OmniRoute router
  */
 
 import type { FastifyInstance } from "fastify";
@@ -27,6 +28,9 @@ import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 // ── Route registration ───────────────────────────────────────────
 
 const GATEWAY_NODE_NAME = "Gateway";
+
+/** Probe budget for the OmniRoute connection test — long enough for a cold local start. */
+const OMNIROUTE_PROBE_TIMEOUT_MS = 8_000;
 
 type ProviderInfoPayload = ProviderSnapshot & { nodeId: string; nodeName: string };
 
@@ -335,6 +339,90 @@ export function registerProviderRoutes(
       return reply.status(500).send(result);
     }
     return result;
+  });
+
+  /**
+   * Probe a self-hosted OmniRoute router.
+   *
+   * OmniRoute is a service the user runs themselves, so the single most common
+   * failure is simply "it isn't up" — and without a probe that only surfaces as
+   * an empty model group or a raw ECONNREFUSED mid-chat. This answers the one
+   * question the settings UI needs: can the gateway reach it, and how many
+   * models does it serve?
+   *
+   * Runs from the gateway on purpose: the browser may sit on a different host,
+   * so a client-side fetch would test the wrong network path.
+   */
+  app.post("/api/providers/omniroute/test", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const body = (request.body as Record<string, unknown> | undefined) ?? {};
+    const settings = deps.userService?.getSettings(authUser.id);
+    const apiKeys = settings?.apiKeys ?? {};
+
+    const rawBaseUrl = typeof body.base_url === "string" && body.base_url.trim()
+      ? body.base_url.trim()
+      : (apiKeys["OMNIROUTE_BASE_URL"]?.trim() || config.omnirouteBaseUrl);
+    const apiKey = typeof body.api_key === "string" && body.api_key.trim()
+      ? body.api_key.trim()
+      : (apiKeys["OMNIROUTE_API_KEY"]?.trim() || config.omnirouteApiKey);
+
+    let modelsUrl: string;
+    try {
+      modelsUrl = `${new URL(rawBaseUrl).toString().replace(/\/+$/, "")}/models`;
+    } catch {
+      return reply.status(400).send({ ok: false, error: `Not a valid URL: ${rawBaseUrl}` });
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OMNIROUTE_PROBE_TIMEOUT_MS);
+    const startedAt = Date.now();
+    try {
+      const res = await fetch(modelsUrl, {
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        signal: controller.signal,
+      });
+      const latencyMs = Date.now() - startedAt;
+      if (!res.ok) {
+        return {
+          ok: false,
+          baseUrl: rawBaseUrl,
+          latencyMs,
+          error: res.status === 401
+            ? "The router answered 401 — the configured OMNIROUTE_API_KEY was rejected. Clear it to use the keyless free tier."
+            : `The router answered HTTP ${res.status}.`,
+        };
+      }
+      const data = (await res.json()) as { data?: Array<{ id?: string }> };
+      const ids = (data.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id));
+      return {
+        ok: true,
+        baseUrl: rawBaseUrl,
+        latencyMs,
+        modelCount: ids.length,
+        // A couple of concrete ids make it obvious the catalogue is real.
+        sampleModels: ids.slice(0, 3),
+        authenticated: Boolean(apiKey),
+      };
+    } catch (error) {
+      const err = error as { name?: string; message?: string; cause?: { code?: string } };
+      const aborted = err?.name === "AbortError" || err?.name === "TimeoutError";
+      // Runtimes word transport failures differently ("fetch failed" on Node,
+      // "Unable to connect…" on Bun). Lead with our own sentence and append the
+      // underlying detail only when it adds something.
+      const detail = err?.cause?.code ?? err?.message?.replace(/[.?!]+$/, "");
+      return {
+        ok: false,
+        baseUrl: rawBaseUrl,
+        latencyMs: Date.now() - startedAt,
+        error: aborted
+          ? `No response within ${OMNIROUTE_PROBE_TIMEOUT_MS / 1000}s. Is the router running and reachable from the gateway?`
+          : `Could not reach the router — start it, or correct the base URL.${detail ? ` (${detail})` : ""}`,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 
   /** List models for a specific provider */

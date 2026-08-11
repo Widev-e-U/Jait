@@ -311,12 +311,20 @@ export class AcpProvider implements CliProviderAdapter {
 
   constructor(config: AcpProviderConfig) {
     const providerType = config.providerType ?? config.id;
+    // Applied here, not in loadAcpProviderConfigs: codex/claude-code definitions
+    // normally come from the ACP registry, and mergeFallbackDefinitions() lets the
+    // registry entry win — an overlay attached to the local defaults would be
+    // silently dropped. The constructor is the one place every construction path
+    // (registry, JAIT_ACP_PROVIDERS fallback, remote accounts) goes through, which
+    // is why CODEX_CONFIG is merged here too.
+    const omnirouteEnv = omnirouteAcpEnv(providerType);
+    const baseEnv = omnirouteEnv ? { ...config.env, ...omnirouteEnv } : config.env;
     const env = providerType === "codex"
       ? {
-          ...config.env,
+          ...baseEnv,
           CODEX_CONFIG: mergeJaitCodexConfig(config.env?.["CODEX_CONFIG"] ?? process.env.CODEX_CONFIG),
         }
-      : config.env;
+      : baseEnv;
     this.id = config.id;
     this.providerType = providerType;
     this.ownerUserId = config.ownerUserId;
@@ -1346,12 +1354,14 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
     };
   }
 
+  const headers = Object.entries(server.headers ?? {}).map(([name, value]) => ({ name, value }));
+
   if (server.transport === "http") {
     return {
       type: "http",
       name: server.name,
       url: server.url ?? "",
-      headers: [],
+      headers,
     };
   }
 
@@ -1359,7 +1369,7 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
     type: "sse",
     name: server.name,
     url: server.url ?? "",
-    headers: [],
+    headers,
   };
 }
 
@@ -1621,6 +1631,36 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
       },
     );
   });
+}
+
+/**
+ * Env overlay that points a CLI agent's own HTTP client at a local OmniRoute
+ * router instead of the vendor API. OmniRoute serves both an OpenAI-compatible
+ * `/v1` and an Anthropic-compatible surface at the root, so Codex and Claude
+ * Code each need their respective pair.
+ *
+ * Opt-in only. Enabling it by default would silently redirect a user's paid
+ * Claude/ChatGPT subscription through a third-party router the moment the
+ * router happens to be installed — never something to infer.
+ */
+export function omnirouteAcpEnv(
+  providerType: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> | undefined {
+  if (env.JAIT_ACP_VIA_OMNIROUTE?.trim().toLowerCase() !== "1") return undefined;
+  const openaiBaseUrl = (env.OMNIROUTE_BASE_URL?.trim() || "http://localhost:20128/v1").replace(/\/+$/, "");
+  // The Anthropic surface lives at the router root, not under /v1 — the CLI
+  // appends /v1/messages itself.
+  const anthropicBaseUrl = openaiBaseUrl.replace(/\/v1$/, "");
+  const key = env.OMNIROUTE_API_KEY?.trim() || "omniroute";
+
+  if (providerType === "claude-code") {
+    return { ANTHROPIC_BASE_URL: anthropicBaseUrl, ANTHROPIC_AUTH_TOKEN: key };
+  }
+  if (providerType === "codex") {
+    return { OPENAI_BASE_URL: openaiBaseUrl, OPENAI_API_KEY: key };
+  }
+  return undefined;
 }
 
 export function loadAcpProviderConfigs(): AcpProviderConfig[] {

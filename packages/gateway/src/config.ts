@@ -40,6 +40,15 @@ export interface AppConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiBaseUrl: string;
+  /**
+   * OmniRoute — a locally run OpenAI-compatible router that fans out to many
+   * upstream providers. Defaults to the router's own default port. Running
+   * the gateway in Docker means localhost is the container, not the host, so
+   * this needs an explicit override (e.g. http://host.docker.internal:20128/v1).
+   */
+  omnirouteBaseUrl: string;
+  /** Optional — OmniRoute serves keyless free-tier providers without one. */
+  omnirouteApiKey: string;
   /** Max context window tokens (auto-detected from model name if not set) */
   contextWindow: number;
   /**
@@ -93,6 +102,10 @@ export interface AppConfig {
 /** Infer context window size from model name. Conservative defaults. */
 export function inferContextWindow(model: string): number {
   const m = model.toLowerCase();
+  // OmniRoute routing aliases ("auto", "auto/coding", …) name a strategy, not a
+  // model — the concrete upstream is picked per request and can be a small free
+  // model, so stay at the conservative default instead of guessing high.
+  if (m === "auto" || m.startsWith("auto/")) return 128_000;
   if (m.includes("gpt-5")) return 400_000;
   if (m.includes("gpt-4o") || m.includes("gpt-4.1")) return 128_000;
   if (m.includes("gpt-4-turbo")) return 128_000;
@@ -137,6 +150,8 @@ export function loadConfig(): AppConfig {
     openaiApiKey: process.env["OPENAI_API_KEY"] ?? "",
     openaiModel: process.env["OPENAI_MODEL"] ?? "gpt-4o",
     openaiBaseUrl: process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1",
+    omnirouteBaseUrl: process.env["OMNIROUTE_BASE_URL"] ?? "http://localhost:20128/v1",
+    omnirouteApiKey: process.env["OMNIROUTE_API_KEY"] ?? "",
     contextWindow: parseInt(
       process.env["CONTEXT_WINDOW"] ?? "0",
       10,

@@ -14,10 +14,11 @@ import {
   fetchOpenAIModels,
   fetchOpenRouterModels,
   fetchOllamaModels,
+  fetchOmniRouteModels,
 } from "../providers/model-fetchers.js";
 
 /** Backend a model is served by — shown as the group/provider in pickers. */
-export type JaitModelGroup = "OpenAI" | "OpenRouter" | "Ollama";
+export type JaitModelGroup = "OpenAI" | "OpenRouter" | "Ollama" | "OmniRoute";
 
 export interface ListJaitModelsOptions {
   config: AppConfig;
@@ -79,11 +80,25 @@ export async function listJaitModels(options: ListJaitModelsOptions): Promise<Pr
     }
   })();
 
-  const [openai, openRouter, ollama] = await Promise.all([
+  const omnirouteBaseUrl = apiKeys["OMNIROUTE_BASE_URL"]?.trim() || config.omnirouteBaseUrl;
+  const omnirouteModelsP: Promise<ProviderModelInfo[]> = (async () => {
+    if (!omnirouteBaseUrl) return [];
+    try {
+      const key = apiKeys["OMNIROUTE_API_KEY"]?.trim() || config.omnirouteApiKey;
+      const models = await fetchOmniRouteModels(key, omnirouteBaseUrl);
+      return models.map((m) => ({ ...m, group: "OmniRoute" }));
+    } catch {
+      // Router not running — skip, same as Ollama.
+      return [];
+    }
+  })();
+
+  const [openai, openRouter, ollama, omniroute] = await Promise.all([
     openaiModelsP,
     openRouterModelsP,
     ollamaModelsP,
+    omnirouteModelsP,
   ]);
 
-  return [...openai, ...openRouter, ...ollama];
+  return [...openai, ...openRouter, ...ollama, ...omniroute];
 }

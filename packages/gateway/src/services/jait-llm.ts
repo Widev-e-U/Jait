@@ -32,6 +32,11 @@ export async function callJaitLlmCompletion(
       messages,
       max_tokens: options.maxTokens ?? 256,
       temperature: options.temperature ?? 0.3,
+      // Explicit, not implied: OpenAI treats a missing `stream` as false, but
+      // OmniRoute defaults to streaming and answers with text/event-stream —
+      // which makes the res.json() below throw. Every caller here wants one
+      // complete response, so say so rather than relying on the backend's default.
+      stream: false,
     }),
     signal: options.signal,
   });
@@ -170,6 +175,34 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
       openaiModel: ollamaModel,
       contextWindow: ollamaNumCtx,
       numCtx: ollamaNumCtx,
+    };
+  }
+
+  // ── OmniRoute backend ────────────────────────────────────────────
+  // Must resolve before the OpenRouter heuristic below: OmniRoute model ids
+  // almost always contain a slash ("openai/gpt-4o", "auto/coding"), which the
+  // `requestedModel.includes("/")` check would otherwise read as "this is an
+  // OpenRouter model" and silently redirect the request to openrouter.ai.
+  if (backend === "omniroute") {
+    const omnirouteBaseUrl = apiKeys["OMNIROUTE_BASE_URL"]?.trim()
+      || options.config.omnirouteBaseUrl
+      || "http://localhost:20128/v1";
+    // Only the explicit request model applies — OPENAI_MODEL defaults name
+    // models that OmniRoute's catalogue may not carry. "auto" lets the router
+    // pick, which is its whole point and always resolves.
+    const omnirouteModel = options.requestedModel?.trim()
+      || apiKeys["OMNIROUTE_MODEL"]?.trim()
+      || "auto";
+    return {
+      backend: "omniroute",
+      // A key is optional (keyless free-tier providers are pre-wired), but an
+      // empty bearer breaks some upstreams — send a placeholder like Ollama does.
+      openaiApiKey: apiKeys["OMNIROUTE_API_KEY"]?.trim()
+        || options.config.omnirouteApiKey
+        || "omniroute",
+      openaiBaseUrl: omnirouteBaseUrl.replace(/\/+$/, ""),
+      openaiModel: omnirouteModel,
+      contextWindow: inferContextWindow(omnirouteModel),
     };
   }
 

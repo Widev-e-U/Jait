@@ -12,7 +12,7 @@ import { agentsApi, type ProviderId } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useAuth, type ReasoningEffort } from '@/hooks/useAuth'
+import { useAuth, type JaitBackend, type ReasoningEffort } from '@/hooks/useAuth'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { useProviders } from '@/hooks/useProviders'
 import { formatModelDisplayLabel } from '@/components/icons/model-icons'
@@ -565,7 +565,12 @@ export function ProviderModelSelector({
     }
   }
 
-  const GROUP_TO_BACKEND: Record<string, string> = { OpenAI: 'openai', OpenRouter: 'openrouter', Ollama: 'ollama' }
+  const GROUP_TO_BACKEND: Record<string, JaitBackend> = {
+    OpenAI: 'openai',
+    OpenRouter: 'openrouter',
+    Ollama: 'ollama',
+    OmniRoute: 'omniroute',
+  }
 
   const handleModelSelect = (modelId: string) => {
     // Auto-switch jaitBackend when picking a model from a different backend group
@@ -573,7 +578,7 @@ export function ProviderModelSelector({
     if (provider === 'jait' && selectedModel?.group) {
       const targetBackend = GROUP_TO_BACKEND[selectedModel.group]
       if (targetBackend && targetBackend !== currentBackend) {
-        updateSettings({ jait_backend: targetBackend as 'openai' | 'openrouter' | 'ollama' }).then(() => {
+        updateSettings({ jait_backend: targetBackend }).then(() => {
           setCurrentBackend(targetBackend)
         }).catch(() => {})
       }

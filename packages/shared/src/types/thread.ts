@@ -9,6 +9,29 @@
 
 export type ProviderId = string;
 
+/**
+ * HTTP backend the built-in `jait` provider sends its OpenAI-compatible
+ * /chat/completions requests to. Shared so the gateway's settings validation
+ * and the web app's settings UI can never drift apart on the allowed values.
+ *
+ * - `openai`     — OpenAI or any OPENAI_BASE_URL-compatible endpoint
+ * - `openrouter` — OpenRouter's hosted catalogue
+ * - `ollama`     — a local Ollama server
+ * - `omniroute`  — a local OmniRoute router (default http://localhost:20128/v1)
+ */
+export type JaitBackend = "openai" | "openrouter" | "ollama" | "omniroute";
+
+export const JAIT_BACKENDS: readonly JaitBackend[] = [
+  "openai",
+  "openrouter",
+  "ollama",
+  "omniroute",
+];
+
+export function isJaitBackend(value: unknown): value is JaitBackend {
+  return typeof value === "string" && (JAIT_BACKENDS as readonly string[]).includes(value);
+}
+
 export function providerTypeFromId(providerId: ProviderId): ProviderId {
   if (providerId.startsWith("codex-")) return "codex";
   if (providerId.startsWith("claude-code-")) return "claude-code";
