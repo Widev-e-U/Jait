@@ -129,25 +129,27 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
         </div>
       </nav>
 
-      {/* Right overflow (…) menu — items disappear toward this control. */}
-      <div className="shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu">
-              <Ellipsis className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-            {overflowItems.map((item) => (
-              <DropdownMenuItem key={item.id} onSelect={item.onSelect}>
-                <item.icon className="h-4 w-4 mr-2" />
-                {item.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {/* Right overflow (…) menu — only rendered when at least one item has overflowed. */}
+      {overflowItems.length > 0 && (
+        <div className="shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu">
+                <Ellipsis className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Navigate</DropdownMenuLabel>
+              {overflowItems.map((item) => (
+                <DropdownMenuItem key={item.id} onSelect={item.onSelect}>
+                  <item.icon className="h-4 w-4 mr-2" />
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   )
 }
