@@ -311,12 +311,20 @@ export class AcpProvider implements CliProviderAdapter {
 
   constructor(config: AcpProviderConfig) {
     const providerType = config.providerType ?? config.id;
+    // Applied here, not in loadAcpProviderConfigs: codex/claude-code definitions
+    // normally come from the ACP registry, and mergeFallbackDefinitions() lets the
+    // registry entry win — an overlay attached to the local defaults would be
+    // silently dropped. The constructor is the one place every construction path
+    // (registry, JAIT_ACP_PROVIDERS fallback, remote accounts) goes through, which
+    // is why CODEX_CONFIG is merged here too.
+    const omnirouteEnv = omnirouteAcpEnv(providerType);
+    const baseEnv = omnirouteEnv ? { ...config.env, ...omnirouteEnv } : config.env;
     const env = providerType === "codex"
       ? {
-          ...config.env,
+          ...baseEnv,
           CODEX_CONFIG: mergeJaitCodexConfig(config.env?.["CODEX_CONFIG"] ?? process.env.CODEX_CONFIG),
         }
-      : config.env;
+      : baseEnv;
     this.id = config.id;
     this.providerType = providerType;
     this.ownerUserId = config.ownerUserId;
@@ -1665,7 +1673,6 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       args: ["-y", "@agentclientprotocol/codex-acp"],
       env: {
         CODEX_CONFIG: mergeJaitCodexConfig(process.env.CODEX_CONFIG),
-        ...omnirouteAcpEnv("codex"),
       },
     },
     {
@@ -1674,7 +1681,6 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       description: "Claude Code via Agent Client Protocol",
       command: "npx",
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
-      ...(omnirouteAcpEnv("claude-code") ? { env: omnirouteAcpEnv("claude-code") } : {}),
     },
     {
       id: "cursor",

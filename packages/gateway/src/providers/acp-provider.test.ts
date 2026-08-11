@@ -841,6 +841,47 @@ describe("omnirouteAcpEnv", () => {
     expect(loadAcpProviderConfigs().find((c) => c.id === "claude-code")?.env).toBeUndefined();
   });
 
+  it("applies to a provider built from a registry definition, not just the local defaults", () => {
+    // Regression: codex/claude-code definitions normally come from the ACP
+    // registry, and mergeFallbackDefinitions() lets the registry entry win. An
+    // overlay attached to loadAcpProviderConfigs() is therefore dropped on the
+    // real path, making JAIT_ACP_VIA_OMNIROUTE silently do nothing.
+    process.env.JAIT_ACP_VIA_OMNIROUTE = "1";
+    try {
+      const fromRegistry = new AcpProvider({
+        id: "claude-code",
+        name: "Claude Code",
+        description: "from registry, carries no env of its own",
+        command: "npx",
+        args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+      });
+
+      expect((fromRegistry as unknown as { config: { env?: Record<string, string> } }).config.env)
+        .toMatchObject({ ANTHROPIC_BASE_URL: "http://localhost:20128" });
+    } finally {
+      delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+    }
+  });
+
+  it("keeps CODEX_CONFIG alongside the OmniRoute overlay", () => {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = "1";
+    try {
+      const codex = new AcpProvider({
+        id: "codex",
+        name: "Codex",
+        description: "from registry",
+        command: "npx",
+        args: ["-y", "@agentclientprotocol/codex-acp"],
+      });
+
+      const env = (codex as unknown as { config: { env?: Record<string, string> } }).config.env ?? {};
+      expect(env.OPENAI_BASE_URL).toBe("http://localhost:20128/v1");
+      expect(env.CODEX_CONFIG).toBeTruthy();
+    } finally {
+      delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+    }
+  });
+
   it("points Claude Code at the router root, not the /v1 surface", () => {
     // The Anthropic-compatible endpoint lives at the router root — the CLI
     // appends /v1/messages itself, so passing …/v1 would yield /v1/v1/messages.
