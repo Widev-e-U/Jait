@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.708](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.708) — 2026-08-11
+- fix(desktop): stop injecting the unstable prerelease `features.code_mode` configuration that current stable Codex rejects at startup, which broke Jait-orchestrated Codex sessions on Windows before any prompt could be sent (`f3631cfb`)
+
 ## [v0.1.707](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.707) — 2026-08-11
 - fix(web): hide the header's overflow "…" menu entirely when no nav items have overflowed, so an empty 3-dot menu never appears (`c24913db`)
 
