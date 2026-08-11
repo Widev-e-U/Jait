@@ -224,7 +224,12 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath): Components | u
     },
     table: ({ children, ref: _ref, node: _node, ...props }) => (
       <div className="my-0 w-full max-w-full overflow-x-auto">
-        <table {...props}>{children}</table>
+        <table
+          className={cn(props.className, 'w-max min-w-full')}
+          {...props}
+        >
+          {children}
+        </table>
       </div>
     ),
     img: ({ src, alt, ref: _ref, ...props }) => {

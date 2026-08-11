@@ -533,7 +533,7 @@ describe("thread.control tool", () => {
       const data = result.data as { thread: { id: string; branch: string | null; workingDirectory: string | null } };
       expect(data.thread.branch).toMatch(/^jait\/[0-9a-f]{8}$/);
       expect(data.thread.workingDirectory).toBe(`/tmp/jait-worktrees/${data.thread.branch!.replace(/\//g, "-")}`);
-      expect(createWorktree).toHaveBeenCalledWith(process.cwd(), "main", data.thread.branch);
+      expect(createWorktree).toHaveBeenCalledWith(process.cwd(), "main", data.thread.branch, undefined, { fastPath: true });
       expect(threadService.getById(data.thread.id)?.workingDirectory).toBe(data.thread.workingDirectory);
     } finally {
       sqlite.close();

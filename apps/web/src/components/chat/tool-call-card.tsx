@@ -2004,6 +2004,10 @@ const SUB_AGENT_LAZY_INITIAL = 24
 const SUB_AGENT_LAZY_PAGE = 12
 const SUB_AGENT_LAZY_THRESHOLD_PX = 160
 
+export function getNextSubAgentVisibleCount(totalItems: number, visibleCount: number): number {
+  return Math.min(totalItems, visibleCount + SUB_AGENT_LAZY_PAGE)
+}
+
 /**
  * The scroll surface a sub-agent's inline chat lives in: capped at 500px, with
  * the same stick-to-bottom behaviour and scroll-to-bottom button as the main
@@ -2036,6 +2040,82 @@ function SubAgentScrollArea({
       )}
     </div>
   )
+}
+
+function SubAgentLoadEarlierButton({ onLoad }: { onLoad: () => void }) {
+  return (
+    <div className="flex justify-center py-1.5">
+      <button
+        type="button"
+        onClick={onLoad}
+        className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-2xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
+      >
+        <ChevronDown className="h-3 w-3 rotate-180 text-primary" />
+        <span>Load earlier activity</span>
+      </button>
+    </div>
+  )
+}
+
+interface LazySubAgentHistory {
+  visibleCount: number
+  hiddenCount: number
+  handleScroll: (event: UIEvent<HTMLDivElement>) => void
+  requestOlder: () => void
+}
+
+function useLazySubAgentHistory(
+  totalItems: number,
+  scroll: StickToBottomScroll,
+): LazySubAgentHistory {
+  const [visibleCount, setVisibleCount] = useState(
+    Math.min(SUB_AGENT_LAZY_INITIAL, totalItems || SUB_AGENT_LAZY_INITIAL),
+  )
+  const loadTriggeredRef = useRef(false)
+  const heightBeforeRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    setVisibleCount((count) => Math.min(Math.max(count, SUB_AGENT_LAZY_INITIAL), totalItems))
+  }, [totalItems])
+
+  useEffect(() => {
+    loadTriggeredRef.current = false
+  }, [visibleCount])
+
+  const hiddenCount = Math.max(0, totalItems - visibleCount)
+  const requestOlder = useCallback(() => {
+    if (visibleCount >= totalItems) return
+    heightBeforeRef.current = scroll.scrollRef.current?.scrollHeight ?? null
+    loadTriggeredRef.current = true
+    setVisibleCount((count) => getNextSubAgentVisibleCount(totalItems, count))
+  }, [scroll.scrollRef, totalItems, visibleCount])
+
+  useLayoutEffect(() => {
+    const before = heightBeforeRef.current
+    if (before === null) return
+    heightBeforeRef.current = null
+    const element = scroll.scrollRef.current
+    if (!element) return
+    const delta = element.scrollHeight - before
+    if (delta > 0) element.scrollTop += delta
+  }, [scroll.scrollRef, visibleCount])
+
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    scroll.onScroll(event)
+    if (loadTriggeredRef.current || hiddenCount === 0) return
+    if (event.currentTarget.scrollTop <= SUB_AGENT_LAZY_THRESHOLD_PX) requestOlder()
+  }, [hiddenCount, requestOlder, scroll])
+
+  // Match the main chat's short-window behaviour: when the current page is too
+  // small to create overflow, keep backfilling until there is something to
+  // scroll (or the complete history is visible).
+  useEffect(() => {
+    const element = scroll.scrollRef.current
+    if (!element || hiddenCount === 0 || loadTriggeredRef.current) return
+    if (element.scrollHeight <= element.clientHeight) requestOlder()
+  }, [hiddenCount, requestOlder, scroll.scrollRef, visibleCount])
+
+  return { visibleCount, hiddenCount, handleScroll, requestOlder }
 }
 
 function SubAgentHistoryView({
@@ -2076,80 +2156,18 @@ function SubAgentHistoryView({
   // when any of it actually ran.
   const segments = useMemo(() => normalizeMessageSegments(data.segments), [data.segments])
 
-  // Scroll handling is the normal chat's: stick to the bottom while the user is
-  // at the bottom, detach as soon as they scroll up, and offer the same
-  // scroll-to-bottom button to come back.
-  const { scrollRef, contentRef, isAtBottom, onScroll, scrollToBottom } = useStickToBottom()
-
-  // Lazy window over the run's history, like the normal chat's load-more-on-scroll:
-  // only the trailing items are rendered and scrolling near the top reveals older
-  // ones, so the full history is always readable without mounting a huge DOM.
+  // Scroll handling and lazy upward paging are shared with the specialist
+  // renderer used after reload, so every inline sub-agent behaves the same.
+  const scroll = useStickToBottom()
   const hasSegments = segments.length > 0
   const finalContent = content || message
   const totalItems = hasSegments
     ? segments.length
     : nestedCalls.length + (finalContent ? 1 : 0)
-  const [visibleCount, setVisibleCount] = useState(Math.min(SUB_AGENT_LAZY_INITIAL, totalItems || SUB_AGENT_LAZY_INITIAL))
-  // Clamp as the history streams in or changes without resetting an open window.
-  const loadTriggeredRef = useRef(false)
-  useEffect(() => {
-    setVisibleCount(c => Math.min(Math.max(c, SUB_AGENT_LAZY_INITIAL), totalItems))
-  }, [totalItems])
-  // Re-arm the scroll reveal once a reveal has rendered, so the next near-top
-  // scroll can pull in another page.
-  useEffect(() => {
-    loadTriggeredRef.current = false
-  }, [visibleCount])
-  const hiddenCount = Math.max(0, totalItems - visibleCount)
-
-  const revealOlder = useCallback(() => {
-    setVisibleCount(c => Math.min(totalItems, c + SUB_AGENT_LAZY_PAGE))
-  }, [totalItems])
-
-  // Keep the reader anchored when older items are prepended above the viewport:
-  // record the scroll height before a reveal, then add back the growth afterwards
-  // so the content the user is looking at does not jump.
-  const heightBeforeRef = useRef<number | null>(null)
-  const requestOlder = useCallback(() => {
-    heightBeforeRef.current = scrollRef.current?.scrollHeight ?? null
-    revealOlder()
-  }, [revealOlder, scrollRef])
-  useLayoutEffect(() => {
-    const before = heightBeforeRef.current
-    if (before === null) return
-    heightBeforeRef.current = null
-    const el = scrollRef.current
-    if (!el) return
-    const delta = el.scrollHeight - before
-    if (delta > 0) el.scrollTop += delta
-  }, [visibleCount, scrollRef])
-
-  // Combined scroll handler: keep stick-to-bottom behaviour, then reveal older
-  // items when the user scrolls near the top — exactly the normal chat's pattern.
-  // The ref guard lets a single near-top scroll reveal one page, then re-arms
-  // once the reveal has been rendered, so the position can re-anchor cleanly.
-  const handleScroll = useCallback((e: UIEvent<HTMLDivElement>) => {
-    onScroll(e)
-    const el = e.currentTarget
-    if (loadTriggeredRef.current) return
-    if (el.scrollTop <= SUB_AGENT_LAZY_THRESHOLD_PX) {
-      loadTriggeredRef.current = true
-      requestOlder()
-    }
-  }, [onScroll, requestOlder])
-
-  const loadEarlierButton = hiddenCount > 0 ? (
-    <div className="flex justify-center py-1.5">
-      <button
-        type="button"
-        onClick={requestOlder}
-        className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-2xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
-      >
-        <ChevronDown className="h-3 w-3 rotate-180 text-primary" />
-        <span>Load earlier activity</span>
-      </button>
-    </div>
-  ) : null
+  const history = useLazySubAgentHistory(totalItems, scroll)
+  const loadEarlierButton = history.hiddenCount > 0
+    ? <SubAgentLoadEarlierButton onLoad={history.requestOlder} />
+    : null
 
   return (
     <div className="text-xs">
@@ -2163,11 +2181,8 @@ function SubAgentHistoryView({
       </div>
 
       <SubAgentScrollArea
-        scrollRef={scrollRef}
-        contentRef={contentRef}
-        isAtBottom={isAtBottom}
-        onScroll={handleScroll}
-        scrollToBottom={scrollToBottom}
+        {...scroll}
+        onScroll={history.handleScroll}
       >
         <SubAgentMission args={args} />
         <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
@@ -2178,7 +2193,7 @@ function SubAgentHistoryView({
           <>
             {loadEarlierButton}
             <div className="px-3 py-1">
-              <AssistantBody segments={segments.slice(segments.length - visibleCount)} toolCalls={nestedCalls} isStreaming={isRunning} compact />
+              <AssistantBody segments={segments.slice(segments.length - history.visibleCount)} toolCalls={nestedCalls} isStreaming={isRunning} compact />
             </div>
           </>
         ) : (
@@ -2188,7 +2203,7 @@ function SubAgentHistoryView({
                 so the tool calls can only be listed, then the answer. */}
             {nestedCalls.length > 0 && (
               <div className="py-1">
-                {nestedCalls.slice(Math.max(0, nestedCalls.length - (visibleCount - (finalContent ? 1 : 0)))).map((call) => (
+                {nestedCalls.slice(Math.max(0, nestedCalls.length - (history.visibleCount - (finalContent ? 1 : 0)))).map((call) => (
                   <ToolCallCard key={call.callId} call={call} />
                 ))}
               </div>
@@ -3720,16 +3735,21 @@ function AgentSpecialistBlock({
     if (content) segs.push({ type: 'text', content })
     return segs
   }, [childSegments, recordedSegments, thinking, childCalls, liveText, content])
+  const history = useLazySubAgentHistory(bodySegments.length, scroll)
+  const visibleBodySegments = bodySegments.slice(bodySegments.length - history.visibleCount)
 
   return (
-    <SubAgentScrollArea {...scroll}>
+    <SubAgentScrollArea {...scroll} onScroll={history.handleScroll}>
       <div className="space-y-1">
         <SubAgentMission args={normalizedArgs} />
+        {history.hiddenCount > 0 && (
+          <SubAgentLoadEarlierButton onLoad={history.requestOlder} />
+        )}
 
         {/* The specialist's actual work — rendered through the same chat body renderer
             as a normal assistant message (thinking block + tool cards + markdown). */}
         <AssistantBody
-          segments={bodySegments}
+          segments={visibleBodySegments}
           toolCalls={childCalls ?? []}
           isStreaming={isRunning}
           hasStreamingText={!!content}

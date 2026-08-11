@@ -3,17 +3,21 @@
  *
  * MCP (Model Context Protocol) lets users bring their own tool servers.
  * This bridge:
- *  1. Connects to an MCP server via stdio or HTTP/SSE transport
+ *  1. Connects to an MCP server via stdio, SSE, or Streamable HTTP transport
  *  2. Discovers its tools via `tools/list`
  *  3. Wraps each tool as a ToolDefinition and registers it
  *  4. Proxies tool execution via `tools/call`
  *
  * All MCP tools get tier: "external", category: "external", source: "mcp".
  *
- * Scaffold — transport & full MCP protocol will be implemented when
- * the MCP SDK is integrated. For now this provides the type contracts
- * and registration flow.
+ * Uses the official @modelcontextprotocol/sdk (Client + transports).
  */
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 import type {
   ToolDefinition,
@@ -31,13 +35,15 @@ export interface McpServerConfig {
   /** Human-readable name */
   name: string;
   /** Transport type */
-  transport: "stdio" | "sse";
-  /** For stdio: command + args to spawn. For sse: URL to connect to. */
+  transport: "stdio" | "sse" | "streamable-http";
+  /** For stdio: command + args to spawn. For sse/streamable-http: URL to connect to. */
   command?: string;
   args?: string[];
   url?: string;
   /** Environment variables to pass to the MCP server process */
   env?: Record<string, string>;
+  /** Working directory for stdio servers */
+  cwd?: string;
   /** Whether the server is enabled (default true) */
   enabled?: boolean;
 }
@@ -52,7 +58,7 @@ export interface McpToolDescriptor {
   inputSchema: ToolParametersSchema;
 }
 
-// ── MCP connection (scaffold) ────────────────────────────────────────
+// ── MCP connection ────────────────────────────────────────────────────
 
 export interface McpConnection {
   serverId: string;
@@ -63,39 +69,180 @@ export interface McpConnection {
 }
 
 /**
+ * Live MCP clients keyed by server id. Kept so `callMcpTool` can route
+ * execution to the correct connected server.
+ */
+const clients = new Map<string, Client>();
+
+/** Build an SDK transport from a server config. */
+function buildTransport(config: McpServerConfig) {
+  switch (config.transport) {
+    case "stdio": {
+      if (!config.command) {
+        throw new Error(`MCP server '${config.id}' (stdio) requires a 'command'`);
+      }
+      return new StdioClientTransport({
+        command: config.command,
+        args: config.args,
+        env: config.env,
+        cwd: config.cwd,
+      });
+    }
+    case "sse": {
+      if (!config.url) {
+        throw new Error(`MCP server '${config.id}' (sse) requires a 'url'`);
+      }
+      return new SSEClientTransport(new URL(config.url));
+    }
+    case "streamable-http": {
+      if (!config.url) {
+        throw new Error(`MCP server '${config.id}' (streamable-http) requires a 'url'`);
+      }
+      return new StreamableHTTPClientTransport(new URL(config.url));
+    }
+    default: {
+      const exhaustive: never = config.transport;
+      throw new Error(`Unsupported MCP transport: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** Convert an SDK Tool into a Jait McpToolDescriptor. */
+function toMcpToolDescriptor(tool: Tool): McpToolDescriptor {
+  return {
+    name: tool.name,
+    description: tool.description ?? "",
+    inputSchema: (tool.inputSchema ?? { type: "object", properties: {} }) as ToolParametersSchema,
+  };
+}
+
+/**
  * Connect to an MCP server and discover its tools.
- *
- * TODO: Implement actual MCP protocol transport. For now this is a
- * scaffold that documents the expected flow and types.
  */
 export async function connectMcpServer(
-  _config: McpServerConfig,
+  config: McpServerConfig,
 ): Promise<McpConnection> {
-  // Scaffold — real implementation will use @modelcontextprotocol/sdk
-  return {
-    serverId: _config.id,
-    serverName: _config.name,
+  const base: McpConnection = {
+    serverId: config.id,
+    serverName: config.name,
     status: "disconnected",
     tools: [],
-    error: "MCP transport not yet implemented — scaffold only",
+  };
+
+  try {
+    const transport = buildTransport(config);
+    const client = new Client(
+      { name: "jait-gateway", version: "1.0.0" },
+      { capabilities: {} },
+    );
+
+    await client.connect(transport);
+
+    const { tools } = await client.listTools();
+    const descriptors = (tools ?? []).map(toMcpToolDescriptor);
+
+    // Close any previous client for this server before storing the new one.
+    const previous = clients.get(config.id);
+    if (previous) {
+      try {
+        await previous.close();
+      } catch {
+        // ignore close errors on stale clients
+      }
+    }
+    clients.set(config.id, client);
+
+    return { ...base, status: "connected", tools: descriptors };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ...base, status: "error", error: message };
+  }
+}
+
+/** Serialize an MCP CallToolResult into a Jait ToolResult. */
+function serializeToolResult(result: {
+  content?: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  isError?: boolean;
+  structuredContent?: unknown;
+  toolResult?: unknown;
+}): ToolResult {
+  // SDK 1.30+ may return a task-based `toolResult` variant instead of `content`.
+  if (result.toolResult !== undefined) {
+    const message =
+      typeof result.toolResult === "string"
+        ? result.toolResult
+        : JSON.stringify(result.toolResult);
+    return {
+      ok: result.isError !== true,
+      message,
+      data: result.toolResult,
+    };
+  }
+
+  const textParts: string[] = [];
+  for (const block of result.content ?? []) {
+    if (block.type === "text" && typeof block.text === "string") {
+      textParts.push(block.text);
+    } else if (block.type === "resource") {
+      textParts.push(JSON.stringify(block));
+    } else {
+      textParts.push(JSON.stringify(block));
+    }
+  }
+  const message = textParts.join("\n") || "MCP tool returned no text content";
+  const data =
+    result.structuredContent !== undefined
+      ? result.structuredContent
+      : textParts.length > 0
+        ? textParts
+        : undefined;
+
+  return {
+    ok: result.isError !== true,
+    message,
+    data,
   };
 }
 
 /**
  * Call a tool on an MCP server.
- *
- * TODO: Implement actual MCP tools/call. For now returns an error
- * indicating the scaffold state.
  */
 export async function callMcpTool(
-  _serverId: string,
-  _toolName: string,
-  _args: unknown,
+  serverId: string,
+  toolName: string,
+  args: unknown,
 ): Promise<ToolResult> {
-  return {
-    ok: false,
-    message: `MCP tool execution not yet implemented (server: ${_serverId}, tool: ${_toolName})`,
-  };
+  const client = clients.get(serverId);
+  if (!client) {
+    return {
+      ok: false,
+      message: `MCP server '${serverId}' is not connected`,
+    };
+  }
+
+  try {
+    const result = await client.callTool({
+      name: toolName,
+      arguments: (args ?? {}) as Record<string, unknown>,
+    });
+    return serializeToolResult(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, message };
+  }
+}
+
+/** Disconnect and close a server's client, removing it from the map. */
+export async function disconnectMcpServer(serverId: string): Promise<void> {
+  const client = clients.get(serverId);
+  if (client) {
+    try {
+      await client.close();
+    } catch {
+      // ignore close errors
+    }
+    clients.delete(serverId);
+  }
 }
 
 // ── Register MCP tools into ToolRegistry ─────────────────────────────
@@ -155,9 +302,8 @@ export function unregisterMcpTools(
 ): number {
   const prefix = `mcp.${serverId}.`;
   const toRemove = registry.listNames().filter((n) => n.startsWith(prefix));
-  for (const _name of toRemove) {
-    // ToolRegistry doesn't have unregister yet — we'll need to add it
-    // For now, tools from disconnected servers will return errors on execute
+  for (const name of toRemove) {
+    registry.unregister(name);
   }
   return toRemove.length;
 }
@@ -212,6 +358,7 @@ export class McpManager {
   disconnect(serverId: string): void {
     unregisterMcpTools(this.registry, serverId);
     this.connections.delete(serverId);
+    void disconnectMcpServer(serverId);
   }
 
   /** Connect to all configured servers */

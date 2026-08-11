@@ -475,6 +475,59 @@ describe("WsControlPlane", () => {
       ws.close();
     });
 
+    it("rejects UI state writes outside the subscribed session", async () => {
+      const token = await createToken("user-ui-isolation");
+      const onUIStateUpdate = vi.fn();
+      plane.onUIStateUpdate = onUIStateUpdate;
+
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      await collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      ws.send(JSON.stringify({ type: "subscribe", sessionId: "ui-session-a" }));
+      await collector.next();
+
+      ws.send(JSON.stringify({
+        type: "ui.state",
+        payload: {
+          sessionId: "ui-session-b",
+          key: "todo_list",
+          value: [{ id: 1, title: "Wrong chat", status: "in-progress" }],
+        },
+      }));
+
+      const rejection = await collector.next();
+      expect(rejection.type).toBe("error");
+      expect(rejection.payload.code).toBe("SESSION_SCOPE_MISMATCH");
+      expect(onUIStateUpdate).not.toHaveBeenCalled();
+      ws.close();
+    });
+
+    it("authorizes session subscriptions before binding client state", async () => {
+      const token = await createToken("session-owner");
+      plane.canAccessSession = (sessionId, userId) => (
+        sessionId === "owned-session" && userId === "session-owner"
+      );
+
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      await collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      ws.send(JSON.stringify({ type: "subscribe", sessionId: "other-session" }));
+      const rejection = await collector.next();
+      expect(rejection.type).toBe("error");
+      expect(rejection.payload.code).toBe("SESSION_FORBIDDEN");
+
+      ws.send(JSON.stringify({ type: "subscribe", sessionId: "owned-session" }));
+      const subscribed = await collector.next();
+      expect(subscribed.type).toBe("session.created");
+      expect(subscribed.sessionId).toBe("owned-session");
+      expect(subscribed.payload.subscribed).toBe(true);
+      ws.close();
+    });
+
     it("replays terminal buffer on subscription and only streams to subscribed clients", async () => {
       const token = await createToken("user-terminal-sync");
       plane.onTerminalReplay = (terminalId) => (terminalId === "term-sync" ? "buffered prompt>" : null);

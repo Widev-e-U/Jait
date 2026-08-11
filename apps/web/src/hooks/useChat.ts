@@ -157,6 +157,19 @@ export function shouldForceMessageLifecycleRefresh(event: 'started' | 'complete'
   return event === 'started' || event === 'complete'
 }
 
+export function shouldProcessDirectStreamEvent(
+  eventType: unknown,
+  isCurrentSession: boolean,
+): boolean {
+  if (isCurrentSession) return true
+
+  // A direct POST stream deliberately survives chat switches. Once its chat is
+  // no longer current, only terminal events may run so the request can clean up
+  // its own controller and placeholders. All other events are session-scoped UI
+  // mutations and must not enter the newly selected chat's state bucket.
+  return eventType === 'done' || eventType === 'queued' || eventType === 'error'
+}
+
 export function shouldOwnDirectChatStream(params: {
   sessionId: string | null
   directStreamSessionId: string | null
@@ -769,18 +782,23 @@ export function useChat(
 
     if (!sessionId) {
       setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null, hasMore: false, totalMessages: 0 })
+      setPendingPlan(null)
       setTodoList([])
       setChangedFiles([])
       setMessageQueue([])
       messageQueueSessionRef.current = null
       setContextUsage(null)
+      setSessionInfo(null)
       loadedMessagesSessionRef.current = null
       return
     }
 
     // Session-scoped transient UI must never remain visible under the next
     // chat while its authoritative full-state packet is still in flight.
+    setPendingPlan(null)
     setTodoList([])
+    setContextUsage(null)
+    setSessionInfo(null)
     if (messageQueueSessionRef.current !== sessionId) {
       messageQueueSessionRef.current = sessionId
       setMessageQueue([])
@@ -1619,17 +1637,19 @@ export function useChat(
       if (response.status === 401) {
         const data = await response.json()
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
-          setState(prev => ({
-            ...prev,
-            isLoading: ownsDirectStream ? false : prev.isLoading,
-            error: data.detail,
-            messages: prev.messages.filter(m =>
-              options.queued
-                ? m.id !== assistantId && m.id !== userMessage.id
-                : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-            ),
-          }))
-          if (data.detail === 'login_required') notifyLoginRequired?.()
+          if (!isStale()) {
+            setState(prev => ({
+              ...prev,
+              isLoading: ownsDirectStream ? false : prev.isLoading,
+              error: data.detail,
+              messages: prev.messages.filter(m =>
+                options.queued
+                  ? m.id !== assistantId && m.id !== userMessage.id
+                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+              ),
+            }))
+            if (data.detail === 'login_required') notifyLoginRequired?.()
+          }
           finishOwnedDirectStream()
           return 'retry'
         }
@@ -1664,6 +1684,7 @@ export function useChat(
           try {
             const data = JSON.parse(line.slice(6))
             pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
+            if (!shouldProcessDirectStreamEvent(data.type, !isStale())) continue
 
             if (data.type === 'thinking') {
               textPacer.enqueueThinking(data.content as string)

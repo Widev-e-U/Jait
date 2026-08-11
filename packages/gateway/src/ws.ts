@@ -32,6 +32,21 @@ interface ConnectedClient {
   terminalSubscriptions: Set<string>;
 }
 
+export function resolveSessionScopedClientTarget(
+  subscribedSessionId: string | null,
+  requestedSessionId: unknown,
+): string | null {
+  if (!subscribedSessionId) return null;
+  if (
+    typeof requestedSessionId === "string"
+    && requestedSessionId.length > 0
+    && requestedSessionId !== subscribedSessionId
+  ) {
+    return null;
+  }
+  return subscribedSessionId;
+}
+
 export class WsControlPlane {
   private wss: WebSocketServer | null = null;
   private clients = new Map<string, ConnectedClient>();
@@ -274,7 +289,21 @@ export class WsControlPlane {
           });
           return;
         }
-        client.sessionId = msg.sessionId ?? null;
+        const requestedSessionId = msg.sessionId ?? null;
+        if (
+          requestedSessionId
+          && this.canAccessSession
+          && !this.canAccessSession(requestedSessionId, client.userId)
+        ) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: requestedSessionId,
+            timestamp: new Date().toISOString(),
+            payload: { message: "Session not found or access denied", code: "SESSION_FORBIDDEN" },
+          });
+          return;
+        }
+        client.sessionId = requestedSessionId;
         client.deviceId = msg.deviceId ?? null;
         console.log(`[screen-share] subscribe: clientId=${client.id} deviceId=${client.deviceId} sessionId=${client.sessionId}`);
         this.send(client.ws, {
@@ -562,9 +591,21 @@ export class WsControlPlane {
       case "ui.state": {
         // Client is reporting a UI component state change (e.g. panel closed)
         const update = msg.payload as { sessionId?: string; key?: string; value?: unknown } | undefined;
-        const uiSessionId = update?.sessionId ?? client.sessionId;
+        const uiSessionId = resolveSessionScopedClientTarget(client.sessionId, update?.sessionId);
         if (uiSessionId && update?.key && this.onUIStateUpdate) {
           this.onUIStateUpdate(uiSessionId, update.key, update.value ?? null, client.id);
+        } else if (
+          client.sessionId
+          && typeof update?.sessionId === "string"
+          && update.sessionId.length > 0
+          && update.sessionId !== client.sessionId
+        ) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId,
+            timestamp: new Date().toISOString(),
+            payload: { message: "UI state target does not match the subscribed session", code: "SESSION_SCOPE_MISMATCH" },
+          });
         }
         break;
       }
@@ -932,6 +973,8 @@ export class WsControlPlane {
   onConsentReject?: (requestId: string, reason?: string) => void;
   /** Callback when a client updates UI component state (panel open/close) */
   onUIStateUpdate?: (sessionId: string, key: string, value: unknown | null, clientId: string) => void;
+  /** Authorize a client before binding its socket to a session. */
+  canAccessSession?: (sessionId: string, userId: string | null) => boolean;
   /** Callback when a client subscribes to a session — used to push full state */
   onClientSubscribe?: (sessionId: string, clientId: string) => void;
   /** Callback when a screen-share start is requested via WS */

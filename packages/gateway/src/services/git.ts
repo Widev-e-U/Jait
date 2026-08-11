@@ -43,6 +43,14 @@ function trimCommandOutput(stdout: string): string {
 const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
 const COMMITTABLE_PATHSPEC = '-- . ":(exclude).jait/release-checkout-*"';
 
+// A repo is treated as "large" (and routed through the fast CoW worktree
+// path) when it has more than this many tracked files. `git ls-files | wc -l`
+// is cheap even on huge repos, so this is the primary signal.
+const LARGE_REPO_FILE_THRESHOLD = 5_000;
+// Secondary signal: working-tree size in bytes (including .git). Only used
+// when the file-count probe fails. `du -sk` is fast enough for this.
+const LARGE_REPO_BYTES_THRESHOLD = 512 * 1024 * 1024;
+
 /** Read a working-tree file for diff display; oversized files get a short placeholder instead. */
 async function readDiffFileCapped(absPath: string): Promise<string> {
   const info = await stat(absPath);
@@ -1388,6 +1396,7 @@ export class GitService {
     baseBranch: string,
     newBranch: string,
     customPath?: string,
+    options?: { fastPath?: boolean },
   ): Promise<GitWorktreeResult> {
     const sanitized = newBranch.replace(/\//g, "-");
     const repoName = basename(cwd);
@@ -1398,6 +1407,14 @@ export class GitService {
     // Ensure parent directory exists
     await mkdir(join(worktreePath, ".."), { recursive: true });
 
+    // Use the fast CoW path when explicitly requested, or automatically for
+    // large repos where the plain `git worktree add` checkout is O(N) and slow.
+    const useFast = options?.fastPath ?? (await this.isLargeRepo(cwd));
+    if (useFast) {
+      await this.createWorktreeFast(cwd, worktreePath, baseBranch, newBranch);
+      return { path: worktreePath, branch: newBranch };
+    }
+
     await gitExec(
       cwd,
       `worktree add -b "${newBranch}" "${worktreePath}" "${baseBranch}"`,
@@ -1405,6 +1422,78 @@ export class GitService {
     );
 
     return { path: worktreePath, branch: newBranch };
+  }
+
+  /**
+   * Fast worktree creation for large repos.
+   *
+   * Uses `git worktree add --no-checkout` (skips the slow file checkout) and
+   * then populates the working tree with a copy-on-write clone of the main
+   * working tree (`cp -c` on macOS APFS, `cp --reflink=auto` on Linux
+   * Btrfs/XFS). CoW makes the copy near-instant and disk-cheap even for huge
+   * repos, and the files are already materialized so the agent can start
+   * immediately. Falls back to a plain checkout if the copy fails.
+   */
+  private async createWorktreeFast(
+    cwd: string,
+    worktreePath: string,
+    baseBranch: string,
+    newBranch: string,
+  ): Promise<void> {
+    await gitExec(
+      cwd,
+      `worktree add --no-checkout -b "${newBranch}" "${worktreePath}" "${baseBranch}"`,
+      60_000,
+    );
+
+    // The worktree's .git is a file pointing at the main repo's gitdir.
+    // Preserve it so we can restore it after the CoW copy overwrites it
+    // with the main repo's .git directory.
+    const gitFile = join(worktreePath, ".git");
+    const gitFileContent = await readFile(gitFile, "utf8").catch(() => null);
+
+    // Remove the .git file first so the recursive copy can lay down the main
+    // repo's .git directory without "cannot overwrite non-directory" errors.
+    await rm(gitFile, { recursive: true, force: true });
+
+    const copyCmd = this.pickCopyCommand(cwd, worktreePath);
+    let copied = false;
+    try {
+      await exec(copyCmd, { cwd });
+      copied = true;
+    } catch {
+      copied = false;
+    }
+
+    if (copied && gitFileContent !== null) {
+      // Drop the copied .git directory and restore the worktree's .git file.
+      await rm(gitFile, { recursive: true, force: true });
+      await writeFile(gitFile, gitFileContent, "utf8");
+    } else if (gitFileContent !== null) {
+      // Copy failed — restore the .git file so the worktree stays valid.
+      await writeFile(gitFile, gitFileContent, "utf8");
+    }
+
+    // Align the working tree with the branch tip. When the CoW copy
+    // succeeded this is a no-op for matching files; when it failed it acts
+    // as a full checkout so the worktree is still usable.
+    await gitExec(worktreePath, "reset --hard HEAD", 60_000).catch(() => {});
+  }
+
+  /** Pick a copy-on-write capable recursive copy command for this platform. */
+  private pickCopyCommand(src: string, dst: string): string {
+    const s = escapeShellArg(src);
+    const d = escapeShellArg(dst);
+    if (process.platform === "darwin") {
+      // macOS APFS: `cp -c` uses clonefile(2) — copy-on-write, near-instant.
+      return `cp -c -R "${s}" "${d}"`;
+    }
+    if (process.platform === "linux") {
+      // Linux Btrfs/XFS: `cp --reflink=auto` uses reflink when available and
+      // falls back to a plain copy otherwise.
+      return `cp --reflink=auto -R "${s}" "${d}"`;
+    }
+    return `cp -R "${s}" "${d}"`;
   }
 
   /** Remove a git worktree. */
@@ -2153,6 +2242,33 @@ export class GitService {
     }
 
     return normalizedMergeBase;
+  }
+
+  /**
+   * Heuristic for whether a repo is large enough to warrant the fast CoW
+   * worktree path. Primary signal is the tracked-file count (`git ls-files`),
+   * which is cheap even on huge repos; falls back to working-tree size in
+   * bytes when the file-count probe fails. Never throws — on any error it
+   * returns false so callers fall back to the plain checkout.
+   */
+  private async isLargeRepo(cwd: string): Promise<boolean> {
+    try {
+      const fileCount = await gitExec(cwd, "ls-files | wc -l").catch(() => "");
+      const count = parseInt(fileCount.trim(), 10);
+      if (Number.isFinite(count)) return count > LARGE_REPO_FILE_THRESHOLD;
+    } catch {
+      // fall through to the size probe
+    }
+
+    try {
+      const sizeKb = await exec(`du -sk ${JSON.stringify(cwd)}`, { maxBuffer: 16 * 1024 * 1024 });
+      const bytes = parseInt(sizeKb.stdout.trim(), 10) * 1024;
+      if (Number.isFinite(bytes)) return bytes > LARGE_REPO_BYTES_THRESHOLD;
+    } catch {
+      // ignore
+    }
+
+    return false;
   }
 }
 

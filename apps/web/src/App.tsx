@@ -100,9 +100,11 @@ import {
 import { projectSuggestions, suggestions } from '@/lib/chat-suggestions'
 import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
 import {
+  readProjectManagerProviderSelection,
   readProjectModelSelections,
   readProjectProviderSelection,
   readProjectReasoningEffortSelection,
+  saveProjectManagerProviderSelection,
   saveProjectModelSelection,
   saveProjectProviderSelection,
   saveProjectReasoningEffortSelection,
@@ -332,6 +334,7 @@ function App() {
   const { gatewayReachable, retry: retryGatewayReachable } = useGatewayReachable()
 
   const automationRefreshRef = useRef<() => Promise<void>>(async () => {})
+  const automationRefreshSelectedThreadRef = useRef<() => Promise<void>>(async () => {})
   const { desktopPlatform, isMaximized } = useDesktopWindow()
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
   const [activeProjectFileId, setActiveProjectFileId] = useState<string | null>(null)
@@ -463,6 +466,10 @@ function App() {
     if (connected) {
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
+      // Re-hydrate the open thread — activities are fetched once per selection and
+      // cached, so a dropped WS (backgrounded tab) would otherwise leave the open
+      // thread stuck on a stale snapshot until reload.
+      void automationRefreshSelectedThreadRef.current()
       // Re-fetch fs nodes — the desktop registers itself as a node async
       // after the WS opens, so the initial mount fetch may have missed it.
       refreshFsNodesRef.current()
@@ -709,6 +716,7 @@ function App() {
   // ── Automation / Manager mode state ───────────────────────────────
   const automation = useAutomation()
   automationRefreshRef.current = automation.refresh
+  automationRefreshSelectedThreadRef.current = automation.refreshSelectedThread
   const {
     automationMessages,
     managerThreads,
@@ -2068,7 +2076,8 @@ function App() {
 
   const handleManagerProviderChange = useCallback((provider: ProviderId) => {
     setManagerProvider(provider)
-  }, [setManagerProvider])
+    saveProjectManagerProviderSelection(activeProjectId, provider)
+  }, [activeProjectId, setManagerProvider])
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -2390,6 +2399,17 @@ function App() {
     // updates the shared global `settings.chat_provider` default) can't leak
     // back into this one just because it never had its own explicit pick.
     if (!cachedProjectProvider) saveProjectProviderSelection(projectId, resolvedProvider)
+
+    // The manager provider is scoped to the project (like the chat provider)
+    // and is not a global setting, so restore it from the per-project cache.
+    // Suppress the WS sync for the transition: the full-state push restores the
+    // active thread's real selection, and the cache is the fallback for fresh
+    // threads that never pinned their own provider.
+    const cachedProjectManagerProvider = readProjectManagerProviderSelection(projectId)
+    const resolvedManagerProvider = (cachedProjectManagerProvider ?? resolvedProvider ?? 'jait') as ProviderId
+    suppressNextUiSync('manager.provider')
+    setManagerProvider(resolvedManagerProvider)
+    if (!cachedProjectManagerProvider) saveProjectManagerProviderSelection(projectId, resolvedManagerProvider)
 
     setActiveProjectIfChanged(activeProjectDuringSwitch(activeProjectRef.current, project))
     setProjectFiles([])
@@ -2888,6 +2908,17 @@ function App() {
     if (provider && !cachedProjectProvider) saveProjectProviderSelection(activeProjectId, provider)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId, settings.chat_provider, authLoading])
+
+  // Sync manager provider from the per-project cache so it survives reloads
+  // and project switches (the manager provider is not a global server setting).
+  useEffect(() => {
+    if (authLoading) return
+    const cachedProjectManagerProvider = readProjectManagerProviderSelection(activeProjectId)
+    if (cachedProjectManagerProvider && cachedProjectManagerProvider !== managerProvider) {
+      setManagerProvider(cachedProjectManagerProvider as ProviderId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, authLoading])
 
   useEffect(() => {
     if (!(isElectron && desktopPlatform === 'win32')) return
@@ -4226,6 +4257,7 @@ function App() {
               handleApplyUpdate={handleApplyUpdate}
               handleLogout={handleLogout}
               handleThemeModeChange={handleThemeModeChange}
+              isAuthLoading={authLoading}
               isAuthenticated={isAuthenticated}
               isElectron={isElectron}
               isMaximized={isMaximized}

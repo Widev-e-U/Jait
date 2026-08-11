@@ -155,7 +155,7 @@ interface ThreadControlGit {
   getPreferredRemote?(cwd: string, branch?: string): Promise<string | null>;
   getRemoteUrl?(cwd: string, name: string): Promise<string | null>;
   resolveDefaultBranch?(cwd: string, remoteUrl?: string | null): Promise<string>;
-  createWorktree?(cwd: string, baseBranch: string, newBranch: string, customPath?: string): Promise<{ path: string; branch: string }>;
+  createWorktree?(cwd: string, baseBranch: string, newBranch: string, customPath?: string, options?: { fastPath?: boolean }): Promise<{ path: string; branch: string }>;
 }
 
 export interface ThreadControlToolDeps {
@@ -314,7 +314,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       ? await gitService.resolveDefaultBranch(cwd, remoteUrl).catch(() => "main")
       : "main";
     const branch = `jait/${thread.id.slice(-8)}`;
-    const worktree = await gitService.createWorktree(cwd, defaultBranch, branch);
+    const worktree = await gitService.createWorktree(cwd, defaultBranch, branch, undefined, { fastPath: true });
     return deps.threadService.update(thread.id, {
       workingDirectory: worktree.path,
       branch: worktree.branch,

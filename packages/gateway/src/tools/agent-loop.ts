@@ -2112,6 +2112,20 @@ export async function runAgentLoop(
   const executedToolCalls: ExecutedToolCall[] = [];
   const segments: MessageSegment[] = [];
   const queue = new ToolCallQueue();
+  const discardLatestContentText = (discardedContent: string): void => {
+    if (!discardedContent) return;
+    if (fullContent.endsWith(discardedContent)) {
+      fullContent = fullContent.slice(0, -discardedContent.length);
+    }
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment?.type !== "text" || !lastSegment.content.endsWith(discardedContent)) return;
+    const retainedContent = lastSegment.content.slice(0, -discardedContent.length);
+    if (retainedContent) {
+      segments[segments.length - 1] = { type: "text", content: retainedContent };
+    } else {
+      segments.pop();
+    }
+  };
   /** Tracks whether the turn's assistant message was already persisted via onPersist. */
   let persisted = false;
 
@@ -2520,6 +2534,87 @@ export async function runAgentLoop(
         );
       }
 
+      const ignoredQuarantineCalls = toolCalls.filter((toolCall) =>
+        roundQuarantinedToolNames.has(fromOpenAIName(toolCall.function.name))
+      );
+      if (ignoredQuarantineCalls.length > 0) {
+        const ignoredNames = [...new Set(
+          ignoredQuarantineCalls.map((toolCall) => fromOpenAIName(toolCall.function.name)),
+        )].join(", ");
+        discardLatestContentText(contentText);
+        const persistentQuarantineNames = new Set(roundQuarantinedToolNames);
+        for (const toolCall of ignoredQuarantineCalls) {
+          persistentQuarantineNames.add(fromOpenAIName(toolCall.function.name));
+        }
+        quarantinedToolNames = persistentQuarantineNames;
+        const message =
+          `Provider repeated an unavailable tool call (${ignoredNames}); rejected it and kept working`;
+        log.warn(`${message} for session ${sessionId}`);
+        onEvent?.({ type: "steering", message });
+        contentText = "";
+        history.push({
+          role: "assistant",
+          content: "",
+          tool_calls: ignoredQuarantineCalls,
+          thinking: capThinking(thinkingText),
+        });
+        const ignoredCallIds: string[] = [];
+        for (const toolCall of ignoredQuarantineCalls) {
+          const tool = fromOpenAIName(toolCall.function.name);
+          let args: unknown;
+          try { args = JSON.parse(toolCall.function.arguments); } catch { args = {}; }
+          const resultData = { quarantined: true, reason: "tool_unavailable" };
+          const now = Date.now();
+          ignoredCallIds.push(toolCall.id);
+          executedToolCalls.push({
+            callId: toolCall.id,
+            tool,
+            args,
+            ok: false,
+            message,
+            data: resultData,
+            startedAt: now,
+            completedAt: now,
+          });
+          history.push({
+            role: "tool",
+            content: JSON.stringify({ ok: false, message, data: resultData }),
+            tool_call_id: toolCall.id,
+            name: toolCall.function.name,
+          });
+          onEvent?.({
+            type: "tool_result",
+            call_id: toolCall.id,
+            tool,
+            ok: false,
+            message,
+            data: resultData,
+          });
+        }
+        if (ignoredCallIds.length > 0) {
+          const lastSegment = segments[segments.length - 1];
+          if (lastSegment?.type === "toolGroup") {
+            segments[segments.length - 1] = {
+              type: "toolGroup",
+              callIds: [...new Set([...lastSegment.callIds, ...ignoredCallIds])],
+            };
+          } else {
+            segments.push({ type: "toolGroup", callIds: ignoredCallIds });
+          }
+        }
+        history.push({
+          role: "system",
+          content:
+            `The provider attempted to call ${ignoredNames} even though it was unavailable. ` +
+            `Jait rejected that call without ending the turn, and the tool remains unavailable for the next response. ` +
+            `Keep working with the available tools or answer from the evidence already collected. Do not repeat the rejected call.`,
+        });
+        toolCalls = toolCalls.filter((toolCall) =>
+          !roundQuarantinedToolNames.has(fromOpenAIName(toolCall.function.name))
+        );
+        if (toolCalls.length === 0) continue;
+      }
+
       // ── Duplicate tool-call loop detection ──
       // If the model emits the exact same tool call(s) — same name(s), same
       // args — round after round, it's stuck: no new information is arriving
@@ -2589,12 +2684,13 @@ export async function runAgentLoop(
             const message =
               `Skipped repeated tool call (${names}); ` +
               `temporarily quarantining ${[...quarantinedNames].join(", ")} for the next model round`;
+            discardLatestContentText(contentText);
             log.warn(`${message} for session ${sessionId}`);
             onEvent?.({ type: "steering", message });
 
             history.push({
               role: "assistant",
-              content: contentText || "",
+              content: "",
               tool_calls: quarantinedCalls,
               thinking: capThinking(thinkingText),
             });
@@ -2661,7 +2757,7 @@ export async function runAgentLoop(
               `(intervention ${duplicateCallInterventions}/${MAX_DUPLICATE_CALL_INTERVENTIONS})`,
           );
           onEvent?.({ type: "steering", message: `Detected a repeated tool call (${names}) — redirecting` });
-          if (contentText) history.push({ role: "assistant", content: contentText });
+          discardLatestContentText(contentText);
           history.push({
             role: "system",
             content:
@@ -3032,23 +3128,23 @@ export async function runAgentLoop(
       lastEmptyThinking = thinkingText;
 
       if (repeatedThinking) {
-        log.warn(
-          `Provider re-emitted identical reasoning (${thinkingText.length} chars) with no answer for session ${sessionId} — ` +
-            `reasoning loop, ending turn instead of replaying the request`,
-        );
-        onEvent?.({
-          type: "steering",
-          message: "Model repeated the same reasoning without answering — stopping",
-        });
-        const msg =
-          "\n\n[Stopped: the model kept repeating the same reasoning without producing an answer. Try rephrasing or narrowing the request.]";
-        history.push({ role: "assistant", content: msg, thinking: capThinking(thinkingText) });
-        fullContent += msg;
-        segments.push({ type: "text", content: msg });
-        onEvent?.({ type: "token", content: msg });
-        onPersist?.(sessionId, "assistant", fullContent, undefined, JSON.stringify(segments), thinkingText || undefined);
-        persisted = true;
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
+        const canRecover =
+          emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < roundLimit;
+        if (canRecover) {
+          emptyResponseRetries++;
+          const message =
+            `Model repeated the same reasoning without answering — rejecting the duplicate and retrying (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES})`;
+          log.warn(`${message} for session ${sessionId}`);
+          onEvent?.({ type: "steering", message });
+          const recoveryPrompt: AgentMessage = {
+            role: "system",
+            content:
+              "Your previous reasoning was an exact duplicate and was rejected. Do not repeat or extend it. Use the evidence already collected and write the answer for the user now, or make a different structured tool call.",
+          };
+          history.push(recoveryPrompt);
+          emptyResponseRecoveryPrompts.add(recoveryPrompt);
+          continue;
+        }
       }
 
       const canRetry = emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < roundLimit;

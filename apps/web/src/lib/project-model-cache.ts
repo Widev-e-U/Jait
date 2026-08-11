@@ -5,6 +5,7 @@ export type ProjectReasoningEffort = string
 
 const PROJECT_MODEL_CACHE_PREFIX = 'jait:project-models:v1:'
 const PROJECT_PROVIDER_CACHE_PREFIX = 'jait:project-provider:v1:'
+const PROJECT_MANAGER_PROVIDER_CACHE_PREFIX = 'jait:project-manager-provider:v1:'
 const PROJECT_REASONING_EFFORT_CACHE_PREFIX = 'jait:project-reasoning-effort:v1:'
 
 function projectModelCacheKey(projectId: string): string {
@@ -106,6 +107,40 @@ export function saveProjectProviderSelection(
   if (!target) return
   try {
     target.setItem(projectProviderCacheKey(projectId), provider)
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function projectManagerProviderCacheKey(projectId: string): string {
+  return `${PROJECT_MANAGER_PROVIDER_CACHE_PREFIX}${projectId}`
+}
+
+export function readProjectManagerProviderSelection(
+  projectId: string | null | undefined,
+  storage?: Storage,
+): string | null {
+  if (!projectId) return null
+  const target = resolveStorage(storage)
+  if (!target) return null
+  try {
+    const provider = target.getItem(projectManagerProviderCacheKey(projectId))?.trim()
+    return provider || null
+  } catch {
+    return null
+  }
+}
+
+export function saveProjectManagerProviderSelection(
+  projectId: string | null | undefined,
+  provider: string,
+  storage?: Storage,
+): void {
+  if (!projectId || !provider.trim()) return
+  const target = resolveStorage(storage)
+  if (!target) return
+  try {
+    target.setItem(projectManagerProviderCacheKey(projectId), provider)
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }

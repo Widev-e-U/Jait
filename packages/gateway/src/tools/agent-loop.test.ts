@@ -1638,6 +1638,35 @@ describe("runAgentLoop tool-loop detection", () => {
     return sseResponse([`data: ${payload}\n\n`, `data: ${finish}\n\n`, "data: [DONE]\n\n"]);
   }
 
+  function toolCallWithContentSSE(id: string, name: string, args: unknown, content: string): Response {
+    const contentPayload = JSON.stringify({ choices: [{ delta: { content } }] });
+    const toolPayload = JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id,
+                type: "function",
+                function: { name, arguments: JSON.stringify(args) },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const finish = JSON.stringify({
+      choices: [{ delta: {}, finish_reason: "tool_calls" }],
+    });
+    return sseResponse([
+      `data: ${contentPayload}\n\n`,
+      `data: ${toolPayload}\n\n`,
+      `data: ${finish}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+  }
+
   function toolCallsSSE(calls: Array<{ id: string; name: string; args?: unknown }>): Response {
     const payload = JSON.stringify({
       choices: [
@@ -2127,6 +2156,74 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(sawRestoredRound).toBe(true);
   });
 
+  it("keeps quarantining and recovers when a provider calls an unavailable tool", async () => {
+    let fetchCalls = 0;
+    let quarantinedRounds = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tools?: Array<{ function?: { name?: string } }>;
+      };
+      const readAvailable = (body.tools ?? []).some((tool) => tool.function?.name === "read");
+      const round = fetchCalls++;
+      const args = { path: "tool-call-card.tsx", startLine: 3490, endLine: 3560 };
+      if (readAvailable) return toolCallSSE(`call-read-${round}`, "read", args);
+
+      quarantinedRounds++;
+      if (quarantinedRounds > 1) {
+        return textResponse("Recovered after the unavailable call was rejected.");
+      }
+      return toolCallWithContentSSE(
+        `call-forbidden-read-${round}`,
+        "read",
+        args,
+        "rth</｜DSML｜tool_calls>",
+      );
+    });
+
+    let executedReads = 0;
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "deepseek-v4-flash:0731-cloud",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the tool card stacking issue." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read",
+              parameters: { type: "object", properties: { path: { type: "string" } } },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-provider-ignores-quarantine",
+        abort: new AbortController(),
+        maxRounds: 20,
+        mode: "agent",
+      },
+      async () => {
+        executedReads++;
+        return { ok: true, message: "read ok" };
+      },
+    );
+
+    expect(quarantinedRounds).toBe(2);
+    expect(fetchCalls).toBe(7);
+    expect(executedReads).toBe(3);
+    expect(result.hitMaxRounds).toBe(false);
+    expect(result.content).toBe("Recovered after the unavailable call was rejected.");
+    expect(result.content).not.toContain("Stopped:");
+    expect(result.content).not.toContain("DSML");
+  });
+
   it("executes an identical tool call only once when the provider repeats it within one round", async () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -2495,7 +2592,7 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(assistantWithTools!.thinking!.endsWith("x".repeat(4000))).toBe(true);
   });
 
-  it("stops instead of replaying when a thinking-only round repeats the same reasoning verbatim", async () => {
+  it("recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim", async () => {
     // A thinking-only response has no visible text and no tool call, so it hits
     // empty-response recovery. Before the fix that recovery re-issued a
     // byte-identical request, the provider reproduced the same reasoning, and
@@ -2511,6 +2608,9 @@ describe("runAgentLoop tool-loop detection", () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       fetchCalls++;
+      if (fetchCalls === 3) {
+        return textResponse("Recovered after the repeated reasoning was rejected.");
+      }
       return new Response(new ReadableStream<Uint8Array>({
         start(controller) {
           const encoder = new TextEncoder();
@@ -2542,9 +2642,9 @@ describe("runAgentLoop tool-loop detection", () => {
       onEvent: (e) => events.push(e),
     });
 
-    // Gave up after the first replay rather than burning every retry.
-    expect(fetchCalls).toBe(2);
-    expect(result.content).toMatch(/kept repeating the same reasoning/i);
+    expect(fetchCalls).toBe(3);
+    expect(result.content).toBe("Recovered after the repeated reasoning was rejected.");
+    expect(result.content).not.toContain("Stopped:");
     expect(events.some((e) => e.type === "steering" && /repeated the same reasoning/i.test(e.message ?? ""))).toBe(true);
 
     // The reasoning is recorded once, not glued to itself.
