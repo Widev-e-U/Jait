@@ -9,6 +9,7 @@ import { backgroundCommandMonitor, type BackgroundCommandResult } from "../servi
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAcpViaOmniRoute = process.env.JAIT_ACP_VIA_OMNIROUTE;
 
 const fakeAcpAgentScript = `
 process.stdin.setEncoding("utf8");
@@ -326,6 +327,13 @@ afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
   } else {
     process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+  }
+  // Vitest pools workers across files, so leaking this would silently reroute
+  // ACP providers in unrelated suites.
+  if (originalAcpViaOmniRoute === undefined) {
+    delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+  } else {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = originalAcpViaOmniRoute;
   }
 });
 

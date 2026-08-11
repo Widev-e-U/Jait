@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { buildOmniRouteMcpServerRef, ProviderRegistry } from "./registry.js";
 
+// Vitest pools workers across files, so a leaked process.env value outlives this
+// file and changes what buildJaitMcpServerRefs() returns for unrelated suites.
+// Restore the originals after every test rather than deleting blindly.
+const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
+const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+
+afterEach(() => {
+  for (const key of ENV_KEYS) {
+    if (originalEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = originalEnv[key];
+  }
+});
+
 describe("ProviderRegistry", () => {
   it("splits Jait core and deferred tools into distinct MCP server refs", () => {
     const refs = new ProviderRegistry().buildJaitMcpServerRefs(
@@ -40,11 +53,6 @@ describe("ProviderRegistry", () => {
 });
 
 describe("buildOmniRouteMcpServerRef", () => {
-  afterEach(() => {
-    delete process.env.JAIT_OMNIROUTE_MCP;
-    delete process.env.OMNIROUTE_API_KEY;
-  });
-
   it("returns null when the switch is absent or not exactly 1", () => {
     expect(buildOmniRouteMcpServerRef({ OMNIROUTE_API_KEY: "sk-omni" })).toBeNull();
     expect(buildOmniRouteMcpServerRef({ JAIT_OMNIROUTE_MCP: "0", OMNIROUTE_API_KEY: "sk-omni" })).toBeNull();
