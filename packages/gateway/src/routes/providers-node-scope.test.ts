@@ -86,11 +86,16 @@ async function buildApp(proxyProviderOp = vi.fn(async () => [] as unknown)) {
   registry.register(gatewayCodexAccount() as never)
 
   const accounts = [GATEWAY_ACCOUNT, WINDOWS_ACCOUNT]
+  const types: { id: string; name: string }[] = []
   const providerAccountService = {
     list: () => accounts,
     get: (id: string) => accounts.find((account) => account.id === id) ?? null,
-    listTypes: () => [],
-    getType: () => null,
+    listTypes: () => types,
+    // The listing route resolves a display name through this. The stub is cast
+    // to `never`, so a missing method is not a type error — it surfaces as a
+    // 500 from the route instead. Derived from listTypes like the real service,
+    // so filling one keeps the other honest.
+    getType: (providerType: string) => types.find((type) => type.id === providerType) ?? null,
   }
 
   const ws = {
