@@ -62,6 +62,9 @@ import { emitPreviewSession } from '@/lib/preview-events'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { ProjectEditorOpenData, ProjectOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, ProjectUIState, ResponseStyle } from '@jait/shared'
+import { ProjectContextDialog, type ProjectContextDraft } from '@/components/project/project-context-dialog'
+import { getProjectRepositoryId } from '@/lib/project-repositories'
+import { resolveProjectContextView, type ProjectContextTarget } from '@/components/project/project-context-target'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
@@ -511,6 +514,8 @@ function App() {
     createSession,
     createProject,
     updateProject,
+    moveProject,
+    fetchProjectSubtree,
     assignProjectRepository,
     switchProject,
     switchSession,
@@ -624,20 +629,54 @@ function App() {
   const confirmDialog = useConfirmDialog()
   const handleRemoveProject = useCallback(async (projectId: string) => {
     const project = projects.find(w => w.id === projectId)
+    const label = project?.title || project?.rootPath || 'this project'
+    const isFolder = project?.kind === 'folder'
+
+    // Archiving a folder takes its whole subtree with it, so say how much is
+    // about to disappear instead of letting the user find out afterwards.
+    const subtree = await fetchProjectSubtree(projectId)
+    const scope = subtree && (subtree.descendantCount > 0 || subtree.sessionCount > 0)
+      ? ` This also archives ${subtree.descendantCount} nested folder(s) and ${subtree.sessionCount} chat(s).`
+      : ''
+
     const confirmed = await confirmDialog({
-      title: 'Archive project',
-      description: `Are you sure you want to archive "${project?.title || project?.rootPath || 'this project'}"? You can clear archived projects later from Settings.`,
+      title: isFolder ? 'Archive folder' : 'Archive project',
+      description: `Are you sure you want to archive "${label}"?${scope} You can clear archived projects later from Settings.`,
       confirmLabel: 'Archive',
       variant: 'destructive',
     })
     if (!confirmed) return
     const removed = await removeProject(projectId)
     if (removed) {
-      toast.success('Project archived.')
+      toast.success(isFolder ? 'Folder archived.' : 'Project archived.')
       return
     }
     toast.error('Failed to archive project.')
-  }, [confirmDialog, removeProject, projects])
+  }, [confirmDialog, fetchProjectSubtree, removeProject, projects])
+
+  // ── Chat folders ────────────────────────────────────────────────────
+  const [contextDialogTarget, setContextDialogTarget] = useState<ProjectContextTarget | null>(null)
+
+  const handleCreateFolder = useCallback((parentId: string | null) => {
+    setContextDialogTarget({ mode: 'create', parentId })
+  }, [])
+
+  const handleMoveProject = useCallback(async (projectId: string, parentId: string | null) => {
+    const result = await moveProject(projectId, parentId)
+    if (result.ok) return
+    const reason = result.error === 'CYCLE'
+      ? 'A folder cannot be moved into itself.'
+      : result.error === 'TOO_DEEP'
+        ? 'That would nest folders too deeply.'
+        : 'Failed to move folder.'
+    toast.error(reason)
+  }, [moveProject])
+
+
+  const { project: contextDialogProject, ancestors: contextDialogAncestors } = useMemo(
+    () => resolveProjectContextView(projects, contextDialogTarget),
+    [contextDialogTarget, projects],
+  )
   const {
     messages,
     isLoading,
@@ -742,16 +781,87 @@ function App() {
     viewMode,
   })
 
-  const handleAssignProjectRepository = useCallback(async (projectId: string) => {
-    const result = await assignProjectRepository(projectId)
+  /**
+   * Attach a repository to a project. Without a repo id the gateway detects one
+   * from .git inside the project's folder; with one it attaches that repository
+   * even when the row has no folder of its own — that is how a folder created
+   * empty gets a repository after the fact.
+   */
+  const handleAssignProjectRepository = useCallback(async (projectId: string, repoId?: string | null) => {
+    const result = await assignProjectRepository(projectId, repoId)
     if (!result) {
-      toast.error('No repository could be assigned. Make sure the project folder contains .git.')
-      return
+      toast.error(repoId
+        ? 'Failed to attach the repository.'
+        : 'No repository could be assigned. Make sure the project folder contains .git.')
+      return null
     }
     await automation.refresh()
     automation.setSelectedRepoId(result.repo.id)
     toast.success(result.skipped ? `Repository already assigned: ${result.repo.name}` : `Assigned repository: ${result.repo.name}`)
+    return result
   }, [assignProjectRepository, automation.refresh, automation.setSelectedRepoId])
+
+  const handleSaveProjectContext = useCallback(async (draft: ProjectContextDraft): Promise<boolean> => {
+    const target = contextDialogTarget
+    if (!target) return false
+    const { repoId, ...fields } = draft
+
+    /**
+     * Attaches the repository the user picked. The gateway honours an explicit
+     * repo id even for a row with no directory, which is what lets a folder
+     * created empty be given a repository afterwards. Re-attaching the one that
+     * is already there is skipped so a plain rename stays a single request.
+     */
+    const applyRepository = async (projectId: string, currentRepoId: string | null) => {
+      if (!repoId || repoId === currentRepoId) return
+      await handleAssignProjectRepository(projectId, repoId)
+    }
+
+    // The gateway refuses a directory another project already owns. Its wording
+    // names the offender, so it is shown as-is rather than replaced by a generic
+    // failure — and returning false keeps the dialog open with the draft intact.
+    let reported = false
+    const onError = (message: string) => { reported = true; toast.error(message) }
+
+    if (target.mode === 'create') {
+      // One call carries the whole draft, so a failure leaves no half-made row
+      // behind and the dialog keeps what was typed.
+      const created = await createProject(
+        // "Create" means create. Silently adopting the existing project for that
+        // directory is what made this look like the button did nothing.
+        { parentId: target.parentId, exclusiveRoot: true, ...fields },
+        { onError },
+      )
+      if (!created) {
+        if (!reported) toast.error('Failed to create.')
+        return false
+      }
+      // A row with a directory is a project you can immediately chat in; one
+      // without is a category, and giving it an empty chat would be noise.
+      if (created.rootPath && created.sessions.length === 0) await createSession(created.id)
+      await applyRepository(created.id, getProjectRepositoryId(created))
+      void automation.refresh()
+      toast.success(created.rootPath ? 'Project created.' : 'Folder created.')
+      return true
+    }
+
+    const updated = await updateProject(target.projectId, fields, { onError })
+    if (!updated) {
+      if (!reported) toast.error('Failed to save settings.')
+      return false
+    }
+    await applyRepository(target.projectId, getProjectRepositoryId(updated))
+    void automation.refresh()
+    toast.success('Saved.')
+    return true
+  }, [
+    automation.refresh,
+    contextDialogTarget,
+    createProject,
+    createSession,
+    handleAssignProjectRepository,
+    updateProject,
+  ])
 
   // Track whether the WS has delivered an authoritative full-state push.
   const wsFullStateReceivedRef = useRef(false)
@@ -2480,10 +2590,12 @@ function App() {
     void handleSwitchProject(projectId, sessionId)
   }, [activeProjectId, activeSessionId, isMobile, switchSession, handleSwitchProject])
 
+  // The "+" opens the same dialog the folder button used to, rather than the raw
+  // file explorer. One form creates both: leave the directory empty for a
+  // grouping folder, pick one for a project.
   const handleCreateProject = useCallback(() => {
-    setProjectPickerMode('project')
-    setFolderPickerOpen(true)
-  }, [])
+    handleCreateFolder(null)
+  }, [handleCreateFolder])
 
   const handleOpenSecretChat = useCallback(async (sessionId: string) => {
     setCurrentView('chat')
@@ -4419,6 +4531,9 @@ function App() {
                   onBlur={handleSidebarBlur}
                   onChangeDirectory={handleChangeDirectory}
                   onCreateProject={handleCreateProject}
+                  onCreateFolder={handleCreateFolder}
+                  onEditProject={(projectId) => { setContextDialogTarget({ mode: 'edit', projectId }) }}
+                  onMoveProject={(projectId, parentId) => { void handleMoveProject(projectId, parentId) }}
                   onCreatePersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
                   onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
                   onSearch={searchChats}
@@ -4750,6 +4865,9 @@ function App() {
                       onSearchProjects={searchProjects}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
                       onCreateProject={handleCreateProject}
+                      onCreateFolder={(parentId) => { setShowMobileToolbar(false); handleCreateFolder(parentId) }}
+                      onEditProject={(projectId) => { setShowMobileToolbar(false); setContextDialogTarget({ mode: 'edit', projectId }) }}
+                      onMoveProject={(projectId, parentId) => { void handleMoveProject(projectId, parentId) }}
                       onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
                       onChangeDirectory={handleChangeDirectory}
                       onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
@@ -4768,6 +4886,16 @@ function App() {
             )}
           </>
         )}
+
+        <ProjectContextDialog
+          open={contextDialogTarget !== null}
+          onOpenChange={(open) => { if (!open) setContextDialogTarget(null) }}
+          project={contextDialogProject}
+          mode={contextDialogTarget?.mode ?? 'edit'}
+          ancestors={contextDialogAncestors}
+          repositories={automation.repositories}
+          onSave={handleSaveProjectContext}
+        />
 
         <AuthOverlays
           requiresAuthGate={requiresAuthGate}

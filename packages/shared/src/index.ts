@@ -4,4 +4,5 @@ export * from "./schemas/index.js";
 export * from "./constants/index.js";
 export * from "./provider-auth.js";
 export * from "./project-ui.js";
+export * from "./project-tree.js";
 export * from "./code-graph.js";

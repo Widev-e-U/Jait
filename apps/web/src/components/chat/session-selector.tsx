@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft } from 'lucide-react'
+import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
+import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -9,7 +11,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
+import { getProjectMoveTargets } from '@/components/project/project-move-targets'
 import type { ProjectRecord, ProjectSearchResults, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
@@ -40,6 +47,12 @@ interface SessionSelectorProps {
   onSearchProjects?: (query: string) => Promise<ProjectRecord[]>
   onNewPersonalSession?: () => void
   onCreateProject: () => void
+  /** Creates a chat folder (no directory on disk), optionally nested. */
+  onCreateFolder?: (parentId: string | null) => void
+  /** Opens the name/description/colour/context editor. */
+  onEditProject?: (projectId: string) => void
+  /** Re-parents a folder or project; null moves it to the root. */
+  onMoveProject?: (projectId: string, parentId: string | null) => void
   onRemoveProject: (projectId: string) => void
   onChangeDirectory: (projectId: string) => void
   onAssignRepository?: (projectId: string) => void
@@ -55,6 +68,11 @@ interface SessionSelectorProps {
 }
 
 const RECENT_SESSIONS_LIMIT = 5
+const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
+/** Per nesting level; deep enough to read, shallow enough for a 256px sidebar. */
+const FOLDER_INDENT_PX = 12
+/** Internal drag payload for re-parenting a folder within the sidebar. */
+const JAIT_PROJECT_MOVE_MIME = 'application/x-jait-project-move'
 const SESSION_CONTEXT_MENU_WIDTH = 256
 const SESSION_CONTEXT_MENU_HEIGHT = 40
 const SESSION_CONTEXT_MENU_MARGIN = 8
@@ -71,6 +89,30 @@ export function getSessionContextMenuPosition(
   return {
     left: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(x, viewportWidth - SESSION_CONTEXT_MENU_WIDTH - SESSION_CONTEXT_MENU_MARGIN)),
     top: Math.max(SESSION_CONTEXT_MENU_MARGIN, Math.min(y, viewportHeight - menuHeight - SESSION_CONTEXT_MENU_MARGIN)),
+  }
+}
+
+/**
+ * Collapsed folders are a view preference, not shared state — they live in
+ * localStorage so a reload keeps the sidebar looking the way the user left it
+ * without a server round-trip.
+ */
+export function readCollapsedFolders(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_FOLDERS_STORAGE_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? new Set(parsed.filter((id): id is string => typeof id === 'string')) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function writeCollapsedFolders(ids: Set<string>) {
+  try {
+    window.localStorage.setItem(COLLAPSED_FOLDERS_STORAGE_KEY, JSON.stringify([...ids]))
+  } catch {
+    /* private mode / quota — the tree still works, it just won't persist */
   }
 }
 
@@ -138,6 +180,9 @@ export function SessionSelector({
   onSearchProjects,
   onNewPersonalSession,
   onCreateProject,
+  onCreateFolder,
+  onEditProject,
+  onMoveProject,
   onRemoveProject,
   onChangeDirectory,
   onAssignRepository,
@@ -202,6 +247,55 @@ export function SessionSelector({
     () => new Set(projects.filter((project) => isNodeOffline(project.nodeId, onlineNodeIds)).map((project) => project.id)),
     [onlineNodeIds, projects],
   )
+
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => readCollapsedFolders())
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null)
+  const openMenuMoveTargets = useMemo(
+    () => (openMenuProjectId ? getProjectMoveTargets(projects, openMenuProjectId) : []),
+    [openMenuProjectId, projects],
+  )
+
+  const toggleFolder = useCallback((projectId: string) => {
+    setCollapsedFolders((current) => {
+      const next = new Set(current)
+      if (next.has(projectId)) next.delete(projectId)
+      else next.add(projectId)
+      writeCollapsedFolders(next)
+      return next
+    })
+  }, [])
+
+  /**
+   * Depth-first list of rows to render. A search flattens the tree — matches
+   * are scattered across folders and hiding them behind collapsed parents
+   * would make the search look broken.
+   */
+  const visibleProjectRows = useMemo(() => {
+    if (normalizedSearchQuery) {
+      return filteredProjects.map((project) => ({ project, depth: 0, hasChildren: false }))
+    }
+    const rows = flattenProjectTree(buildProjectTree(filteredProjects))
+    const hiddenUnder = new Set<string>()
+    const out: Array<{ project: typeof filteredProjects[number]; depth: number; hasChildren: boolean }> = []
+    for (const node of rows) {
+      const parentId = node.project.parentId
+      if (parentId && hiddenUnder.has(parentId)) {
+        // Parent is collapsed (or itself hidden) — hide this whole branch.
+        hiddenUnder.add(node.project.id)
+        continue
+      }
+      out.push({ project: node.project, depth: node.depth, hasChildren: node.children.length > 0 })
+      if (collapsedFolders.has(node.project.id)) hiddenUnder.add(node.project.id)
+    }
+    return out
+  }, [collapsedFolders, filteredProjects, normalizedSearchQuery])
+
+  /** Folders this project may legally be dropped into, per the shared rules. */
+  const canDropProjectInto = useCallback((draggedId: string, targetId: string) => {
+    if (!onMoveProject || draggedId === targetId) return false
+    return validateProjectMove(projects, draggedId, targetId) === null
+  }, [onMoveProject, projects])
 
   const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession)
 
@@ -305,7 +399,34 @@ export function SessionSelector({
         <>
           {/* ── Top half: Projects ──────────────────────────── */}
           <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
-            <div className="flex h-8 shrink-0 items-center px-3 text-left transition-colors hover:bg-muted/30">
+            <div
+              className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
+                dropTargetId === '__root__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
+              }`}
+              // Dropping on the section header is the desktop equivalent of
+              // "Move to top level".
+              onDragOver={(e) => {
+                if (!onMoveProject || !e.dataTransfer.types.includes(JAIT_PROJECT_MOVE_MIME)) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                setDropTargetId('__root__')
+              }}
+              onDragLeave={() => setDropTargetId((current) => (current === '__root__' ? null : current))}
+              onDrop={(e) => {
+                setDropTargetId(null)
+                if (!onMoveProject) return
+                const draggedId = e.dataTransfer.getData(JAIT_PROJECT_MOVE_MIME)
+                if (!draggedId) return
+                e.preventDefault()
+                onMoveProject(draggedId, null)
+              }}
+            >
+              {/*
+                No second button here. "New project" and "New folder" were the
+                same act with two names — the one "+" above opens a dialog where
+                the directory is optional, so a folder is just a project that
+                has not been given one yet.
+              */}
               <span className="text-2xs font-medium text-muted-foreground">Projects</span>
             </div>
             <ScrollArea className="min-h-0 flex-1">
@@ -324,7 +445,13 @@ export function SessionSelector({
                     No matching projects.
                   </p>
                 )}
-                {filteredProjects.map((project) => {
+                {visibleProjectRows.map(({ project, depth, hasChildren }) => {
+                  const isFolder = project.kind === 'folder'
+                  // Only the open menu needs targets; validating every row on
+                  // every render would be O(projects × folders × projects).
+                  const moveTargets = openMenuProjectId === project.id ? openMenuMoveTargets : []
+                  const isCollapsed = collapsedFolders.has(project.id)
+                  const isDropTarget = dropTargetId === project.id
                   const isActiveProject = project.id === activeProjectId
                   const latestSessionId = getLatestProjectSessionId(project)
                   const isLatestProjectSessionActive = isActiveProject && latestSessionId === activeSessionId
@@ -343,40 +470,90 @@ export function SessionSelector({
                     : sortedSessions.slice(0, visibleSessionLimit)
                   const hasOlderSessions = !normalizedSearchQuery && sortedSessions.length > recentSessions.length
                   return (
-                    <div key={project.id}>
+                    <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
                     <div
                       className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${
                         offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'
                       } ${
-                        isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
+                        isDropTarget
+                          ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10'
+                          : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
                       }`}
-                      draggable={Boolean(project.rootPath)}
+                      // Workspaces stay draggable as a project *reference* (the
+                      // existing prompt-attachment gesture). Every row is also
+                      // draggable as a move within the sidebar.
+                      draggable={Boolean(project.rootPath) || Boolean(onMoveProject)}
                       onDragStart={(e) => {
-                        if (!project.rootPath) {
+                        if (!project.rootPath && !onMoveProject) {
                           e.preventDefault()
                           return
                         }
-                        e.dataTransfer.effectAllowed = 'copy'
-                        e.dataTransfer.setData(
-                          JAIT_PROJECT_REF_MIME,
-                          JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined)),
-                        )
+                        e.dataTransfer.effectAllowed = 'copyMove'
+                        if (onMoveProject) {
+                          e.dataTransfer.setData(JAIT_PROJECT_MOVE_MIME, project.id)
+                        }
+                        if (project.rootPath) {
+                          e.dataTransfer.setData(
+                            JAIT_PROJECT_REF_MIME,
+                            JSON.stringify(buildProjectDragPayload(project.rootPath, project.title || undefined)),
+                          )
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        if (!isFolder || !onMoveProject) return
+                        const draggedId = e.dataTransfer.types.includes(JAIT_PROJECT_MOVE_MIME)
+                        if (!draggedId) return
+                        // The id itself is unreadable during dragover, so the
+                        // precise legality check happens on drop; here we only
+                        // signal that a folder can receive something at all.
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setDropTargetId(project.id)
+                      }}
+                      onDragLeave={() => setDropTargetId((current) => (current === project.id ? null : current))}
+                      onDrop={(e) => {
+                        setDropTargetId(null)
+                        if (!isFolder || !onMoveProject) return
+                        const draggedId = e.dataTransfer.getData(JAIT_PROJECT_MOVE_MIME)
+                        if (!draggedId || !canDropProjectInto(draggedId, project.id)) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onMoveProject(draggedId, project.id)
                       }}
                       onClick={() => {
                         onDismiss?.()
                         if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id)
                       }}
                     >
-                      {isActiveProject ? (
+                      {hasChildren ? (
+                        <button
+                          type="button"
+                          aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
+                          aria-expanded={!isCollapsed}
+                          className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                          onClick={(e) => { e.stopPropagation(); toggleFolder(project.id) }}
+                        >
+                          {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                      ) : isActiveProject ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       ) : (
                         <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                          <ProjectColorDot color={project.color} />
                           <span className="min-w-0 truncate text-xs font-medium">
-                            {project.title || 'Untitled Project'}
+                            {project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')}
                           </span>
+                          {project.instructions?.trim() && (
+                            <span
+                              className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-medium text-primary"
+                              title="This folder adds context to its chats"
+                            >
+                              ctx
+                            </span>
+                          )}
                           {repository && (
                             <>
                               <span className="shrink-0 text-2xs text-muted-foreground">·</span>
@@ -388,10 +565,21 @@ export function SessionSelector({
                           )}
                         </div>
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
-                          <span className="min-w-0 truncate">{project.rootPath || 'No folder linked'}</span>
+                          {/* A folder has no path by design, so showing "No
+                              folder linked" there would read as a defect. */}
+                          <span className="min-w-0 truncate">
+                            {isFolder
+                              ? (project.description?.trim() || 'Chat folder')
+                              : (project.rootPath || 'No folder linked')}
+                          </span>
                           <span className="shrink-0">·</span>
                           <span className="shrink-0">{formatTime(project.lastActiveAt)}</span>
                         </div>
+                        {!isFolder && project.description?.trim() && (
+                          <div className="min-w-0 truncate text-2xs text-muted-foreground/80">
+                            {project.description}
+                          </div>
+                        )}
                         {offline && (
                           <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5 shrink-0" />
@@ -420,7 +608,9 @@ export function SessionSelector({
                         )}
                       </div>
                       <div className="mt-0.5 flex shrink-0 self-start">
-                        <DropdownMenu>
+                        <DropdownMenu
+                          onOpenChange={(open) => setOpenMenuProjectId(open ? project.id : null)}
+                        >
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
@@ -433,7 +623,83 @@ export function SessionSelector({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">
-                            {onAssignRepository && (
+                            {onEditProject && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onSelect={(e) => {
+                                  e.preventDefault()
+                                  onEditProject(project.id)
+                                }}
+                              >
+                                <Settings2 className="h-3.5 w-3.5" />
+                                <span>{isFolder ? 'Folder settings' : 'Project settings'}</span>
+                              </DropdownMenuItem>
+                            )}
+                            {onCreateFolder && isFolder && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onSelect={(e) => {
+                                  e.preventDefault()
+                                  onCreateFolder(project.id)
+                                }}
+                              >
+                                <FolderPlus className="h-3.5 w-3.5" />
+                                <span>New subfolder</span>
+                              </DropdownMenuItem>
+                            )}
+                            {/* Touch has no drag-and-drop worth relying on, so
+                                every move must exist as a menu action too.
+                                Workspaces belong here as much as folders — that
+                                is what lets a "Private" folder hold projects. */}
+                            {onMoveProject && (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="gap-2">
+                                  <FolderInput className="h-3.5 w-3.5" />
+                                  <span>Move to folder</span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                                  <DropdownMenuItem
+                                    className="gap-2"
+                                    disabled={!project.parentId}
+                                    onSelect={(e) => {
+                                      e.preventDefault()
+                                      onMoveProject(project.id, null)
+                                    }}
+                                  >
+                                    <CornerUpLeft className="h-3.5 w-3.5" />
+                                    <span>Top level</span>
+                                  </DropdownMenuItem>
+                                  {moveTargets.length > 0 && <DropdownMenuSeparator />}
+                                  {moveTargets.map((target) => (
+                                    <DropdownMenuItem
+                                      key={target.project.id}
+                                      className="gap-2"
+                                      disabled={target.disabled}
+                                      title={target.reason ?? undefined}
+                                      style={{ paddingLeft: 10 + target.depth * 12 }}
+                                      onSelect={(e) => {
+                                        e.preventDefault()
+                                        onMoveProject(project.id, target.project.id)
+                                      }}
+                                    >
+                                      <ProjectColorDot color={target.project.color} />
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {target.project.title || 'Untitled folder'}
+                                      </span>
+                                      {target.isCurrent && (
+                                        <span className="shrink-0 text-2xs text-muted-foreground">current</span>
+                                      )}
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {moveTargets.length === 0 && (
+                                    <p className="px-2 py-2 text-center text-2xs text-muted-foreground">
+                                      No folders yet.
+                                    </p>
+                                  )}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            )}
+                            {onAssignRepository && !isFolder && (
                               <DropdownMenuItem
                                 disabled={!project.rootPath}
                                 className={`gap-2 ${repository ? 'text-primary focus:text-primary' : ''}`}
@@ -446,16 +712,18 @@ export function SessionSelector({
                                 <span>{repository ? `Repository: ${repository.name}` : 'Assign repository'}</span>
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem
-                              className="gap-2"
-                              onSelect={(e) => {
-                                e.preventDefault()
-                                onChangeDirectory(project.id)
-                              }}
-                            >
-                              <FolderInput className="h-3.5 w-3.5" />
-                              <span>Change directory</span>
-                            </DropdownMenuItem>
+                            {!isFolder && (
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onSelect={(e) => {
+                                  e.preventDefault()
+                                  onChangeDirectory(project.id)
+                                }}
+                              >
+                                <FolderInput className="h-3.5 w-3.5" />
+                                <span>Change directory</span>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               className="gap-2 text-destructive focus:text-destructive"
                               onSelect={(e) => {
@@ -464,7 +732,7 @@ export function SessionSelector({
                               }}
                             >
                               <Archive className="h-3.5 w-3.5" />
-                              <span>Archive project</span>
+                              <span>{isFolder ? 'Archive folder' : 'Archive project'}</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

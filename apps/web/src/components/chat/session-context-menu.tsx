@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ChevronRight, Folder, Loader2, MessageSquare, Search, WifiOff } from 'lucide-react'
+import { buildProjectTree, flattenProjectTree } from '@jait/shared'
+import { ProjectColorDot } from '@/components/project/project-color-picker'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
 /** Above this many projects the picker gets its own search field. */
@@ -109,11 +111,19 @@ export function SessionMoveSubmenu({
 
   const candidates = useMemo(() => {
     // A remote lookup already applied the query; a local list still has to.
-    if (remoteResults) return remoteResults
-    if (!normalizedQuery) return projects
-    return projects.filter((project) => (
-      [project.title, project.rootPath].some((term) => term?.toLowerCase().includes(normalizedQuery))
-    ))
+    if (remoteResults) return remoteResults.map((project) => ({ project, depth: 0 }))
+    if (normalizedQuery) {
+      return projects
+        .filter((project) => (
+          [project.title, project.rootPath, project.description]
+            .some((term) => term?.toLowerCase().includes(normalizedQuery))
+        ))
+        .map((project) => ({ project, depth: 0 }))
+    }
+    // No query: show the real hierarchy so "which folder is this?" is obvious
+    // when several folders share a name across different parents.
+    return flattenProjectTree(buildProjectTree(projects))
+      .map((node) => ({ project: node.project, depth: node.depth }))
   }, [normalizedQuery, projects, remoteResults])
 
   const showSearch = Boolean(onSearchProjects) || projects.length > SESSION_MOVE_SEARCH_THRESHOLD
@@ -150,7 +160,7 @@ export function SessionMoveSubmenu({
             {normalizedQuery ? 'No matching projects.' : 'No projects yet.'}
           </p>
         )}
-        {candidates.map((project) => {
+        {candidates.map(({ project, depth }) => {
           const isCurrent = project.id === sessionProjectId
           const offline = offlineProjectIds?.has(project.id) ?? false
           return (
@@ -159,13 +169,15 @@ export function SessionMoveSubmenu({
               type="button"
               role="menuitem"
               disabled={disabled || isCurrent}
-              title={isCurrent ? 'Already in this project' : project.rootPath ?? undefined}
+              title={isCurrent ? 'Already in this project' : project.rootPath ?? project.description ?? undefined}
+              style={{ paddingLeft: 8 + depth * 12 }}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
               onClick={() => onSelectProject(project.id)}
             >
+              <ProjectColorDot color={project.color} />
               <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs">
-                {project.title || 'Untitled Project'}
+                {project.title || (project.kind === 'folder' ? 'Untitled folder' : 'Untitled Project')}
               </span>
               {isCurrent && <span className="shrink-0 text-2xs text-muted-foreground">current</span>}
               {offline && !isCurrent && (

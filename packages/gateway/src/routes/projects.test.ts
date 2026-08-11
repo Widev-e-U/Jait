@@ -19,7 +19,7 @@ const testConfig = {
   port: 0,
   wsPort: 0,
   logLevel: "silent",
-  nodeEnv: "test",
+  nodeEnv: "test"
 };
 
 async function authHeaders(userId: string, username: string, jwtSecret: string) {
@@ -60,7 +60,7 @@ describe("project routes", () => {
       repoService,
       gitService: new GitService(),
       userService,
-      audit,
+      audit
     });
   });
 
@@ -80,7 +80,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/sessions",
       headers,
-      payload: { name: "Chat one" },
+      payload: { name: "Chat one" }
     });
     expect(createSessionRes.statusCode).toBe(201);
     const createdSession = JSON.parse(createSessionRes.body) as { projectId: string | null };
@@ -90,7 +90,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Jait Repo", rootPath: "/project/Jait" },
+      payload: { title: "Jait Repo", rootPath: "/project/Jait" }
     });
     expect(createProjectRes.statusCode).toBe(201);
     const project = JSON.parse(createProjectRes.body) as { id: string; rootPath: string | null; title: string };
@@ -100,14 +100,14 @@ describe("project routes", () => {
       method: "POST",
       url: `/api/projects/${project.id}/sessions`,
       headers,
-      payload: { name: "Fix tests" },
+      payload: { name: "Fix tests" }
     });
     expect(createProjectSessionRes.statusCode).toBe(201);
 
     const listRes = await app.inject({
       method: "GET",
       url: "/api/projects?status=active",
-      headers,
+      headers
     });
     expect(listRes.statusCode).toBe(200);
     const body = JSON.parse(listRes.body) as {
@@ -121,7 +121,7 @@ describe("project routes", () => {
     const sessionsRes = await app.inject({
       method: "GET",
       url: "/api/sessions?status=active",
-      headers,
+      headers
     });
     expect(sessionsRes.statusCode).toBe(200);
     const sessionsBody = JSON.parse(sessionsRes.body) as {
@@ -135,7 +135,7 @@ describe("project routes", () => {
     userService.updateSettings(user.id, { apiKeys: { OPENAI_API_KEY: "test-key" } });
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-      choices: [{ message: { content: "Diagnose Electron gray screens" } }],
+      choices: [{ message: { content: "Diagnose Electron gray screens" } }]
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     try {
@@ -143,7 +143,7 @@ describe("project routes", () => {
         method: "POST",
         url: "/api/sessions",
         headers,
-        payload: {},
+        payload: {}
       });
       const session = JSON.parse(createRes.body) as { id: string; name: string };
       expect(session.name).toBe("New Chat");
@@ -152,7 +152,7 @@ describe("project routes", () => {
         method: "POST",
         url: `/api/sessions/${session.id}/generate-title`,
         headers,
-        payload: { prompt: "my windows node shows a gray window randomly" },
+        payload: { prompt: "my windows node shows a gray window randomly" }
       });
       expect(titleRes.statusCode).toBe(200);
       const titleBody = JSON.parse(titleRes.body) as { session: { name: string }; generated: boolean };
@@ -172,7 +172,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "My Repo", rootPath: "/project/repo" },
+      payload: { title: "My Repo", rootPath: "/project/repo" }
     });
     const project = JSON.parse(projectRes.body) as { id: string };
 
@@ -180,7 +180,7 @@ describe("project routes", () => {
       method: "POST",
       url: `/api/projects/${project.id}/sessions`,
       headers,
-      payload: { name: "First chat" },
+      payload: { name: "First chat" }
     });
     const firstSession = JSON.parse(firstSessionRes.body) as { id: string };
 
@@ -190,33 +190,33 @@ describe("project routes", () => {
       headers,
       payload: {
         "project.layout": { tree: false, editor: true },
-        "project.tabs": { activeTabId: "file:src/index.ts", tabs: [] },
-      },
+        "project.tabs": { activeTabId: "file:src/index.ts", tabs: [] }
+      }
     });
 
     const secondSessionRes = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/sessions`,
       headers,
-      payload: { name: "Second chat" },
+      payload: { name: "Second chat" }
     });
     expect(secondSessionRes.statusCode).toBe(201);
 
     const stateRes = await app.inject({
       method: "GET",
       url: `/api/projects/${project.id}/state?keys=project.layout,project.tabs`,
-      headers,
+      headers
     });
     expect(stateRes.statusCode).toBe(200);
     expect(JSON.parse(stateRes.body)).toEqual({
       "project.layout": { tree: false, editor: true },
-      "project.tabs": { activeTabId: "file:src/index.ts", tabs: [] },
+      "project.tabs": { activeTabId: "file:src/index.ts", tabs: [] }
     });
 
     const lastActiveRes = await app.inject({
       method: "GET",
       url: "/api/projects/last-active",
-      headers,
+      headers
     });
     expect(lastActiveRes.statusCode).toBe(200);
     const lastActive = JSON.parse(lastActiveRes.body) as {
@@ -236,14 +236,14 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Selected Project", rootPath: "/project/selected" },
+      payload: { title: "Selected Project", rootPath: "/project/selected" }
     });
     const selectedProject = JSON.parse(selectedProjectRes.body) as { id: string };
     const selectedSessionRes = await app.inject({
       method: "POST",
       url: `/api/projects/${selectedProject.id}/sessions`,
       headers,
-      payload: { name: "Selected chat" },
+      payload: { name: "Selected chat" }
     });
     const selectedSession = JSON.parse(selectedSessionRes.body) as { id: string };
 
@@ -252,7 +252,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects/select",
       headers,
-      payload: { projectId: selectedProject.id, sessionId: selectedSession.id },
+      payload: { projectId: selectedProject.id, sessionId: selectedSession.id }
     });
     expect(selectRes.statusCode).toBe(200);
 
@@ -262,20 +262,20 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Other Project", rootPath: "/project/other" },
+      payload: { title: "Other Project", rootPath: "/project/other" }
     });
     const otherProject = JSON.parse(otherProjectRes.body) as { id: string };
     await app.inject({
       method: "POST",
       url: `/api/projects/${otherProject.id}/sessions`,
       headers,
-      payload: { name: "Background automation chat" },
+      payload: { name: "Background automation chat" }
     });
 
     const lastActiveRes = await app.inject({
       method: "GET",
       url: "/api/projects/last-active",
-      headers,
+      headers
     });
     expect(lastActiveRes.statusCode).toBe(200);
     const lastActive = JSON.parse(lastActiveRes.body) as {
@@ -294,7 +294,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Selected Project", rootPath: "/project/selected" },
+      payload: { title: "Selected Project", rootPath: "/project/selected" }
     });
     const selectedProject = JSON.parse(selectedProjectRes.body) as { id: string };
 
@@ -305,7 +305,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects/select",
       headers,
-      payload: { projectId: selectedProject.id, sessionId: null },
+      payload: { projectId: selectedProject.id, sessionId: null }
     });
     expect(selectRes.statusCode).toBe(200);
 
@@ -315,20 +315,20 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Other Project", rootPath: "/project/other" },
+      payload: { title: "Other Project", rootPath: "/project/other" }
     });
     const otherProject = JSON.parse(otherProjectRes.body) as { id: string };
     await app.inject({
       method: "POST",
       url: `/api/projects/${otherProject.id}/sessions`,
       headers,
-      payload: { name: "Background automation chat" },
+      payload: { name: "Background automation chat" }
     });
 
     const lastActiveRes = await app.inject({
       method: "GET",
       url: "/api/projects/last-active",
-      headers,
+      headers
     });
     expect(lastActiveRes.statusCode).toBe(200);
     const lastActive = JSON.parse(lastActiveRes.body) as {
@@ -346,14 +346,14 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Scratch" },
+      payload: { title: "Scratch" }
     });
     const emptyProject = JSON.parse(emptyProjectRes.body) as { id: string };
 
     const deleteEmptyRes = await app.inject({
       method: "DELETE",
       url: `/api/projects/${emptyProject.id}`,
-      headers,
+      headers
     });
     expect(deleteEmptyRes.statusCode).toBe(204);
 
@@ -361,7 +361,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Keep me" },
+      payload: { title: "Keep me" }
     });
     const seededProject = JSON.parse(seededProjectRes.body) as { id: string };
 
@@ -369,7 +369,7 @@ describe("project routes", () => {
       method: "POST",
       url: `/api/projects/${seededProject.id}/sessions`,
       headers,
-      payload: { name: "Existing chat" },
+      payload: { name: "Existing chat" }
     });
     expect(createSessionRes.statusCode).toBe(201);
     const session = JSON.parse(createSessionRes.body) as { id: string };
@@ -377,7 +377,7 @@ describe("project routes", () => {
     const deleteSeededRes = await app.inject({
       method: "DELETE",
       url: `/api/projects/${seededProject.id}`,
-      headers,
+      headers
     });
     expect(deleteSeededRes.statusCode).toBe(204);
 
@@ -385,7 +385,7 @@ describe("project routes", () => {
     const archivedRes = await app.inject({
       method: "GET",
       url: "/api/projects/archived",
-      headers,
+      headers
     });
     expect(archivedRes.statusCode).toBe(200);
     const archived = JSON.parse(archivedRes.body) as { projects: Array<{ id: string }> };
@@ -395,7 +395,7 @@ describe("project routes", () => {
     const sessionsRes = await app.inject({
       method: "GET",
       url: `/api/projects/${seededProject.id}/sessions?status=archived`,
-      headers,
+      headers
     });
     expect(sessionsRes.statusCode).toBe(200);
     const sessions = JSON.parse(sessionsRes.body) as { sessions: Array<{ id: string }> };
@@ -411,7 +411,7 @@ describe("project routes", () => {
       method: "POST",
       url: "/api/projects",
       headers,
-      payload: { title: "Route Repo", rootPath },
+      payload: { title: "Route Repo", rootPath }
     });
     expect(createProjectRes.statusCode).toBe(201);
     const project = JSON.parse(createProjectRes.body) as { id: string; metadata: string | null };
@@ -421,24 +421,232 @@ describe("project routes", () => {
     const reposRes = await app.inject({
       method: "GET",
       url: "/api/repos",
-      headers,
+      headers
     });
     expect(reposRes.statusCode).toBe(200);
     const reposBody = JSON.parse(reposRes.body) as { repos: Array<{ id: string; localPath: string }> };
     expect(reposBody.repos).toContainEqual(expect.objectContaining({
       id: metadata.repositoryId,
-      localPath: rootPath,
+      localPath: rootPath
     }));
 
     const assignRes = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/repository`,
       headers,
-      payload: {},
+      payload: {}
     });
     expect(assignRes.statusCode).toBe(200);
     const assignBody = JSON.parse(assignRes.body) as { skipped: boolean; repo: { id: string } };
     expect(assignBody.skipped).toBe(true);
     expect(assignBody.repo.id).toBe(metadata.repositoryId);
+  });
+
+  describe("chat folders", () => {
+    async function folderUser(name: string) {
+      const user = userService.createUser(name, "password123");
+      return authHeaders(user.id, user.username, testConfig.jwtSecret);
+    }
+
+    const createFolder = async (headers: Record<string, string>, payload: Record<string, unknown>) => {
+      const res = await app.inject({ method: "POST", url: "/api/projects", headers, payload: { ...payload } });
+      expect(res.statusCode).toBe(201);
+      return JSON.parse(res.body) as { id: string; kind: string; rootPath: string | null; color: string | null; description: string | null };
+    };
+
+    it("creates a folder with no root path", async () => {
+      const headers = await folderUser("folder-user");
+      const folder = await createFolder(headers, { title: "Work", description: "Job stuff", color: "blue" });
+      expect(folder.kind).toBe("folder");
+      expect(folder.rootPath).toBeNull();
+      expect(folder.color).toBe("blue");
+      expect(folder.description).toBe("Job stuff");
+    });
+
+    it("creates distinct folders instead of collapsing them by root path", async () => {
+      const headers = await folderUser("folder-distinct-user");
+      const a = await createFolder(headers, { title: "A" });
+      const b = await createFolder(headers, { title: "B" });
+      expect(a.id).not.toBe(b.id);
+    });
+
+    it("refuses to create a second project on a directory that is taken", async () => {
+      const headers = await folderUser("folder-conflict-user");
+      const first = await createFolder(headers, { title: "Jait", rootPath: "/srv/jait" });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        headers,
+        payload: { title: "Jait again", rootPath: "/srv/jait", exclusiveRoot: true },
+      });
+
+      // Previously this answered 201 with the *existing* project, so the dialog
+      // closed, nothing new appeared, and the click looked like it did nothing.
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body) as { error: string; details: string };
+      expect(body.error).toBe("ROOT_PATH_IN_USE");
+      expect(body.details).toContain("Jait");
+
+      const listRes = await app.inject({ method: "GET", url: "/api/projects", headers });
+      const list = JSON.parse(listRes.body) as { projects: { id: string }[] };
+      expect(list.projects.map((p) => p.id)).toEqual([first.id]);
+    });
+
+    it("still adopts an existing project when opening a folder rather than creating one", async () => {
+      const headers = await folderUser("folder-adopt-user");
+      const first = await createFolder(headers, { title: "Jait", rootPath: "/srv/adopt" });
+
+      // The editor's open-folder flow sends no exclusiveRoot: reusing the
+      // project you already have is exactly what it wants.
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        headers,
+        payload: { rootPath: "/srv/adopt" },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect((JSON.parse(res.body) as { id: string }).id).toBe(first.id);
+    });
+
+    it("refuses to give a folder a directory another project already owns", async () => {
+      const headers = await folderUser("folder-patch-conflict-user");
+      await createFolder(headers, { title: "Jait", rootPath: "/srv/patch-taken" });
+      const folder = await createFolder(headers, { title: "Ideas" });
+
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${folder.id}`,
+        headers,
+        payload: { rootPath: "/srv/patch-taken" },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect((JSON.parse(res.body) as { error: string }).error).toBe("ROOT_PATH_IN_USE");
+      // The folder must be untouched, not half-updated.
+      const after = await app.inject({ method: "GET", url: "/api/projects", headers });
+      const rows = (JSON.parse(after.body) as { projects: { id: string; rootPath: string | null; kind: string }[] }).projects;
+      const unchanged = rows.find((p) => p.id === folder.id);
+      expect(unchanged?.rootPath).toBeNull();
+      expect(unchanged?.kind).toBe("folder");
+    });
+
+    it("lets a project keep its own directory when nothing else changes", async () => {
+      const headers = await folderUser("folder-patch-self-user");
+      const project = await createFolder(headers, { title: "Jait", rootPath: "/srv/self" });
+
+      // Re-sending the row's own path must not read as a conflict with itself.
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${project.id}`,
+        headers,
+        payload: { rootPath: "/srv/self", title: "Renamed" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect((JSON.parse(res.body) as { title: string }).title).toBe("Renamed");
+    });
+
+    it("moves a project into a folder", async () => {
+      const headers = await folderUser("folder-move-user");
+      const parent = await createFolder(headers, { title: "Parent" });
+      const child = await createFolder(headers, { title: "Child" });
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/projects/${child.id}/move`,
+        headers,
+        payload: { parentId: parent.id }
+      });
+      expect(res.statusCode).toBe(200);
+      expect((JSON.parse(res.body) as { parentId: string }).parentId).toBe(parent.id);
+    });
+
+    it("rejects a cyclic move with 400", async () => {
+      const headers = await folderUser("folder-cycle-user");
+      const parent = await createFolder(headers, { title: "Parent" });
+      const child = await createFolder(headers, { title: "Child" });
+      await app.inject({ method: "POST", url: `/api/projects/${child.id}/move`, headers, payload: { parentId: parent.id } });
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/projects/${parent.id}/move`,
+        headers,
+        payload: { parentId: child.id }
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.body) as { error: string }).error).toBe("CYCLE");
+    });
+
+    it("rejects creating a folder under an unknown parent", async () => {
+      const headers = await folderUser("folder-bad-parent-user");
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/projects",
+        headers,
+        payload: { title: "Orphan", parentId: "does-not-exist" }
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.body) as { error: string }).error).toBe("PARENT_NOT_FOUND");
+    });
+
+    it("patches instructions, description and colour, and clears them with null", async () => {
+      const headers = await folderUser("folder-patch-user");
+      const folder = await createFolder(headers, { title: "Ctx" });
+
+      const set = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${folder.id}`,
+        headers,
+        payload: { instructions: "answer in german", description: "d", color: "#00FF00" }
+      });
+      expect(set.statusCode).toBe(200);
+      const afterSet = JSON.parse(set.body) as { instructions: string; description: string; color: string };
+      expect(afterSet.instructions).toBe("answer in german");
+      expect(afterSet.color).toBe("#00ff00");
+
+      const clear = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${folder.id}`,
+        headers,
+        payload: { instructions: null, color: null }
+      });
+      const afterClear = JSON.parse(clear.body) as { instructions: string | null; color: string | null; description: string };
+      expect(afterClear.instructions).toBeNull();
+      expect(afterClear.color).toBeNull();
+      // Not included in the patch, so it must survive untouched.
+      expect(afterClear.description).toBe("d");
+    });
+
+    it("reports subtree size before an archive", async () => {
+      const headers = await folderUser("folder-subtree-user");
+      const parent = await createFolder(headers, { title: "Parent" });
+      const child = await createFolder(headers, { title: "Child" });
+      await app.inject({ method: "POST", url: `/api/projects/${child.id}/move`, headers, payload: { parentId: parent.id } });
+      await app.inject({ method: "POST", url: `/api/projects/${child.id}/sessions`, headers, payload: { name: "chat" } });
+
+      const res = await app.inject({ method: "GET", url: `/api/projects/${parent.id}/subtree`, headers });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { descendantCount: number; sessionCount: number };
+      expect(body.descendantCount).toBe(1);
+      expect(body.sessionCount).toBe(1);
+    });
+
+    it("does not leak another user's folder as a move target", async () => {
+      const mine = await folderUser("folder-owner-a");
+      const theirs = await folderUser("folder-owner-b");
+      const foreign = await createFolder(theirs, { title: "Theirs" });
+      const own = await createFolder(mine, { title: "Mine" });
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/projects/${own.id}/move`,
+        headers: mine,
+        payload: { parentId: foreign.id }
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.body) as { error: string }).error).toBe("PARENT_NOT_FOUND");
+    });
   });
 });

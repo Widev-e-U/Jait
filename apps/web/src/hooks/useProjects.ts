@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import type { ProjectKind } from '@jait/shared'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { AutomationRepo } from '@/lib/agents-api'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
@@ -28,6 +29,15 @@ export interface ProjectRecord {
   title: string | null
   rootPath: string | null
   nodeId: string | null
+  /** Parent folder id, or null at the root of the tree. */
+  parentId: string | null
+  /** 'workspace' = folder on disk; 'folder' = pure chat category. */
+  kind: ProjectKind
+  /** Extra system-prompt context inherited by every chat below this node. */
+  instructions: string | null
+  description: string | null
+  /** Palette token or `#rrggbb`. */
+  color: string | null
   status: 'active' | 'archived' | 'deleted'
   createdAt: string
   lastActiveAt: string
@@ -83,10 +93,37 @@ export function applyPersonalSessionMove(
   return [session, ...without]
 }
 
+/**
+ * Reads the gateway's `{ error, details }` body so a refusal can be shown
+ * verbatim ("\"Jait\" already uses that folder.") instead of a generic failure.
+ */
+async function readRequestError(res: Response): Promise<string | null> {
+  try {
+    const body = await res.json() as { details?: unknown; error?: unknown }
+    if (typeof body.details === 'string' && body.details.trim()) return body.details
+    if (typeof body.error === 'string' && body.error.trim()) return body.error
+  } catch {
+    // Non-JSON body — the caller falls back to its own generic message.
+  }
+  return null
+}
+
 export interface CreateProjectOptions {
   title?: string
   rootPath?: string | null
   nodeId?: string | null
+  /** 'folder' creates a chat category with no directory on disk. */
+  kind?: ProjectKind
+  parentId?: string | null
+  description?: string | null
+  color?: string | null
+  instructions?: string | null
+  /**
+   * Refuse instead of adopting when another project already uses this
+   * directory. Set by the create dialog; the editor's open-folder flow leaves
+   * it off because reusing what you already have is the point there.
+   */
+  exclusiveRoot?: boolean
 }
 
 export interface ProjectRepositoryAssignmentResponse {
@@ -420,7 +457,10 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [token])
 
-  const createProject = useCallback(async (options: CreateProjectOptions = {}) => {
+  const createProject = useCallback(async (
+    options: CreateProjectOptions = {},
+    handlers: { onError?: (message: string) => void } = {},
+  ) => {
     if (!token) {
       onLoginRequired?.()
       return null
@@ -433,13 +473,23 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
           title: options.title,
           rootPath: options.rootPath,
           nodeId: options.nodeId,
+          kind: options.kind,
+          parentId: options.parentId,
+          description: options.description,
+          color: options.color,
+          instructions: options.instructions,
+          exclusiveRoot: options.exclusiveRoot,
         }),
       })
       if (res.status === 401) {
         onLoginRequired?.()
         return null
       }
-      if (!res.ok) return null
+      if (!res.ok) {
+        const message = await readRequestError(res)
+        if (message) handlers.onError?.(message)
+        return null
+      }
       const project = await res.json() as Omit<ProjectRecord, 'sessions'> & { sessions?: ProjectSession[] }
       let nextProject!: ProjectRecord
       setProjects((prev) => {
@@ -699,7 +749,15 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [onLoginRequired, token])
 
-  const updateProject = useCallback(async (projectId: string, data: { rootPath?: string; nodeId?: string; title?: string }) => {
+  const updateProject = useCallback(async (projectId: string, data: {
+    /** Null clears the directory and turns the row back into a grouping folder. */
+    rootPath?: string | null
+    nodeId?: string | null
+    title?: string
+    description?: string | null
+    color?: string | null
+    instructions?: string | null
+  }, handlers: { onError?: (message: string) => void } = {}) => {
     if (!token) {
       onLoginRequired?.()
       return null
@@ -714,7 +772,11 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         onLoginRequired?.()
         return null
       }
-      if (!res.ok) return null
+      if (!res.ok) {
+        const message = await readRequestError(res)
+        if (message) handlers.onError?.(message)
+        return null
+      }
       const project = await res.json() as Omit<ProjectRecord, 'sessions'> & { sessions?: ProjectSession[] }
       const updated: ProjectRecord = { ...project, sessions: project.sessions ?? [] }
       setProjects((prev) => prev.map((w) => w.id === projectId ? { ...w, ...updated } : w))
@@ -724,6 +786,59 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       return null
     }
   }, [onLoginRequired, token])
+
+  /**
+   * Re-parent a folder/project. The server re-validates the move, so a stale
+   * client tree can never push through a cycle; a rejection returns the reason
+   * code for the caller to surface.
+   */
+  const moveProject = useCallback(async (
+    projectId: string,
+    parentId: string | null,
+  ): Promise<{ ok: true; project: ProjectRecord } | { ok: false; error: string }> => {
+    if (!token) {
+      onLoginRequired?.()
+      return { ok: false, error: 'UNAUTHORIZED' }
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${projectId}/move`, {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId }),
+      })
+      if (res.status === 401) {
+        onLoginRequired?.()
+        return { ok: false, error: 'UNAUTHORIZED' }
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        return { ok: false, error: body?.error ?? 'MOVE_FAILED' }
+      }
+      const project = await res.json() as Omit<ProjectRecord, 'sessions'> & { sessions?: ProjectSession[] }
+      let next!: ProjectRecord
+      setProjects((prev) => prev.map((entry) => {
+        if (entry.id !== projectId) return entry
+        next = { ...entry, ...project, sessions: project.sessions ?? entry.sessions }
+        return next
+      }))
+      return { ok: true, project: next }
+    } catch (err) {
+      console.error('Failed to move project:', err)
+      return { ok: false, error: 'MOVE_FAILED' }
+    }
+  }, [onLoginRequired, token])
+
+  /** Chat/folder counts an archive would sweep up, for the confirmation prompt. */
+  const fetchProjectSubtree = useCallback(async (projectId: string) => {
+    if (!token) return null
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${projectId}/subtree`, { headers: authHeaders(token) })
+      if (!res.ok) return null
+      return await res.json() as { descendantCount: number; sessionCount: number }
+    } catch {
+      return null
+    }
+  }, [token])
 
   const assignProjectRepository = useCallback(async (projectId: string, repoId?: string | null): Promise<ProjectRepositoryAssignmentResponse | null> => {
     if (!token) {
@@ -1108,6 +1223,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     searchProjects,
     createProject,
     updateProject,
+    moveProject,
+    fetchProjectSubtree,
     assignProjectRepository,
     createSession,
     switchProject,

@@ -41,6 +41,9 @@ interface DeveloperSidebarsProps {
   onBlur: (event: FocusEvent<HTMLElement>) => void
   onChangeDirectory: (projectId: string) => void
   onCreateProject: () => void
+  onCreateFolder: (parentId: string | null) => void
+  onEditProject: (projectId: string) => void
+  onMoveProject: (projectId: string, parentId: string | null) => void
   onCreatePersonalSession: () => void
   onRemoveProject: (projectId: string) => void
   onSearch: (query: string) => void
@@ -88,6 +91,9 @@ export function DeveloperSidebars({
   onBlur,
   onChangeDirectory,
   onCreateProject,
+  onCreateFolder,
+  onEditProject,
+  onMoveProject,
   onCreatePersonalSession,
   onRemoveProject,
   onSearch,
@@ -217,6 +223,9 @@ export function DeveloperSidebars({
               onSearchProjects={onSearchProjects}
               onNewPersonalSession={onCreatePersonalSession}
               onCreateProject={onCreateProject}
+              onCreateFolder={onCreateFolder}
+              onEditProject={onEditProject}
+              onMoveProject={onMoveProject}
               onRemoveProject={onRemoveProject}
               onChangeDirectory={onChangeDirectory}
               onAssignRepository={onAssignRepository}

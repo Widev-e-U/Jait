@@ -138,6 +138,11 @@ export interface PromptContext {
   platform?: string;
   shell?: string;
   hostname?: string;
+  /**
+   * User-authored context inherited from the chat's project folder and its
+   * ancestors, already rendered and length-capped by `renderInstructionChain`.
+   */
+  projectInstructions?: string;
 }
 
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
@@ -211,6 +216,15 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
   const globalInstructions = loadGlobalJaitInstructions();
   if (globalInstructions) {
     prompt += "\n\n<globalJaitInstructions>\nUser-level instructions loaded from the Jait global instruction file. These apply across projects and providers unless a higher-priority instruction conflicts.\n\n" + globalInstructions + "\n</globalJaitInstructions>";
+  }
+
+  // Folder context comes last: it is the most specific thing the user set, so
+  // it outranks the global instruction file when the two disagree. Applied
+  // outside the local-model branch so lightweight models honour it too — the
+  // user typed these instructions deliberately and would notice their absence.
+  const projectInstructions = ctx?.projectInstructions?.trim();
+  if (projectInstructions) {
+    prompt += `\n\n<projectInstructions>\nContext and instructions the user attached to this chat's project folder (and any folder above it), ordered from the outermost folder inwards. The innermost entry is the most specific — prefer it when two entries conflict. These outrank the global instruction file.\n\n${projectInstructions}\n</projectInstructions>`;
   }
 
   return prompt;
