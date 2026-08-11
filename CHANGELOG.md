@@ -4,6 +4,16 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.704](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.704) — 2026-08-11
+- feat(projects): nest projects in folders with instructions, descriptions, colours, and optional repository assignments (`f0d989f6`)
+- feat(gateway): add OmniRoute as a configurable Jait LLM backend with model discovery and connection testing (`0e6ba270`)
+- feat(persistence): bound stored context and tool-call payloads, suppress noisy streaming activity from session search, add opt-in incremental retention, and keep startup migrations fast on multi-gigabyte databases (`b50af04e`)
+- feat(search): rank bounded project/code-search results across gateway, remote nodes, and desktop while enforcing literal argv execution, ownership checks, ignore rules, output caps, and safe fallbacks (`b50af04e`)
+- feat(pull requests): add conflict inspection and resolution workflows, harden Git/path handling, and bind every GitHub operation to the authenticated user's encrypted token instead of shared gateway credentials (`b50af04e`)
+- fix(agent + chat): preserve reasoning effort through threads and providers, improve cancellation/background continuation, tighten tool-loop persistence, and stabilize message editing, mobile project controls, and provider selection (`b50af04e`)
+- test: isolate gateway and E2E databases from live Jait data, add fail-then-pass authorization/search regressions, and benchmark migrations against large database copies (`b50af04e`)
+- fix(gateway): keep the provider-account test double compatible with the provider type contract (`69a7581c`)
+
 ## [v0.1.703](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.703) — 2026-08-10
 - fix(web): persist per-project manager provider, refresh thread on WS reconnect, markdown reasoning (`f0fd4b3f`)
 - fix(gateway): reject quarantined tool calls and repeated reasoning without ending the turn (`75c7c01e`)

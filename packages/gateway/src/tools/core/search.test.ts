@@ -34,7 +34,7 @@ function createRegistryStub() {
 describe("search core tool retry behavior", () => {
   it("keeps a literal no-match successful when optional regex retry is unavailable", async () => {
     const projectRoot = await createTempProject("sample.txt", "foo\n");
-    const tool = createSearchTool(createRegistryStub() as any);
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });
 
     const result = await tool.execute(
       { pattern: "fo+", isRegexp: false, limit: 5 },

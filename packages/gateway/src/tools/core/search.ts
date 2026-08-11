@@ -15,6 +15,7 @@ import {
   normalizeProjectSearchLimit,
   searchProject,
 } from "../../services/project-search.js";
+import type { ProjectSearchRuntime } from "../../services/project-search.js";
 import { resolveProjectRoot } from "./get-fs.js";
 
 interface SearchInput {
@@ -55,7 +56,10 @@ function fileResultMessage(pattern: string, count: number, limit: number, limite
   return `Found ${count} file${count === 1 ? "" : "s"} matching "${pattern}"${suffix}`;
 }
 
-export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<SearchInput> {
+export function createSearchTool(
+  registry: SurfaceRegistry,
+  runtime: ProjectSearchRuntime = {},
+): ToolDefinition<SearchInput> {
   return {
     name: "search",
     description:
@@ -110,13 +114,16 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
         const limit = normalizeProjectSearchLimit(input.limit);
         const mode = input.mode ?? "content";
         if (mode === "files") {
-          const result = await searchProject({
-            root: searchRoot,
-            query: input.pattern,
-            mode: "files",
-            limit,
-            includeIgnoredFiles: input.includeIgnoredFiles,
-          });
+          const result = await searchProject(
+            {
+              root: searchRoot,
+              query: input.pattern,
+              mode: "files",
+              limit,
+              includeIgnoredFiles: input.includeIgnoredFiles,
+            },
+            runtime,
+          );
           if (result.mode !== "files") throw new Error("Unexpected project search mode");
           const files = result.files.map((file) => file.path);
           return {
@@ -127,15 +134,18 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
         }
 
         const runContentSearch = async (isRegexp: boolean) => {
-          const result = await searchProject({
-            root: searchRoot,
-            query: input.pattern,
-            mode: "content",
-            limit,
-            include: input.include,
-            isRegexp,
-            includeIgnoredFiles: input.includeIgnoredFiles,
-          });
+          const result = await searchProject(
+            {
+              root: searchRoot,
+              query: input.pattern,
+              mode: "content",
+              limit,
+              include: input.include,
+              isRegexp,
+              includeIgnoredFiles: input.includeIgnoredFiles,
+            },
+            runtime,
+          );
           if (result.mode !== "content") throw new Error("Unexpected project search mode");
           return result;
         };
