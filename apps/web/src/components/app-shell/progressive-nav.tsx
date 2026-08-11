@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { EllipsisVertical } from 'lucide-react'
+import { Ellipsis } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +33,8 @@ interface ProgressiveNavProps {
   style?: React.CSSProperties
 }
 
+const OVERFLOW_MENU_WIDTH = 40
+
 function NavButton({ item }: { item: ProgressiveNavItem }) {
   const Icon = item.icon
   return (
@@ -52,7 +54,8 @@ function NavButton({ item }: { item: ProgressiveNavItem }) {
 /**
  * Greedily count how many nav items fit within `availableWidth`, given each
  * item's cumulative end offset (including inter-item gaps). Items overflow
- * right-to-left so the leftmost items always stay visible.
+ * right-to-left so the leftmost items always stay visible. The overflow menu
+ * remains at the right edge, where the removed items previously appeared.
  */
 export function computeVisibleCount(itemEnds: number[], availableWidth: number): number {
   if (itemEnds.length === 0) return 0
@@ -94,7 +97,7 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
   // Greedily fit items from the left until the next button would exceed the
   // available width. Anything past the cutoff lives in the overflow menu.
   const visibleCount = itemEnds.length === items.length
-    ? computeVisibleCount(itemEnds, availableWidth)
+    ? computeVisibleCount(itemEnds, Math.max(0, availableWidth - OVERFLOW_MENU_WIDTH))
     : 0
 
   const visibleItems = items.slice(0, visibleCount)
@@ -102,26 +105,6 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
 
   return (
     <div className={cn('flex min-w-0 items-center gap-1', className)} style={style}>
-      {/* Left overflow (⋯) menu */}
-      <div className="shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu">
-              <EllipsisVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-            {overflowItems.map((item) => (
-              <DropdownMenuItem key={item.id} onSelect={item.onSelect}>
-                <item.icon className="h-4 w-4 mr-2" />
-                {item.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       {/* Live nav — only the items that fit are rendered inline. */}
       <nav ref={navRef} className="flex min-w-0 items-center gap-1 overflow-hidden">
         {visibleItems.map((item) => (
@@ -145,6 +128,26 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
           ))}
         </div>
       </nav>
+
+      {/* Right overflow (…) menu — items disappear toward this control. */}
+      <div className="shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu">
+              <Ellipsis className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Navigate</DropdownMenuLabel>
+            {overflowItems.map((item) => (
+              <DropdownMenuItem key={item.id} onSelect={item.onSelect}>
+                <item.icon className="h-4 w-4 mr-2" />
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   )
 }

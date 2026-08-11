@@ -4,7 +4,7 @@ import { computeVisibleCount } from './progressive-nav'
 /**
  * The overflow menu fills progressively as the header shrinks: items are kept
  * inline from the left until the next button would exceed the available width,
- * and everything past the cutoff is moved into the "⋯" menu.
+ * and everything past the cutoff is moved into the right-side "…" menu.
  */
 describe('computeVisibleCount', () => {
   // itemEnds = cumulative offset+width for each nav button, e.g.
