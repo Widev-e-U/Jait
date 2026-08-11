@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.706](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.706) — 2026-08-11
+- feat(gateway): add `jait update` command to install and restart the latest gateway (or a specific version) (`b676931f`)
+- fix(web): move the header's progressive overflow menu to the right of the visible items so collapsed entries disappear toward the "…" control, align the dropdown right, and reserve trigger width while resizing (`d2bf4338`)
+
 ## [v0.1.705](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.705) — 2026-08-11
 - fix(web): keep chat transcript hooks unconditional so the empty-to-loaded render cannot crash with React error #310; enforce the Rules of Hooks in the standard lint/CI path (`8a97559b`)
 
