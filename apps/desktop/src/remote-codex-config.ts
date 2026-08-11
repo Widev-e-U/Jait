@@ -10,6 +10,10 @@ export function resolveRemoteCodexModelDiscoveryArgs(): string[] {
   return ['app-server']
 }
 
+export function resolveRemoteCodexCompatibilityArgs(): string[] {
+  return []
+}
+
 export function resolveRemoteCodexThreadConfig(mode: string): RemoteCodexThreadConfig {
   const hasFullAccess = mode === 'full-access'
   return {

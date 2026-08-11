@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, sta
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
-import { resolveRemoteCodexModelDiscoveryArgs, resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
+import { resolveRemoteCodexCompatibilityArgs, resolveRemoteCodexModelDiscoveryArgs, resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
 import { normalizeBrowserUrl } from "./browser-navigation.js";
 const { autoUpdater } = electronUpdater;
 
@@ -37,7 +37,6 @@ const require = createRequire(import.meta.url);
 const GATEWAY_URL = process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000";
 const DEV_SERVER_URL = process.env["JAIT_WEB_DEV_URL"] ?? "http://localhost:3000";
 const JAIT_CORE_MCP_SERVER_NAME = "jait_core";
-const JAIT_CORE_CODE_MODE_NAMESPACE = "mcp__jait_core";
 const IS_DEV = !app.isPackaged;
 
 // ── "Open with Jait" — extract folder path from CLI args ──────────────
@@ -1128,9 +1127,7 @@ function buildDesktopCodexMcpArgs(servers?: DesktopMcpServerRef[]): string[] {
       }
     }
   }
-  if (servers.some((server) => server.name === JAIT_CORE_MCP_SERVER_NAME)) {
-    args.push("-c", `features.code_mode.direct_only_tool_namespaces=["${JAIT_CORE_CODE_MODE_NAMESPACE}"]`);
-  }
+  args.push(...resolveRemoteCodexCompatibilityArgs());
   return args;
 }
 
