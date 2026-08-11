@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.707](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.707) — 2026-08-11
+- fix(web): hide the header's overflow "…" menu entirely when no nav items have overflowed, so an empty 3-dot menu never appears (`c24913db`)
+
 ## [v0.1.706](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.706) — 2026-08-11
 - feat(gateway): add `jait update` command to install and restart the latest gateway (or a specific version) (`b676931f`)
 - fix(web): move the header's progressive overflow menu to the right of the visible items so collapsed entries disappear toward the "…" control, align the dropdown right, and reserve trigger width while resizing (`d2bf4338`)
