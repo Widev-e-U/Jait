@@ -9,6 +9,7 @@
  *   jait stop                Stop the background gateway
  *   jait status              Check if the gateway is running
  *   jait doctor              Run local diagnostics
+ *   jait update              Update the gateway and restart it when managed
  *   jait reset               Wipe all data
  *   jait --port 9000         Use a custom port
  *   jait --host 127.0.0.1   Bind to specific host
@@ -27,7 +28,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, openSyn
 import { resolve, dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execSync, spawn } from "node:child_process";
+import { execFileSync, execSync, spawn, spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
 import { createInterface } from "node:readline";
 
@@ -78,6 +79,7 @@ Commands:
   stop               Stop the background gateway
   status             Check if the gateway is running
   doctor             Run local diagnostics
+  update [version]   Update the gateway (default: latest)
   reset              Wipe all data (~/.jait)
   daemon <cmd>       Manage systemd service (Linux only)
 
@@ -298,8 +300,8 @@ function isProcessRunning(pid) {
   }
 }
 
-async function cmdStart(cliFlags) {
-  printBanner();
+async function cmdStart(cliFlags, { showBanner = true } = {}) {
+  if (showBanner) printBanner();
   const port = cliFlags.port || process.env.PORT || "8000";
 
   // Check if already running
@@ -365,6 +367,109 @@ async function cmdStart(cliFlags) {
   console.log(`  Logs: ${LOG_PATH}`);
   console.log(`  Run 'jait status' to check health.`);
   console.log(`  Run 'jait stop' to stop the gateway.`);
+  console.log("");
+}
+
+function npmCommand() {
+  return platform() === "win32" ? "npm.cmd" : "npm";
+}
+
+function readInstalledGatewayVersion() {
+  try {
+    const output = execFileSync(
+      npmCommand(),
+      ["list", "-g", "@jait/gateway", "--depth=0", "--json"],
+      { encoding: "utf8", timeout: 10_000, windowsHide: true, stdio: "pipe" },
+    );
+    return JSON.parse(output).dependencies?.["@jait/gateway"]?.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isSystemdServiceActive() {
+  if (platform() !== "linux") return false;
+  try {
+    execFileSync(
+      "systemctl",
+      ["--user", "is-active", "--quiet", SERVICE_NAME],
+      { timeout: 5_000, windowsHide: true, stdio: "ignore" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForProcessExit(pid, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessRunning(pid)) return true;
+    await sleep(100);
+  }
+  return !isProcessRunning(pid);
+}
+
+async function restartTrackedGateway(tracked, port) {
+  if (platform() === "win32") {
+    execFileSync("taskkill", ["/PID", String(tracked.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    process.kill(Number(tracked.pid), "SIGTERM");
+  }
+
+  if (!(await waitForProcessExit(tracked.pid))) {
+    throw new Error(`gateway process ${tracked.pid} did not stop within 10 seconds`);
+  }
+
+  cleanupPidFile(tracked.pidPath);
+  await cmdStart({ port }, { showBanner: false });
+}
+
+async function cmdUpdate({ version = "latest", port } = {}) {
+  if (!/^(?:[A-Za-z][0-9A-Za-z._-]*|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.test(version)) {
+    throw new Error(`Invalid gateway version or npm tag: ${version}`);
+  }
+
+  printBanner();
+  const activePort = port || process.env.PORT || "8000";
+  const systemdActive = isSystemdServiceActive();
+  const tracked = systemdActive ? null : getTrackedProcess();
+  const previousVersion = readInstalledGatewayVersion() ?? pkg.version;
+  const packageSpec = `@jait/gateway@${version}`;
+
+  console.log(`  Installing ${packageSpec}...`);
+  const install = spawnSync(npmCommand(), ["install", "-g", packageSpec], {
+    stdio: "inherit",
+    timeout: 120_000,
+    windowsHide: true,
+  });
+  if (install.error) {
+    throw new Error(`npm install failed: ${install.error.message}`);
+  }
+  if (install.status !== 0) {
+    throw new Error(`npm install failed with exit code ${install.status ?? "unknown"}`);
+  }
+
+  const installedVersion = readInstalledGatewayVersion() ?? version;
+  console.log(`  Installed @jait/gateway ${installedVersion} (was ${previousVersion}).`);
+
+  if (systemdActive) {
+    execFileSync("systemctl", ["--user", "restart", SERVICE_NAME], {
+      stdio: "inherit",
+      windowsHide: true,
+    });
+    console.log(`  Restarted ${SERVICE_NAME}.`);
+  } else if (tracked) {
+    console.log(`  Restarting background gateway (PID ${tracked.pid})...`);
+    await restartTrackedGateway(tracked, activePort);
+  } else {
+    console.log("  Gateway was not managed by the CLI, so it was not restarted.");
+    console.log("  Restart the current gateway process to activate the update.");
+  }
+
   console.log("");
 }
 
@@ -819,6 +924,40 @@ if (args[0] === "start") {
 if (args[0] === "stop") {
   cmdStop();
   process.exit(0);
+}
+
+if (args[0] === "update") {
+  let version = "latest";
+  let versionProvided = false;
+  let port;
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === "--help" || args[i] === "-h") {
+      console.log("Usage: jait update [version] [--port <number>]");
+      console.log("");
+      console.log("Updates @jait/gateway globally and restarts a CLI-managed gateway.");
+      process.exit(0);
+    }
+    if (args[i] === "--port" && args[i + 1]) {
+      port = args[++i];
+    } else if (args[i].startsWith("-")) {
+      console.error(`Unknown update option: ${args[i]}`);
+      process.exit(1);
+    } else if (!versionProvided) {
+      version = args[i];
+      versionProvided = true;
+    } else {
+      console.error(`Unexpected update argument: ${args[i]}`);
+      process.exit(1);
+    }
+  }
+  try {
+    await cmdUpdate({ version, port });
+    process.exit(0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Update failed: ${message}`);
+    process.exit(1);
+  }
 }
 
 if (args[0] === "reset") {

@@ -151,11 +151,13 @@ jait daemon uninstall   # remove service
 ### Update on the server
 
 ```bash
-npm install -g @jait/gateway@latest
-jait daemon restart
+jait update
 ```
 
-Or trigger the update from the web UI: **Settings → Check for updates → Apply**.
+This installs the latest gateway and automatically restarts gateways managed by
+`jait start` or `jait daemon`. To install a specific release, run
+`jait update 0.1.705`. You can also trigger the update from the web UI:
+**Settings → Check for updates → Apply**.
 
 ---
 
@@ -166,6 +168,7 @@ jait                       Start the gateway (default port 8000)
 jait start                 Start the gateway in the background
 jait stop                  Stop the background gateway
 jait status                Check if the gateway is running
+jait update [version]      Update the gateway (default: latest)
 jait reset                 Wipe all data (~/.jait) — double confirmation
 jait --port 9000           Custom port
 jait --host 127.0.0.1      Bind to localhost only
