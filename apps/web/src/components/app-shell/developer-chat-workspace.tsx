@@ -232,6 +232,49 @@ export function DeveloperChatWorkspace({
     setEditingMessageId(null)
   }, [activeSessionId])
 
+  // These hooks must stay above the empty-chat return. A chat commonly renders
+  // once without messages while history loads and then renders with messages;
+  // placing transcript-only hooks below that return changes the hook count on
+  // that transition and makes React abort the entire application.
+  const elementCacheRef = useRef<Map<string, {
+    key: string
+    element: ReactNode
+    content: unknown
+    contextFlow: unknown
+    hasContextFlow: unknown
+    hasMemoryProvenance: unknown
+    displayContent: unknown
+    referencedFiles: unknown
+    displaySegments: unknown
+    attachments: unknown
+    thinking: unknown
+    thinkingDuration: unknown
+    toolCalls: unknown
+    segments: unknown
+    isStreaming: boolean
+    steered: unknown
+  }>>(new Map())
+  const cacheSessionRef = useRef<string | null>(null)
+  const scrollToUserMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return messages[i].id
+    }
+    return null
+  }, [messages])
+  const activeProjectHasRepo = useMemo(
+    () => {
+      if (!activeProjectId) return false
+      const record = projects.find((project) => project.id === activeProjectId) ?? null
+      return getProjectRepositoryId(record) != null
+    },
+    [projects, activeProjectId],
+  )
+
+  if (cacheSessionRef.current !== activeSessionId) {
+    elementCacheRef.current.clear()
+    cacheSessionRef.current = activeSessionId
+  }
+
   if (!hasMessages) {
     return (
       <div
@@ -346,29 +389,6 @@ export function DeveloperChatWorkspace({
     onMemorySourceOpen,
     onHandleMemoryFeedback,
   ]
-  const elementCacheRef = useRef<Map<string, {
-    key: string
-    element: ReactNode
-    content: unknown
-    contextFlow: unknown
-    hasContextFlow: unknown
-    hasMemoryProvenance: unknown
-    displayContent: unknown
-    referencedFiles: unknown
-    displaySegments: unknown
-    attachments: unknown
-    thinking: unknown
-    thinkingDuration: unknown
-    toolCalls: unknown
-    segments: unknown
-    isStreaming: boolean
-    steered: unknown
-  }>>(new Map())
-  const cacheSessionRef = useRef<string | null>(null)
-  if (cacheSessionRef.current !== activeSessionId) {
-    elementCacheRef.current.clear()
-    cacheSessionRef.current = activeSessionId
-  }
   const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : null
   const sharedKey = JSON.stringify(sharedPropsKey)
   const messageElements: ReactNode[] = []
@@ -472,27 +492,7 @@ export function DeveloperChatWorkspace({
     }
   }
 
-  // Id of the most recently sent user message. When a new user message lands we
-  // pass this to <Conversation> so it reveals the message even if the user had
-  // scrolled up to read history. The value only changes when a user message is
-  // added, so streaming assistant replies won't retrigger the scroll.
-  const scrollToUserMessageId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') return messages[i].id
-    }
-    return null
-  }, [messages])
-
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
-
-  const activeProjectHasRepo = useMemo(
-    () => {
-      if (!activeProjectId) return false
-      const record = projects.find((project) => project.id === activeProjectId) ?? null
-      return getProjectRepositoryId(record) != null
-    },
-    [projects, activeProjectId],
-  )
 
   return (
     <div
