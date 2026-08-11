@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.705](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.705) — 2026-08-11
+- fix(web): keep chat transcript hooks unconditional so the empty-to-loaded render cannot crash with React error #310; enforce the Rules of Hooks in the standard lint/CI path (`8a97559b`)
+
 ## [v0.1.704](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.704) — 2026-08-11
 - feat(projects): nest projects in folders with instructions, descriptions, colours, and optional repository assignments (`f0d989f6`)
 - feat(gateway): add OmniRoute as a configurable Jait LLM backend with model discovery and connection testing (`0e6ba270`)
