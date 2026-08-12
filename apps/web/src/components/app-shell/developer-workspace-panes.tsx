@@ -76,6 +76,9 @@ interface DeveloperWorkspacePanesProps {
   onTerminalSelect: (terminalId: string) => void
   onToggleProjectEditor: () => void
   onToggleProjectTree: () => void
+  savedPanelSize?: number | null
+  savedTreeSize?: number | null
+  onLayoutSizeChange?: (panelSize: number, treeSize: number) => void
 }
 
 export function DeveloperWorkspacePanes({
@@ -147,6 +150,9 @@ export function DeveloperWorkspacePanes({
   onTerminalSelect,
   onToggleProjectEditor,
   onToggleProjectTree,
+  savedPanelSize,
+  savedTreeSize,
+  onLayoutSizeChange,
 }: DeveloperWorkspacePanesProps) {
   const hasManagerThread = Boolean(automationSelectedThread)
   const shouldShowDesktopPanes = (viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopProject || showTerminal))
@@ -212,6 +218,9 @@ export function DeveloperWorkspacePanes({
         cliModel={cliModel}
         onMaxCollapsedChange={mobile ? undefined : onSetChatCollapsed}
         restoreRef={mobile ? undefined : projectRestoreRef}
+        savedPanelSize={mobile ? undefined : savedPanelSize}
+        savedTreeSize={mobile ? undefined : savedTreeSize}
+        onLayoutSizeChange={mobile ? undefined : onLayoutSizeChange}
       />
     </ErrorBoundary>
   )

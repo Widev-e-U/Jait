@@ -46,7 +46,18 @@ describe('mobile project layout', () => {
     expect(normalizeHydratedProjectLayout({ tree: false, editor: true }, false)).toEqual({ tree: false, editor: true })
   })
 
-  it('uses the editor as the desktop fallback when hydrated panes are both closed', () => {
-    expect(normalizeHydratedProjectLayout({ tree: false, editor: false }, false)).toEqual({ tree: false, editor: true })
+  it('preserves a fully collapsed desktop layout (explicit user choice)', () => {
+    // A saved { tree: false, editor: false } layout is an explicit choice to
+    // collapse everything — it must stay collapsed, never force the editor open.
+    expect(normalizeHydratedProjectLayout({ tree: false, editor: false }, false)).toEqual({ tree: false, editor: false })
+  })
+
+  it('restores each project from its own saved layout without leaking', () => {
+    // Project A: tree hidden, editor visible.
+    expect(normalizeHydratedProjectLayout({ tree: false, editor: true }, false)).toEqual({ tree: false, editor: true })
+    // Project B: everything collapsed.
+    expect(normalizeHydratedProjectLayout({ tree: false, editor: false }, false)).toEqual({ tree: false, editor: false })
+    // Project C: both visible.
+    expect(normalizeHydratedProjectLayout({ tree: true, editor: true }, false)).toEqual({ tree: true, editor: true })
   })
 })

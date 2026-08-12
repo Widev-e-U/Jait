@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { getDesktopProjectPanelStyle, toggleDesktopProjectTreeVisibility } from './project-panel-layout'
+import {
+  DRAG_SNAP_MAX,
+  DRAG_SNAP_MIN,
+  getDesktopProjectPanelStyle,
+  resolveDragEndSize,
+  toggleDesktopProjectTreeVisibility,
+} from './project-panel-layout'
 
 describe('project panel desktop layout', () => {
   it('keeps the configured panel width when both tree and editor are visible', () => {
@@ -69,5 +75,36 @@ describe('project panel desktop layout', () => {
       tree: true,
       editor: false,
     })
+  })
+})
+
+describe('resolveDragEndSize (per-project size reporting)', () => {
+  it('reports nothing when no drag happened', () => {
+    expect(resolveDragEndSize(null, 1200)).toBeNull()
+  })
+
+  it('reports nothing when the pane snapped collapsed to width 0', () => {
+    expect(resolveDragEndSize(DRAG_SNAP_MIN, 1200)).toBeNull()
+  })
+
+  it('reports the max size when the pane snapped to full width', () => {
+    expect(resolveDragEndSize(DRAG_SNAP_MAX, 1200)).toBe(1200)
+  })
+
+  it('reports the final width for a normal drag', () => {
+    expect(resolveDragEndSize(640, 1200)).toBe(640)
+  })
+
+  it('is the only reporting point — a single drag yields a single size', () => {
+    // Simulates a drag that produced one pending value; the hook calls this
+    // exactly once per drag end, never per pointer-move frame.
+    const reported: number[] = []
+    const report = (size: number | null) => {
+      const resolved = resolveDragEndSize(size, 1200)
+      if (resolved !== null) reported.push(resolved)
+    }
+    report(640)
+    report(null) // no further frames report anything
+    expect(reported).toEqual([640])
   })
 })

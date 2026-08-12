@@ -135,7 +135,7 @@ export function DeveloperSidebars({
             </TooltipTrigger>
             <TooltipContent side="right">Terminal</TooltipContent>
           </Tooltip>
-          {activeProject && (
+          {(activeProjectId || activeProject) && (
             <>
               <Tooltip>
                 <TooltipTrigger asChild>

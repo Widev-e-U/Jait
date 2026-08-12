@@ -99,6 +99,7 @@ import {
   areProjectUiValuesEqual,
   getPersistablePreviewTarget,
   getProjectUiRestoreKey,
+  mergeProjectLayout,
 } from '@/lib/project-ui-state'
 import { projectSuggestions, suggestions } from '@/lib/chat-suggestions'
 import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
@@ -1112,9 +1113,17 @@ function App() {
   }, [updateProjectUI])
 
   const loadingProjectLayout = loadingProjectUI && !!activeProjectId && !!token
-  const setSavedProjectLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
+  const setSavedProjectLayout = useCallback((v: ProjectUIState['layout'], options?: { immediate?: boolean }) => {
     updateProjectUI('layout', v, { immediate: options?.immediate ?? true })
   }, [updateProjectUI])
+
+  // Persist panel/tree widths per-project. Called only on drag end (never per
+  // drag frame), so it cannot spam network requests or re-renders. Merges with
+  // the current tree/editor visibility so a size-only update never drops them.
+  const handleProjectLayoutSizeChange = useCallback((panelSize: number, treeSize: number) => {
+    const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, { panelSize, treeSize })
+    setSavedProjectLayout(next)
+  }, [setSavedProjectLayout])
 
   const setSavedProjectTabs = useCallback((v: ProjectTabsState | null) => {
     updateProjectUI('tabs', v)
@@ -1304,6 +1313,14 @@ function App() {
     setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
     setProjectFiles([])
     setActiveProjectFileId(null)
+    // Reset tree/editor visibility to the defaults so the previous project's
+    // layout does not leak into the next one while its project.ui fetch is
+    // still in flight. The panel is hidden by setShowProject(false) above, so
+    // this reset is not visible; the new project's saved layout is applied by
+    // applyProjectUI once its fetch resolves (and a project with no saved
+    // layout keeps these defaults: tree + editor both visible).
+    setShowProjectTree(true)
+    setShowProjectEditor(true)
   }, [activeProjectId])
 
   // ── Persistent session state for changed files ─────────────────────
@@ -2095,7 +2112,9 @@ function App() {
     if (!options?.immediateSync) return
 
     prevProjectLayoutPayloadRef.current = JSON.stringify(layout)
-    setSavedProjectLayout(layout, { immediate: true })
+    // Merge with the persisted panelSize/treeSize so a visibility toggle never
+    // drops the per-project widths.
+    setSavedProjectLayout(mergeProjectLayout(projectUIRef.current?.layout ?? null, layout), { immediate: true })
     if (activeSessionId) {
       sendUIState('project.layout', layout, activeSessionId)
     }
@@ -2109,7 +2128,9 @@ function App() {
     const serialized = JSON.stringify(layout)
     if (serialized === prevProjectLayoutPayloadRef.current) return
     prevProjectLayoutPayloadRef.current = serialized
-        setSavedProjectLayout(layout)
+    // Merge with the persisted panelSize/treeSize so this visibility-only save
+    // never clobbers the per-project widths with undefined.
+    setSavedProjectLayout(mergeProjectLayout(projectUIRef.current?.layout ?? null, layout))
     if (activeSessionId) {
       if (consumeSuppressedUiSync('project.layout')) return
       sendUIState('project.layout', layout, activeSessionId)
@@ -4682,6 +4703,9 @@ function App() {
                 onTerminalSelect={setActiveTerminalId}
                 onToggleProjectEditor={toggleProjectEditor}
                 onToggleProjectTree={toggleProjectTree}
+                savedPanelSize={projectUI?.layout?.panelSize ?? null}
+                savedTreeSize={projectUI?.layout?.treeSize ?? null}
+                onLayoutSizeChange={handleProjectLayoutSizeChange}
               />
             </div>
 

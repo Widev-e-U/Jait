@@ -22,7 +22,7 @@ import { saveDetachedProjectTab, type DetachedProjectTabPayload } from '@/lib/de
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchProjectContent } from '@/lib/project-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './project-git-actions'
-import { getDesktopProjectPanelStyle } from './project-panel-layout'
+import { DRAG_SNAP_MAX, DRAG_SNAP_MIN, getDesktopProjectPanelStyle, resolveDragEndSize } from './project-panel-layout'
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import type { FsChangesPayload } from '@jait/shared'
 import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
@@ -132,6 +132,12 @@ interface ProjectPanelProps {
   onMaxCollapsedChange?: (collapsed: boolean) => void
   /** Restore the panel from a collapsed state (called externally via button). */
   restoreRef?: React.MutableRefObject<(() => void) | null>
+  /** Per-project persisted panel width — overrides the global localStorage fallback. */
+  savedPanelSize?: number | null
+  /** Per-project persisted tree pane width — overrides the global localStorage fallback. */
+  savedTreeSize?: number | null
+  /** Reports final panel/tree widths after a drag ends (for per-project persistence). */
+  onLayoutSizeChange?: (panelSize: number, treeSize: number) => void
 }
 
 export interface ProjectPanelHandle {
@@ -839,14 +845,29 @@ function useDragResize(
   max: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
   storageKey?: string,
-  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number; minStoredSize?: number },
+  options?: {
+    snapCollapse?: boolean
+    snapMaxCollapse?: boolean
+    snapMaxSize?: number
+    minStoredSize?: number
+    /** Per-project persisted size — takes precedence over the global localStorage fallback. */
+    persistedInitial?: number | null
+    /** Called once with the final size when a drag ends (never mid-drag). */
+    onSizeChange?: (size: number) => void
+  },
 ) {
   const snapCollapse = options?.snapCollapse ?? false
   const snapMaxCollapse = options?.snapMaxCollapse ?? false
   const snapMaxSize = options?.snapMaxSize ?? max
   const minStoredSize = options?.minStoredSize ?? min
+  const persistedInitial = options?.persistedInitial ?? null
   const [size, setSize] = useState(() => {
-    if (!storageKey || typeof window === 'undefined') return initial
+    if (typeof window === 'undefined') return initial
+    // Per-project persisted value wins over the global localStorage fallback.
+    if (persistedInitial != null && Number.isFinite(persistedInitial)) {
+      return Math.min(max, Math.max(min, minStoredSize, persistedInitial))
+    }
+    if (!storageKey) return initial
     const raw = window.localStorage.getItem(storageKey)
     const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
     if (!Number.isFinite(parsed)) return initial
@@ -859,9 +880,23 @@ function useDragResize(
   const [isDragging, setIsDragging] = useState(false)
   const frameRef = useRef<number | null>(null)
   const pendingSizeRef = useRef<number | null>(null)
-  // sentinel values for snap states
-  const SNAP_MIN = -1
-  const SNAP_MAX = -2
+  const onSizeChangeRef = useRef(options?.onSizeChange)
+  onSizeChangeRef.current = options?.onSizeChange
+  // Guards for applying a per-project persisted size that arrives after mount
+  // (project.ui loads async): apply at most once, and never while the user is
+  // mid-drag or has already dragged, so we never fight the user's interaction.
+  const appliedPersistedRef = useRef(false)
+  const userDraggedRef = useRef(false)
+
+  // Apply a per-project persisted size when it arrives after mount.
+  useEffect(() => {
+    if (persistedInitial == null || !Number.isFinite(persistedInitial)) return
+    if (appliedPersistedRef.current || userDraggedRef.current) return
+    if (collapsed || maxCollapsed) return
+    appliedPersistedRef.current = true
+    const clamped = Math.min(max, Math.max(min, minStoredSize, persistedInitial))
+    setSize((prev) => (prev === clamped ? prev : clamped))
+  }, [persistedInitial, min, max, minStoredSize, collapsed, maxCollapsed])
 
   // Keep cachedSizeRef in sync with actual size when not collapsed
   useEffect(() => {
@@ -906,11 +941,11 @@ function useDragResize(
 
   const applyPending = useCallback((nextSize: number | null) => {
     if (nextSize === null) return
-    if (nextSize === SNAP_MIN) {
+    if (nextSize === DRAG_SNAP_MIN) {
       updateBooleanState(setCollapsed, true)
       updateBooleanState(setMaxCollapsed, false)
       updateNumberState(setSize, 0)
-    } else if (nextSize === SNAP_MAX) {
+    } else if (nextSize === DRAG_SNAP_MAX) {
       updateBooleanState(setMaxCollapsed, true)
       updateBooleanState(setCollapsed, false)
       updateNumberState(setSize, snapMaxSize)
@@ -925,6 +960,7 @@ function useDragResize(
     (e: React.PointerEvent) => {
       e.preventDefault()
       dragging.current = true
+      userDraggedRef.current = true
       setIsDragging(true)
       const pointerId = e.pointerId
       const target = e.currentTarget
@@ -942,9 +978,9 @@ function useDragResize(
         const raw = startSize + delta
 
         if (snapCollapse && raw < minSnapThreshold) {
-          pendingSizeRef.current = SNAP_MIN
+          pendingSizeRef.current = DRAG_SNAP_MIN
         } else if (snapMaxCollapse && raw > maxSnapThreshold) {
-          pendingSizeRef.current = SNAP_MAX
+          pendingSizeRef.current = DRAG_SNAP_MAX
         } else {
           pendingSizeRef.current = Math.min(max, Math.max(min, raw))
         }
@@ -966,8 +1002,14 @@ function useDragResize(
           frameRef.current = null
         }
         if (pendingSizeRef.current !== null) {
-          applyPending(pendingSizeRef.current)
+          const pending = pendingSizeRef.current
+          applyPending(pending)
           pendingSizeRef.current = null
+          // Report the final size exactly once, on drag end (never per-frame),
+          // so the parent can persist it per-project without re-rendering on
+          // every pointer move. Collapsed (width 0) is not reported.
+          const reported = resolveDragEndSize(pending, snapMaxSize)
+          if (reported !== null) onSizeChangeRef.current?.(reported)
         }
         document.removeEventListener('pointermove', onMove)
         document.removeEventListener('pointerup', onUp)
@@ -1289,6 +1331,9 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   onCollapsedChange,
   onMaxCollapsedChange,
   restoreRef,
+  savedPanelSize,
+  savedTreeSize,
+  onLayoutSizeChange,
 }, ref) {
   const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
@@ -1324,12 +1369,19 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
   const panelFullWidth = Math.max(panelMax, viewportWidth - sidebarWidth)
   const initialPanel = Math.min(panelMax, Math.max(400, viewportWidth - sidebarWidth - initialChatWidth))
+  // Refs mirror the current sizes so each pane's drag-end report can include
+  // the other pane's latest width without re-rendering the parent mid-drag.
+  const panelSizeRef = useRef(initialPanel)
+  const treeSizeRef = useRef(260)
   const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'projectPanelWidth', {
     snapCollapse: true,
     snapMaxCollapse: true,
     snapMaxSize: panelFullWidth,
     minStoredSize: initialPanel,
+    persistedInitial: savedPanelSize ?? null,
+    onSizeChange: (size) => onLayoutSizeChange?.(size, treeSizeRef.current),
   })
+  panelSizeRef.current = panel.size
 
   // Notify parent when collapse state changes (layout effects prevent one-frame flash)
   useLayoutEffect(() => { onCollapsedChange?.(panel.collapsed) }, [panel.collapsed, onCollapsedChange])
@@ -1340,7 +1392,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const treeMax = Math.max(240, panel.size - minEditorWidth)
   const tree = useDragResize(260, 240, treeMax, 'horizontal', 'projectTreePaneWidth', {
     snapCollapse: true,
+    persistedInitial: savedTreeSize ?? null,
+    onSizeChange: (size) => onLayoutSizeChange?.(panelSizeRef.current, size),
   })
+  treeSizeRef.current = tree.size
 
   // When project panel snaps collapsed via drag, let parent close
   // (component will unmount, so no need to restore drag state here)

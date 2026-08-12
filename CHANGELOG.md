@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.709](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.709) — 2026-08-12
+- feat(web): add a built-in Light Plus Monaco theme so light mode uses the real VS Code light-plus scopes instead of the plain `vs` fallback; load both Dark Plus and Light Plus into the Shiki highlighter and register them with Monaco, with light palette overrides that match the app shell, and drop the hand-written dark-plus fallback rules in favour of the live bundled theme scopes
+- feat(web): persist project panel/tree widths per-project (previously a single global localStorage value); sizes are reported only on drag end and merged with the current tree/editor visibility so a size-only update never drops them
+- fix(web): reset tree/editor visibility to the defaults when switching projects so the previous project's layout does not leak into the next while its saved layout is still loading
+- fix(web): respect a saved desktop project layout as-is, so an explicitly fully-collapsed layout stays collapsed instead of forcing the editor open
+- fix(web): show the project button in the developer sidebar as soon as a project id is active, even before the project object finishes loading
+
 ## [v0.1.708](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.708) — 2026-08-11
 - fix(desktop): stop injecting the unstable prerelease `features.code_mode` configuration that current stable Codex rejects at startup, which broke Jait-orchestrated Codex sessions on Windows before any prompt could be sent (`f3631cfb`)
 

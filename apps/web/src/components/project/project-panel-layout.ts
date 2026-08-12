@@ -37,6 +37,29 @@ export interface ProjectPaneVisibility {
   editor: boolean
 }
 
+/** Sentinel values used by the drag-resize hook for snap states. */
+export const DRAG_SNAP_MIN = -1
+export const DRAG_SNAP_MAX = -2
+
+/**
+ * Resolve the size to report to the parent when a drag ends.
+ *
+ * Returns `null` when there is nothing meaningful to persist: no drag
+ * happened, or the pane snapped collapsed to width 0 (the parent closes the
+ * panel in that case, and 0 is not a usable persisted width). This is the
+ * only point at which sizes are reported — never mid-drag — so the parent
+ * can persist per-project widths without re-rendering on every pointer move.
+ */
+export function resolveDragEndSize(
+  pendingSize: number | null,
+  snapMaxSize: number,
+): number | null {
+  if (pendingSize === null) return null
+  if (pendingSize === DRAG_SNAP_MIN) return null
+  if (pendingSize === DRAG_SNAP_MAX) return snapMaxSize
+  return pendingSize
+}
+
 export function toggleDesktopProjectTreeVisibility(
   layout: ProjectPaneVisibility,
 ): ProjectPaneVisibility {

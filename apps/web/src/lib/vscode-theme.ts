@@ -1,4 +1,5 @@
 import darkPlusTheme from '@shikijs/themes/dark-plus'
+import lightPlusTheme from '@shikijs/themes/light-plus'
 
 export interface MonacoStandaloneThemeRule {
   token: string
@@ -76,9 +77,11 @@ const THEME_SEARCH_TERMS = [
 
 const appliedThemeVariableKeys = new Set<string>()
 export const BUILT_IN_DARK_PLUS_MONACO_THEME_NAME = 'dark-plus'
+export const BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME = 'light-plus'
 const shikiMonacoInitialized = new WeakSet<object>()
 
 const BUNDLED_DARK_PLUS_THEME = darkPlusTheme as BundledVsCodeThemeDocument
+const BUNDLED_LIGHT_PLUS_THEME = lightPlusTheme as BundledVsCodeThemeDocument
 const JAIT_DARK_PLUS_COLOR_OVERRIDES: Record<string, string> = {
   'editor.background': '#0B0C0E',
   'editorGutter.background': '#0B0C0E',
@@ -96,13 +99,37 @@ const JAIT_DARK_PLUS_COLOR_OVERRIDES: Record<string, string> = {
 const BUILT_IN_DARK_PLUS_MONACO_THEME: MonacoStandaloneThemeData = {
   base: 'vs-dark',
   inherit: false,
-  rules: [
-    ...buildMonacoRules(BUNDLED_DARK_PLUS_THEME.tokenColors ?? []),
-    ...buildDarkPlusMonacoFallbackRules(),
-  ],
+  rules: buildMonacoRules(BUNDLED_DARK_PLUS_THEME.tokenColors ?? []),
   colors: {
     ...sanitizeColorMap(BUNDLED_DARK_PLUS_THEME.colors ?? {}),
     ...JAIT_DARK_PLUS_COLOR_OVERRIDES,
+  },
+}
+
+// Mirror the app shell's light palette (index.css :root) so Monaco blends in:
+// --background hsl(210 18% 94%) ≈ #EDF0F2, --popover hsl(210 18% 96%) ≈ #F3F5F7,
+// --border hsl(210 12% 80%) ≈ #C6CCD2.
+const JAIT_LIGHT_PLUS_COLOR_OVERRIDES: Record<string, string> = {
+  'editor.background': '#EDF0F2',
+  'editorGutter.background': '#EDF0F2',
+  'editorStickyScroll.background': '#EDF0F2',
+  'editorStickyScrollGutter.background': '#EDF0F2',
+  'minimap.background': '#EDF0F2',
+  'editor.lineHighlightBackground': '#E2E6E9',
+  'editorWidget.background': '#F3F5F7',
+  'editorHoverWidget.background': '#F3F5F7',
+  'editorWidget.border': '#C6CCD2',
+  'editorHoverWidget.border': '#C6CCD2',
+  'editorGroupHeader.tabsBackground': '#EDF0F2',
+}
+
+const BUILT_IN_LIGHT_PLUS_MONACO_THEME: MonacoStandaloneThemeData = {
+  base: 'vs',
+  inherit: false,
+  rules: buildMonacoRules(BUNDLED_LIGHT_PLUS_THEME.tokenColors ?? []),
+  colors: {
+    ...sanitizeColorMap(BUNDLED_LIGHT_PLUS_THEME.colors ?? {}),
+    ...JAIT_LIGHT_PLUS_COLOR_OVERRIDES,
   },
 }
 
@@ -114,6 +141,7 @@ export function registerBuiltInMonacoThemes(
   monaco: { editor?: MonacoEditorApi } | null | undefined,
 ): void {
   monaco?.editor?.defineTheme?.(BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, BUILT_IN_DARK_PLUS_MONACO_THEME)
+  monaco?.editor?.defineTheme?.(BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME, BUILT_IN_LIGHT_PLUS_MONACO_THEME)
 }
 
 export function ensureBuiltInDarkPlusTextMateTheme(monaco: unknown): void {
@@ -133,15 +161,20 @@ export function ensureBuiltInDarkPlusTextMateTheme(monaco: unknown): void {
       }
     }
 
+    // Load both built-in themes into the highlighter. shikiToMonaco wraps
+    // monaco.editor.setTheme and calls highlighter.setTheme(themeName) first;
+    // that call throws for any theme that isn't loaded here, which would leave
+    // Monaco stuck on the previous theme when switching to the light theme.
     const highlighter = await createHighlighter({
-      themes: ['dark-plus'],
+      themes: [BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME],
       langs: ['javascript', 'typescript', 'jsx', 'tsx', 'json', 'css', 'html', 'markdown', 'python', 'yaml', 'diff'],
     })
     shikiToMonaco(highlighter, monaco as never)
     registerBuiltInMonacoThemes(monaco as Parameters<typeof registerBuiltInMonacoThemes>[0])
     const editor = (monaco as { editor?: MonacoEditorApi }).editor
-    if (typeof document !== 'undefined' && document.documentElement.dataset.monacoTheme === BUILT_IN_DARK_PLUS_MONACO_THEME_NAME) {
-      editor?.setTheme?.(BUILT_IN_DARK_PLUS_MONACO_THEME_NAME)
+    const currentTheme = typeof document !== 'undefined' ? document.documentElement.dataset.monacoTheme : null
+    if (currentTheme === BUILT_IN_DARK_PLUS_MONACO_THEME_NAME || currentTheme === BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME) {
+      editor?.setTheme?.(currentTheme)
     }
   }).catch((error) => {
     console.error('Failed to initialize Shiki Monaco Dark Plus theme:', error)
@@ -230,48 +263,6 @@ function buildMonacoRules(tokenColors: VsCodeThemeTokenRule[]): MonacoStandalone
     }
   }
   return rules
-}
-
-function buildDarkPlusMonacoFallbackRules(): MonacoStandaloneThemeRule[] {
-  return [
-    { token: '', foreground: 'D4D4D4', background: '1E1E1E' },
-    { token: 'invalid', foreground: 'F44747' },
-    { token: 'emphasis', fontStyle: 'italic' },
-    { token: 'strong', fontStyle: 'bold' },
-    { token: 'comment', foreground: '6A9955' },
-    { token: 'constant', foreground: '569CD6' },
-    { token: 'number', foreground: 'B5CEA8' },
-    { token: 'regexp', foreground: 'D16969' },
-    { token: 'string', foreground: 'CE9178' },
-    { token: 'string.key.json', foreground: '9CDCFE' },
-    { token: 'string.value.json', foreground: 'CE9178' },
-    { token: 'keyword', foreground: '569CD6' },
-    { token: 'keyword.flow', foreground: 'C586C0' },
-    { token: 'keyword.operator', foreground: 'D4D4D4' },
-    { token: 'keyword.operator.new', foreground: 'C586C0' },
-    { token: 'operator', foreground: 'D4D4D4' },
-    { token: 'type', foreground: '4EC9B0' },
-    { token: 'type.identifier', foreground: '4EC9B0' },
-    { token: 'class', foreground: '4EC9B0' },
-    { token: 'interface', foreground: '4EC9B0' },
-    { token: 'enum', foreground: '4EC9B0' },
-    { token: 'namespace', foreground: '4EC9B0' },
-    { token: 'identifier', foreground: '9CDCFE' },
-    { token: 'identifier.function', foreground: 'DCDCAA' },
-    { token: 'function', foreground: 'DCDCAA' },
-    { token: 'member', foreground: 'DCDCAA' },
-    { token: 'method', foreground: 'DCDCAA' },
-    { token: 'property', foreground: '9CDCFE' },
-    { token: 'variable', foreground: '9CDCFE' },
-    { token: 'variable.parameter', foreground: '9CDCFE' },
-    { token: 'parameter', foreground: '9CDCFE' },
-    { token: 'delimiter', foreground: 'D4D4D4' },
-    { token: 'delimiter.html', foreground: '808080' },
-    { token: 'delimiter.xml', foreground: '808080' },
-    { token: 'tag', foreground: '569CD6' },
-    { token: 'attribute.name', foreground: '9CDCFE' },
-    { token: 'attribute.value', foreground: 'CE9178' },
-  ]
 }
 
 function buildCssVariables(colors: Record<string, string>): Record<string, string> {

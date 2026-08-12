@@ -1,4 +1,4 @@
-import { BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, buildStoredVsCodeTheme, registerBuiltInMonacoThemes, type MonacoStandaloneThemeData } from './vscode-theme'
+import { BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME, buildStoredVsCodeTheme, registerBuiltInMonacoThemes, type MonacoStandaloneThemeData } from './vscode-theme'
 
 describe('buildStoredVsCodeTheme', () => {
   it('parses commented theme JSON and flattens token scopes', () => {
@@ -80,10 +80,40 @@ describe('registerBuiltInMonacoThemes', () => {
     expect(theme.rules).toEqual(expect.arrayContaining([
       { token: 'comment', foreground: '6a9955' },
       { token: 'entity.name.function', foreground: 'dcdcaa' },
-      { token: 'identifier.function', foreground: 'DCDCAA' },
-      { token: 'function', foreground: 'DCDCAA' },
-      { token: 'class', foreground: '4EC9B0' },
+      { token: 'support.function', foreground: 'dcdcaa' },
+      { token: 'entity.name.type', foreground: '4ec9b0' },
+      { token: 'entity.name.class', foreground: '4ec9b0' },
       { token: 'keyword.control', foreground: '569cd6' },
+    ]))
+  })
+
+  it('registers a bundled light theme that matches the app light palette', () => {
+    const defineTheme = vi.fn()
+
+    registerBuiltInMonacoThemes({ editor: { defineTheme } })
+
+    expect(defineTheme).toHaveBeenCalledWith(BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME, expect.objectContaining({
+      base: 'vs',
+      inherit: false,
+      colors: expect.objectContaining({
+        'editor.background': '#EDF0F2',
+        'editor.foreground': '#000000',
+        'editorGutter.background': '#EDF0F2',
+        'editor.lineHighlightBackground': '#E2E6E9',
+        'editorWidget.background': '#F3F5F7',
+        'editorWidget.border': '#C6CCD2',
+      }),
+    }))
+
+    const lightCalls = defineTheme.mock.calls.filter((call) => call[0] === BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME)
+    const theme = lightCalls[0]?.[1] as MonacoStandaloneThemeData
+    expect(theme.rules).toEqual(expect.arrayContaining([
+      { token: 'comment', foreground: '008000' },
+      { token: 'string', foreground: 'a31515' },
+      { token: 'keyword', foreground: '0000ff' },
+      { token: 'entity.name.type', foreground: '267f99' },
+      { token: 'entity.name.function', foreground: '795e26' },
+      { token: 'variable', foreground: '001080' },
     ]))
   })
 })

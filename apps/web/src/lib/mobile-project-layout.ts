@@ -10,9 +10,12 @@ export function normalizeHydratedProjectLayout(
   isMobile: boolean,
 ): ProjectLayoutState {
   if (!isMobile) {
-    return !layout.tree && !layout.editor
-      ? { tree: false, editor: true }
-      : layout
+    // Desktop: respect the saved layout as-is. A fully collapsed layout
+    // ({ tree: false, editor: false }) is an explicit user choice and must
+    // stay collapsed — never force the editor open here. Projects with no
+    // saved layout never reach this function (applyProjectUI leaves the
+    // tree/editor defaults untouched), so there is no fallback to invent.
+    return layout
   }
 
   if (layout.tree) return { tree: true, editor: false }
