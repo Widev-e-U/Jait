@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.711](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.711) — 2026-08-13
+- fix(web): show editor mode as a read-only status glyph beside each project instead of a toggle button, so the icon tells the user whether editor mode is active; the sidebar editor button remains the activation control
+- fix(web): route chat archiving through the confirmation dialog so it always asks before archiving
+- fix(web): use explicit red styling for archive/remove actions so they no longer look grayed out in dark mode
+- fix(web): bound the mobile provider-model dialog and patch-notes tooltip to the viewport so they no longer overflow the screen
+
 ## [v0.1.710](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.710) — 2026-08-13
 - feat(web): add a "Sign in to GitHub" action to the pull-requests authentication error so a missing GitHub credential can be fixed from within Jait; it opens the forge setup dialog pre-targeted at the selected repository
 - feat(web): keep project action menus visible on desktop without hovering, and add a per-project editor-mode indicator (with toggle) left of the menu that opens the editor for the active project or switches to that project first
