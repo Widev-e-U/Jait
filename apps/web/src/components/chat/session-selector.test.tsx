@@ -118,6 +118,43 @@ describe('SessionSelector', () => {
     expect(unreadCount).toBe(0)
   })
 
+  it('keeps project actions visible and shows desktop editor state', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject()]}
+        activeProjectId="project-1"
+        editorModeActive
+        onToggleProjectEditor={() => {}}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Close editor for Jait"')
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('aria-label="Project actions"')
+    expect(markup).not.toContain('sm:opacity-0')
+  })
+
+  it('omits the editor control when the mobile selector has no callback', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject()]}
+        activeProjectId="project-1"
+        editorModeActive
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).not.toContain('editor for Jait')
+    expect(markup).toContain('aria-label="Project actions"')
+  })
+
   it('keeps the chat context menu inside the viewport', () => {
     expect(getSessionContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100 })
     expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 136, top: 352 })

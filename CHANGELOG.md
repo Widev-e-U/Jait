@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.710](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.710) — 2026-08-13
+- feat(web): add a "Sign in to GitHub" action to the pull-requests authentication error so a missing GitHub credential can be fixed from within Jait; it opens the forge setup dialog pre-targeted at the selected repository
+- feat(web): keep project action menus visible on desktop without hovering, and add a per-project editor-mode indicator (with toggle) left of the menu that opens the editor for the active project or switches to that project first
+- fix(web): stop the project settings dialog from clipping the left focus ring on its inputs by reserving left padding inside the scroll area
+- fix(web): keep the in-memory project's sessions when a project PATCH response omits them, so the chat list no longer appears empty until a reload
+- fix(gateway): read gateway-owned absolute files (such as installed skills) locally even while a project is remote, avoiding bogus Windows-mangled paths on remote nodes
+
 ## [v0.1.709](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.709) — 2026-08-12
 - feat(web): add a built-in Light Plus Monaco theme so light mode uses the real VS Code light-plus scopes instead of the plain `vs` fallback; load both Dark Plus and Light Plus into the Shiki highlighter and register them with Monaco, with light palette overrides that match the app shell, and drop the hand-written dark-plus fallback rules in favour of the live bundled theme scopes
 - feat(web): persist project panel/tree widths per-project (previously a single global localStorage value); sizes are reported only on drag end and merged with the current tree/editor visibility so a size-only update never drops them

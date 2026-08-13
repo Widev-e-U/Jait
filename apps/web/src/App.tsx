@@ -4608,6 +4608,13 @@ function App() {
                   onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
                   onToggleDebug={() => setShowDebugPanel((d) => !d)}
                   onToggleEditor={() => { void handleToggleEditor() }}
+                  onToggleProjectEditor={(projectId) => {
+                    if (projectId === activeProjectId) {
+                      void handleToggleEditor()
+                    } else {
+                      void handleSwitchProject(projectId)
+                    }
+                  }}
                   onTogglePreview={() => { void handleSidebarPreviewToggle() }}
                   onToggleSidebar={() => setShowSidebar((s) => !s)}
                   onToggleTerminal={() => { void handleToggleTerminal() }}

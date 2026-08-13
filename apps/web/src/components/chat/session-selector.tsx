@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -51,6 +51,9 @@ interface SessionSelectorProps {
   onCreateFolder?: (parentId: string | null) => void
   /** Opens the name/description/colour/context editor. */
   onEditProject?: (projectId: string) => void
+  /** Toggles editor mode for a desktop project row. Omit on mobile. */
+  onToggleProjectEditor?: (projectId: string) => void
+  editorModeActive?: boolean
   /** Re-parents a folder or project; null moves it to the root. */
   onMoveProject?: (projectId: string, parentId: string | null) => void
   onRemoveProject: (projectId: string) => void
@@ -182,6 +185,8 @@ export function SessionSelector({
   onCreateProject,
   onCreateFolder,
   onEditProject,
+  onToggleProjectEditor,
+  editorModeActive = false,
   onMoveProject,
   onRemoveProject,
   onChangeDirectory,
@@ -607,7 +612,29 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      <div className="mt-0.5 flex shrink-0 self-start">
+                      <div className="mt-0.5 flex shrink-0 items-center self-start">
+                        {!isFolder && onToggleProjectEditor && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={isActiveProject && editorModeActive ? 'secondary' : 'ghost'}
+                                size="icon"
+                                aria-label={`${isActiveProject && editorModeActive ? 'Close' : 'Open'} editor for ${project.title || 'project'}`}
+                                aria-pressed={isActiveProject && editorModeActive}
+                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onToggleProjectEditor(project.id)
+                                }}
+                              >
+                                <Code className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                              {isActiveProject && editorModeActive ? 'Close editor' : 'Open editor'}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                         <DropdownMenu
                           onOpenChange={(open) => setOpenMenuProjectId(open ? project.id : null)}
                         >
@@ -616,7 +643,7 @@ export function SessionSelector({
                               variant="ghost"
                               size="icon"
                               aria-label="Project actions"
-                              className="h-6 w-6 shrink-0 text-muted-foreground transition-opacity hover:text-foreground data-[state=open]:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <MoreVertical className="h-3 w-3" />

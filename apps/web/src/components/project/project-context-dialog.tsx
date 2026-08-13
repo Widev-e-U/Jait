@@ -204,7 +204,7 @@ export function ProjectContextDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-3">
+        <ScrollArea className="max-h-[60vh] pl-1 pr-3">
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="project-title">Name</Label>

@@ -22,6 +22,7 @@
  */
 
 import { resolve, isAbsolute, dirname } from "node:path";
+import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
@@ -102,6 +103,15 @@ function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
+/** Gateway-owned absolute files must stay local while a project is remote. */
+export function isGatewayLocalPathOutsideProject(targetPath: string, projectRoot?: string): boolean {
+  if (!isAbsolute(targetPath) || isForeignPlatformPath(targetPath) || !existsSync(targetPath)) return false;
+  if (!projectRoot) return true;
+  const normalizedTarget = normalizePath(targetPath);
+  const normalizedRoot = normalizePath(projectRoot);
+  return normalizedTarget !== normalizedRoot && !normalizedTarget.startsWith(normalizedRoot + "/");
+}
+
 /**
  * Check whether a surface (local or remote) covers `targetPath`.
  * Uses forward-slash-normalized, case-insensitive prefix matching so a
@@ -156,7 +166,7 @@ export async function getFs(
   const remoteSurfaces = registry
     .getBySession(context.sessionId)
     .filter((s): s is RemoteFileSystemSurface => s instanceof RemoteFileSystemSurface && s.state === "running");
-  if (remoteSurfaces.length > 0) {
+  if (remoteSurfaces.length > 0 && !(targetPath && isGatewayLocalPathOutsideProject(targetPath, context.projectRoot))) {
     if (targetPath) {
       const covered = pickMostSpecificAny(remoteSurfaces, targetPath);
       if (covered) return covered;

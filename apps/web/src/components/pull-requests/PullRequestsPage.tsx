@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner'
 
 import { MessageResponse } from '@/components/ai-elements/message'
+import { ForgeSetupDialog } from '@/components/automation/GhSetupDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -115,6 +116,10 @@ function isGitHubRepository(repository: AutomationRepository): boolean {
   } catch {
     return url.toLowerCase().includes('github')
   }
+}
+
+export function isGitHubAuthenticationError(error: string | null): boolean {
+  return error?.toLowerCase().includes('github authentication is required') ?? false
 }
 
 function stateBadge(pr: Pick<PullRequestSummary, 'state' | 'isDraft'>) {
@@ -212,6 +217,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
     [repositories],
   )
   const [repositoryId, setRepositoryId] = useState('')
+  const [forgeSetupOpen, setForgeSetupOpen] = useState(false)
   const [listState, setListState] = useState<PullRequestListState>(deepLink ? 'all' : 'open')
   const [pullRequests, setPullRequests] = useState<PullRequestSummary[]>([])
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null)
@@ -234,6 +240,10 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
   const [conflictFiles, setConflictFiles] = useState<PullRequestConflictFile[]>([])
   const [resolutions, setResolutions] = useState<Record<string, PullRequestConflictSide>>({})
   const [previewPath, setPreviewPath] = useState<string | null>(null)
+  const selectedRepository = useMemo(
+    () => githubRepositories.find((repository) => repository.id === repositoryId) ?? null,
+    [githubRepositories, repositoryId],
+  )
 
   useEffect(() => {
     if (!deepLinkHandledRef.current && deepLink) {
@@ -550,8 +560,19 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
       </div>
 
       {error && (
-        <div className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-700 dark:text-red-300">
+          <span>{error}</span>
+          {isGitHubAuthenticationError(error) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 border-red-500/30 bg-background/80 text-foreground hover:bg-background"
+              onClick={() => setForgeSetupOpen(true)}
+            >
+              <GitPullRequest className="mr-1.5 h-4 w-4" />
+              Sign in to GitHub
+            </Button>
+          )}
         </div>
       )}
 
@@ -979,6 +1000,17 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
           )}
         </main>
       </div>
+
+      <ForgeSetupDialog
+        open={forgeSetupOpen}
+        onOpenChange={setForgeSetupOpen}
+        cwd={selectedRepository?.localPath}
+        remoteUrl={selectedRepository?.forgeUrl ?? selectedRepository?.githubUrl ?? undefined}
+        onReady={() => {
+          void refreshList()
+          void refreshDetail()
+        }}
+      />
     </div>
   )
 }

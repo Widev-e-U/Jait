@@ -30,6 +30,7 @@
 import type { ToolResult, ToolContext } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
+import { isGatewayLocalPathOutsideProject } from "./core/get-fs.js";
 
 /**
  * Tools that operate on the project's filesystem and therefore must be
@@ -146,6 +147,16 @@ export function createRemoteToolExecutor(
     // listed AND implemented by every remote node handler.
     if (!remoteNodeId || !REMOTE_EXECUTABLE_TOOLS.has(toolName)) {
       return localExecutor(toolName, input, context, execOptions);
+    }
+
+    // Installed skills and other gateway-owned absolute files are outside a
+    // remote project filesystem. Sending a POSIX path to a Windows node
+    // otherwise produces a bogus C:\\home\\... path.
+    if ((toolName === "read" || toolName === "file.read") && input && typeof input === "object") {
+      const targetPath = (input as { path?: unknown }).path;
+      if (typeof targetPath === "string" && isGatewayLocalPathOutsideProject(targetPath, context.projectRoot)) {
+        return localExecutor(toolName, input, context, execOptions);
+      }
     }
 
     // Check that the remote node is still connected

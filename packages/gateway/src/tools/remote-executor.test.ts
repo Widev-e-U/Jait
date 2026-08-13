@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -108,6 +108,14 @@ describe("resolveRemoteNodeForSession", () => {
 });
 
 describe("createRemoteToolExecutor", () => {
+  let cleanupPath: string | null = null;
+
+  afterEach(() => {
+    if (cleanupPath) {
+      rmSync(cleanupPath, { force: true, recursive: true });
+      cleanupPath = null;
+    }
+  });
   it("executes locally when there is no remote node", async () => {
     const ws = createMockWs();
     const localExecutor = vi.fn(async () => ({ ok: true, message: "local result" }));
@@ -168,6 +176,23 @@ describe("createRemoteToolExecutor", () => {
       expect.objectContaining({ sessionId: context.sessionId, projectRoot: context.projectRoot }),
     );
     expect(localExecutor).not.toHaveBeenCalled();
+  });
+
+  it("reads an existing gateway-local skill path locally for a remote project", async () => {
+    cleanupPath = mkdtempSync(join(tmpdir(), "jait-gateway-skill-"));
+    const skillPath = join(cleanupPath, "SKILL.md");
+    writeFileSync(skillPath, "# Debugging\n");
+    const ws = createMockWs();
+    const localExecutor = vi.fn(async () => ({ ok: true, message: "local skill" }));
+    const context = { ...createToolContext(), projectRoot: "C:\\Users\\test\\repo" };
+    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+
+    await expect(execute("file.read", { path: skillPath }, context)).resolves.toEqual({
+      ok: true,
+      message: "local skill",
+    });
+    expect(localExecutor).toHaveBeenCalledWith("file.read", { path: skillPath }, context, undefined);
+    expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
   it("proxies non-local tools to the selected remote node", async () => {

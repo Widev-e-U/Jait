@@ -778,8 +778,11 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         return null
       }
       const project = await res.json() as Omit<ProjectRecord, 'sessions'> & { sessions?: ProjectSession[] }
-      const updated: ProjectRecord = { ...project, sessions: project.sessions ?? [] }
-      setProjects((prev) => prev.map((w) => w.id === projectId ? { ...w, ...updated } : w))
+      // The PATCH response does not include sessions, so keep whatever the
+      // client already had rather than clobbering it with an empty list —
+      // otherwise the chat list would appear empty until the next reload.
+      let updated!: ProjectRecord
+      setProjects((prev) => prev.map((w) => w.id === projectId ? (updated = { ...w, ...project, sessions: project.sessions ?? w.sessions }) : w))
       return updated
     } catch (err) {
       console.error('Failed to update project:', err)
