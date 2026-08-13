@@ -124,7 +124,7 @@ describe('SessionSelector', () => {
         projects={[createProject()]}
         activeProjectId="project-1"
         editorModeActive
-        onToggleProjectEditor={() => {}}
+        showEditorModeStatus
         onSelectProject={() => {}}
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
@@ -132,13 +132,13 @@ describe('SessionSelector', () => {
       />,
     )
 
-    expect(markup).toContain('aria-label="Close editor for Jait"')
-    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('aria-label="Editor mode active for Jait"')
+    expect(markup).not.toContain('aria-pressed')
     expect(markup).toContain('aria-label="Project actions"')
     expect(markup).not.toContain('sm:opacity-0')
   })
 
-  it('omits the editor control when the mobile selector has no callback', () => {
+  it('omits editor status when the mobile selector does not request it', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
         projects={[createProject()]}
@@ -151,7 +151,7 @@ describe('SessionSelector', () => {
       />,
     )
 
-    expect(markup).not.toContain('editor for Jait')
+    expect(markup).not.toContain('Editor mode active for Jait')
     expect(markup).toContain('aria-label="Project actions"')
   })
 

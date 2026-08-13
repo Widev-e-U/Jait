@@ -47,8 +47,8 @@ export function PatchNotesTooltip({
       {children}
       {open && release && (
         <div
-          className={`absolute top-full z-50 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-lg border bg-popover text-popover-foreground shadow-lg ${
-            align === 'right' ? 'right-0' : 'left-0'
+          className={`fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-50 max-h-[calc(100dvh-1rem)] overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-1rem)] ${
+            align === 'right' ? 'sm:right-0' : 'sm:left-0'
           }`}
           onPointerDown={(event) => event.stopPropagation()}
         >

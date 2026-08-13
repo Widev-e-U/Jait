@@ -634,6 +634,19 @@ function App() {
   }, [])
 
   const confirmDialog = useConfirmDialog()
+  const handleArchiveSession = useCallback(async (sessionId: string) => {
+    const session = personalSessions.find((candidate) => candidate.id === sessionId)
+      ?? projects.flatMap((project) => project.sessions).find((candidate) => candidate.id === sessionId)
+    const label = session?.name?.trim() || 'this chat'
+    const confirmed = await confirmDialog({
+      title: 'Archive chat',
+      description: `Are you sure you want to archive "${label}"?`,
+      confirmLabel: 'Archive',
+      variant: 'destructive',
+    })
+    if (confirmed) await archiveSession(sessionId)
+  }, [archiveSession, confirmDialog, personalSessions, projects])
+
   const handleRemoveProject = useCallback(async (projectId: string) => {
     const project = projects.find(w => w.id === projectId)
     const label = project?.title || project?.rootPath || 'this project'
@@ -4588,7 +4601,7 @@ function App() {
                   streamingSessionIds={streamingSessionIds}
                   sidebarRef={sidebarRef}
                   onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
-                  onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
+                  onArchiveSession={(sessionId) => { void handleArchiveSession(sessionId) }}
                   onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
                   onSearchProjects={searchProjects}
                   onBlur={handleSidebarBlur}
@@ -4608,13 +4621,6 @@ function App() {
                   onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
                   onToggleDebug={() => setShowDebugPanel((d) => !d)}
                   onToggleEditor={() => { void handleToggleEditor() }}
-                  onToggleProjectEditor={(projectId) => {
-                    if (projectId === activeProjectId) {
-                      void handleToggleEditor()
-                    } else {
-                      void handleSwitchProject(projectId)
-                    }
-                  }}
                   onTogglePreview={() => { void handleSidebarPreviewToggle() }}
                   onToggleSidebar={() => setShowSidebar((s) => !s)}
                   onToggleTerminal={() => { void handleToggleTerminal() }}
@@ -4935,7 +4941,7 @@ function App() {
                       onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
                       onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
                       onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSelectPersonalSession(sessionId) }}
-                      onArchiveSession={(sessionId) => { void archiveSession(sessionId) }}
+                      onArchiveSession={(sessionId) => { void handleArchiveSession(sessionId) }}
                       onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
                       onSearchProjects={searchProjects}
                       onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}

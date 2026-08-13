@@ -343,7 +343,7 @@ export function SessionContextMenu({
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-red-600 outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10 focus:text-red-700 dark:text-red-400 dark:focus:text-red-300"
             onClick={() => {
               onArchiveSession(sessionId)
               onClose()

@@ -884,7 +884,9 @@ export function ProviderModelSelector({
                 bottom: 'max(0.5rem, env(safe-area-inset-bottom))',
                 top: 'auto',
                 width: 'auto',
+                maxWidth: 'calc(100vw - 1rem)',
                 maxHeight: 'min(36rem, calc(100dvh - 1rem))',
+                boxSizing: 'border-box',
                 transform: 'translateZ(0)',
               }}
             >

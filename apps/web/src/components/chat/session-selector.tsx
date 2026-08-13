@@ -51,8 +51,8 @@ interface SessionSelectorProps {
   onCreateFolder?: (parentId: string | null) => void
   /** Opens the name/description/colour/context editor. */
   onEditProject?: (projectId: string) => void
-  /** Toggles editor mode for a desktop project row. Omit on mobile. */
-  onToggleProjectEditor?: (projectId: string) => void
+  /** Shows read-only editor-mode state beside desktop project rows. */
+  showEditorModeStatus?: boolean
   editorModeActive?: boolean
   /** Re-parents a folder or project; null moves it to the root. */
   onMoveProject?: (projectId: string, parentId: string | null) => void
@@ -185,7 +185,7 @@ export function SessionSelector({
   onCreateProject,
   onCreateFolder,
   onEditProject,
-  onToggleProjectEditor,
+  showEditorModeStatus = false,
   editorModeActive = false,
   onMoveProject,
   onRemoveProject,
@@ -613,25 +613,20 @@ export function SessionSelector({
                         )}
                       </div>
                       <div className="mt-0.5 flex shrink-0 items-center self-start">
-                        {!isFolder && onToggleProjectEditor && (
+                        {!isFolder && showEditorModeStatus && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button
-                                variant={isActiveProject && editorModeActive ? 'secondary' : 'ghost'}
-                                size="icon"
-                                aria-label={`${isActiveProject && editorModeActive ? 'Close' : 'Open'} editor for ${project.title || 'project'}`}
-                                aria-pressed={isActiveProject && editorModeActive}
-                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  onToggleProjectEditor(project.id)
-                                }}
+                              <span
+                                aria-label={`Editor mode ${isActiveProject && editorModeActive ? 'active' : 'inactive'} for ${project.title || 'project'}`}
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center ${
+                                  isActiveProject && editorModeActive ? 'text-primary' : 'text-muted-foreground/40'
+                                }`}
                               >
                                 <Code className="h-3 w-3" />
-                              </Button>
+                              </span>
                             </TooltipTrigger>
                             <TooltipContent side="right">
-                              {isActiveProject && editorModeActive ? 'Close editor' : 'Open editor'}
+                              Editor mode {isActiveProject && editorModeActive ? 'active' : 'inactive'}
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -752,7 +747,7 @@ export function SessionSelector({
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem
-                              className="gap-2 text-destructive focus:text-destructive"
+                              className="gap-2 text-red-600 focus:bg-red-500/10 focus:text-red-700 dark:text-red-400 dark:focus:text-red-300"
                               onSelect={(e) => {
                                 e.preventDefault()
                                 onRemoveProject(project.id)

@@ -55,7 +55,6 @@ interface DeveloperSidebarsProps {
   onToggleArchitecture: () => void
   onToggleDebug: () => void
   onToggleEditor: () => void
-  onToggleProjectEditor: (projectId: string) => void
   onTogglePreview: () => void
   onToggleSidebar: () => void
   onToggleTerminal: () => void
@@ -106,7 +105,6 @@ export function DeveloperSidebars({
   onToggleArchitecture,
   onToggleDebug,
   onToggleEditor,
-  onToggleProjectEditor,
   onTogglePreview,
   onToggleSidebar,
   onToggleTerminal,
@@ -227,7 +225,7 @@ export function DeveloperSidebars({
               onCreateProject={onCreateProject}
               onCreateFolder={onCreateFolder}
               onEditProject={onEditProject}
-              onToggleProjectEditor={onToggleProjectEditor}
+              showEditorModeStatus
               editorModeActive={showProject}
               onMoveProject={onMoveProject}
               onRemoveProject={onRemoveProject}

@@ -63,6 +63,8 @@ describe('SessionContextMenu', () => {
     // The projects themselves only show up once the submenu opens.
     expect(markup).not.toContain('Mobile App')
     expect(markup).toContain('Archive chat')
+    expect(markup).toContain('text-red-600')
+    expect(markup).not.toContain('text-destructive')
   })
 
   it('does not offer the personal chats to a chat that is already personal', () => {
