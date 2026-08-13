@@ -56,6 +56,16 @@ interface TelegramResponse<T> {
   ok: boolean;
   result?: T;
   description?: string;
+  /** Bot API error code — 401 a rejected token, 409 a second poller. */
+  error_code?: number;
+}
+
+/** A Bot API call that answered `ok: false`, carrying Telegram's error code. */
+class TelegramApiError extends Error {
+  constructor(message: string, readonly errorCode?: number) {
+    super(message);
+    this.name = "TelegramApiError";
+  }
 }
 
 export interface TelegramConnectorDeps {
@@ -69,6 +79,10 @@ export interface TelegramConnectorDeps {
   makePairingCode?: () => string;
   /** How long a pairing code stays valid. Default 5 minutes. */
   pairingTtlMs?: number;
+  /** Backoff floor after a failed poll. Default 1s. Injectable for tests. */
+  pollRetryMinMs?: number;
+  /** Backoff ceiling after a failed poll. Default 30s. */
+  pollRetryMaxMs?: number;
   log?: (msg: string, ...args: unknown[]) => void;
 }
 
@@ -219,6 +233,78 @@ export function sanitizeReturnUrl(raw: string | undefined): string | undefined {
   }
 }
 
+/** Default long-poll window handed to `getUpdates`. */
+const DEFAULT_POLL_TIMEOUT_SECONDS = 25;
+
+/** First retry after a failed poll — a blip should cost about a second. */
+const POLL_RETRY_MIN_MS = 1_000;
+
+/** Backoff ceiling. Telegram outages last minutes, so stop doubling here. */
+const POLL_RETRY_MAX_MS = 30_000;
+
+/**
+ * Consecutive failures tolerated before the channel is reported as broken. One
+ * dropped long poll is routine; three in a row is worth a badge in the UI.
+ */
+const POLL_FAILURES_BEFORE_ERROR = 3;
+
+/**
+ * Grace on top of the long-poll window before a stalled request is dropped. A
+ * socket can die without erroring (laptop suspend, NAT timeout), and then the
+ * request never settles — the channel looks connected while nothing arrives.
+ */
+const POLL_WATCHDOG_GRACE_MS = 15_000;
+
+/** Bot API code for "another getUpdates is already running for this bot". */
+const TELEGRAM_CONFLICT = 409;
+
+/**
+ * Telegram error codes that no amount of retrying will fix: the token is wrong,
+ * revoked, or the bot is gone. Everything else — a 409 from a second poller, a
+ * 5xx, a dropped socket — deserves another attempt.
+ */
+export function isFatalPollError(errorCode: number | undefined): boolean {
+  return errorCode === 401 || errorCode === 404;
+}
+
+/** Exponential backoff with a ceiling: 1s, 2s, 4s … capped. */
+export function pollBackoffMs(
+  attempt: number,
+  minMs = POLL_RETRY_MIN_MS,
+  maxMs = POLL_RETRY_MAX_MS,
+): number {
+  return Math.min(maxMs, minMs * 2 ** Math.max(0, attempt - 1));
+}
+
+/**
+ * Say what a poll failure actually means. Telegram's own wording for a 409
+ * mentions "other getUpdates request", which reads as an internal detail — the
+ * user needs to know two Jait instances share one bot token.
+ */
+export function describePollFailure(message: string, errorCode?: number): string {
+  if (errorCode === TELEGRAM_CONFLICT) {
+    return "Another instance is polling this bot — Telegram allows only one. Stop the other Jait gateway, or give this one its own bot token.";
+  }
+  if (isFatalPollError(errorCode)) {
+    return `${message} — the bot token was rejected. Check it in @BotFather and paste it again.`;
+  }
+  return message;
+}
+
+/** Sleep that resolves early when the connector is stopped. */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
+  });
+}
+
 export class TelegramConnector implements ChannelConnector {
   readonly id = "telegram";
   readonly label = "Telegram";
@@ -241,6 +327,8 @@ export class TelegramConnector implements ChannelConnector {
   private botUsername: string | null = null;
   /** Where to send the user back to after a successful scan. */
   private returnUrl: string | undefined;
+  /** Last reported poll failure, so one outage isn't announced repeatedly. */
+  private lastPollError: string | null = null;
   /** callback_data token → the message to dispatch when the button is tapped. */
   private readonly choiceValues = new Map<string, string>();
   private choiceSeq = 0;
@@ -321,25 +409,64 @@ export class TelegramConnector implements ChannelConnector {
 
     this.abort?.abort();
     this.abort = new AbortController();
+    const signal = this.abort.signal;
+    this.lastPollError = null;
     this.setStatus("connecting");
 
     try {
-      const me = await this.api<TelegramUser>("getMe", undefined, this.abort.signal);
-      if (!me.ok) throw new Error(me.description ?? "Telegram getMe failed");
-      this.botUsername = me.result?.username ?? null;
-      this.log(`connected as ${this.botUsername ?? me.result?.id ?? "bot"}`);
-
-      if (isPaired(this.config)) this.setStatus("connected");
-      else await this.beginPairing();
-      if (this._status === "error") return;
-
-      // Polling starts only once the pairing state is settled — otherwise a
-      // `/start` arriving mid-setup would be overwritten by the pending QR status.
-      // It must run during pairing too: the handshake arrives as a normal update.
-      void this.pollLoop();
+      await this.connectAndPoll(signal);
     } catch (err) {
-      if (this.abort.signal.aborted) return;
-      this.setStatus("error", { error: err instanceof Error ? err.message : String(err) });
+      if (signal.aborted) return;
+      const code = err instanceof TelegramApiError ? err.errorCode : undefined;
+      const detail = describePollFailure(err instanceof Error ? err.message : String(err), code);
+      this.setStatus("error", { error: detail });
+      // A rejected token needs a human. Anything else — Telegram unreachable
+      // because the gateway booted before the network came up, say — resolves
+      // itself, so keep trying instead of leaving a dead channel behind.
+      if (!isFatalPollError(code)) void this.retryConnect(signal);
+    }
+  }
+
+  /** Handshake, settle the pairing state, then poll. Throws if getMe fails. */
+  private async connectAndPoll(signal: AbortSignal): Promise<void> {
+    const me = await this.api<TelegramUser>("getMe", undefined, signal);
+    if (!me.ok) throw new TelegramApiError(me.description ?? "Telegram getMe failed", me.error_code);
+    this.botUsername = me.result?.username ?? null;
+    this.log(`connected as ${this.botUsername ?? me.result?.id ?? "bot"}`);
+
+    if (isPaired(this.config)) this.setStatus("connected");
+    else await this.beginPairing();
+    if (this._status === "error") return;
+
+    // Polling starts only once the pairing state is settled — otherwise a
+    // `/start` arriving mid-setup would be overwritten by the pending QR status.
+    // It must run during pairing too: the handshake arrives as a normal update.
+    void this.pollLoop();
+  }
+
+  /**
+   * Retry the handshake with backoff after a transient failure, so a channel
+   * switched on while Telegram was unreachable comes up by itself rather than
+   * waiting for someone to notice the badge and toggle it.
+   */
+  private async retryConnect(signal: AbortSignal): Promise<void> {
+    for (let attempt = 1; !signal.aborted; attempt += 1) {
+      await delay(this.backoffFor(attempt), signal);
+      if (signal.aborted) return;
+      try {
+        await this.connectAndPoll(signal);
+        this.lastPollError = null;
+        return;
+      } catch (err) {
+        if (signal.aborted) return;
+        const code = err instanceof TelegramApiError ? err.errorCode : undefined;
+        const detail = describePollFailure(err instanceof Error ? err.message : String(err), code);
+        this.log(`connect attempt ${attempt} failed: ${detail}`);
+        if (isFatalPollError(code)) {
+          this.reportPollFailure(detail);
+          return;
+        }
+      }
     }
   }
 
@@ -348,6 +475,7 @@ export class TelegramConnector implements ChannelConnector {
     this.abort = null;
     this.pairingCode = null;
     this.pairingExpiresAt = 0;
+    this.lastPollError = null;
     this.setStatus("stopped");
   }
 
@@ -579,18 +707,32 @@ export class TelegramConnector implements ChannelConnector {
     return true;
   }
 
+  /**
+   * Long-poll Telegram for updates until the connector is stopped.
+   *
+   * A dropped long poll is routine, not fatal: the request sits open for half a
+   * minute, so every NAT timeout, suspended laptop and Telegram hiccup lands
+   * here. Treating that as terminal left the channel stuck on "error" until
+   * someone toggled it by hand — so failures back off and retry, and only a
+   * rejected token gives up. The badge flips to error once the failures persist
+   * and back to connected on the first good poll, so it stays truthful without
+   * flickering on every blip.
+   */
   private async pollLoop(): Promise<void> {
     const signal = this.abort?.signal;
     if (!signal) return;
+    let failures = 0;
 
     while (!signal.aborted) {
       try {
-        const res = await this.api<TelegramUpdate[]>("getUpdates", {
-          timeout: this.deps.pollTimeoutSeconds ?? 25,
-          offset: this.offset,
-          allowed_updates: ["message", "callback_query"],
-        }, signal);
-        if (!res.ok) throw new Error(res.description ?? "Telegram getUpdates failed");
+        const res = await this.poll(signal);
+        if (!res.ok) {
+          throw new TelegramApiError(res.description ?? "Telegram getUpdates failed", res.error_code);
+        }
+        if (failures > 0) {
+          failures = 0;
+          this.recoverFromPollFailure();
+        }
         for (const update of res.result ?? []) {
           this.offset = Math.max(this.offset, update.update_id + 1);
 
@@ -611,10 +753,66 @@ export class TelegramConnector implements ChannelConnector {
         }
       } catch (err) {
         if (signal.aborted) return;
-        this.setStatus("error", { error: err instanceof Error ? err.message : String(err) });
-        return;
+        failures += 1;
+        const code = err instanceof TelegramApiError ? err.errorCode : undefined;
+        const detail = describePollFailure(err instanceof Error ? err.message : String(err), code);
+
+        if (isFatalPollError(code)) {
+          this.reportPollFailure(detail);
+          return;
+        }
+
+        // A 409 means someone else holds the bot. Retrying fast would only make
+        // the two instances steal updates from each other, so wait the full
+        // ceiling and surface it right away — that one is a setup problem.
+        const conflict = code === TELEGRAM_CONFLICT;
+        const wait = conflict
+          ? (this.deps.pollRetryMaxMs ?? POLL_RETRY_MAX_MS)
+          : this.backoffFor(failures);
+        this.log(`poll failed (attempt ${failures}, retrying in ${wait}ms): ${detail}`);
+        if (conflict || failures >= POLL_FAILURES_BEFORE_ERROR) this.reportPollFailure(detail);
+        await delay(wait, signal);
       }
     }
+  }
+
+  /** One long poll, abandoned if it stalls past the watchdog budget. */
+  private async poll(signal: AbortSignal): Promise<TelegramResponse<TelegramUpdate[]>> {
+    const timeoutSeconds = this.deps.pollTimeoutSeconds ?? DEFAULT_POLL_TIMEOUT_SECONDS;
+    const budgetMs = timeoutSeconds * 1_000 + POLL_WATCHDOG_GRACE_MS;
+    return await this.api<TelegramUpdate[]>("getUpdates", {
+      timeout: timeoutSeconds,
+      offset: this.offset,
+      allowed_updates: ["message", "callback_query"],
+    }, AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]));
+  }
+
+  /** Backoff for the nth consecutive failure, honouring the injected bounds. */
+  private backoffFor(attempt: number): number {
+    return pollBackoffMs(attempt, this.deps.pollRetryMinMs, this.deps.pollRetryMaxMs);
+  }
+
+  /**
+   * Surface a failure the retries are not getting past. Reported once per
+   * distinct cause, so a long outage doesn't emit a status update per attempt.
+   */
+  private reportPollFailure(detail: string): void {
+    // A blip mid-pairing must not wipe the QR the user is about to scan.
+    if (this._status === "qr") {
+      this.log(`poll failing while pairing: ${detail}`);
+      return;
+    }
+    if (this._status === "error" && this.lastPollError === detail) return;
+    this.lastPollError = detail;
+    this.setStatus("error", { error: detail });
+  }
+
+  /** A poll succeeded again — put the badge back. */
+  private recoverFromPollFailure(): void {
+    this.lastPollError = null;
+    if (this._status !== "error") return;
+    this.log("polling recovered");
+    this.setStatus("connected");
   }
 
   private async api<T>(
