@@ -530,6 +530,7 @@ export function DeveloperChatWorkspace({
               hasMore={hasMoreMessages}
               onLoadMore={loadOlderMessages}
               scrollToMessageId={scrollToUserMessageId}
+              showMinimap={!isMobile}
             >
               {messageElements}
               {messageQueue.length > 0 && (

@@ -1,5 +1,5 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,7 @@ interface ConversationProps {
     thinking?: unknown
     toolCalls?: unknown
     segments?: unknown
+    role?: 'user' | 'agent'
   }>
   /** Whether there are older messages available to load. */
   hasMore?: boolean
@@ -38,6 +39,12 @@ interface ConversationProps {
    * the moment it lands.
    */
   scrollToMessageId?: string | null
+  /**
+   * Show a VSCode-style minimap scrollbar on the right edge (desktop only).
+   * Blue bars mark user messages, muted bars mark agent messages. Clicking or
+   * dragging the rail scrolls the conversation.
+   */
+  showMinimap?: boolean
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
@@ -216,11 +223,22 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, scrollToMessageId }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, scrollToMessageId, showMinimap = false }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const hasContent = childItems.length > 0
+  // Per-child role for the minimap, index-aligned with childItems. Anything
+  // without an explicit 'user' role (e.g. the streaming queue) reads as agent.
+  const minimapRoles = useMemo<Array<'user' | 'agent'>>(
+    () =>
+      (messageEstimateInputs ?? []).map((m) =>
+        m && typeof m === 'object' && 'role' in m && (m as { role?: unknown }).role === 'user'
+          ? 'user'
+          : 'agent',
+      ),
+    [messageEstimateInputs],
+  )
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
@@ -789,6 +807,108 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           }}
         />
       )}
+
+      {showMinimap && (
+        <ConversationMinimap
+          virtualizer={virtualizer}
+          scrollRef={scrollRef}
+          roles={minimapRoles}
+        />
+      )}
     </AIConversation>
+  )
+}
+
+interface ConversationMinimapProps {
+  virtualizer: Virtualizer<HTMLDivElement, Element>
+  scrollRef: RefObject<HTMLDivElement | null>
+  /** Per-child role ('user' | 'agent'), index-aligned with the virtualizer items. */
+  roles: Array<'user' | 'agent'>
+}
+
+const MINIMAP_BAR_MIN_PX = 3
+
+/**
+ * VSCode-style minimap scrollbar for the conversation. Blue bars mark user
+ * messages on the right, muted bars mark agent messages on the left. Clicking
+ * or dragging the rail scrolls the conversation to that position.
+ */
+function ConversationMinimap({ virtualizer, scrollRef, roles }: ConversationMinimapProps) {
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const [scrollTop, setScrollTop] = useState(0)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => setViewportHeight(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [scrollRef])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => setScrollTop(el.scrollTop)
+    onScroll()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [scrollRef])
+
+  const totalSize = virtualizer.getTotalSize()
+  if (totalSize <= 0 || viewportHeight <= 0) return null
+
+  const trackHeight = viewportHeight
+  const viewportRatio = Math.min(viewportHeight / totalSize, 1)
+  const viewportTopRatio = Math.min(scrollTop / totalSize, 1 - viewportRatio)
+
+  const handlePointer = (clientY: number) => {
+    const el = scrollRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const ratio = (rect.height > 0 ? (clientY - rect.top) / rect.height : 0)
+    el.scrollTop = ratio * totalSize
+  }
+
+  const items = virtualizer.getVirtualItems()
+
+  return (
+    <div
+      onPointerDown={(e) => {
+        e.preventDefault()
+        handlePointer(e.clientY)
+      }}
+      onPointerMove={(e) => {
+        if (e.buttons > 0) handlePointer(e.clientY)
+      }}
+      className="absolute right-0 top-0 bottom-0 z-20 w-3.5 cursor-pointer select-none rounded-l-md border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
+      role="slider"
+      aria-label="Conversation minimap"
+    >
+      {/* viewport indicator */}
+      <div
+        className="absolute left-0 right-0 rounded-full bg-foreground/10"
+        style={{
+          top: `${viewportTopRatio * 100}%`,
+          height: `${Math.max(viewportRatio * 100, 2)}%`,
+        }}
+      />
+      {items.map((item) => {
+        const isUser = roles[item.index] === 'user'
+        const top = (item.start / totalSize) * trackHeight
+        const height = Math.max((item.size / totalSize) * trackHeight, MINIMAP_BAR_MIN_PX)
+        return (
+          <div
+            key={item.key}
+            className={cn(
+              'absolute rounded-full',
+              isUser ? 'right-0 bg-blue-500/80' : 'left-0 bg-muted-foreground/50',
+            )}
+            style={{ top, height, width: '60%' }}
+          />
+        )
+      })}
+    </div>
   )
 }

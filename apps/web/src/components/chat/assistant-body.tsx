@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { MessageContent as AIMessageContent } from '@/components/ai-elements/message'
 import { Reasoning } from '@/components/chat/reasoning'
-import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from '@/components/chat/tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, computeAgentNesting, type ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { ProviderId } from '@/lib/agents-api'
 import type { MessageSegment } from '@/hooks/useChat'
 
@@ -14,8 +14,19 @@ import type { MessageSegment } from '@/hooks/useChat'
  */
 const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
 
+/**
+ * Number of top-level tool calls in a message, ignoring calls that are children
+ * of a sub-agent call. This keeps a single sub-agent (which internally may make
+ * many tool calls) from being mistaken for multiple sibling agent-style calls.
+ */
+function countTopLevelToolCalls(calls: ToolCallInfo[]): number {
+  if (calls.length === 0) return 0
+  const { parentSet } = computeAgentNesting(calls)
+  return calls.length - parentSet.size
+}
+
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is ProviderId {
-  return Boolean(provider && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
+  return Boolean(provider && countTopLevelToolCalls(calls) >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
 }
 
 function ThinkingDots() {
@@ -49,6 +60,13 @@ export interface AssistantBodyProps {
   compact?: boolean
   preferLlmUi?: boolean
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
+  /**
+   * When true, non-steering segments are capped at 85% width (left-aligned)
+   * so a steered bubble can render full-width and flush to the right edge
+   * like a user message. Off by default so nested/sub-agent rendering is
+   * unaffected.
+   */
+  capNonSteeringWidth?: boolean
   className?: string
 }
 
@@ -74,6 +92,7 @@ export function AssistantBody({
   compact,
   preferLlmUi,
   onOpenPath,
+  capNonSteeringWidth,
   className,
 }: AssistantBodyProps) {
   const hasText = segments.some((s) => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
@@ -81,12 +100,14 @@ export function AssistantBody({
   return (
     <div className={cn('relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]', className)}>
       {segments.map((seg, i) => {
+        let node: ReactNode | null = null
+
         if (seg.type === 'toolGroup') {
           const callIds = Array.isArray(seg.callIds) ? seg.callIds : []
           const calls = (toolCalls ?? []).filter((tc) => callIds.includes(tc.callId))
           // Collapse completed tool groups that are followed by text
           const followedByText = segments.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
-          return calls.length > 0 ? (
+          node = calls.length > 0 ? (
             shouldUseAgentToolCallWrapper(provider, calls) ? (
               <AgentToolCallWrapper
                 key={`tg-${i}`}
@@ -112,10 +133,8 @@ export function AssistantBody({
               />
             )
           ) : null
-        }
-
-        if (seg.type === 'thinking') {
-          return seg.content.trim() ? (
+        } else if (seg.type === 'thinking') {
+          node = seg.content.trim() ? (
             <Reasoning
               key={`th-${i}`}
               content={seg.content}
@@ -124,20 +143,16 @@ export function AssistantBody({
               onOpenPath={onOpenPath}
             />
           ) : null
-        }
-
-        if (seg.type === 'error') {
-          return (
+        } else if (seg.type === 'error') {
+          node = (
             <div key={`err-${i}`} className="flex items-start gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span className="min-w-0 break-words">{seg.content}</span>
             </div>
           )
-        }
-
-        if (seg.type === 'steering') {
-          return (
-            <div key={`sg-${i}`} className="relative ml-auto flex w-fit max-w-full flex-col items-end">
+        } else if (seg.type === 'steering') {
+          node = (
+            <div key={`sg-${i}`} className="relative ml-auto flex w-full max-w-full flex-col items-end">
               <span className="mb-1 inline-flex items-center gap-1 text-2xs font-medium uppercase tracking-wider text-primary/70">
                 <ArrowRight className="h-3 w-3" />
                 Steered into running turn
@@ -147,23 +162,34 @@ export function AssistantBody({
               </div>
             </div>
           )
+        } else {
+          node = (typeof seg.content === 'string' && seg.content.trim()) ? (
+            <AIMessageContent
+              key={`ts-${i}`}
+              data-message-from="assistant"
+              className="max-w-full bg-card/78"
+            >
+              <AssistantMarkdown
+                content={seg.content}
+                compact={compact}
+                isStreaming={!!isStreaming && i === segments.length - 1}
+                preferLlmUi={preferLlmUi}
+                onOpenPath={onOpenPath}
+              />
+            </AIMessageContent>
+          ) : null
         }
 
-        return (typeof seg.content === 'string' && seg.content.trim()) ? (
-          <AIMessageContent
-            key={`ts-${i}`}
-            data-message-from="assistant"
-            className="max-w-full bg-card/78"
-          >
-            <AssistantMarkdown
-              content={seg.content}
-              compact={compact}
-              isStreaming={!!isStreaming && i === segments.length - 1}
-              preferLlmUi={preferLlmUi}
-              onOpenPath={onOpenPath}
-            />
-          </AIMessageContent>
-        ) : null
+        if (node === null) return null
+
+        // Cap only the assistant side so steered bubbles can sit flush right.
+        if (capNonSteeringWidth && seg.type !== 'steering') {
+          return (
+            <div key={`cap-${i}`} className="max-w-[85%]">{node}</div>
+          )
+        }
+
+        return node
       })}
 
       {isStreaming && !hasStreamingText && !hasText && (

@@ -38,9 +38,10 @@ export const pullRequestsApi = {
   async list(
     repoId: string,
     state: PullRequestListState = 'open',
+    limit = 30,
   ): Promise<PullRequestSummary[]> {
     const response = await request<{ pullRequests: PullRequestSummary[] }>(
-      `${repoPath(repoId)}?state=${encodeURIComponent(state)}`,
+      `${repoPath(repoId)}?state=${encodeURIComponent(state)}&limit=${limit}`,
       { headers: headers() },
     )
     return response.pullRequests

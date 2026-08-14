@@ -11,8 +11,8 @@ describe('resolveProjectPanelOpen', () => {
     expect(resolveProjectPanelOpen(undefined, { open: true })).toBe(true)
   })
 
-  it('opens projects without a saved preference by default', () => {
-    expect(resolveProjectPanelOpen(undefined, null)).toBe(true)
+  it('does not open projects without a saved preference by default', () => {
+    expect(resolveProjectPanelOpen(undefined, null)).toBe(false)
   })
 
   it('allows an explicit editor action to override the saved preference', () => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getSessionContextMenuPosition, SessionSelector } from './session-selector'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
-function createProject(): ProjectRecord {
+function createProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
   return {
     id: 'project-1',
     title: 'Jait',
@@ -29,6 +29,7 @@ function createProject(): ProjectRecord {
       viewedAt: null,
       metadata: null,
     })),
+    ...overrides,
   }
 }
 
@@ -118,13 +119,13 @@ describe('SessionSelector', () => {
     expect(unreadCount).toBe(0)
   })
 
-  it('keeps project actions visible and shows desktop editor state', () => {
+  it('keeps project actions visible on mobile alongside the editor state', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
-        projects={[createProject()]}
+        projects={[createProject({ editorModeActive: true })]}
         activeProjectId="project-1"
-        editorModeActive
         showEditorModeStatus
+        isMobile
         onSelectProject={() => {}}
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
@@ -138,12 +139,32 @@ describe('SessionSelector', () => {
     expect(markup).not.toContain('sm:opacity-0')
   })
 
+  it('shows persisted editor mode independently for every project row', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[
+          createProject({ id: 'project-1', title: 'Inactive', editorModeActive: false }),
+          createProject({ id: 'project-2', title: 'Active elsewhere', editorModeActive: true }),
+        ]}
+        activeProjectId="project-1"
+        showEditorModeStatus
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Editor mode inactive for Inactive"')
+    expect(markup).toContain('aria-label="Editor mode active for Active elsewhere"')
+  })
+
   it('omits editor status when the mobile selector does not request it', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
         projects={[createProject()]}
         activeProjectId="project-1"
-        editorModeActive
+        isMobile
         onSelectProject={() => {}}
         onCreateProject={() => {}}
         onRemoveProject={() => {}}

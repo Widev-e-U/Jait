@@ -149,7 +149,8 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+      // Editor mode is opt-in, so the panel state only opens when requested.
+      body: JSON.stringify({ path: writableTestRoot, sessionId, openPanel: true }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
@@ -421,7 +422,7 @@ describe("POST /api/project/open", () => {
     const openRes = await fetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+      body: JSON.stringify({ path: writableTestRoot, sessionId, openPanel: true }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 

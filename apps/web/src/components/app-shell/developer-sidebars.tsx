@@ -226,7 +226,6 @@ export function DeveloperSidebars({
               onCreateFolder={onCreateFolder}
               onEditProject={onEditProject}
               showEditorModeStatus
-              editorModeActive={showProject}
               onMoveProject={onMoveProject}
               onRemoveProject={onRemoveProject}
               onChangeDirectory={onChangeDirectory}

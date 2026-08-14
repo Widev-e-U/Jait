@@ -228,6 +228,63 @@ describe("project routes", () => {
     expect(lastActive.session?.id).not.toBe(firstSession.id);
   });
 
+  it("includes each project's persisted editor-mode status in the project list", async () => {
+    const user = userService.createUser("editor-status-user", "password123");
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+
+    const activeProjectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Editor Active", rootPath: "/project/editor-active" }
+    });
+    const inactiveProjectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Editor Inactive", rootPath: "/project/editor-inactive" }
+    });
+    const activeProject = JSON.parse(activeProjectRes.body) as { id: string };
+    const inactiveProject = JSON.parse(inactiveProjectRes.body) as { id: string };
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${activeProject.id}/state`,
+      headers,
+      payload: {
+        "project.ui": {
+          panel: { open: true, remotePath: "/project/editor-active" },
+          tabs: null,
+          layout: null,
+          terminal: null,
+          preview: null
+        }
+      }
+    });
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${inactiveProject.id}/state`,
+      headers,
+      payload: {
+        "project.ui": {
+          panel: { open: false, remotePath: "/project/editor-inactive" },
+          tabs: null,
+          layout: null,
+          terminal: null,
+          preview: null
+        }
+      }
+    });
+
+    const listRes = await app.inject({ method: "GET", url: "/api/projects", headers });
+    expect(listRes.statusCode).toBe(200);
+    const listed = JSON.parse(listRes.body) as {
+      projects: Array<{ id: string; editorModeActive?: boolean }>;
+    };
+    expect(listed.projects.find((project) => project.id === activeProject.id)?.editorModeActive).toBe(true);
+    expect(listed.projects.find((project) => project.id === inactiveProject.id)?.editorModeActive).toBe(false);
+  });
+
   it("keeps the explicitly selected project as last-active even after unrelated session activity", async () => {
     const user = userService.createUser("select-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);

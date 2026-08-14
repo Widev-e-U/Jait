@@ -42,6 +42,8 @@ export interface ProjectRecord {
   createdAt: string
   lastActiveAt: string
   metadata: string | null
+  /** Persisted project editor-panel activation state. */
+  editorModeActive?: boolean
   sessions: ProjectSession[]
 }
 
@@ -625,6 +627,22 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     // Opening a session counts as viewing it — clear its unread indicator.
     void markSessionViewed(sessionId)
   }, [persistActiveSelectionToCache, persistSelection, markSessionViewed])
+
+  const setProjectEditorModeActive = useCallback((projectId: string, editorModeActive: boolean) => {
+    setProjects((prev) => prev.map((project) => (
+      project.id === projectId && project.editorModeActive !== editorModeActive
+        ? { ...project, editorModeActive }
+        : project
+    )))
+    setSearchResults((prev) => prev ? {
+      ...prev,
+      projects: prev.projects.map((project) => (
+        project.id === projectId && project.editorModeActive !== editorModeActive
+          ? { ...project, editorModeActive }
+          : project
+      )),
+    } : prev)
+  }, [])
 
   const archiveSession = useCallback(async (sessionId: string) => {
     if (!token) {
@@ -1232,6 +1250,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     createSession,
     switchProject,
     switchSession,
+    setProjectEditorModeActive,
     archiveSession,
     moveSession,
     fetchArchivedSessions,

@@ -78,6 +78,13 @@ export function registerProjectEntityRoutes(
     throw err;
   };
 
+  const withEditorModeStatus = <T extends { id: string }>(project: T): T & { editorModeActive: boolean } => {
+    const ui = projectState?.get(project.id, ["project.ui"])["project.ui"] as {
+      panel?: { open?: boolean } | null;
+    } | null | undefined;
+    return { ...project, editorModeActive: ui?.panel?.open === true };
+  };
+
   /** Broadcast a project event over WS to the owning user's other clients */
   const broadcastProjectEvent = (
     userId: string,
@@ -190,7 +197,11 @@ export function registerProjectEntityRoutes(
     const status = typeof query["status"] === "string" ? query["status"] : "active";
     const limit = parseListLimit(query["limit"]);
     if (status === "active") await maybeAutoAssignProjectRepos(authUser.id);
-    return projectService.listWithSessions(authUser.id, status, limit);
+    const result = projectService.listWithSessions(authUser.id, status, limit);
+    return {
+      ...result,
+      projects: result.projects.map(withEditorModeStatus),
+    };
   });
 
   app.get("/api/projects/search", async (request, reply) => {
@@ -199,7 +210,11 @@ export function registerProjectEntityRoutes(
     const query = request.query as Record<string, unknown>;
     const search = typeof query["q"] === "string" ? query["q"].trim() : "";
     if (!search) return { projects: [], personalSessions: [] };
-    return projectService.searchWithSessions(authUser.id, search);
+    const result = projectService.searchWithSessions(authUser.id, search);
+    return {
+      ...result,
+      projects: result.projects.map(withEditorModeStatus),
+    };
   });
 
   app.get("/api/projects/last-active", async (request, reply) => {
@@ -272,10 +287,10 @@ export function registerProjectEntityRoutes(
     if (!project) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
-    return {
+    return withEditorModeStatus({
       ...project,
       sessions: sessionService.listByProject(id, "active", authUser.id),
-    };
+    });
   });
 
   app.patch("/api/projects/:id", async (request, reply) => {

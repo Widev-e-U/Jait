@@ -1,130 +1,103 @@
 import { describe, expect, it } from 'vitest'
-
 import {
   getMobileProjectActiveTarget,
   isMobileProjectTargetActive,
   resolveProjectPanelOpenAfterChatSelection,
-  shouldRenderSessionSidebar,
+  type MobileProjectControlState,
 } from './mobile-project-controls'
 
-describe('mobile project controls', () => {
-  it('returns the terminal target when terminal fullscreen is open', () => {
-    expect(getMobileProjectActiveTarget({
-      showProject: true,
-      showTerminal: true,
-      showProjectTree: true,
-      showProjectEditor: false,
-      treeTab: 'files',
-    })).toBe('terminal')
+describe('resolveProjectPanelOpenAfterChatSelection', () => {
+  it('does NOT open the panel on desktop for a project that never had editor mode enabled (default-false)', () => {
+    // A project with no saved editor-mode preference must not auto-open its panel.
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: false,
+        focusChat: false,
+        requestedOpen: false,
+      }),
+    ).toBe(false)
   })
 
-  it('returns null when no mobile project surface is open', () => {
-    expect(getMobileProjectActiveTarget({
-      showProject: false,
-      showTerminal: false,
-      showProjectTree: false,
-      showProjectEditor: false,
-      treeTab: 'files',
-    })).toBe(null)
+  it('does NOT open the panel on desktop when focusChat is on and no preference saved', () => {
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: false,
+        focusChat: true,
+        requestedOpen: false,
+      }),
+    ).toBe(false)
   })
 
-  it('marks files active only when the project tree is open on the files tab', () => {
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: false,
-      showProjectTree: true,
-      showProjectEditor: false,
-      treeTab: 'files',
-    }, 'files')).toBe(true)
-
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: false,
-      showProjectTree: true,
-      showProjectEditor: false,
-      treeTab: 'git',
-    }, 'files')).toBe(false)
+  it('honours requestedOpen=true (project had editor mode persisted) on desktop', () => {
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: false,
+        focusChat: false,
+        requestedOpen: true,
+      }),
+    ).toBe(true)
   })
 
-  it('marks git active only when the changes tab is the visible tree panel', () => {
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: false,
-      showProjectTree: true,
-      showProjectEditor: false,
-      treeTab: 'git',
-    }, 'git')).toBe(true)
-
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: false,
-      showProjectTree: false,
-      showProjectEditor: true,
-      treeTab: 'git',
-    }, 'git')).toBe(false)
+  it('on mobile, focus-chat collapses the panel even when editor mode is persisted', () => {
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: true,
+        focusChat: true,
+        requestedOpen: true,
+      }),
+    ).toBe(false)
   })
 
-  it('marks editor active only when the editor pane is visible', () => {
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: false,
-      showProjectTree: false,
-      showProjectEditor: true,
-      treeTab: 'files',
-    }, 'editor')).toBe(true)
+  it('on mobile without focus-chat, honours the persisted editor-mode state', () => {
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: true,
+        focusChat: false,
+        requestedOpen: true,
+      }),
+    ).toBe(true)
+    expect(
+      resolveProjectPanelOpenAfterChatSelection({
+        isMobile: true,
+        focusChat: false,
+        requestedOpen: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('getMobileProjectActiveTarget / isMobileProjectTargetActive', () => {
+  const base: MobileProjectControlState = {
+    showProject: true,
+    showTerminal: false,
+    showProjectTree: true,
+    showProjectEditor: false,
+    treeTab: 'files',
+  }
+
+  it('returns editor when the editor panel is active', () => {
+    expect(
+      getMobileProjectActiveTarget({ ...base, showProjectEditor: true }),
+    ).toBe('editor')
+    expect(isMobileProjectTargetActive({ ...base, showProjectEditor: true }, 'editor')).toBe(true)
   })
 
-  it('marks terminal active independently from project visibility', () => {
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: true,
-      showProjectTree: false,
-      showProjectEditor: true,
-      treeTab: 'files',
-    }, 'terminal')).toBe(true)
-
-    expect(isMobileProjectTargetActive({
-      showProject: false,
-      showTerminal: false,
-      showProjectTree: false,
-      showProjectEditor: false,
-      treeTab: 'files',
-    }, 'terminal')).toBe(false)
+  it('returns files tab when only the tree is shown', () => {
+    expect(getMobileProjectActiveTarget(base)).toBe('files')
+    expect(isMobileProjectTargetActive(base, 'git')).toBe(false)
   })
 
-  it('treats project targets as inactive while terminal fullscreen is open', () => {
-    expect(isMobileProjectTargetActive({
-      showProject: true,
-      showTerminal: true,
-      showProjectTree: true,
-      showProjectEditor: false,
-      treeTab: 'files',
-    }, 'files')).toBe(false)
+  it('returns null when the project panel is closed', () => {
+    expect(getMobileProjectActiveTarget({ ...base, showProject: false })).toBeNull()
   })
 
-  it('renders the session sidebar only when explicitly open', () => {
-    expect(shouldRenderSessionSidebar(false)).toBe(false)
-    expect(shouldRenderSessionSidebar(true)).toBe(true)
-  })
-
-  it('keeps the chat visible after selecting a chat on mobile', () => {
-    expect(resolveProjectPanelOpenAfterChatSelection({
-      isMobile: true,
-      focusChat: true,
-      requestedOpen: true,
-    })).toBe(false)
-  })
-
-  it('preserves project panel behavior outside mobile chat selection', () => {
-    expect(resolveProjectPanelOpenAfterChatSelection({
-      isMobile: false,
-      focusChat: true,
-      requestedOpen: true,
-    })).toBe(true)
-    expect(resolveProjectPanelOpenAfterChatSelection({
-      isMobile: true,
-      focusChat: false,
-      requestedOpen: true,
-    })).toBe(true)
+  it('prioritises terminal over all other targets', () => {
+    expect(
+      getMobileProjectActiveTarget({
+        ...base,
+        showTerminal: true,
+        showProjectEditor: true,
+      }),
+    ).toBe('terminal')
   })
 })

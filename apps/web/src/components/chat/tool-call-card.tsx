@@ -3722,6 +3722,25 @@ function AgentSpecialistBlock({
     () => normalizeMessageSegments(resultRecord?.segments),
     [resultRecord?.segments],
   )
+  // On a reloaded conversation the live childMap is empty, so `childCalls` is
+  // undefined even though the sub-agent's tool calls were persisted inside the
+  // result payload. Rebuild them from that payload so the tool cards render
+  // again (same shape SubAgentHistoryView uses for the same data).
+  const nestedCalls = useMemo<ToolCallInfo[]>(() => {
+    if (childCalls && childCalls.length > 0) return childCalls
+    const raw = Array.isArray(resultRecord?.toolCalls) ? resultRecord.toolCalls as SubAgentToolCall[] : []
+    return raw.map((tc, i) => ({
+      callId: tc.callId ?? `sub-${i}`,
+      tool: tc.tool,
+      args: (tc.args && typeof tc.args === 'object' && !Array.isArray(tc.args))
+        ? tc.args as Record<string, unknown>
+        : {},
+      status: tc.ok ? 'success' : 'error',
+      result: { ok: tc.ok, message: tc.message, data: tc.data },
+      startedAt: tc.startedAt ?? 0,
+      completedAt: tc.completedAt,
+    }))
+  }, [childCalls, resultRecord?.toolCalls])
   const scroll = useStickToBottom()
   const bodySegments = useMemo<MessageSegment[]>(() => {
     if (childSegments && childSegments.length > 0) return childSegments
@@ -3750,7 +3769,7 @@ function AgentSpecialistBlock({
             as a normal assistant message (thinking block + tool cards + markdown). */}
         <AssistantBody
           segments={visibleBodySegments}
-          toolCalls={childCalls ?? []}
+          toolCalls={nestedCalls}
           isStreaming={isRunning}
           hasStreamingText={!!content}
           threadControlThreads={threadControlThreads}

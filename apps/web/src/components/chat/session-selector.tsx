@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
@@ -25,6 +25,7 @@ import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 interface SessionSelectorProps {
   projects: ProjectRecord[]
@@ -51,9 +52,15 @@ interface SessionSelectorProps {
   onCreateFolder?: (parentId: string | null) => void
   /** Opens the name/description/colour/context editor. */
   onEditProject?: (projectId: string) => void
-  /** Shows read-only editor-mode state beside desktop project rows. */
+  /** Shows each project's persisted editor-mode state beside desktop project rows. */
   showEditorModeStatus?: boolean
-  editorModeActive?: boolean
+  /**
+   * Overrides mobile detection. When omitted, mobile is inferred from the
+   * viewport/device via `useIsMobile()`. On desktop the 3-dot menu affordance is
+   * hidden (menu reached by right-click); on touch it is kept alongside
+   * long-press. Tests pass this explicitly to force a layout.
+   */
+  isMobile?: boolean
   /** Re-parents a folder or project; null moves it to the root. */
   onMoveProject?: (projectId: string, parentId: string | null) => void
   onRemoveProject: (projectId: string) => void
@@ -81,6 +88,8 @@ const SESSION_CONTEXT_MENU_HEIGHT = 40
 const SESSION_CONTEXT_MENU_MARGIN = 8
 /** Touch devices have no right-click — a press this long opens the menu instead. */
 const SESSION_LONG_PRESS_MS = 500
+/** Project rows use the same hold-to-open gesture on touch, but reuse the timer. */
+const PROJECT_LONG_PRESS_MS = SESSION_LONG_PRESS_MS
 
 export function getSessionContextMenuPosition(
   x: number,
@@ -186,7 +195,7 @@ export function SessionSelector({
   onCreateFolder,
   onEditProject,
   showEditorModeStatus = false,
-  editorModeActive = false,
+  isMobile: isMobileProp,
   onMoveProject,
   onRemoveProject,
   onChangeDirectory,
@@ -199,6 +208,8 @@ export function SessionSelector({
   nodes = [],
   repositories = [],
 }: SessionSelectorProps) {
+  const detectedMobile = useIsMobile()
+  const isMobile = isMobileProp ?? detectedMobile
   // Derive online node IDs from the nodes prop (already fetched by App.tsx)
   const onlineNodeIds = useMemo(
     () => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)),
@@ -212,6 +223,9 @@ export function SessionSelector({
   const longPressTimerRef = useRef<number | null>(null)
   const longPressOriginRef = useRef<{ x: number; y: number } | null>(null)
   const longPressFiredRef = useRef(false)
+  // Set when the project menu was opened via right-click or long-press so the
+  // click that follows (esp. on touch) doesn't also select the project.
+  const projectMenuJustOpenedRef = useRef(false)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
   const displayedProjects = normalizedSearchQuery && onSearch
     ? searchResults?.projects ?? []
@@ -359,6 +373,49 @@ export function SessionSelector({
   const consumedByLongPress = () => {
     if (!longPressFiredRef.current) return false
     longPressFiredRef.current = false
+    return true
+  }
+
+  /**
+   * Right-click opens the project's 3-dot menu (the native browser context
+   * menu is suppressed). On touch, a long press performs the same role. We
+   * mark the open so the click that follows a touch long-press doesn't also
+   * select the project.
+   */
+  const openProjectMenu = (projectId: string) => {
+    projectMenuJustOpenedRef.current = true
+    setOpenMenuProjectId(projectId)
+  }
+
+  const projectRowMenuHandlers = (projectId: string) => ({
+    onContextMenu: (event: ReactMouseEvent) => {
+      event.preventDefault()
+      openProjectMenu(projectId)
+    },
+    onPointerDown: (event: ReactPointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      cancelLongPress()
+      const { clientX, clientY } = event
+      longPressOriginRef.current = { x: clientX, y: clientY }
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressFiredRef.current = true
+        openProjectMenu(projectId)
+      }, PROJECT_LONG_PRESS_MS)
+    },
+    onPointerMove: (event: ReactPointerEvent) => {
+      const origin = longPressOriginRef.current
+      if (!origin) return
+      if (Math.abs(event.clientX - origin.x) > 10 || Math.abs(event.clientY - origin.y) > 10) cancelLongPress()
+    },
+    onPointerUp: cancelLongPress,
+    onPointerLeave: cancelLongPress,
+    onPointerCancel: cancelLongPress,
+  })
+
+  /** Swallows the click that follows a right-click / long-press menu open. */
+  const consumedByProjectMenu = () => {
+    if (!projectMenuJustOpenedRef.current) return false
+    projectMenuJustOpenedRef.current = false
     return true
   }
 
@@ -526,9 +583,11 @@ export function SessionSelector({
                         onMoveProject(draggedId, project.id)
                       }}
                       onClick={() => {
+                        if (consumedByProjectMenu()) return
                         onDismiss?.()
                         if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id)
                       }}
+                      {...projectRowMenuHandlers(project.id)}
                     >
                       {hasChildren ? (
                         <button
@@ -617,33 +676,40 @@ export function SessionSelector({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span
-                                aria-label={`Editor mode ${isActiveProject && editorModeActive ? 'active' : 'inactive'} for ${project.title || 'project'}`}
+                                aria-label={`Editor mode ${project.editorModeActive ? 'active' : 'inactive'} for ${project.title || 'project'}`}
                                 className={`flex h-6 w-6 shrink-0 items-center justify-center ${
-                                  isActiveProject && editorModeActive ? 'text-primary' : 'text-muted-foreground/40'
+                                  project.editorModeActive ? 'text-primary' : 'text-muted-foreground/40'
                                 }`}
                               >
                                 <Code className="h-3 w-3" />
                               </span>
                             </TooltipTrigger>
                             <TooltipContent side="right">
-                              Editor mode {isActiveProject && editorModeActive ? 'active' : 'inactive'}
+                              Editor mode {project.editorModeActive ? 'active' : 'inactive'}
                             </TooltipContent>
                           </Tooltip>
                         )}
                         <DropdownMenu
+                          open={openMenuProjectId === project.id}
                           onOpenChange={(open) => setOpenMenuProjectId(open ? project.id : null)}
                         >
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Project actions"
-                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          {/* On desktop the menu is reached by right-clicking the
+                              row, so the visible 3-dot affordance is hidden. It is
+                              kept on touch devices alongside the long-press. */}
+                          {isMobile && (
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Project actions"
+                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => e.stopPropagation()}
+                                onContextMenu={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          )}
                           <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">
                             {onEditProject && (
                               <DropdownMenuItem

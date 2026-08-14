@@ -530,10 +530,17 @@ describe("runAgentLoop repetition containment", () => {
     ];
   }
 
-  it("ends the turn instead of auto-continuing a looping response", async () => {
+  it("silently discards a looping generation and resamples a clean response", async () => {
     let fetchCalls = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       fetchCalls++;
+      if (fetchCalls === 2) {
+        return new Response([
+          'data: {"choices":[{"delta":{"content":"Provider selector fixed."}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join(""));
+      }
       return new Response(new ReadableStream<Uint8Array>({
         start(controller) {
           const encoder = new TextEncoder();
@@ -568,22 +575,165 @@ describe("runAgentLoop repetition containment", () => {
       async () => ({ ok: true, message: "unused" }),
     );
 
-    // The old behaviour was three more `finish_reason: "length"` continuations,
-    // each resuming the loop for another few thousand tokens.
-    expect(fetchCalls).toBe(1);
+    expect(fetchCalls).toBe(2);
     expect(result.aborted).toBe(false);
     expect(result.hitMaxRounds).toBe(false);
-    expect(result.content).toContain("[Stopped: the model repeated the same text");
+    expect(result.content).toBe("Provider selector fixed.");
+    expect(result.content).not.toContain("Stopped:");
     expect(events.some((event) =>
       event.type === "steering" && event.message.includes("repeating its text")
-    )).toBe(true);
+    )).toBe(false);
 
-    // History keeps a collapsed copy so a follow-up round can't read the wall
-    // of duplicated text and fall straight back into the loop.
+    // The malformed wall is never replayed into provider history.
+    expect(history.some((message) => message.content.includes(LOOP_UNIT.repeat(8)))).toBe(false);
     const assistantTurn = history.at(-1)!;
     expect(assistantTurn.role).toBe("assistant");
-    expect(assistantTurn.content).toContain("further identical repetitions removed");
-    expect(assistantTurn.content.length).toBeLessThan(LOOP_UNIT.length * 5);
+    expect(assistantTurn.content).toBe("Provider selector fixed.");
+  });
+
+  it("drops the run-up into the loop instead of replaying it to the resample", async () => {
+    // The prefix the model wrote on its way into the loop is the context it was
+    // following when it fell in, so a discarded attempt must contribute nothing
+    // to history or to the rendered transcript.
+    const preamble = "Let me re-read the selector one more time.\n";
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      if (fetchCalls === 2) {
+        return new Response([
+          'data: {"choices":[{"delta":{"content":"Provider selector fixed."}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join(""));
+      }
+      return new Response([
+        `data: {"choices":[{"delta":{"content":${JSON.stringify(preamble)}}}]}\n`,
+        ...loopingResponse(),
+      ].join(""), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Fix the provider selector." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-repetition-runup",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    expect(fetchCalls).toBe(2);
+    expect(result.content).toBe("Provider selector fixed.");
+    expect(result.segments.some((segment) => segment.content.includes(preamble))).toBe(false);
+    expect(history.some((message) => (message.content ?? "").includes(preamble))).toBe(false);
+    expect(history.some((message) => message.role === "assistant" && !message.content)).toBe(false);
+  });
+
+  it("stops continuing a truncated turn once the reasoning loops across rounds", async () => {
+    // Each round stays one copy under the streaming guard, so only the
+    // accumulated reasoning reveals the loop. Without that check the
+    // "resume where you left off" recovery feeds the loop back in.
+    const round = (visible: string) => [
+      `data: {"choices":[{"delta":{"reasoning_content":${JSON.stringify(LOOP_UNIT.repeat(10))}}}]}\n\n`,
+      `data: {"choices":[{"delta":{"content":${JSON.stringify(visible)}}}]}\n\n`,
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+      "data: [DONE]\n\n",
+    ].join("");
+
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      return new Response(round(fetchCalls === 1 ? "A" : "B"));
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the provider selector." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-repetition-length",
+        abort: new AbortController(),
+        maxRounds: 8,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    // One continuation, then the accumulated reasoning trips the guard.
+    expect(fetchCalls).toBe(2);
+    expect(result.content).toBe("AB");
+  });
+
+  it("varies ollama sampling on the resample so the retry can't replay the loop", async () => {
+    const bodies: any[] = [];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init: any) => {
+      fetchCalls++;
+      bodies.push(JSON.parse(init.body));
+      if (fetchCalls === 2) {
+        return new Response(
+          `{"message":{"content":"Provider selector fixed."},"done":true,"done_reason":"stop"}\n`,
+        );
+      }
+      return new Response([
+        ...Array.from(
+          { length: 60 },
+          () => `{"message":{"content":${JSON.stringify(LOOP_UNIT)}},"done":false}\n`,
+        ),
+        `{"done":true,"done_reason":"stop"}\n`,
+      ].join(""), { status: 200 });
+    });
+
+    await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "http://localhost:11434/v1",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+          backend: "ollama",
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the provider selector." },
+        ],
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-repetition-ollama",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    expect(fetchCalls).toBe(2);
+    expect(bodies[0].options.temperature).toBeUndefined();
+    expect(bodies[0].options.seed).toBeUndefined();
+    expect(bodies[1].options.temperature).toBeGreaterThan(0.8);
+    expect(typeof bodies[1].options.seed).toBe("number");
   });
 });
 

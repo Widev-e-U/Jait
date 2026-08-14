@@ -1562,6 +1562,8 @@ function capToolResultData(data: unknown): unknown {
 const MAX_PLAIN_TEXT_RETRIES = 2;
 /** Max times we re-prompt when a provider ends a round without text or tool calls. */
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
+/** Max times a malformed repeating generation is discarded and resampled. */
+const MAX_REPETITION_RECOVERIES = 3;
 /**
  * Max times we auto-continue a response that was cut off by the output token
  * limit (finish_reason="length"). Reasoning models (e.g. gpt-5) can exhaust
@@ -2412,6 +2414,20 @@ export async function runAgentLoop(
       segments.pop();
     }
   };
+  /** Roll a round's reasoning back out of the rendered transcript. */
+  const discardLatestThinkingText = (discardedThinking: string): void => {
+    if (!discardedThinking) return;
+    const lastSegment = segments[segments.length - 1];
+    // A verbatim replay is never appended (see the segment merge below), so a
+    // segment that doesn't end with this round's reasoning has nothing to drop.
+    if (lastSegment?.type !== "thinking" || !lastSegment.content.endsWith(discardedThinking)) return;
+    const retainedThinking = lastSegment.content.slice(0, -discardedThinking.length);
+    if (retainedThinking) {
+      segments[segments.length - 1] = { type: "thinking", content: retainedThinking };
+    } else {
+      segments.pop();
+    }
+  };
   /** Tracks whether the turn's assistant message was already persisted via onPersist. */
   let persisted = false;
 
@@ -2433,6 +2449,13 @@ export async function runAgentLoop(
   };
   /** Times we've auto-continued after a length-truncated response in this loop run. */
   let lengthContinuations = 0;
+  /** Times we've discarded a provider generation that fell into verbatim repetition. */
+  let repetitionRecoveries = 0;
+  /**
+   * Set for the single round that immediately follows a discarded generation,
+   * so the resample can be nudged off the sampling path that just looped.
+   */
+  let repetitionResampleAttempt = 0;
   /** Signature of the most recent round's tool call(s), for duplicate-loop detection. */
   let lastToolCallSignature: string | null = null;
   /** Consecutive rounds with the exact same tool call signature. */
@@ -2583,6 +2606,18 @@ export async function runAgentLoop(
           stream: true,
           stream_options: { include_usage: true },
         };
+    // Re-sending a discarded generation's request unchanged only helps when the
+    // backend samples non-deterministically. Ollama's defaults are effectively
+    // replayable for a byte-identical payload, so a resample there has to move
+    // off the path that just looped. OpenAI-compatible payloads are left alone:
+    // reasoning models reject a non-default temperature outright, and those
+    // backends already vary between identical requests.
+    if (isOllama && repetitionResampleAttempt > 0) {
+      const options = reqBody.options as Record<string, unknown>;
+      options.temperature = Math.min(1.1, 0.8 + 0.15 * repetitionResampleAttempt);
+      options.seed = Math.floor(Math.random() * 0x7fffffff);
+    }
+    repetitionResampleAttempt = 0;
     // Reasoning effort (OpenAI o-series / GPT-5 reasoning models). Ollama's
     // native /api/chat endpoint does not accept this field, so only send it to
     // OpenAI-compatible backends when the user has explicitly chosen a level.
@@ -2795,44 +2830,91 @@ export async function runAgentLoop(
       };
     }
 
-    // ── Runaway repetition → end the turn ──
-    // The stream parser cut the response off as soon as the model started
-    // emitting the same block over and over. Anything that "keeps going" from
-    // here — another tool round, or the truncation recovery below — just
-    // resumes the loop and burns the rest of the output budget, which is how a
-    // single degenerate response turned into thousands of duplicated lines.
-    // Stop with what we have and tell the user why.
+    // ── Runaway repetition → discard and resample ──
+    // Treat a repeating generation as a failed sampling attempt, not as a
+    // terminal answer — the same way codex treats a stream that dies before
+    // `response.completed`. There, only *completed* response items are ever
+    // committed to history, so a failed attempt contributes nothing and the
+    // retry re-derives the turn from the unchanged conversation. That is the
+    // part that matters: the prefix leading into a loop is the exact context
+    // the model was following when it fell in, so replaying it back is the
+    // surest way to land in the same attractor again. The retry bound prevents
+    // a genuinely broken backend from consuming the continuous-loop budget.
     if (repetitionStop) {
       const repeated = repetitionStop.source === "thinking" ? "reasoning" : "text";
+      const cleanContent = repetitionStop.source === "content"
+        ? contentText.slice(0, repetitionStop.startIndex)
+        : contentText;
+      const cleanThinking = repetitionStop.source === "thinking"
+        ? thinkingText.slice(0, repetitionStop.startIndex)
+        : thinkingText;
+
       log.warn(
         `Runaway repetition in ${repetitionStop.source} for session ${sessionId}: `
-          + `${repetitionStop.copies} identical copies of a ${repetitionStop.unit.length}-char block — ending the turn`,
+          + `${repetitionStop.copies} identical copies of a ${repetitionStop.unit.length}-char block — discarding generation`,
       );
-      onEvent?.({ type: "steering", message: `Model started repeating its ${repeated} — stopping the response` });
-      const notice = `\n\n[Stopped: the model repeated the same ${repeated} ${repetitionStop.copies} times and was cut off. `
-        + `This reply is incomplete — retry, or rephrase the request.]`;
-      onEvent?.({ type: "token", content: notice });
-      fullContent += notice;
-      const lastSegment = segments[segments.length - 1];
-      if (lastSegment?.type === "text") {
-        segments[segments.length - 1] = { type: "text", content: lastSegment.content + notice };
-      } else {
-        segments.push({ type: "text", content: notice });
+
+      const canRecover =
+        repetitionRecoveries < MAX_REPETITION_RECOVERIES && round + 1 < roundLimit;
+
+      // Roll the whole attempt back out of the rendered transcript. On the last
+      // attempt the clean prefix is re-added below as a best-effort salvage.
+      discardLatestContentText(contentText);
+      discardLatestThinkingText(thinkingText);
+      contentText = canRecover ? "" : cleanContent;
+      thinkingText = canRecover ? "" : cleanThinking;
+
+      if (canRecover) {
+        repetitionRecoveries++;
+        repetitionResampleAttempt = repetitionRecoveries;
+        // Nothing from the discarded generation enters `history`. The only
+        // difference from the request that just failed is this instruction,
+        // which clearEmptyResponseRecoveryPrompts() strips again once the
+        // resample starts streaming.
+        const recoveryPrompt: AgentMessage = {
+          role: "system",
+          content:
+            `Your previous generation fell into verbatim repetition in its ${repeated} and was discarded. ` +
+            `Do not repeat, recap, or extend that pattern. Continue from the useful evidence already in the conversation, ` +
+            `change strategy if needed, and complete the user's request with a concise answer or a different structured tool call.`,
+        };
+        history.push(recoveryPrompt);
+        emptyResponseRecoveryPrompts.add(recoveryPrompt);
+        continue;
       }
-      // History keeps a collapsed copy: replaying the wall of duplicated text
-      // into the next request is the surest way to trigger the loop again.
-      if (contentText) {
-        history.push({ role: "assistant", content: trimDegenerateRepetition(contentText) });
+
+      if (cleanThinking) {
+        const lastSegment = segments[segments.length - 1];
+        if (lastSegment?.type === "thinking") {
+          segments[segments.length - 1] = { type: "thinking", content: lastSegment.content + cleanThinking };
+        } else {
+          segments.push({ type: "thinking", content: cleanThinking });
+        }
       }
-      onPersist?.(
-        sessionId,
-        "assistant",
-        fullContent,
-        executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
-        segments.length > 0 ? JSON.stringify(segments) : undefined,
-        capThinking(thinkingText) || undefined,
-      );
-      persisted = true;
+      if (cleanContent) {
+        fullContent += cleanContent;
+        const lastSegment = segments[segments.length - 1];
+        if (lastSegment?.type === "text") {
+          segments[segments.length - 1] = { type: "text", content: lastSegment.content + cleanContent };
+        } else {
+          segments.push({ type: "text", content: cleanContent });
+        }
+      }
+
+      // Recovery is intentionally quiet: retain any clean prefix and end with
+      // the best usable result instead of exposing an internal loop guard as a
+      // synthetic "Stopped" message or throwing a provider error.
+      if (fullContent || thinkingText || segments.length > 0 || executedToolCalls.length > 0) {
+        onPersist?.(
+          sessionId,
+          "assistant",
+          fullContent,
+          executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
+          segments.length > 0 ? JSON.stringify(segments) : undefined,
+          capThinking(thinkingText) || undefined,
+        );
+        persisted = true;
+      }
       return {
         content: fullContent,
         executedToolCalls,
@@ -3475,10 +3557,21 @@ export async function runAgentLoop(
       lengthContinuations < MAX_LENGTH_CONTINUATIONS
     ) {
       // A model that ran out of budget while looping is not going to "resume"
-      // into anything useful. Checking the whole turn (not just this round)
-      // catches a loop that only became obvious across continuations, e.g. one
-      // whose repeating unit is longer than a single response.
-      const degenerate = findDegenerateRepetition(fullContent);
+      // into anything useful — "continue where you left off" just feeds the
+      // loop back in and burns another continuation. Checking the whole turn
+      // (not just this round) catches a loop that only became obvious across
+      // continuations, e.g. one whose repeating unit is longer than a single
+      // response. Reasoning counts too: a model that loops in its thinking
+      // until the cap leaves `fullContent` clean, so scanning visible text
+      // alone would wave the continuation straight through.
+      const turnThinking = segments
+        .filter((segment): segment is { type: "thinking"; content: string } => segment.type === "thinking")
+        .map((segment) => segment.content)
+        // Joined without a separator: a loop that spans two continuation rounds
+        // is only periodic if nothing is injected at the seam.
+        .join("");
+      const degenerate = findDegenerateRepetition(fullContent)
+        ?? findDegenerateRepetition(turnThinking);
       if (degenerate) {
         log.warn(
           `Response hit the output token limit while repeating itself `

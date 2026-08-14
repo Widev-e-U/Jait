@@ -526,6 +526,7 @@ function App() {
     assignProjectRepository,
     switchProject,
     switchSession,
+    setProjectEditorModeActive,
     archiveSession,
     moveSession,
     fetchArchivedSessions,
@@ -2087,6 +2088,11 @@ function App() {
     }
   }, [activeProject?.projectRoot, loadArchitectureDiagramForProject, token])
 
+  useEffect(() => {
+    if (!activeProjectId || !projectStateReady || loadingProjectUI) return
+    setProjectEditorModeActive(activeProjectId, showProject)
+  }, [activeProjectId, loadingProjectUI, projectStateReady, setProjectEditorModeActive, showProject])
+
   const prevProjectPanelPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeProjectId && token && !projectStateReady) {
@@ -2531,8 +2537,9 @@ function App() {
     }
   }, [activeProjectId, activeSessionId])
 
-  // Wrap switchProject so clicking a project also opens its remote directory
-  // and shows the correct files/session in the editor.
+  // Wrap switchProject so clicking a project opens its remote directory and
+  // restores that project's saved editor-mode state without leaking another
+  // project's panel visibility.
   const handleSwitchProject = useCallback(async (
     projectId: string,
     sessionId?: string,
@@ -2604,7 +2611,7 @@ function App() {
         const openPanel = resolveProjectPanelOpenAfterChatSelection({
           isMobile,
           focusChat: focusChatOnMobile,
-          requestedOpen: true,
+          requestedOpen: project.editorModeActive === true,
         })
         const res = await fetch(`${API_URL}/api/project/open`, {
           method: 'POST',
@@ -4932,6 +4939,7 @@ function App() {
                       personalSessions={personalSessions}
                       activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}
+                      isMobile
                       loading={projectsLoading}
                       hasMoreProjects={hasMoreProjects}
                       showFewerProjects={projects.length > projectListLimit}

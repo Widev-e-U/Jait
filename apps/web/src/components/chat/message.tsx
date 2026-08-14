@@ -784,10 +784,7 @@ function MessageInner({
         )}
 
         {!isUser && segments && segments.length > 0 ? (
-          <div className={cn(
-            'relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]',
-            hasSteeringSegment && '[&>*]:max-w-[85%]',
-          )}>
+          <div className="relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]">
             <AssistantBody
               segments={segments}
               toolCalls={toolCalls}
@@ -803,10 +800,13 @@ function MessageInner({
               compact={compact}
               preferLlmUi={preferLlmUi}
               onOpenPath={onOpenPath}
+              capNonSteeringWidth={hasSteeringSegment}
             />
 
-            {assistantActions}
-            {memoryProvenance}
+            <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
+              {assistantActions}
+              {memoryProvenance}
+            </div>
           </div>
         ) : (
           <>

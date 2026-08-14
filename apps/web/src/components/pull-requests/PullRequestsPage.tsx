@@ -49,6 +49,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { pullRequestsApi } from '@/lib/pull-requests-api'
+import {
+  orderPullRequestRepositories,
+  rememberPullRequestRepository,
+} from '@/lib/pull-requests-selection-storage'
 import { cn } from '@/lib/utils'
 
 interface PullRequestsPageProps {
@@ -216,6 +220,10 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
     () => repositories.filter(isGitHubRepository),
     [repositories],
   )
+  const orderedRepositories = useMemo(
+    () => orderPullRequestRepositories(githubRepositories),
+    [githubRepositories],
+  )
   const [repositoryId, setRepositoryId] = useState('')
   const [forgeSetupOpen, setForgeSetupOpen] = useState(false)
   const [listState, setListState] = useState<PullRequestListState>(deepLink ? 'all' : 'open')
@@ -258,8 +266,8 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
       }
     }
     if (repositoryId && githubRepositories.some((repository) => repository.id === repositoryId)) return
-    setRepositoryId(githubRepositories[0]?.id ?? '')
-  }, [deepLink, githubRepositories, repositoryId])
+    setRepositoryId(orderedRepositories[0]?.id ?? '')
+  }, [deepLink, githubRepositories, orderedRepositories, repositoryId])
 
   const refreshList = useCallback(async () => {
     if (!repositoryId) {
@@ -516,6 +524,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
               value={repositoryId}
               onValueChange={(value) => {
                 deepLinkHandledRef.current = true
+                rememberPullRequestRepository(value)
                 setRepositoryId(value)
                 setSelectedNumber(null)
                 setDetail(null)
@@ -525,7 +534,7 @@ export function PullRequestsPage({ repositories }: PullRequestsPageProps) {
                 <SelectValue placeholder="Choose repository" />
               </SelectTrigger>
               <SelectContent>
-                {githubRepositories.map((repository) => (
+                {orderedRepositories.map((repository) => (
                   <SelectItem key={repository.id} value={repository.id}>
                     {repository.name}
                   </SelectItem>
