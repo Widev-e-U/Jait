@@ -17,7 +17,7 @@ import {
   type OpenAIToolCall,
 } from "./agent-loop.js";
 import { ToolRegistry } from "./registry.js";
-import { computeContextUsage } from "./token-estimator.js";
+import { getReminderInstructions } from "./prompts/index.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -2723,6 +2723,7 @@ describe("runAgentLoop tool-loop detection", () => {
   it("compacts completed work inside the active turn before context pressure causes a duplicate-call loop", async () => {
     let fetchCalls = 0;
     let preservedRecentEvidence = false;
+    let maxCompletedToolRounds = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: AgentMessage[] };
       preservedRecentEvidence ||= (body.messages ?? []).some(
@@ -2730,15 +2731,25 @@ describe("runAgentLoop tool-loop detection", () => {
           message.content.includes("[active-turn-summary]") &&
           message.content.includes("evidence:unique-"),
       );
-      const completedToolRounds = (body.messages ?? []).filter(
-        (message) => message.role === "assistant" && message.tool_calls?.length,
-      ).length;
+      const compacted = (body.messages ?? []).some(
+        (message) => message.role === "system" && message.content.includes("[active-turn-summary]"),
+      );
+      maxCompletedToolRounds = Math.max(
+        maxCompletedToolRounds,
+        (body.messages ?? []).filter(
+          (message) => message.role === "assistant" && message.tool_calls?.length,
+        ).length,
+      );
       const round = fetchCalls++;
 
       if (round < 10) {
         return toolCallSSE(`call-${round}`, "search", { pattern: `unique-${round}` });
       }
-      if (completedToolRounds > 4) {
+      // Keep pushing until the active turn has actually been collapsed. Gating
+      // on a specific surviving round count instead would silently encode
+      // ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP, and the run would never terminate if
+      // that window were ever widened.
+      if (!compacted) {
         return toolCallSSE(`call-stuck-${round}`, "execute", { command: "check the same logs" });
       }
       return textResponse("Recovered from the long investigation.");
@@ -3029,6 +3040,93 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(bodies[1]).toContain("produced reasoning but no answer");
     // Recorded as a real assistant turn, so it survives recovery-prompt cleanup.
     expect(history.some((m) => m.role === "assistant" && m.content === "" && m.thinking === firstThinking)).toBe(true);
+  });
+
+  describe("investigation without progress", () => {
+    /** Read-only rounds that never repeat a call, so no duplicate guard can fire. */
+    function investigateForever(sessionId: string) {
+      let fetchCalls = 0;
+      let sawToolFreeRound = false;
+      const history: AgentMessage[] = [
+        { role: "system", content: "system" },
+        { role: "user", content: "Find out why the build is slow." },
+      ];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { tools?: unknown[] };
+        if (!body.tools || body.tools.length === 0) {
+          sawToolFreeRound = true;
+          return textResponse("Here is what I found.");
+        }
+        const round = fetchCalls++;
+        return toolCallSSE(`call-${round}`, "read", { path: `file-${round}.ts` });
+      });
+
+      const run = runAgentLoop(
+        {
+          llm: {
+            openaiApiKey: "test-key",
+            openaiBaseUrl: "https://llm.test",
+            openaiModel: "test-model",
+            contextWindow: 100_000,
+          },
+          history,
+          toolSchemas: [
+            {
+              type: "function",
+              function: {
+                name: "read",
+                description: "Read a file",
+                parameters: { type: "object", properties: { path: { type: "string" } } },
+              },
+            },
+          ],
+          hasTools: true,
+          sessionId,
+          abort: new AbortController(),
+          maxRounds: 80,
+          mode: "agent",
+        },
+        async () => ({ ok: true, message: "file contents" }),
+      );
+
+      return { run, history, sawToolFree: () => sawToolFreeRound, rounds: () => fetchCalls };
+    }
+
+    it("withholds tools to force an answer when nothing changes for many rounds", async () => {
+      const { run, sawToolFree } = investigateForever("session-wandering");
+      const result = await run;
+
+      // The model never repeated a call and never hit the round cap — only the
+      // absence of state change ends this turn.
+      expect(result.hitMaxRounds).toBe(false);
+      expect(sawToolFree()).toBe(true);
+      expect(result.content).toBe("Here is what I found.");
+      expect(result.rounds).toBeLessThan(30);
+    });
+
+    it("re-anchors on the goal once, not once per round", async () => {
+      const { run, history } = investigateForever("session-wandering-anchor");
+      await run;
+
+      const nudges = history.filter(
+        (message) =>
+          message.role === "system" && message.content.includes("Investigation is not the goal"),
+      );
+      expect(nudges).toHaveLength(1);
+    });
+
+    it("keeps a single live copy of the periodic reminder instead of stacking one every 4 rounds", async () => {
+      const reminder = getReminderInstructions("agent", { model: "test-model", baseUrl: "" });
+      expect(reminder).toBeTruthy();
+
+      const { run, history } = investigateForever("session-wandering-reminder");
+      await run;
+
+      const reminders = history.filter(
+        (message) => message.role === "system" && message.content.startsWith(reminder!),
+      );
+      expect(reminders).toHaveLength(1);
+    });
   });
 });
 

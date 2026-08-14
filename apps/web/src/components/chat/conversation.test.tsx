@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
+  computeMinimapLineShape,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
@@ -183,5 +184,36 @@ describe('scroll anchoring', () => {
     // Rounding jitter every animation frame would itself read as flicker.
     expect(scrollAnchorDelta(-120.2, -120)).toBe(0)
     expect(scrollAnchorDelta(-120, -120)).toBe(0)
+  })
+})
+
+describe('computeMinimapLineShape', () => {
+  it('turns a short paragraph into one partial-width line', () => {
+    const [width, ...rest] = computeMinimapLineShape('a'.repeat(32))
+
+    expect(width).toBeCloseTo(0.5)
+    expect(rest).toEqual([])
+  })
+
+  it('wraps a long paragraph into full-width lines plus a remainder', () => {
+    // 64 chars fill the rail, so 160 chars is two full lines and a half line.
+    expect(computeMinimapLineShape('a'.repeat(160))).toEqual([1, 1, 0.5])
+  })
+
+  it('keeps blank lines blank so paragraph gaps stay visible', () => {
+    expect(computeMinimapLineShape('hi\n\nthere')).toEqual([
+      expect.any(Number),
+      0,
+      expect.any(Number),
+    ])
+  })
+
+  it('gives text-less turns a stub so tool-only messages still show up', () => {
+    expect(computeMinimapLineShape('')).toEqual([0.3])
+    expect(computeMinimapLineShape('   \n  ')).toEqual([0.3])
+  })
+
+  it('bounds the shape of a huge paste', () => {
+    expect(computeMinimapLineShape('a'.repeat(2_000_000)).length).toBeLessThanOrEqual(4000)
   })
 })

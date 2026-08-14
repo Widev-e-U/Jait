@@ -20,6 +20,7 @@ import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js"
 import { computeContextUsage, estimateMessageTokens, estimateTokens } from "./token-estimator.js";
 import { ToolName } from "./tool-names.js";
 import { createSwarmRound, endSwarmRound } from "./swarm-mailbox.js";
+import { getSessionTodos, type TodoItem } from "./core/todo.js";
 
 /** Tool names that spawn a sub-agent — either the simplified "agent" core tool or legacy "agent.spawn". */
 function isAgentSpawnToolName(name: string): boolean {
@@ -1586,6 +1587,38 @@ const MAX_TOOL_CALLS_PER_ROUND = 64;
 const DEFAULT_TOOL_ROUND_CHECKPOINT = 64;
 const ABSOLUTE_TOOL_ROUND_BUDGET = 200;
 
+/**
+ * Consecutive rounds that only investigate — read-only tools, no plan step
+ * completed — before Jait re-anchors the model on the goal, and before it
+ * withholds tools for one round so the model has to answer.
+ *
+ * The duplicate-call and read-coverage guards below only fire when the model
+ * repeats itself. The more common "wanders off and never lands" failure never
+ * repeats a call: it reads one more file, greps one more term, opens one more
+ * directory, forever. Nothing about that is detectable per-call — only the
+ * absence of state change across many rounds gives it away.
+ */
+const CONVERGE_NUDGE_ROUND_STREAK = 12;
+const FORCE_ANSWER_ROUND_STREAK = 24;
+
+/**
+ * Renders the session's todo list as a compact plan snapshot for re-injection.
+ *
+ * The `todo` tool records the plan but nothing ever reads it back, so the plan
+ * only exists in the tool result that created it — the first thing compaction
+ * throws away. Re-injecting the live list keeps the destination in front of the
+ * model for the whole turn instead of only just after it wrote the plan.
+ */
+function renderPlanSnapshot(todos: TodoItem[]): string | null {
+  if (todos.length === 0) return null;
+  const completed = todos.filter((todo) => todo.status === "completed").length;
+  const lines = todos.map((todo) => {
+    const marker = todo.status === "completed" ? "x" : todo.status === "in-progress" ? "~" : " ";
+    return `[${marker}] ${todo.title}`;
+  });
+  return `Your current plan (${completed}/${todos.length} done):\n${lines.join("\n")}`;
+}
+
 function canonicalizeToolCallValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalizeToolCallValue);
   if (value && typeof value === "object") {
@@ -2289,14 +2322,64 @@ function compactCandidatesToTarget(
  * get touched — and even then only down to the much larger `RECENT_TOOL_RESULT_MIN_CHARS`
  * floor, so content the model just fetched stays useful instead of being erased.
  */
+/**
+ * Replaces older file reads that a later read fully covers with a one-line stub.
+ *
+ * When the model reads the same file twice, both copies stay in history and both
+ * count against the budget — so the duplicate content is itself a cause of the
+ * compaction that deletes the content and provokes the next re-read. Dropping
+ * the superseded copy is lossless: the newer read holds the same lines, in full,
+ * and is the one recency protection keeps. Runs before any lossy pass.
+ */
+function dropSupersededReadResults(history: AgentMessage[]): boolean {
+  interface ReadResult { index: number; path: string; startLine: number; endLine: number }
+
+  const reads: ReadResult[] = [];
+  for (const [index, message] of history.entries()) {
+    if (message.role !== "tool" || message.content.length <= COMPACTED_TOOL_RESULT_MIN_CHARS) continue;
+    let parsed: { ok?: boolean; data?: unknown };
+    try {
+      parsed = JSON.parse(message.content) as { ok?: boolean; data?: unknown };
+    } catch {
+      continue;
+    }
+    const data = parsed.data as
+      | { type?: unknown; path?: unknown; startLine?: unknown; endLine?: unknown }
+      | undefined;
+    if (!data || data.type !== "file" || typeof data.path !== "string") continue;
+    if (typeof data.startLine !== "number" || typeof data.endLine !== "number") continue;
+    reads.push({ index, path: data.path, startLine: data.startLine, endLine: data.endLine });
+  }
+
+  let dropped = false;
+  for (const [position, read] of reads.entries()) {
+    const superseded = reads.slice(position + 1).some((later) =>
+      later.path === read.path && later.startLine <= read.startLine && later.endLine >= read.endLine
+    );
+    if (!superseded) continue;
+    history[read.index]!.content = JSON.stringify({
+      ok: true,
+      message:
+        `${read.path} — lines ${read.startLine}-${read.endLine}; this result was re-read later in the ` +
+        `conversation and the newer copy is below. Use that one; do not read this range again.`,
+    });
+    dropped = true;
+  }
+  return dropped;
+}
+
 function compactToolResultsToBudget(
   history: AgentMessage[],
   toolSchemas: unknown[],
   contextWindow: number,
 ): boolean {
   const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
+  if (computeContextUsage(history, toolSchemas, contextWindow).total <= targetTokens) return false;
+
+  // Lossless first: reclaim duplicate copies before shortening anything.
+  const deduped = dropSupersededReadResults(history);
   const usage = computeContextUsage(history, toolSchemas, contextWindow);
-  if (usage.total <= targetTokens) return false;
+  if (usage.total <= targetTokens) return deduped;
 
   const toolIndices = history
     .map((message, index) => ({ message, index }))
@@ -2309,17 +2392,30 @@ function compactToolResultsToBudget(
   const older = compactCandidatesToTarget(
     history, olderCandidates, toolSchemas, contextWindow, targetTokens, COMPACTED_TOOL_RESULT_MIN_CHARS,
   );
-  if (older.total <= targetTokens) return older.compacted;
+  if (older.total <= targetTokens) return deduped || older.compacted;
 
   // Compacting every older result wasn't enough — let the protected recent tier give
   // some room too, but only down to its much higher floor.
   const recent = compactCandidatesToTarget(
     history, recentCandidates, toolSchemas, contextWindow, targetTokens, RECENT_TOOL_RESULT_MIN_CHARS,
   );
-  return older.compacted || recent.compacted;
+  return deduped || older.compacted || recent.compacted;
 }
 
-const ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP = 3;
+/**
+ * Tool rounds inside the active turn that are never collapsed into a summary.
+ *
+ * This is the floor that decides how long a file the model read stays readable.
+ * Collapsing deletes the tool result outright and replaces it with a ~600-char
+ * summary line, so anything past this window is gone — not shortened, gone —
+ * and the model's only way back to that content is to read the file again.
+ * A window of 3 (the previous value) meant a file read four rounds ago had to
+ * be re-read, which is the re-read treadmill: re-reading regrows the context
+ * that triggered the collapse, which collapses again, which forces another
+ * re-read. The floor-protected `compactToolResultsToBudget` pass exists to
+ * shrink this content gracefully instead, so it should be doing the work.
+ */
+const ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP = 8;
 const ACTIVE_TURN_SUMMARY_SOURCE_MESSAGES = 24;
 
 /**
@@ -2331,8 +2427,19 @@ const ACTIVE_TURN_SUMMARY_SOURCE_MESSAGES = 24;
  * Collapse the completed prefix of the active turn into a compact progress
  * summary while keeping the latest tool rounds verbatim. The original user
  * request remains in history, so the summary only needs to preserve recent work.
+ *
+ * Collapsing is destructive and irreversible, so it is budget-driven: it only
+ * removes as many of the oldest rounds as it takes to get back under the target,
+ * and does nothing at all when the history already fits. Without the budget
+ * check this ran on every round once usage crossed the trigger once — cutting
+ * the turn back to the keep-window even when the preceding pruning passes had
+ * already freed enough space.
  */
-function compactActiveTurnHistory(history: AgentMessage[]): boolean {
+function compactActiveTurnHistory(
+  history: AgentMessage[],
+  toolSchemas: unknown[] = [],
+  contextWindow = 0,
+): boolean {
   let lastUserIndex = -1;
   for (let index = history.length - 1; index >= 0; index--) {
     if (history[index]!.role === "user") {
@@ -2351,7 +2458,25 @@ function compactActiveTurnHistory(history: AgentMessage[]): boolean {
   }
   if (toolRoundStarts.length <= ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP) return false;
 
-  const keepFromIndex = toolRoundStarts[toolRoundStarts.length - ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP]!;
+  const removableRounds = toolRoundStarts.length - ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP;
+  const targetTokens = contextWindow > 0 ? Math.floor(contextWindow * PRUNE_TARGET_RATIO) : 0;
+  let roundsToDrop = removableRounds;
+
+  if (targetTokens > 0) {
+    const tokensToFree = computeContextUsage(history, toolSchemas, contextWindow).total - targetTokens;
+    if (tokensToFree <= 0) return false;
+    let freed = 0;
+    roundsToDrop = 0;
+    while (roundsToDrop < removableRounds && freed < tokensToFree) {
+      const from = roundsToDrop === 0 ? lastUserIndex + 1 : toolRoundStarts[roundsToDrop]!;
+      const to = toolRoundStarts[roundsToDrop + 1]!;
+      for (let index = from; index < to; index++) freed += estimateMessageTokens(history[index]!);
+      roundsToDrop++;
+    }
+    if (roundsToDrop === 0) return false;
+  }
+
+  const keepFromIndex = toolRoundStarts[roundsToDrop]!;
   const removeCount = keepFromIndex - lastUserIndex - 1;
   if (removeCount <= 0) return false;
 
@@ -2476,6 +2601,16 @@ export async function runAgentLoop(
   let swarmUndelegatedReadCount = 0;
   /** Swarm mode: has the forced-delegation nudge already been sent? */
   let swarmDelegationNudged = false;
+  /** The periodic reminder currently in history, so the next one replaces it. */
+  let periodicReminderPrompt: AgentMessage | null = null;
+  /** The convergence directive currently in history, removed once progress resumes. */
+  let convergePrompt: AgentMessage | null = null;
+  /** Consecutive rounds that only investigated and completed no plan step. */
+  let investigationOnlyStreak = 0;
+  /** Completed todo count at the end of the previous round, to detect plan movement. */
+  let completedTodoCount = getSessionTodos(sessionId).filter((todo) => todo.status === "completed").length;
+  /** When set, the next round is sent without tools so the model has to answer. */
+  let forceFinalAnswer = false;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -2516,8 +2651,8 @@ export async function runAgentLoop(
         if (checkpointIndex >= 0) history.splice(checkpointIndex, 1);
       }
       if (llm.contextWindow > 0) {
-        compactActiveTurnHistory(history);
         compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
+        compactActiveTurnHistory(history, activeSchemas, llm.contextWindow);
       }
       autonomousCheckpointPrompt = {
         role: "system",
@@ -2546,11 +2681,26 @@ export async function runAgentLoop(
     }
 
     // ── Periodic reminder (every 4 rounds) to reinforce good agent behaviour ──
+    // The previous copy is removed first. Appending instead stacked an
+    // identical reminder every 4 rounds: pure context bloat, and — since every
+    // resolver's reminder amounts to "keep going until the task is resolved" —
+    // a pile of standing instructions to keep calling tools, which is the last
+    // pressure a model circling the same ground needs. One live copy, carrying
+    // the current plan so the goal survives compaction, replaces the stack.
     if (round > 0 && round % 4 === 0 && mode !== "ask") {
       const modelEndpoint: ModelEndpoint = { model: llm.openaiModel, baseUrl: "" };
       const reminder = getReminderInstructions(mode, modelEndpoint);
       if (reminder) {
-        history.push({ role: "system", content: reminder });
+        if (periodicReminderPrompt) {
+          const reminderIndex = history.indexOf(periodicReminderPrompt);
+          if (reminderIndex >= 0) history.splice(reminderIndex, 1);
+        }
+        const planSnapshot = renderPlanSnapshot(getSessionTodos(sessionId));
+        periodicReminderPrompt = {
+          role: "system",
+          content: planSnapshot ? `${reminder}\n\n${planSnapshot}` : reminder,
+        };
+        history.push(periodicReminderPrompt);
       }
     }
 
@@ -2566,8 +2716,17 @@ export async function runAgentLoop(
         const pruned = await pruneHistory(history, contextWindow, activeSchemas, {
           summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
         });
-        const activeTurnCompacted = compactActiveTurnHistory(history);
+        // Shrink tool payloads before collapsing whole rounds. Both free space,
+        // but compaction keeps every result present and readable down to a
+        // floor, while collapsing deletes results outright — so running the
+        // destructive pass first threw away file contents that the recoverable
+        // pass could have kept, and the model had to go read them again.
         const compactedToolResults = compactToolResultsToBudget(
+          history,
+          activeSchemas,
+          contextWindow,
+        );
+        const activeTurnCompacted = compactActiveTurnHistory(
           history,
           activeSchemas,
           contextWindow,
@@ -2590,9 +2749,16 @@ export async function runAgentLoop(
     const isOllama = llm.backend === "ollama";
     const roundQuarantinedToolNames = quarantinedToolNames;
     quarantinedToolNames = new Set<string>();
-    const roundToolSchemas = roundQuarantinedToolNames.size > 0
-      ? activeSchemas.filter((schema) => !roundQuarantinedToolNames.has(fromOpenAIName(schema.function.name)))
-      : activeSchemas;
+    // A round sent without any tools cannot produce another tool call, so the
+    // model answers from what it has and the turn ends. This is the only hard
+    // stop for a turn that would otherwise investigate forever.
+    const answerOnlyRound = forceFinalAnswer;
+    forceFinalAnswer = false;
+    const roundToolSchemas = answerOnlyRound
+      ? []
+      : roundQuarantinedToolNames.size > 0
+        ? activeSchemas.filter((schema) => !roundQuarantinedToolNames.has(fromOpenAIName(schema.function.name)))
+        : activeSchemas;
     const reqBody: Record<string, unknown> = isOllama
       ? {
           model: llm.openaiModel,
@@ -2715,8 +2881,8 @@ export async function runAgentLoop(
             await pruneHistory(history, llm.contextWindow, activeSchemas, {
               summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
             });
-            compactActiveTurnHistory(history);
             compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
+            compactActiveTurnHistory(history, activeSchemas, llm.contextWindow);
           }
 
           // Continue this round again (decrement round counter so we don't consume a round)
@@ -3520,6 +3686,67 @@ export async function runAgentLoop(
               }
             }
           }
+        }
+      }
+
+      // ── Investigation-without-progress detection ──
+      // Everything above catches a model repeating itself. This catches the
+      // opposite shape: a model that never repeats a call and never lands
+      // either — one more file read, one more search, round after round, with
+      // nothing edited, nothing run, and no plan step closed. Escalate in two
+      // stages so a genuinely long investigation isn't cut off at the first
+      // sign of quiet: re-anchor on the goal first, force an answer only if
+      // the model keeps circling after that.
+      {
+        const investigationOnlyRound = toolCalls.every((toolCall) =>
+          ASK_MODE_TOOLS.has(fromOpenAIName(toolCall.function.name)),
+        );
+        const completedNow = getSessionTodos(sessionId)
+          .filter((todo) => todo.status === "completed").length;
+        const planAdvanced = completedNow > completedTodoCount;
+        completedTodoCount = completedNow;
+
+        if (investigationOnlyRound && !planAdvanced) {
+          investigationOnlyStreak++;
+        } else {
+          investigationOnlyStreak = 0;
+          if (convergePrompt) {
+            const convergeIndex = history.indexOf(convergePrompt);
+            if (convergeIndex >= 0) history.splice(convergeIndex, 1);
+            convergePrompt = null;
+          }
+        }
+
+        const planSnapshot = renderPlanSnapshot(getSessionTodos(sessionId));
+        if (investigationOnlyStreak >= FORCE_ANSWER_ROUND_STREAK) {
+          forceFinalAnswer = true;
+          investigationOnlyStreak = 0;
+          const message =
+            `No state change in ${FORCE_ANSWER_ROUND_STREAK} consecutive rounds — withholding tools for one round to force an answer`;
+          log.warn(`${message} for session ${sessionId}`);
+          onEvent?.({ type: "steering", message });
+          history.push({
+            role: "system",
+            content:
+              `You have spent ${FORCE_ANSWER_ROUND_STREAK} consecutive rounds gathering information without changing anything or completing a plan step. ` +
+              `No tools are available on your next response. Answer the user now using the evidence already in this conversation: ` +
+              `state what you found, what you concluded, and — if the task is unfinished — exactly what remains and what is blocking it.` +
+              (planSnapshot ? `\n\n${planSnapshot}` : ""),
+          });
+        } else if (investigationOnlyStreak >= CONVERGE_NUDGE_ROUND_STREAK && !convergePrompt) {
+          const message =
+            `No state change in ${investigationOnlyStreak} consecutive rounds — re-anchoring the model on the goal`;
+          log.warn(`${message} for session ${sessionId}`);
+          onEvent?.({ type: "steering", message });
+          convergePrompt = {
+            role: "system",
+            content:
+              `The last ${investigationOnlyStreak} rounds were all information gathering — nothing was edited, no command was run, and no plan step was completed. ` +
+              `Investigation is not the goal; finishing the user's request is. On your next response, commit: take the concrete action that moves the task forward, ` +
+              `or give the user your answer. If you cannot decide what to do next, say so and explain what is blocking you rather than reading more.` +
+              (planSnapshot ? `\n\n${planSnapshot}` : ""),
+          };
+          history.push(convergePrompt);
         }
       }
 

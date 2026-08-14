@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { Children, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
@@ -40,9 +40,10 @@ interface ConversationProps {
    */
   scrollToMessageId?: string | null
   /**
-   * Show a VSCode-style minimap scrollbar on the right edge (desktop only).
-   * Blue bars mark user messages, muted bars mark agent messages. Clicking or
-   * dragging the rail scrolls the conversation.
+   * Show a VSCode/Rider-style content-preview minimap on the right edge
+   * (desktop only). Each text line of the conversation is drawn as one thin
+   * line — blue for user turns, muted for agent turns — so the rail reads like
+   * a shrunken preview of the transcript. Clicking or dragging it scrolls.
    */
   showMinimap?: boolean
 }
@@ -53,6 +54,8 @@ const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
 const TOUCH_DETACH_THRESHOLD_PX = 4
 const ESTIMATE_TEXT_LIMIT = 12_000
+/** Stable identity so an absent `messageContents` doesn't rebuild the minimap. */
+const EMPTY_MESSAGE_CONTENTS: string[] = []
 export const INITIAL_CONVERSATION_SCROLL_OFFSET = Number.MAX_SAFE_INTEGER
 
 export function positionConversationAtBottom(
@@ -726,14 +729,14 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   }, [restoreScrollAnchor, scrollToBottom, updateBottomState])
 
   return (
-    <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
+    <AIConversation className={cn('relative flex flex-1 overflow-hidden', className)}>
       {loading && !hasContent ? (
         <ConversationPositioningSkeleton label={loadingLabel} />
       ) : (
         <div
           ref={scrollRef}
           onScroll={updateBottomState}
-          className="h-full overflow-y-auto"
+          className="h-full min-w-0 flex-1 overflow-y-auto scrollbar-none"
           style={{
             ...MOBILE_SCROLL_CONTAINMENT_STYLE,
             visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
@@ -813,6 +816,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           virtualizer={virtualizer}
           scrollRef={scrollRef}
           roles={minimapRoles}
+          texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
         />
       )}
     </AIConversation>
@@ -824,16 +828,52 @@ interface ConversationMinimapProps {
   scrollRef: RefObject<HTMLDivElement | null>
   /** Per-child role ('user' | 'agent'), index-aligned with the virtualizer items. */
   roles: Array<'user' | 'agent'>
+  /** Per-child raw text, index-aligned with the virtualizer items. */
+  texts: string[]
 }
 
-const MINIMAP_BAR_MIN_PX = 3
+/** Vertical distance between two preview lines, and how tall each line paints. */
+const MINIMAP_ROW_PITCH_PX = 3
+const MINIMAP_ROW_HEIGHT_PX = 2
+/** Characters that count as one full-width line of the preview. */
+const MINIMAP_CHARS_PER_LINE = 64
+/** Never let a non-empty line vanish entirely. */
+const MINIMAP_MIN_LINE_RATIO = 0.12
+/** Ceiling on the line shape we keep per message, so one huge paste can't blow up memory. */
+const MINIMAP_MAX_LINES_PER_MESSAGE = 4000
+/** Shape used for messages with no text of their own (tool-only turns, queue items). */
+const MINIMAP_EMPTY_SHAPE = [0.3]
 
 /**
- * VSCode-style minimap scrollbar for the conversation. Blue bars mark user
- * messages on the right, muted bars mark agent messages on the left. Clicking
- * or dragging the rail scrolls the conversation to that position.
+ * Break a message into the relative widths of its rendered text lines: 1 means
+ * the line fills the rail, 0.25 means a quarter of it. Soft-wrapping is
+ * approximated by chopping each paragraph into `MINIMAP_CHARS_PER_LINE` chunks,
+ * which costs one `split` per message instead of a real layout pass — the whole
+ * point of drawing lines rather than shrunken text.
  */
-function ConversationMinimap({ virtualizer, scrollRef, roles }: ConversationMinimapProps) {
+export function computeMinimapLineShape(text: string): number[] {
+  if (!text.trim()) return MINIMAP_EMPTY_SHAPE
+  const widths: number[] = []
+  for (const paragraph of text.split('\n')) {
+    let remaining = paragraph.length
+    while (remaining > MINIMAP_CHARS_PER_LINE && widths.length < MINIMAP_MAX_LINES_PER_MESSAGE) {
+      widths.push(1)
+      remaining -= MINIMAP_CHARS_PER_LINE
+    }
+    if (widths.length >= MINIMAP_MAX_LINES_PER_MESSAGE) break
+    // A blank line stays blank — that gap is what makes the preview readable.
+    widths.push(remaining === 0 ? 0 : Math.max(remaining / MINIMAP_CHARS_PER_LINE, MINIMAP_MIN_LINE_RATIO))
+  }
+  return widths.length > 0 ? widths : MINIMAP_EMPTY_SHAPE
+}
+
+/**
+ * VSCode/Rider-style content-preview minimap for the conversation. Instead of
+ * one bar per message it paints one thin line per line of text — blue for user
+ * turns, muted for agent turns — so the rail looks like the transcript seen
+ * from very far away. Clicking or dragging it scrolls to that position.
+ */
+function ConversationMinimap({ virtualizer, scrollRef, roles, texts }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -856,33 +896,95 @@ function ConversationMinimap({ virtualizer, scrollRef, roles }: ConversationMini
     return () => el.removeEventListener('scroll', onScroll)
   }, [scrollRef])
 
+  // Reads (and populates) the virtualizer's measurement cache below.
   const totalSize = virtualizer.getTotalSize()
+
+  // Line shapes are derived once per message and reused until its text changes,
+  // so a streaming turn only re-splits its own content, not the whole history.
+  const shapeCacheRef = useRef(new Map<number, { text: string; widths: number[] }>())
+
+  // The rail is walked one painted row at a time rather than one message at a
+  // time: the number of rows is fixed by the rail's height, so the DOM stays
+  // bounded no matter how long the conversation is, and every row maps back to
+  // whatever message covers that document offset.
+  //
+  // Offsets come from the layout the virtualizer already maintains.
+  // `measurementsCache` covers the *whole* conversation — real measured heights
+  // for items that have rendered, estimates for the rest — and is updated in
+  // place as content streams in, so the rail stays live without a second height
+  // pass per render. Deriving from the cache rather than from
+  // `getVirtualItems()` is also what keeps the full history on the rail: virtual
+  // items only ever span the visible window, which is why the old bars used to
+  // flash in and appear to vanish while scrolling.
+  const rows = useMemo(() => {
+    if (totalSize <= 0 || viewportHeight <= 0) return []
+    const measurements = virtualizer.measurementsCache
+    const cache = shapeCacheRef.current
+    const shapeAt = (index: number) => {
+      const text = texts[index] ?? ''
+      const cached = cache.get(index)
+      if (cached && cached.text === text) return cached.widths
+      const widths = computeMinimapLineShape(text)
+      cache.set(index, { text, widths })
+      return widths
+    }
+
+    const out: MinimapRow[] = []
+    const rowCount = Math.floor(viewportHeight / MINIMAP_ROW_PITCH_PX)
+    let index = 0
+    // Long conversations pack several messages into a single row. A user turn
+    // swallowed that way still colours the row it fell into, so the blue
+    // markers that make the rail navigable never disappear.
+    let skippedUser = false
+    for (let row = 0; row < rowCount; row++) {
+      const y = row * MINIMAP_ROW_PITCH_PX
+      const docY = (y / viewportHeight) * totalSize
+      while (index + 1 < measurements.length) {
+        const next = measurements[index + 1]
+        if (!next || next.start > docY) break
+        if (roles[index] === 'user') skippedUser = true
+        index++
+      }
+      const measurement = measurements[index]
+      if (!measurement) break
+      const isUser = roles[index] === 'user' || skippedUser
+      skippedUser = false
+      const widths = shapeAt(index)
+      const progress = measurement.size > 0 ? (docY - measurement.start) / measurement.size : 0
+      const line = Math.min(widths.length - 1, Math.max(0, Math.floor(progress * widths.length)))
+      const width = widths[line] ?? 0
+      if (width <= 0) continue
+      out.push({ y, width, isUser })
+    }
+    return out
+  }, [roles, texts, totalSize, viewportHeight, virtualizer])
+
   if (totalSize <= 0 || viewportHeight <= 0) return null
 
-  const trackHeight = viewportHeight
   const viewportRatio = Math.min(viewportHeight / totalSize, 1)
   const viewportTopRatio = Math.min(scrollTop / totalSize, 1 - viewportRatio)
 
-  const handlePointer = (clientY: number) => {
+  // Map a pointer position on the rail back to a scroll offset. Measured
+  // against the rail itself (not the scroll container) so the mapping matches
+  // where the bars are actually painted.
+  const handlePointer = (rail: HTMLElement, clientY: number) => {
     const el = scrollRef.current
     if (!el) return
-    const rect = el.getBoundingClientRect()
-    const ratio = (rect.height > 0 ? (clientY - rect.top) / rect.height : 0)
-    el.scrollTop = ratio * totalSize
+    const rect = rail.getBoundingClientRect()
+    const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0
+    el.scrollTop = Math.min(Math.max(ratio, 0), 1) * totalSize
   }
-
-  const items = virtualizer.getVirtualItems()
 
   return (
     <div
       onPointerDown={(e) => {
         e.preventDefault()
-        handlePointer(e.clientY)
+        handlePointer(e.currentTarget, e.clientY)
       }}
       onPointerMove={(e) => {
-        if (e.buttons > 0) handlePointer(e.clientY)
+        if (e.buttons > 0) handlePointer(e.currentTarget, e.clientY)
       }}
-      className="absolute right-0 top-0 bottom-0 z-20 w-3.5 cursor-pointer select-none rounded-l-md border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
+      className="relative h-full w-4 shrink-0 cursor-pointer select-none border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
       role="slider"
       aria-label="Conversation minimap"
     >
@@ -894,21 +996,41 @@ function ConversationMinimap({ virtualizer, scrollRef, roles }: ConversationMini
           height: `${Math.max(viewportRatio * 100, 2)}%`,
         }}
       />
-      {items.map((item) => {
-        const isUser = roles[item.index] === 'user'
-        const top = (item.start / totalSize) * trackHeight
-        const height = Math.max((item.size / totalSize) * trackHeight, MINIMAP_BAR_MIN_PX)
-        return (
-          <div
-            key={item.key}
-            className={cn(
-              'absolute rounded-full',
-              isUser ? 'right-0 bg-blue-500/80' : 'left-0 bg-muted-foreground/50',
-            )}
-            style={{ top, height, width: '60%' }}
-          />
-        )
-      })}
+      <MinimapLines rows={rows} />
     </div>
   )
 }
+
+interface MinimapRow {
+  /** Offset of this line from the top of the rail, in px. */
+  y: number
+  /** Line length as a fraction of the rail's usable width. */
+  width: number
+  isUser: boolean
+}
+
+/**
+ * Split out and memoized: scrolling re-renders the minimap on every scroll
+ * event to move the viewport indicator, but the preview lines themselves only
+ * change when the conversation's layout or content does.
+ */
+const MinimapLines = memo(function MinimapLines({ rows }: { rows: MinimapRow[] }) {
+  return (
+    <>
+      {rows.map((row) => (
+        <div
+          key={row.y}
+          className={cn(
+            'absolute left-[2px] rounded-[1px]',
+            row.isUser ? 'bg-blue-500/80' : 'bg-muted-foreground/45',
+          )}
+          style={{
+            top: row.y,
+            height: MINIMAP_ROW_HEIGHT_PX,
+            width: `calc(${(row.width * 100).toFixed(1)}% - 4px)`,
+          }}
+        />
+      ))}
+    </>
+  )
+})
