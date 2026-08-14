@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.713](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.713) — 2026-08-14
+- feat(gateway): stop the agent loop from stacking a fresh "keep going" reminder every 4 rounds — one live copy now replaces the previous one and re-injects the session's todo list, so the goal survives context compaction instead of being thrown away with the plan-creating tool result
+- feat(gateway): detect investigation-without-progress (rounds that only read/search and complete no plan step) — re-anchor the model on the goal after 12 such rounds, and withhold tools for one round after 24 so the model has to answer instead of circling forever
+- feat(gateway): drop superseded file reads from history before any lossy compaction, so duplicate content stops being the cause of the compaction that forces the next re-read; run the recoverable tool-result compaction before the destructive active-turn collapse, and make the collapse budget-driven so it only removes as many oldest rounds as needed
+- feat(gateway): raise the active-turn keep window from 3 to 8 rounds so recently read file contents stay readable instead of being collapsed into summaries that force re-reads
+- feat(web): upgrade the conversation minimap from one bar per message to a VSCode/Rider-style content preview — one thin line per text line, blue for user turns, muted for agent turns, derived from the virtualizer's measurement cache so the full history stays on the rail while scrolling; memoize the preview lines and cache per-message line shapes so streaming re-splits only the message that changed
+
 ## [v0.1.711](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.711) — 2026-08-13
 - fix(web): show editor mode as a read-only status glyph beside each project instead of a toggle button, so the icon tells the user whether editor mode is active; the sidebar editor button remains the activation control
 - fix(web): route chat archiving through the confirmation dialog so it always asks before archiving
