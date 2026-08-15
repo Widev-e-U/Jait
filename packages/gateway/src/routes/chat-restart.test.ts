@@ -238,4 +238,105 @@ describe("chat restart from message", () => {
 
     await app.close();
   });
+
+  it("keeps earlier answers when system-notice rows sit between turns", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("restart-user4", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Restart Session 4" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const now = new Date("2026-04-25T00:00:00.000Z");
+    const at = (offset: number) => new Date(now.getTime() + offset).toISOString();
+
+    // System-notice rows (background terminal commands) are persisted and
+    // rendered, but hydration drops them from the in-memory history. Resolving
+    // the edit target against that shorter list while deleting from the full
+    // persisted list shifted the cut earlier by one row per notice — silently
+    // destroying the previous assistant answer.
+    db.insert(messages).values([
+      { id: "m1", sessionId: session.id, role: "user", content: "first", createdAt: at(1) },
+      { id: "m2", sessionId: session.id, role: "system", content: "build finished", createdAt: at(2) },
+      { id: "m3", sessionId: session.id, role: "system", content: "tests finished", createdAt: at(3) },
+      { id: "m4", sessionId: session.id, role: "assistant", content: "answer one", createdAt: at(4) },
+      { id: "m5", sessionId: session.id, role: "user", content: "second", createdAt: at(5) },
+      { id: "m6", sessionId: session.id, role: "assistant", content: "answer two", createdAt: at(6) },
+    ]).run();
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/restart-from`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { messageFromEnd: 1, expectedContent: "second" },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const remaining = db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, session.id))
+      .orderBy(messages.createdAt)
+      .all();
+    expect(remaining.map((row) => row.id)).toEqual(["m1", "m2", "m3", "m4"]);
+
+    await app.close();
+  });
+
+  it("deletes the edited user message when a cancelled turn persisted a thinking-only answer", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("restart-user5", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Restart Session 5" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const now = new Date("2026-04-25T00:00:00.000Z");
+    const at = (offset: number) => new Date(now.getTime() + offset).toISOString();
+
+    // Stopping a turn before any text streams persists an assistant row that
+    // carries only thinking/segments — no content and no tool calls. It is a
+    // real, rendered bubble, so it occupies a slot in the client's index space;
+    // excluding it from the deletion list shifted the cut one row late, leaving
+    // the edited user message behind to reappear as a duplicate on reload.
+    db.insert(messages).values([
+      { id: "m1", sessionId: session.id, role: "user", content: "first", createdAt: at(1) },
+      {
+        id: "m2",
+        sessionId: session.id,
+        role: "assistant",
+        content: "",
+        segments: JSON.stringify([{ type: "thinking", content: "weighing options" }]),
+        thinking: "weighing options",
+        createdAt: at(2),
+      },
+      { id: "m3", sessionId: session.id, role: "user", content: "second", createdAt: at(3) },
+    ]).run();
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${session.id}/restart-from`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { messageFromEnd: 0, expectedContent: "second" },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const remaining = db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, session.id))
+      .orderBy(messages.createdAt)
+      .all();
+    expect(remaining.map((row) => row.id)).toEqual(["m1", "m2"]);
+
+    await app.close();
+  });
 });

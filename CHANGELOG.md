@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.717](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.717) — 2026-08-15
+- fix(gateway): stop editing or resending a user message from silently eating the assistant answers around it — `restart-from` resolved the target against the in-memory history but deleted from the `messages` table, two lists that drift apart (hydration drops system notices, a live turn pushes one entry per tool round, a cancelled turn can persist a row that was never pushed), so an edit either deleted a preceding answer or failed to delete the edited row and left a duplicate; target resolution and deletion now both run on the persisted rows the client's ids actually come from, and the in-memory history is re-hydrated from what survived instead of index-sliced
+
 ## [v0.1.716](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.716) — 2026-08-15
 - fix(web): stop the conversation from snapping back to the bottom right after a minimap scrub — the minimap moves the container by writing `scrollTop`, which the wheel/touch handlers never see, so the scroll handler re-armed stick-to-bottom and the 500ms bottom-sync poll dragged the view back to the end; a scrub now detaches exactly like scrolling by hand, and drops a stale scroll anchor instead of letting the next reflow pull the view back to where the scrub started
 

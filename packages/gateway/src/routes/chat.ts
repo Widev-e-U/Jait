@@ -22,7 +22,7 @@ import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable } from "../db/schema.js";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { requireAuth } from "../security/http-auth.js";
@@ -1541,6 +1541,20 @@ function writeMessageContextMetadata(db: JaitDB, messageId: string, contextFlow?
     .run();
 }
 
+/**
+ * The single rule for which persisted rows are part of the UI transcript, and
+ * therefore what a message id's numeric suffix counts. Every consumer of that
+ * index space — the messages window the client renders from, and the
+ * `restart-from` deleter that acts on ids the client sends back — must filter
+ * identically, or an edit resolves against one list and deletes from another.
+ * Tool rows are internal LLM plumbing and are never rendered; everything else,
+ * including assistant rows that hold only thinking/segments from a cancelled
+ * turn, is a real bubble and must keep its slot.
+ */
+function visiblePersistedRows(sessionId: string) {
+  return and(eq(messagesTable.sessionId, sessionId), ne(messagesTable.role, "tool"));
+}
+
 function persistedMessageWindow(
   db: JaitDB,
   sessionId: string,
@@ -1550,7 +1564,7 @@ function persistedMessageWindow(
   const totalRow = db
     .select({ count: sql<number>`count(*)` })
     .from(messagesTable)
-    .where(eq(messagesTable.sessionId, sessionId))
+    .where(visiblePersistedRows(sessionId))
     .get();
   const total = Number(totalRow?.count ?? 0);
   const end = typeof before === "number" && Number.isFinite(before) && before >= 0 && before < total
@@ -1570,7 +1584,7 @@ function persistedMessageWindow(
       })
       .from(messagesTable)
       .leftJoin(messageContextMetadataTable, eq(messageContextMetadataTable.messageId, messagesTable.id))
-      .where(eq(messagesTable.sessionId, sessionId))
+      .where(visiblePersistedRows(sessionId))
       .orderBy(messagesTable.createdAt, messagesTable.id)
       .limit(end - start)
       .offset(start)
@@ -3886,7 +3900,30 @@ export function registerChatRoutes(
 
     hydrateSession(sessionId);
     const history = sessionHistory.get(sessionId) ?? [];
-    const visibleEntries = buildVisibleHistoryEntries(sessionId, history);
+    // Resolve the edit target against the *persisted* rows whenever a database
+    // is present. The client's message ids/indexes come from
+    // `persistedMessageWindow`, which numbers every row in `messages` — while
+    // the in-memory history is a different list entirely: hydration drops
+    // system-notice rows, a live turn pushes one entry per tool round, and a
+    // cancelled turn can persist a row that was never pushed at all. Resolving
+    // on one list and deleting from the other made the two indexes drift, so a
+    // single edit either deleted a preceding assistant answer (drift one way)
+    // or failed to delete the edited user row, leaving a duplicate (the other).
+    const persistedRows = db
+      ? db
+        .select({ id: messagesTable.id, role: messagesTable.role, content: messagesTable.content })
+        .from(messagesTable)
+        .where(visiblePersistedRows(sessionId))
+        .orderBy(messagesTable.createdAt, messagesTable.id)
+        .all()
+      : [];
+    const visibleEntries: Array<{ id: string; role: string; content: string; historyIndex?: number }> = db
+      ? persistedRows.map((row, index) => ({
+        id: `${sessionId}-${index}`,
+        role: row.role,
+        content: typeof row.content === "string" ? row.content : String(row.content ?? ""),
+      }))
+      : buildVisibleHistoryEntries(sessionId, history);
     let targetVisibleIndex = visibleEntries.findIndex((m) => m.id === messageId);
     if (
       targetVisibleIndex === -1 &&
@@ -3956,37 +3993,38 @@ export function registerChatRoutes(
       await memoryService.flushPreCompaction(sessionId, toFlush);
     }
 
-    const truncatedHistory = history.slice(0, target.historyIndex);
-    sessionHistory.set(sessionId, truncatedHistory);
-
     if (db) {
-      const rows = db
-        .select({ id: messagesTable.id, role: messagesTable.role, content: messagesTable.content, toolCalls: messagesTable.toolCalls })
+      // `targetVisibleIndex` indexes the visible persisted rows directly, so the
+      // target row's id is exact. Delete from that row onward across *all* rows
+      // (including any non-visible ones interleaved after it) so nothing from the
+      // replayed turns is orphaned behind the truncation point.
+      const targetRowId = persistedRows[targetVisibleIndex]!.id;
+      const allRows = db
+        .select({ id: messagesTable.id })
         .from(messagesTable)
         .where(eq(messagesTable.sessionId, sessionId))
         .orderBy(messagesTable.createdAt, messagesTable.id)
         .all();
-      // The in-memory historyIndex includes the leading system message and any
-      // tool messages, which are NOT persisted to the messages table. Deleting DB
-      // rows by `historyIndex - 1` therefore misaligns with the actual rows and
-      // can leave the edited user message (and trailing turns) behind — so on the
-      // next snapshot reload the original message reappears in context.
-      // Instead, filter persisted rows the same way visible entries are built
-      // (skip tool rows and empty assistant rows) so they map 1:1 to the visible
-      // entries, then delete from the target's visible index onward.
-      const persistedVisibleRows = rows.filter(
-        (r) => r.role !== "tool" && !(r.role === "assistant" && !r.content && !r.toolCalls),
-      );
-      const rowsToDelete = persistedVisibleRows.slice(targetVisibleIndex);
-      for (const row of rowsToDelete) {
+      const cutoff = allRows.findIndex((row) => row.id === targetRowId);
+      for (const row of allRows.slice(cutoff < 0 ? allRows.length : cutoff)) {
         db.delete(messagesTable).where(eq(messagesTable.id, row.id)).run();
       }
+      // Rebuild the in-memory history from what actually survived in the
+      // database instead of index-slicing the (possibly drifted) live copy.
+      // This is also the only point where a divergence introduced earlier in
+      // the session — e.g. by a cancelled turn — gets corrected.
+      sessionHistory.delete(sessionId);
+      hydrateSession(sessionId);
+    } else {
+      sessionHistory.set(sessionId, history.slice(0, target.historyIndex ?? 0));
     }
+    const truncatedHistory = sessionHistory.get(sessionId) ?? [];
 
     try { sessionService?.touch(sessionId); } catch { /* ignore */ }
 
-    const updatedMessages = buildVisibleHistoryMessages(sessionId, truncatedHistory);
-    const windowed = windowMessages(updatedMessages, DEFAULT_UI_MESSAGE_LIMIT);
+    const windowed = db
+      ? persistedMessageWindow(db, sessionId, DEFAULT_UI_MESSAGE_LIMIT)
+      : windowMessages(buildVisibleHistoryMessages(sessionId, truncatedHistory), DEFAULT_UI_MESSAGE_LIMIT);
     return {
       ok: true,
       sessionId,
