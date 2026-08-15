@@ -7,6 +7,7 @@ import { shouldShowNormalChatComposer } from '@/components/chat/message-edit-lay
 import { GitDiffIndicator } from '@/components/chat/git-diff-indicator'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
+import { TrajectoryPanel } from '@/components/debug/trajectory-panel'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import type { ContextUsage } from '@/hooks/useChat'
@@ -28,6 +29,8 @@ interface DeveloperChatWorkspaceProps {
   chatProvider: any
   chatProviderRuntimeMode: any
   chatResponseStyle: any
+  showDebugPanel: boolean
+  onCloseDebugPanel: () => void
   cliModel: string | null
   reasoningEffort: SessionReasoningEffort | null
   contextUsage: ContextUsage | null
@@ -133,6 +136,8 @@ export function DeveloperChatWorkspace({
   chatProvider,
   chatProviderRuntimeMode,
   chatResponseStyle,
+  showDebugPanel,
+  onCloseDebugPanel,
   cliModel,
   reasoningEffort,
   contextUsage,
@@ -521,33 +526,41 @@ export function DeveloperChatWorkspace({
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}
-          <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
-            <Conversation
-              key={activeSessionId ?? 'developer-empty'}
-              className="min-h-0 flex-1 border-b"
-              compact={showDesktopProject}
-              loading={isLoadingHistory}
-              loadingLabel="Loading chat"
-              messageContents={messageContents}
-              messageEstimateInputs={messages}
-              hasMore={hasMoreMessages}
-              onLoadMore={loadOlderMessages}
-              scrollToMessageId={scrollToUserMessageId}
-              showMinimap={!isMobile}
-            >
-              {messageElements}
-              {messageQueue.length > 0 && (
-                <MessageQueue
-                  items={messageQueue}
-                  onRemove={onDequeueMessage}
-                  onEdit={onUpdateQueueItem}
-                  onReorder={onReorderQueueItem}
-                  onSteer={isLoading && activeSessionId ? onSteerQueuedMessage : undefined}
-                  onToggleHold={onToggleHoldQueueItem}
-                />
-              )}
-            </Conversation>
-          </ErrorBoundary>
+          {showDebugPanel ? (
+            // Trajectory/debug mode replaces only the transcript — the composer
+            // and its controls stay, and auto-scroll keeps matching the chat.
+            <ErrorBoundary name="Trajectory panel" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, showDebugPanel]}>
+              <TrajectoryPanel onClose={onCloseDebugPanel} />
+            </ErrorBoundary>
+          ) : (
+            <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
+              <Conversation
+                key={activeSessionId ?? 'developer-empty'}
+                className="min-h-0 flex-1 border-b"
+                compact={showDesktopProject}
+                loading={isLoadingHistory}
+                loadingLabel="Loading chat"
+                messageContents={messageContents}
+                messageEstimateInputs={messages}
+                hasMore={hasMoreMessages}
+                onLoadMore={loadOlderMessages}
+                scrollToMessageId={scrollToUserMessageId}
+                showMinimap={!isMobile}
+              >
+                {messageElements}
+                {messageQueue.length > 0 && (
+                  <MessageQueue
+                    items={messageQueue}
+                    onRemove={onDequeueMessage}
+                    onEdit={onUpdateQueueItem}
+                    onReorder={onReorderQueueItem}
+                    onSteer={isLoading && activeSessionId ? onSteerQueuedMessage : undefined}
+                    onToggleHold={onToggleHoldQueueItem}
+                  />
+                )}
+              </Conversation>
+            </ErrorBoundary>
+          )}
 
           {showNormalComposer && (
             <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>

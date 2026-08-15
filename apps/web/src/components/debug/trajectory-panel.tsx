@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,12 @@ interface TrajectoryPanelProps {
 }
 
 const STEP_ROW_HEIGHT = 24
+// Estimated height of a collapsed row for the virtualizer. The actual row is
+// taller than the 24px content column: py-1 (8px) + 24px content + 1px border
+// = 33px. Keeping the estimate in sync with the real collapsed height keeps the
+// scrollbar representative of the message list (otherwise getTotalSize()
+// undercounts and the thumb no longer matches the content).
+const STEP_ROW_ESTIMATE = 33
 
 type Role = 'user' | 'assistant' | 'tool' | 'done' | 'error'
 
@@ -153,9 +159,62 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => STEP_ROW_HEIGHT,
+    estimateSize: () => STEP_ROW_ESTIMATE,
     overscan: 30,
+    // Open at the newest step, matching the chat's stick-to-bottom behaviour.
+    initialOffset: Number.MAX_SAFE_INTEGER,
   })
+
+  // ── Auto-scroll (same stick-to-bottom behaviour as the chat) ──
+  const stickToBottomRef = useRef(true)
+  const userScrollingRef = useRef(false)
+  const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickToBottomRef.current = distanceFromBottom < 24
+  }, [])
+
+  // Detach when the user scrolls up (wheel/touch); re-engage only once they
+  // return to the bottom, so new streamed steps don't yank the view.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const markUserScroll = () => {
+      userScrollingRef.current = true
+      clearTimeout(userScrollTimerRef.current)
+      userScrollTimerRef.current = setTimeout(() => {
+        userScrollingRef.current = false
+      }, 300)
+    }
+    const handleWheel = (e: WheelEvent) => {
+      markUserScroll()
+      if (e.deltaY < 0 && stickToBottomRef.current) {
+        stickToBottomRef.current = false
+      }
+    }
+    el.addEventListener('wheel', handleWheel, { passive: true })
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', handleWheel)
+      el.removeEventListener('scroll', handleScroll)
+      clearTimeout(userScrollTimerRef.current)
+    }
+  }, [handleScroll])
+
+  // Follow newly appended steps while stuck to the bottom (mirrors the chat's
+  // streaming auto-scroll).
+  const prevStepCountRef = useRef(0)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (filtered.length > prevStepCountRef.current && stickToBottomRef.current && !userScrollingRef.current) {
+      virtualizer.scrollToOffset(Number.MAX_SAFE_INTEGER)
+    }
+    prevStepCountRef.current = filtered.length
+  }, [filtered.length, virtualizer])
 
   const handleCopy = () => {
     const text = steps

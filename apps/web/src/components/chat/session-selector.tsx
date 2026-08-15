@@ -270,6 +270,10 @@ export function SessionSelector({
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => readCollapsedFolders())
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null)
+  // Right-click / long-press coordinates for the project menu. On desktop the
+  // 3-dot button is hidden, so the menu is anchored to the cursor via an
+  // invisible trigger; on touch it falls back to the row's own button.
+  const [projectMenuAnchor, setProjectMenuAnchor] = useState<{ x: number; y: number } | null>(null)
   const openMenuMoveTargets = useMemo(
     () => (openMenuProjectId ? getProjectMoveTargets(projects, openMenuProjectId) : []),
     [openMenuProjectId, projects],
@@ -382,15 +386,16 @@ export function SessionSelector({
    * mark the open so the click that follows a touch long-press doesn't also
    * select the project.
    */
-  const openProjectMenu = (projectId: string) => {
+  const openProjectMenu = (projectId: string, x: number, y: number) => {
     projectMenuJustOpenedRef.current = true
+    setProjectMenuAnchor({ x, y })
     setOpenMenuProjectId(projectId)
   }
 
   const projectRowMenuHandlers = (projectId: string) => ({
     onContextMenu: (event: ReactMouseEvent) => {
       event.preventDefault()
-      openProjectMenu(projectId)
+      openProjectMenu(projectId, event.clientX, event.clientY)
     },
     onPointerDown: (event: ReactPointerEvent) => {
       if (event.pointerType !== 'touch') return
@@ -399,7 +404,7 @@ export function SessionSelector({
       longPressOriginRef.current = { x: clientX, y: clientY }
       longPressTimerRef.current = window.setTimeout(() => {
         longPressFiredRef.current = true
-        openProjectMenu(projectId)
+        openProjectMenu(projectId, clientX, clientY)
       }, PROJECT_LONG_PRESS_MS)
     },
     onPointerMove: (event: ReactPointerEvent) => {
@@ -691,12 +696,19 @@ export function SessionSelector({
                         )}
                         <DropdownMenu
                           open={openMenuProjectId === project.id}
-                          onOpenChange={(open) => setOpenMenuProjectId(open ? project.id : null)}
+                          onOpenChange={(open) => {
+                            setOpenMenuProjectId(open ? project.id : null)
+                            if (!open) setProjectMenuAnchor(null)
+                          }}
                         >
                           {/* On desktop the menu is reached by right-clicking the
                               row, so the visible 3-dot affordance is hidden. It is
-                              kept on touch devices alongside the long-press. */}
-                          {isMobile && (
+                              kept on touch devices alongside the long-press. The
+                              Radix content is portal-rendered and needs a trigger
+                              to anchor to; on desktop we supply an invisible span
+                              parked at the right-click point so the menu opens at
+                              the cursor. */}
+                          {isMobile ? (
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -708,6 +720,17 @@ export function SessionSelector({
                               >
                                 <MoreVertical className="h-3 w-3" />
                               </Button>
+                            </DropdownMenuTrigger>
+                          ) : (
+                            <DropdownMenuTrigger asChild>
+                              <span
+                                aria-hidden
+                                className="pointer-events-none fixed z-0 h-px w-px opacity-0"
+                                style={{
+                                  left: openMenuProjectId === project.id ? projectMenuAnchor?.x ?? 0 : -9999,
+                                  top: openMenuProjectId === project.id ? projectMenuAnchor?.y ?? 0 : -9999,
+                                }}
+                              />
                             </DropdownMenuTrigger>
                           )}
                           <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">

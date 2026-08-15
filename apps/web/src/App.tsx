@@ -10,7 +10,6 @@ import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem, ToolCall
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
-import { DebugPanel } from '@/components/debug/debug-panel'
 import { AppHeader } from '@/components/app-shell/app-header'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
 import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
@@ -4793,13 +4792,9 @@ function App() {
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
                 inlinePrompts={inlinePrompts}
               />
-            ) : showDebugPanel ? (
-              <div className="flex-1 min-h-0">
-                <ErrorBoundary name="Debug panel" variant="section" className="h-full" resetKeys={[showDebugPanel, activeSessionId]}>
-                  <DebugPanel onClose={() => setShowDebugPanel(false)} />
-                </ErrorBoundary>
-              </div>
             ) : <DeveloperChatWorkspace
+                showDebugPanel={showDebugPanel}
+                onCloseDebugPanel={() => setShowDebugPanel(false)}
                 activeProject={activeProject}
                 activeProjectId={activeProjectId}
                 activeProjectDisplayName={activeProjectDisplayName}

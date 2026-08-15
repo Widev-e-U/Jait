@@ -58,6 +58,9 @@ const typeColors: Record<string, string> = {
 }
 
 const ROW_HEIGHT = 20
+// Estimated height of a collapsed row for the virtualizer. The actual row is
+// taller than the 20px content column: py-1 (8px) + 20px content = 28px.
+const ROW_ESTIMATE = 28
 
 export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
   const events = useSSEDebugEvents()
@@ -83,7 +86,7 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => ROW_ESTIMATE,
     overscan: 30,
   })
 

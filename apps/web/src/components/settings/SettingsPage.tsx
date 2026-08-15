@@ -1134,6 +1134,7 @@ const providerAccountsCard = (
           <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="email" className="flex-1 sm:flex-none">Mail & Calendar</TabsTrigger>
           <TabsTrigger value="channels" className="flex-1 sm:flex-none">Channels</TabsTrigger>
+          <TabsTrigger value="nodes" className="flex-1 sm:flex-none">Nodes</TabsTrigger>
           <TabsTrigger value="shortcuts" className="flex-1 sm:flex-none">Shortcuts</TabsTrigger>
           <TabsTrigger value="usage" className="flex-1 sm:flex-none">Usage</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
