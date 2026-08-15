@@ -1,4 +1,4 @@
-import { Children, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { Children, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
@@ -228,6 +228,17 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
 
 export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, scrollToMessageId, showMinimap = false }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  // The scroll container may not exist yet on first mount (history still
+  // loading renders the skeleton branch), and a plain ref object is not
+  // reactive — the minimap used to mount, see `null`, and never set up its
+  // size/scroll observers until a remount (e.g. a mobile→desktop resize)
+  // happened. Mirror the ref into state so dependents re-observe the moment
+  // the element appears.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+  const attachScrollElement = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el
+    setScrollElement(el)
+  }, [])
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const hasContent = childItems.length > 0
@@ -734,7 +745,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <ConversationPositioningSkeleton label={loadingLabel} />
       ) : (
         <div
-          ref={scrollRef}
+          ref={attachScrollElement}
           onScroll={updateBottomState}
           className="h-full min-w-0 flex-1 overflow-y-auto scrollbar-none"
           style={{
@@ -814,7 +825,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       {showMinimap && (
         <ConversationMinimap
           virtualizer={virtualizer}
-          scrollRef={scrollRef}
+          scrollElement={scrollElement}
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
         />
@@ -825,7 +836,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
 interface ConversationMinimapProps {
   virtualizer: Virtualizer<HTMLDivElement, Element>
-  scrollRef: RefObject<HTMLDivElement | null>
+  /** The conversation's scroll container; null until the transcript renders. */
+  scrollElement: HTMLDivElement | null
   /** Per-child role ('user' | 'agent'), index-aligned with the virtualizer items. */
   roles: Array<'user' | 'agent'>
   /** Per-child raw text, index-aligned with the virtualizer items. */
@@ -835,6 +847,14 @@ interface ConversationMinimapProps {
 /** Vertical distance between two preview lines, and how tall each line paints. */
 const MINIMAP_ROW_PITCH_PX = 3
 const MINIMAP_ROW_HEIGHT_PX = 2
+/**
+ * User turns read as right-aligned bubbles (like the real layout, where they
+ * sit on the right edge of the chat), so their preview lines are capped to
+ * this fraction of the rail and painted from the right — agent prose stays
+ * left-aligned and full-width, giving the rail the same left/right rhythm as
+ * the transcript.
+ */
+const MINIMAP_USER_MAX_WIDTH = 0.6
 /** Characters that count as one full-width line of the preview. */
 const MINIMAP_CHARS_PER_LINE = 64
 /** Never let a non-empty line vanish entirely. */
@@ -873,28 +893,26 @@ export function computeMinimapLineShape(text: string): number[] {
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-function ConversationMinimap({ virtualizer, scrollRef, roles, texts }: ConversationMinimapProps) {
+function ConversationMinimap({ virtualizer, scrollElement, roles, texts }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const update = () => setViewportHeight(el.clientHeight)
+    if (!scrollElement) return
+    const update = () => setViewportHeight(scrollElement.clientHeight)
     update()
     const ro = new ResizeObserver(update)
-    ro.observe(el)
+    ro.observe(scrollElement)
     return () => ro.disconnect()
-  }, [scrollRef])
+  }, [scrollElement])
 
   useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const onScroll = () => setScrollTop(el.scrollTop)
+    if (!scrollElement) return
+    const onScroll = () => setScrollTop(scrollElement.scrollTop)
     onScroll()
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [scrollRef])
+    scrollElement.addEventListener('scroll', onScroll, { passive: true })
+    return () => scrollElement.removeEventListener('scroll', onScroll)
+  }, [scrollElement])
 
   // Reads (and populates) the virtualizer's measurement cache below.
   const totalSize = virtualizer.getTotalSize()
@@ -964,15 +982,19 @@ function ConversationMinimap({ virtualizer, scrollRef, roles, texts }: Conversat
   const viewportRatio = Math.min(viewportHeight / totalSize, 1)
   const viewportTopRatio = Math.min(scrollTop / totalSize, 1 - viewportRatio)
 
-  // Map a pointer position on the rail back to a scroll offset. Measured
-  // against the rail itself (not the scroll container) so the mapping matches
-  // where the bars are actually painted.
+  // Map a pointer position on the rail back to a scroll offset so the pressed
+  // point lands in the *middle* of the viewport indicator (like Rider/VS Code
+  // scrollbar annotations), instead of snapping the indicator's top edge to
+  // the cursor. Measured against the rail itself so the mapping matches where
+  // the preview lines are painted.
   const handlePointer = (rail: HTMLElement, clientY: number) => {
-    const el = scrollRef.current
-    if (!el) return
+    if (!scrollElement) return
     const rect = rail.getBoundingClientRect()
-    const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0
-    el.scrollTop = Math.min(Math.max(ratio, 0), 1) * totalSize
+    const centerRatio = rect.height > 0
+      ? (clientY - rect.top) / rect.height - viewportRatio / 2
+      : 0
+    const maxRatio = Math.max(1 - viewportRatio, 0)
+    scrollElement.scrollTop = Math.min(Math.max(centerRatio, 0), maxRatio) * totalSize
   }
 
   return (
@@ -984,13 +1006,13 @@ function ConversationMinimap({ virtualizer, scrollRef, roles, texts }: Conversat
       onPointerMove={(e) => {
         if (e.buttons > 0) handlePointer(e.currentTarget, e.clientY)
       }}
-      className="relative h-full w-4 shrink-0 cursor-pointer select-none border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
+      className="relative h-full w-24 shrink-0 cursor-pointer select-none border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
       role="slider"
       aria-label="Conversation minimap"
     >
       {/* viewport indicator */}
       <div
-        className="absolute left-0 right-0 rounded-full bg-foreground/10"
+        className="absolute left-0 right-0 bg-foreground/10"
         style={{
           top: `${viewportTopRatio * 100}%`,
           height: `${Math.max(viewportRatio * 100, 2)}%`,
@@ -1021,13 +1043,23 @@ const MinimapLines = memo(function MinimapLines({ rows }: { rows: MinimapRow[] }
         <div
           key={row.y}
           className={cn(
-            'absolute left-[2px] rounded-[1px]',
+            'absolute',
             row.isUser ? 'bg-blue-500/80' : 'bg-muted-foreground/45',
           )}
           style={{
             top: row.y,
             height: MINIMAP_ROW_HEIGHT_PX,
-            width: `calc(${(row.width * 100).toFixed(1)}% - 4px)`,
+            // User turns hug the right edge like chat bubbles; agent prose stays
+            // on the left so the rail mirrors the transcript's left/right rhythm.
+            ...(row.isUser
+              ? {
+                  right: 2,
+                  width: `calc(${(Math.min(row.width, MINIMAP_USER_MAX_WIDTH) * 100).toFixed(1)}% - 4px)`,
+                }
+              : {
+                  left: 2,
+                  width: `calc(${(row.width * 100).toFixed(1)}% - 4px)`,
+                }),
           }}
         />
       ))}

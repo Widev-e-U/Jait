@@ -8,6 +8,8 @@
  * logic) instead of a generic toolcard.
  */
 
+import { existsSync } from "node:fs";
+import { isAbsolute, join, resolve } from "node:path";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 
 interface ScreenshotCaptureInput {
@@ -182,22 +184,19 @@ function resolveTarget(target: string, projectRoot: string): string {
   if (t === "dev") return FRONTEND_URL;
   if (/^https?:\/\//i.test(t)) return t;
   if (t.startsWith("file://")) return t;
-  const fs = require("node:fs");
-  const pathMod = require("node:path");
-  const abs = pathMod.isAbsolute(t) ? t : pathMod.resolve(projectRoot, t);
-  if (!fs.existsSync(abs)) throw new Error(`target not found: ${t} (resolved ${abs})`);
+  const abs = isAbsolute(t) ? t : resolve(projectRoot, t);
+  if (!existsSync(abs)) throw new Error(`target not found: ${t} (resolved ${abs})`);
   return "file://" + abs;
 }
 
 function resolveOutPath(inputPath: string | undefined): string {
-  const pathMod = require("node:path");
   if (inputPath && inputPath.trim()) {
-    const resolved = pathMod.isAbsolute(inputPath) ? inputPath : pathMod.resolve(process.cwd(), inputPath);
+    const resolved = isAbsolute(inputPath) ? inputPath : resolve(process.cwd(), inputPath);
     if (!resolved.endsWith(".png")) return `${resolved}.png`;
     return resolved;
   }
-  const dir = pathMod.resolve(process.cwd(), ".jait", "shots");
-  return pathMod.join(dir, `screenshot-${timestamp()}.png`);
+  const dir = resolve(process.cwd(), ".jait", "shots");
+  return join(dir, `screenshot-${timestamp()}.png`);
 }
 
 function arrayify<T>(value: T[] | T | undefined): T[] {
