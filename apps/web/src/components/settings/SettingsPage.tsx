@@ -814,6 +814,277 @@ export function SettingsPage({
   )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
+  // Whether a tab currently shows any matching content for the active search query.
+  // Tabs that never filter (email, shortcuts, usage, nodes, changelog) always count as a match
+  // so they stay reachable and never hijack an active search.
+  const tabHasMatch = (tab: SettingsTab): boolean => {
+    switch (tab) {
+      case 'general':
+        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showJaitBackendSection || showSpeechSection
+      case 'api':
+        return filteredApiFields.length > 0 || showProviderAccountsSection
+      case 'tools':
+        return showToolsSection
+      case 'extensions':
+        return showExtensionsSection
+      case 'skills':
+        return showSkillsSection
+      case 'channels':
+        return showChannelsSection
+      case 'activity':
+        return showActivitySection
+      default:
+        return true
+    }
+  }
+
+  // When the user searches, jump to the first tab that has matching content so the
+  // top-level search box actually finds results across the settings pages.
+  useEffect(() => {
+    if (!searchQuery) return
+    if (tabHasMatch(activeTab)) return
+    const next = (Object.keys(SETTINGS_TAB_LABELS) as SettingsTab[]).find((t) => tabHasMatch(t))
+    if (next && next !== activeTab) setActiveTab(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, activeTab])
+
+const providerAccountsCard = (
+  <Card className="space-y-4 p-5">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <h2 className="text-base font-medium">{highlight('Provider accounts')}</h2>
+        <p className="text-sm text-muted-foreground">
+          Provider accounts are tied to the device where their CLI login exists. Other devices cannot use them.
+        </p>
+      </div>
+      <Button variant="outline" size="sm" onClick={() => { void loadProviderAccounts() }} disabled={providerAccountsLoading}>
+        {providerAccountsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+        Refresh
+      </Button>
+    </div>
+    <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(10rem,0.7fr)_minmax(12rem,1fr)_auto]">
+      <Select value={newProviderAccountType} onValueChange={setNewProviderAccountType}>
+        <SelectTrigger aria-label="Provider account type">
+          <SelectValue placeholder="Choose provider" />
+        </SelectTrigger>
+        <SelectContent>
+          {providerAccountTypes.map((type) => (
+            <SelectItem key={type.providerType} value={type.providerType}>
+              {type.name}{type.version ? ` ${type.version}` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={newProviderAccountNodeId} onValueChange={setNewProviderAccountNodeId}>
+        <SelectTrigger aria-label="Provider account device">
+          <SelectValue placeholder="Choose device" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="gateway">Gateway</SelectItem>
+          {remoteProviderNodes.map((node) => {
+            const supported = node.availableProviderTypes?.includes(newProviderAccountType) ?? false
+            return <SelectItem key={node.nodeId} value={node.nodeId} disabled={!supported}>{node.nodeName}{supported ? "" : " (provider unavailable)"}</SelectItem>
+          })}
+        </SelectContent>
+      </Select>
+      <Input
+        value={newProviderAccountLabel}
+        onChange={(event) => setNewProviderAccountLabel(event.target.value)}
+        placeholder="Account label, e.g. Work"
+        maxLength={80}
+        onKeyDown={(event) => { if (event.key === 'Enter') void handleCreateProviderAccount() }}
+      />
+      <Button
+        className="sm:w-auto"
+        onClick={() => { void handleCreateProviderAccount() }}
+        disabled={!newProviderAccountType || !newProviderAccountLabel.trim() || providerAccountMutationBusy}
+      >
+        {providerAccountMutationBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+        Add account
+      </Button>
+      {selectedProviderAccountType && (
+        <p className="text-xs text-muted-foreground sm:col-span-4">
+          {selectedProviderAccountType.description}
+          {selectedProviderAccountType.distribution
+            ? ` Installs on first use via ${selectedProviderAccountType.distribution}.`
+            : ''}
+        </p>
+      )}
+    </div>
+    <div className="space-y-2">
+      {providerAccounts.length === 0 && remoteProviderNodes.every((node) => (node.providerStatuses?.length ?? node.providers.length) === 0) && !providerAccountsLoading ? (
+        <p className="text-sm text-muted-foreground">No provider account actions are available on this gateway.</p>
+      ) : providerAccounts.map((provider) => {
+        const auth = provider.auth
+        const providerId = provider.id
+        const isSignedIn = auth?.authenticated === true
+        const isKnownSignedOut = auth?.authenticated === false
+        const logoutBusy = providerLogoutBusy === providerId
+        const loginBusy = providerLoginBusy === providerId
+        const busy = logoutBusy || loginBusy
+        const loginInstructions = providerLoginInstructions?.providerId === providerId ? providerLoginInstructions : null
+        const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
+        return (
+          <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{PROVIDER_LABELS[providerId] ?? provider.name}</p>
+                <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
+                  {isSignedIn ? 'signed in' : auth?.authenticated === false ? 'signed out' : 'unknown'}
+                </Badge>
+                <Badge variant="outline" className="text-2xs">Gateway</Badge>
+              </div>
+              {isSignedIn && auth?.username && (
+                <p className="mt-1 text-xs text-muted-foreground">Signed in as {auth.username}</p>
+              )}
+              {auth?.detail && (
+                <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
+              )}
+              {loginInstructions && (
+                <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                  <p>{loginInstructions.message}</p>
+                  {loginInstructions.userCode && (
+                    <div className="flex items-center gap-2">
+                      <code className="min-w-0 flex-1 rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          void copyTextToClipboard(loginInstructions.userCode!).then((copied) => {
+                            setProviderLoginInstructions((current) => (
+                              current?.providerId === providerId ? { ...current, copied } : current
+                            ))
+                          })
+                        }}
+                      >
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                        {loginInstructions.copied ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                  )}
+                  {loginInstructions.waitingForCompletion && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Waiting for login completion…
+                    </div>
+                  )}
+                  {loginInstructions.verificationUri && (
+                    <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open login page
+                    </a>
+                  )}
+                  {loginInstructions.requiresCodeInput && (
+                    <div className="flex gap-2">
+                      <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === 'Enter') void handleProviderLoginCode(providerId) }} />
+                      <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(providerId) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              {shouldShowProviderLoginAction(auth) && (
+                <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(providerId) }} disabled={busy || providerLogoutBusy !== null}>
+                  {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
+                  Login
+                </Button>
+              )}
+              {auth?.logout && (
+                <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(providerId) }} disabled={busy || providerLoginBusy !== null || isKnownSignedOut}>
+                  {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
+                  Logout
+                </Button>
+              )}
+              {configuredAccount && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={`Remove ${configuredAccount.label}`}
+                  disabled={busy || providerAccountMutationBusy}
+                  onClick={() => {
+                    if (window.confirm(`Remove “${configuredAccount.label}” and its local credentials?`)) {
+                      void handleDeleteProviderAccount(configuredAccount)
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+      {remoteProviderNodes.flatMap((node) => (
+        (node.providerStatuses ?? node.providers.map((id) => ({ id, providerType: id, name: undefined, installed: true, authenticated: null, detail: undefined })))
+          .map((provider) => ({ node, provider }))
+      )).map(({ node, provider }) => {
+        const isSignedIn = provider.authenticated === true
+        const configuredAccount = configuredProviderAccounts.find((account) => account.id === provider.id)
+        const loginBusy = providerLoginBusy === provider.id
+        const logoutBusy = providerLogoutBusy === provider.id
+        const busy = loginBusy || logoutBusy
+        const loginInstructions = providerLoginInstructions?.providerId === provider.id ? providerLoginInstructions : null
+        return (
+          <div key={`${node.nodeId}:${provider.id}`} className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{provider.name ?? PROVIDER_LABELS[provider.providerType ?? provider.id] ?? provider.id}</p>
+                <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
+                  {isSignedIn ? 'signed in' : provider.authenticated === false ? 'signed out' : 'unknown'}
+                </Badge>
+                <Badge variant="outline" className="text-2xs">{node.nodeName}</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {provider.detail ?? `Available only for projects on this ${node.platform} device.`}
+              </p>
+              {loginInstructions && (
+                <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                  <p>{loginInstructions.message}</p>
+                  {loginInstructions.userCode && <code className="block rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>}
+                  {loginInstructions.verificationUri && (
+                    <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" /> Open login page
+                    </a>
+                  )}
+                  {loginInstructions.requiresCodeInput && (
+                    <div className="flex gap-2">
+                      <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === "Enter") void handleProviderLoginCode(provider.id) }} />
+                      <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(provider.id) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
+                    </div>
+                  )}
+                  {loginInstructions.waitingForCompletion && <div className="flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for login completion…</div>}
+                </div>
+              )}
+            </div>
+            <div className="flex w-full gap-2 sm:w-auto">
+              {!isSignedIn && (
+                <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(provider.id) }} disabled={busy}>
+                  {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
+                  Login
+                </Button>
+              )}
+              {isSignedIn && (
+                <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(provider.id) }} disabled={busy}>
+                  {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
+                  Logout
+                </Button>
+              )}
+              {configuredAccount && (
+                <Button variant="outline" size="icon" aria-label={`Remove ${configuredAccount.label}`} disabled={busy || providerAccountMutationBusy} onClick={() => {
+                  if (window.confirm(`Remove “${configuredAccount.label}” and its credentials from ${node.nodeName}?`)) void handleDeleteProviderAccount(configuredAccount)
+                }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  </Card>
+)
+
   const emptyState = (
     <Card className="p-5">
       <p className="text-sm text-muted-foreground">
@@ -1292,242 +1563,6 @@ export function SettingsPage({
             </Card>
           )}
 
-          {showProviderAccountsSection && (
-            <Card className="space-y-4 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-medium">{highlight('Provider accounts')}</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Provider accounts are tied to the device where their CLI login exists. Other devices cannot use them.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => { void loadProviderAccounts() }} disabled={providerAccountsLoading}>
-                  {providerAccountsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-                  Refresh
-                </Button>
-              </div>
-              <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(10rem,0.7fr)_minmax(12rem,1fr)_auto]">
-                <Select value={newProviderAccountType} onValueChange={setNewProviderAccountType}>
-                  <SelectTrigger aria-label="Provider account type">
-                    <SelectValue placeholder="Choose provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerAccountTypes.map((type) => (
-                      <SelectItem key={type.providerType} value={type.providerType}>
-                        {type.name}{type.version ? ` ${type.version}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={newProviderAccountNodeId} onValueChange={setNewProviderAccountNodeId}>
-                  <SelectTrigger aria-label="Provider account device">
-                    <SelectValue placeholder="Choose device" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gateway">Gateway</SelectItem>
-                    {remoteProviderNodes.map((node) => {
-                      const supported = node.availableProviderTypes?.includes(newProviderAccountType) ?? false
-                      return <SelectItem key={node.nodeId} value={node.nodeId} disabled={!supported}>{node.nodeName}{supported ? "" : " (provider unavailable)"}</SelectItem>
-                    })}
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={newProviderAccountLabel}
-                  onChange={(event) => setNewProviderAccountLabel(event.target.value)}
-                  placeholder="Account label, e.g. Work"
-                  maxLength={80}
-                  onKeyDown={(event) => { if (event.key === 'Enter') void handleCreateProviderAccount() }}
-                />
-                <Button
-                  className="sm:w-auto"
-                  onClick={() => { void handleCreateProviderAccount() }}
-                  disabled={!newProviderAccountType || !newProviderAccountLabel.trim() || providerAccountMutationBusy}
-                >
-                  {providerAccountMutationBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
-                  Add account
-                </Button>
-                {selectedProviderAccountType && (
-                  <p className="text-xs text-muted-foreground sm:col-span-4">
-                    {selectedProviderAccountType.description}
-                    {selectedProviderAccountType.distribution
-                      ? ` Installs on first use via ${selectedProviderAccountType.distribution}.`
-                      : ''}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                {providerAccounts.length === 0 && remoteProviderNodes.every((node) => (node.providerStatuses?.length ?? node.providers.length) === 0) && !providerAccountsLoading ? (
-                  <p className="text-sm text-muted-foreground">No provider account actions are available on this gateway.</p>
-                ) : providerAccounts.map((provider) => {
-                  const auth = provider.auth
-                  const providerId = provider.id
-                  const isSignedIn = auth?.authenticated === true
-                  const isKnownSignedOut = auth?.authenticated === false
-                  const logoutBusy = providerLogoutBusy === providerId
-                  const loginBusy = providerLoginBusy === providerId
-                  const busy = logoutBusy || loginBusy
-                  const loginInstructions = providerLoginInstructions?.providerId === providerId ? providerLoginInstructions : null
-                  const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
-                  return (
-                    <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium">{PROVIDER_LABELS[providerId] ?? provider.name}</p>
-                          <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
-                            {isSignedIn ? 'signed in' : auth?.authenticated === false ? 'signed out' : 'unknown'}
-                          </Badge>
-                          <Badge variant="outline" className="text-2xs">Gateway</Badge>
-                        </div>
-                        {isSignedIn && auth?.username && (
-                          <p className="mt-1 text-xs text-muted-foreground">Signed in as {auth.username}</p>
-                        )}
-                        {auth?.detail && (
-                          <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
-                        )}
-                        {loginInstructions && (
-                          <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
-                            <p>{loginInstructions.message}</p>
-                            {loginInstructions.userCode && (
-                              <div className="flex items-center gap-2">
-                                <code className="min-w-0 flex-1 rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    void copyTextToClipboard(loginInstructions.userCode!).then((copied) => {
-                                      setProviderLoginInstructions((current) => (
-                                        current?.providerId === providerId ? { ...current, copied } : current
-                                      ))
-                                    })
-                                  }}
-                                >
-                                  <Copy className="mr-1.5 h-3.5 w-3.5" />
-                                  {loginInstructions.copied ? 'Copied' : 'Copy'}
-                                </Button>
-                              </div>
-                            )}
-                            {loginInstructions.waitingForCompletion && (
-                              <div className="flex items-center gap-1.5 text-muted-foreground">
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                Waiting for login completion…
-                              </div>
-                            )}
-                            {loginInstructions.verificationUri && (
-                              <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Open login page
-                              </a>
-                            )}
-                            {loginInstructions.requiresCodeInput && (
-                              <div className="flex gap-2">
-                                <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === 'Enter') void handleProviderLoginCode(providerId) }} />
-                                <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(providerId) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex w-full gap-2 sm:w-auto">
-                        {shouldShowProviderLoginAction(auth) && (
-                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(providerId) }} disabled={busy || providerLogoutBusy !== null}>
-                            {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
-                            Login
-                          </Button>
-                        )}
-                        {auth?.logout && (
-                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(providerId) }} disabled={busy || providerLoginBusy !== null || isKnownSignedOut}>
-                            {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
-                            Logout
-                          </Button>
-                        )}
-                        {configuredAccount && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label={`Remove ${configuredAccount.label}`}
-                            disabled={busy || providerAccountMutationBusy}
-                            onClick={() => {
-                              if (window.confirm(`Remove “${configuredAccount.label}” and its local credentials?`)) {
-                                void handleDeleteProviderAccount(configuredAccount)
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                {remoteProviderNodes.flatMap((node) => (
-                  (node.providerStatuses ?? node.providers.map((id) => ({ id, providerType: id, name: undefined, installed: true, authenticated: null, detail: undefined })))
-                    .map((provider) => ({ node, provider }))
-                )).map(({ node, provider }) => {
-                  const isSignedIn = provider.authenticated === true
-                  const configuredAccount = configuredProviderAccounts.find((account) => account.id === provider.id)
-                  const loginBusy = providerLoginBusy === provider.id
-                  const logoutBusy = providerLogoutBusy === provider.id
-                  const busy = loginBusy || logoutBusy
-                  const loginInstructions = providerLoginInstructions?.providerId === provider.id ? providerLoginInstructions : null
-                  return (
-                    <div key={`${node.nodeId}:${provider.id}`} className="flex flex-col gap-2 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium">{provider.name ?? PROVIDER_LABELS[provider.providerType ?? provider.id] ?? provider.id}</p>
-                          <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
-                            {isSignedIn ? 'signed in' : provider.authenticated === false ? 'signed out' : 'unknown'}
-                          </Badge>
-                          <Badge variant="outline" className="text-2xs">{node.nodeName}</Badge>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {provider.detail ?? `Available only for projects on this ${node.platform} device.`}
-                        </p>
-                        {loginInstructions && (
-                          <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
-                            <p>{loginInstructions.message}</p>
-                            {loginInstructions.userCode && <code className="block rounded bg-background px-2 py-1 font-mono text-foreground [overflow-wrap:anywhere]">{loginInstructions.userCode}</code>}
-                            {loginInstructions.verificationUri && (
-                              <a className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" href={loginInstructions.verificationUri} target="_blank" rel="noreferrer">
-                                <ExternalLink className="h-3.5 w-3.5" /> Open login page
-                              </a>
-                            )}
-                            {loginInstructions.requiresCodeInput && (
-                              <div className="flex gap-2">
-                                <Input value={providerLoginCode} onChange={(event) => setProviderLoginCode(event.target.value)} placeholder="Authorization code" onKeyDown={(event) => { if (event.key === "Enter") void handleProviderLoginCode(provider.id) }} />
-                                <Button variant="outline" size="sm" onClick={() => { void handleProviderLoginCode(provider.id) }} disabled={!providerLoginCode.trim() || busy}>Submit</Button>
-                              </div>
-                            )}
-                            {loginInstructions.waitingForCompletion && <div className="flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting for login completion…</div>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex w-full gap-2 sm:w-auto">
-                        {!isSignedIn && (
-                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(provider.id) }} disabled={busy}>
-                            {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
-                            Login
-                          </Button>
-                        )}
-                        {isSignedIn && (
-                          <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogout(provider.id) }} disabled={busy}>
-                            {logoutBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
-                            Logout
-                          </Button>
-                        )}
-                        {configuredAccount && (
-                          <Button variant="outline" size="icon" aria-label={`Remove ${configuredAccount.label}`} disabled={busy || providerAccountMutationBusy} onClick={() => {
-                            if (window.confirm(`Remove “${configuredAccount.label}” and its credentials from ${node.nodeName}?`)) void handleDeleteProviderAccount(configuredAccount)
-                          }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-          )}
 
           {showSpeechSection && (
             <Card className="space-y-4 p-5">
@@ -1593,7 +1628,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showJaitBackendSection && !showProviderAccountsSection && !showSpeechSection && emptyState}
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6 pb-20">
@@ -1694,7 +1729,9 @@ export function SettingsPage({
             {error && <span className="text-sm text-destructive">{error}</span>}
           </div>
         </div>
-      </>) : emptyState}
+      </>) : null}
+      {showProviderAccountsSection && providerAccountsCard}
+      {filteredApiFields.length === 0 && !showProviderAccountsSection && emptyState}
         </TabsContent>
 
         <TabsContent value="tools" className="space-y-6">

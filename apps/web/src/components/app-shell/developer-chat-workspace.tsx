@@ -515,7 +515,9 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {contextUsage && (
-            <div className="absolute top-2 right-2 z-10">
+            // On desktop the conversation shows the minimap scrollbar (w-24) flush to
+            // the right edge; offset the indicator so it sits to its left, not under it.
+            <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[104px]'}`}>
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}

@@ -12,6 +12,7 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "browser",
   "camera",
   "network",
+  "agent",
 ];
 
 export function isNodeCapability(value: unknown): value is NodeCapability {

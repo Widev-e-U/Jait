@@ -15,6 +15,7 @@ const CAPABILITY_LABELS: Record<NodeCapability, string> = {
   browser: 'Browser',
   camera: 'Camera',
   network: 'Network',
+  agent: 'Agent',
 }
 
 const CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
@@ -25,6 +26,7 @@ const CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
   browser: 'Drive a browser on this node',
   camera: 'Access this node\u2019s camera',
   network: 'Use this node\u2019s network / HTTP',
+  agent: 'Run the agent / CLI sessions on this node',
 }
 
 interface NodeRow {

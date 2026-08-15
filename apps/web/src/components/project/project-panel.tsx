@@ -9,6 +9,7 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
@@ -216,12 +217,6 @@ function readGitAutoFetchPeriodSeconds(): number {
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
   if (!Number.isFinite(parsed) || parsed < 10) return DEFAULT_GIT_AUTO_FETCH_PERIOD_SECONDS
   return parsed
-}
-
-function describeGitAutoFetchMode(mode: GitAutoFetchMode): string {
-  if (mode === 'all') return 'Auto-fetch: all remotes'
-  if (mode === true) return 'Auto-fetch: default remote'
-  return 'Auto-fetch: off'
 }
 
 function availableFilesSignature(files: AvailableFileForMention[]) {
@@ -5291,16 +5286,19 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 </span>
               )}
               {remoteRoot && (
-                <select
-                  className="h-6 rounded border bg-background px-1.5 text-2xs text-muted-foreground"
-                  value={String(gitAutoFetchMode)}
-                  onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
-                  title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
-                >
-                  <option value="false">Auto-fetch off</option>
-                  <option value="true">Auto-fetch origin</option>
-                  <option value="all">Auto-fetch all</option>
-                </select>
+                <Select value={String(gitAutoFetchMode)} onValueChange={handleGitAutoFetchModeChange}>
+                  <SelectTrigger
+                    className="h-6 w-auto shrink-0 gap-1 rounded border bg-background px-1.5 text-2xs text-muted-foreground"
+                    aria-label="Auto-fetch mode"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">Auto-fetch off</SelectItem>
+                    <SelectItem value="true">Auto-fetch origin</SelectItem>
+                    <SelectItem value="all">Auto-fetch all</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               <button
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -5920,16 +5918,19 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             )}
             {!gitStatus?.branch && <span className="ui-caption flex-1 min-w-0">No repo</span>}
             {remoteRoot && (
-              <select
-                className="h-7 rounded-md border border-input bg-background/90 px-2 text-xs text-muted-foreground shadow-sm shrink-0"
-                value={String(gitAutoFetchMode)}
-                onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
-                title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
-              >
-                <option value="false">Auto-fetch off</option>
-                <option value="true">Auto-fetch origin</option>
-                <option value="all">Auto-fetch all</option>
-              </select>
+              <Select value={String(gitAutoFetchMode)} onValueChange={handleGitAutoFetchModeChange}>
+                <SelectTrigger
+                  className="h-7 w-auto shrink-0 gap-1 rounded-md border border-input bg-background/90 px-2 text-xs text-muted-foreground shadow-sm"
+                  aria-label="Auto-fetch mode"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="false">Auto-fetch off</SelectItem>
+                  <SelectItem value="true">Auto-fetch origin</SelectItem>
+                  <SelectItem value="all">Auto-fetch all</SelectItem>
+                </SelectContent>
+              </Select>
             )}
             <button
               className="ui-inline-action p-1"

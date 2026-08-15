@@ -1,5 +1,34 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+
+// jsdom has no canvas, so pretext's real text measurement throws. Mock it with a
+// deterministic char-width model (8px per char → 64 chars per 512px line) so the
+// minimap line-shape tests can assert exact, stable widths.
+vi.mock('@chenglou/pretext', () => {
+  const CHAR_W = 8
+  return {
+    prepareWithSegments: (text: string) => ({ __text: text }),
+    walkLineRanges: (
+      prepared: { __text: string },
+      width: number,
+      onLine: (line: { width: number }) => void,
+    ) => {
+      const charsPerLine = Math.max(Math.floor(width / CHAR_W), 1)
+      for (const paragraph of prepared.__text.split('\n')) {
+        if (paragraph.length === 0) {
+          onLine({ width: 0 })
+          continue
+        }
+        let remaining = paragraph.length
+        while (remaining > 0) {
+          const n = Math.min(remaining, charsPerLine)
+          onLine({ width: n * CHAR_W })
+          remaining -= n
+        }
+      }
+    },
+  }
+})
 import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
@@ -190,19 +219,20 @@ describe('scroll anchoring', () => {
 
 describe('computeMinimapLineShape', () => {
   it('turns a short paragraph into one partial-width line', () => {
-    const [width, ...rest] = computeMinimapLineShape('a'.repeat(32))
+    const [width, ...rest] = computeMinimapLineShape('a'.repeat(32), 512)
 
     expect(width).toBeCloseTo(0.5)
     expect(rest).toEqual([])
   })
 
   it('wraps a long paragraph into full-width lines plus a remainder', () => {
-    // 64 chars fill the rail, so 160 chars is two full lines and a half line.
-    expect(computeMinimapLineShape('a'.repeat(160))).toEqual([1, 1, 0.5])
+    // 64 chars fill a 512px line (8px/char), so 160 chars is two full lines
+    // plus a half line.
+    expect(computeMinimapLineShape('a'.repeat(160), 512)).toEqual([1, 1, 0.5])
   })
 
   it('keeps blank lines blank so paragraph gaps stay visible', () => {
-    expect(computeMinimapLineShape('hi\n\nthere')).toEqual([
+    expect(computeMinimapLineShape('hi\n\nthere', 512)).toEqual([
       expect.any(Number),
       0,
       expect.any(Number),
@@ -210,12 +240,12 @@ describe('computeMinimapLineShape', () => {
   })
 
   it('gives text-less turns a stub so tool-only messages still show up', () => {
-    expect(computeMinimapLineShape('')).toEqual([0.3])
-    expect(computeMinimapLineShape('   \n  ')).toEqual([0.3])
+    expect(computeMinimapLineShape('', 512)).toEqual([0.3])
+    expect(computeMinimapLineShape('   \n  ', 512)).toEqual([0.3])
   })
 
   it('bounds the shape of a huge paste', () => {
-    expect(computeMinimapLineShape('a'.repeat(2_000_000)).length).toBeLessThanOrEqual(4000)
+    expect(computeMinimapLineShape('a'.repeat(2_000_000), 512).length).toBeLessThanOrEqual(4000)
   })
 })
 

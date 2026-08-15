@@ -1,4 +1,4 @@
-import { Boxes, Bug, Code, Globe, PanelLeftClose, PanelLeftOpen, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Code, Globe, PanelLeftClose, PanelLeftOpen, Settings, Terminal as TerminalIcon } from 'lucide-react'
 import type { FocusEvent, RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
@@ -28,7 +28,6 @@ interface DeveloperSidebarsProps {
   searchResults: ProjectSearchResults | null
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
-  showDebugPanel: boolean
   showProject: boolean
   showSidebar: boolean
   showTerminal: boolean
@@ -53,11 +52,11 @@ interface DeveloperSidebarsProps {
   onShowFewer: () => void
   onShowMore: () => void
   onToggleArchitecture: () => void
-  onToggleDebug: () => void
   onToggleEditor: () => void
   onTogglePreview: () => void
   onToggleSidebar: () => void
   onToggleTerminal: () => void
+  onOpenSettings: () => void
 }
 
 export function DeveloperSidebars({
@@ -78,7 +77,6 @@ export function DeveloperSidebars({
   searchResults,
   sessionInfo,
   showArchitecture,
-  showDebugPanel,
   showProject,
   showSidebar,
   showTerminal,
@@ -103,11 +101,11 @@ export function DeveloperSidebars({
   onShowFewer,
   onShowMore,
   onToggleArchitecture,
-  onToggleDebug,
   onToggleEditor,
   onTogglePreview,
   onToggleSidebar,
   onToggleTerminal,
+  onOpenSettings,
 }: DeveloperSidebarsProps) {
   return (
     <>
@@ -180,18 +178,11 @@ export function DeveloperSidebars({
           <div className="flex-1" />
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant={showDebugPanel ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                disabled={!showProject || !activeProject}
-                aria-label="Debug"
-                onClick={onToggleDebug}
-              >
-                <Bug className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" aria-label="Settings" onClick={onOpenSettings}>
+                <Settings className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">Debug</TooltipContent>
+            <TooltipContent side="right">Settings</TooltipContent>
           </Tooltip>
         </aside>
       )}

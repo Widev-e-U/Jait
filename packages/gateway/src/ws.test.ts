@@ -887,6 +887,55 @@ describe("WsControlPlane", () => {
       remote.ws.close();
     });
 
+    it("denies agent-execution provider ops (CLI agent w/ full device access) by default", async () => {
+      const token = await createToken("user-provider-deny");
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      remote.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "agent-deny-node",
+          name: "Agent Deny Node",
+          platform: "win32",
+          role: "desktop",
+          capabilities: { providers: ["cli"], surfaces: [], tools: [], interactiveTerminal: false },
+        },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "agent-deny-node", name: "Agent Deny Node", platform: "win32", providers: ["cli"] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // No grants were configured — starting a CLI agent session on this node
+      // (which would give full device access) must be rejected, not dispatched.
+      await expect(
+        plane.proxyProviderOp("agent-deny-node", "start-session", {
+          provider: "cli",
+          model: "gpt-4o",
+          projectRoot: "C:\\\\Users\\\\me\\\\proj",
+        }),
+      ).rejects.toThrow(/permission_denied: node agent-deny-node not granted agent/);
+
+      // send-turn and stop-session are gated too.
+      await expect(
+        plane.proxyProviderOp("agent-deny-node", "send-turn", { sessionId: "s1", message: "hi" }),
+      ).rejects.toThrow(/not granted agent/);
+      await expect(
+        plane.proxyProviderOp("agent-deny-node", "stop-session", { sessionId: "s1" }),
+      ).rejects.toThrow(/not granted agent/);
+
+      // No provider.op-request was ever forwarded to the node.
+      const forwarded = await remote.collector.maybeNext(150);
+      expect(forwarded && forwarded.type).not.toBe("provider.op-request");
+
+      remote.ws.close();
+    });
+
     it("round-trips node grants through nodes.list and nodes.update-permissions", async () => {
       const token = await createToken("user-terminal-perms");
 
@@ -935,6 +984,57 @@ describe("WsControlPlane", () => {
       expect(node.permissions.screen).toBe(false);
 
       admin.ws.close();
+    });
+
+    it("accepts nodes.update-permissions with nodeId/grants at the message top level (web legacy shape)", async () => {
+      const token = await createToken("user-top-level-perms");
+
+      const client = openWs(port, { token });
+      await waitForOpen(client.ws);
+      await client.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      client.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "top-level-node",
+          name: "Top Level Node",
+          platform: "darwin",
+          role: "desktop",
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [], interactiveTerminal: true },
+        },
+      }));
+      client.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "top-level-node", name: "Top Level Node", platform: "darwin", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // The web hook historically sent nodeId/grants at the TOP level (not nested
+      // in `payload`). The handler must accept that shape too.
+      client.ws.send(JSON.stringify({
+        type: "nodes.update-permissions",
+        nodeId: "top-level-node",
+        grants: { terminal: true, filesystem: true },
+      }));
+
+      // Verify via the nodes.permissions broadcast that the grants were applied.
+      let snap: any;
+      for (;;) {
+        snap = await nextNodesPermissions(client);
+        const node = snap.payload.nodes.find((n: any) => n.id === "top-level-node");
+        if (node?.permissions?.terminal) break;
+      }
+      const applied = snap.payload.nodes.find((n: any) => n.id === "top-level-node");
+      expect(applied.permissions.terminal).toBe(true);
+      expect(applied.permissions.filesystem).toBe(true);
+      expect(applied.permissions.screen).toBe(false);
+
+      // No BAD_REQUEST was emitted for this message.
+      const err = await client.collector.maybeNext(150);
+      expect(err && err.type).not.toBe("error");
+
+      client.ws.close();
     });
 
     it("fast-fails terminal.start on nodes that do not claim interactiveTerminal support", async () => {

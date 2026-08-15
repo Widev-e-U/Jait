@@ -68,7 +68,8 @@ export type NodeCapability =
   | "voice"
   | "browser"
   | "camera"
-  | "network";
+  | "network"
+  | "agent";
 
 export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "terminal",
@@ -78,6 +79,7 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "browser",
   "camera",
   "network",
+  "agent",
 ];
 
 export interface NodePermissionRecord {

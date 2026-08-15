@@ -50,6 +50,16 @@ interface ConnectedClient {
   terminalSubscriptions: Set<string>;
 }
 
+/**
+ * Provider ops that run the remote CLI agent on the node with full device
+ * access. These are the session lifecycle ops proxied by RemoteCliProvider and
+ * must be gated behind the "agent" capability. Auth/listing ops (auth-status,
+ * list-models, etc.) do not execute the agent, so they stay ungated.
+ */
+function isAgentProviderOp(op: string): boolean {
+  return op === "start-session" || op === "send-turn" || op === "stop-session";
+}
+
 export function resolveSessionScopedClientTarget(
   subscribedSessionId: string | null,
   requestedSessionId: unknown,
@@ -533,10 +543,11 @@ export class WsControlPlane {
           });
           return;
         }
-        const { nodeId, grants } = (msg.payload ?? {}) as {
+        const p = (msg.payload ?? msg) as {
           nodeId?: string;
           grants?: Partial<Record<NodeCapability, boolean>>;
         };
+        const { nodeId, grants } = p;
         if (!nodeId || !grants || typeof grants !== "object") {
           this.send(client.ws, {
             type: "error",
@@ -1534,6 +1545,14 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local provider for gateway node"));
+    // Agent-execution ops run the CLI agent on the remote node with full device
+    // access, so they must be gated behind the "agent" capability just like any
+    // other privileged operation. Without a grant they must be denied outright
+    // rather than proxied (otherwise an unconfigured node is fully accessible).
+    if (isAgentProviderOp(op)) {
+      const denied = this.permissionDeniedError(nodeId, "agent");
+      if (denied) return Promise.reject(denied);
+    }
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));

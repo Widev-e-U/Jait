@@ -10,7 +10,7 @@ import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem, ToolCall
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
-import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
+import { DebugPanel } from '@/components/debug/debug-panel'
 import { AppHeader } from '@/components/app-shell/app-header'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
 import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
@@ -4603,7 +4603,6 @@ function App() {
                   searchResults={searchResults}
                   sessionInfo={sessionInfo}
                   showArchitecture={showArchitecture}
-                  showDebugPanel={showDebugPanel}
                   showProject={showProject}
                   showSidebar={showSidebar}
                   showTerminal={showTerminal}
@@ -4628,11 +4627,11 @@ function App() {
                   onShowFewer={showFewerProjects}
                   onShowMore={showMoreProjects}
                   onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
-                  onToggleDebug={() => setShowDebugPanel((d) => !d)}
                   onToggleEditor={() => { void handleToggleEditor() }}
                   onTogglePreview={() => { void handleSidebarPreviewToggle() }}
                   onToggleSidebar={() => setShowSidebar((s) => !s)}
                   onToggleTerminal={() => { void handleToggleTerminal() }}
+                  onOpenSettings={() => setCurrentView('settings')}
                 />
               )}
 
@@ -4918,7 +4917,7 @@ function App() {
             {viewMode === 'developer' && showDebugPanel && (
               <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
                 <ErrorBoundary name="Debug panel" variant="section" className="h-full" resetKeys={[showDebugPanel, activeSessionId]}>
-                  <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
+                  <DebugPanel onClose={() => setShowDebugPanel(false)} />
                 </ErrorBoundary>
               </div>
             )}

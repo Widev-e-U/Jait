@@ -31,7 +31,7 @@ export function clearSSEDebugEvents() {
   _listeners.forEach(fn => fn())
 }
 
-function useSSEDebugEvents() {
+export function useSSEDebugEvents() {
   const [, setTick] = useState(0)
   useEffect(() => {
     const listener = () => setTick(t => t + 1)

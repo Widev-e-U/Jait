@@ -121,7 +121,7 @@ export function useNodePermissions(token: string | null): NodePermissionsApi {
       }
       setSaveError(null);
       setSaving(true);
-      ws.send(JSON.stringify({ type: "nodes.update-permissions", nodeId, grants }));
+      ws.send(JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }));
     },
     [],
   );
