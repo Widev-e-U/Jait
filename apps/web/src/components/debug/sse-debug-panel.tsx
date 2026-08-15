@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { X, Trash2, ArrowDown, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -58,9 +57,6 @@ const typeColors: Record<string, string> = {
 }
 
 const ROW_HEIGHT = 20
-// Estimated height of a collapsed row for the virtualizer. The actual row is
-// taller than the 20px content column: py-1 (8px) + 20px content = 28px.
-const ROW_ESTIMATE = 28
 
 export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
   const events = useSSEDebugEvents()
@@ -83,13 +79,6 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
     ? events.filter(e => e.type.includes(filter) || e.raw.includes(filter))
     : events
 
-  const virtualizer = useVirtualizer({
-    count: filtered.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_ESTIMATE,
-    overscan: 30,
-  })
-
   const handleCopy = () => {
     const text = filtered
       .map(e => `${new Date(e.ts).toISOString().slice(11, 23)} ${e.type} ${e.raw}`)
@@ -101,8 +90,9 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
 
   // Auto-scroll to bottom when new events arrive
   useEffect(() => {
-    if (autoScroll && filtered.length > 0) {
-      virtualizer.scrollToIndex(filtered.length - 1, { align: 'end' })
+    const el = scrollRef.current
+    if (el && autoScroll && filtered.length > 0) {
+      el.scrollTop = el.scrollHeight
     }
   }, [filtered.length, autoScroll])
 
@@ -141,55 +131,41 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
         </div>
       </div>
 
-      {/* Virtualized event stream */}
+      {/* Event stream (plain flow so the native scrollbar matches the content) */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto overflow-x-hidden"
       >
-        <div
-          style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}
-        >
-          {virtualizer.getVirtualItems().map(virtualRow => {
-            const ev = filtered[virtualRow.index]
-            const time = new Date(ev.ts).toISOString().slice(11, 23)
-            const color = typeColors[ev.type] ?? 'text-zinc-400'
-            const isLong = ev.raw.length > 120
-            const isExpanded = expanded.has(ev.id)
-            const display = isLong && !isExpanded ? ev.raw.slice(0, 120) + '…' : ev.raw
-            return (
-              <div
-                key={ev.id}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
+        {filtered.map(ev => {
+          const time = new Date(ev.ts).toISOString().slice(11, 23)
+          const color = typeColors[ev.type] ?? 'text-zinc-400'
+          const isLong = ev.raw.length > 120
+          const isExpanded = expanded.has(ev.id)
+          const display = isLong && !isExpanded ? ev.raw.slice(0, 120) + '…' : ev.raw
+          return (
+            <div
+              key={ev.id}
+              className={cn(
+                'flex gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none',
+                isExpanded ? 'items-start py-1 bg-zinc-800/30' : 'items-center',
+              )}
+              onClick={() => toggleExpand(ev.id)}
+            >
+              <span className="text-zinc-600 shrink-0 w-20" style={{ minHeight: ROW_HEIGHT }}>{time}</span>
+              <span className={cn('shrink-0 w-28 text-right', color)} style={{ minHeight: ROW_HEIGHT }}>{ev.type}</span>
+              <span
                 className={cn(
-                  'flex gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none',
-                  isExpanded ? 'items-start py-1 bg-zinc-800/30' : 'items-center',
+                  'text-zinc-400 min-w-0',
+                  isExpanded ? 'break-all whitespace-pre-wrap' : 'truncate',
                 )}
-                onClick={() => toggleExpand(ev.id)}
               >
-                <span className="text-zinc-600 shrink-0 w-20" style={{ minHeight: ROW_HEIGHT }}>{time}</span>
-                <span className={cn('shrink-0 w-28 text-right', color)} style={{ minHeight: ROW_HEIGHT }}>{ev.type}</span>
-                <span
-                  className={cn(
-                    'text-zinc-400 min-w-0',
-                    isExpanded ? 'break-all whitespace-pre-wrap' : 'truncate',
-                  )}
-                >
-                  {display}
-                  {isLong && !isExpanded && <span className="text-zinc-600 ml-1">▸</span>}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+                {display}
+                {isLong && !isExpanded && <span className="text-zinc-600 ml-1">▸</span>}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       {/* Scroll-to-bottom indicator */}
@@ -201,7 +177,8 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
             className="h-6 w-6 rounded-full bg-zinc-800 border-zinc-600"
             onClick={() => {
               setAutoScroll(true)
-              virtualizer.scrollToIndex(filtered.length - 1, { align: 'end' })
+              const el = scrollRef.current
+              if (el) el.scrollTop = el.scrollHeight
             }}
           >
             <ArrowDown className="h-3 w-3" />

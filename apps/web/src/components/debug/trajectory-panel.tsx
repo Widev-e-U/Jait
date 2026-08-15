@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,12 +11,6 @@ interface TrajectoryPanelProps {
 }
 
 const STEP_ROW_HEIGHT = 24
-// Estimated height of a collapsed row for the virtualizer. The actual row is
-// taller than the 24px content column: py-1 (8px) + 24px content + 1px border
-// = 33px. Keeping the estimate in sync with the real collapsed height keeps the
-// scrollbar representative of the message list (otherwise getTotalSize()
-// undercounts and the thumb no longer matches the content).
-const STEP_ROW_ESTIMATE = 33
 
 type Role = 'user' | 'assistant' | 'tool' | 'done' | 'error'
 
@@ -156,15 +149,6 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
     })
   }, [steps, filter])
 
-  const virtualizer = useVirtualizer({
-    count: filtered.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => STEP_ROW_ESTIMATE,
-    overscan: 30,
-    // Open at the newest step, matching the chat's stick-to-bottom behaviour.
-    initialOffset: Number.MAX_SAFE_INTEGER,
-  })
-
   // ── Auto-scroll (same stick-to-bottom behaviour as the chat) ──
   const stickToBottomRef = useRef(true)
   const userScrollingRef = useRef(false)
@@ -204,6 +188,12 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
     }
   }, [handleScroll])
 
+  // Open at the newest step, matching the chat's stick-to-bottom behaviour.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [])
+
   // Follow newly appended steps while stuck to the bottom (mirrors the chat's
   // streaming auto-scroll).
   const prevStepCountRef = useRef(0)
@@ -211,10 +201,10 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
     const el = scrollRef.current
     if (!el) return
     if (filtered.length > prevStepCountRef.current && stickToBottomRef.current && !userScrollingRef.current) {
-      virtualizer.scrollToOffset(Number.MAX_SAFE_INTEGER)
+      el.scrollTop = el.scrollHeight
     }
     prevStepCountRef.current = filtered.length
-  }, [filtered.length, virtualizer])
+  }, [filtered.length])
 
   const handleCopy = () => {
     const text = steps
@@ -265,50 +255,38 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
         </div>
       </div>
 
-      {/* Virtualized step list */}
+      {/* Step list (plain flow so the native scrollbar matches the content) */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
-          {virtualizer.getVirtualItems().map(virtualRow => {
-            const step = filtered[virtualRow.index]
-            const isExpanded = expanded.has(step.index)
-            const isSelected = selected === step.index
-            const hasDetail = step.kind === 'tool' || (step.kind === 'assistant' && (step.thinking || step.text)) || step.kind === 'error'
-            return (
-              <div
-                key={`${step.role}-${step.index}`}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                className={cn(
-                  'flex items-start gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none border-b border-zinc-800/40',
-                  isExpanded || isSelected ? 'py-1 bg-zinc-800/30' : 'py-1',
-                )}
-                onClick={() => {
-                  if (hasDetail) toggleExpand(step.index)
-                  setSelected(step.index)
-                }}
-              >
-                <span className="w-14 shrink-0 text-right font-bold" style={{ minHeight: STEP_ROW_HEIGHT }}>
-                  <span className={roleStyles[step.role]}>{roleLabels[step.role]}</span>
+        {filtered.map(step => {
+          const isExpanded = expanded.has(step.index)
+          const isSelected = selected === step.index
+          const hasDetail = step.kind === 'tool' || (step.kind === 'assistant' && (step.thinking || step.text)) || step.kind === 'error'
+          return (
+            <div
+              key={`${step.role}-${step.index}`}
+              className={cn(
+                'flex items-start gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none border-b border-zinc-800/40',
+                isExpanded || isSelected ? 'py-1 bg-zinc-800/30' : 'py-1',
+              )}
+              onClick={() => {
+                if (hasDetail) toggleExpand(step.index)
+                setSelected(step.index)
+              }}
+            >
+              <span className="w-14 shrink-0 text-right font-bold" style={{ minHeight: STEP_ROW_HEIGHT }}>
+                <span className={roleStyles[step.role]}>{roleLabels[step.role]}</span>
+              </span>
+              {hasDetail && (
+                <span className="shrink-0 w-3 text-zinc-500">
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </span>
-                {hasDetail && (
-                  <span className="shrink-0 w-3 text-zinc-500">
-                    {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <StepContent step={step} expanded={isExpanded} />
-                </span>
-              </div>
-            )
-          })}
-        </div>
+              )}
+              <span className="min-w-0 flex-1">
+                <StepContent step={step} expanded={isExpanded} />
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       {/* Selected step details */}
