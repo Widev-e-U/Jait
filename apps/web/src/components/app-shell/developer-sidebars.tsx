@@ -1,4 +1,4 @@
-import { Boxes, Code, Globe, PanelLeftClose, PanelLeftOpen, Settings, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Bug, Code, Globe, PanelLeftClose, PanelLeftOpen, Settings, Terminal as TerminalIcon } from 'lucide-react'
 import type { FocusEvent, RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
@@ -28,6 +28,7 @@ interface DeveloperSidebarsProps {
   searchResults: ProjectSearchResults | null
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
+  showDebugPanel: boolean
   showProject: boolean
   showSidebar: boolean
   showTerminal: boolean
@@ -52,6 +53,7 @@ interface DeveloperSidebarsProps {
   onShowFewer: () => void
   onShowMore: () => void
   onToggleArchitecture: () => void
+  onToggleDebug: () => void
   onToggleEditor: () => void
   onTogglePreview: () => void
   onToggleSidebar: () => void
@@ -77,6 +79,7 @@ export function DeveloperSidebars({
   searchResults,
   sessionInfo,
   showArchitecture,
+  showDebugPanel,
   showProject,
   showSidebar,
   showTerminal,
@@ -101,6 +104,7 @@ export function DeveloperSidebars({
   onShowFewer,
   onShowMore,
   onToggleArchitecture,
+  onToggleDebug,
   onToggleEditor,
   onTogglePreview,
   onToggleSidebar,
@@ -176,6 +180,21 @@ export function DeveloperSidebars({
             </>
           )}
           <div className="flex-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showDebugPanel ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-9 w-9 rounded-md p-0"
+                disabled={!activeSessionId}
+                aria-label="Trajectory"
+                onClick={onToggleDebug}
+              >
+                <Bug className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Trajectory</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" aria-label="Settings" onClick={onOpenSettings}>

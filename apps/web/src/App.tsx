@@ -4603,6 +4603,7 @@ function App() {
                   searchResults={searchResults}
                   sessionInfo={sessionInfo}
                   showArchitecture={showArchitecture}
+                  showDebugPanel={showDebugPanel}
                   showProject={showProject}
                   showSidebar={showSidebar}
                   showTerminal={showTerminal}
@@ -4627,6 +4628,7 @@ function App() {
                   onShowFewer={showFewerProjects}
                   onShowMore={showMoreProjects}
                   onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
+                  onToggleDebug={() => setShowDebugPanel((d) => !d)}
                   onToggleEditor={() => { void handleToggleEditor() }}
                   onTogglePreview={() => { void handleSidebarPreviewToggle() }}
                   onToggleSidebar={() => setShowSidebar((s) => !s)}

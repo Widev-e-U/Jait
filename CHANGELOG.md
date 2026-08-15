@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.719](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.719) — 2026-08-15
+- fix(chat): restore access to the Trajectory debug panel from inside a chat — the desktop developer sidebar footer now has a Trajectory button (Bug icon) that toggles the trajectory panel for any active session, and the mobile toolbar's debug button now appears for any developer chat (previously only project chats) with its tooltip renamed to "Trajectory", so the trajectory view is reachable again on both desktop and mobile after the last release dropped the toolbar entry point
+
 ## [v0.1.718](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.718) — 2026-08-15
 - feat(debug): add a trajectory debug panel alongside the existing SSE view — the developer-mode debug drawer now has Trajectory and SSE tabs, where Trajectory reconstructs the agent's model trajectory (provider/model/mode, direction/feedback, files) from the live chat and lets you scrub through it; a small `trajectory-builder` turns raw chat events into the ordered trajectory the panel renders
 - feat(settings): replace the debug toggle in the developer sidebar with a Settings button that opens the Settings view directly, so the full settings page is one click away from a project instead of being buried in the project menu

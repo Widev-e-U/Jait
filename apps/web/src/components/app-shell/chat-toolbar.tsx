@@ -283,7 +283,7 @@ export function ChatToolbar({
         </Tooltip>
       )}
 
-      {viewMode === 'developer' && showProject && activeProject && (
+      {viewMode === 'developer' && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -295,7 +295,7 @@ export function ChatToolbar({
               <Bug className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">SSE debug stream</TooltipContent>
+          <TooltipContent side="bottom">Trajectory</TooltipContent>
         </Tooltip>
       )}
 
