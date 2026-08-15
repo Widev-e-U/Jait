@@ -92,6 +92,16 @@ export interface AppConfig {
   /** Display name advertised to the primary for this node (defaults to the hostname). */
   nodeName: string;
   /**
+   * SSH account used by the os.* Windows driver to reach the dockur Windows VM
+   * (provisioned in the VM via SSH_USERNAME). Override with WINDOWS_SSH_USERNAME.
+   */
+  windowsSshUsername: string;
+  /**
+   * SSH password used by the os.* Windows driver (provisioned via SSH_PASSWORD).
+   * Override with WINDOWS_SSH_PASSWORD.
+   */
+  windowsSshPassword: string;
+  /**
    * Run as a headless remote node only. In this mode the process does not
    * expose the gateway HTTP dashboard/API and only opens the outbound primary
    * link used for remote filesystem and terminal access.
@@ -169,6 +179,11 @@ export function loadConfig(): AppConfig {
     primaryGateway,
     primaryToken: process.env["JAIT_PRIMARY_TOKEN"]?.trim() ?? "",
     nodeName: process.env["JAIT_NODE_NAME"]?.trim() ?? "",
+    // Windows VM sandbox SSH channel — matches the dockur image defaults
+    // (docker/Dockerfile.windows-sandbox) so the os.* Windows driver works
+    // out of the box; override when the VM is provisioned with other creds.
+    windowsSshUsername: process.env["WINDOWS_SSH_USERNAME"]?.trim() ?? "Docker",
+    windowsSshPassword: process.env["WINDOWS_SSH_PASSWORD"]?.trim() ?? "admin",
     nodeOnly,
   };
 }

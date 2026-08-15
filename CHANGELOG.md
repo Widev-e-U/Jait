@@ -4,6 +4,20 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.715](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.715) — 2026-08-15
+- feat(gateway): node capability permission model — every node that says hello is persisted with a deny-all grant map (terminal, filesystem, screen, voice, browser, camera, network), enforced at the WebSocket route boundary, with denials written to the consent log and `nodes.list` / `nodes.get` / `nodes.update-permissions` control messages to inspect and change grants
+- feat(web): "Nodes & Permissions" settings tab plus an onboarding gate that surfaces newly seen nodes so their capabilities can be granted deliberately instead of implicitly
+- feat(gateway): Windows VM sandbox (`windows.sandbox.start` / `windows.sandbox.stop`) built on `dockurr/windows`, with an RDP + web-viewer endpoint, KVM acceleration, persistent disk under `$JAIT_WINDOWS_SANDBOX_STORAGE`, and docker/compose files for standalone testing
+- feat(gateway): Linux desktop sandbox (`linux.desktop.sandbox.start` / `linux.desktop.sandbox.stop`) and an `os-control` layer with Windows (SSH-driven) and Linux desktop drivers behind a shared resolver, so `os.*` screenshot/click/type/exec tools run against a sandboxed desktop
+- feat(gateway): Codex-style context compaction — history now stays verbatim until usage crosses 85% of the model window and then summarizes once, replacing the tiered tool-result crushing that kept erasing file contents the model had just read
+- feat(gateway): serve the real provider/model list to the jobs UI (including expanded jait-backend models) instead of a hardcoded OpenAI/Ollama stub, and let jobs carry a description
+- fix(web): require every question in a user-questions prompt to be answered before submit, so mobile-web sends the complete answer map, and keep the submit row pinned while the prompt scrolls
+- test(gateway): cover node permissions, the sandbox manager, and the os-control resolver; make the Ollama e2e suite opt-in via `OLLAMA_E2E=1` so it stops failing on machines that cannot load the 26B model
+
+## [v0.1.714](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.714) — 2026-08-15
+- feat(web): polish the conversation minimap scroll bar — right-aligned user-turn preview lines, centered viewport indicator, reactive scroll-container ref
+- fix(gateway): replace the bare `require()` in screenshot-tools with top-level `node:fs` / `node:path` imports for ESM
+
 ## [v0.1.713](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.713) — 2026-08-14
 - feat(gateway): stop the agent loop from stacking a fresh "keep going" reminder every 4 rounds — one live copy now replaces the previous one and re-injects the session's todo list, so the goal survives context compaction instead of being thrown away with the plan-creating tool result
 - feat(gateway): detect investigation-without-progress (rounds that only read/search and complete no plan step) — re-anchor the model on the goal after 12 such rounds, and withhold tools for one round after 24 so the model has to answer instead of circling forever

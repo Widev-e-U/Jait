@@ -242,7 +242,7 @@ async function main() {
   surfaceRegistry.register(new BrowserSurfaceFactory());
 
   // WebSocket control plane (created early so consent callbacks can reference it)
-  const ws = new WsControlPlane(config);
+  const ws = new WsControlPlane(config, db);
   const threadReviewSync = new ThreadReviewSyncService({ threadService, ws });
 
   // Notification service — broadcasts to all connected clients

@@ -40,6 +40,7 @@ export function CreateJobDialog({
   
   // Form state
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [jobType, setJobType] = useState<JobType>('agent_task')
   const [schedule, setSchedule] = useState('0 * * * *')
   const [customSchedule, setCustomSchedule] = useState('')
@@ -62,6 +63,7 @@ export function CreateJobDialog({
 
   const applyJobToForm = (job: ScheduledJob) => {
     setName(job.name)
+    setDescription(job.description || '')
     setJobType(job.job_type as JobType)
     setSchedule(job.cron_expression)
     setEnabled(job.enabled)
@@ -119,6 +121,7 @@ export function CreateJobDialog({
     } else {
       // Reset form for new job
       setName('')
+      setDescription('')
       setJobType('agent_task')
       setSchedule('0 * * * *')
       setCustomSchedule('')
@@ -148,6 +151,7 @@ export function CreateJobDialog({
 
     const jobData: CreateJobRequest = {
       name,
+      description: description || undefined,
       job_type: jobType,
       cron_expression: normalizedSchedule,
       enabled,
@@ -313,6 +317,17 @@ export function CreateJobDialog({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="My scheduled job"
                 required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What this job does (optional)"
+                rows={2}
               />
             </div>
 

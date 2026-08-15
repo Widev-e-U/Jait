@@ -43,8 +43,11 @@ export type {
   NodeHelloPayload,
   NodeState,
   NodeRegistrySnapshot,
+  NodeCapability,
+  NodePermissionRecord,
+  NodeWithPermissions,
 } from "./node.js";
-export { NODE_PROTOCOL_VERSION } from "./node.js";
+export { NODE_PROTOCOL_VERSION, NODE_CAPABILITIES } from "./node.js";
 
 export type {
   NetworkHost,

@@ -269,7 +269,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
   if (deps.scheduler) {
-    registerJobRoutes(app, config, deps.scheduler);
+    registerJobRoutes(app, config, deps.scheduler, {
+      providerRegistry: deps.providerRegistry,
+      providerAccountService: deps.providerAccountService,
+      userService: deps.userService,
+    });
   }
 
   if (deps.deviceRegistry && deps.consentManager) {

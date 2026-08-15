@@ -17,6 +17,7 @@ export {
   createImageViewTool,
 } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
+export { createOsControlToolset } from "./os-control-tools.js";
 export {
   createSurfacesListTool,
   createSurfacesStartTool,
@@ -46,6 +47,12 @@ export {
 } from "./browser-tools.js";
 import { createScreenshotCaptureTool } from "./screenshot-tools.js";
 export { createScreenshotCaptureTool } from "./screenshot-tools.js";
+export {
+  createWindowsSandboxStartTool,
+  createWindowsSandboxStopTool,
+  createLinuxDesktopSandboxStartTool,
+  createLinuxDesktopSandboxStopTool,
+} from "./sandbox-tools.js";
 export {
   createMemorySaveTool,
   createMemorySearchTool,
@@ -117,6 +124,7 @@ export {
   pruneHistory,
   repairToolCallHistory,
   generateLLMConversationSummary,
+  CONTEXT_COMPACT_TRIGGER_RATIO,
   buildToolSchemas,
   buildTieredToolSchemas,
   toolDefsToSchemas,
@@ -158,6 +166,9 @@ import {
   createImageViewTool,
 } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
+import { createOsControlToolset } from "./os-control-tools.js";
+import { createOsControlResolver } from "../os-control/resolver.js";
+import { SandboxManager } from "../security/sandbox-manager.js";
 import {
   createSurfacesListTool,
   createSurfacesStartTool,
@@ -185,6 +196,12 @@ import {
   createWebSearchTool,
   createBrowserSandboxStartTool,
 } from "./browser-tools.js";
+import {
+  createWindowsSandboxStartTool,
+  createWindowsSandboxStopTool,
+  createLinuxDesktopSandboxStartTool,
+  createLinuxDesktopSandboxStopTool,
+} from "./sandbox-tools.js";
 import {
   createMemorySaveTool,
   createMemorySearchTool,
@@ -508,6 +525,22 @@ export function createToolRegistry(
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
+  tools.register(createWindowsSandboxStartTool());
+  tools.register(createWindowsSandboxStopTool());
+  tools.register(createLinuxDesktopSandboxStartTool());
+  tools.register(createLinuxDesktopSandboxStopTool());
+
+  // Operating-system control (desktop screen capture + input injection)
+  // The Windows channel talks to the VM's OpenSSH; pass the dockur SSH
+  // credentials through so the driver doesn't fall back to empty defaults.
+  for (const tool of createOsControlToolset(
+    createOsControlResolver(new SandboxManager(), {
+      username: deps.config?.windowsSshUsername ?? "Docker",
+      password: deps.config?.windowsSshPassword ?? "admin",
+    }),
+  )) {
+    tools.register(tool);
+  }
   tools.register(createScreenshotCaptureTool());
 
   // Email tools (Gmail / Outlook) — only when an EmailService is wired

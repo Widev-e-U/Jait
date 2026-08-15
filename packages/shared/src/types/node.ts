@@ -59,3 +59,35 @@ export interface NodeRegistrySnapshot {
   serverTime: string;
   nodes: NodeState[];
 }
+
+// ─── Node capability grants (trust model) ─────────────────────────────
+export type NodeCapability =
+  | "terminal"
+  | "filesystem"
+  | "screen"
+  | "voice"
+  | "browser"
+  | "camera"
+  | "network";
+
+export const NODE_CAPABILITIES: readonly NodeCapability[] = [
+  "terminal",
+  "filesystem",
+  "screen",
+  "voice",
+  "browser",
+  "camera",
+  "network",
+];
+
+export interface NodePermissionRecord {
+  nodeId: string;
+  capability: NodeCapability;
+  granted: boolean;
+}
+
+/** A node with its full permission grant map attached (settings UI + enforcement view). */
+export interface NodeWithPermissions extends NodeState {
+  firstSeenAt?: string;
+  permissions: Record<NodeCapability, boolean>;
+}

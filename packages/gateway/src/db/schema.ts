@@ -4,7 +4,7 @@
  * Tables: sessions, audit_log, trust_levels, consent_log, consent_session_approvals
  * All IDs are UUIDv7 (sortable by time). Single-operator — no users table.
  */
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 
 // ─── Projects ──────────────────────────────────────────────────────
 export const projects = sqliteTable(
@@ -580,6 +580,43 @@ export const networkHosts = sqliteTable(
   },
   (table) => [
     index("idx_network_hosts_last_seen").on(table.lastSeenAt),
+  ],
+);
+
+// ─── Node Permissions (trust model) ─────────────────────────────────
+// `nodes` holds the identity of every device that has ever announced itself
+// to the gateway via `node.hello`. Permission grants live separately in
+// `node_permissions` and default to DENY (no row = no grant), so a newly
+// seen node can execute nothing sensitive until the user explicitly
+// enables capabilities for it.
+export const nodes = sqliteTable(
+  "nodes",
+  {
+    nodeId: text("node_id").primaryKey(),
+    name: text("name"),
+    platform: text("platform"),
+    role: text("role"),
+    firstSeenAt: text("first_seen_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_nodes_last_seen").on(table.lastSeenAt),
+  ],
+);
+
+export const nodePermissions = sqliteTable(
+  "node_permissions",
+  {
+    nodeId: text("node_id").notNull(),
+    capability: text("capability").notNull(), // 'terminal'|'filesystem'|'screen'|'voice'|'browser'|'camera'|'network'
+    granted: integer("granted").notNull().default(0), // 0 = denied, 1 = granted
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    // Composite PK — one row per (node, capability) grant.
+    primaryKey({ columns: [table.nodeId, table.capability] }),
   ],
 );
 

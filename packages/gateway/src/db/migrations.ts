@@ -1443,4 +1443,34 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 59: Node identity + permission grants (trust model) ───────────
+  {
+    id: 59,
+    name: "node_permissions_tables",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS nodes (
+          node_id TEXT PRIMARY KEY,
+          name TEXT,
+          platform TEXT,
+          role TEXT,
+          first_seen_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_nodes_last_seen ON nodes(last_seen_at)`);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS node_permissions (
+          node_id TEXT NOT NULL,
+          capability TEXT NOT NULL,
+          granted INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (node_id, capability)
+        )
+      `);
+    },
+  },
+
 ];

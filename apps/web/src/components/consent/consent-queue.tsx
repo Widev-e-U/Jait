@@ -1,6 +1,6 @@
 import { ActionCard, ToolIcon, useConsentQueue, type ConsentRequestInfo } from './action-card'
 import { ShieldAlert, ShieldCheck, ShieldX, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 // ── StatusBadge ──────────────────────────────────────────────────────
 
@@ -57,9 +57,11 @@ export interface ConsentQueueProps {
   onApproveAllEnabled?: () => void
   /** If true, render as a block inside a shared merged composer surface */
   merged?: boolean
+  /** Called when the presence of visible items changes */
+  onVisibleChange?: (present: boolean) => void
 }
 
-export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled, merged }: ConsentQueueProps) {
+export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled, merged, onVisibleChange }: ConsentQueueProps) {
   const { queue, approve, reject, approveAllForSession } = useConsentQueue(sessionId)
   const [approvingAll, setApprovingAll] = useState(false)
 
@@ -76,6 +78,9 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
     setApprovingAll(false)
   }
 
+  const isPresent = visibleQueue.length > 0
+  useEffect(() => { onVisibleChange?.(isPresent) }, [isPresent, onVisibleChange])
+
   if (visibleQueue.length === 0) {
     return null
   }
@@ -85,7 +90,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
     const first = visibleQueue[0]
     const extra = visibleQueue.length - 1
     return (
-      <div className={`flex flex-nowrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2 border-t bg-background dark:bg-card ${className}`}>
+      <div className={`flex flex-nowrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2 bg-background dark:bg-card ${className}`}>
         <ToolIcon toolName={first.toolName} />
         <span className="text-xs font-semibold text-foreground truncate shrink-0 max-w-[30%]">{first.toolName}</span>
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{first.summary}</span>

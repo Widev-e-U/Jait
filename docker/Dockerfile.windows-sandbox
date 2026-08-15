@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+#
+# Jait Windows VM sandbox — wrapper around dockur/windows.
+#
+# Runs a full Windows VM (QEMU/KVM) inside a container with:
+#   - RDP on 3389 (tcp + udp)
+#   - Web viewer (KasmVNC) on 8006
+#
+# Host requirements:
+#   - Linux with KVM acceleration (/dev/kvm must exist)
+#   - At least 8 GB free RAM and ~32 GB free disk
+#
+# The base image (dockurr/windows) performs a hands-free Windows install on
+# first boot. The disk image lives in the /storage volume, so it persists
+# across container restarts.
+#
+# Build:
+#   docker build -t jait/windows-sandbox:latest -f docker/Dockerfile.windows-sandbox docker
+#
+# Run:
+#   docker run -d --rm --name jait-windows-sandbox \
+#     --device /dev/kvm --device /dev/vhost-net --device /dev/net/tun \
+#     --cap-add NET_ADMIN --stop-timeout 120 \
+#     -p 3389:3389/tcp -p 3389:3389/udp -p 8006:8006 -p 2222:22 \
+#     -v "$PWD/windows-sandbox-storage:/storage" \
+#     jait/windows-sandbox:latest
+#
+# Default VM configuration.  All values can be overridden at runtime with -e
+# (e.g. -e RAM_SIZE=8G -e CPU_CORES=8 -e VERSION=10).
+FROM dockurr/windows:latest
+
+ENV VERSION="11" \
+    RAM_SIZE="6G" \
+    CPU_CORES="4" \
+    DISK_SIZE="64G" \
+    # Enable the Windows OpenSSH server so the os.* Windows driver (os.exec,
+    # os.type, os.keyboard, os.click, os.screenshot) has a channel into the VM.
+    # dockur/windows auto-installs & starts OpenSSH when these are set, creating
+    # the user and printing the connection details in the container logs.
+    SSH_USERNAME="Docker" \
+    SSH_PASSWORD="admin"
+
+EXPOSE 3389 8006 22
+
+# Entrypoint inherited from dockur/windows (/usr/bin/tini -s /run/entry.sh)

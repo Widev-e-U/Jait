@@ -3,6 +3,7 @@ import WebSocket from "ws";
 import * as jose from "jose";
 import { WsControlPlane } from "./ws.js";
 import type { AppConfig } from "./config.js";
+import { openDatabase, migrateDatabase } from "./db/index.js";
 
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 
@@ -73,6 +74,14 @@ function createMessageCollector(ws: WebSocket) {
         });
       });
     },
+    /** Shallow copy of the messages currently queued (no blocking) */
+    peekAll(): unknown[] {
+      return [...queue];
+    },
+    /** Remove and return the message at `index` from the queue */
+    removeAt(index: number): unknown {
+      return queue.splice(index, 1)[0];
+    },
   };
 }
 
@@ -93,13 +102,69 @@ function openWs(port: number, opts?: { token?: string; headers?: Record<string, 
   return { ws, collector };
 }
 
+/**
+ * Grant capabilities to a node over the WS API. Drains the resulting
+ * `nodes.permissions` broadcast so callers can then assert on op dispatch.
+ */
+async function grantPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+  nodeId: string,
+  grants: Record<string, boolean>,
+): Promise<void> {
+  remote.ws.send(
+    JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }),
+  );
+  // Wait until a `nodes.permissions` broadcast reflecting the applied grants is
+  // queued. The update is processed synchronously, but a stale snapshot (e.g.
+  // from node registration) may already be queued, so we scan the queue for the
+  // target node's updated grant values. Stale snapshots for the target node are
+  // removed so the loop makes progress; all unrelated messages (fs.node-registered,
+  // node.updated, …) are left untouched for the rest of the test to consume.
+  for (;;) {
+    const queue = remote.collector.peekAll();
+    let madeProgress = false;
+    for (let i = 0; i < queue.length; i++) {
+      const msg = queue[i] as any;
+      if (msg.type !== "nodes.permissions") continue;
+      const node = (msg.payload?.nodes ?? []).find(
+        (n: any) => n.id === nodeId || n.nodeId === nodeId,
+      );
+      if (!node) continue;
+      const perms = node.permissions ?? node;
+      const matches = Object.entries(grants).every(
+        ([cap, expected]) => perms[cap] === expected,
+      );
+      remote.collector.removeAt(i);
+      if (matches) return;
+      // Stale snapshot for the target node — drop it and re-scan.
+      madeProgress = true;
+      break;
+    }
+    if (!madeProgress) await new Promise((r) => setTimeout(r, 30));
+  }
+}
+
+/** Pull the next `nodes.permissions` broadcast, skipping unrelated messages. */
+async function nextNodesPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+): Promise<any> {
+  for (;;) {
+    const msg = await remote.collector.next(3000);
+    if (msg.type === "nodes.permissions") return msg;
+  }
+}
+
 describe("WsControlPlane", () => {
   let plane: WsControlPlane;
   let port: number;
+  let db: Awaited<ReturnType<typeof openDatabase>>["db"];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const config = makeConfig({ wsPort: 0 });
-    plane = new WsControlPlane(config);
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    migrateDatabase(opened.sqlite);
+    plane = new WsControlPlane(config, db);
     plane.start();
     const addr = (plane as any).wss?.address();
     port = typeof addr === "object" ? addr.port : 0;
@@ -663,6 +728,8 @@ describe("WsControlPlane", () => {
       }));
       await new Promise((r) => setTimeout(r, 50));
 
+      await grantPermissions(remote, "remote-tool-node", { terminal: true });
+
       const chunks: Array<{ chunk: string; metadata?: { streamId: string; seq: number } }> = [];
       const resultPromise = plane.proxyToolOp<{ ok: boolean }>(
         "remote-tool-node",
@@ -732,6 +799,8 @@ describe("WsControlPlane", () => {
       }));
       await new Promise((r) => setTimeout(r, 50));
 
+      await grantPermissions(remote, "remote-terminal-node", { terminal: true });
+
       const outputEvents: Array<{ terminalId: string; data: string; nodeId?: string }> = [];
       plane.onRemoteTerminalOutput = (terminalId, data, nodeId) => {
         outputEvents.push({ terminalId, data, nodeId });
@@ -745,7 +814,7 @@ describe("WsControlPlane", () => {
 
       let request = await remote.collector.next();
       while (request.type !== "terminal.op-request") {
-        expect(["node.updated", "fs.node-registered"]).toContain(request.type);
+        expect(["node.updated", "fs.node-registered", "nodes.permissions"]).toContain(request.type);
         request = await remote.collector.next();
       }
       expect(request.type).toBe("terminal.op-request");
@@ -782,6 +851,92 @@ describe("WsControlPlane", () => {
       remote.ws.close();
     });
 
+    it("denies terminal ops by default on an unconfigured node (deny-all) and records to audit", async () => {
+      const token = await createToken("user-terminal-deny");
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      remote.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "deny-node",
+          name: "Deny Node",
+          platform: "linux",
+          role: "desktop",
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [], interactiveTerminal: true },
+        },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "deny-node", name: "Deny Node", platform: "linux", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // No grants were configured — terminal must be rejected, not dispatched.
+      await expect(
+        plane.proxyTerminalOp("deny-node", "start", { cols: 80, rows: 24 }),
+      ).rejects.toThrow(/permission_denied: node deny-node not granted terminal/);
+
+      // No terminal.op-request was ever forwarded to the node (skip unrelated broadcasts).
+      const forwarded = await remote.collector.maybeNext(150);
+      expect(forwarded && forwarded.type).not.toBe("terminal.op-request");
+
+      remote.ws.close();
+    });
+
+    it("round-trips node grants through nodes.list and nodes.update-permissions", async () => {
+      const token = await createToken("user-terminal-perms");
+
+      const admin = openWs(port, { token });
+      await waitForOpen(admin.ws);
+      await admin.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      admin.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: {
+          id: "roundtrip-node",
+          name: "Roundtrip Node",
+          platform: "darwin",
+          role: "desktop",
+          capabilities: { providers: [], surfaces: ["filesystem", "terminal"], tools: [], interactiveTerminal: true },
+        },
+      }));
+      admin.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "roundtrip-node", name: "Roundtrip Node", platform: "darwin", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Initially deny-all.
+      admin.ws.send(JSON.stringify({ type: "nodes.list" }));
+      let snap = await nextNodesPermissions(admin);
+      let node = snap.payload.nodes.find((n: any) => n.id === "roundtrip-node");
+      expect(node.permissions.terminal).toBe(false);
+      expect(node.permissions.filesystem).toBe(false);
+
+      // Grant terminal + filesystem.
+      admin.ws.send(JSON.stringify({
+        type: "nodes.update-permissions",
+        payload: { nodeId: "roundtrip-node", grants: { terminal: true, filesystem: true } },
+      }));
+      // Broadcast arrives after the update is applied. Skip stale queued
+      // snapshots (the nodes.list response) until we see the persisted grants.
+      for (;;) {
+        snap = await nextNodesPermissions(admin);
+        node = snap.payload.nodes.find((n: any) => n.id === "roundtrip-node");
+        if (node?.permissions?.terminal) break;
+      }
+      expect(node.permissions.terminal).toBe(true);
+      expect(node.permissions.filesystem).toBe(true);
+      expect(node.permissions.screen).toBe(false);
+
+      admin.ws.close();
+    });
+
     it("fast-fails terminal.start on nodes that do not claim interactiveTerminal support", async () => {
       const token = await createToken("user-terminal-nocap");
 
@@ -807,6 +962,8 @@ describe("WsControlPlane", () => {
         payload: { id: "remote-terminal-legacy", name: "Legacy Terminal Node", platform: "linux", providers: [] },
       }));
       await new Promise((r) => setTimeout(r, 50));
+
+      await grantPermissions(remote, "remote-terminal-legacy", { terminal: true });
 
       await expect(
         plane.proxyTerminalOp("remote-terminal-legacy", "start", {

@@ -1,0 +1,47 @@
+# Standalone Windows VM sandbox for manual testing.
+#
+#   docker compose -f docker/docker-compose.windows-sandbox.yml up -d
+#   docker compose -f docker/docker-compose.windows-sandbox.yml logs -f
+#
+# Then open http://localhost:8006 (web viewer) or connect an RDP client to
+# localhost:3389 (user: Docker / password: admin).
+#
+# Requires a Linux host with KVM (/dev/kvm). The first start downloads the
+# Windows 11 ISO and performs a hands-free install; the disk image persists in
+# ./windows-sandbox-storage so later starts boot straight into Windows.
+# Delete that folder to reset the VM.
+
+services:
+  windows-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.windows-sandbox
+    image: jait/windows-sandbox:latest
+    container_name: jait-windows-sandbox
+    environment:
+      VERSION: "11"
+      RAM_SIZE: "6G"
+      CPU_CORES: "4"
+      DISK_SIZE: "64G"
+      USERNAME: "Docker"
+      PASSWORD: "admin"
+      # OpenSSH inside the VM (used by the os.* Windows driver). The image
+      # defaults match these; kept explicit so the VM account and SSH account
+      # stay aligned.
+      SSH_USERNAME: "Docker"
+      SSH_PASSWORD: "admin"
+    devices:
+      - /dev/kvm
+      - /dev/vhost-net
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "3389:3389/tcp"
+      - "3389:3389/udp"
+      - "8006:8006"
+      - "2222:22"
+    volumes:
+      - ./windows-sandbox-storage:/storage
+    restart: unless-stopped
+    stop_grace_period: 2m

@@ -76,7 +76,7 @@ export function FilesChanged({
   return (
     <div ref={rootRef} className={cn(
       'overflow-hidden',
-      merged ? 'border-b' : 'rounded-lg border bg-muted/30',
+      merged ? '' : 'rounded-lg border bg-muted/30',
       className,
     )}>
       {/* Header */}

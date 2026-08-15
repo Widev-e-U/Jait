@@ -113,7 +113,7 @@ describe("POST /api/terminals with remote nodeId", () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new TerminalSurfaceFactory());
 
-    plane = new WsControlPlane(config);
+    plane = new WsControlPlane(config, db);
 
     // Mirror the production wiring in index.ts so remote terminal output is
     // broadcast to subscribed clients and input/replay are forwarded.
@@ -213,6 +213,13 @@ describe("POST /api/terminals with remote nodeId", () => {
     // Drain registration broadcasts until the node is known to the plane.
     await new Promise((r) => setTimeout(r, 100));
     expect(plane.isRemoteNode(REMOTE_NODE_ID)).toBe(true);
+
+    // Grant terminal permission for the remote node (deny-by-default otherwise).
+    remote.ws.send(JSON.stringify({
+      type: "nodes.update-permissions",
+      payload: { nodeId: REMOTE_NODE_ID, grants: { terminal: true } },
+    }));
+    await remote.collector.next(); // nodes.permissions
 
     // ── 2. Subscribe a second client that will watch terminal output ─
     const viewer = openWs(httpPort, token);

@@ -13,6 +13,7 @@ import { ChannelSettings } from './ChannelSettings'
 import { EmailSettings } from './EmailSettings'
 import { CalendarSettings } from './CalendarSettings'
 import { UsageSettings } from './UsageSettings'
+import { NodesPermissionsTab } from './NodesPermissionsTab'
 import { KeyboardShortcutSettings } from './KeyboardShortcutSettings'
 import { PatchNotesTooltip } from './PatchNotesTooltip'
 import { Switch } from '@/components/ui/switch'
@@ -134,7 +135,7 @@ interface WearStatus {
   }>
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'shortcuts' | 'usage' | 'activity' | 'changelog'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'email' | 'channels' | 'shortcuts' | 'usage' | 'activity' | 'nodes' | 'changelog'
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   general: 'General',
@@ -147,6 +148,7 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   shortcuts: 'Shortcuts',
   usage: 'Usage',
   activity: 'Activity',
+  nodes: 'Nodes & Permissions',
   changelog: 'Changelog',
 }
 
@@ -1722,6 +1724,10 @@ export function SettingsPage({
 
         <TabsContent value="usage" className="space-y-6">
           <UsageSettings token={token} />
+        </TabsContent>
+
+        <TabsContent value="nodes" className="space-y-6">
+          <NodesPermissionsTab token={token} />
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">

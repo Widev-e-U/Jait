@@ -19,6 +19,24 @@ import type { Server as HttpServer } from "node:http";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
 import { NodeStateManager } from "./services/node-state-manager.js";
 import type { ToolOutputStreamMetadata } from "./tools/contracts.js";
+import type { JaitDB } from "./db/connection.js";
+import { NodePermissionsService, isNodeCapability } from "./services/node-permissions.js";
+import type {
+  NodeCapability,
+  NodePlatform,
+  NodeRole,
+  NodeWithPermissions,
+} from "@jait/shared";
+import type { NodeCapabilities } from "@jait/shared";
+
+const EMPTY_CAPABILITIES: NodeCapabilities = {
+  providers: [],
+  surfaces: [],
+  tools: [],
+  screenShare: false,
+  voice: false,
+  preview: false,
+};
 
 interface ConnectedClient {
   id: string;
@@ -53,6 +71,8 @@ export class WsControlPlane {
   private jwtSecret: Uint8Array;
   /** Server-side keepalive: pings clients and terminates dead sockets. */
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  /** Node capability grants — source of truth for route-boundary enforcement. */
+  private nodePermissions!: NodePermissionsService;
 
   /** Filesystem nodes registered by clients (keyed by node ID) */
   private fsNodes = new Map<string, FsNode>();
@@ -110,9 +130,10 @@ export class WsControlPlane {
   getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 
-  constructor(private config: AppConfig) {
+  constructor(private config: AppConfig, db?: JaitDB) {
     if (!config.jwtSecret.trim()) throw new Error("JWT secret is not configured");
     this.jwtSecret = new TextEncoder().encode(config.jwtSecret);
+    this.nodePermissions = new NodePermissionsService(db ?? null);
   }
 
   /**
@@ -449,7 +470,95 @@ export class WsControlPlane {
           protocolVersion: payload.protocolVersion ?? NODE_PROTOCOL_VERSION,
           capabilities: payload.capabilities,
         });
+        // Persist node identity + deny-all default grants on first-seen.
+        this.nodePermissions.ensureNodeSeen(payload);
         this.broadcastNodeUpdate(node);
+        this.broadcastNodePermissions();
+        break;
+      }
+      case "nodes.list": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate before listing nodes", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        this.send(client.ws, {
+          type: "nodes.permissions",
+          sessionId: client.sessionId ?? "",
+          timestamp: new Date().toISOString(),
+          payload: { nodes: this.buildNodePermissionSnapshot() },
+        });
+        break;
+      }
+      case "nodes.get": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const nodeId = (msg.payload as { nodeId?: string } | undefined)?.nodeId;
+        if (!nodeId) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "nodes.get requires nodeId", code: "BAD_REQUEST" },
+          });
+          return;
+        }
+        const node = this.buildNodePermissionSnapshot().find((n) => n.id === nodeId);
+        this.send(client.ws, {
+          type: "nodes.permissions",
+          sessionId: client.sessionId ?? "",
+          timestamp: new Date().toISOString(),
+          payload: { nodes: node ? [node] : [] },
+        });
+        break;
+      }
+      case "nodes.update-permissions": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const { nodeId, grants } = (msg.payload ?? {}) as {
+          nodeId?: string;
+          grants?: Partial<Record<NodeCapability, boolean>>;
+        };
+        if (!nodeId || !grants || typeof grants !== "object") {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "nodes.update-permissions requires nodeId and grants", code: "BAD_REQUEST" },
+          });
+          return;
+        }
+        // Reject unknown capabilities to avoid silently persisting typos.
+        const invalid = Object.keys(grants).find((k) => !isNodeCapability(k));
+        if (invalid) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: `Unknown capability: ${invalid}`, code: "BAD_REQUEST" },
+          });
+          return;
+        }
+        this.nodePermissions.updatePermissions(nodeId, grants);
+        this.broadcastNodePermissions();
         break;
       }
       case "terminal.subscribe": {
@@ -577,6 +686,16 @@ export class WsControlPlane {
         const startReq = msg.payload as { hostDeviceId: string; sessionId?: string; viewerDeviceIds?: string[] } | undefined;
         if (startReq) {
           console.log(`[screen-share] WS start-request relay from device=${client.deviceId} → host=${startReq.hostDeviceId}`);
+          const denied = this.permissionDeniedError(startReq.hostDeviceId, "screen");
+          if (denied) {
+            this.send(client.ws, {
+              type: "screen-share:start-error" as WsEvent["type"],
+              sessionId: startReq.sessionId ?? "",
+              timestamp: new Date().toISOString(),
+              payload: { error: denied.message, hostDeviceId: startReq.hostDeviceId },
+            });
+            break;
+          }
           this.relayToDevice(startReq.hostDeviceId, client.deviceId, msg);
         }
         break;
@@ -1190,6 +1309,8 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local roots for gateway node"));
+    const denied = this.permissionDeniedError(nodeId, "filesystem");
+    if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
@@ -1224,6 +1345,8 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local operations for gateway node"));
+    const denied = this.permissionDeniedError(nodeId, "filesystem");
+    if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
@@ -1242,6 +1365,30 @@ export class WsControlPlane {
         payload: { requestId, op, ...params },
       });
     });
+  }
+
+  /**
+   * Route-boundary enforcement gate. Returns a `permission_denied` error (and
+   * records it to the audit trail) when the target node lacks the grant for a
+   * capability; returns null when the node is allowed to proceed. DENY-ALL is
+   * the default, so a node with no permission rows cannot run anything here.
+   */
+  private permissionDeniedError(nodeId: string, capability: NodeCapability): Error | null {
+    if (this.nodePermissions.isGranted(nodeId, capability)) return null;
+    const err = new Error(`permission_denied: node ${nodeId} not granted ${capability}`);
+    this.nodePermissions.logDenied(nodeId, capability, err.message);
+    return err;
+  }
+
+  /** Map a remote agent tool name onto the node capability it exercises. */
+  private capabilityForTool(tool: string): NodeCapability | undefined {
+    if (/^(terminal|shell|command)\./.test(tool)) return "terminal";
+    if (/^(file|fs|read|write|search)\./.test(tool)) return "filesystem";
+    if (/^(browser|web)\./.test(tool)) return "browser";
+    if (/^screen/.test(tool)) return "screen";
+    if (/^voice/.test(tool)) return "voice";
+    if (/^camera/.test(tool)) return "camera";
+    return undefined;
   }
 
   /** Check if a node ID refers to a remote (non-gateway) node */
@@ -1282,6 +1429,8 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local terminal for gateway node"));
+    const denied = this.permissionDeniedError(nodeId, "terminal");
+    if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
@@ -1324,6 +1473,8 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) throw new Error(`Unknown node: ${nodeId}`);
     if (node.isGateway) throw new Error("Use local terminal for gateway node");
+    const denied = this.permissionDeniedError(nodeId, "terminal");
+    if (denied) throw denied;
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       throw new Error(`Node ${nodeId} is not connected`);
@@ -1350,6 +1501,11 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local execution for gateway node"));
+    const cap = this.capabilityForTool(tool);
+    if (cap) {
+      const denied = this.permissionDeniedError(nodeId, cap);
+      if (denied) return Promise.reject(denied);
+    }
     const client = this.clients.get(node.clientId);
     if (!client || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
@@ -1421,6 +1577,50 @@ export class WsControlPlane {
       sessionId: "",
       timestamp: new Date().toISOString(),
       payload: node,
+    });
+  }
+
+  /** Merge DB-persisted node permissions with the live in-memory registry. */
+  private buildNodePermissionSnapshot(): NodeWithPermissions[] {
+    const dbNodes = this.nodePermissions.listNodePermissions();
+    const live = this.nodeStates.listNodes();
+    const liveById = new Map(live.map((n) => [n.id, n]));
+    const nodesMap = new Map<string, NodeWithPermissions>();
+
+    for (const n of dbNodes) {
+      const liveState = liveById.get(n.nodeId);
+      nodesMap.set(n.nodeId, {
+        id: n.nodeId,
+        name: n.name ?? liveState?.name ?? n.nodeId,
+        platform: (n.platform ?? liveState?.platform ?? "linux") as NodePlatform,
+        role: (n.role ?? liveState?.role ?? "remote") as NodeRole,
+        lifecycle: liveState?.lifecycle ?? "disconnected",
+        protocolVersion: liveState?.protocolVersion ?? NODE_PROTOCOL_VERSION,
+        capabilities: liveState?.capabilities ?? EMPTY_CAPABILITIES,
+        connectedAt: liveState?.connectedAt ?? n.lastSeenAt,
+        lastSeenAt: liveState?.lastSeenAt ?? n.lastSeenAt,
+        firstSeenAt: n.firstSeenAt,
+        permissions: n.permissions as Record<NodeCapability, boolean>,
+      });
+    }
+    // Defensively include live nodes that aren't persisted yet (rare).
+    for (const s of live) {
+      if (nodesMap.has(s.id)) continue;
+      nodesMap.set(s.id, {
+        ...s,
+        permissions: this.nodePermissions.getPermissions(s.id) as Record<NodeCapability, boolean>,
+      });
+    }
+    return [...nodesMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Broadcast the current permissions snapshot to all connected clients. */
+  private broadcastNodePermissions() {
+    this.broadcastAll({
+      type: "nodes.permissions",
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { nodes: this.buildNodePermissionSnapshot() },
     });
   }
 

@@ -73,6 +73,7 @@ export type ScreenShareSignalType =
   | "screen-share:answer"
   | "screen-share:ice-candidate"
   | "screen-share:start-request"
+  | "screen-share:start-error"
   | "screen-share:stop-request"
   | "screen-share:state-update";
 

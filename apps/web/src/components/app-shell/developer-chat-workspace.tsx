@@ -223,6 +223,7 @@ export function DeveloperChatWorkspace({
   renderInlineSecretPrompt,
 }: DeveloperChatWorkspaceProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [consentPresent, setConsentPresent] = useState(false)
   const handleMessageEditingChange = useCallback((messageId: string, editing: boolean) => {
     setEditingMessageId((current) => editing ? messageId : current === messageId ? null : current)
   }, [])
@@ -586,7 +587,7 @@ export function DeveloperChatWorkspace({
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
               <div className="overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
-                <div className="max-h-[40vh] overflow-y-auto">
+                <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
                   {developerChatUiState.showTodoList && (
                     <TodoList items={todoList} onClear={onClearTodoList} merged />
                   )}
@@ -601,11 +602,11 @@ export function DeveloperChatWorkspace({
                       merged
                     />
                   )}
-                  <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
+                  <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} onVisibleChange={setConsentPresent} />
                   {inlinePrompts}
                 </div>
                 {(() => {
-                  const hasItemsAboveComposer = developerChatUiState.showTodoList || changedFiles.length > 0 || Boolean(inlinePrompts)
+                  const hasItemsAboveComposer = developerChatUiState.showTodoList || changedFiles.length > 0 || Boolean(inlinePrompts) || consentPresent
                   return (
                 <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                   <PromptInput

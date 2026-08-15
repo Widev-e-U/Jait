@@ -451,6 +451,10 @@ export function toOpenAIName(name: string): string {
 
 export function fromOpenAIName(name: string): string {
   if (name === "browser_sandbox_start") return "browser.sandbox.start";
+  if (name === "windows_sandbox_start") return "windows.sandbox.start";
+  if (name === "windows_sandbox_stop") return "windows.sandbox.stop";
+  if (name === "linux_desktop_sandbox_start") return "linux.desktop.sandbox.start";
+  if (name === "linux_desktop_sandbox_stop") return "linux.desktop.sandbox.stop";
   if (name === "ssh_session_start") return "ssh.session.start";
   if (name === "ssh_session_run") return "ssh.session.run";
   if (name === "ssh_session_close") return "ssh.session.close";
@@ -496,6 +500,10 @@ const SEQUENTIAL_TOOLS = new Set([
   "screen.record",
   "browser.navigate",
   "browser.sandbox.start",
+  "windows.sandbox.start",
+  "windows.sandbox.stop",
+  "linux.desktop.sandbox.start",
+  "linux.desktop.sandbox.stop",
   "ssh.run",
   "ssh.session.start",
   "ssh.session.run",
@@ -1516,7 +1524,6 @@ export const __testUtils = {
   isTransientFailure,
   isSubstantiveUserMessage,
   pruneHistory,
-  compactToolResultsToBudget,
   repairToolCallHistory,
 };
 
@@ -1545,9 +1552,8 @@ const TOOL_RESULT_MAX_CHARS = 30_000;
  * large session, or any tool returning megabytes of structured output) can inject an
  * uncapped multi-megabyte blob straight into the model's conversation history — `message`
  * stays a short summary, so the truncation above never fires. That single oversized entry
- * then forces `compactToolResultsToBudget` to crush every other tool result (including ones
- * read moments ago) just to claw back budget, which is what causes the model to "forget"
- * file contents it just read and re-fetch them in a loop.
+ * would otherwise sit in history verbatim until the Codex-style compaction trigger fires,
+ * wasting a large share of the window and forcing an early summarization of everything.
  */
 function capToolResultData(data: unknown): unknown {
   if (data === undefined || data === null) return data;
@@ -1843,6 +1849,17 @@ function detectPlainTextToolCalls(
 /** Target ratio after pruning — leave headroom for the next LLM response */
 /** Target ratio after pruning — lower value leaves more headroom for the next LLM response, compensating for the imprecise char/token estimator. */
 const PRUNE_TARGET_RATIO = 0.45;
+
+/**
+ * Codex-style compaction trigger. Every message — including file reads and
+ * other tool results — stays verbatim in context until usage crosses this
+ * fraction of the model window. Codex's auto-compaction fires purely on token
+ * budget (`auto_compact_token_limit`, a high fraction of the window), never on
+ * round count, and then performs a single full summarization. 0.85 instead of
+ * ~0.9 because Jait's char/token estimator is imprecise; the emergency
+ * overflow recovery backstops an underestimate with a compact-and-retry.
+ */
+export const CONTEXT_COMPACT_TRIGGER_RATIO = 0.85;
 const SUMMARY_ITEM_LIMIT = 5;
 const SUMMARY_TEXT_LIMIT = 220;
 
@@ -2259,149 +2276,6 @@ export async function pruneHistory(
   return pruned;
 }
 
-const COMPACTED_TOOL_RESULT_MIN_CHARS = 800;
-/**
- * Higher floor used for the protected "recent" tier (~1k tokens) — big enough that a file
- * the model just read still has usable content, instead of being crushed to a stub.
- */
-const RECENT_TOOL_RESULT_MIN_CHARS = 4_000;
-/**
- * How many of the most recent tool results are protected from the first compaction pass.
- * A tool-heavy turn can produce many calls per round, so this needs enough headroom to
- * survive more than a round or two — a window of 2 (the previous value) meant a file read
- * this round was already "old" by the next round and got crushed again, forcing the model
- * to keep re-reading the same content it had just fetched instead of acting on it.
- */
-const RECENT_TOOL_RESULTS_TO_KEEP_FULL = 12;
-
-function compactToolResultContent(content: string, targetChars: number): string {
-  if (content.length <= targetChars) return content;
-  const marker = `\n\n[older tool result compacted for context; ${content.length - targetChars} chars omitted]\n\n`;
-  const available = Math.max(0, targetChars - marker.length);
-  const headChars = Math.ceil(available * 0.7);
-  const tailChars = Math.max(0, available - headChars);
-  return `${content.slice(0, headChars)}${marker}${tailChars > 0 ? content.slice(-tailChars) : ""}`;
-}
-
-/** Compacts `candidates` (oldest first) down to `floorChars` each until `targetTokens` is met. */
-function compactCandidatesToTarget(
-  history: AgentMessage[],
-  candidates: number[],
-  toolSchemas: unknown[],
-  contextWindow: number,
-  targetTokens: number,
-  floorChars: number,
-): { total: number; compacted: boolean } {
-  let usage = computeContextUsage(history, toolSchemas, contextWindow);
-  let compacted = false;
-
-  for (const index of candidates) {
-    if (usage.total <= targetTokens) break;
-    const message = history[index]!;
-    const tokensToFree = usage.total - targetTokens;
-    const charsToFree = Math.ceil(tokensToFree * 3.7) + 256;
-    const targetChars = Math.max(floorChars, message.content.length - charsToFree);
-    if (targetChars >= message.content.length) continue;
-
-    message.content = compactToolResultContent(message.content, targetChars);
-    compacted = true;
-    usage = computeContextUsage(history, toolSchemas, contextWindow);
-  }
-
-  return { total: usage.total, compacted };
-}
-
-/**
- * Tool-heavy work can exceed the model context entirely within the current user
- * turn. Preserve every assistant/tool protocol pair, but progressively compact
- * older tool payloads until the next request has enough response headroom.
- *
- * Compaction runs in two tiers: older tool results are crushed all the way down
- * to `COMPACTED_TOOL_RESULT_MIN_CHARS` first. Only if that alone isn't enough to
- * reach budget does the most recent `RECENT_TOOL_RESULTS_TO_KEEP_FULL` results
- * get touched — and even then only down to the much larger `RECENT_TOOL_RESULT_MIN_CHARS`
- * floor, so content the model just fetched stays useful instead of being erased.
- */
-/**
- * Replaces older file reads that a later read fully covers with a one-line stub.
- *
- * When the model reads the same file twice, both copies stay in history and both
- * count against the budget — so the duplicate content is itself a cause of the
- * compaction that deletes the content and provokes the next re-read. Dropping
- * the superseded copy is lossless: the newer read holds the same lines, in full,
- * and is the one recency protection keeps. Runs before any lossy pass.
- */
-function dropSupersededReadResults(history: AgentMessage[]): boolean {
-  interface ReadResult { index: number; path: string; startLine: number; endLine: number }
-
-  const reads: ReadResult[] = [];
-  for (const [index, message] of history.entries()) {
-    if (message.role !== "tool" || message.content.length <= COMPACTED_TOOL_RESULT_MIN_CHARS) continue;
-    let parsed: { ok?: boolean; data?: unknown };
-    try {
-      parsed = JSON.parse(message.content) as { ok?: boolean; data?: unknown };
-    } catch {
-      continue;
-    }
-    const data = parsed.data as
-      | { type?: unknown; path?: unknown; startLine?: unknown; endLine?: unknown }
-      | undefined;
-    if (!data || data.type !== "file" || typeof data.path !== "string") continue;
-    if (typeof data.startLine !== "number" || typeof data.endLine !== "number") continue;
-    reads.push({ index, path: data.path, startLine: data.startLine, endLine: data.endLine });
-  }
-
-  let dropped = false;
-  for (const [position, read] of reads.entries()) {
-    const superseded = reads.slice(position + 1).some((later) =>
-      later.path === read.path && later.startLine <= read.startLine && later.endLine >= read.endLine
-    );
-    if (!superseded) continue;
-    history[read.index]!.content = JSON.stringify({
-      ok: true,
-      message:
-        `${read.path} — lines ${read.startLine}-${read.endLine}; this result was re-read later in the ` +
-        `conversation and the newer copy is below. Use that one; do not read this range again.`,
-    });
-    dropped = true;
-  }
-  return dropped;
-}
-
-function compactToolResultsToBudget(
-  history: AgentMessage[],
-  toolSchemas: unknown[],
-  contextWindow: number,
-): boolean {
-  const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
-  if (computeContextUsage(history, toolSchemas, contextWindow).total <= targetTokens) return false;
-
-  // Lossless first: reclaim duplicate copies before shortening anything.
-  const deduped = dropSupersededReadResults(history);
-  const usage = computeContextUsage(history, toolSchemas, contextWindow);
-  if (usage.total <= targetTokens) return deduped;
-
-  const toolIndices = history
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.role === "tool" && message.content.length > COMPACTED_TOOL_RESULT_MIN_CHARS)
-    .map(({ index }) => index);
-  const recentStart = Math.max(0, toolIndices.length - RECENT_TOOL_RESULTS_TO_KEEP_FULL);
-  const olderCandidates = toolIndices.slice(0, recentStart);
-  const recentCandidates = toolIndices.slice(recentStart);
-
-  const older = compactCandidatesToTarget(
-    history, olderCandidates, toolSchemas, contextWindow, targetTokens, COMPACTED_TOOL_RESULT_MIN_CHARS,
-  );
-  if (older.total <= targetTokens) return deduped || older.compacted;
-
-  // Compacting every older result wasn't enough — let the protected recent tier give
-  // some room too, but only down to its much higher floor.
-  const recent = compactCandidatesToTarget(
-    history, recentCandidates, toolSchemas, contextWindow, targetTokens, RECENT_TOOL_RESULT_MIN_CHARS,
-  );
-  return deduped || older.compacted || recent.compacted;
-}
-
 /**
  * Tool rounds inside the active turn that are never collapsed into a summary.
  *
@@ -2412,8 +2286,10 @@ function compactToolResultsToBudget(
  * A window of 3 (the previous value) meant a file read four rounds ago had to
  * be re-read, which is the re-read treadmill: re-reading regrows the context
  * that triggered the collapse, which collapses again, which forces another
- * re-read. The floor-protected `compactToolResultsToBudget` pass exists to
- * shrink this content gracefully instead, so it should be doing the work.
+ * re-read. Codex-style compaction avoids the treadmill differently: nothing is
+ * shortened or collapsed until the token-budget trigger fires, and then the
+ * oldest completed rounds go into a summary wholesale rather than being
+ * truncated into stubs.
  */
 const ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP = 8;
 const ACTIVE_TURN_SUMMARY_SOURCE_MESSAGES = 24;
@@ -2645,14 +2521,12 @@ export async function runAgentLoop(
     // ── Invisible continuous-run checkpoint ──
     // A checkpoint is a context/strategy boundary, not a terminal condition.
     // The previous checkpoint prompt is removed so these do not accumulate.
+    // Codex-style compaction is token-budget-only: this round-count boundary
+    // never compacts history — the per-round budget check handles that.
     if (continuous && round > 0 && round % roundBudget === 0) {
       if (autonomousCheckpointPrompt) {
         const checkpointIndex = history.indexOf(autonomousCheckpointPrompt);
         if (checkpointIndex >= 0) history.splice(checkpointIndex, 1);
-      }
-      if (llm.contextWindow > 0) {
-        compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
-        compactActiveTurnHistory(history, activeSchemas, llm.contextWindow);
       }
       autonomousCheckpointPrompt = {
         role: "system",
@@ -2704,34 +2578,33 @@ export async function runAgentLoop(
       }
     }
 
-    // ── Context budget tracking & pruning ──────────────────────────────
+    // ── Context budget tracking & compaction (Codex-style) ────────────
+    // Everything stays verbatim in history until usage crosses
+    // CONTEXT_COMPACT_TRIGGER_RATIO — a high fraction of the window, matching
+    // Codex's token-budget-only auto-compaction (it fires at ~90% of the model
+    // window, never by round count). When it fires, the old portion of the
+    // conversation is replaced by a single structured summary; the current
+    // request and the most recent tool rounds stay verbatim.
     const contextWindow = llm.contextWindow;
     if (contextWindow > 0) {
       let usage = computeContextUsage(history, activeSchemas, contextWindow);
       onEvent?.({ type: "context_usage", ...usage });
 
-      // If context usage ≥ 60%, proactively prune oldest conversation turns
-      // Lower threshold because the estimator is imprecise (char/token ratio doesn't match real tokenization).
-      if (usage.ratio >= 0.60) {
+      if (usage.ratio >= CONTEXT_COMPACT_TRIGGER_RATIO) {
+        // Summarize completed turns (before the last user message) first.
         const pruned = await pruneHistory(history, contextWindow, activeSchemas, {
           summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
         });
-        // Shrink tool payloads before collapsing whole rounds. Both free space,
-        // but compaction keeps every result present and readable down to a
-        // floor, while collapsing deletes results outright — so running the
-        // destructive pass first threw away file contents that the recoverable
-        // pass could have kept, and the model had to go read them again.
-        const compactedToolResults = compactToolResultsToBudget(
-          history,
-          activeSchemas,
-          contextWindow,
-        );
+        // In a long single-turn run there are no completed turns to prune, so
+        // also collapse the completed prefix of the active turn into a summary
+        // (keeps the most recent rounds verbatim). Both passes summarize rather
+        // than truncate — no tool result is ever shortened into a stub.
         const activeTurnCompacted = compactActiveTurnHistory(
           history,
           activeSchemas,
           contextWindow,
         );
-        if (pruned || activeTurnCompacted || compactedToolResults) {
+        if (pruned || activeTurnCompacted) {
           usage = computeContextUsage(history, activeSchemas, contextWindow);
           onEvent?.({ type: "context_usage", ...usage, pruned: true });
           log.info(
@@ -2876,12 +2749,15 @@ export async function runAgentLoop(
           // Force aggressive pruning: lower the threshold to trigger even if
           // the estimator thinks we're under 60% (the estimator is imprecise
           // and the provider clearly disagrees).
+          // Force a Codex-style summarization: lower the trigger to fire even
+          // if the estimator thinks we're under budget (the estimator is
+          // imprecise and the provider clearly disagrees). Both passes summarize
+          // — nothing is truncated into a stub.
           const emergencyUsage = computeContextUsage(history, activeSchemas, llm.contextWindow);
           if (emergencyUsage.ratio >= 0.30) {
             await pruneHistory(history, llm.contextWindow, activeSchemas, {
               summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
             });
-            compactToolResultsToBudget(history, activeSchemas, llm.contextWindow);
             compactActiveTurnHistory(history, activeSchemas, llm.contextWindow);
           }
 

@@ -736,10 +736,15 @@ function UserQuestionForm({
   onSubmit: () => Promise<void>
   onCancel: () => Promise<void>
 }) {
-  const canSubmit = request.questions.some((question) => {
-    const answer = answers[question.id]
-    return answer?.skipped || Boolean(answer?.freeText?.trim()) || (answer?.selected.length ?? 0) > 0
-  })
+  // Every question must be answered before the submit button is enabled. Using `.every()`
+  // (instead of `.some()`) guarantees the full `answers` map is sent to the backend so the
+  // agent actually recognizes a complete answer on mobile-web as well as desktop.
+  const canSubmit =
+    request.questions.length > 0 &&
+    request.questions.every((question) => {
+      const answer = answers[question.id]
+      return Boolean(answer?.freeText?.trim()) || (answer?.selected.length ?? 0) > 0
+    })
 
   return (
     <div className="space-y-4">
@@ -792,7 +797,7 @@ function UserQuestionForm({
           </div>
         )
       })}
-      <div className="flex justify-end gap-1.5">
+      <div className="sticky bottom-0 z-10 -mx-1 flex justify-end gap-1.5 bg-background/95 px-1 pb-1 pt-2 backdrop-blur-sm">
         <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
         <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !canSubmit}>Submit</Button>
       </div>

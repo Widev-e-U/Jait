@@ -71,4 +71,20 @@ describe("loadConfig", () => {
     const config = loadConfig();
     expect(Number.isNaN(config.port)).toBe(true);
   });
+
+  it("defaults the Windows VM SSH credentials to the dockur image defaults", () => {
+    delete process.env["WINDOWS_SSH_USERNAME"];
+    delete process.env["WINDOWS_SSH_PASSWORD"];
+    const config = loadConfig();
+    expect(config.windowsSshUsername).toBe("Docker");
+    expect(config.windowsSshPassword).toBe("admin");
+  });
+
+  it("reads WINDOWS_SSH_USERNAME / WINDOWS_SSH_PASSWORD from env", () => {
+    process.env["WINDOWS_SSH_USERNAME"] = "jait";
+    process.env["WINDOWS_SSH_PASSWORD"] = "s3cret";
+    const config = loadConfig();
+    expect(config.windowsSshUsername).toBe("jait");
+    expect(config.windowsSshPassword).toBe("s3cret");
+  });
 });

@@ -239,6 +239,42 @@ bun run test:e2e                    # Playwright E2E (requires running gateway)
 
 ---
 
+## Windows VM sandbox
+
+Jait can spin up a full Windows VM (Windows 11) inside a container using
+[`dockurr/windows`](https://github.com/dockur/windows) for browser testing on
+Windows. The VM is accelerated with KVM and exposes both an RDP endpoint
+(port 3389) and a web viewer (port 8006).
+
+Requirements: a Linux host with KVM (`/dev/kvm`), at least 8 GB free RAM and
+~32 GB free disk.
+
+### Build the image
+
+```bash
+docker build -t jait/windows-sandbox:latest -f docker/Dockerfile.windows-sandbox docker
+```
+
+### Standalone testing (docker compose)
+
+```bash
+docker compose -f docker/docker-compose.windows-sandbox.yml up -d
+```
+
+- Web viewer: http://localhost:8006
+- RDP: `localhost:3389` (user `Docker`, password `admin`)
+- The Windows disk image persists in `docker/windows-sandbox-storage/`; delete
+  that folder to reset the VM.
+
+### From the gateway
+
+`SandboxManager.startWindowsSandbox()` starts a sandboxed VM and returns the
+RDP/web-viewer ports plus a `browserId`. The VM disk is stored under
+`$JAIT_WINDOWS_SANDBOX_STORAGE` (default: the OS temp dir) and is removed with
+`stopWindowsSandbox(name, { removeStorage: true })`.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. In short:

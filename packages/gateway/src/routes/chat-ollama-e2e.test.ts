@@ -1,8 +1,11 @@
 /**
  * End-to-end test against a real Ollama instance.
  *
- * Skipped in CI — run manually with:
- *   OLLAMA_E2E_URL=http://localhost:11434 bun run test -- --run packages/gateway/src/routes/chat-ollama-e2e.test.ts
+ * Opt-in only: it needs a running Ollama that can actually load the target model
+ * (a 26B model needs ~19 GiB free RAM), so it stays off in CI and on dev machines
+ * that would only produce provider 500s. Run it explicitly with:
+ *   OLLAMA_E2E=1 bunx vitest run packages/gateway/src/routes/chat-ollama-e2e.test.ts
+ * Override the target with OLLAMA_E2E_URL / OLLAMA_E2E_MODEL.
  */
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../server.js";
@@ -16,8 +19,9 @@ import { signAuthToken } from "../security/http-auth.js";
 const OLLAMA_URL = process.env["OLLAMA_E2E_URL"] || "http://localhost:11434";
 const OLLAMA_MODEL = process.env["OLLAMA_E2E_MODEL"] || "gemma4:26b";
 
-// Skip the entire suite in CI or when SKIP_OLLAMA_E2E is set
-const skip = !!process.env["CI"] || !!process.env["SKIP_OLLAMA_E2E"];
+// Opt in with OLLAMA_E2E=1; always off in CI or when SKIP_OLLAMA_E2E is set
+const skip =
+  !process.env["OLLAMA_E2E"] || !!process.env["CI"] || !!process.env["SKIP_OLLAMA_E2E"];
 
 describe.skipIf(skip)("Ollama e2e (real server)", () => {
   let app: Awaited<ReturnType<typeof createServer>> | null = null;

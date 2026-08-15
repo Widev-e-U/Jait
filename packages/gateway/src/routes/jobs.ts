@@ -2,6 +2,10 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { SchedulerService, ScheduledJobRecord } from "../scheduler/service.js";
 import { requireAuth } from "../security/http-auth.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { ProviderAccountService } from "../services/provider-accounts.js";
+import type { UserService } from "../services/users.js";
+import { listJaitModels } from "../services/jait-models.js";
 
 type JobType = "agent_task" | "system_job";
 
@@ -135,22 +139,42 @@ export function registerJobRoutes(
   app: FastifyInstance,
   config: AppConfig,
   scheduler: SchedulerService,
+  deps: {
+    providerRegistry?: ProviderRegistry;
+    providerAccountService?: ProviderAccountService;
+    userService?: UserService;
+  } = {},
 ) {
   app.get("/api/jobs/providers/available", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    return {
-      providers: {
-        openai: {
-          name: "OpenAI",
-          models: ["gpt-5", "gpt-4.1"],
-        },
-        ollama: {
-          name: "Ollama",
-          models: ["local-model"],
-        },
-      },
-    };
+
+    const providers: Record<string, { name: string; models: string[] }> = {};
+    const registry = deps.providerRegistry;
+    if (registry) {
+      for (const provider of registry.list()) {
+        if (!registry.isVisibleTo(provider.id, authUser.id)) continue;
+        try {
+          let models = provider.listModels ? await provider.listModels() : [];
+          // For the jait provider, expand models from all configured backends
+          // (mirrors the /api/providers/:id/models route).
+          if (provider.id === "jait" && deps.userService) {
+            const settings = deps.userService.getSettings(authUser.id);
+            models = await listJaitModels({
+              config,
+              apiKeys: settings.apiKeys ?? {},
+              fallbackModels: models,
+            });
+          }
+          providers[provider.id] = { name: provider.info.name, models: models.map((m) => m.id) };
+        } catch {
+          // Never fail the whole endpoint because one provider's catalogue is
+          // unreachable; fall back to an empty model list for it.
+          providers[provider.id] = { name: provider.info.name, models: [] };
+        }
+      }
+    }
+    return { providers };
   });
 
   app.get("/api/jobs", async (request, reply) => {

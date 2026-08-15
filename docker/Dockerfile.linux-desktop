@@ -1,0 +1,149 @@
+# jait/sandbox-linux-desktop — full XFCE desktop sandbox with Chromium + Firefox
+#
+# Extends the headless-browser sandbox (Dockerfile.sandbox-browser) into a
+# complete desktop environment for interactive testing:
+#   - XFCE4 desktop (panel, window manager, app menu)
+#   - Chromium (auto-started, CDP on 9223 for automation)
+#   - Firefox (latest stable from Mozilla's APT repo, launch from the menu)
+#   - Xvfb virtual display + x11vnc + websockify + noVNC (ports 5900/6080)
+#   - PulseAudio (optional, for media/audio testing)
+#   - Utilities: xfce4-terminal, Thunar file manager, Mousepad text editor
+#
+# Port conventions (kept identical to sandbox-browser for tool compatibility):
+#   5900  VNC (x11vnc)
+#   6080  noVNC web UI
+#   9223  Chromium CDP (socat proxy to internal 9222)
+#
+# Build:  docker build -f docker/Dockerfile.linux-desktop -t jait/sandbox-linux-desktop docker/
+# Run:    docker compose -f docker/docker-compose.linux-desktop.yml up -d
+#         then open http://localhost:6080/vnc.html (noVNC) or any VNC client on :5900
+
+FROM debian:bookworm-slim
+
+# --- Latest stable Firefox via Mozilla's official APT repo -------------------
+# (Debian's own firefox-esr is ESR, not latest stable; Mozilla's repo is the
+#  officially supported way to get current Firefox on Debian.)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+  && install -d -m 0755 /etc/apt/keyrings \
+  && curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \
+     -o /etc/apt/keyrings/packages.mozilla.org.asc \
+  && echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
+     > /etc/apt/sources.list.d/mozilla.list
+
+# --- Desktop, display, remote access, browsers, audio, utilities ------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  # Desktop environment
+  xfce4 \
+  xfce4-terminal \
+  xfce4-whiskermenu-plugin \
+  thunar \
+  mousepad \
+  dbus \
+  dbus-x11 \
+  # Virtual display + remote access (same stack as sandbox-browser)
+  xvfb \
+  x11vnc \
+  websockify \
+  novnc \
+  socat \
+  # Audio (optional, for media testing)
+  pulseaudio \
+  pulseaudio-utils \
+  # Browsers
+  chromium \
+  firefox \
+  # Misc
+  ca-certificates \
+  curl \
+  fonts-dejavu-core \
+  fonts-liberation \
+  # OS-control toolset: screen capture + input injection (os.* tools)
+  xdotool \
+  wmctrl \
+  imagemagick \
+  x11-apps \
+  && rm -rf /var/lib/apt/lists/* \
+  # Hide noVNC top bar for a cleaner live view (same tweak as sandbox-browser)
+  && sed -i 's/#top_bar {/#top_bar { display:none !important;/' /usr/share/novnc/vnc_lite.html
+
+# --- Optional: Microsoft Edge (uncomment to include) -------------------------
+# RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+#       | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg \
+#   && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/edge stable main" \
+#      > /etc/apt/sources.list.d/microsoft-edge.list \
+#   && apt-get update && apt-get install -y --no-install-recommends microsoft-edge-stable \
+#   && rm -rf /var/lib/apt/lists/*
+
+# --- Entrypoint: start display, desktop, browsers, VNC, noVNC ---------------
+RUN cat <<'EOF' >/usr/local/bin/jait-linux-desktop.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DISPLAY=:99
+export SCREEN_RES="${SCREEN_RES:-1920x1080x24}"
+export XDG_RUNTIME_DIR=/tmp/xdg
+mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+
+cleanup() {
+  jobs -pr | xargs -r kill 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# System + session D-Bus (XFCE needs a session bus)
+mkdir -p /run/dbus
+dbus-daemon --system --fork 2>/dev/null || true
+eval "$(dbus-launch --sh-syntax)"
+
+# Virtual display (same approach as sandbox-browser)
+Xvfb :99 -screen 0 "$SCREEN_RES" &
+
+for _ in $(seq 1 50); do
+  [[ -S /tmp/.X11-unix/X99 ]] && break
+  sleep 0.1
+done
+
+# PulseAudio (optional; ignore failure so the desktop still comes up)
+pulseaudio --daemonize=yes --exit-idle-time=-1 --disallow-exit 2>/dev/null || true
+
+# Full XFCE desktop
+xfce4-session &
+
+# Give the desktop a moment to come up before placing the browser window
+sleep 3
+
+# Chromium with CDP for automation (9222 inside, 9223 exposed via socat)
+chromium --no-sandbox --disable-gpu --disable-software-rasterizer \
+  --disable-dev-shm-usage --no-first-run --no-default-browser-check \
+  --window-size=1280,720 --window-position=0,0 \
+  --remote-debugging-port=9222 about:blank &
+
+# Firefox is available from the XFCE menu (Applications > Internet > Firefox);
+# launch it manually when needed:  firefox &
+
+# CDP proxy: 9223 -> 9222
+(
+  while true; do
+    socat TCP-LISTEN:9223,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9222
+    sleep 1
+  done
+) &
+
+# VNC with auto-restart (x11vnc has been observed to segfault after client
+# disconnects when XDamage is enabled; disable that path and restart so the
+# live view survives transient crashes)
+(
+  while true; do
+    x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -noxdamage -rfbport 5900
+    echo "x11vnc exited with status $?; restarting in 1s" >&2
+    sleep 1
+  done
+) &
+
+exec websockify --web /usr/share/novnc/ 6080 localhost:5900
+EOF
+
+RUN chmod +x /usr/local/bin/jait-linux-desktop.sh
+
+EXPOSE 5900 6080 9223
+
+CMD ["/usr/local/bin/jait-linux-desktop.sh"]

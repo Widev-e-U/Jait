@@ -70,6 +70,10 @@ export const ToolName = {
   BrowserWait: "browser.wait",
   BrowserScreenshot: "browser.screenshot",
   BrowserSandboxStart: "browser.sandbox.start",
+  WindowsSandboxStart: "windows.sandbox.start",
+  WindowsSandboxStop: "windows.sandbox.stop",
+  LinuxDesktopSandboxStart: "linux.desktop.sandbox.start",
+  LinuxDesktopSandboxStop: "linux.desktop.sandbox.stop",
   WebFetch: "web.fetch",
   WebSearch: "web.search",
 

@@ -248,4 +248,165 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     expect(stopped).toEqual(["jait-browser-sb-legacy"]);
     expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-legacy"))).toBe(true);
   });
+
+  it("starts Linux desktop sandbox with CDP and host gateway when requested", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return {
+        output: "container-id",
+        exitCode: 0,
+        timedOut: false,
+      };
+    });
+
+    const result = await manager.startLinuxDesktopSandbox({
+      projectRoot: testProject,
+      mountMode: "none",
+      networkEnabled: true,
+      hostGateway: true,
+      novncPort: 6602,
+      vncPort: 6002,
+      cdpPort: 9224,
+      waitForCdp: false,
+      screenRes: "1280x720x24",
+    });
+
+    expect(result).toMatchObject({
+      novncUrl: "http://127.0.0.1:6602/vnc_lite.html",
+      novncPort: 6602,
+      vncPort: 6002,
+      cdpUrl: "http://127.0.0.1:9224",
+    });
+    const imageInspectCmd = commands.find((c) => c.join(" ").includes("image inspect"));
+    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-linux-desktop:latest/);
+    const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
+    expect(runCmd?.join(" ")).toContain("--add-host host.docker.internal:");
+    expect(runCmd?.join(" ")).toContain("-p 9224:9223");
+    expect(runCmd?.join(" ")).toContain("--shm-size 1gb");
+    expect(runCmd?.join(" ")).toContain("SCREEN_RES=1280x720x24");
+    expect(runCmd?.join(" ")).toContain("jait.kind=linux-desktop-sandbox");
+    expect(runCmd?.join(" ")).not.toContain("--network none");
+  });
+
+  it("reaps conflicting stale Linux desktop sandboxes and retries startup", async () => {
+    const commands: string[][] = [];
+    let runAttempts = 0;
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      const joined = cmd.join(" ");
+      if (joined.includes(" ps ") && joined.includes("{{.Ports}}")) {
+        return {
+          output: "jait-linux-desktop-sb-old\t0.0.0.0:6080->6080/tcp, 0.0.0.0:5900->5900/tcp",
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      if (joined.includes(" ps ") && joined.includes("{{.Names}}")) {
+        return { output: "", exitCode: 0, timedOut: false };
+      }
+      if (joined.includes("image inspect")) {
+        return { output: "[]", exitCode: 0, timedOut: false };
+      }
+      if (cmd.includes("run")) {
+        runAttempts += 1;
+        if (runAttempts === 1) {
+          return {
+            output: "docker: Error response from daemon: Bind for 0.0.0.0:6080 failed: port is already allocated",
+            exitCode: 125,
+            timedOut: false,
+          };
+        }
+      }
+      return { output: "container-id", exitCode: 0, timedOut: false };
+    });
+
+    const result = await manager.startLinuxDesktopSandbox({
+      projectRoot: testProject,
+      novncPort: 6080,
+      vncPort: 5900,
+    });
+
+    expect(result).toMatchObject({
+      novncPort: 6080,
+      vncPort: 5900,
+      novncUrl: "http://127.0.0.1:6080/vnc_lite.html",
+    });
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-linux-desktop-sb-old"))).toBe(true);
+  });
+
+  it("refuses to start Linux desktop sandboxes when the container runtime health check times out", async () => {
+    const manager = new SandboxManager(async (cmd) => {
+      if (cmd.includes("info")) {
+        return { output: "", exitCode: null, timedOut: true };
+      }
+      return { output: "unexpected", exitCode: 0, timedOut: false };
+    });
+
+    await expect(manager.startLinuxDesktopSandbox({
+      projectRoot: testProject,
+      novncPort: 6084,
+      vncPort: 5904,
+    })).rejects.toThrow("Linux desktop sandbox disabled: container runtime health check failed (timed out)");
+  });
+
+  it("refuses to start Linux desktop sandboxes when the active sandbox limit is reached", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return { output: "jait-linux-desktop-sb-active", exitCode: 0, timedOut: false };
+      }
+      return { output: "ok", exitCode: 0, timedOut: false };
+    });
+
+    await expect(manager.startLinuxDesktopSandbox({
+      projectRoot: testProject,
+      novncPort: 6085,
+      vncPort: 5905,
+    })).rejects.toThrow("Linux desktop sandbox limit reached (1 active, max 1)");
+    expect(commands.some((cmd) => cmd.join(" ").includes("image inspect"))).toBe(false);
+  });
+
+  it("cleans stale Linux desktop sandbox containers while preserving active ones", async () => {
+    const commands: string[][] = [];
+    const now = Date.now();
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return {
+          output: [
+            `jait-linux-desktop-sb-old\tignored\tjait.kind=linux-desktop-sandbox,jait.createdAt=${now - 2 * 60 * 60 * 1000}`,
+            `jait-linux-desktop-sb-active\tignored\tjait.kind=linux-desktop-sandbox,jait.createdAt=${now - 2 * 60 * 60 * 1000}`,
+            `jait-linux-desktop-sb-fresh\tignored\tjait.kind=linux-desktop-sandbox,jait.createdAt=${now}`,
+          ].join("\n"),
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      return { output: "removed", exitCode: 0, timedOut: false };
+    });
+
+    const stopped = await manager.cleanupLinuxDesktopSandboxes({
+      maxAgeMs: 60 * 60 * 1000,
+      excludeNames: ["jait-linux-desktop-sb-active"],
+    });
+
+    expect(stopped).toEqual(["jait-linux-desktop-sb-old"]);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-linux-desktop-sb-old"))).toBe(true);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-linux-desktop-sb-active"))).toBe(false);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-linux-desktop-sb-fresh"))).toBe(false);
+  });
+
+  it("stops a Linux desktop sandbox container", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return { output: "removed", exitCode: 0, timedOut: false };
+    });
+
+    await manager.stopLinuxDesktopSandbox("jait-linux-desktop-sb-abc");
+
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-linux-desktop-sb-abc"))).toBe(true);
+  });
 });

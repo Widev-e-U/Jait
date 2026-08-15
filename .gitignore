@@ -76,3 +76,6 @@ apps/mobile/.expo/
 
 # Firebase client config (project-specific)
 apps/mobile/android/app/google-services.json
+
+# Windows VM sandbox disk images (multi-GB, never commit)
+docker/windows-sandbox-storage/

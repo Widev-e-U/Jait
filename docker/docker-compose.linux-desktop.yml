@@ -1,0 +1,29 @@
+# jait/sandbox-linux-desktop — full XFCE desktop sandbox (Chromium + Firefox)
+#
+# Usage:
+#   docker compose -f docker/docker-compose.linux-desktop.yml up -d --build
+#   open http://localhost:6080/vnc.html   (noVNC web client)
+#   or connect any VNC client to localhost:5900
+#   Chromium CDP automation endpoint: http://localhost:9223
+#
+# Ports (same conventions as sandbox-browser):
+#   5900  VNC
+#   6080  noVNC web UI
+#   9223  Chromium CDP
+services:
+  linux-desktop:
+    build:
+      context: .
+      dockerfile: Dockerfile.linux-desktop
+    image: jait/sandbox-linux-desktop:latest
+    container_name: jait-linux-desktop
+    ports:
+      - "5900:5900"
+      - "6080:6080"
+      - "9223:9223"
+    environment:
+      # Xvfb screen geometry: WIDTHxHEIGHTxDEPTH
+      - SCREEN_RES=1920x1080x24
+    # Chromium needs a larger /dev/shm than Docker's 64MB default
+    shm_size: "1gb"
+    restart: unless-stopped

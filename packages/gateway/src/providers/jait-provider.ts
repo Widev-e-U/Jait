@@ -16,6 +16,7 @@ import {
   buildSystemPrompt,
   buildTieredToolSchemas,
   computeContextUsage,
+  CONTEXT_COMPACT_TRIGGER_RATIO,
   generateLLMConversationSummary,
   pruneHistory,
   repairToolCallHistory,
@@ -284,17 +285,19 @@ export class JaitProvider implements CliProviderAdapter {
 
         rememberActivatedToolNames(state.activatedToolNames, discoveredToolNames(result));
 
-        // ── Post-turn history compaction ───────────────────────────────
-        // After runAgentLoop mutates the shared history, compact it so the next turn
-        // starts with a bounded context window. Without this, messages from all previous
-        // turns accumulate in state.history forever (user + assistant + tool results).
+        // ── Post-turn history compaction (Codex-style) ──────────────────
+        // After runAgentLoop mutates the shared history, keep everything verbatim
+        // across turns until usage crosses the same high trigger the loop uses —
+        // matching Codex, which only compacts when the token budget is nearly
+        // exhausted and then summarizes in one pass. Without this, messages from
+        // all previous turns would accumulate in state.history forever.
         if (llm.contextWindow > 0) {
           const postUsage = computeContextUsage(
             state.history,
             toolSchemas,
             llm.contextWindow,
           );
-          if (postUsage.ratio >= 0.45) {
+          if (postUsage.ratio >= CONTEXT_COMPACT_TRIGGER_RATIO) {
             await pruneHistory(state.history, llm.contextWindow, toolSchemas, {
               summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
             });
