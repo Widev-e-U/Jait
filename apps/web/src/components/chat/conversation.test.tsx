@@ -4,6 +4,7 @@ import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
   computeMinimapLineShape,
+  computeMinimapScrollTop,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
@@ -215,5 +216,34 @@ describe('computeMinimapLineShape', () => {
 
   it('bounds the shape of a huge paste', () => {
     expect(computeMinimapLineShape('a'.repeat(2_000_000)).length).toBeLessThanOrEqual(4000)
+  })
+})
+
+describe('computeMinimapScrollTop', () => {
+  // A 10 000px transcript in an 800px viewport: the rail is the viewport's
+  // height and the indicator covers 8% of it.
+  const rail = { railHeight: 800, viewportRatio: 0.08, totalSize: 10_000 }
+
+  it('centers the viewport on the pressed point', () => {
+    // Pressed halfway down the rail → the middle of the transcript, offset up
+    // by half an indicator so the pressed content sits mid-viewport.
+    expect(computeMinimapScrollTop({ pointerOffset: 400, ...rail })).toBeCloseTo(4600)
+  })
+
+  it('clamps a scrub above the rail to the top of the transcript', () => {
+    expect(computeMinimapScrollTop({ pointerOffset: 0, ...rail })).toBe(0)
+    expect(computeMinimapScrollTop({ pointerOffset: -50, ...rail })).toBe(0)
+  })
+
+  it('clamps a scrub past the end to the last screenful', () => {
+    // Never past `totalSize - viewportHeight`, so the final scrub still shows
+    // a full screen of transcript instead of empty space.
+    expect(computeMinimapScrollTop({ pointerOffset: 800, ...rail })).toBeCloseTo(9200)
+    expect(computeMinimapScrollTop({ pointerOffset: 5000, ...rail })).toBeCloseTo(9200)
+  })
+
+  it('stays at the top when the transcript fits on screen or the rail has no height', () => {
+    expect(computeMinimapScrollTop({ pointerOffset: 400, railHeight: 800, viewportRatio: 1, totalSize: 800 })).toBe(0)
+    expect(computeMinimapScrollTop({ pointerOffset: 400, railHeight: 0, viewportRatio: 0.08, totalSize: 10_000 })).toBe(0)
   })
 })

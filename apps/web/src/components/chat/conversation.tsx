@@ -270,6 +270,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
   const initialRevealFrameRef = useRef<number | null>(null)
+  // Pending re-anchor after a minimap scrub (see detachFromBottom).
+  const scrubAnchorFrameRef = useRef<number | null>(null)
   // Set briefly after a click inside the conversation (e.g. expanding a tool
   // call or reasoning block) so the resize this causes doesn't get treated
   // as new streamed content and yank the view down to the bottom.
@@ -307,7 +309,14 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         return { key: node.dataset.convKey ?? '', top: rect.top - containerTop, height: rect.height }
       }),
     )
-    if (!anchor) return
+    if (!anchor) {
+      // Nothing on screen to anchor to — right after a jump (a minimap scrub)
+      // the rendered window still belongs to the old position. Drop the anchor
+      // instead of keeping the stale one, which would otherwise pull the view
+      // back to where the user just scrolled away from on the next reflow.
+      anchorKeyRef.current = null
+      return
+    }
     anchorKeyRef.current = anchor.key
     anchorOffsetRef.current = anchor.offset
   }, [])
@@ -628,6 +637,31 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     el.scrollTo({ top: el.scrollHeight, behavior })
   }, [])
 
+  // The minimap moves the container by writing `scrollTop` directly, which no
+  // wheel/touch handler ever sees — so `updateBottomState` used to read the
+  // resulting scroll event as "not detached" and re-arm stick-to-bottom, and
+  // the next height sync (streaming, the ResizeObserver, or the bottom-sync
+  // poll) immediately yanked the view back to the end of the transcript.
+  // Treat a scrub as exactly the same intent as scrolling by hand: detach, and
+  // anchor on whatever the scrub landed on. Called *after* the scroll position
+  // is written, so the anchor is captured at the new position.
+  const detachFromBottom = useCallback(() => {
+    detachedRef.current = true
+    if (stickToBottomRef.current) {
+      stickToBottomRef.current = false
+      setStickToBottom(false)
+    }
+    captureScrollAnchor()
+    // A scrub can jump far enough that the virtualizer has not rendered the
+    // destination yet, so the capture above finds nothing to anchor to. Try
+    // again once the new window has been laid out.
+    if (scrubAnchorFrameRef.current !== null) cancelAnimationFrame(scrubAnchorFrameRef.current)
+    scrubAnchorFrameRef.current = requestAnimationFrame(() => {
+      scrubAnchorFrameRef.current = null
+      captureScrollAnchor()
+    })
+  }, [captureScrollAnchor])
+
   // When a new user message lands, re-attach to the bottom and bring that
   // message into view — even if the user had scrolled up to read history.
   // Runs in layout so the scroll happens before paint, avoiding a visible jump.
@@ -697,6 +731,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     return () => {
       if (initialRevealFrameRef.current !== null) {
         cancelAnimationFrame(initialRevealFrameRef.current)
+      }
+      if (scrubAnchorFrameRef.current !== null) {
+        cancelAnimationFrame(scrubAnchorFrameRef.current)
       }
     }
   }, [])
@@ -828,6 +865,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           scrollElement={scrollElement}
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
+          onScrub={detachFromBottom}
         />
       )}
     </AIConversation>
@@ -842,6 +880,12 @@ interface ConversationMinimapProps {
   roles: Array<'user' | 'agent'>
   /** Per-child raw text, index-aligned with the virtualizer items. */
   texts: string[]
+  /**
+   * Called right after a scrub writes a new scroll position, so the conversation
+   * can stop following the bottom — a programmatic scroll is invisible to the
+   * wheel/touch handlers that normally detect that intent.
+   */
+  onScrub: () => void
 }
 
 /** Vertical distance between two preview lines, and how tall each line paints. */
@@ -888,12 +932,38 @@ export function computeMinimapLineShape(text: string): number[] {
 }
 
 /**
+ * Maps a pointer position on the rail back to a scroll offset so the pressed
+ * point lands in the *middle* of the viewport indicator (like Rider/VS Code
+ * scrollbar annotations), instead of snapping the indicator's top edge to the
+ * cursor. Measured against the rail itself so the mapping matches where the
+ * preview lines are painted, and clamped so a scrub past either end of the rail
+ * stops at the corresponding end of the transcript.
+ */
+export function computeMinimapScrollTop({
+  pointerOffset,
+  railHeight,
+  viewportRatio,
+  totalSize,
+}: {
+  /** Pointer position relative to the top of the rail, in px. */
+  pointerOffset: number
+  railHeight: number
+  /** Visible fraction of the transcript, i.e. the indicator's height. */
+  viewportRatio: number
+  totalSize: number
+}): number {
+  const centerRatio = railHeight > 0 ? pointerOffset / railHeight - viewportRatio / 2 : 0
+  const maxRatio = Math.max(1 - viewportRatio, 0)
+  return Math.min(Math.max(centerRatio, 0), maxRatio) * totalSize
+}
+
+/**
  * VSCode/Rider-style content-preview minimap for the conversation. Instead of
  * one bar per message it paints one thin line per line of text — blue for user
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-function ConversationMinimap({ virtualizer, scrollElement, roles, texts }: ConversationMinimapProps) {
+function ConversationMinimap({ virtualizer, scrollElement, roles, texts, onScrub }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -982,19 +1052,16 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts }: Conve
   const viewportRatio = Math.min(viewportHeight / totalSize, 1)
   const viewportTopRatio = Math.min(scrollTop / totalSize, 1 - viewportRatio)
 
-  // Map a pointer position on the rail back to a scroll offset so the pressed
-  // point lands in the *middle* of the viewport indicator (like Rider/VS Code
-  // scrollbar annotations), instead of snapping the indicator's top edge to
-  // the cursor. Measured against the rail itself so the mapping matches where
-  // the preview lines are painted.
   const handlePointer = (rail: HTMLElement, clientY: number) => {
     if (!scrollElement) return
     const rect = rail.getBoundingClientRect()
-    const centerRatio = rect.height > 0
-      ? (clientY - rect.top) / rect.height - viewportRatio / 2
-      : 0
-    const maxRatio = Math.max(1 - viewportRatio, 0)
-    scrollElement.scrollTop = Math.min(Math.max(centerRatio, 0), maxRatio) * totalSize
+    scrollElement.scrollTop = computeMinimapScrollTop({
+      pointerOffset: clientY - rect.top,
+      railHeight: rect.height,
+      viewportRatio,
+      totalSize,
+    })
+    onScrub()
   }
 
   return (

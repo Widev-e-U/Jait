@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.716](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.716) — 2026-08-15
+- fix(web): stop the conversation from snapping back to the bottom right after a minimap scrub — the minimap moves the container by writing `scrollTop`, which the wheel/touch handlers never see, so the scroll handler re-armed stick-to-bottom and the 500ms bottom-sync poll dragged the view back to the end; a scrub now detaches exactly like scrolling by hand, and drops a stale scroll anchor instead of letting the next reflow pull the view back to where the scrub started
+
 ## [v0.1.715](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.715) — 2026-08-15
 - feat(gateway): node capability permission model — every node that says hello is persisted with a deny-all grant map (terminal, filesystem, screen, voice, browser, camera, network), enforced at the WebSocket route boundary, with denials written to the consent log and `nodes.list` / `nodes.get` / `nodes.update-permissions` control messages to inspect and change grants
 - feat(web): "Nodes & Permissions" settings tab plus an onboarding gate that surfaces newly seen nodes so their capabilities can be granted deliberately instead of implicitly
