@@ -3,9 +3,12 @@ import {
   TELEGRAM_MAX_COMMANDS,
   TelegramConnector,
   botFatherSetupLink,
+  describePollFailure,
   extractBotToken,
   generateUsernameSlug,
+  isFatalPollError,
   isPaired,
+  pollBackoffMs,
   parseStartPayload,
   sanitizeReturnUrl,
   suggestBotUsername,
@@ -594,6 +597,182 @@ describe("pairing code expiry", () => {
     expect(paired).toHaveLength(0);
     expect(String(sent.at(-1)!["text"])).toMatch(/expired|Jait/i);
     await connector.stop();
+  });
+});
+
+describe("poll resilience", () => {
+  /** One scripted answer to a `getUpdates` poll. */
+  type PollStep = {
+    /** Deliver these updates. */
+    updates?: unknown[];
+    /** Reject the request, the way a dropped socket does. */
+    throws?: string;
+    /** Answer `ok: false`, the way the Bot API reports a refusal. */
+    fails?: { error_code?: number; description: string };
+  };
+
+  /**
+   * Bot API fake whose polls follow a script. Steps past the end idle quietly,
+   * like a real long poll with nothing to report.
+   */
+  function scriptedApi(steps: PollStep[], opts?: { getMeFailures?: number }) {
+    const json = (value: unknown) => ({ json: async () => value }) as unknown as Response;
+    let polled = 0;
+    let getMeCalls = 0;
+    const fetchImpl = vi.fn(async (url: unknown) => {
+      const path = String(url);
+      if (path.endsWith("/getMe")) {
+        getMeCalls += 1;
+        if (getMeCalls <= (opts?.getMeFailures ?? 0)) throw new TypeError("fetch failed");
+        return json({ ok: true, result: { id: 1, username: "jait_bot" } });
+      }
+      if (path.endsWith("/sendMessage")) return json({ ok: true, result: { message_id: 1 } });
+      if (path.endsWith("/getUpdates")) {
+        const step = steps[polled];
+        polled += 1;
+        if (step?.throws) throw new TypeError(step.throws);
+        if (step?.fails) return json({ ok: false, ...step.fails });
+        if (step?.updates) return json({ ok: true, result: step.updates });
+        await new Promise((r) => setTimeout(r, 10));
+        return json({ ok: true, result: [] });
+      }
+      return json({ ok: false, description: `unexpected ${path}` });
+    });
+    return {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      pollCount: () => polled,
+      getMeCount: () => getMeCalls,
+    };
+  }
+
+  const textUpdate = (text: string, id = 1) => ({
+    update_id: id,
+    message: { message_id: id, date: 1, chat: { id: 4242, type: "private" }, from: { id: 4242 }, text },
+  });
+
+  /** A connector wired to a paired channel with test-speed backoff. */
+  function pairedConnector(fetchImpl: typeof fetch) {
+    return new TelegramConnector({ token: "t", fetchImpl, pollRetryMinMs: 1, pollRetryMaxMs: 2 });
+  }
+
+  it("keeps polling after a dropped long poll", async () => {
+    const api = scriptedApi([{ throws: "fetch failed" }, { updates: [textUpdate("hello")] }]);
+    const inbound: InboundMessage[] = [];
+    const connector = pairedConnector(api.fetchImpl);
+
+    await connector.start(
+      { onInbound: (m) => { inbound.push(m); }, onStatus: () => {} },
+      { allowedSenders: ["4242"] },
+    );
+
+    // The message arrives on the poll *after* the failure — the loop used to
+    // die on the first dropped request and never come back.
+    await vi.waitFor(() => expect(inbound).toHaveLength(1));
+    expect(inbound[0]!.text).toBe("hello");
+    expect(connector.status()).toBe("connected");
+    await connector.stop();
+  });
+
+  it("reports an error once the failures persist, and clears it on recovery", async () => {
+    const api = scriptedApi([
+      { throws: "fetch failed" },
+      { throws: "fetch failed" },
+      { throws: "fetch failed" },
+      { updates: [textUpdate("back")] },
+    ]);
+    const statuses: ChannelStatus[] = [];
+    const connector = pairedConnector(api.fetchImpl);
+
+    await connector.start(
+      { onInbound: () => {}, onStatus: (status) => { statuses.push(status); } },
+      { allowedSenders: ["4242"] },
+    );
+
+    await vi.waitFor(() => expect(statuses).toContain("error"));
+    await vi.waitFor(() => expect(connector.status()).toBe("connected"));
+    // One badge per outage, not one per attempt.
+    expect(statuses.filter((s) => s === "error")).toHaveLength(1);
+    await connector.stop();
+  });
+
+  it("names the competing instance behind a 409 and keeps trying", async () => {
+    const api = scriptedApi([
+      { fails: { error_code: 409, description: "Conflict: terminated by other getUpdates request" } },
+      { updates: [textUpdate("mine")] },
+    ]);
+    const details: ChannelStatusDetail[] = [];
+    const inbound: InboundMessage[] = [];
+    const connector = pairedConnector(api.fetchImpl);
+
+    await connector.start(
+      { onInbound: (m) => { inbound.push(m); }, onStatus: (_s, detail) => { if (detail) details.push(detail); } },
+      { allowedSenders: ["4242"] },
+    );
+
+    await vi.waitFor(() => expect(details.some((d) => /only one/i.test(d.error ?? ""))).toBe(true));
+    await vi.waitFor(() => expect(inbound).toHaveLength(1));
+    await connector.stop();
+  });
+
+  it("stops polling when the bot token is rejected", async () => {
+    const api = scriptedApi([{ fails: { error_code: 401, description: "Unauthorized" } }]);
+    const details: ChannelStatusDetail[] = [];
+    const connector = pairedConnector(api.fetchImpl);
+
+    await connector.start(
+      { onInbound: () => {}, onStatus: (_s, detail) => { if (detail) details.push(detail); } },
+      { allowedSenders: ["4242"] },
+    );
+
+    await vi.waitFor(() => expect(connector.status()).toBe("error"));
+    expect(details.at(-1)!.error).toMatch(/@BotFather/);
+
+    // A rejected token is not going to fix itself — no retry storm.
+    const polls = api.pollCount();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(api.pollCount()).toBe(polls);
+    await connector.stop();
+  });
+
+  it("retries the handshake when Telegram is unreachable at start", async () => {
+    const api = scriptedApi([{ updates: [textUpdate("later")] }], { getMeFailures: 1 });
+    const inbound: InboundMessage[] = [];
+    const connector = pairedConnector(api.fetchImpl);
+
+    await connector.start(
+      { onInbound: (m) => { inbound.push(m); }, onStatus: () => {} },
+      { allowedSenders: ["4242"] },
+    );
+
+    // Visible as broken straight away, but not abandoned.
+    expect(connector.status()).toBe("error");
+    await vi.waitFor(() => expect(connector.status()).toBe("connected"));
+    await vi.waitFor(() => expect(inbound).toHaveLength(1));
+    await connector.stop();
+  });
+
+  describe("classification", () => {
+    it("treats a rejected token as fatal and everything else as retryable", () => {
+      expect(isFatalPollError(401)).toBe(true);
+      expect(isFatalPollError(404)).toBe(true);
+      expect(isFatalPollError(409)).toBe(false);
+      expect(isFatalPollError(502)).toBe(false);
+      expect(isFatalPollError(undefined)).toBe(false);
+    });
+
+    it("backs off exponentially up to the ceiling", () => {
+      expect(pollBackoffMs(1, 1_000, 30_000)).toBe(1_000);
+      expect(pollBackoffMs(2, 1_000, 30_000)).toBe(2_000);
+      expect(pollBackoffMs(3, 1_000, 30_000)).toBe(4_000);
+      expect(pollBackoffMs(99, 1_000, 30_000)).toBe(30_000);
+    });
+
+    it("explains a conflict in terms of the second instance", () => {
+      expect(describePollFailure("Conflict: terminated by other getUpdates request", 409))
+        .toMatch(/only one/i);
+      expect(describePollFailure("Unauthorized", 401)).toMatch(/@BotFather/);
+      expect(describePollFailure("fetch failed", undefined)).toBe("fetch failed");
+    });
   });
 });
 
