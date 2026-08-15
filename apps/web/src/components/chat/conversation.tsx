@@ -881,7 +881,6 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
           textWidth={containerWidth}
-          estimateItemSize={estimateItemSize}
           onScrub={detachFromBottom}
         />
       )}
@@ -903,12 +902,6 @@ interface ConversationMinimapProps {
    * line of the transcript rather than an arbitrary character-count chunk.
    */
   textWidth: number
-  /**
-   * Height estimate for a message that has not rendered yet, matching the
-   * virtualizer's `estimateSize`. Lets the flat line model place unrendered
-   * history on the rail at the same scale the virtualizer expects.
-   */
-  estimateItemSize: (index: number) => number
   /**
    * Called right after a scrub writes a new scroll position, so the conversation
    * can stop following the bottom — a programmatic scroll is invisible to the
@@ -945,13 +938,6 @@ const MINIMAP_EMPTY_SHAPE = [0.3]
  * height disagree and the rail's lines drift out of sync with the transcript.
  */
 const MINIMAP_COLUMN_H_PADDING = 32
-/**
- * Line-height (px) of the assistant prose (`LINE_HEIGHT` in `pretext-height.ts`).
- * Preview lines are laid out at this real pitch, so every rail line maps 1:1 to a
- * line of the transcript and lines hold still relative to each other instead of
- * being re-split every time a streaming turn grows.
- */
-const MINIMAP_LINE_HEIGHT_PX = 28
 /** Font the transcript's assistant prose is rendered with, used for measurement. */
 const MINIMAP_FONT = '16px Inter'
 /**
@@ -1028,26 +1014,29 @@ export function computeMinimapLineShape(text: string, wrapWidth = 512): number[]
  * Maps a pointer position on the rail back to a scroll offset so the pressed
  * point lands in the *middle* of the viewport indicator (like Rider/VS Code
  * scrollbar annotations), instead of snapping the indicator's top edge to the
- * cursor. Measured against the rail itself so the mapping matches where the
- * preview lines are painted, and clamped so a scrub past either end of the rail
- * stops at the corresponding end of the transcript.
+ * cursor. The document maps onto the rail's content band (the top
+ * `contentHeight` px — the fixed-pitch preview lines), so the pointer is
+ * measured against that band, and the result is clamped so a scrub past either
+ * end stops at the corresponding end of the transcript.
  */
 export function computeMinimapScrollTop({
   pointerOffset,
-  railHeight,
-  viewportRatio,
+  contentHeight,
+  viewportHeight,
   totalSize,
 }: {
   /** Pointer position relative to the top of the rail, in px. */
   pointerOffset: number
-  railHeight: number
-  /** Visible fraction of the transcript, i.e. the indicator's height. */
-  viewportRatio: number
+  /** Height of the rail's content band (the fixed-pitch preview lines), in px. */
+  contentHeight: number
+  /** Height of the rail / viewport, in px. */
+  viewportHeight: number
   totalSize: number
 }): number {
-  const centerRatio = railHeight > 0 ? pointerOffset / railHeight - viewportRatio / 2 : 0
-  const maxRatio = Math.max(1 - viewportRatio, 0)
-  return Math.min(Math.max(centerRatio, 0), maxRatio) * totalSize
+  if (contentHeight <= 0) return 0
+  const center = (pointerOffset / contentHeight) * totalSize - viewportHeight / 2
+  const max = Math.max(totalSize - viewportHeight, 0)
+  return Math.min(Math.max(center, 0), max)
 }
 
 /**
@@ -1056,7 +1045,7 @@ export function computeMinimapScrollTop({
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWidth, estimateItemSize, onScrub }: ConversationMinimapProps) {
+function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWidth, onScrub }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -1113,20 +1102,15 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
   // a message's own lines changing as it streams.
   const allLines = useMemo(() => {
     if (totalSize <= 0 || viewportHeight <= 0) return { lines: [] as MinimapLine[], total: 0 }
-    const measurements = virtualizer.measurementsCache
     const cache = shapeCacheRef.current
-    // Compress the whole transcript into the fixed-height rail. Every line is
-    // scaled by this ratio, so short and long paragraphs keep their relative
-    // mass and the scale is uniform across the rail.
-    const scale = viewportHeight / totalSize
-    // Real transcript line pitch, compressed to rail space.
-    const rowPitch = MINIMAP_LINE_HEIGHT_PX * scale
+    // Lay the transcript out at a fixed pitch: one rail line per line of text,
+    // so the rail is a 1:1 map of the transcript. The rail is *not* compressed
+    // to fill its height — a short conversation simply leaves the lower rail
+    // empty, and lines hold still relative to each other as a turn streams.
     const lines: MinimapLine[] = []
     let running = 0
     for (let index = 0; index < texts.length && index < roles.length; index++) {
       const role = roles[index] ?? 'agent'
-      const measurement = measurements[index]
-      const size = measurement && measurement.size > 0 ? measurement.size : estimateItemSize(index)
       const text = texts[index] ?? ''
       const cached = cache.get(index)
       let widths: number[]
@@ -1137,22 +1121,13 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
         cache.set(index, { text, widths })
       }
       if (widths.length === 0) continue
-      // The message must span exactly its scaled rail height. Lines run at the
-      // constant real pitch; any leftover height (container padding, collapsed
-      // reasoning blocks, tool-card chrome — parts with no prose lines) pads the
-      // gap to the next message. If a measured message ever renders shorter than
-      // its line count warrants, clamp the pitch so it still fits rather than
-      // spilling past its own bounds.
-      const room = size * scale
-      const pitch = Math.min(rowPitch, room / widths.length)
       for (const width of widths) {
         if (width > 0) lines.push({ role, width, y: running })
-        running += pitch
+        running += MINIMAP_ROW_PITCH_PX
       }
-      running += Math.max(0, room - widths.length * pitch)
     }
     return { lines, total: running }
-  }, [roles, texts, totalSize, viewportHeight, virtualizer, wrapWidth, estimateItemSize])
+  }, [roles, texts, virtualizer, wrapWidth])
 
   const rows = useMemo(() => {
     const { lines, total } = allLines
@@ -1161,16 +1136,17 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
     const out: MinimapRow[] = []
     for (let row = 0; row < rowCount; row++) {
       const y = row * MINIMAP_ROW_PITCH_PX
-      // Sample the flat line list at the row's centre, so each painted row
-      // reflects the line actually occupying that vertical slice.
-      const target = ((y + MINIMAP_ROW_PITCH_PX / 2) / viewportHeight) * total
-      // Binary search for the last line whose band starts at or before target.
+      // Stop once the fixed-pitch rows run past the content — the rail is not
+      // compressed to fill its height, so short conversations leave the lower
+      // rail empty.
+      if (y >= total) break
+      // Find the last line whose band starts at or before this row.
       let lo = 0
       let hi = lines.length - 1
       let line = lines[0]
       while (lo <= hi) {
         const mid = (lo + hi) >> 1
-        if (lines[mid].y <= target) {
+        if (lines[mid].y <= y) {
           line = lines[mid]
           lo = mid + 1
         } else {
@@ -1184,16 +1160,19 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
 
   if (totalSize <= 0 || viewportHeight <= 0) return null
 
-  const viewportRatio = Math.min(viewportHeight / totalSize, 1)
-  const viewportTopRatio = Math.min(scrollTop / totalSize, 1 - viewportRatio)
+  const contentHeight = allLines.total
+  // The document maps onto the rail's content band (the top `contentHeight` px).
+  const scale = contentHeight > 0 ? contentHeight / totalSize : 0
+  const indicatorTop = scrollTop * scale
+  const indicatorHeight = Math.min(viewportHeight, totalSize - scrollTop) * scale
 
   const handlePointer = (rail: HTMLElement, clientY: number) => {
     if (!scrollElement) return
     const rect = rail.getBoundingClientRect()
     scrollElement.scrollTop = computeMinimapScrollTop({
       pointerOffset: clientY - rect.top,
-      railHeight: rect.height,
-      viewportRatio,
+      contentHeight,
+      viewportHeight,
       totalSize,
     })
     onScrub()
@@ -1216,8 +1195,8 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
       <div
         className="absolute left-0 right-0 bg-foreground/10"
         style={{
-          top: `${viewportTopRatio * 100}%`,
-          height: `${Math.max(viewportRatio * 100, 2)}%`,
+          top: `${indicatorTop}px`,
+          height: `${Math.max(indicatorHeight, 2)}px`,
         }}
       />
       <MinimapLines rows={rows} />

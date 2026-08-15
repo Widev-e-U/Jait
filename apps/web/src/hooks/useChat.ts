@@ -746,7 +746,15 @@ export function useChat(
     // path already triggers a resume. Avoid racing it.
     if (abortControllerRef.current && directStreamSessionRef.current === sessionId) return
     const attempt = resumeReconnectAttemptsRef.current + 1
-    if (attempt > 20) return // ~5 min total of backoff — give up gracefully.
+    if (attempt > 20) {
+      // ~5 min total of backoff — give up gracefully. The gateway may still be
+      // running the turn, but we can no longer reach it. Clear the stuck
+      // loading state so the chat doesn't remain frozen in a spinner forever.
+      setState(prev => prev.isLoading
+        ? { ...prev, isLoading: false, error: 'Connection lost. Reconnect attempts exhausted.' }
+        : prev)
+      return
+    }
     resumeReconnectAttemptsRef.current = attempt
     const delay = Math.min(30000, 500 * Math.pow(2, attempt - 1))
     resumeReconnectTimerRef.current = setTimeout(() => {

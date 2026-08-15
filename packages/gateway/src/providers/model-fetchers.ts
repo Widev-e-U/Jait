@@ -22,8 +22,21 @@ const FETCH_TIMEOUT_MS = 5_000;
 /** Maximum number of OpenRouter models to return (UI list cap). */
 const OPENROUTER_MAX_MODELS = 100;
 
-/** Maximum number of OmniRoute models to return (its catalogue runs to 500+). */
-const OMNIROUTE_MAX_MODELS = 150;
+/**
+ * Maximum number of OmniRoute models to return (its catalogue runs to 500+).
+ *
+ * Overridable with `OMNIROUTE_MAX_MODELS` so a self-hosted router with a large
+ * catalogue (or a specific model that sorts past the default cap) can surface
+ * everything the owner wants in the picker. Set it to `0` to disable the cap
+ * and return the full catalogue. The default of 150 keeps the UI list
+ * responsive for the common case.
+ */
+const OMNIROUTE_MAX_MODELS = (() => {
+  const raw = process.env["OMNIROUTE_MAX_MODELS"]?.trim();
+  if (raw === undefined || raw === "") return 150;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0; // 0 (or garbage) => no cap
+})();
 
 /**
  * Bare `auto` is accepted as a request model but is *not* returned by
@@ -252,7 +265,7 @@ async function doFetchOmniRouteModels(apiKey: string, url: string): Promise<Prov
     const catalogue: ProviderModelInfo[] = (data.data ?? [])
       .filter((m) => m.id && !aliasIds.has(m.id))
       .sort((a, b) => a.id.localeCompare(b.id))
-      .slice(0, OMNIROUTE_MAX_MODELS)
+      .slice(0, OMNIROUTE_MAX_MODELS > 0 ? OMNIROUTE_MAX_MODELS : undefined)
       .map((m) => ({
         id: m.id,
         name: m.id,

@@ -4793,6 +4793,12 @@ function App() {
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
                 inlinePrompts={inlinePrompts}
               />
+            ) : showDebugPanel ? (
+              <div className="flex-1 min-h-0">
+                <ErrorBoundary name="Debug panel" variant="section" className="h-full" resetKeys={[showDebugPanel, activeSessionId]}>
+                  <DebugPanel onClose={() => setShowDebugPanel(false)} />
+                </ErrorBoundary>
+              </div>
             ) : <DeveloperChatWorkspace
                 activeProject={activeProject}
                 activeProjectId={activeProjectId}
@@ -4915,14 +4921,6 @@ function App() {
         )}
 
             {/* Terminal panel rendered as sidebar-adjacent column above */}
-
-            {viewMode === 'developer' && showDebugPanel && (
-              <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
-                <ErrorBoundary name="Debug panel" variant="section" className="h-full" resetKeys={[showDebugPanel, activeSessionId]}>
-                  <DebugPanel onClose={() => setShowDebugPanel(false)} />
-                </ErrorBoundary>
-              </div>
-            )}
 
             {isMobile && (
               <MobileNavDrawer

@@ -27,6 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("isChatCapableOpenAIModelId", () => {
@@ -187,6 +188,26 @@ describe("fetchOmniRouteModels", () => {
     mockFetchOnce({ data: Array.from({ length: 400 }, (_, i) => ({ id: `vendor/model-${i}` })) });
     const models = await fetchOmniRouteModels("k", "http://localhost:20128/v1");
     expect(models).toHaveLength(151); // "auto" + 150 catalogue entries
+  });
+
+  it("honours a custom OMNIROUTE_MAX_MODELS cap", async () => {
+    vi.resetModules();
+    vi.stubEnv("OMNIROUTE_MAX_MODELS", "5");
+    const { fetchOmniRouteModels: fetchCapped, resetModelFetcherCaches: resetCapped } = await import("./model-fetchers.js");
+    resetCapped();
+    mockFetchOnce({ data: Array.from({ length: 400 }, (_, i) => ({ id: `vendor/model-${i}` })) });
+    const models = await fetchCapped("k", "http://localhost:20128/v1");
+    expect(models).toHaveLength(6); // "auto" + 5 catalogue entries
+  });
+
+  it("returns the full catalogue when OMNIROUTE_MAX_MODELS=0", async () => {
+    vi.resetModules();
+    vi.stubEnv("OMNIROUTE_MAX_MODELS", "0");
+    const { fetchOmniRouteModels: fetchAll, resetModelFetcherCaches: resetAll } = await import("./model-fetchers.js");
+    resetAll();
+    mockFetchOnce({ data: Array.from({ length: 400 }, (_, i) => ({ id: `vendor/model-${i}` })) });
+    const models = await fetchAll("k", "http://localhost:20128/v1");
+    expect(models).toHaveLength(401); // "auto" + all 400 catalogue entries
   });
 
   it("omits the Authorization header when no key is configured", async () => {

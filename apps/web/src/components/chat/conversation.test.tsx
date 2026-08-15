@@ -250,13 +250,14 @@ describe('computeMinimapLineShape', () => {
 })
 
 describe('computeMinimapScrollTop', () => {
-  // A 10 000px transcript in an 800px viewport: the rail is the viewport's
-  // height and the indicator covers 8% of it.
-  const rail = { railHeight: 800, viewportRatio: 0.08, totalSize: 10_000 }
+  // A 10 000px transcript in an 800px viewport. The rail's content band is the
+  // top 800px (the fixed-pitch preview lines), so the document maps onto that
+  // band and the indicator covers the full band height.
+  const rail = { contentHeight: 800, viewportHeight: 800, totalSize: 10_000 }
 
   it('centers the viewport on the pressed point', () => {
-    // Pressed halfway down the rail → the middle of the transcript, offset up
-    // by half an indicator so the pressed content sits mid-viewport.
+    // Pressed halfway down the content band → the middle of the transcript,
+    // offset up by half an indicator so the pressed content sits mid-viewport.
     expect(computeMinimapScrollTop({ pointerOffset: 400, ...rail })).toBeCloseTo(4600)
   })
 
@@ -272,8 +273,8 @@ describe('computeMinimapScrollTop', () => {
     expect(computeMinimapScrollTop({ pointerOffset: 5000, ...rail })).toBeCloseTo(9200)
   })
 
-  it('stays at the top when the transcript fits on screen or the rail has no height', () => {
-    expect(computeMinimapScrollTop({ pointerOffset: 400, railHeight: 800, viewportRatio: 1, totalSize: 800 })).toBe(0)
-    expect(computeMinimapScrollTop({ pointerOffset: 400, railHeight: 0, viewportRatio: 0.08, totalSize: 10_000 })).toBe(0)
+  it('stays at the top when the transcript fits on screen or the band has no height', () => {
+    expect(computeMinimapScrollTop({ pointerOffset: 400, contentHeight: 800, viewportHeight: 800, totalSize: 800 })).toBe(0)
+    expect(computeMinimapScrollTop({ pointerOffset: 400, contentHeight: 0, viewportHeight: 800, totalSize: 10_000 })).toBe(0)
   })
 })
