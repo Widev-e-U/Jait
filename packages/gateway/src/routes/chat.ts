@@ -14,6 +14,7 @@ import type { MemoryEntry, MemoryScope, MemoryService } from "../memory/contract
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
+import type { TrajectoryStreamEvent } from "@jait/shared";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProjectService } from "../services/projects.js";
 import type { ProviderRegistry } from "../providers/registry.js";
@@ -1308,6 +1309,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
+  | { type: "request"; content: string; provider: string; model?: string; mode: string; runtimeMode?: string }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -2893,14 +2895,14 @@ export function registerChatRoutes(
     // The existing message consumers ignore unknown event types, so this is
     // purely additive. The client-side debug log no longer synthesizes its own
     // `request` push — the gateway is the single source for turn boundaries.
-    const requestEvent = {
+    const requestEvent: StreamEvent = {
       type: "request",
       content,
       provider: requestProvider ?? "jait",
       ...(requestBodyModel ? { model: requestBodyModel } : {}),
       mode: chatMode,
       ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
-    } as unknown as StreamEvent;
+    };
     safeWrite(`data: ${JSON.stringify(requestEvent)}\n\n`);
     emitToSubscribers(sessionId, requestEvent);
 
@@ -4541,13 +4543,14 @@ export function registerChatRoutes(
       lastLogId = ev.log_id;
       let payloadObj: unknown;
       try { payloadObj = JSON.parse(ev.payload); } catch { payloadObj = {}; }
-      writeSseChunk(reply, `data: ${JSON.stringify({
+      const envelope: TrajectoryStreamEvent = {
         type: "trajectory_event",
         log_id: ev.log_id,
         ts: ev.created_at,
         replay: true,
         payload: payloadObj,
-      })}\n\n`);
+      };
+      writeSseChunk(reply, `data: ${JSON.stringify(envelope)}\n\n`);
     }
 
     // Keep the connection alive during idle periods between turns so browsers
@@ -4566,13 +4569,14 @@ export function registerChatRoutes(
       const logId = sessionEventCounter.get(sessionId) ?? lastLogId;
       if (logId <= lastLogId) return;
       try {
-        writeSseChunk(reply, `data: ${JSON.stringify({
+        const envelope: TrajectoryStreamEvent = {
           type: "trajectory_event",
           log_id: logId,
           ts: Date.now(),
           replay: false,
           payload: event,
-        })}\n\n`);
+        };
+        writeSseChunk(reply, `data: ${JSON.stringify(envelope)}\n\n`);
       } catch {
         // Client went away mid-fan-out — drop this connection without letting
         // the write error abort delivery to the other subscribers.

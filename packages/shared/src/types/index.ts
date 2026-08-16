@@ -183,3 +183,5 @@ export type {
   VoiceServerMessage,
 } from "./voice-assistant.js";
 export { VOICE_ASSISTANT_INITIAL_STATE } from "./voice-assistant.js";
+
+export type { TrajectoryStreamEvent } from "./streaming.js";

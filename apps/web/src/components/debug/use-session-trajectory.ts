@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
+import type { TrajectoryStreamEvent } from '@jait/shared'
 import type { SSEDebugEvent } from './sse-debug-panel'
 
 const API_URL = getApiUrl()
@@ -8,14 +9,6 @@ function authHeaders(token?: string | null): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
   return headers
-}
-
-interface TrajectoryStreamEvent {
-  type: 'trajectory_event'
-  log_id: number
-  ts: number
-  replay: boolean
-  payload: Record<string, unknown>
 }
 
 export interface SessionTrajectoryState {

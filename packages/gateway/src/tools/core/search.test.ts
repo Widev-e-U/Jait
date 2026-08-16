@@ -19,6 +19,36 @@ async function createTempProject(fileName: string, content: string): Promise<str
   return dir;
 }
 
+/**
+ * Writes a tiny stand-in for ripgrep into the temp project and returns its
+ * path. Real ripgrep is not guaranteed to be installed on every machine (the
+ * local dev boxes and self-hosted CI runners that run these tests do not have
+ * it), but the "regex with metacharacters" retry test needs the empty-regex →
+ * literal retry path to be exercised. Without rg installed the gateway instead
+ * degrades the regex to a literal search up front, which is a different code
+ * path and fails the old assertion.
+ *
+ * The fake mimics the behaviour the test relies on: regex invocations (no
+ * `--fixed-strings` in argv) return no matches so the tool retries as literal,
+ * and literal invocations emit a single `path:line:content` match.
+ */
+async function createFakeRg(dir: string): Promise<string> {
+  const rgPath = join(dir, "rg");
+  await writeFile(
+    rgPath,
+    [
+      "#!/bin/sh",
+      'case " $* " in',
+      '  *" --fixed-strings "*) printf \'%s\\n\' "sample.txt:1:literal[1]" ;;',
+      "esac",
+      "exit 0",
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return rgPath;
+}
+
 function searchContext(sessionId: string, projectRoot: string) {
   return { sessionId, actionId: `${sessionId}-action`, projectRoot, requestedBy: "user" } as any;
 }
@@ -56,7 +86,8 @@ describe("search core tool retry behavior", () => {
 
   it("retries a regex search as literal when the pattern contains regex metacharacters", async () => {
     const projectRoot = await createTempProject("sample.txt", "literal[1]\n");
-    const tool = createSearchTool(createRegistryStub() as any);
+    const rgCommand = await createFakeRg(projectRoot);
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand });
 
     const result = await tool.execute(
       { pattern: "literal[1]", isRegexp: true, limit: 5 },

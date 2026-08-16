@@ -10,8 +10,10 @@ import type { AddressInfo } from "node:net";
 
 const { emitToSubscribers, emitTurnDone } = __chatTestUtils;
 
-// emitToSubscribers only accepts the narrow StreamEvent union; tests build
-// synthetic events for every stream type, so widen the input.
+// emitToSubscribers accepts the narrow StreamEvent union. `request` is now a
+// typed union member (matching the gateway's synthetic turn-boundary event),
+// but tests still build the full set of synthetic events for every stream
+// type, so widen the input for brevity.
 type StreamEventLike = Record<string, unknown>;
 const emit = (sessionId: string, event: StreamEventLike) =>
   emitToSubscribers(sessionId, event as unknown as Parameters<typeof emitToSubscribers>[1]);
