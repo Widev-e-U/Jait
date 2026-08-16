@@ -13,7 +13,7 @@ let _containerBinary: string | null = null;
 const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:app-window-v1";
 const BROWSER_SANDBOX_NAME_PREFIX = "jait-browser-sb-";
 const BROWSER_SANDBOX_HEALTH_TIMEOUT_MS = 3_000;
-const DEFAULT_MAX_BROWSER_SANDBOXES = 1;
+const DEFAULT_MAX_BROWSER_SANDBOXES = 2;
 
 const WINDOWS_SANDBOX_IMAGE = "jait/windows-sandbox:latest";
 const WINDOWS_SANDBOX_NAME_PREFIX = "jait-windows-sb-";

@@ -181,7 +181,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     })).rejects.toThrow("container runtime health check failed (timed out)");
   });
 
-  it("refuses to start sandbox browsers when the active sandbox limit is reached", async () => {
+  it("allows a second sandbox browser by default", async () => {
     const commands: string[][] = [];
     const manager = new SandboxManager(async (cmd) => {
       commands.push(cmd);
@@ -195,7 +195,32 @@ describe("Sprint 13 — Docker Sandboxing", () => {
       projectRoot: testProject,
       novncPort: 6083,
       vncPort: 5903,
-    })).rejects.toThrow("Browser sandbox limit reached (1 active, max 1)");
+    })).resolves.toMatchObject({
+      novncPort: 6083,
+      vncPort: 5903,
+    });
+    expect(commands.some((cmd) => cmd.join(" ").includes("image inspect"))).toBe(true);
+  });
+
+  it("refuses to start sandbox browsers when the active sandbox limit is reached", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return {
+          output: "jait-browser-sb-active-1\njait-browser-sb-active-2",
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      return { output: "ok", exitCode: 0, timedOut: false };
+    });
+
+    await expect(manager.startBrowserSandbox({
+      projectRoot: testProject,
+      novncPort: 6083,
+      vncPort: 5903,
+    })).rejects.toThrow("Browser sandbox limit reached (2 active, max 2)");
     expect(commands.some((cmd) => cmd.join(" ").includes("image inspect"))).toBe(false);
   });
 
