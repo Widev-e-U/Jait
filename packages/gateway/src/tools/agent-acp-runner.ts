@@ -229,7 +229,7 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
       collector.toolStart(callId, event.tool, event.args);
       emitNested?.({ type: "tool_start", tool: event.tool, args: event.args, call_id: callId, parent_call_id: event.parentCallId });
     } else if (event.type === "tool.output") {
-      emitNested?.({ type: "tool_output", call_id: event.callId, content: event.content });
+      emitNested?.({ type: "tool_output", call_id: event.callId, content: event.content, channel: "text" });
     } else if (event.type === "tool.result") {
       const callId = event.callId ?? `${opts.subAgentId}-${event.tool}`;
       collector.toolResult(callId, event.tool, event.ok, event.message, event.data);

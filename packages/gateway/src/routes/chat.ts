@@ -654,6 +654,16 @@ interface PersistedToolCall {
   data?: unknown;
   startedAt?: number;
   completedAt?: number;
+  /**
+   * Ordered child segments of a sub-agent call (interleaved thinking / text /
+   * toolGroup), mirrored live in the streaming accumulator so a reload snapshot
+   * keeps a sub-agent's full streamed history instead of only its newest part.
+   */
+  childSegments?: Array<
+    | { type: "text"; content: string }
+    | { type: "thinking"; content: string }
+    | { type: "toolGroup"; callIds: string[] }
+  >;
 }
 
 function buildSyntheticSkillToolCall(skills: Skill[]): PersistedToolCall | null {
@@ -1106,6 +1116,55 @@ export function getExternalFileMutationPath(tool: string, args: unknown): string
   return typeof path === "string" && path.trim() ? path : null;
 }
 
+type ChildSegment =
+  | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "toolGroup"; callIds: string[] };
+
+/** Detect sub-agent tool names ("agent", "agent.delegate", ...). */
+function isAgentToolName(tool: string): boolean {
+  const normalized = fromOpenAIName(tool);
+  return normalized === "agent" || normalized.startsWith("agent.");
+}
+
+/** Append a text chunk, extending a trailing text child segment when present. */
+function withTextChildSegment(segs: ChildSegment[] | undefined, text: string): ChildSegment[] {
+  const arr = segs ? [...segs] : [];
+  const last = arr[arr.length - 1];
+  if (last?.type === "text") {
+    arr[arr.length - 1] = { type: "text", content: last.content + text };
+  } else {
+    arr.push({ type: "text", content: text });
+  }
+  return arr;
+}
+
+/** Append a thinking chunk, extending a trailing thinking child segment when present. */
+function withThinkingChildSegment(segs: ChildSegment[] | undefined, text: string): ChildSegment[] {
+  const arr = segs ? [...segs] : [];
+  const last = arr[arr.length - 1];
+  if (last?.type === "thinking") {
+    arr[arr.length - 1] = { type: "thinking", content: last.content + text };
+  } else {
+    arr.push({ type: "thinking", content: text });
+  }
+  return arr;
+}
+
+/** Append a tool callId to the trailing tool-group child segment, or start a new one. */
+function withToolChildSegment(segs: ChildSegment[] | undefined, callId: string): ChildSegment[] {
+  const arr = segs ? [...segs] : [];
+  const last = arr[arr.length - 1];
+  if (last?.type === "toolGroup") {
+    if (!last.callIds.includes(callId)) {
+      arr[arr.length - 1] = { type: "toolGroup", callIds: [...last.callIds, callId] };
+    }
+  } else {
+    arr.push({ type: "toolGroup", callIds: [callId] });
+  }
+  return arr;
+}
+
 function getOrCreateAccumulator(sessionId: string): StreamingAccumulator {
   let acc = sessionStreamingState.get(sessionId);
   if (!acc) {
@@ -1215,7 +1274,19 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
   // falls back to `ok ? "success" : "error"` and a reconnect snapshot reports every
   // in-flight call as already-succeeded-with-no-message — which is what made a
   // long-running sub-agent card come back looking finished and frozen.
-  acc.toolCalls.push({ callId, parentCallId, tool, args, ok: true, message: "", status: "running", startedAt: Date.now() });
+  acc.toolCalls.push({
+    callId,
+    parentCallId,
+    tool,
+    args,
+    ok: true,
+    message: "",
+    status: "running",
+    startedAt: Date.now(),
+    // Sub-agent calls get an ordered child-segment list so their streamed
+    // thinking / text / nested tool calls can be mirrored into the accumulator.
+    childSegments: isAgentToolName(tool) ? [] : undefined,
+  });
   const last = acc.segments[acc.segments.length - 1];
   if (last?.type === "toolGroup") {
     if (!last.callIds.includes(callId)) {
@@ -1223,6 +1294,15 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
     }
   } else {
     acc.segments.push({ type: "toolGroup", callIds: [callId] });
+  }
+  // A tool call whose parent is an agent call is a sub-agent's inner tool —
+  // mirror it into that agent call's ordered child segments so a reload renders
+  // it inside the card at the same interleaved position it actually ran.
+  if (parentCallId) {
+    const parent = acc.toolCalls.find(t => t.callId === parentCallId);
+    if (parent && isAgentToolName(parent.tool)) {
+      parent.childSegments = withToolChildSegment(parent.childSegments, callId);
+    }
   }
 }
 
@@ -1255,11 +1335,27 @@ function accumulateToolApproval(sessionId: string, requestId: string, tool: stri
 }
 
 /** Record streaming output for a tool call */
-function accumulateToolOutput(sessionId: string, callId: string, content: string): void {
+function accumulateToolOutput(sessionId: string, callId: string, content: string, channel?: string): void {
   const acc = sessionStreamingState.get(sessionId);
   if (!acc) return;
   const tc = acc.toolCalls.find(t => t.callId === callId);
-  if (tc) tc.message = (tc.message || "") + content;
+  if (!tc) return;
+  // A sub-agent's own reasoning / prose streams against its call id on an explicit
+  // channel. Accumulate it into its ordered child segments (alongside the nested
+  // tool-group entries from accumulateToolStart) so a reload keeps the full
+  // interleaved text/thinking/tool layout instead of only the newest message part.
+  if (channel && isAgentToolName(tc.tool)) {
+    tc.childSegments = channel === "thinking"
+      ? withThinkingChildSegment(tc.childSegments, content)
+      : withTextChildSegment(tc.childSegments, content);
+    return;
+  }
+  if (channel && channel !== "thinking") {
+    // Non-agent tool output on a non-thinking channel — preserve legacy behavior.
+    tc.message = (tc.message || "") + content;
+    return;
+  }
+  tc.message = (tc.message || "") + content;
 }
 
 /** Record a tool call completion */
@@ -1445,6 +1541,7 @@ function mapPersistedToolCallsForUI(toolCalls: PersistedToolCall[]): Array<Recor
     data: tc.data,
     startedAt: tc.startedAt,
     completedAt: tc.completedAt,
+    childSegments: tc.childSegments,
   }));
 }
 
@@ -3741,7 +3838,7 @@ export function registerChatRoutes(
           }
           // Sub-agent reasoning streams on its own channel — keep it out of the
           // call's output accumulator so reload snapshots don't mix the two.
-          else if (event.type === "tool_output" && event.channel !== "thinking") accumulateToolOutput(sessionId, event.call_id, event.content);
+          else if (event.type === "tool_output") accumulateToolOutput(sessionId, event.call_id, event.content, event.channel);
           else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
           // A turn-ending failure (rate limit, spent quota, unreachable backend).
           // The loop returns rather than throws after emitting this, so the

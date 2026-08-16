@@ -368,6 +368,8 @@ type RawSnapshotMessage = {
     streamingOutput?: string
     startedAt?: number
     completedAt?: number
+    /** Ordered child segments of a sub-agent tool call (text/thinking/nested tool groups) so a reload replays the full interleaved layout. */
+    childSegments?: MessageSegment[]
   }>
 }
 
@@ -434,6 +436,7 @@ function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: b
                 data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
               },
           streamingOutput: tc.streamingOutput,
+          childSegments: tc.childSegments,
           startedAt,
           completedAt: resolvedCompletedAt,
         }
