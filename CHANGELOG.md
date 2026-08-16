@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.727](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.727) — 2026-08-16
+- fix(gateway + web): persist a sub-agent tool call's ordered child segments (thinking / text / nested tool groups) in the streaming accumulator and replay them in reload snapshots, so a reconnected or reloaded chat renders the sub-agent card's full interleaved history instead of only its newest part
+- refactor(web): theme the SSE debug and trajectory panels with the app's context-indicator palette and popover/muted/border tokens so they follow light/dark theme switching instead of a fixed dark palette (done/error keep explicit status colors)
+
 ## [v0.1.726](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.726) — 2026-08-16
 - fix(gateway + web): add a cross-round replayed-reasoning guard to `runAgentLoop` that pairs verbatim thinking with the same tool-call signature and stops the turn (after one corrective steer) instead of letting a deterministic provider (Ollama / `deepseek-v4-flash:0731-cloud`) burn the whole round budget replaying the same reasoning + quarantined call
 - fix(gateway + web): emit a `content_rollback` event whenever the loop discards a generation after streaming (runaway repetition / replayed-reasoning loop) and roll back the live token/segment accumulators in the CLI chat route, the web streaming hook, and the provider adapter so reload snapshots don't persist content the loop itself removed
