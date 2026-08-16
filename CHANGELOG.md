@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.726](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.726) — 2026-08-16
+- fix(gateway + web): add a cross-round replayed-reasoning guard to `runAgentLoop` that pairs verbatim thinking with the same tool-call signature and stops the turn (after one corrective steer) instead of letting a deterministic provider (Ollama / `deepseek-v4-flash:0731-cloud`) burn the whole round budget replaying the same reasoning + quarantined call
+- fix(gateway + web): emit a `content_rollback` event whenever the loop discards a generation after streaming (runaway repetition / replayed-reasoning loop) and roll back the live token/segment accumulators in the CLI chat route, the web streaming hook, and the provider adapter so reload snapshots don't persist content the loop itself removed
+
 ## [v0.1.725](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.725) — 2026-08-16
 - feat(gateway): add a typed `request` variant to the gateway's `StreamEvent` union so the turn-boundary event is constructed as a typed `StreamEvent` instead of `as unknown as StreamEvent`
 - feat(shared + gateway + web): add a shared `TrajectoryStreamEvent` type in `@jait/shared` (re-exported from the types barrel and root) and use it in both the gateway trajectory SSE endpoint and the web debug hook, removing the duplicated inline interface
