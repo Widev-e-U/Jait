@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.725](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.725) — 2026-08-16
+- feat(gateway): add a typed `request` variant to the gateway's `StreamEvent` union so the turn-boundary event is constructed as a typed `StreamEvent` instead of `as unknown as StreamEvent`
+- feat(shared + gateway + web): add a shared `TrajectoryStreamEvent` type in `@jait/shared` (re-exported from the types barrel and root) and use it in both the gateway trajectory SSE endpoint and the web debug hook, removing the duplicated inline interface
+- fix(gateway): make the search regex-retry path deterministic on CI runners without ripgrep by injecting a fake `rg` through the existing `rgCommand` runtime hook
+
 ## [v0.1.724](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.724) — 2026-08-16
 - feat(gateway): per-session trajectory SSE endpoint (`GET /api/sessions/:sessionId/trajectory`) that replays the persisted stream-event log then forwards live events, staying open across turns with a 15s keepalive — so a trajectory/debug view shows a session's full history (even after reload or session switch) and keeps following new turns
 - feat(gateway): persist every stream event to a new bounded `session_events` table (20k rows/session, pruned incrementally) and emit a synthetic `request` turn-boundary event at turn start, making the gateway the single source for trajectory turn boundaries instead of a client-synthesized push
