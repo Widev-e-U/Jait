@@ -20,12 +20,15 @@ const STEP_ROW_HEIGHT = 24
 
 type Role = 'user' | 'assistant' | 'tool' | 'done' | 'error'
 
+// Role colours follow Jait's context-indicator palette (--ctx-*): History →
+// user turns, Tools → tool calls, Tool Results → tool output, System → the
+// model/assistant. done/error use the app's status colours.
 const roleStyles: Record<Role, string> = {
-  user: 'text-blue-400',
-  assistant: 'text-green-400',
-  tool: 'text-yellow-400',
-  done: 'text-emerald-400',
-  error: 'text-red-400',
+  user: 'var(--ctx-history)',
+  assistant: 'var(--ctx-system)',
+  tool: 'var(--ctx-tools)',
+  done: '#10b981',
+  error: '#ef4444',
 }
 
 const roleLabels: Record<Role, string> = {
@@ -38,19 +41,19 @@ const roleLabels: Record<Role, string> = {
 
 function StepContent({ step, expanded }: { step: TrajectoryStep; expanded: boolean }) {
   if (step.kind === 'turn') {
-    return <span className="text-zinc-400 truncate">{step.content}</span>
+    return <span className="text-muted-foreground truncate">{step.content}</span>
   }
   if (step.kind === 'assistant') {
     return (
       <div className="min-w-0">
         {step.thinking && (
-          <div className={cn('text-purple-400/80', expanded ? 'whitespace-pre-wrap' : 'truncate')}>
-            <span className="text-purple-500">…thinking </span>
+          <div className={cn(expanded ? 'whitespace-pre-wrap' : 'truncate')} style={{ color: 'var(--ctx-system)', opacity: 0.85 }}>
+            <span style={{ color: 'var(--ctx-system)' }}>…thinking </span>
             {step.thinking}
           </div>
         )}
         <div className={expanded ? 'whitespace-pre-wrap break-words' : 'truncate'}>
-          {step.text || <span className="text-zinc-600 italic">(no text yet)</span>}
+          {step.text || <span className="text-muted-foreground italic">(no text yet)</span>}
         </div>
       </div>
     )
@@ -58,12 +61,12 @@ function StepContent({ step, expanded }: { step: TrajectoryStep; expanded: boole
   if (step.kind === 'tool') {
     return (
       <div className="min-w-0">
-        <span className="font-medium text-yellow-300">{step.tool}</span>{' '}
-        <span className={cn('text-zinc-500', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')}>
+        <span className="font-medium" style={{ color: 'var(--ctx-tools)' }}>{step.tool}</span>{' '}
+        <span className={cn('text-muted-foreground', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')}>
           {step.argsPreview}
         </span>
         {step.result && (
-          <span className={cn('block text-emerald-400/90', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')}>
+          <span className={cn('block', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')} style={{ color: 'var(--ctx-tool-results)' }}>
             → {step.result.message}
           </span>
         )}
@@ -71,17 +74,17 @@ function StepContent({ step, expanded }: { step: TrajectoryStep; expanded: boole
     )
   }
   if (step.kind === 'done') {
-    return <span className="text-emerald-400">{step.message}</span>
+    return <span className="text-emerald-500">{step.message}</span>
   }
   // error
-  return <span className="text-red-400">{step.message}</span>
+  return <span className="text-red-500">{step.message}</span>
 }
 
 function StepDetails({ step, onClose }: { step: TrajectoryStep; onClose: () => void }) {
   return (
-    <div className="flex flex-col border-t border-zinc-700/60 bg-zinc-900/60">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700/60">
-        <span className="text-2xs font-semibold text-zinc-400 uppercase tracking-wider">
+    <div className="flex flex-col border-t border-border/70 bg-muted/40">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/70">
+        <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
           Step {step.index} {step.turn > 0 ? `· Turn ${step.turn}` : ''}
         </span>
         <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onClose}>
@@ -90,10 +93,10 @@ function StepDetails({ step, onClose }: { step: TrajectoryStep; onClose: () => v
       </div>
       <div className="p-3 overflow-y-auto max-h-64">
         <div className="flex items-center gap-2 mb-2">
-          <span className={cn('text-2xs font-bold', roleStyles[step.role])}>{roleLabels[step.role]}</span>
-          {step.kind === 'tool' && <span className="text-2xs text-zinc-500">{step.tool}</span>}
+          <span className="text-2xs font-bold" style={{ color: roleStyles[step.role] }}>{roleLabels[step.role]}</span>
+          {step.kind === 'tool' && <span className="text-2xs text-muted-foreground">{step.tool}</span>}
         </div>
-        <pre className="text-xs font-mono text-zinc-300 whitespace-pre-wrap break-words leading-relaxed">
+        <pre className="text-xs font-mono text-popover-foreground whitespace-pre-wrap break-words leading-relaxed">
           {stepDetailText(step)}
         </pre>
       </div>
@@ -230,17 +233,17 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   const selectedStep = selected != null ? filtered.find(s => s.index === selected) ?? null : null
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] text-[#c9d1d9] text-xs font-mono">
+    <div className="flex flex-col h-full bg-popover text-popover-foreground text-xs font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700/60 shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/70 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Trajectory</span>
-          <span className="text-2xs text-zinc-500">{steps.length} steps</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trajectory</span>
+          <span className="text-2xs text-muted-foreground">{steps.length} steps</span>
           {(meta.provider || meta.model) && (
-            <span className="flex items-center gap-1.5 truncate text-2xs text-zinc-500">
-              {meta.provider && <span className="text-zinc-400">{meta.provider}</span>}
-              {meta.provider && meta.model && <span className="text-zinc-600">/</span>}
-              {meta.model && <span className="text-blue-400/90">{meta.model}</span>}
+            <span className="flex items-center gap-1.5 truncate text-2xs text-muted-foreground">
+              {meta.provider && <span className="text-popover-foreground/80">{meta.provider}</span>}
+              {meta.provider && meta.model && <span className="text-muted-foreground">/</span>}
+              {meta.model && <span style={{ color: 'var(--ctx-history)' }}>{meta.model}</span>}
             </span>
           )}
         </div>
@@ -250,22 +253,22 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
               title={sessionTrajectory.connected ? 'Live stream connected' : 'Live stream reconnecting…'}
               className={cn(
                 'h-1.5 w-1.5 rounded-full shrink-0',
-                sessionTrajectory.connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse',
+                sessionTrajectory.connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse',
               )}
             />
           )}
           <div className="relative">
-            <Search className="h-3 w-3 text-zinc-500 absolute left-1.5 top-1/2 -translate-y-1/2" />
+            <Search className="h-3 w-3 text-muted-foreground absolute left-1.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Filter..."
               value={filter}
               onChange={e => setFilter(e.target.value)}
-              className="h-5 w-32 pl-6 pr-1.5 text-2xs rounded bg-zinc-800 border border-zinc-700 text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+              className="h-5 w-32 pl-6 pr-1.5 text-2xs rounded bg-muted/60 border border-border text-popover-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
             />
           </div>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy} title="Copy trajectory">
-            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
           </Button>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => (sessionId ? sessionTrajectory.clear() : clearSSEDebugEvents())} title="Clear events">
             <Trash2 className="h-3 w-3" />
@@ -286,8 +289,8 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
             <div
               key={`${step.role}-${step.index}`}
               className={cn(
-                'flex items-start gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none border-b border-zinc-800/40',
-                isExpanded || isSelected ? 'py-1 bg-zinc-800/30' : 'py-1',
+                'flex items-start gap-2 px-2 hover:bg-muted/40 leading-tight cursor-pointer select-none border-b border-border/40',
+                isExpanded || isSelected ? 'py-1 bg-muted/30' : 'py-1',
               )}
               onClick={() => {
                 if (hasDetail) toggleExpand(step.index)
@@ -295,10 +298,10 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
               }}
             >
               <span className="w-14 shrink-0 text-right font-bold" style={{ minHeight: STEP_ROW_HEIGHT }}>
-                <span className={roleStyles[step.role]}>{roleLabels[step.role]}</span>
+                <span style={{ color: roleStyles[step.role] }}>{roleLabels[step.role]}</span>
               </span>
               {hasDetail && (
-                <span className="shrink-0 w-3 text-zinc-500">
+                <span className="shrink-0 w-3 text-muted-foreground">
                   {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </span>
               )}

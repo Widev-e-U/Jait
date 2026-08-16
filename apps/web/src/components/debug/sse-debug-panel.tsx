@@ -44,16 +44,19 @@ interface SSEDebugPanelProps {
   onClose: () => void
 }
 
+// Event colours follow Jait's context-indicator palette (--ctx-*): History →
+// requests, Tools → tool call deltas/starts, Tool Results → tool output/result,
+// System → thinking. done/error use the app's status colours.
 const typeColors: Record<string, string> = {
-  request: 'text-orange-400',
-  token: 'text-gray-400',
-  tool_call_delta: 'text-blue-400',
-  tool_start: 'text-yellow-400',
-  tool_output: 'text-green-400',
-  tool_result: 'text-emerald-400',
-  thinking: 'text-purple-400',
-  done: 'text-gray-500',
-  error: 'text-red-400',
+  request: 'var(--ctx-history)',
+  token: 'var(--muted-foreground)',
+  tool_call_delta: 'var(--ctx-tools)',
+  tool_start: 'var(--ctx-tools)',
+  tool_output: 'var(--ctx-tool-results)',
+  tool_result: 'var(--ctx-tool-results)',
+  thinking: 'var(--ctx-system)',
+  done: '#10b981',
+  error: '#ef4444',
 }
 
 const ROW_HEIGHT = 20
@@ -104,12 +107,12 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
   }, [])
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] text-[#c9d1d9] text-xs font-mono">
+    <div className="flex flex-col h-full bg-popover text-popover-foreground text-xs font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700/60 shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/70 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">SSE Debug</span>
-          <span className="text-2xs text-zinc-500">{filtered.length}/{events.length}</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">SSE Debug</span>
+          <span className="text-2xs text-muted-foreground">{filtered.length}/{events.length}</span>
         </div>
         <div className="flex items-center gap-1">
           <input
@@ -117,10 +120,10 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
             placeholder="Filter..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            className="h-5 w-28 px-1.5 text-2xs rounded bg-zinc-800 border border-zinc-700 text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            className="h-5 w-28 px-1.5 text-2xs rounded bg-muted/60 border border-border text-popover-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
           />
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy} title="Copy all events">
-            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+            {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
           </Button>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={clearSSEDebugEvents}>
             <Trash2 className="h-3 w-3" />
@@ -139,7 +142,7 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
       >
         {filtered.map(ev => {
           const time = new Date(ev.ts).toISOString().slice(11, 23)
-          const color = typeColors[ev.type] ?? 'text-zinc-400'
+          const color = typeColors[ev.type] ?? 'var(--muted-foreground)'
           const isLong = ev.raw.length > 120
           const isExpanded = expanded.has(ev.id)
           const display = isLong && !isExpanded ? ev.raw.slice(0, 120) + '…' : ev.raw
@@ -147,21 +150,21 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
             <div
               key={ev.id}
               className={cn(
-                'flex gap-2 px-2 hover:bg-zinc-800/50 leading-tight cursor-pointer select-none',
-                isExpanded ? 'items-start py-1 bg-zinc-800/30' : 'items-center',
+                'flex gap-2 px-2 hover:bg-muted/40 leading-tight cursor-pointer select-none',
+                isExpanded ? 'items-start py-1 bg-muted/30' : 'items-center',
               )}
               onClick={() => toggleExpand(ev.id)}
             >
-              <span className="text-zinc-600 shrink-0 w-20" style={{ minHeight: ROW_HEIGHT }}>{time}</span>
-              <span className={cn('shrink-0 w-28 text-right', color)} style={{ minHeight: ROW_HEIGHT }}>{ev.type}</span>
+              <span className="text-muted-foreground shrink-0 w-20" style={{ minHeight: ROW_HEIGHT }}>{time}</span>
+              <span className="shrink-0 w-28 text-right" style={{ minHeight: ROW_HEIGHT, color }}>{ev.type}</span>
               <span
                 className={cn(
-                  'text-zinc-400 min-w-0',
+                  'text-muted-foreground min-w-0',
                   isExpanded ? 'break-all whitespace-pre-wrap' : 'truncate',
                 )}
               >
                 {display}
-                {isLong && !isExpanded && <span className="text-zinc-600 ml-1">▸</span>}
+                {isLong && !isExpanded && <span className="text-muted-foreground ml-1">▸</span>}
               </span>
             </div>
           )
@@ -174,7 +177,7 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
           <Button
             variant="outline"
             size="icon"
-            className="h-6 w-6 rounded-full bg-zinc-800 border-zinc-600"
+            className="h-6 w-6 rounded-full bg-muted border-border"
             onClick={() => {
               setAutoScroll(true)
               const el = scrollRef.current
