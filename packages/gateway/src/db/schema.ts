@@ -353,6 +353,26 @@ export const messages = sqliteTable(
   ],
 );
 
+export const subAgentHistory = sqliteTable(
+  "sub_agent_history",
+  {
+    subAgentId: text("sub_agent_id").primaryKey(),
+    sessionId: text("session_id"),
+    messageId: text("message_id"),
+    content: text("content"), // JSON array of SubAgentSegment
+    performative: text("performative"),
+    rounds: integer("rounds"),
+    durationMs: integer("duration_ms"),
+    segments: text("segments"), // JSON array of MessageSegment (lazy render fallback)
+    toolCalls: text("tool_calls"), // JSON array of executed tool calls
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_sub_agent_history_session").on(table.sessionId, table.createdAt),
+    index("idx_sub_agent_history_message").on(table.messageId),
+  ],
+);
+
 export const messageContextMetadata = sqliteTable(
   "message_context_metadata",
   {

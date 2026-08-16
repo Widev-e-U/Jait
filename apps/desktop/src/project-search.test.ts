@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  DesktopProjectSearchInputError,
   DesktopProjectSearchUnavailableError,
   rankDesktopFilePaths,
   resolveDesktopSearchRoot,
@@ -153,21 +154,41 @@ describe("desktop project search fallback safety", () => {
     });
   });
 
-  it("fails closed without a Git-safe file listing", async () => {
+  it("still finds content without ripgrep or Git, via the native ignore-aware walker", async () => {
     const root = await mkdtemp(join(tmpdir(), "jait-desktop-search-loose-"));
     tempDirectories.push(root);
     await writeProjectFile(root, "needle.ts", "needle\n");
+    await writeProjectFile(root, ".gitignore", "node_modules/\n*.gen.ts\n");
+    await writeProjectFile(root, "node_modules/dep.ts", "needle\n");
+    await writeProjectFile(root, "out.gen.ts", "needle\n");
 
+    // Neither binary is present, so this used to throw
+    // `safe_fallback_unavailable` ("ripgrep is unavailable and Git is
+    // required") — a machine-level dead end the caller can neither fix nor
+    // route around, which is what turned one bad call into a retry loop. The
+    // native walker now produces the listing itself, so the search succeeds.
+    const result = await runDesktopProjectSearch(
+      { root, query: "needle", mode: "content" },
+      {
+        rgCommand: "jait-missing-rg",
+        gitCommand: "jait-missing-git",
+      },
+    );
+    if (result.mode !== "content") throw new Error("unexpected mode");
+    expect(result.matches.map((m) => m.file)).toEqual(["needle.ts"]);
+  });
+
+  it("reports a bad root as an input problem, not a missing-binary problem", async () => {
+    // A typo'd or non-existent path used to surface as the same ENOENT spawn
+    // error as a missing ripgrep, so the message claimed the machine lacked
+    // tooling the model could not install.
     await expect(
       runDesktopProjectSearch(
-        { root, query: "needle", mode: "content" },
-        {
-          rgCommand: "jait-missing-rg",
-          gitCommand: "jait-missing-git",
-        },
+        { root: join(tmpdir(), "jait-desktop-no-such-dir-xyz"), query: "needle", mode: "content" },
+        { rgCommand: "jait-missing-rg" },
       ),
-    ).rejects.toMatchObject<Partial<DesktopProjectSearchUnavailableError>>({
-      reason: "safe_fallback_unavailable",
+    ).rejects.toMatchObject<Partial<DesktopProjectSearchInputError>>({
+      name: "ProjectSearchInputError",
     });
   });
 });

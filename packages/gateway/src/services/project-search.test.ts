@@ -210,7 +210,7 @@ describe("project search fallback safety", () => {
     });
   });
 
-  it("uses gitignore-aware literal fallback and fails closed outside Git", async () => {
+  it("uses a gitignore-aware literal fallback when ripgrep is unavailable", async () => {
     const root = await createProject();
     await writeProjectFile(root, ".gitignore", "secret/\n");
     await writeProjectFile(root, "visible/needle.ts", "needle\n");
@@ -224,17 +224,101 @@ describe("project search fallback safety", () => {
     expect(result.matches.map((match) => match.relativePath)).toEqual([
       "visible/needle.ts",
     ]);
+  });
 
+  it("still honours .gitignore when neither ripgrep nor Git is available", async () => {
+    // The old behaviour threw "safe_fallback_unavailable" here, which named a
+    // machine-level problem the model could not fix or route around — so it
+    // retried the identical call instead. Enumeration is now native, so the
+    // search simply works, with the same privacy guarantee Git provided.
     const looseRoot = await mkdtemp(join(tmpdir(), "jait-project-search-loose-"));
     tempDirectories.push(looseRoot);
+    await writeProjectFile(looseRoot, ".gitignore", "secret/\nbuild/*.js\n");
     await writeProjectFile(looseRoot, "needle.ts", "needle\n");
+    await writeProjectFile(looseRoot, "nested/deep/needle.ts", "needle\n");
+    await writeProjectFile(looseRoot, "secret/needle.ts", "needle\n");
+    await writeProjectFile(looseRoot, "build/needle.js", "needle\n");
+
+    const result = await searchProject(
+      { root: looseRoot, query: "needle", mode: "content" },
+      { rgCommand: "jait-missing-rg", gitCommand: "jait-missing-git" },
+    );
+    if (result.mode !== "content") throw new Error("unexpected mode");
+    expect(result.matches.map((match) => match.relativePath).sort()).toEqual([
+      "needle.ts",
+      "nested/deep/needle.ts",
+    ]);
+  });
+
+  it("applies nested .gitignore files and negations like Git does", async () => {
+    const looseRoot = await mkdtemp(join(tmpdir(), "jait-project-search-nested-"));
+    tempDirectories.push(looseRoot);
+    await writeProjectFile(looseRoot, ".gitignore", "*.gen.ts\n");
+    await writeProjectFile(looseRoot, "pkg/.gitignore", "!keep.gen.ts\ntmp/\n");
+    await writeProjectFile(looseRoot, "top.gen.ts", "needle\n");
+    await writeProjectFile(looseRoot, "pkg/keep.gen.ts", "needle\n");
+    await writeProjectFile(looseRoot, "pkg/drop.gen.ts", "needle\n");
+    await writeProjectFile(looseRoot, "pkg/tmp/needle.ts", "needle\n");
+    await writeProjectFile(looseRoot, "pkg/src/needle.ts", "needle\n");
+
+    const result = await searchProject(
+      { root: looseRoot, query: "needle", mode: "content" },
+      { rgCommand: "jait-missing-rg", gitCommand: "jait-missing-git" },
+    );
+    if (result.mode !== "content") throw new Error("unexpected mode");
+    expect(result.matches.map((match) => match.relativePath).sort()).toEqual([
+      "pkg/keep.gen.ts",
+      "pkg/src/needle.ts",
+    ]);
+  });
+
+  it("finds files by name without ripgrep or Git", async () => {
+    const looseRoot = await mkdtemp(join(tmpdir(), "jait-project-search-files-"));
+    tempDirectories.push(looseRoot);
+    await writeProjectFile(looseRoot, ".gitignore", "node_modules/\n");
+    await writeProjectFile(looseRoot, "src/widget-view.ts", "x\n");
+    await writeProjectFile(looseRoot, "node_modules/widget-view.ts", "x\n");
+
+    const result = await searchProject(
+      { root: looseRoot, query: "widget-view", mode: "files" },
+      { rgCommand: "jait-missing-rg", gitCommand: "jait-missing-git" },
+    );
+    if (result.mode !== "files") throw new Error("unexpected mode");
+    expect(result.files.map((file) => file.relativePath)).toEqual(["src/widget-view.ts"]);
+  });
+});
+
+describe("project search root validation", () => {
+  it("names a missing search path instead of blaming ripgrep or Git", async () => {
+    const root = await createProject();
+
     await expect(
-      searchProject(
-        { root: looseRoot, query: "needle", mode: "content" },
-        { rgCommand: "jait-missing-rg", gitCommand: "jait-missing-git" },
-      ),
-    ).rejects.toMatchObject<Partial<ProjectSearchUnavailableError>>({
-      reason: "safe_fallback_unavailable",
-    });
+      searchProject({ root: join(root, "not-here"), query: "anything" }, { rgCommand: "jait-missing-rg" }),
+    ).rejects.toThrow(/Search path does not exist/);
+  });
+
+  it("rejects a file used as a search root rather than spawning with it as cwd", async () => {
+    const root = await createProject();
+    await writeProjectFile(root, "pkg.json", '{"name":"x"}\n');
+
+    // spawn() throws ENOTDIR synchronously for a file cwd, and reports a missing
+    // directory as ENOENT — indistinguishable from a missing binary.
+    await expect(
+      searchProject({ root: join(root, "pkg.json"), query: "name" }, { rgCommand: "jait-missing-rg" }),
+    ).rejects.toThrow(/is a file, not a directory/);
+  });
+
+  it("falls back to Git enumeration without ripgrep when the root is valid", async () => {
+    const root = await createProject();
+    await writeProjectFile(root, "src/app.ts", "const measurementsCache = 1;\n");
+
+    const result = await searchProject(
+      { root, query: "measurementsCache", mode: "content", limit: 5 },
+      { rgCommand: "jait-missing-rg" },
+    );
+
+    if (result.mode !== "content") throw new Error("expected content mode");
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.file.endsWith("src/app.ts")).toBe(true);
   });
 });

@@ -23,7 +23,7 @@ import {
   writeCachedChatHistory,
 } from '@/lib/chat-history-cache'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
-import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamWriter } from '@/lib/message-stream'
+import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamSnapshot, type MessageStreamWriter } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
@@ -233,6 +233,24 @@ export type MessageSegment =
   | { type: 'error'; content: string }
   /** A user message injected into a running turn via steering, anchored at the point it was received. */
   | { type: 'steering'; content: string; displayContent?: string }
+
+/**
+ * Segments for a turn the gateway ended with an error — a rate limit, spent
+ * quota, or unreachable backend — with the failure appended where it happened.
+ *
+ * Keeps everything that streamed (text, reasoning, tool cards) rather than
+ * replacing the turn with a bare error line, and mirrors the transcript the
+ * gateway persists for the same failure so the message doesn't change shape
+ * on reload.
+ */
+export function segmentsWithError(snapshot: MessageStreamSnapshot, message: string): MessageSegment[] {
+  const base = snapshot.segments.length > 0
+    ? snapshot.segments
+    : snapshot.content
+      ? [{ type: 'text' as const, content: snapshot.content }]
+      : []
+  return [...base, { type: 'error', content: message }]
+}
 
 export interface LlmContextFlowRound {
   round: number
@@ -1318,20 +1336,43 @@ export function useChat(
                 })
               } else if (data.type === 'error') {
                 const errorMsg = data.message as string
-                setState(prev => ({
-                  ...prev,
-                  isLoading: false,
-                  error: errorMsg,
-                  messages: [
-                    ...prev.messages,
-                    {
-                      id: crypto.randomUUID(),
-                      role: 'assistant' as const,
-                      content: errorMsg,
-                      segments: [{ type: 'error' as const, content: errorMsg }],
-                    },
-                  ],
-                }))
+                await textPacer.waitUntilIdle()
+                subscribeScheduler.flushNow()
+                const finalSnapshot = stream.finish()
+                setState(prev => {
+                  // Append the failure to the turn it belongs to. Adding a
+                  // second, separate error bubble left the partial answer above
+                  // it looking complete, and did not match the single persisted
+                  // message the gateway writes for this turn.
+                  const hasTurn = !!assistantId && prev.messages.some(m => m.id === assistantId)
+                  return {
+                    ...prev,
+                    isLoading: false,
+                    // Shown inline in red at the end of the turn — raising the
+                    // composer banner too would say the same thing twice.
+                    error: hasTurn ? null : errorMsg,
+                    messages: hasTurn
+                      ? prev.messages.map(m =>
+                          m.id === assistantId
+                            ? {
+                                ...m,
+                                ...snapshotToChatMessageUpdates(finalSnapshot),
+                                content: finalSnapshot.content || errorMsg,
+                                segments: segmentsWithError(finalSnapshot, errorMsg),
+                              }
+                            : m
+                        )
+                      : [
+                          ...prev.messages,
+                          {
+                            id: crypto.randomUUID(),
+                            role: 'assistant' as const,
+                            content: errorMsg,
+                            segments: [{ type: 'error' as const, content: errorMsg }],
+                          },
+                        ],
+                  }
+                })
               }
             } catch (parseErr) {
               if (!(parseErr instanceof SyntaxError)) throw parseErr
@@ -1928,7 +1969,7 @@ export function useChat(
     } catch (error) {
       textPacer.flushNow()
       streamScheduler.cancel()
-      stream.finish()
+      const finalSnapshot = stream.finish()
       flushBufferImmediately()
       if (error instanceof Error && error.name === 'AbortError') {
         finishOwnedDirectStream()
@@ -1974,12 +2015,13 @@ export function useChat(
         setState(prev => {
           // When the error is rendered inline as a chat message we must not also
           // surface it via the `error` banner above the composer (avoids dupes).
+          // The failure is appended to the turn whether or not anything
+          // streamed first, so the banner is redundant for any turn we still
+          // have a message for.
           const renderedInline =
             !transientConnectionError &&
             !options.queued &&
-            prev.messages.some(m =>
-              m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
-            )
+            prev.messages.some(m => m.id === assistantId)
           return {
             ...prev,
             isLoading: ownsDirectStream ? false : prev.isLoading,
@@ -1990,12 +2032,18 @@ export function useChat(
                     ? m.id !== assistantId && m.id !== userMessage.id
                     : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
                 )
+              // Keep the partial turn and mark where it stopped. Gating this on
+              // an empty message meant a rate limit that arrived mid-answer left
+              // no red marker at all — only a banner above the composer, which
+              // then disappeared on reload once the persisted error segment
+              // rendered inline instead.
               : prev.messages.map(m =>
-                  m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
+                  m.id === assistantId
                     ? {
                         ...m,
-                        content: errorMessage,
-                        segments: [{ type: 'error' as const, content: errorMessage }],
+                        ...snapshotToChatMessageUpdates(finalSnapshot),
+                        content: finalSnapshot.content || errorMessage,
+                        segments: segmentsWithError(finalSnapshot, errorMessage),
                       }
                     : m
                 ),

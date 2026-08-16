@@ -1589,6 +1589,23 @@ const MAX_DUPLICATE_CALL_STREAK = 3;
 /** Max nudges before escalating a duplicate-call loop to one-round tool quarantine. */
 const MAX_DUPLICATE_CALL_INTERVENTIONS = 2;
 const MAX_SAME_TOOL_CALLS_PER_TURN = 6;
+/**
+ * Hard lifetime cap on how often one exact call may be issued in a turn.
+ *
+ * Unlike {@link MAX_SAME_TOOL_CALLS_PER_TURN} this is never reset by an
+ * intervention, so it bounds the total even when the model keeps ignoring
+ * nudges. Past this point the call is skipped outright rather than nudged.
+ */
+const MAX_SAME_TOOL_CALLS_PER_TURN_HARD = 10;
+/**
+ * Identical failures of the same call before it is treated as a loop.
+ *
+ * Re-running a call that succeeded can be legitimate (state may have changed);
+ * re-running one that returns the byte-identical error never is. This catches
+ * the loop several rounds earlier than the generic repeat guard, which is what
+ * matters when the tool is broken for the whole turn.
+ */
+const MAX_IDENTICAL_FAILURES_PER_CALL = 2;
 const MAX_TOOL_CALLS_PER_ROUND = 64;
 const DEFAULT_TOOL_ROUND_CHECKPOINT = 64;
 const ABSOLUTE_TOOL_ROUND_BUDGET = 200;
@@ -1644,6 +1661,34 @@ function toolCallSignature(toolCall: OpenAIToolCall): string {
     args = toolCall.function.arguments.trim();
   }
   return JSON.stringify({ name: fromOpenAIName(toolCall.function.name), args });
+}
+
+/**
+ * Records whether a call succeeded, so identical repeated failures are visible
+ * to the duplicate-call guard on the *next* round.
+ *
+ * The streak only advances while the error text stays the same — a call that
+ * starts failing differently is making progress of a sort, and a call that
+ * succeeds clears its history entirely.
+ */
+function recordToolCallOutcome(
+  failures: Map<string, { message: string; count: number }>,
+  toolCall: OpenAIToolCall,
+  executed: { ok: boolean; message?: string },
+): void {
+  const signature = toolCallSignature(toolCall);
+  if (executed.ok) {
+    failures.delete(signature);
+    return;
+  }
+  const message = executed.message ?? "";
+  const previous = failures.get(signature);
+  failures.set(
+    signature,
+    previous && previous.message === message
+      ? { message, count: previous.count + 1 }
+      : { message, count: 1 },
+  );
 }
 
 /** Consecutive near-redundant ranged reads allowed before redirecting the model. */
@@ -2468,6 +2513,17 @@ export async function runAgentLoop(
   /** Internal tool names hidden from the next provider round after a loop. */
   let quarantinedToolNames = new Set<string>();
   const toolCallOccurrences = new Map<string, number>();
+  /**
+   * Lifetime count per signature, never reset by an intervention.
+   *
+   * `toolCallOccurrences` is zeroed every time we nudge or quarantine, which
+   * hands the model a fresh budget each cycle — so a call that should have been
+   * stopped at 6 can keep recurring indefinitely (nudge, reset, 6 more, nudge,
+   * reset…). This is the counter that actually terminates such a loop.
+   */
+  const toolCallLifetimeOccurrences = new Map<string, number>();
+  /** Consecutive failures per signature that returned the same error text. */
+  const repeatedFailureCounts = new Map<string, { message: string; count: number }>();
   const readCoverageByTarget = new Map<string, ReadCoverageState>();
   /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
   let overflowRecoveryAttempted = false;
@@ -3142,19 +3198,33 @@ export async function runAgentLoop(
         }
 
         const repeatedAcrossTurn = new Set<string>();
+        /** Signatures past a hard limit — skipped outright, never merely nudged. */
+        const exhaustedSignatures = new Set<string>();
         for (const signature of currentCallSignatures) {
           const occurrences = (toolCallOccurrences.get(signature) ?? 0) + 1;
           toolCallOccurrences.set(signature, occurrences);
           if (occurrences >= MAX_SAME_TOOL_CALLS_PER_TURN) repeatedAcrossTurn.add(signature);
+
+          const lifetime = (toolCallLifetimeOccurrences.get(signature) ?? 0) + 1;
+          toolCallLifetimeOccurrences.set(signature, lifetime);
+          if (lifetime >= MAX_SAME_TOOL_CALLS_PER_TURN_HARD) exhaustedSignatures.add(signature);
+
+          // A call that keeps returning the same error is never worth another
+          // attempt — the tool is broken or misused for the whole turn.
+          if ((repeatedFailureCounts.get(signature)?.count ?? 0) >= MAX_IDENTICAL_FAILURES_PER_CALL) {
+            exhaustedSignatures.add(signature);
+          }
         }
 
         if (
           duplicateCallStreak >= MAX_DUPLICATE_CALL_STREAK ||
           repeatedAcrossTurn.size > 0 ||
+          exhaustedSignatures.size > 0 ||
           ignoredInterventionSignatures.size > 0
         ) {
           const repeatedSignatures = new Set([
             ...repeatedAcrossTurn,
+            ...exhaustedSignatures,
             ...ignoredInterventionSignatures,
           ]);
           const loopSignatures = repeatedSignatures.size > 0
@@ -3171,6 +3241,7 @@ export async function runAgentLoop(
 
           if (
             ignoredInterventionSignatures.size > 0 ||
+            exhaustedSignatures.size > 0 ||
             duplicateCallInterventions >= MAX_DUPLICATE_CALL_INTERVENTIONS
           ) {
             const quarantinedCalls = toolCalls.filter((toolCall) =>
@@ -3241,12 +3312,21 @@ export async function runAgentLoop(
                 segments.push({ type: "toolGroup", callIds });
               }
             }
+            // When the loop is a call that keeps *failing*, "you already have
+            // that result" is the wrong explanation and the model will keep
+            // trying. Name the error instead, so it switches approach.
+            const stuckError = [...loopSignatures]
+              .map((signature) => repeatedFailureCounts.get(signature))
+              .find((entry) => entry && entry.count >= MAX_IDENTICAL_FAILURES_PER_CALL);
             history.push({
               role: "system",
-              content:
-                `The exact repeated call was skipped because its result is already in the conversation. ` +
-                `The tool(s) ${[...quarantinedNames].join(", ")} are unavailable for your next response only. ` +
-                `Keep working: use another available tool, change strategy, delegate, or answer from the evidence already collected. Do not repeat the skipped call.`,
+              content: stuckError
+                ? `That call kept failing with the same error and was skipped: "${stuckError.message}". `
+                  + `Retrying it will produce the same failure, so ${[...quarantinedNames].join(", ")} is unavailable for your next response. `
+                  + `Fix the cause if the error tells you how (a wrong path or argument), otherwise reach the goal a different way — another tool, a terminal command, or an answer from what you already have.`
+                : `The exact repeated call was skipped because its result is already in the conversation. `
+                  + `The tool(s) ${[...quarantinedNames].join(", ")} are unavailable for your next response only. `
+                  + `Keep working: use another available tool, change strategy, delegate, or answer from the evidence already collected. Do not repeat the skipped call.`,
             });
             continue;
           }
@@ -3476,6 +3556,7 @@ export async function runAgentLoop(
             onEvent,
             executeTool,
           });
+          recordToolCallOutcome(repeatedFailureCounts, item.toolCall, executed);
           executedToolCalls.push(executed);
           history.push(historyEntry);
         } else {
@@ -3512,12 +3593,18 @@ export async function runAgentLoop(
             );
             for (const [index, outcome] of results.entries()) {
               if (outcome.status === "fulfilled") {
+                recordToolCallOutcome(
+                  repeatedFailureCounts,
+                  batch[index]!.toolCall,
+                  outcome.value.executed,
+                );
                 executedToolCalls.push(outcome.value.executed);
                 history.push(outcome.value.historyEntry);
                 continue;
               }
               const item = batch[index]!;
               const failed = failedToolCallOutcome(item.toolCall, outcome.reason);
+              recordToolCallOutcome(repeatedFailureCounts, item.toolCall, failed.executed);
               log.error(`Tool call ${item.toolCall.function.name} rejected unexpectedly: ${failed.executed.message}`);
               onEvent?.({
                 type: "tool_result",

@@ -33,7 +33,9 @@ import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
   computeMinimapLineShape,
+  computeMinimapRows,
   computeMinimapScrollTop,
+  type MinimapBlock,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
@@ -250,9 +252,9 @@ describe('computeMinimapLineShape', () => {
 })
 
 describe('computeMinimapScrollTop', () => {
-  // A 10 000px transcript in an 800px viewport. The rail's content band is the
-  // top 800px (the fixed-pitch preview lines), so the document maps onto that
-  // band and the indicator covers the full band height.
+  // A 10 000px transcript in an 800px viewport. The whole document is scaled
+  // onto the rail's content band (the full 800px here), so the pointer is
+  // measured against that band.
   const rail = { contentHeight: 800, viewportHeight: 800, totalSize: 10_000 }
 
   it('centers the viewport on the pressed point', () => {
@@ -276,5 +278,69 @@ describe('computeMinimapScrollTop', () => {
   it('stays at the top when the transcript fits on screen or the band has no height', () => {
     expect(computeMinimapScrollTop({ pointerOffset: 400, contentHeight: 800, viewportHeight: 800, totalSize: 800 })).toBe(0)
     expect(computeMinimapScrollTop({ pointerOffset: 400, contentHeight: 0, viewportHeight: 800, totalSize: 10_000 })).toBe(0)
+  })
+})
+
+describe('computeMinimapRows', () => {
+  const block = (start: number, end: number, role: 'user' | 'agent', widths = [1]): MinimapBlock =>
+    ({ start, end, role, widths })
+
+  it('places a message where the document actually has it', () => {
+    // 10 000px document, 800px rail → every rail px is 12.5 document px. The
+    // user turn owns 5 000–6 000, so its rows must land on 400–480.
+    const rows = computeMinimapRows({
+      blocks: [block(0, 5_000, 'agent'), block(5_000, 6_000, 'user'), block(6_000, 10_000, 'agent')],
+      viewportHeight: 800,
+      totalSize: 10_000,
+    })
+    const userRows = rows.filter((r) => r.isUser)
+    expect(userRows.length).toBeGreaterThan(0)
+    expect(Math.min(...userRows.map((r) => r.y))).toBeGreaterThanOrEqual(400)
+    expect(Math.max(...userRows.map((r) => r.y))).toBeLessThan(480)
+  })
+
+  it('keeps a rail row and the scroll it scrubs to pointing at the same message', () => {
+    const blocks = [block(0, 5_000, 'agent'), block(5_000, 6_000, 'user'), block(6_000, 10_000, 'agent')]
+    const rows = computeMinimapRows({ blocks, viewportHeight: 800, totalSize: 10_000 })
+    const userRow = rows.find((r) => r.isUser)!
+    // Scrubbing that row centers the viewport on it, so the user turn is on
+    // screen — the exact failure the document-space mapping exists to prevent.
+    const scrollTop = computeMinimapScrollTop({
+      pointerOffset: userRow.y,
+      contentHeight: 800,
+      viewportHeight: 800,
+      totalSize: 10_000,
+    })
+    expect(scrollTop).toBeLessThanOrEqual(6_000)
+    expect(scrollTop + 800).toBeGreaterThanOrEqual(5_000)
+  })
+
+  it('does not stretch a transcript shorter than the rail', () => {
+    // 600px of document in an 800px rail: rows stop at 600, leaving the rest
+    // of the rail empty rather than zooming the content up to fill it.
+    const rows = computeMinimapRows({
+      blocks: [block(0, 600, 'agent')],
+      viewportHeight: 800,
+      totalSize: 600,
+    })
+    expect(rows.length).toBeGreaterThan(0)
+    expect(Math.max(...rows.map((r) => r.y))).toBeLessThan(600)
+  })
+
+  it('paints the widest line a compressed row covers', () => {
+    // One 1 000px message compressed into 80 rail px: each row spans 12.5px of
+    // the document, so blank lines between paragraphs must not punch holes.
+    const rows = computeMinimapRows({
+      blocks: [block(0, 1_000, 'agent', [1, 0, 1, 0, 1, 0, 1, 0])],
+      viewportHeight: 80,
+      totalSize: 1_000,
+    })
+    expect(rows.every((r) => r.width === 1)).toBe(true)
+  })
+
+  it('returns nothing without geometry or content', () => {
+    expect(computeMinimapRows({ blocks: [], viewportHeight: 800, totalSize: 10_000 })).toEqual([])
+    expect(computeMinimapRows({ blocks: [block(0, 100, 'user')], viewportHeight: 0, totalSize: 100 })).toEqual([])
+    expect(computeMinimapRows({ blocks: [block(0, 100, 'user')], viewportHeight: 800, totalSize: 0 })).toEqual([])
   })
 })

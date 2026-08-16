@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -180,5 +180,52 @@ describe("search core tool filename mode", () => {
 
     expect(result.ok).toBe(true);
     expect((result.data as any).files).toEqual([]);
+  });
+});
+
+describe("search core tool path resolution", () => {
+  it("resolves a relative path against the project root, not the gateway cwd", async () => {
+    const projectRoot = await createTempProject("placeholder.txt", "x\n");
+    await mkdir(join(projectRoot, "apps", "web", "src"), { recursive: true });
+    await writeFile(join(projectRoot, "apps", "web", "src", "app.ts"), "const needle = 1;\n", "utf8");
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });
+
+    // process.cwd() is the monorepo root here, where "apps/web/src" also exists —
+    // so a wrong base would still "work". Assert on the match instead.
+    const result = await tool.execute(
+      { pattern: "needle", path: "apps/web/src", limit: 5 },
+      searchContext("session-relative", projectRoot),
+    );
+
+    expect(result.ok).toBe(true);
+    expect((result.data as any).matches).toHaveLength(1);
+    expect((result.data as any).matches[0].file.endsWith("app.ts")).toBe(true);
+  });
+
+  it("searches a file when path points at one instead of erroring on a bad cwd", async () => {
+    const projectRoot = await createTempProject("package.json", '{"react-virtual":"1"}\n');
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });
+
+    const result = await tool.execute(
+      { pattern: "react-virtual", path: "package.json", limit: 5 },
+      searchContext("session-file-path", projectRoot),
+    );
+
+    expect(result.ok).toBe(true);
+    expect((result.data as any).matches).toHaveLength(1);
+  });
+
+  it("reports a missing path by name rather than as a ripgrep/Git outage", async () => {
+    const projectRoot = await createTempProject("sample.txt", "foo\n");
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });
+
+    const result = await tool.execute(
+      { pattern: "foo", path: "does/not/exist", limit: 5 },
+      searchContext("session-missing-path", projectRoot),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/Search path does not exist/);
+    expect(result.message).not.toMatch(/ripgrep is unavailable/);
   });
 });

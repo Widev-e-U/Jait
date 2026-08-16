@@ -12,7 +12,7 @@ class FakeAcpProvider implements CliProviderAdapter {
   startedSessions: StartSessionOptions[] = [];
   stoppedSessionIds: string[] = [];
   sentTurns: Array<{ sessionId: string; message: string }> = [];
-  behavior: "success" | "error" | "hang" = "success";
+  behavior: "success" | "error" | "error-after-work" | "hang" | "with-tools" = "success";
 
   async checkAvailability(): Promise<boolean> {
     return true;
@@ -32,6 +32,19 @@ class FakeAcpProvider implements CliProviderAdapter {
     if (this.behavior === "error") {
       this.emitter.emit("event", { type: "session.error", sessionId, error: "boom" } satisfies ProviderEvent);
       throw new Error("boom");
+    }
+    if (this.behavior === "error-after-work") {
+      this.emitter.emit("event", { type: "token", sessionId, content: "looking into it" } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "tool.start", sessionId, tool: "bash", args: {}, callId: "call-1" } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "tool.result", sessionId, tool: "bash", ok: true, message: "ok!", callId: "call-1" } satisfies ProviderEvent);
+      throw new Error("transport died");
+    }
+    if (this.behavior === "with-tools") {
+      this.emitter.emit("event", { type: "token", sessionId, content: "start" } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "tool.start", sessionId, tool: "bash", args: {}, callId: "call-1" } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "tool.result", sessionId, tool: "bash", ok: true, message: "ok!", callId: "call-1", data: { output: "ok!" } } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "token", sessionId, content: "finished" } satisfies ProviderEvent);
+      return;
     }
     this.emitter.emit("event", { type: "token", sessionId, content: "[INFORM] " } satisfies ProviderEvent);
     this.emitter.emit("event", { type: "token", sessionId, content: "done" } satisfies ProviderEvent);
@@ -68,12 +81,60 @@ describe("runAcpSpecialistTurn", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.message).toBe("[INFORM] done");
+    // The [INFORM] performative tag is parsed out of the visible message.
+    expect(result.message).toBe("done");
+
+    // The result carries a structured sub-agent message payload — the same
+    // shape a jait-backend specialist produces — so the parent turn can persist
+    // and reload it like a normal chat turn.
+    const data = result.data as Record<string, unknown>;
+    expect(data.subAgentId).toBe("sub-1");
+    expect(data.provider).toBe("claude-code");
+    expect(data.performative).toBe("inform");
+    expect(data.content).toBe("[INFORM] done");
+    // Two consecutive text tokens are merged into a single text segment.
+    expect(data.segments).toEqual([{ type: "text", content: "done" }]);
+    expect(data.toolCalls).toEqual([]);
+    expect(typeof data.durationMs).toBe("number");
+
     expect(provider.startedSessions).toHaveLength(1);
     expect(provider.startedSessions[0]?.threadId).toBe("session-1:sub:sub-1");
     expect(provider.sentTurns[0]?.message).toBe("do the thing");
     // Always tears the scoped session down — it's a one-shot delegation, not a persistent chat.
     expect(provider.stoppedSessionIds).toHaveLength(1);
+  });
+
+  it("collects tool calls and their results into ordered segments for persistence", async () => {
+    const provider = new FakeAcpProvider();
+    provider.behavior = "with-tools";
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+
+    const result = await runAcpSpecialistTurn({
+      providerRegistry: registry,
+      config,
+      providerId: "claude-code",
+      userId: "user-1",
+      sessionId: "session-1",
+      subAgentId: "sub-tools",
+      projectRoot: "/repo",
+      prompt: "use a tool",
+    });
+
+    expect(result.ok).toBe(true);
+    const data = result.data as Record<string, unknown>;
+    expect(data.segments).toEqual([
+      { type: "text", content: "start" },
+      { type: "toolGroup", callIds: ["call-1"] },
+      { type: "text", content: "finished" },
+    ]);
+    expect(data.toolCalls).toHaveLength(1);
+    const call = (data.toolCalls as Array<Record<string, unknown>>)[0]!;
+    expect(call.callId).toBe("call-1");
+    expect(call.tool).toBe("bash");
+    expect(call.ok).toBe(true);
+    expect(call.message).toBe("ok!");
+    expect(typeof call.completedAt).toBe("number");
   });
 
   it("returns ok:false when the provider reports a session error", async () => {
@@ -96,6 +157,37 @@ describe("runAcpSpecialistTurn", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("boom");
     expect(provider.stoppedSessionIds).toHaveLength(1);
+  });
+
+  it("keeps the transcript streamed before the turn threw so it can still be persisted", async () => {
+    const provider = new FakeAcpProvider();
+    provider.behavior = "error-after-work";
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+
+    const result = await runAcpSpecialistTurn({
+      providerRegistry: registry,
+      config,
+      providerId: "claude-code",
+      userId: "user-1",
+      sessionId: "session-1",
+      subAgentId: "sub-partial",
+      projectRoot: "/repo",
+      prompt: "do the thing",
+    });
+
+    expect(result.ok).toBe(false);
+    const data = result.data as Record<string, unknown>;
+    expect(data.subAgentId).toBe("sub-partial");
+    // Text + tool call up to the failure, then the error itself — not just a
+    // bare error message with the work discarded.
+    expect(data.segments).toEqual([
+      { type: "text", content: "looking into it" },
+      { type: "toolGroup", callIds: ["call-1"] },
+      { type: "error", content: expect.stringContaining("transport died") },
+    ]);
+    expect(data.toolCalls).toHaveLength(1);
+    expect(data.content).toBe("looking into it");
   });
 
   it("times out and stops the session instead of hanging forever", async () => {

@@ -205,23 +205,25 @@ export async function runPrimarySearchTool(
     });
     const initialMode = args["isRegexp"] === true;
     let retriedAs: "regex" | "literal" | null = null;
+    let degradedFromRegex = false;
     let result;
     try {
       result = await runContentSearch(initialMode);
     } catch (error) {
-      const initialRegexUnavailable =
-        initialMode
-        && error instanceof ProjectSearchUnavailableError
-        && error.reason === "regexp_requires_rg";
-      if (!initialRegexUnavailable) throw error;
-      const literalRetry = await runContentSearch(false);
-      if (literalRetry.mode !== "content") throw new Error("Unexpected project search mode");
-      if (literalRetry.matches.length === 0) throw error;
-      result = literalRetry;
-      retriedAs = "literal";
+      if (
+        !initialMode
+        || !(error instanceof ProjectSearchUnavailableError)
+        || error.reason !== "regexp_requires_rg"
+      ) throw error;
+      // Regex needs ripgrep, which is missing; run the pattern as literal text
+      // and say so rather than failing the call.
+      result = await runContentSearch(false);
+      degradedFromRegex = true;
     }
     if (result.mode !== "content") throw new Error("Unexpected project search mode");
-    if (result.matches.length === 0 && !retriedAs) {
+    if (result.matches.length === 0 && !degradedFromRegex) {
+      // Opportunistic retry with the opposite interpretation; if the pattern is
+      // not valid the other way, keep the original empty result.
       try {
         const retry = await runContentSearch(!initialMode);
         if (retry.mode !== "content") throw new Error("Unexpected project search mode");
@@ -229,12 +231,8 @@ export async function runPrimarySearchTool(
           result = retry;
           retriedAs = initialMode ? "literal" : "regex";
         }
-      } catch (error) {
-        const unavailableImplicitRegex =
-          !initialMode
-          && error instanceof ProjectSearchUnavailableError
-          && error.reason === "regexp_requires_rg";
-        if (!unavailableImplicitRegex) throw error;
+      } catch {
+        // Keep the original empty result.
       }
     }
     const matches = result.matches.map(({ file, line, content }) => ({ file, line, content }));
@@ -244,9 +242,12 @@ export async function runPrimarySearchTool(
     const retrySuffix = retriedAs ? ` (retried as ${retriedAs})` : "";
     return {
       ok: true,
-      message: matches.length === 0
+      message: (matches.length === 0
         ? `No matches for "${pattern}"`
-        : `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"${limitSuffix}${retrySuffix}`,
+        : `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"${limitSuffix}${retrySuffix}`)
+        + (degradedFromRegex
+          ? " — searched as literal text because regex needs ripgrep, which is not installed."
+          : ""),
       data: { pattern, matches },
     };
   } catch (error) {

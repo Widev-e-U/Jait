@@ -83,6 +83,32 @@ function createToolCallStreamResponse(): Response {
   });
 }
 
+/** A round that streams prose and then calls a tool, so the loop continues to a second round. */
+function createTextThenToolCallStreamResponse(): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Working on it"},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_before_quota","type":"function","function":{"name":"proof_ok","arguments":"{}"}}]},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+
+/** The provider refusing the next round because the account is out of quota. */
+function createQuotaExhaustedResponse(): Response {
+  return new Response(
+    JSON.stringify({ error: { message: "You exceeded your current quota", code: "insufficient_quota" } }),
+    { status: 429, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   return {
     id: "mem-project-1",
@@ -504,6 +530,102 @@ describe("chat route OpenRouter backend selection", () => {
       ]);
       expect(assistantMessage?.segments).toEqual([
         expect.objectContaining({ type: "toolGroup", callIds: ["call_cancel_proof"] }),
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("persists the turn up to a mid-stream quota error instead of dropping it", { timeout: 15_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("quota-persist-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Quota Persistence Session" });
+    const toolRegistry = new ToolRegistry();
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: { OPENROUTER_API_KEY: "openrouter-test-key" },
+    });
+
+    toolRegistry.register({
+      name: "proof.ok",
+      description: "Proof tool that succeeds immediately.",
+      tier: "core",
+      category: "meta",
+      parameters: { type: "object", properties: {} },
+      execute: async () => ({ ok: true, message: "did the thing" }),
+    });
+
+    // Round 1 streams prose + a tool call; round 2 is refused for lack of quota.
+    let llmCalls = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("http://127.0.0.1:")) return originalFetch(input, init);
+      llmCalls += 1;
+      return llmCalls === 1 ? createTextThenToolCallStreamResponse() : createQuotaExhaustedResponse();
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService, toolRegistry });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+
+    try {
+      const address = app.server.address() as AddressInfo;
+      const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+      const response = await originalFetch(`http://127.0.0.1:${address.port}/api/chat`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ content: "do the thing", sessionId: session.id, model: "gpt-4o" }),
+      });
+      expect(response.status).toBe(200);
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let streamBody = "";
+      const startedAt = Date.now();
+      while (!streamBody.includes('"type":"done"')) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        streamBody += decoder.decode(value, { stream: true });
+        if (Date.now() - startedAt > 10_000) throw new Error("Timed out waiting for done");
+      }
+      await reader.cancel().catch(() => {});
+
+      // The failure reached the live stream...
+      expect(streamBody).toContain("exceeded your API quota");
+
+      // ...and, crucially, survives a reload: the loop reports this class of
+      // failure as an event and then returns normally, so nothing throws and
+      // nothing aborts — the turn used to be persisted nowhere at all.
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(messagesResponse.statusCode).toBe(200);
+      const messagesBody = messagesResponse.json() as {
+        messages: Array<{
+          role: string;
+          content: string;
+          toolCalls?: Array<{ callId: string; tool: string; ok?: boolean }>;
+          segments?: Array<{ type: string; content?: string; callIds?: string[] }>;
+        }>;
+      };
+      const assistantMessage = messagesBody.messages.find((message) => message.role === "assistant");
+      expect(assistantMessage).toBeDefined();
+      expect(assistantMessage!.content).toContain("Working on it");
+      expect(assistantMessage!.toolCalls).toEqual([
+        expect.objectContaining({ callId: "call_before_quota", tool: "proof.ok", ok: true }),
+      ]);
+      // Text, the tool call, then the error — in the order they happened.
+      expect(assistantMessage!.segments).toEqual([
+        expect.objectContaining({ type: "text", content: "Working on it" }),
+        expect.objectContaining({ type: "toolGroup", callIds: ["call_before_quota"] }),
+        expect.objectContaining({ type: "error", content: expect.stringContaining("exceeded your API quota") }),
       ]);
     } finally {
       await app.close();

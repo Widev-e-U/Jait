@@ -6,6 +6,9 @@
  * only the final ranked results are capped for model context.
  */
 
+import { basename, dirname, resolve } from "node:path";
+import { stat } from "node:fs/promises";
+
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import {
@@ -108,7 +111,25 @@ export function createSearchTool(
     },
     async execute(input: SearchInput, context: ToolContext): Promise<ToolResult> {
       const effectiveRoot = resolveProjectRoot(registry, context.sessionId, context.projectRoot);
-      const searchRoot = input.path || effectiveRoot;
+      // A relative `path` means "relative to the project", not "relative to
+      // wherever the gateway process happens to have been started" — those are
+      // routinely different (the gateway is often launched from apps/web or a
+      // preview worktree), and resolving against process.cwd() turned ordinary
+      // paths like "apps/web/src" into a search root that does not exist.
+      const searchRoot = input.path ? resolve(effectiveRoot, input.path) : effectiveRoot;
+      // Pointing `path` at a file is a natural way to ask "search this file";
+      // it is also the one thing a search root cannot be. Honour the intent
+      // instead of rejecting it.
+      let include = input.include;
+      let resolvedRoot = searchRoot;
+      try {
+        if ((await stat(searchRoot)).isFile()) {
+          resolvedRoot = dirname(searchRoot);
+          include = basename(searchRoot);
+        }
+      } catch {
+        // Leave it alone; searchProject reports a missing path precisely.
+      }
 
       try {
         const limit = normalizeProjectSearchLimit(input.limit);
@@ -116,7 +137,7 @@ export function createSearchTool(
         if (mode === "files") {
           const result = await searchProject(
             {
-              root: searchRoot,
+              root: resolvedRoot,
               query: input.pattern,
               mode: "files",
               limit,
@@ -136,11 +157,11 @@ export function createSearchTool(
         const runContentSearch = async (isRegexp: boolean) => {
           const result = await searchProject(
             {
-              root: searchRoot,
+              root: resolvedRoot,
               query: input.pattern,
               mode: "content",
               limit,
-              include: input.include,
+              include,
               isRegexp,
               includeIgnoredFiles: input.includeIgnoredFiles,
             },
@@ -152,43 +173,55 @@ export function createSearchTool(
 
         const initialMode = input.isRegexp ?? false;
         let retriedAs: "regex" | "literal" | null = null;
+        /** Set when regex was requested but only literal matching could run. */
+        let degradedFromRegex = false;
         let result;
         try {
           result = await runContentSearch(initialMode);
         } catch (error) {
-          const initialRegexUnavailable =
-            initialMode
-            && error instanceof ProjectSearchUnavailableError
-            && error.reason === "regexp_requires_rg";
-          if (!initialRegexUnavailable) throw error;
-          const literalRetry = await runContentSearch(false);
-          if (literalRetry.matches.length === 0) throw error;
-          result = literalRetry;
-          retriedAs = "literal";
+          if (
+            !initialMode
+            || !(error instanceof ProjectSearchUnavailableError)
+            || error.reason !== "regexp_requires_rg"
+          ) throw error;
+          // Regex needs ripgrep, which is missing. Run the pattern as literal
+          // text rather than failing: an empty regex result and an empty
+          // literal result mean different things, so this is reported either
+          // way instead of being passed off as a regex search that found
+          // nothing.
+          result = await runContentSearch(false);
+          degradedFromRegex = true;
         }
-        if (result.matches.length === 0 && !retriedAs) {
+
+        if (result.matches.length === 0 && !degradedFromRegex) {
+          // A pattern the caller labelled literal is often a regex and vice
+          // versa, so an empty result is worth one attempt the other way. This
+          // is opportunistic: if the opposite interpretation cannot run, keep
+          // the first result rather than reporting the retry's failure as the
+          // tool's outcome.
           try {
             const retry = await runContentSearch(!initialMode);
             if (retry.matches.length > 0) {
               result = retry;
               retriedAs = initialMode ? "literal" : "regex";
             }
-          } catch (error) {
-            const optionalRegexRetryUnavailable =
-              !initialMode
-              && error instanceof ProjectSearchUnavailableError
-              && error.reason === "regexp_requires_rg";
-            if (!optionalRegexRetryUnavailable) throw error;
+          } catch {
+            // Keep the original empty result.
           }
         }
 
         const matches = result.matches.map(({ file, line, content }) => ({ file, line, content }));
         const retrySuffix = retriedAs ? ` (retried as ${retriedAs})` : "";
+        const degradedSuffix = degradedFromRegex
+          ? " — searched as literal text because regex needs ripgrep, which is not installed."
+            + " Install ripgrep for regex, or use a literal pattern; repeating this call will not change the result."
+          : "";
         return {
           ok: true,
           message:
             contentResultMessage(input.pattern, matches.length, limit, result.limited)
-            + retrySuffix,
+            + retrySuffix
+            + degradedSuffix,
           data: { pattern: input.pattern, matches },
         };
       } catch (error) {

@@ -16,6 +16,115 @@ import type { NestedAgentEvent, ToolResult } from "./contracts.js";
 import type { CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { RuntimeMode } from "@jait/shared/types";
+import type { MessageSegment } from "./agent-loop.js";
+import { parsePerformative, stripPerformativeTag, isSuccessfulPerformative } from "./agent-communication.js";
+
+/**
+ * Tool-call snapshot captured from the ACP event stream, shaped the same way
+ * the jait specialist path reports `executedToolCalls` so the web layer can
+ * render sub-agent tool calls identically regardless of backend.
+ */
+interface AcpToolCall {
+  callId: string;
+  tool: string;
+  args?: unknown;
+  ok: boolean;
+  message: string;
+  data?: unknown;
+  startedAt: number;
+  completedAt?: number;
+}
+
+/**
+ * Interleaves a flat sub-agent token stream into ordered `MessageSegment`s
+ * exactly like the jait agent loop does: consecutive text tokens merge into a
+ * text segment, consecutive thinking tokens merge into a thinking segment, and
+ * tool calls (which interrupt any pending text/thinking) become `toolGroup`
+ * segments referencing the collected tool calls. This ordering is what gets
+ * persisted, so on reload the specialist's turn renders the same way it did
+ * live.
+ *
+ * Both sub-agent backends feed it: the ACP path below from provider events, and
+ * the jait-backend path in `agent-tools.ts` from agent-loop events — so a
+ * sub-agent that dies mid-run still has its transcript-so-far to persist, which
+ * is the one thing the loop's own return value can no longer provide.
+ */
+export class SubAgentTranscriptCollector {
+  readonly segments: MessageSegment[] = [];
+  readonly toolCalls: AcpToolCall[] = [];
+  private pending: { type: "text" | "thinking"; content: string } | null = null;
+  private callIndex = new Map<string, number>();
+
+  private flush() {
+    if (!this.pending) return;
+    const content = this.pending.type === "text" ? stripPerformativeTag(this.pending.content.trim()) : this.pending.content.trim();
+    if (content) this.segments.push({ type: this.pending.type, content });
+    this.pending = null;
+  }
+
+  text(content: string) {
+    if (this.pending?.type === "text") this.pending.content += content;
+    else {
+      this.flush();
+      this.pending = { type: "text", content };
+    }
+  }
+
+  thinking(content: string) {
+    if (this.pending?.type === "thinking") this.pending.content += content;
+    else {
+      this.flush();
+      this.pending = { type: "thinking", content };
+    }
+  }
+
+  error(content: string) {
+    this.flush();
+    if (content) this.segments.push({ type: "error", content });
+  }
+
+  toolStart(callId: string, tool: string, args: unknown) {
+    this.flush();
+    const last = this.segments[this.segments.length - 1];
+    if (last && last.type === "toolGroup") {
+      last.callIds.push(callId);
+    } else {
+      this.segments.push({ type: "toolGroup", callIds: [callId] });
+    }
+    this.callIndex.set(callId, this.toolCalls.length);
+    this.toolCalls.push({ callId, tool, args, ok: false, message: "(in progress)", startedAt: Date.now() });
+  }
+
+  toolResult(callId: string, tool: string, ok: boolean, message: string, data?: unknown) {
+    const idx = this.callIndex.get(callId);
+    if (idx === undefined) {
+      // Result without a matching start (some CLI providers emit one). Record
+      // it anyway so the call is visible on reload.
+      this.callIndex.set(callId, this.toolCalls.length);
+      this.toolCalls.push({ callId, tool, ok, message, data, startedAt: Date.now(), completedAt: Date.now() });
+      return;
+    }
+    const call = this.toolCalls[idx]!;
+    call.ok = ok;
+    call.message = message;
+    call.data = data;
+    call.completedAt = Date.now();
+  }
+
+  finalize() {
+    this.flush();
+    // Default any calls that never produced a result (timeout/abort) so every
+    // entry has the required fields the web renderer expects.
+    for (const call of this.toolCalls) {
+      if (call.completedAt === undefined) {
+        call.ok = false;
+        call.message = "(no result — sub-agent stopped before completing)";
+        call.completedAt = Date.now();
+      }
+    }
+    return { segments: this.segments, toolCalls: this.toolCalls };
+  }
+}
 
 export interface AcpSpecialistTurnOptions {
   providerRegistry: ProviderRegistry;
@@ -58,6 +167,7 @@ function resolveRuntimeMode(provider: CliProviderAdapter, requested?: string): R
  * chat.
  */
 export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Promise<ToolResult> {
+  const startedAt = Date.now();
   const provider = opts.providerRegistry.getForUser(opts.providerId, opts.userId);
   if (!provider) {
     return { ok: false, message: `Provider "${opts.providerId}" is not available for this account.` };
@@ -101,21 +211,29 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
 
   const chunks: string[] = [];
   const emitNested = opts.onNestedEvent;
+  const collector = new SubAgentTranscriptCollector();
   const handleEvent = (event: ProviderEvent) => {
     if (event.sessionId !== session.id) return;
     if (event.type === "token") {
       chunks.push(event.content);
+      collector.text(event.content);
       emitNested?.({ type: "tool_output", call_id: "", content: event.content, channel: "text" });
     } else if (event.type === "session.error") {
       chunks.push(`\n[error] ${event.error}`);
+      collector.error(event.error);
     } else if (event.type === "thinking") {
+      collector.thinking(event.content);
       emitNested?.({ type: "tool_output", call_id: "", content: event.content, channel: "thinking" });
     } else if (event.type === "tool.start") {
-      emitNested?.({ type: "tool_start", tool: event.tool, args: event.args, call_id: event.callId ?? `${opts.subAgentId}-${event.tool}`, parent_call_id: event.parentCallId });
+      const callId = event.callId ?? `${opts.subAgentId}-${event.tool}`;
+      collector.toolStart(callId, event.tool, event.args);
+      emitNested?.({ type: "tool_start", tool: event.tool, args: event.args, call_id: callId, parent_call_id: event.parentCallId });
     } else if (event.type === "tool.output") {
       emitNested?.({ type: "tool_output", call_id: event.callId, content: event.content });
     } else if (event.type === "tool.result") {
-      emitNested?.({ type: "tool_result", call_id: event.callId ?? `${opts.subAgentId}-${event.tool}`, tool: event.tool, ok: event.ok, message: event.message, parent_call_id: event.parentCallId, data: event.data });
+      const callId = event.callId ?? `${opts.subAgentId}-${event.tool}`;
+      collector.toolResult(callId, event.tool, event.ok, event.message, event.data);
+      emitNested?.({ type: "tool_result", call_id: callId, tool: event.tool, ok: event.ok, message: event.message, parent_call_id: event.parentCallId, data: event.data });
     } else if (event.type === "tool.approval-required" && opts.onApprovalRequired) {
       // Supervised runs block here until the caller decides. Errors deny: a
       // broken approval path must not silently grant tool access.
@@ -140,6 +258,34 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
       })
     : null;
 
+  // Every path below carries the collected segments + tool calls so the parent
+  // turn's tool-result payload (and therefore the DB row) has the same
+  // structured sub-agent message a jait-backend specialist would produce —
+  // this is what lets the web layer render a persisted sub-agent turn.
+  // `collector.finalize()` is called lazily here (not up front) so the pending
+  // trailing text/thinking gets flushed only after the turn's events have all
+  // arrived.
+  const withData = (
+    message: string,
+    ok: boolean,
+    extra: Record<string, unknown> = {},
+  ): ToolResult => {
+    const collected = collector.finalize();
+    return {
+      ok,
+      message,
+      data: {
+        subAgentId: opts.subAgentId,
+        provider: opts.providerId,
+        content: chunks.join("").trim(),
+        segments: collected.segments,
+        toolCalls: collected.toolCalls,
+        durationMs: Date.now() - startedAt,
+        ...extra,
+      },
+    };
+  };
+
   let result: ToolResult;
   try {
     const raced = await Promise.race([
@@ -148,21 +294,29 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
       ...(abort ? [abort] : []),
     ]);
     if (raced === "timeout") {
-      result = {
-        ok: false,
-        message: `Specialist timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${opts.providerId}.${chunks.length ? ` Partial output:\n${chunks.join("")}` : ""}`,
-      };
+      result = withData(
+        `Specialist timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${opts.providerId}.${chunks.length ? ` Partial output:\n${chunks.join("")}` : ""}`,
+        false,
+      );
     } else if (raced === "aborted") {
-      result = { ok: false, message: "Cancelled before the specialist finished." };
+      result = withData("Cancelled before the specialist finished.", false);
     } else {
       const content = chunks.join("").trim();
-      result = { ok: true, message: content || "(specialist produced no output)" };
+      const { performative, content: cleanContent } = parsePerformative(content);
+      const ok = isSuccessfulPerformative(performative);
+      result = withData(
+        cleanContent || (ok ? "(specialist produced no output)" : `Sub-agent ${performative}: no details given`),
+        ok,
+        { performative },
+      );
     }
   } catch (err) {
-    result = {
-      ok: false,
-      message: `Specialist turn on ${opts.providerId} failed: ${err instanceof Error ? err.message : String(err)}`,
-    };
+    // Same as the timeout/abort paths: whatever the specialist streamed before
+    // it threw is real work and must reach the DB, so the reloaded transcript
+    // shows the turn up to the failure instead of a bare error line.
+    const message = `Specialist turn on ${opts.providerId} failed: ${err instanceof Error ? err.message : String(err)}`;
+    collector.error(message);
+    result = withData(message, false);
   } finally {
     clearTimeout(timeoutHandle);
     unsubscribe();

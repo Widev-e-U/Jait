@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
+import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -19,23 +19,80 @@ import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from 
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 
+/**
+ * Session + auth context used to lazy-load persisted sub-agent bodies. Provided
+ * by the message renderer so nested sub-agent cards (which otherwise only see the
+ * lightweight stub embedded in the parent tool-call data) can fetch their full
+ * content/segments/toolCalls from the gateway on demand.
+ */
+export interface SubAgentAuth { sessionId?: string | null; authToken?: string | null }
+const SubAgentAuthContext = createContext<SubAgentAuth>({})
+export function SubAgentAuthProvider({ sessionId, authToken, children }: SubAgentAuth & { children: ReactNode }) {
+  const value = useMemo(() => ({ sessionId, authToken }), [sessionId, authToken])
+  return <SubAgentAuthContext.Provider value={value}>{children}</SubAgentAuthContext.Provider>
+}
+
+/**
+ * When a sub-agent tool-call only carries the lightweight stub (`subAgentId`
+ * plus summary stats) rather than its full body, lazy-load the persisted body
+ * from the gateway and merge it back in so the card renders like a normal chat.
+ * Returns the record unchanged when it already has its full body or nothing to
+ * load.
+ */
+function usePersistedSubAgent(record: Record<string, unknown>): Record<string, unknown> {
+  const { sessionId, authToken } = useContext(SubAgentAuthContext)
+  const subAgentId = typeof record.subAgentId === 'string' ? record.subAgentId : null
+  const [merged, setMerged] = useState<Record<string, unknown>>(record)
+  // The parent re-derives the stub object on every render, so keep the latest
+  // reference in a ref and fetch the full body exactly once.
+  const recordRef = useRef(record)
+  recordRef.current = record
+  const loadedRef = useRef(false)
+
+  useEffect(() => {
+    if (!subAgentId || !sessionId || loadedRef.current) return
+    if (Array.isArray(recordRef.current.toolCalls)) {
+      loadedRef.current = true
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const headers: Record<string, string> = {}
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+        const res = await fetch(`${getApiUrl()}/api/sessions/${sessionId}/sub-agents/${encodeURIComponent(subAgentId)}`, { headers })
+        if (!res.ok || cancelled) return
+        const json = await res.json()
+        const sa = json?.subAgent
+        if (cancelled || !sa) return
+        const latest = recordRef.current
+        setMerged({
+          ...latest,
+          performative: sa.performative ?? latest.performative,
+          rounds: sa.rounds ?? latest.rounds,
+          durationMs: sa.durationMs ?? latest.durationMs,
+          content: sa.content,
+          segments: sa.segments,
+          toolCalls: sa.toolCalls,
+        })
+      } catch {
+        // Ignore network/parse failures — the card simply stays as its stub.
+      } finally {
+        if (!cancelled) loadedRef.current = true
+      }
+    })()
+    return () => { cancelled = true }
+  }, [subAgentId, sessionId, authToken])
+
+  return merged
+}
+
 /** Auto-scroll a container to the bottom when content changes. */
 function useAutoScroll<T extends HTMLElement = HTMLPreElement>(dep: unknown) {
   const ref = useRef<T>(null)
-  const rafRef = useRef<number | null>(null)
-  useEffect(() => {
-    if (rafRef.current !== null) return
-    rafRef.current = window.requestAnimationFrame(() => {
-      rafRef.current = null
-      const el = ref.current
-      if (el) el.scrollTop = el.scrollHeight
-    })
-    return () => {
-      if (rafRef.current !== null) {
-        window.cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
-      }
-    }
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [dep])
   return ref
 }
@@ -1916,7 +1973,6 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
     <div className="sticky top-0 z-10 space-y-2 border-b border-border/50 bg-card/95 px-3 py-2.5 backdrop-blur">
       {prompt && (
         <div className="flex items-center gap-2 text-xs leading-5 text-foreground/90">
-          <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Delegated:</span>
           {expanded ? (
             <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{prompt}</span>
           ) : (
@@ -2120,7 +2176,7 @@ function useLazySubAgentHistory(
 
 function SubAgentHistoryView({
   args,
-  data,
+  data: dataProp,
   message,
   status,
   streamingOutput,
@@ -2131,6 +2187,7 @@ function SubAgentHistoryView({
   status?: 'pending' | 'running' | 'success' | 'error'
   streamingOutput?: string
 }) {
+  const data = usePersistedSubAgent(dataProp)
   const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls as SubAgentToolCall[] : []
   const content = typeof data.content === 'string' ? data.content.trim() : ''
   const rounds = typeof data.rounds === 'number' ? data.rounds : null
@@ -3699,12 +3756,15 @@ function AgentSpecialistBlock({
   const resultRecord = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
     ? call.result.data as Record<string, unknown>
     : undefined
-  const normalizedArgs = normalizeToolArgs(displayTool, call.args, resultRecord)
+  // If the result only carries the lightweight stub, lazy-load the full
+  // persisted body from the gateway so this card renders like a normal chat.
+  const effectiveResult = usePersistedSubAgent(resultRecord ?? {})
+  const normalizedArgs = normalizeToolArgs(displayTool, call.args, effectiveResult)
   const isRunning = call.status === 'running' || call.status === 'pending'
 
   // Live reasoning stream + final markdown answer (prefer structured content)
   const thinking = call.streamingThinking ?? ''
-  const content = (typeof resultRecord?.content === 'string' ? resultRecord.content.trim() : '')
+  const content = (typeof effectiveResult.content === 'string' ? effectiveResult.content.trim() : '')
     || (call.result?.message ? call.result.message.trim() : '')
     || ''
 
@@ -3719,8 +3779,8 @@ function AgentSpecialistBlock({
   // returned. Live segments only exist for the turn that streamed them, so this
   // is what a reloaded conversation renders from.
   const recordedSegments = useMemo(
-    () => normalizeMessageSegments(resultRecord?.segments),
-    [resultRecord?.segments],
+    () => normalizeMessageSegments(effectiveResult.segments),
+    [effectiveResult.segments],
   )
   // On a reloaded conversation the live childMap is empty, so `childCalls` is
   // undefined even though the sub-agent's tool calls were persisted inside the
@@ -3728,7 +3788,7 @@ function AgentSpecialistBlock({
   // again (same shape SubAgentHistoryView uses for the same data).
   const nestedCalls = useMemo<ToolCallInfo[]>(() => {
     if (childCalls && childCalls.length > 0) return childCalls
-    const raw = Array.isArray(resultRecord?.toolCalls) ? resultRecord.toolCalls as SubAgentToolCall[] : []
+    const raw = Array.isArray(effectiveResult.toolCalls) ? effectiveResult.toolCalls as SubAgentToolCall[] : []
     return raw.map((tc, i) => ({
       callId: tc.callId ?? `sub-${i}`,
       tool: tc.tool,
@@ -3740,7 +3800,7 @@ function AgentSpecialistBlock({
       startedAt: tc.startedAt ?? 0,
       completedAt: tc.completedAt,
     }))
-  }, [childCalls, resultRecord?.toolCalls])
+  }, [childCalls, effectiveResult.toolCalls])
   const scroll = useStickToBottom()
   const bodySegments = useMemo<MessageSegment[]>(() => {
     if (childSegments && childSegments.length > 0) return childSegments

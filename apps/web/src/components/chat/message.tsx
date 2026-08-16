@@ -23,7 +23,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, SubAgentAuthProvider, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
 import { AssistantBody, shouldUseAgentToolCallWrapper } from './assistant-body'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
@@ -811,28 +811,30 @@ function MessageInner({
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
-              shouldUseAgentToolCallWrapper(provider, toolCalls) ? (
-                <AgentToolCallWrapper
-                  provider={provider}
-                  calls={toolCalls}
-                  isStreaming={isStreaming}
-                  threadControlThreads={threadControlThreads}
-                  onOpenTerminal={onOpenTerminal}
-                  onOpenDiff={onOpenDiff}
-                  renderInlineSecretPrompt={renderInlineSecretPrompt}
-                  onApprovalResponse={onApprovalResponse}
-                />
-              ) : (
-                <ToolCallGroup
-                  calls={toolCalls}
-                  collapsible
-                  threadControlThreads={threadControlThreads}
-                  onOpenTerminal={onOpenTerminal}
-                  onOpenDiff={onOpenDiff}
-                  renderInlineSecretPrompt={renderInlineSecretPrompt}
-                  onApprovalResponse={onApprovalResponse}
-                />
-              )
+              <SubAgentAuthProvider sessionId={sessionId} authToken={authToken}>
+                {shouldUseAgentToolCallWrapper(provider, toolCalls) ? (
+                  <AgentToolCallWrapper
+                    provider={provider}
+                    calls={toolCalls}
+                    isStreaming={isStreaming}
+                    threadControlThreads={threadControlThreads}
+                    onOpenTerminal={onOpenTerminal}
+                    onOpenDiff={onOpenDiff}
+                    renderInlineSecretPrompt={renderInlineSecretPrompt}
+                    onApprovalResponse={onApprovalResponse}
+                  />
+                ) : (
+                  <ToolCallGroup
+                    calls={toolCalls}
+                    collapsible
+                    threadControlThreads={threadControlThreads}
+                    onOpenTerminal={onOpenTerminal}
+                    onOpenDiff={onOpenDiff}
+                    renderInlineSecretPrompt={renderInlineSecretPrompt}
+                    onApprovalResponse={onApprovalResponse}
+                  />
+                )}
+              </SubAgentAuthProvider>
             )}
 
             {hasUserRenderableContent || content ? (

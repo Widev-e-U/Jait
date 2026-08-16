@@ -4,6 +4,30 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.723](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.723) — 2026-08-16
+- fix(gateway): kill the search retry loop that dominated broken turns — a search root that does not exist, a `path` pointing at a file, or a missing ripgrep all used to surface as the same unfixable "ripgrep is unavailable and Git is required" error, which the model could only respond to by retrying (one turn reached 1034 calls); search now resolves relative paths against the project root, validates the root up front as a named input error, separates a sync-throw ENOTDIR from a missing binary, walks files natively with a compiled `.gitignore` engine (the same approach Codex CLI uses, so no binary is required), treats `git ls-files` as an optimization rather than a requirement, and degrades regex to an explicit literal-text search with a message that says repeating the call will not change the result
+- fix(gateway): bound repeated tool calls hard — a lifetime cap of 10 per exact call per turn that interventions never reset, plus quarantine of any call that returns the identical error twice, with the steering message naming the actual error instead of "you already have that result"; together these terminate the interleaved-repeat loops the round-streak and per-turn counters could not
+- feat(gateway): persist sub-agent transcripts — a sub-agent that fails, times out, or is cancelled now writes its partial content, ordered segments, and executed tool calls to a new `sub_agent_history` table (the parent message keeps a light stub), so a reloaded chat renders the turn up to where it stopped instead of a bare error stub
+- fix(gateway): deliver the turn-`done` SSE event to mid-run resume subscribers — the per-session sequence counter is now cleared only after the done event is sequenced, so a client reconnecting mid-turn (snapshot seq >= 1) actually receives it and the stream closes instead of hanging on "loading"
+- fix(gateway): record turn-ending errors (rate limits, quota, transport failures) at their live transcript position so a reload keeps the red marker where the turn stopped
+- fix(web): render sub-agent tool calls on reload from the persisted tool data, and append a turn-ending gateway error to the in-flight message inline instead of spawning a second bubble
+- fix(desktop): port the search fixes to the desktop node's own search implementation — same native ignore-aware walker, root validation, and fallback degradation, so remote/desktop projects do not hit the old dead-end either
+
+## [v0.1.722](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.722) — 2026-08-15
+- fix(web): align the debug panel scrollbar with the content center — the trajectory and SSE debug panels no longer use the virtualizer, whose fixed `estimateSize` for non-rendered rows made `getTotalSize()` drift so the native scrollbar thumb lost the content center; rendering all rows in normal flow makes the scrollbar reflect the true content height exactly, with auto-scroll-to-bottom preserved via `scrollTop = scrollHeight`
+
+## [v0.1.721](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.721) — 2026-08-15
+- fix(chat): trajectory view replaces only the chat transcript, keeping the composer in place
+- feat(debug): trajectory panel live-streaming auto-scroll (stick-to-bottom with user-scroll detach), opens at the newest step, and scrollbar row estimates
+- fix(debug): accurate collapsed row height for the SSE debug panel virtualizer
+- fix(session-selector): project menu opens at the cursor on right-click / touch long-press
+- feat(settings): add the Nodes tab trigger
+
+## [v0.1.720](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.720) — 2026-08-15
+- feat(chat): conversation minimap with 1:1 line mapping, fixed pitch, and a content-band indicator
+- fix(useChat): trajectory mode replaces the entire chat and streaming stays consistent
+- feat(gateway): `OMNIROUTE_MAX_MODELS` env override for the model-picker cap
+
 ## [v0.1.719](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.719) — 2026-08-15
 - fix(chat): restore access to the Trajectory debug panel from inside a chat — the desktop developer sidebar footer now has a Trajectory button (Bug icon) that toggles the trajectory panel for any active session, and the mobile toolbar's debug button now appears for any developer chat (previously only project chats) with its tooltip renamed to "Trajectory", so the trajectory view is reachable again on both desktop and mobile after the last release dropped the toolbar entry point
 

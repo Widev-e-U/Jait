@@ -1473,4 +1473,28 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 060: Sub-agent history table ─────────────────────────────────
+  {
+    id: 60,
+    name: "sub_agent_history",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sub_agent_history (
+          sub_agent_id TEXT PRIMARY KEY,
+          session_id TEXT,
+          message_id TEXT,
+          content TEXT,
+          performative TEXT,
+          rounds INTEGER,
+          duration_ms INTEGER,
+          segments TEXT,
+          tool_calls TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_agent_history_session ON sub_agent_history(session_id, created_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_agent_history_message ON sub_agent_history(message_id)`);
+    },
+  },
+
 ];

@@ -882,6 +882,22 @@ function useDragResize(
   // mid-drag or has already dragged, so we never fight the user's interaction.
   const appliedPersistedRef = useRef(false)
   const userDraggedRef = useRef(false)
+  const prevPersistedInitialRef = useRef(persistedInitial)
+
+  // ProjectPanel stays mounted across project switches (ErrorBoundary only
+  // remounts on error), so the one-time apply/drag guards must be reset
+  // whenever a project change is detected. The per-project persisted size goes
+  // through a null snapshot between projects, so a non-null -> null transition
+  // is the reliable signal. This must run before the persisted-apply effect
+  // below so the newly loaded project's size can be restored.
+  useEffect(() => {
+    const prev = prevPersistedInitialRef.current
+    prevPersistedInitialRef.current = persistedInitial
+    if (prev != null && persistedInitial == null) {
+      appliedPersistedRef.current = false
+      userDraggedRef.current = false
+    }
+  }, [persistedInitial])
 
   // Apply a per-project persisted size when it arrives after mount.
   useEffect(() => {

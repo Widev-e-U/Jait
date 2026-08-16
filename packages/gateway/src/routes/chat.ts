@@ -21,10 +21,11 @@ import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from 
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
-import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable } from "../db/schema.js";
+import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable, subAgentHistory as subAgentHistoryTable } from "../db/schema.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
+import { persistSubAgentHistories, stripSubAgentPayloads } from "../lib/sub-agent-persistence.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
@@ -1018,6 +1019,7 @@ interface StreamingAccumulator {
     | { type: "thinking"; content: string }
     | { type: "toolGroup"; callIds: string[] }
     | { type: "steering"; content: string; displayContent?: string }
+    | { type: "error"; content: string }
   >;
   thinking: string;
 }
@@ -1144,6 +1146,19 @@ function accumulateSteering(sessionId: string, content: string, displayContent?:
     content,
     ...(displayContent ? { displayContent } : {}),
   });
+}
+
+/**
+ * Record a turn-ending error at its live position in the transcript.
+ *
+ * The agent loop reports rate limits, exhausted quota, and transport failures
+ * as an `error` event and then *returns normally* — it does not throw. Without
+ * this the error exists only in the live SSE stream, so a reload showed the
+ * partial answer with no sign it had been cut short.
+ */
+function accumulateError(sessionId: string, content: string): void {
+  const acc = getOrCreateAccumulator(sessionId);
+  acc.segments.push({ type: "error", content });
 }
 
 /** Record a tool call start in the streaming accumulator */
@@ -1446,6 +1461,18 @@ function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscri
   };
 }
 
+/**
+ * Emit the terminal `done` event for a turn, then clear the per-session seq
+ * counter. Order matters: the counter must still be present when the done event
+ * is sequenced so resume subscribers (minSeqExclusive >= 1) receive it and their
+ * SSE stream closes. Clearing first would give done seq=1 and drop it for every
+ * mid-run resume subscriber, leaving their stream open forever (stuck loading).
+ */
+export function emitTurnDone(sessionId: string, doneEvent: StreamEvent) {
+  emitToSubscribers(sessionId, doneEvent);
+  sessionStreamSeq.delete(sessionId);
+}
+
 function parseMessageLimit(raw: unknown): number {
   const parsed = typeof raw === "number"
     ? raw
@@ -1525,6 +1552,15 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
 
 function hasMemoryProvenanceInContextFlow(json: string): boolean {
   return json.includes('"injectedIds":[') && !json.includes('"injectedIds":[]');
+}
+
+function parseSubAgentJson(json: string | null | undefined): unknown {
+  if (!json) return undefined;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return undefined;
+  }
 }
 
 function writeMessageContextMetadata(db: JaitDB, messageId: string, contextFlow?: string): void {
@@ -1853,13 +1889,14 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
   if (!_dbRef) return;
   try {
     const messageId = randomUUID();
+    persistSubAgentHistories(_dbRef, sessionId, messageId, toolCalls);
     _dbRef.insert(messagesTable)
       .values({
         id: messageId,
         sessionId,
         role,
         content,
-        toolCalls: serializePersistedToolCalls(toolCalls),
+        toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
         segments: segments ?? null,
         contextFlow: contextFlow ?? null,
         thinking: thinking ?? null,
@@ -1885,6 +1922,13 @@ export const __chatTestUtils = {
   getOrCreateAccumulator,
   serializePersistedContextFlow,
   serializePersistedToolCalls,
+  // Per-session SSE seq gate internals (used by the stream-resume regression test).
+  sessionStreamSeq,
+  sessionSubscribers,
+  subscribe,
+  emitToSubscribers,
+  nextStreamSeq,
+  emitTurnDone,
 };
 
 export interface ChatRouteDeps {
@@ -2245,13 +2289,14 @@ export function registerChatRoutes(
     if (!db) return;
     try {
       const messageId = randomUUID();
+      persistSubAgentHistories(db, sessionId, messageId, toolCalls);
       db.insert(messagesTable)
         .values({
           id: messageId,
           sessionId,
           role,
           content,
-          toolCalls: serializePersistedToolCalls(toolCalls),
+          toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
           segments: segments ?? null,
           contextFlow: contextFlow ?? null,
           thinking: thinking ?? null,
@@ -2679,6 +2724,14 @@ export function registerChatRoutes(
     // order on reload because the rows share createdAt down to the millisecond).
     let loopPersisted = false;
     let assistantTurnPersisted = false;
+    /**
+     * Message from a turn-ending `error` event, if the loop reported one.
+     *
+     * Used as the persisted content when the failure arrived before any text
+     * streamed, so the reloaded turn says "you've exceeded your API quota"
+     * rather than being an empty assistant bubble.
+     */
+    let loopErrorMessage: string | undefined;
     let cliEventUnsubscribe: (() => void) | null = null;
     let cliTurnDoneUnsubscribe: (() => void) | null = null;
     const cleanupCliListeners = () => {
@@ -3511,6 +3564,13 @@ export function registerChatRoutes(
           // call's output accumulator so reload snapshots don't mix the two.
           else if (event.type === "tool_output" && event.channel !== "thinking") accumulateToolOutput(sessionId, event.call_id, event.content);
           else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
+          // A turn-ending failure (rate limit, spent quota, unreachable backend).
+          // The loop returns rather than throws after emitting this, so the
+          // post-loop fallback below is what persists the turn.
+          else if (event.type === "error") {
+            loopErrorMessage = event.message;
+            accumulateError(sessionId, event.message);
+          }
 
           // ── Cross-client sync: persist & broadcast state changes ──
           const ev = event as Record<string, unknown>;
@@ -3735,16 +3795,34 @@ export function registerChatRoutes(
       try {
         safeWrite(`data: ${JSON.stringify(wasCancelled ? { type: "done", session_id: sessionId } : { type: "error", message: errMsg })}\n\n`);
       } catch { /* client gone */ }
+      // Error/cancel path: emit happened above (before this delete), so the
+      // done/error event got a proper seq. Clear the counter now that the turn
+      // is over (the success path clears it inside emitTurnDone).
+      sessionStreamSeq.delete(sessionId);
     }
 
     // Persist partial results BEFORE clearing stream state so a reload after
     // cancel can still render whatever had streamed, including thinking-only
     // output that may not have reached the provider loop finalization path.
-    if (streamAbort.signal.aborted && !assistantTurnPersisted) {
+    //
+    // This also carries the turn-ending error returns — rate limit, exhausted
+    // quota, unreachable backend. The loop reports those as an `error` event and
+    // then returns *normally* instead of throwing, so neither the catch above
+    // nor the loop's own onPersist runs for them. While this was gated on
+    // `aborted`, every token and tool call streamed before a rate limit was
+    // dropped on reload.
+    if (!assistantTurnPersisted) {
       const acc = sessionStreamingState.get(sessionId);
-      const fallbackContent = fullContent || acc?.content || "";
+      const fallbackContent = fullContent || acc?.content || loopErrorMessage || "";
       const fallbackToolCalls = partialToolCalls.length > 0 ? partialToolCalls : (acc?.toolCalls ?? []);
-      const fallbackSegmentsJson = resultSegmentsJson ?? (acc?.segments.length ? JSON.stringify(acc.segments) : undefined);
+      // The loop's own segments never contain the failure (it emits an event
+      // rather than pushing a segment), so when an error was reported prefer the
+      // accumulator's copy — that one has the transcript *and* the error in the
+      // order they happened.
+      const accSegmentsJson = acc?.segments.length ? JSON.stringify(acc.segments) : undefined;
+      const fallbackSegmentsJson = loopErrorMessage
+        ? accSegmentsJson ?? resultSegmentsJson
+        : resultSegmentsJson ?? accSegmentsJson;
       const fallbackThinking = acc?.thinking || undefined;
       if (fallbackContent || fallbackThinking || fallbackToolCalls.length > 0 || fallbackSegmentsJson) {
         const tcJson = fallbackToolCalls.length > 0 ? JSON.stringify(fallbackToolCalls) : undefined;
@@ -3769,7 +3847,6 @@ export function registerChatRoutes(
     sessionSteeringControllers.delete(sessionId);
     unregisterInterventionResume();
     sessionStreamingState.delete(sessionId);
-    sessionStreamSeq.delete(sessionId);
 
     // Preserve completed tool-call/result pairs for the next request. If a
     // cancellation genuinely interrupted a call, synthesize only its missing
@@ -3798,7 +3875,7 @@ export function registerChatRoutes(
       hit_max_rounds: hitMaxRounds,
       has_timed_out_tools: hasTimedOutTools,
     };
-    emitToSubscribers(sessionId, doneEvent);
+    emitTurnDone(sessionId, doneEvent);
     safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);
 
     try { reply.raw.end(); } catch { /* already closed */ }
@@ -4141,6 +4218,53 @@ export function registerChatRoutes(
       }
     } catch { /* fall through to null */ }
     return { contextFlow: null };
+  });
+
+  // ── GET /api/sessions/:sessionId/sub-agents/:subAgentId ─────────────
+  // Lazy-load the full persisted body of a sub-agent (nested agent). The
+  // messages endpoint only returns the lightweight stub embedded in the parent
+  // tool-call data; the full content/segments/toolCalls are fetched here only
+  // when the user expands the sub-agent card.
+  app.get("/api/sessions/:sessionId/sub-agents/:subAgentId", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId, subAgentId } = request.params as { sessionId: string; subAgentId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    if (!db) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Sub-agent history not available" });
+    }
+    const row = db
+      .select()
+      .from(subAgentHistoryTable)
+      .where(
+        and(
+          eq(subAgentHistoryTable.subAgentId, subAgentId),
+          eq(subAgentHistoryTable.sessionId, sessionId),
+        ),
+      )
+      .get();
+    if (!row) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Sub-agent not found" });
+    }
+    return {
+      subAgent: {
+        subAgentId: row.subAgentId,
+        sessionId: row.sessionId,
+        messageId: row.messageId,
+        performative: row.performative,
+        rounds: row.rounds,
+        durationMs: row.durationMs,
+        createdAt: row.createdAt,
+        content: parseSubAgentJson(row.content),
+        segments: parseSubAgentJson(row.segments),
+        toolCalls: parseSubAgentJson(row.toolCalls),
+      },
+    };
   });
 
   // SSE stream-resume: join an in-progress session's token stream

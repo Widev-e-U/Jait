@@ -226,7 +226,6 @@ describe('sub-agent activity', () => {
 
     for (const markup of [beforeChildCalls, afterChildCalls]) {
       expect(markup).toContain('sticky top-0 z-10')
-      expect(markup).toContain('Delegated:')
       expect(markup).toContain('file.read')
       expect(markup).toContain('terminal.run')
     }

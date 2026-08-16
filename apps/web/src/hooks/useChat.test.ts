@@ -12,10 +12,12 @@ import {
   shouldOpenResumeStream,
   shouldOwnDirectChatStream,
   shouldProcessDirectStreamEvent,
+  segmentsWithError,
   shouldForceMessageLifecycleRefresh,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
 } from '@/hooks/useChat'
+import type { MessageStreamSnapshot } from '@/lib/message-stream'
 
 describe('formatChatHttpError', () => {
   it('explains Codex image uploads that hit the gateway body limit', () => {
@@ -306,5 +308,77 @@ describe('shouldProcessDirectStreamEvent', () => {
     expect(shouldProcessDirectStreamEvent('done', false)).toBe(true)
     expect(shouldProcessDirectStreamEvent('queued', false)).toBe(true)
     expect(shouldProcessDirectStreamEvent('error', false)).toBe(true)
+  })
+})
+
+describe('segmentsWithError', () => {
+  const snapshot = (overrides: Partial<MessageStreamSnapshot> = {}): MessageStreamSnapshot => ({
+    content: '',
+    segments: [],
+    ...overrides,
+  })
+
+  it('appends the failure after the streamed segments instead of replacing them', () => {
+    const result = segmentsWithError(snapshot({
+      segments: [
+        { type: 'text', content: 'Working on it' },
+        { type: 'toolGroup', callIds: ['call_1'] },
+      ],
+    }), 'You exceeded your current quota')
+
+    expect(result).toEqual([
+      { type: 'text', content: 'Working on it' },
+      { type: 'toolGroup', callIds: ['call_1'] },
+      { type: 'error', content: 'You exceeded your current quota' },
+    ])
+  })
+
+  it('wraps bare content into a text segment so the partial answer stays visible', () => {
+    const result = segmentsWithError(snapshot({ content: 'Partial answer' }), 'Backend unreachable')
+
+    expect(result).toEqual([
+      { type: 'text', content: 'Partial answer' },
+      { type: 'error', content: 'Backend unreachable' },
+    ])
+  })
+
+  it('yields a bare error segment when the turn produced nothing before failing', () => {
+    const result = segmentsWithError(snapshot(), 'You exceeded your current quota')
+
+    expect(result).toEqual([{ type: 'error', content: 'You exceeded your current quota' }])
+  })
+
+  it('renders the error as the last segment — the red marker marks where the turn stopped', () => {
+    const result = segmentsWithError(snapshot({
+      segments: [{ type: 'thinking', content: 'reasoning…' }],
+    }), 'Rate limit reached')
+
+    expect(result[result.length - 1]).toEqual({ type: 'error', content: 'Rate limit reached' })
+  })
+})
+
+describe('turn-ending error handling', () => {
+  it('appends the gateway error to the in-flight turn instead of spawning a second bubble', () => {
+    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+    const sseErrorStart = source.indexOf("} else if (data.type === 'error') {")
+    const sseErrorEnd = source.indexOf('} catch (parseErr)', sseErrorStart)
+    const sseErrorBlock = source.slice(sseErrorStart, sseErrorEnd)
+
+    // The existing turn is kept and marked with the failure at the end.
+    expect(sseErrorBlock).toContain('segmentsWithError(finalSnapshot, errorMsg)')
+    expect(sseErrorBlock).toContain('const hasTurn = !!assistantId && prev.messages.some(m => m.id === assistantId)')
+    // No separate error bubble is appended when a turn exists.
+    expect(sseErrorBlock).toContain('prev.messages.map')
+  })
+
+  it('direct-stream catch keeps the partial turn and marks where it stopped', () => {
+    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+    // The direct-stream catch is the *last* place the stream is finished — the
+    // SSE handler above also calls stream.finish(), so anchor on the last one.
+    const catchStart = source.lastIndexOf('const finalSnapshot = stream.finish()')
+    const catchBlock = source.slice(catchStart, catchStart + 4000)
+
+    expect(catchBlock).toContain('segmentsWithError(finalSnapshot, errorMessage)')
+    expect(catchBlock).toContain('m.id === assistantId')
   })
 })

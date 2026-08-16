@@ -2029,6 +2029,125 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(sawQuarantinedRound).toBe(true);
   });
 
+  it("stops re-running a call that keeps returning the identical error", async () => {
+    // Mirrors the observed loop: `search` failed with the same message every
+    // time (ripgrep missing + an unusable root), and the model kept retrying it
+    // interleaved with other calls, so neither the round-signature streak nor
+    // the 6-per-turn counter stopped it.
+    let executions = 0;
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      if (round > 12) return textResponse("Giving up on search.");
+      // Vary the surrounding calls so the whole-round signature never repeats.
+      return toolCallsSSE([
+        { id: `search-${round}`, name: "search", args: { pattern: "x", path: "apps/web/src" } },
+        { id: `read-${round}`, name: "file_read", args: { path: `file-${round % 3}` } },
+      ]);
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Find it." },
+    ];
+    await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [
+          {
+            type: "function",
+            function: { name: "search", description: "Search", parameters: { type: "object", properties: {} } },
+          },
+          {
+            type: "function",
+            function: { name: "file_read", description: "Read", parameters: { type: "object", properties: {} } },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-repeated-failure",
+        abort: new AbortController(),
+        maxRounds: 20,
+        mode: "agent",
+      },
+      async (name) => {
+        if (name === "search") {
+          executions++;
+          return { ok: false, message: "ripgrep is unavailable and Git is required for a privacy-safe fallback search." };
+        }
+        return { ok: true, message: "ok" };
+      },
+    );
+
+    // Two identical failures are enough evidence; the third attempt is skipped.
+    expect(executions).toBeLessThanOrEqual(3);
+    const steer = history.filter(
+      (entry) => entry.role === "system" && String(entry.content).includes("kept failing with the same error"),
+    );
+    expect(steer.length).toBeGreaterThan(0);
+    // The model is told what actually broke, not "you already have that result".
+    expect(String(steer[0]?.content)).toContain("ripgrep is unavailable");
+  });
+
+  it("bounds total repeats of one call even when the model ignores every nudge", async () => {
+    // The per-turn counter is zeroed by each intervention, which handed the
+    // model a fresh budget every cycle — one call was seen 17 times in a single
+    // turn. The lifetime cap is what terminates that.
+    let executions = 0;
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      if (round > 60) return textResponse("Done.");
+      return toolCallsSSE([
+        { id: `alpha-${round}`, name: "alpha", args: { path: "same-file.ts" } },
+        // Rotating companion call keeps the whole-round signature changing, so
+        // the consecutive-streak guard never fires.
+        { id: `beta-${round}`, name: "beta", args: { pattern: `p-${round % 5}` } },
+      ]);
+    });
+
+    await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Go." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: { name: "alpha", description: "Alpha", parameters: { type: "object", properties: {} } },
+          },
+          {
+            type: "function",
+            function: { name: "beta", description: "Beta", parameters: { type: "object", properties: {} } },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-lifetime-cap",
+        abort: new AbortController(),
+        maxRounds: 60,
+        mode: "agent",
+      },
+      async (name) => {
+        if (name === "alpha") executions++;
+        return { ok: true, message: "ok" };
+      },
+    );
+
+    expect(executions).toBeLessThanOrEqual(10);
+  });
+
   it("without maxRounds, ends normally when the model answers before the safety backstop", async () => {
     const calls = ["file_read", "file_write"];
     let callIdx = 0;

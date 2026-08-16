@@ -21,12 +21,13 @@ import {
   type AgentMessage,
   type ToolExecutor,
   type AgentLoopEvent,
+  type ExecutedToolCall,
   type MessageSegment,
 } from "./agent-loop.js";
 import { ToolName } from "./tool-names.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { isSuccessfulPerformative, parsePerformative, stripPerformativeTag } from "./agent-communication.js";
-import { runAcpSpecialistTurn } from "./agent-acp-runner.js";
+import { runAcpSpecialistTurn, SubAgentTranscriptCollector } from "./agent-acp-runner.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 
 // ── Input type ───────────────────────────────────────────────────────
@@ -118,6 +119,24 @@ function renderSegments(segments: MessageSegment[]): MessageSegment[] {
   return segments.map((seg) =>
     seg.type === "text" ? { ...seg, content: stripPerformativeTag(seg.content) } : seg,
   );
+}
+
+/**
+ * Sub-agent tool calls in the shape the persistence layer and web renderer
+ * expect. Every exit path (success, cancel, error) reports the same shape so a
+ * sub-agent that stopped early still renders its tool calls on reload.
+ */
+function renderToolCalls(calls: ExecutedToolCall[]) {
+  return calls.map((tc) => ({
+    callId: tc.callId,
+    tool: tc.tool,
+    args: tc.args,
+    ok: tc.ok,
+    message: tc.message,
+    data: tc.data,
+    startedAt: tc.startedAt,
+    completedAt: tc.completedAt,
+  }));
 }
 
 // ── Factory ──────────────────────────────────────────────────────────
@@ -245,11 +264,29 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           parentActionId: context.actionId,
         });
 
+        // acpResult.data carries the structured sub-agent message (content,
+        // ordered segments, tool calls) collected from the ACP event stream —
+        // forward it so the persisted tool-result has everything the web layer
+        // needs to render the sub-agent turn like a normal chat on reload.
+        const acpData = (acpResult.data ?? {}) as Record<string, unknown>;
+
         if (!acpResult.ok) {
+          // Failure is exactly when the transcript matters most. The runner
+          // already collected everything streamed before the timeout / abort /
+          // error, so forward it here too — dropping it back to a bare stub is
+          // what made failed sub-agents come back empty after a reload.
           return {
             ok: false,
             message: acpResult.message,
-            data: { subAgentId, provider: context.providerId, durationMs },
+            data: {
+              subAgentId,
+              provider: context.providerId,
+              durationMs,
+              content: typeof acpData.content === "string" ? acpData.content : acpResult.message,
+              segments: Array.isArray(acpData.segments) ? acpData.segments : undefined,
+              toolCalls: Array.isArray(acpData.toolCalls) ? acpData.toolCalls : undefined,
+              ...(typeof acpData.performative === "string" ? { performative: acpData.performative } : {}),
+            },
           };
         }
 
@@ -258,7 +295,15 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
         return {
           ok,
           message: content || (ok ? "Sub-agent completed with no output" : `Sub-agent ${performative}: no details given`),
-          data: { subAgentId, provider: context.providerId, performative, durationMs },
+          data: {
+            subAgentId,
+            provider: context.providerId,
+            performative,
+            durationMs,
+            content: typeof acpData.content === "string" ? acpData.content : content,
+            segments: Array.isArray(acpData.segments) ? acpData.segments : undefined,
+            toolCalls: Array.isArray(acpData.toolCalls) ? acpData.toolCalls : undefined,
+          },
         };
       }
 
@@ -353,8 +398,20 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       // chat turn (markdown + thinking block) instead of a flat activity log.
       const subEvents: AgentLoopEvent[] = [];
       const emitNested = context.onNestedEvent;
+      // Live mirror of the sub-agent's transcript. runAgentLoop's return value
+      // is the normal source of segments/tool calls, but it does not exist when
+      // the loop throws — this does, so an errored sub-agent still persists
+      // everything it produced up to the failure.
+      const transcript = new SubAgentTranscriptCollector();
+      let subContent = "";
       const onEvent = (event: AgentLoopEvent) => {
         subEvents.push(event);
+        if (event.type === "token") {
+          subContent += event.content;
+          transcript.text(event.content);
+        } else if (event.type === "thinking") transcript.thinking(event.content);
+        else if (event.type === "tool_start") transcript.toolStart(event.call_id, event.tool, event.args);
+        else if (event.type === "tool_result") transcript.toolResult(event.call_id, event.tool, event.ok, event.message, event.data);
         if (emitNested) {
           if (event.type === "tool_start") {
             emitNested({ type: "tool_start", tool: event.tool, args: event.args, call_id: event.call_id, parent_call_id: event.parent_call_id });
@@ -450,7 +507,10 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
               partialContent: result.content,
               segments: renderSegments(result.segments),
               rounds: result.rounds,
-              toolCalls: result.executedToolCalls.length,
+              // The executed calls themselves, not a count — a count persists
+              // as an unusable scalar and the cancelled sub-agent comes back
+              // with no tool calls at all.
+              toolCalls: renderToolCalls(result.executedToolCalls),
               durationMs,
             },
           };
@@ -472,16 +532,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
             performative,
             segments: renderSegments(result.segments),
             rounds: result.rounds,
-            toolCalls: result.executedToolCalls.map((tc) => ({
-              callId: tc.callId,
-              tool: tc.tool,
-              args: tc.args,
-              ok: tc.ok,
-              message: tc.message,
-              data: tc.data,
-              startedAt: tc.startedAt,
-              completedAt: tc.completedAt,
-            })),
+            toolCalls: renderToolCalls(result.executedToolCalls),
             durationMs,
           },
         };
@@ -499,10 +550,23 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           parentActionId: context.actionId,
         });
 
+        // runAgentLoop threw, so its result — and with it the segments and
+        // executed tool calls — is gone. Fall back to the live transcript
+        // mirror, which holds everything the sub-agent streamed up to the
+        // failure, and append the error so the reloaded card shows where it
+        // stopped instead of only "Sub-agent failed".
+        transcript.error(message);
+        const partial = transcript.finalize();
         return {
           ok: false,
           message: `Sub-agent failed: ${message}`,
-          data: { subAgentId },
+          data: {
+            subAgentId,
+            partialContent: subContent,
+            segments: renderSegments(partial.segments),
+            toolCalls: partial.toolCalls,
+            durationMs: Date.now() - startedAt,
+          },
         };
       }
     },

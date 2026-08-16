@@ -1040,6 +1040,68 @@ export function computeMinimapScrollTop({
 }
 
 /**
+ * Paint the rail: walk it one row at a time and ask what the document holds at
+ * that offset.
+ *
+ * The whole document (`totalSize`) is scaled onto the rail's content band, so
+ * row `y` shows what lives at document offset `y / scale` — the same offset a
+ * click at `y` scrolls to (see `computeMinimapScrollTop`). That shared mapping
+ * is what makes a user turn's blue band actually point at that user turn.
+ *
+ * Walking rows rather than messages also keeps the DOM bounded: the row count
+ * is fixed by the rail's height no matter how long the conversation is.
+ *
+ * A row usually covers several lines of text once the document is compressed,
+ * so it paints the widest line in its slice — sampling a single line would
+ * punch holes into a paragraph wherever the sample happened to land on a blank
+ * line between paragraphs.
+ */
+export function computeMinimapRows({
+  blocks,
+  viewportHeight,
+  totalSize,
+}: {
+  blocks: MinimapBlock[]
+  /** Height of the rail / viewport, in px. */
+  viewportHeight: number
+  /** Height of the whole virtualized document, in px. */
+  totalSize: number
+}): MinimapRow[] {
+  if (blocks.length === 0 || viewportHeight <= 0 || totalSize <= 0) return []
+  const scale = Math.min(viewportHeight / totalSize, 1)
+  const contentHeight = totalSize * scale
+  const rowCount = Math.floor(contentHeight / MINIMAP_ROW_PITCH_PX)
+  const rowSpan = MINIMAP_ROW_PITCH_PX / scale
+  const out: MinimapRow[] = []
+  // Blocks are ordered and contiguous, so the walk only ever moves forward.
+  let cursor = 0
+  for (let row = 0; row < rowCount; row++) {
+    const y = row * MINIMAP_ROW_PITCH_PX
+    const docOffset = y / scale
+    while (cursor < blocks.length - 1 && blocks[cursor].end <= docOffset) cursor++
+    const block = blocks[cursor]
+    if (docOffset < block.start || docOffset >= block.end) continue
+    const span = block.end - block.start
+    const count = block.widths.length
+    if (span <= 0 || count === 0) continue
+    // Which of the message's lines this row covers. Lines are spread evenly
+    // across the message's band: a turn's non-prose height (tool cards,
+    // reasoning, code chrome) is part of the band it occupies, so spreading is
+    // what keeps the message's shape aligned with the message's real extent.
+    const from = Math.min(Math.floor(((docOffset - block.start) / span) * count), count - 1)
+    const to = Math.min(Math.ceil(((docOffset + rowSpan - block.start) / span) * count), count)
+    let width = 0
+    for (let i = from; i < Math.max(to, from + 1); i++) {
+      const w = block.widths[i] ?? 0
+      if (w > width) width = w
+    }
+    if (width <= 0) continue
+    out.push({ y, width, isUser: block.role === 'user' })
+  }
+  return out
+}
+
+/**
  * VSCode/Rider-style content-preview minimap for the conversation. Instead of
  * one bar per message it paints one thin line per line of text — blue for user
  * turns, muted for agent turns — so the rail looks like the transcript seen
@@ -1073,12 +1135,23 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
   // so a streaming turn only re-splits its own content, not the whole history.
   const shapeCacheRef = useRef(new Map<number, { text: string; widths: number[] }>())
 
-  // The rail is walked one painted row at a time rather than one message at a
-  // time: the number of rows is fixed by the rail's height, so the DOM stays
-  // bounded no matter how long the conversation is, and every row maps back to
-  // whatever message covers that document offset.
+  // Wrap preview lines at the same column width the real prose wraps at, so the
+  // rail's line breaks line up with the transcript's.
+  const wrapWidth = Math.max(textWidth - MINIMAP_COLUMN_H_PADDING, 100)
+
+  // Each message's *document* band (its real vertical range inside the scroll
+  // container) paired with the shape of its text lines.
   //
-  // Offsets come from the layout the virtualizer already maintains.
+  // This is the part that has to come from the virtualizer rather than from a
+  // synthetic line count: the rail's whole job is to be a map of the document,
+  // so a rail offset must translate back to the document offset the transcript
+  // actually has there. The older model laid every message out at a fixed pitch
+  // per line of text, which drifts away from the real layout as soon as a turn
+  // renders anything that isn't prose (tool-call cards, collapsed reasoning,
+  // diffs, images) — a tall tool-heavy turn occupied almost no rail, so the
+  // blue band of a user turn pointed at a completely different part of the
+  // conversation than the click on it scrolled to.
+  //
   // `measurementsCache` covers the *whole* conversation — real measured heights
   // for items that have rendered, estimates for the rest — and is updated in
   // place as content streams in, so the rail stays live without a second height
@@ -1086,30 +1159,14 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
   // `getVirtualItems()` is also what keeps the full history on the rail: virtual
   // items only ever span the visible window, which is why the old bars used to
   // flash in and appear to vanish while scrolling.
-  // Wrap preview lines at the same column width the real prose wraps at, so the
-  // rail's line breaks line up with the transcript's.
-  const wrapWidth = Math.max(textWidth - MINIMAP_COLUMN_H_PADDING, 100)
-
-  // Build a flat, monotonically-ordered list of every line in the transcript,
-  // each tagged with its role and its pixel pitch from the top of the rail.
-  // Lines are laid out at a constant pitch derived from the transcript's real
-  // line-height, so each rail line maps 1:1 to an actual line of the chat and
-  // lines hold still relative to one another. When a streaming turn appends a
-  // line it just extends that message's block (and eats into the trailing gap),
-  // instead of the old model that re-split each message's height evenly across
-  // its lines — which made already-painted lines jump on every chunk. The only
-  // residual motion is the slow uniform zoom as the whole transcript grows, plus
-  // a message's own lines changing as it streams.
-  const allLines = useMemo(() => {
-    if (totalSize <= 0 || viewportHeight <= 0) return { lines: [] as MinimapLine[], total: 0 }
+  const blocks = useMemo(() => {
+    if (totalSize <= 0) return [] as MinimapBlock[]
     const cache = shapeCacheRef.current
-    // Lay the transcript out at a fixed pitch: one rail line per line of text,
-    // so the rail is a 1:1 map of the transcript. The rail is *not* compressed
-    // to fill its height — a short conversation simply leaves the lower rail
-    // empty, and lines hold still relative to each other as a turn streams.
-    const lines: MinimapLine[] = []
-    let running = 0
-    for (let index = 0; index < texts.length && index < roles.length; index++) {
+    const measurements = virtualizer.measurementsCache
+    const out: MinimapBlock[] = []
+    for (let index = 0; index < measurements.length; index++) {
+      const measurement = measurements[index]
+      if (!measurement || measurement.size <= 0) continue
       const role = roles[index] ?? 'agent'
       const text = texts[index] ?? ''
       const cached = cache.get(index)
@@ -1120,47 +1177,24 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
         widths = computeMinimapLineShape(text, wrapWidth)
         cache.set(index, { text, widths })
       }
-      if (widths.length === 0) continue
-      for (const width of widths) {
-        if (width > 0) lines.push({ role, width, y: running })
-        running += MINIMAP_ROW_PITCH_PX
-      }
-    }
-    return { lines, total: running }
-  }, [roles, texts, virtualizer, wrapWidth])
-
-  const rows = useMemo(() => {
-    const { lines, total } = allLines
-    if (total <= 0 || lines.length === 0) return []
-    const rowCount = Math.floor(viewportHeight / MINIMAP_ROW_PITCH_PX)
-    const out: MinimapRow[] = []
-    for (let row = 0; row < rowCount; row++) {
-      const y = row * MINIMAP_ROW_PITCH_PX
-      // Stop once the fixed-pitch rows run past the content — the rail is not
-      // compressed to fill its height, so short conversations leave the lower
-      // rail empty.
-      if (y >= total) break
-      // Find the last line whose band starts at or before this row.
-      let lo = 0
-      let hi = lines.length - 1
-      let line = lines[0]
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1
-        if (lines[mid].y <= y) {
-          line = lines[mid]
-          lo = mid + 1
-        } else {
-          hi = mid - 1
-        }
-      }
-      out.push({ y, width: line.width, isUser: line.role === 'user' })
+      out.push({ start: measurement.start, end: measurement.start + measurement.size, role, widths })
     }
     return out
-  }, [allLines, viewportHeight])
+    // `totalSize` stands in for the measurement cache, which mutates in place:
+    // it changes whenever an item is measured or the list grows.
+  }, [roles, texts, totalSize, virtualizer, wrapWidth])
+
+  const rows = useMemo(
+    () => computeMinimapRows({ blocks, viewportHeight, totalSize }),
+    [blocks, viewportHeight, totalSize],
+  )
 
   if (totalSize <= 0 || viewportHeight <= 0) return null
 
-  const contentHeight = allLines.total
+  // The document is scaled down onto the rail's content band. A conversation
+  // shorter than the rail is never stretched — it just leaves the lower rail
+  // empty — so the band is at most the document's own height.
+  const contentHeight = Math.min(viewportHeight, totalSize)
   // The document maps onto the rail's content band (the top `contentHeight` px).
   const scale = contentHeight > 0 ? contentHeight / totalSize : 0
   const indicatorTop = scrollTop * scale
@@ -1204,15 +1238,17 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
   )
 }
 
-interface MinimapLine {
-  /** Offset of this line's band from the top of the rail, in px. */
-  y: number
-  /** Line length as a fraction of the rail's usable width. */
-  width: number
+export interface MinimapBlock {
+  /** Offset of the message's top edge inside the scroll container, in px. */
+  start: number
+  /** Offset of the message's bottom edge inside the scroll container, in px. */
+  end: number
+  /** Relative widths of the message's rendered text lines, top to bottom. */
+  widths: number[]
   role: 'user' | 'agent'
 }
 
-interface MinimapRow {
+export interface MinimapRow {
   /** Offset of this line from the top of the rail, in px. */
   y: number
   /** Line length as a fraction of the rail's usable width. */

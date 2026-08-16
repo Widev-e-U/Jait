@@ -63,9 +63,13 @@ export class ProjectSearchInputError extends Error {
   }
 }
 
-export type ProjectSearchUnavailableReason =
-  | "regexp_requires_rg"
-  | "safe_fallback_unavailable";
+/**
+ * Why a search could not run as asked.
+ *
+ * `safe_fallback_unavailable` is gone: enumeration no longer depends on Git, so
+ * there is no longer a machine state in which a listing cannot be produced.
+ */
+export type ProjectSearchUnavailableReason = "regexp_requires_rg";
 
 export class ProjectSearchUnavailableError extends Error {
   constructor(
@@ -125,6 +129,19 @@ export interface ProjectSearchRuntime {
 interface FileEnumerationResult {
   files: string[];
   limited: boolean;
+}
+
+/** One compiled `.gitignore` line. */
+interface IgnoreRule {
+  negated: boolean;
+  dirOnly: boolean;
+  regex: RegExp;
+}
+
+/** The rules from one `.gitignore`, plus the root-relative directory it governs. */
+interface IgnoreScope {
+  base: string;
+  rules: IgnoreRule[];
 }
 
 interface FallbackContentResult {
@@ -275,6 +292,27 @@ function matchesInclude(relativePath: string, include: string | undefined): bool
   return normalized.includes(include.replace(/\*/g, ""));
 }
 
+/**
+ * Spawns a search helper, keeping "the binary is missing" distinguishable from
+ * "the cwd is unusable".
+ *
+ * `spawn` reports a bad `cwd` the same way it reports a missing executable —
+ * asynchronously as ENOENT when the directory does not exist, and by throwing
+ * synchronously as ENOTDIR when the path is a file. Both used to surface as
+ * "ripgrep is unavailable and Git is required", which sent the model chasing a
+ * non-existent tooling problem and retrying the same doomed call. The root is
+ * validated by `assertSearchableRoot` before we get here, so anything left is a
+ * genuinely missing binary — but a sync throw must still not escape as an
+ * unhandled exception.
+ */
+function spawnSearchChild(command: string, args: string[], cwd: string) {
+  try {
+    return { child: spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] as const }) };
+  } catch (error) {
+    return { error: error as NodeJS.ErrnoException };
+  }
+}
+
 function runCommandLines(
   command: string,
   args: string[],
@@ -283,11 +321,19 @@ function runCommandLines(
   keep?: (line: string) => boolean,
 ): Promise<CommandResult> {
   return new Promise((resolveResult, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const spawned = spawnSearchChild(command, args, cwd);
+    if (spawned.error) {
+      resolveResult({
+        lines: [],
+        missing: spawned.error.code === "ENOENT",
+        code: null,
+        stderr: spawned.error.message,
+        limited: false,
+        timedOut: false,
+      });
+      return;
+    }
+    const child = spawned.child;
     const lines: string[] = [];
     let stdoutRest = "";
     let stderr = "";
@@ -368,11 +414,19 @@ function runNulRecords(
   timeoutMs: number,
 ): Promise<CommandResult> {
   return new Promise((resolveResult, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const spawned = spawnSearchChild(command, args, cwd);
+    if (spawned.error) {
+      resolveResult({
+        lines: [],
+        missing: spawned.error.code === "ENOENT",
+        code: null,
+        stderr: spawned.error.message,
+        limited: false,
+        timedOut: false,
+      });
+      return;
+    }
+    const child = spawned.child;
     const lines: string[] = [];
     let rest = "";
     let stderr = "";
@@ -453,14 +507,162 @@ function assertCommandSucceeded(command: string, result: CommandResult): void {
   );
 }
 
+/**
+ * Translates one `.gitignore` pattern into a matcher.
+ *
+ * Returns `null` for blanks and comments. Semantics follow gitignore(5) closely
+ * enough for exclusion purposes: `!` negates, a trailing `/` restricts the rule
+ * to directories, and a slash anywhere but the end anchors the pattern to the
+ * directory holding the ignore file. `**` crosses path separators, `*` and `?`
+ * do not.
+ */
+function compileIgnorePattern(rawPattern: string): IgnoreRule | null {
+  // Trailing whitespace is insignificant unless escaped; a lone "\" is not a
+  // pattern.
+  const trimmed = rawPattern.replace(/(?<!\\)\s+$/, "");
+  if (!trimmed || trimmed.startsWith("#")) return null;
+
+  let pattern = trimmed;
+  let negated = false;
+  if (pattern.startsWith("!")) {
+    negated = true;
+    pattern = pattern.slice(1);
+  } else if (pattern.startsWith("\\#") || pattern.startsWith("\\!")) {
+    pattern = pattern.slice(1);
+  }
+
+  let dirOnly = false;
+  if (pattern.endsWith("/")) {
+    dirOnly = true;
+    pattern = pattern.slice(0, -1);
+  }
+  if (!pattern) return null;
+
+  // A slash left anywhere anchors the pattern; otherwise it matches at any
+  // depth below the ignore file.
+  const anchored = pattern.includes("/");
+  if (pattern.startsWith("/")) pattern = pattern.slice(1);
+
+  let source = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index]!;
+    if (char === "\\" && index + 1 < pattern.length) {
+      index += 1;
+      source += pattern[index]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      continue;
+    }
+    if (char === "*") {
+      if (pattern[index + 1] === "*") {
+        index += 1;
+        // "**/" collapses to "any number of directories", so that "**/foo"
+        // matches a bare "foo" too.
+        if (pattern[index + 1] === "/") {
+          index += 1;
+          source += "(?:.*/)?";
+        } else {
+          source += ".*";
+        }
+        continue;
+      }
+      source += "[^/]*";
+      continue;
+    }
+    if (char === "?") {
+      source += "[^/]";
+      continue;
+    }
+    if (char === "[") {
+      const end = pattern.indexOf("]", index + 1);
+      if (end > index) {
+        const body = pattern.slice(index + 1, end).replace(/^!/, "^");
+        source += `[${body}]`;
+        index = end;
+        continue;
+      }
+      source += "\\[";
+      continue;
+    }
+    source += char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  const prefix = anchored ? "" : "(?:.*/)?";
+  try {
+    // Matching a directory must also ignore everything under it, hence the
+    // optional trailing path segment.
+    return { negated, dirOnly, regex: new RegExp(`^${prefix}${source}(?:/.*)?$`) };
+  } catch {
+    return null;
+  }
+}
+
+function parseIgnoreFile(content: string): IgnoreRule[] {
+  const rules: IgnoreRule[] = [];
+  for (const line of content.split(/\r?\n/)) {
+    const rule = compileIgnorePattern(line);
+    if (rule) rules.push(rule);
+  }
+  return rules;
+}
+
+/**
+ * Loads the ignore rules a directory contributes, scoped to its own path.
+ *
+ * `base` is the directory's path relative to the search root, so rules are
+ * matched against the same relative form regardless of how deep they were
+ * declared.
+ */
+async function loadIgnoreScope(directory: string, base: string): Promise<IgnoreScope | null> {
+  let content: string;
+  try {
+    content = await readFile(join(directory, ".gitignore"), "utf8");
+  } catch {
+    return null;
+  }
+  const rules = parseIgnoreFile(content);
+  return rules.length > 0 ? { base, rules } : null;
+}
+
+/**
+ * Whether `relativePath` is ignored by any scope in effect.
+ *
+ * Later rules win over earlier ones — including negations — and deeper scopes
+ * win over shallower ones, matching how Git resolves conflicting patterns.
+ */
+function isIgnored(scopes: readonly IgnoreScope[], relativePath: string, isDirectory: boolean): boolean {
+  let ignored = false;
+  for (const scope of scopes) {
+    if (scope.base && !relativePath.startsWith(`${scope.base}/`)) continue;
+    const scoped = scope.base ? relativePath.slice(scope.base.length + 1) : relativePath;
+    for (const rule of scope.rules) {
+      // Files under a directory-only rule are excluded by never descending into
+      // the directory, so the rule only has to be consulted for directories.
+      if (rule.dirOnly && !isDirectory) continue;
+      if (!rule.regex.test(scoped)) continue;
+      ignored = !rule.negated;
+    }
+  }
+  return ignored;
+}
+
+/**
+ * Enumerates files under `root` without shelling out.
+ *
+ * When `respectIgnoreFiles` is set the walk honours `.gitignore` files as it
+ * descends, which is what makes this usable as the primary enumeration path:
+ * it produces the same privacy guarantee `git ls-files` provided without
+ * needing Git — or any other binary — to be installed.
+ */
 async function walkFiles(
   root: string,
   maxFiles: number,
   deadline: number,
   now: () => number,
+  respectIgnoreFiles = false,
 ): Promise<FileEnumerationResult> {
   const files: string[] = [];
-  const queue = [root];
+  const queue: Array<{ path: string; relative: string; scopes: IgnoreScope[] }> = [
+    { path: root, relative: "", scopes: [] },
+  ];
   let queueIndex = 0;
   let directories = 0;
   let discoveredDirectories = 1;
@@ -477,27 +679,37 @@ async function walkFiles(
     directories += 1;
     let entries;
     try {
-      entries = await readdir(current, { withFileTypes: true });
+      entries = await readdir(current.path, { withFileTypes: true });
     } catch (error) {
-      if (current === root) throw error;
+      if (current.path === root) throw error;
       limited = true;
       continue;
     }
+
+    let scopes = current.scopes;
+    if (respectIgnoreFiles) {
+      const scope = await loadIgnoreScope(current.path, current.relative);
+      if (scope) scopes = [...scopes, scope];
+    }
+
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       if (now() >= deadline) throw new Error("Project search timed out.");
-      const fullPath = join(current, entry.name);
+      const fullPath = join(current.path, entry.name);
+      const relativePath = current.relative ? `${current.relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (ALWAYS_SKIPPED_DIRS.has(entry.name)) continue;
+        if (respectIgnoreFiles && isIgnored(scopes, relativePath, true)) continue;
         if (discoveredDirectories >= PROJECT_SEARCH_FALLBACK_MAX_DIRECTORIES) {
           limited = true;
           continue;
         }
         discoveredDirectories += 1;
-        queue.push(fullPath);
+        queue.push({ path: fullPath, relative: relativePath, scopes });
         continue;
       }
       if (!entry.isFile()) continue;
+      if (respectIgnoreFiles && isIgnored(scopes, relativePath, false)) continue;
       visitedFiles += 1;
       if (visitedFiles > PROJECT_SEARCH_FALLBACK_MAX_FILES) {
         limited = true;
@@ -543,18 +755,14 @@ async function enumerateFallbackFiles(
     PROJECT_SEARCH_FALLBACK_MAX_FILES,
     Math.max(1, deadline - now()),
   );
-  if (run.missing) {
-    throw new ProjectSearchUnavailableError(
-      "safe_fallback_unavailable",
-      "ripgrep is unavailable and Git is required for a privacy-safe fallback search.",
-    );
-  }
-  if (run.timedOut) throw new Error("git ls-files timed out during fallback search.");
-  if (!(run.code === 0 || (run.limited && run.code === null))) {
-    throw new ProjectSearchUnavailableError(
-      "safe_fallback_unavailable",
-      "ripgrep is unavailable and a privacy-safe Git file listing could not be produced.",
-    );
+  // Git is an optimisation here, not a requirement: it is faster and knows
+  // about excludes the walker cannot see (global and repo-local excludes). When
+  // it is absent, fails, or the directory is not a repository, the ignore-aware
+  // walk produces an equivalent listing. Failing instead would surface a
+  // machine-level problem the model can neither fix nor route around, which is
+  // exactly the kind of dead end that turns one bad call into a retry loop.
+  if (run.missing || run.timedOut || !(run.code === 0 || (run.limited && run.code === null))) {
+    return walkFiles(root, PROJECT_SEARCH_FALLBACK_MAX_FILES, deadline, now, true);
   }
   return {
     files: run.lines
@@ -574,10 +782,18 @@ async function fallbackContentSearch(
   deadline: number,
   runtime: ProjectSearchRuntime,
 ): Promise<FallbackContentResult> {
+  // Deliberately does NOT evaluate the pattern with the platform regex engine.
+  // The pattern is model-supplied and JS regexes cannot be interrupted once
+  // matching starts, so a catastrophic-backtracking pattern such as `(a+)+$`
+  // would block the gateway's event loop outright. ripgrep's automaton has no
+  // such failure mode, so regex stays gated on it.
+  //
+  // The caller turns this into an automatic literal search, so it is a routed
+  // detour rather than a dead end.
   if (isRegexp) {
     throw new ProjectSearchUnavailableError(
       "regexp_requires_rg",
-      "Regex search requires ripgrep; the bounded fallback supports literal text only.",
+      "Regex search needs ripgrep, which is not installed; literal-text search is available without it.",
     );
   }
 
@@ -639,6 +855,31 @@ async function fallbackContentSearch(
   return { matches, limited };
 }
 
+/**
+ * Fails fast when the search root cannot be used as a working directory.
+ *
+ * Without this the bad root is only discovered by `spawn`, which reports it
+ * identically to a missing binary — so a typo'd or relative-to-the-wrong-base
+ * path came back as "ripgrep is unavailable and Git is required". That message
+ * describes a machine-level problem the model cannot fix and does not name the
+ * offending path, so the only apparent recovery is to try again.
+ */
+async function assertSearchableRoot(root: string): Promise<void> {
+  let entry;
+  try {
+    entry = await stat(root);
+  } catch {
+    throw new ProjectSearchInputError(
+      `Search path does not exist: ${root}. Pass a directory inside the project, or omit "path" to search from the project root.`,
+    );
+  }
+  if (!entry.isDirectory()) {
+    throw new ProjectSearchInputError(
+      `Search path is a file, not a directory: ${root}. Pass its parent directory (optionally with an "include" glob), or read the file directly.`,
+    );
+  }
+}
+
 export async function searchProject(
   options: ProjectSearchOptions,
   runtime: ProjectSearchRuntime = {},
@@ -650,6 +891,7 @@ export async function searchProject(
   if (mode !== "files" && mode !== "content") {
     throw new ProjectSearchInputError('mode must be "files" or "content"');
   }
+  await assertSearchableRoot(root);
   const limit = normalizeProjectSearchLimit(options.limit);
   const maxCandidates = projectSearchCandidateLimit(limit);
   const now = runtime.now ?? Date.now;
