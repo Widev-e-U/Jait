@@ -5,6 +5,7 @@ import {
   getMobileUserMessageEditTop,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
+  shouldShowChatContextIndicator,
   shouldShowNormalChatComposer,
 } from './message-edit-layout'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
@@ -87,6 +88,12 @@ describe('message edit mobile layout', () => {
     expect(shouldShowNormalChatComposer(true, 'message-1')).toBe(false)
     expect(shouldShowNormalChatComposer(true, null)).toBe(true)
     expect(shouldShowNormalChatComposer(false, 'message-1')).toBe(true)
+  })
+
+  it('hides the context indicator while trajectory mode is open', () => {
+    expect(shouldShowChatContextIndicator(true, true)).toBe(false)
+    expect(shouldShowChatContextIndicator(true, false)).toBe(true)
+    expect(shouldShowChatContextIndicator(false, false)).toBe(false)
   })
 
   it('renders the floating mobile composer as an opaque card so messages do not bleed through', () => {

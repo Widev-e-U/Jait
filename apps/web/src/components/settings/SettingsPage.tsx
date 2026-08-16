@@ -630,6 +630,30 @@ export function SettingsPage({
     }
   }, [token, draft.OMNIROUTE_BASE_URL, draft.OMNIROUTE_API_KEY])
 
+  const [resettingModels, setResettingModels] = useState(false)
+  const [resetMsg, setResetMsg] = useState<string | null>(null)
+
+  // Drop the cached model catalogues (gateway + browser) so the provider picker
+  // shows the *current* models instead of a stale snapshot. `resetModelFetcherCaches`
+  // on the gateway resets every backend (OpenAI, Ollama, OpenRouter, OmniRoute, …).
+  const handleResetProviderModels = useCallback(async () => {
+    setResettingModels(true)
+    setResetMsg(null)
+    try {
+      const res = await fetch(`${API_URL}/api/providers/models/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(`Reset failed (HTTP ${res.status})`)
+      agentsApi.resetProviderModels()
+      setResetMsg('Model cache cleared. The picker will reload fresh models on next open.')
+    } catch (err) {
+      setResetMsg(`Failed to reset: ${err instanceof Error ? err.message : 'unknown error'}`)
+    } finally {
+      setResettingModels(false)
+    }
+  }, [token])
+
   const toggleVisibility = useCallback((field: string) => {
     setVisible((prev) => ({ ...prev, [field]: !prev[field] }))
   }, [])
@@ -1687,32 +1711,52 @@ const providerAccountsCard = (
                       )
                     })}
                   </div>
-                  {group.label === 'OmniRoute' && (
-                    <div className="border-t px-5 py-4">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => { void handleTestOmniRoute() }}
-                          disabled={omniRouteTesting}
-                        >
-                          {omniRouteTesting
-                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            : <Network className="mr-1.5 h-3.5 w-3.5" />}
-                          Test connection
-                        </Button>
-                        {omniRouteResult && (
-                          <span className={cn('text-sm', omniRouteResult.ok ? 'text-emerald-600 dark:text-emerald-500' : 'text-destructive')}>
-                            {omniRouteResult.message}
-                          </span>
-                        )}
-                      </div>
+                  <div className="border-t px-5 py-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {group.label === 'OmniRoute' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { void handleTestOmniRoute() }}
+                            disabled={omniRouteTesting}
+                          >
+                            {omniRouteTesting
+                              ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              : <Network className="mr-1.5 h-3.5 w-3.5" />}
+                            Test connection
+                          </Button>
+                          {omniRouteResult && (
+                            <span className={cn('text-sm', omniRouteResult.ok ? 'text-emerald-600 dark:text-emerald-500' : 'text-destructive')}>
+                              {omniRouteResult.message}
+                            </span>
+                          )}
+                        </>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { void handleResetProviderModels() }}
+                        disabled={resettingModels}
+                      >
+                        {resettingModels
+                          ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                        Reset models
+                      </Button>
+                      {resetMsg && (
+                        <span className={cn('text-sm', resetMsg.startsWith('Failed') ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-500')}>
+                          {resetMsg}
+                        </span>
+                      )}
+                    </div>
+                    {group.label === 'OmniRoute' && (
                       <p className="mt-2 text-xs text-muted-foreground">
                         Probed from the gateway, not your browser — that is the connection that
                         actually has to work. Tests the values shown above, saved or not.
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </CollapsibleContent>
               </Card>
             </Collapsible>

@@ -52,6 +52,35 @@ describe('SessionSelector', () => {
     expect(markup).toContain('Show older')
   })
 
+  it('renders projects and root chats in one combined list', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject({ sessions: [] })]}
+        personalSessions={[{
+          id: 'personal-1',
+          projectId: null,
+          name: 'Root chat',
+          projectPath: null,
+          status: 'active',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          lastActiveAt: '2026-07-06T00:00:00.000Z',
+          viewedAt: null,
+          metadata: null,
+        }]}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('Projects &amp; Chats')
+    expect(markup).toContain('Jait')
+    expect(markup).toContain('Root chat')
+    expect(markup).not.toContain('Personal chats')
+  })
+
   it('renders personal chats with the compact project-chat sizing', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector

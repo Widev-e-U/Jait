@@ -35,7 +35,7 @@ import { useAuthForm } from '@/hooks/useAuthForm'
 import { useGatewayConnection } from '@/hooks/useGatewayConnection'
 import { useUpdateChecker } from '@/hooks/useUpdateChecker'
 import { useFloatingScreenShare } from '@/hooks/useFloatingScreenShare'
-import { useTerminalLayout } from '@/hooks/useTerminalLayout'
+import { useTerminalLayout, type TerminalLayoutState } from '@/hooks/useTerminalLayout'
 import { useChatPanelMeasure } from '@/hooks/useChatPanelMeasure'
 import { useDesktopWindow } from '@/hooks/useDesktopWindow'
 import { useInputDraft } from '@/hooks/useInputDraft'
@@ -271,14 +271,6 @@ function App() {
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureProjectRef = useRef<string | null>(null)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
-  const {
-    terminalHeight,
-    setTerminalHeight,
-    terminalHeightBeforeFullscreenRef,
-    terminalColumnWidth,
-    handleTerminalDragStart,
-    handleTerminalColumnDragStart,
-  } = useTerminalLayout()
   const { chatMeasuredWidth, setChatPanelElement } = useChatPanelMeasure()
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
@@ -1138,6 +1130,25 @@ function App() {
     const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, { panelSize, treeSize })
     setSavedProjectLayout(next)
   }, [setSavedProjectLayout])
+
+  const handleTerminalLayoutSizeChange = useCallback((layout: TerminalLayoutState) => {
+    const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, layout)
+    setSavedProjectLayout(next)
+  }, [setSavedProjectLayout])
+
+  const {
+    terminalHeight,
+    setTerminalHeight,
+    terminalHeightBeforeFullscreenRef,
+    terminalColumnWidth,
+    handleTerminalDragStart,
+    handleTerminalColumnDragStart,
+  } = useTerminalLayout({
+    projectId: activeProjectId,
+    savedHeight: projectUI?.layout?.terminalHeight ?? null,
+    savedColumnWidth: projectUI?.layout?.terminalColumnWidth ?? null,
+    onLayoutChange: handleTerminalLayoutSizeChange,
+  })
 
   const setSavedProjectTabs = useCallback((v: ProjectTabsState | null) => {
     updateProjectUI('tabs', v)

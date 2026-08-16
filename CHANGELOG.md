@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.728](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.728) — 2026-08-16
+- fix(web): make resumed chat streams generation-owned and self-healing — a 3s snapshot handshake timeout and 40s heartbeat watchdog abort hung SSE connections, fresh snapshots repair missed events, retryable HTTP/body/EOF failures reconnect, stale generations cannot write, and failed handshakes keep jittered exponential backoff until a healthy snapshot resets it
+- feat(web): expand the trajectory view into a full step inspector with request/provider metadata, context-usage steps, complete tool payloads/results, nested call ids, completion timing, searchable details, and responsive tabbed summary panels while keeping the chat composer outside the trajectory pane
+- feat(gateway + web): add an authenticated model-catalogue reset endpoint and Settings actions for every provider group, clearing gateway and browser caches so the next model-picker open fetches the current provider list
+- feat(shared + gateway + web): persist terminal height and split-column width per project, restore and clamp them on project switches, report changes only after drag completion, and merge partial layout updates without discarding saved dimensions or visibility
+- feat(web): combine projects and root-level personal chats into one searchable `Projects & Chats` sidebar hierarchy with a dedicated new-chat action and unified empty/search states
+- fix(web): make fenced-code highlighting react to light/dark theme changes, normalize common language aliases with plain-text fallback, highlight completed responses immediately, and retain a short debounce only while code is streaming
+
 ## [v0.1.727](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.727) — 2026-08-16
 - fix(gateway + web): persist a sub-agent tool call's ordered child segments (thinking / text / nested tool groups) in the streaming accumulator and replay them in reload snapshots, so a reconnected or reloaded chat renders the sub-agent card's full interleaved history instead of only its newest part
 - refactor(web): theme the SSE debug and trajectory panels with the app's context-indicator palette and popover/muted/border tokens so they follow light/dark theme switching instead of a fixed dark palette (done/error keep explicit status colors)

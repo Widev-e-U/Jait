@@ -119,10 +119,10 @@ export function ChatToolbar({
                 ? <PanelLeftClose className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
                 : <PanelLeftOpen className={`${isMobile ? 'h-3.5 w-3.5 rotate-90' : 'h-3 w-3 mr-1'}`} />
               }
-              {!isMobile && 'Projects'}
+              {!isMobile && 'Projects & Chats'}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Toggle projects sidebar</TooltipContent>
+          <TooltipContent side="bottom">Toggle projects and chats sidebar</TooltipContent>
         </Tooltip>
       )}
 

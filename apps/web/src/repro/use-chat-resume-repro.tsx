@@ -7,14 +7,21 @@ const encoder = new TextEncoder()
 
 type ReproWindow = Window & {
   __resumeStreamFetchCount?: number
+  __resumeStreamFetchTimes?: number[]
   __resumeStreamControllers?: ReadableStreamDefaultController<Uint8Array>[]
 }
 
 const reproWindow = window as ReproWindow
 reproWindow.__resumeStreamFetchCount = 0
+reproWindow.__resumeStreamFetchTimes = []
 reproWindow.__resumeStreamControllers = []
 
 const originalFetch = window.fetch.bind(window)
+const searchParams = new URLSearchParams(window.location.search)
+const stallFirstStream = searchParams.has('stall-first')
+const stallAfterSnapshot = searchParams.has('stall-after-snapshot')
+const failFirstTwoStreams = searchParams.has('fail-first-two')
+if (failFirstTwoStreams) Math.random = () => 0
 
 window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string'
@@ -25,6 +32,19 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 
   if (url.includes('/api/sessions/resume-repro-session/stream')) {
     reproWindow.__resumeStreamFetchCount = (reproWindow.__resumeStreamFetchCount ?? 0) + 1
+    reproWindow.__resumeStreamFetchTimes?.push(performance.now())
+
+    if (failFirstTwoStreams && reproWindow.__resumeStreamFetchCount <= 2) {
+      return Promise.reject(new TypeError('Failed to fetch'))
+    }
+
+    if (stallFirstStream && reproWindow.__resumeStreamFetchCount === 1) {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        }, { once: true })
+      })
+    }
 
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -41,13 +61,20 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
             { id: 'assistant-1', role: 'assistant', content: 'partial' },
           ],
         })}\n\n`))
+
+        if (stallAfterSnapshot && reproWindow.__resumeStreamFetchCount === 1) return
       },
       cancel() {},
     })
 
     init?.signal?.addEventListener('abort', () => {
-      // Keep the controller open for observability; the fetch itself is aborted by the browser.
-    })
+      const controller = reproWindow.__resumeStreamControllers?.at(-1)
+      try {
+        controller?.error(new DOMException('The operation was aborted.', 'AbortError'))
+      } catch {
+        // The stream may already have reached a terminal event.
+      }
+    }, { once: true })
 
     return Promise.resolve(new Response(stream, {
       status: 200,

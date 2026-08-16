@@ -464,8 +464,8 @@ export function SessionSelector({
         </div>
       ) : (
         <>
-          {/* ── Top half: Projects ──────────────────────────── */}
-          <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
+          {/* Projects and root-level personal chats share one hierarchy. */}
+          <div className="flex min-h-0 flex-1 flex-col">
             <div
               className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
                 dropTargetId === '__root__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
@@ -488,28 +488,45 @@ export function SessionSelector({
                 onMoveProject(draggedId, null)
               }}
             >
-              {/*
-                No second button here. "New project" and "New folder" were the
-                same act with two names — the one "+" above opens a dialog where
-                the directory is optional, so a folder is just a project that
-                has not been given one yet.
-              */}
-              <span className="text-2xs font-medium text-muted-foreground">Projects</span>
+              <span className="text-2xs font-medium text-muted-foreground">Projects & Chats</span>
+              {onNewPersonalSession && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-1 h-6 w-6 rounded-md p-1"
+                      onClick={onNewPersonalSession}
+                    >
+                      <MessageSquare className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">New personal chat</TooltipContent>
+                </Tooltip>
+              )}
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {!normalizedSearchQuery && projects.length === 0 && (
+                {!normalizedSearchQuery && projects.length === 0 && personalSessions.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    No projects yet.
+                    No projects or chats yet.
                     <br />
                     <button onClick={onCreateProject} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                      Choose project folder
+                      Create a project
                     </button>
+                    {onNewPersonalSession && (
+                      <>
+                        {' or '}
+                        <button onClick={onNewPersonalSession} className="underline underline-offset-2 hover:text-foreground">
+                          start a chat
+                        </button>
+                      </>
+                    )}
                   </p>
                 )}
-                {normalizedSearchQuery && !searchLoading && filteredProjects.length === 0 && (
+                {normalizedSearchQuery && !searchLoading && filteredProjects.length === 0 && filteredPersonalSessions.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    No matching projects.
+                    No matching projects or chats.
                   </p>
                 )}
                 {visibleProjectRows.map(({ project, depth, hasChildren }) => {
@@ -925,46 +942,8 @@ export function SessionSelector({
                   </button>
                 )}
               </div>
-            </ScrollArea>
-          </div>
-
-          {/* ── Bottom half: Personal chats ───────────────────── */}
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex h-8 shrink-0 items-center justify-between px-3">
-              <div className="flex min-w-0 flex-1 items-center text-left transition-colors hover:text-foreground">
-                <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
-              </div>
-              {onNewPersonalSession && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="ml-1 h-6 w-6 rounded-md p-1" onClick={onNewPersonalSession}>
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">New personal chat</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-            <ScrollArea className="min-h-0 flex-1">
+              <div className="mx-1.5 my-1 border-t" />
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {!normalizedSearchQuery && personalSessions.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-4">
-                    No personal chats yet.
-                    {onNewPersonalSession && (
-                      <>
-                        <br />
-                        <button onClick={onNewPersonalSession} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                          Start a chat
-                        </button>
-                      </>
-                    )}
-                  </p>
-                )}
-                {normalizedSearchQuery && !searchLoading && filteredPersonalSessions.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-4">
-                    No matching personal chats.
-                  </p>
-                )}
                 {filteredPersonalSessions.map((session) => {
                   const isActive = activeProjectId === null && session.id === activeSessionId
                   const isStreaming = streamingSessionIds?.has(session.id) ?? false

@@ -11,7 +11,7 @@ import { SessionStateService } from "./services/session-state.js";
 import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface, RemoteTerminalSurface } from "./surfaces/index.js";
-import { resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
+import { mergeSavedProjectLayout, resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
 import { shouldSyncProjectSurfaceUi } from "./surfaces/project-ui-sync.js";
 import { createToolRegistry } from "./tools/index.js";
 import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
@@ -1153,7 +1153,9 @@ async function main() {
             "project.ui": {
               panel: key === "project.panel" ? value : existing?.panel ?? null,
               tabs: existing?.tabs ?? null,
-              layout: key === "project.layout" ? value : existing?.layout ?? null,
+              layout: key === "project.layout"
+                ? mergeSavedProjectLayout(existing?.layout as Parameters<typeof mergeSavedProjectLayout>[0], value)
+                : existing?.layout ?? null,
               terminal: existing?.terminal ?? null,
               preview: existing?.preview ?? null,
             },

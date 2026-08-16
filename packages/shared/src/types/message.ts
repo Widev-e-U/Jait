@@ -258,8 +258,15 @@ export interface ProjectUIState {
     tabs: Array<{ path: string; label: string }>;
     activePath: string | null;
   } | null;
-  /** Tree/editor visibility and desktop resize state */
-  layout: { tree: boolean; editor: boolean; panelSize?: number; treeSize?: number } | null;
+  /** Tree/editor visibility and per-project desktop resize state */
+  layout: {
+    tree: boolean;
+    editor: boolean;
+    panelSize?: number;
+    treeSize?: number;
+    terminalHeight?: number;
+    terminalColumnWidth?: number;
+  } | null;
   /** Terminal panel */
   terminal: { open: boolean; activeTerminalId?: string | null } | null;
   /** Dev preview / VNC browser panel */

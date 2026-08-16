@@ -27,6 +27,13 @@ export function shouldShowNormalChatComposer(
   return !isMobile || editingMessageId === null
 }
 
+export function shouldShowChatContextIndicator(
+  hasContextUsage: boolean,
+  showTrajectory: boolean,
+): boolean {
+  return hasContextUsage && !showTrajectory
+}
+
 export function getUserMessageEditComposerTransitionClassName(showEditComposer: boolean): string {
   return [
     'space-y-3 origin-bottom transition-opacity duration-150 ease-out',

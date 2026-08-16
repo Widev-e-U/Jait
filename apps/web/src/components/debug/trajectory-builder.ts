@@ -8,21 +8,68 @@ export interface TrajectoryMeta {
 }
 
 export type TrajectoryStep =
-  | { kind: 'turn'; role: 'user'; index: number; turn: number; content: string; ts: number }
-  | { kind: 'assistant'; role: 'assistant'; index: number; turn: number; thinking: string; text: string; ts: number }
+  | {
+      kind: 'turn'
+      role: 'user'
+      index: number
+      turn: number
+      content: string
+      provider?: string
+      model?: string
+      mode?: string
+      runtimeMode?: string
+      ts: number
+    }
+  | {
+      kind: 'assistant'
+      role: 'assistant'
+      index: number
+      turn: number
+      thinking: string
+      text: string
+      completedAt?: number
+      ts: number
+    }
+  | {
+      kind: 'context'
+      role: 'context'
+      index: number
+      turn: number
+      system: number
+      history: number
+      toolResults: number
+      tools: number
+      total: number
+      limit: number
+      ratio: number
+      pruned: boolean
+      ts: number
+    }
   | {
       kind: 'tool'
       role: 'tool'
       index: number
       turn: number
       callId?: string
+      parentCallId?: string
       tool: string
+      args: string
       argsPreview: string
       output: string
-      result?: { ok: boolean; message: string }
+      completedAt?: number
+      result?: { ok: boolean; message: string; data?: string }
       ts: number
     }
-  | { kind: 'done'; role: 'done'; index: number; turn: number; message: string; ts: number }
+  | {
+      kind: 'done'
+      role: 'done'
+      index: number
+      turn: number
+      message: string
+      sessionId?: string
+      promptCount?: number
+      ts: number
+    }
   | { kind: 'error'; role: 'error'; index: number; turn: number; message: string; ts: number }
 
 export interface Trajectory {
@@ -31,25 +78,72 @@ export interface Trajectory {
 }
 
 type StepInput =
-  | { kind: 'turn'; role: 'user'; content: string; ts: number }
-  | { kind: 'assistant'; role: 'assistant'; thinking: string; text: string; ts: number }
+  | {
+      kind: 'turn'
+      role: 'user'
+      content: string
+      provider?: string
+      model?: string
+      mode?: string
+      runtimeMode?: string
+      ts: number
+    }
+  | {
+      kind: 'assistant'
+      role: 'assistant'
+      thinking: string
+      text: string
+      completedAt?: number
+      ts: number
+    }
+  | {
+      kind: 'context'
+      role: 'context'
+      system: number
+      history: number
+      toolResults: number
+      tools: number
+      total: number
+      limit: number
+      ratio: number
+      pruned: boolean
+      ts: number
+    }
   | {
       kind: 'tool'
       role: 'tool'
       callId?: string
+      parentCallId?: string
       tool: string
+      args: string
       argsPreview: string
       output: string
-      result?: { ok: boolean; message: string }
+      completedAt?: number
+      result?: { ok: boolean; message: string; data?: string }
       ts: number
     }
-  | { kind: 'done'; role: 'done'; message: string; ts: number }
+  | {
+      kind: 'done'
+      role: 'done'
+      message: string
+      sessionId?: string
+      promptCount?: number
+      ts: number
+    }
   | { kind: 'error'; role: 'error'; message: string; ts: number }
 
 /** Trim long payloads for inline previews while preserving full detail. */
 function preview(raw: string, max = 200): string {
   const cleaned = raw.trim()
   return cleaned.length > max ? `${cleaned.slice(0, max)}…` : cleaned
+}
+
+function stringify(value: unknown, compact = false): string {
+  try {
+    return JSON.stringify(value, null, compact ? 0 : 2) ?? ''
+  } catch {
+    return String(value ?? '')
+  }
 }
 
 /**
@@ -99,6 +193,10 @@ export function buildTrajectory(events: SSEDebugEvent[]): Trajectory {
           kind: 'turn',
           role: 'user',
           content: String(data.content ?? '(empty prompt)'),
+          ...(typeof data.provider === 'string' && data.provider ? { provider: data.provider } : {}),
+          ...(typeof data.model === 'string' && data.model ? { model: data.model } : {}),
+          ...(typeof data.mode === 'string' && data.mode ? { mode: data.mode } : {}),
+          ...(typeof data.runtimeMode === 'string' && data.runtimeMode ? { runtimeMode: data.runtimeMode } : {}),
           ts: ev.ts,
         })
         assistantIdx = steps.length
@@ -121,20 +219,36 @@ export function buildTrajectory(events: SSEDebugEvent[]): Trajectory {
         break
       }
 
+      case 'context_usage': {
+        push({
+          kind: 'context',
+          role: 'context',
+          system: Number(data.system) || 0,
+          history: Number(data.history) || 0,
+          toolResults: Number(data.toolResults) || 0,
+          tools: Number(data.tools) || 0,
+          total: Number(data.total) || 0,
+          limit: Number(data.limit) || 0,
+          ratio: Number(data.ratio) || 0,
+          pruned: data.pruned === true,
+          ts: ev.ts,
+        })
+        break
+      }
+
       case 'tool_start': {
         const callId = data.call_id as string | undefined
-        let argsStr = ''
-        try {
-          argsStr = JSON.stringify(data.args ?? {}, null, 0)
-        } catch {
-          argsStr = ''
-        }
+        const args = stringify(data.args ?? {})
         push({
           kind: 'tool',
           role: 'tool',
           callId,
+          ...(typeof data.parent_call_id === 'string' && data.parent_call_id
+            ? { parentCallId: data.parent_call_id }
+            : {}),
           tool: String(data.tool ?? 'tool'),
-          argsPreview: preview(argsStr),
+          args,
+          argsPreview: preview(stringify(data.args ?? {}, true)),
           output: '',
           ts: ev.ts,
         })
@@ -159,19 +273,35 @@ export function buildTrajectory(events: SSEDebugEvent[]): Trajectory {
         if (idx != null && steps[idx]?.kind === 'tool') {
           const ok = data.ok === true
           const msg = String(data.message ?? (ok ? 'ok' : 'error'))
-          steps[idx].result = { ok, message: preview(msg) }
+          steps[idx].completedAt = ev.ts
+          steps[idx].result = {
+            ok,
+            message: msg,
+            ...(data.data === undefined ? {} : { data: stringify(data.data) }),
+          }
         }
         running.delete(callId)
         break
       }
 
       case 'done': {
-        push({ kind: 'done', role: 'done', message: String(data.message ?? 'done'), ts: ev.ts })
+        const assistant = assistantIdx != null ? steps[assistantIdx] : undefined
+        if (assistant?.kind === 'assistant') assistant.completedAt = ev.ts
+        push({
+          kind: 'done',
+          role: 'done',
+          message: String(data.message ?? 'done'),
+          ...(typeof data.session_id === 'string' ? { sessionId: data.session_id } : {}),
+          ...(typeof data.prompt_count === 'number' ? { promptCount: data.prompt_count } : {}),
+          ts: ev.ts,
+        })
         assistantIdx = null
         break
       }
 
       case 'error': {
+        const assistant = assistantIdx != null ? steps[assistantIdx] : undefined
+        if (assistant?.kind === 'assistant') assistant.completedAt = ev.ts
         push({
           kind: 'error',
           role: 'error',

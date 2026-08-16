@@ -25,14 +25,31 @@ import { resolveChatImageUrl } from '@/lib/chat-image-url'
 export type OnOpenPath = (path: string, line?: number, column?: number) => Promise<void> | void
 
 const CODE_HIGHLIGHT_CACHE_LIMIT = 120
+const STREAMING_HIGHLIGHT_DELAY_MS = 150
 const codeHighlightCache = new Map<string, string | null>()
 const CODE_HTML_MATCHER = /<pre[^>]*><code>([\s\S]*)<\/code><\/pre>/
 
+type CodeHighlightTheme = 'github-dark' | 'github-light'
+
 function normalizeCodeLanguage(language: string): string {
   const normalized = language.toLowerCase()
-  if (!normalized || normalized === 'text' || normalized === 'plain') return 'txt'
-  if (normalized === 'shell' || normalized === 'sh') return 'bash'
-  return normalized
+  const aliases: Record<string, string> = {
+    'c#': 'csharp',
+    'c++': 'cpp',
+    docker: 'dockerfile',
+    js: 'javascript',
+    md: 'markdown',
+    plain: 'txt',
+    plaintext: 'txt',
+    py: 'python',
+    rb: 'ruby',
+    sh: 'bash',
+    shell: 'bash',
+    ts: 'typescript',
+    yml: 'yaml',
+    zsh: 'bash',
+  }
+  return (aliases[normalized] ?? normalized) || 'txt'
 }
 
 function getCodeHighlightCacheKey(code: string, language: string, theme: string): string {
@@ -47,67 +64,103 @@ function rememberHighlightedCode(key: string, value: string | null) {
   codeHighlightCache.set(key, value)
 }
 
+function getCurrentCodeTheme(): CodeHighlightTheme {
+  if (typeof document === 'undefined') return 'github-light'
+  return document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
+}
+
+function useCodeHighlightTheme(): CodeHighlightTheme {
+  const [theme, setTheme] = useState<CodeHighlightTheme>(getCurrentCodeTheme)
+
+  useEffect(() => {
+    setTheme(getCurrentCodeTheme())
+    if (typeof MutationObserver === 'undefined') return
+
+    const observer = new MutationObserver(() => setTheme(getCurrentCodeTheme()))
+    observer.observe(document.documentElement, { attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  return theme
+}
+
+export function getCodeHighlightDelay(isStreaming: boolean): number {
+  return isStreaming ? STREAMING_HIGHLIGHT_DELAY_MS : 0
+}
+
+export async function highlightCodeHtml(
+  code: string,
+  language: string,
+  theme: CodeHighlightTheme,
+): Promise<string | null> {
+  const cacheKey = getCodeHighlightCacheKey(code, language, theme)
+  if (codeHighlightCache.has(cacheKey)) {
+    return codeHighlightCache.get(cacheKey) ?? null
+  }
+
+  const render = async (lang: string) => {
+    const html = await codeToHtml(code, { lang: lang as any, theme })
+    return html.match(CODE_HTML_MATCHER)?.[1] ?? null
+  }
+
+  try {
+    const highlighted = await render(normalizeCodeLanguage(language))
+    rememberHighlightedCode(cacheKey, highlighted)
+    return highlighted
+  } catch {
+    try {
+      const highlighted = await render('txt')
+      rememberHighlightedCode(cacheKey, highlighted)
+      return highlighted
+    } catch {
+      rememberHighlightedCode(cacheKey, null)
+      return null
+    }
+  }
+}
+
 function HighlightedCode({
   code,
   language,
   className,
+  isStreaming,
 }: {
   code: string
   language: string
   className?: string
+  isStreaming: boolean
 }) {
-  const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
+  const theme = useCodeHighlightTheme()
+  const cacheKey = getCodeHighlightCacheKey(code, language, theme)
+  const [highlightedResult, setHighlightedResult] = useState<{
+    cacheKey: string
+    html: string | null
+  } | null>(null)
+  const highlightedHtml = highlightedResult?.cacheKey === cacheKey
+    ? highlightedResult.html
+    : null
 
   useEffect(() => {
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
-    // Debounce highlighting to avoid running Shiki on every streamed token
-    const timeoutId = setTimeout(() => {
-      const highlight = async () => {
-        const theme = document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
-        const normalizedLanguage = normalizeCodeLanguage(language)
-        const cacheKey = getCodeHighlightCacheKey(code, language, theme)
-        if (codeHighlightCache.has(cacheKey)) {
-          setHighlightedHtml(codeHighlightCache.get(cacheKey) ?? null)
-          return
-        }
+    const highlight = async () => {
+      const html = await highlightCodeHtml(code, language, theme)
+      if (!cancelled) setHighlightedResult({ cacheKey, html })
+    }
 
-        try {
-          const html = await codeToHtml(code, {
-            lang: normalizedLanguage as any,
-            theme,
-          })
-          if (cancelled) return
-          const highlighted = html.match(CODE_HTML_MATCHER)?.[1] ?? null
-          rememberHighlightedCode(cacheKey, highlighted)
-          setHighlightedHtml(highlighted)
-        } catch {
-          try {
-            const html = await codeToHtml(code, {
-              lang: 'txt' as any,
-              theme,
-            })
-            if (cancelled) return
-            const highlighted = html.match(CODE_HTML_MATCHER)?.[1] ?? null
-            rememberHighlightedCode(cacheKey, highlighted)
-            setHighlightedHtml(highlighted)
-          } catch {
-            if (!cancelled) {
-              rememberHighlightedCode(cacheKey, null)
-              setHighlightedHtml(null)
-            }
-          }
-        }
-      }
-
+    const delay = getCodeHighlightDelay(isStreaming)
+    if (delay > 0) {
+      timeoutId = setTimeout(() => void highlight(), delay)
+    } else {
       void highlight()
-    }, 150)
+    }
 
     return () => {
       cancelled = true
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
     }
-  }, [code, language])
+  }, [cacheKey, code, isStreaming, language, theme])
 
   if (!highlightedHtml) {
     return <code className={cn(className, 'whitespace-pre')}>{code}</code>
@@ -163,7 +216,7 @@ function ProjectPathLink({
   )
 }
 
-export function buildMarkdownComponents(onOpenPath?: OnOpenPath): Components | undefined {
+export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = false): Components | undefined {
   return {
     pre: ({ children }) => <>{children}</>,
     code: ({ node, className, children, ref: _ref, ...props }: any) => {
@@ -184,7 +237,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath): Components | u
               </CodeBlockActions>
             </CodeBlockHeader>
             <div className="overflow-x-auto px-3 py-2 text-sm">
-              <HighlightedCode code={code} language={language} className={className} />
+              <HighlightedCode code={code} language={language} className={className} isStreaming={isStreaming} />
             </div>
           </CodeBlock>
         )
@@ -265,13 +318,18 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath): Components | u
 function StaticMarkdown({
   content,
   compact,
+  isStreaming,
   onOpenPath,
 }: {
   content: string
   compact?: boolean
+  isStreaming: boolean
   onOpenPath?: OnOpenPath
 }) {
-  const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
+  const components = useMemo(
+    () => buildMarkdownComponents(onOpenPath, isStreaming),
+    [isStreaming, onOpenPath],
+  )
   return (
     <div className={proseClassName(compact)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -285,6 +343,7 @@ function StaticMarkdown({
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   compact,
+  isStreaming = false,
   onOpenPath,
 }: {
   content: string
@@ -293,6 +352,6 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   preferLlmUi?: boolean
   onOpenPath?: OnOpenPath
 }) {
-  return <StaticMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
+  return <StaticMarkdown content={content} compact={compact} isStreaming={isStreaming} onOpenPath={onOpenPath} />
 })
 AssistantMarkdown.displayName = 'AssistantMarkdown'

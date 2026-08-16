@@ -127,7 +127,7 @@ export function DeveloperSidebars({
                 {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">Projects</TooltipContent>
+            <TooltipContent side="right">Projects & Chats</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

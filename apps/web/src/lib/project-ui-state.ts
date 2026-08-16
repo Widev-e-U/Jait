@@ -35,13 +35,22 @@ export function areProjectUiValuesEqual(a: unknown, b: unknown) {
  */
 export function mergeProjectLayout(
   existing: ProjectUIState['layout'],
-  next: { tree?: boolean; editor?: boolean; panelSize?: number; treeSize?: number },
+  next: {
+    tree?: boolean
+    editor?: boolean
+    panelSize?: number
+    treeSize?: number
+    terminalHeight?: number
+    terminalColumnWidth?: number
+  },
 ): ProjectUIState['layout'] {
   return {
     tree: next.tree ?? existing?.tree ?? true,
     editor: next.editor ?? existing?.editor ?? true,
     panelSize: next.panelSize ?? existing?.panelSize,
     treeSize: next.treeSize ?? existing?.treeSize,
+    terminalHeight: next.terminalHeight ?? existing?.terminalHeight,
+    terminalColumnWidth: next.terminalColumnWidth ?? existing?.terminalColumnWidth,
   }
 }
 

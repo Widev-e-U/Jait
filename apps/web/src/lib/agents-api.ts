@@ -314,6 +314,12 @@ export class AgentsApi {
   private _modelsInflight = new Map<string, Promise<ProviderModelsResponse>>()
   private _modelsCachedAt = new Map<string, number>()
 
+  /** Drop the in-memory model cache so the next fetch pulls a fresh catalogue. */
+  resetProviderModels(): void {
+    this._modelsInflight.clear()
+    this._modelsCachedAt.clear()
+  }
+
   async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
     const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
     const cacheKey = `${providerId}:${effectiveNodeId}`

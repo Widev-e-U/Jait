@@ -5,7 +5,9 @@ import {
   applyResumeSnapshotSeq,
   buildReasoningEffortRequestField,
   formatChatHttpError,
+  getResumeReconnectDelay,
   getVisibleChangedFiles,
+  isRetryableResumeResponseStatus,
   isResumeStreamRunCurrent,
   shouldFlushStreamTextImmediately,
   shouldProcessResumeStreamEvent,
@@ -44,6 +46,27 @@ describe('buildReasoningEffortRequestField', () => {
     expect(buildReasoningEffortRequestField('high')).toEqual({ reasoningEffort: 'high' })
     expect(buildReasoningEffortRequestField(null)).toEqual({ reasoningEffort: null })
     expect(buildReasoningEffortRequestField(undefined)).toEqual({})
+  })
+})
+
+describe('resume stream recovery policy', () => {
+  it('uses jittered exponential backoff capped at 30 seconds', () => {
+    expect(getResumeReconnectDelay(1, () => 0)).toBe(250)
+    expect(getResumeReconnectDelay(1, () => 1)).toBe(500)
+    expect(getResumeReconnectDelay(2, () => 0)).toBe(500)
+    expect(getResumeReconnectDelay(2, () => 1)).toBe(1_000)
+    expect(getResumeReconnectDelay(20, () => 0)).toBe(15_000)
+    expect(getResumeReconnectDelay(20, () => 1)).toBe(30_000)
+  })
+
+  it('retries temporary HTTP failures but not terminal client responses', () => {
+    expect(isRetryableResumeResponseStatus(408)).toBe(true)
+    expect(isRetryableResumeResponseStatus(425)).toBe(true)
+    expect(isRetryableResumeResponseStatus(429)).toBe(true)
+    expect(isRetryableResumeResponseStatus(503)).toBe(true)
+    expect(isRetryableResumeResponseStatus(400)).toBe(false)
+    expect(isRetryableResumeResponseStatus(401)).toBe(false)
+    expect(isRetryableResumeResponseStatus(404)).toBe(false)
   })
 })
 

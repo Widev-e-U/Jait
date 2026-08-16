@@ -41,6 +41,11 @@ const STREAM_SNAPSHOT_LIMIT = INITIAL_CHAT_HISTORY_MESSAGE_LIMIT
 // Older history remains available in larger batches when the user scrolls up.
 const LAZY_LOAD_BATCH_SIZE = 60
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
+const RESUME_SNAPSHOT_TIMEOUT_MS = 3_000
+const RESUME_STREAM_IDLE_TIMEOUT_MS = 40_000
+const RESUME_RECONNECT_BASE_DELAY_MS = 500
+const RESUME_RECONNECT_MAX_DELAY_MS = 30_000
+const RESUME_RECONNECT_MAX_ATTEMPTS = 20
 
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
@@ -70,6 +75,18 @@ function isTransientConnectionError(error: unknown): boolean {
     message.includes('network connection was lost') ||
     message.includes('the internet connection appears to be offline')
   )
+}
+
+export function isRetryableResumeResponseStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500
+}
+
+export function getResumeReconnectDelay(attempt: number, random = Math.random): number {
+  const cap = Math.min(
+    RESUME_RECONNECT_MAX_DELAY_MS,
+    RESUME_RECONNECT_BASE_DELAY_MS * Math.pow(2, Math.max(0, attempt - 1)),
+  )
+  return cap / 2 + random() * (cap / 2)
 }
 
 export function shouldResumeChatSession(params: {
@@ -666,6 +683,7 @@ export function useChat(
   // chat "freezing" until the user manually reloads or switches sessions.
   const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumeReconnectAttemptsRef = useRef(0)
+  const resumeReconnectSessionRef = useRef<string | null>(null)
   const documentWasHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false)
   const browserWasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 
@@ -732,8 +750,6 @@ export function useChat(
     pendingResumeAfterDirectStreamRef.current = false
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
-    // Starting a fresh (re)subscribe — reset the backoff state.
-    resumeReconnectAttemptsRef.current = 0
     if (resumeReconnectTimerRef.current !== null) {
       clearTimeout(resumeReconnectTimerRef.current)
       resumeReconnectTimerRef.current = null
@@ -742,21 +758,13 @@ export function useChat(
   }, [sessionId])
 
   /**
-   * Auto-reconnect the resume SSE stream after a transient drop.
-   *
-   * This is the fix for the "chat freezes, must reload or switch projects"
-   * problem: when the SSE fetch connection dies mid-stream (network blip,
-   * proxy idle timeout, browser throttling a background tab), the previous
-   * code only surfaced an error banner and never resubscribed. The agent
-   * loop on the gateway keeps running, but the client stops receiving tokens
-   * until the user manually reloads / switches sessions (which bumps
-   * refreshTrigger and re-runs the resume effect).
-   *
-   * We schedule a reconnect with exponential backoff, preserving the messages
-   * already received (the snapshot endpoint replays the full state including
-   * any partial assistant content, deduped via `seq`). Reconnecting is a no-op
-   * if the user has navigated away from this session or a fresh stream already
-   * opened. Capped at ~30s backoff and gives up after ~5 minutes of failures.
+   * Schedule the next resume-stream generation after a transport failure.
+   * Attempts survive failed handshakes and reset only after a fresh snapshot,
+   * so a sustained outage gets jittered exponential backoff while a healthy
+   * generation starts from the base delay after a later disconnect. The new
+   * snapshot repairs any live-event gap from authoritative session history.
+   * Reconnecting is a no-op after navigation, while a direct stream owns the
+   * session, or when a replacement resume stream is already active.
    */
   const scheduleResumeReconnect = useCallback(() => {
     // If the user navigated away from this session, don't reconnect.
@@ -766,18 +774,22 @@ export function useChat(
     // A direct chat stream is owned by the sending client; its done/finish
     // path already triggers a resume. Avoid racing it.
     if (abortControllerRef.current && directStreamSessionRef.current === sessionId) return
+    if (resumeReconnectSessionRef.current !== sessionId) {
+      resumeReconnectSessionRef.current = sessionId
+      resumeReconnectAttemptsRef.current = 0
+    }
     const attempt = resumeReconnectAttemptsRef.current + 1
-    if (attempt > 20) {
-      // ~5 min total of backoff — give up gracefully. The gateway may still be
-      // running the turn, but we can no longer reach it. Clear the stuck
-      // loading state so the chat doesn't remain frozen in a spinner forever.
-      setState(prev => prev.isLoading
-        ? { ...prev, isLoading: false, error: 'Connection lost. Reconnect attempts exhausted.' }
-        : prev)
+    if (attempt > RESUME_RECONNECT_MAX_ATTEMPTS) {
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        isLoadingHistory: false,
+        error: 'Connection lost. Reconnect attempts exhausted.',
+      }))
       return
     }
     resumeReconnectAttemptsRef.current = attempt
-    const delay = Math.min(30000, 500 * Math.pow(2, attempt - 1))
+    const delay = getResumeReconnectDelay(attempt)
     resumeReconnectTimerRef.current = setTimeout(() => {
       resumeReconnectTimerRef.current = null
       // Re-check currency inside the timer — session may have changed.
@@ -966,6 +978,9 @@ export function useChat(
     streamAbortRef.current = streamController
     streamResumeSessionRef.current = sessionId
     const resumeRunId = ++resumeStreamRunIdRef.current
+    const isCurrentResumeGeneration = () => (
+      !cancelled && resumeStreamRunIdRef.current === resumeRunId
+    )
     const isCurrentResumeRun = () => isResumeStreamRunCurrent({
       cancelled,
       aborted: streamController.signal.aborted,
@@ -978,9 +993,9 @@ export function useChat(
     // server snapshot could not be fetched, so it never preempts fresh data and
     // never causes the cached-then-updated flash.
     const applyCachedFallback = async () => {
-      if (!isCurrentResumeRun() || serverSnapshotReceived) return
+      if (!isCurrentResumeGeneration() || serverSnapshotReceived) return
       const stored = await readCachedChatHistory(cacheScope, sessionId)
-      if (!isCurrentResumeRun() || serverSnapshotReceived) return
+      if (!isCurrentResumeGeneration() || serverSnapshotReceived) return
       const cached = selectImmediateChatHistory(stored, sessionLastActiveAt)
       if (!cached || cached.messages.length === 0) return
       setState(prev => ({
@@ -996,7 +1011,26 @@ export function useChat(
     ;(async () => {
       let cancelPendingSubscribeFlush: (() => void) | null = null
       let textPacer: ReturnType<typeof createStreamTextPacer> | null = null
+      let streamTimeout: ReturnType<typeof setTimeout> | null = null
+      let timedOutPhase: 'snapshot' | 'idle' | null = null
+
+      const clearStreamTimeout = () => {
+        if (streamTimeout === null) return
+        clearTimeout(streamTimeout)
+        streamTimeout = null
+      }
+
+      const armStreamTimeout = (phase: 'snapshot' | 'idle', timeoutMs: number) => {
+        clearStreamTimeout()
+        streamTimeout = setTimeout(() => {
+          if (!isCurrentResumeRun()) return
+          timedOutPhase = phase
+          streamController.abort()
+        }, timeoutMs)
+      }
+
       try {
+        armStreamTimeout('snapshot', RESUME_SNAPSHOT_TIMEOUT_MS)
         await Promise.resolve()
         if (!isCurrentResumeRun()) return
         const res = await fetch(
@@ -1028,18 +1062,33 @@ export function useChat(
         }
         if (!res.ok || !isCurrentResumeRun()) {
           if (isCurrentResumeRun()) {
-            setState(prev => ({ ...prev, isLoadingHistory: false }))
+            const retryable = isRetryableResumeResponseStatus(res.status)
+            setState(prev => ({
+              ...prev,
+              isLoadingHistory: false,
+              error: retryable ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
+            }))
             void applyCachedFallback()
+            if (retryable) scheduleResumeReconnect()
           }
           return
         }
         const reader = res.body?.getReader()
-        if (!reader) return
+        if (!reader) {
+          setState(prev => ({
+            ...prev,
+            isLoadingHistory: false,
+            error: TRANSIENT_CONNECTION_MESSAGE,
+          }))
+          void applyCachedFallback()
+          scheduleResumeReconnect()
+          return
+        }
 
         const decoder = new TextDecoder()
         let lineBuffer = ''
         let assistantId: string | null = null
-        let receivedDone = false
+        let receivedTerminalEvent = false
         let wasStreaming = false
 
         // Coalesce only React commits. Transport events keep flowing
@@ -1125,6 +1174,9 @@ export function useChat(
           const { done, value } = await reader.read()
           if (done) break
           if (!isCurrentResumeRun()) { reader.cancel(); break }
+          if (serverSnapshotReceived && wasStreaming) {
+            armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
+          }
 
           lineBuffer += decoder.decode(value, { stream: true })
           const lines = lineBuffer.split('\n')
@@ -1143,10 +1195,14 @@ export function useChat(
 
               if (data.type === 'snapshot') {
                 serverSnapshotReceived = true
+                resumeReconnectSessionRef.current = sessionId
+                resumeReconnectAttemptsRef.current = 0
                 cacheWriteReadySessionRef.current = sessionId
                 textPacer.flushNow()
                 const rawMsgs = data.messages as RawSnapshotMessage[]
                 const snapshotStreaming = data.streaming as boolean
+                if (snapshotStreaming) armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
+                else clearStreamTimeout()
                 applyResumeSnapshotSeq(lastResumeSeqBySessionRef.current, sessionId, data.seq)
                 let msgs: ChatMessage[] = mapSnapshotMessages(rawMsgs, snapshotStreaming)
                 // Track whether the server reported an active stream for this
@@ -1310,7 +1366,8 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               } else if (data.type === 'done') {
-                receivedDone = true
+                receivedTerminalEvent = true
+                clearStreamTimeout()
                 await textPacer.waitUntilIdle()
                 // Flush any batched token updates before marking completion
                 subscribeScheduler.flushNow()
@@ -1338,6 +1395,8 @@ export function useChat(
                   }
                 })
               } else if (data.type === 'error') {
+                receivedTerminalEvent = true
+                clearStreamTimeout()
                 const errorMsg = data.message as string
                 await textPacer.waitUntilIdle()
                 subscribeScheduler.flushNow()
@@ -1386,23 +1445,43 @@ export function useChat(
         // Flush any remaining batched updates when stream ends
         await textPacer.waitUntilIdle()
         subscribeScheduler.flushNow()
-        // The SSE connection ended without a `done` event while the gateway
-        // reported it was still streaming — the connection dropped silently
-        // (proxy idle timeout, background-tab throttling, network blip).
-        // Re-subscribe so live tokens keep flowing without a manual reload.
-        if (!cancelled && !receivedDone && wasStreaming && isCurrentResumeRun()) {
+        // A generation that closes before its snapshot never established.
+        // One that closes after a streaming snapshot but before a terminal event
+        // lost live delivery. Both cases reconnect and repair from a fresh,
+        // authoritative snapshot.
+        if (
+          !cancelled
+          && !receivedTerminalEvent
+          && isCurrentResumeRun()
+          && (!serverSnapshotReceived || wasStreaming)
+        ) {
+          setState(prev => ({
+            ...prev,
+            isLoadingHistory: false,
+            error: TRANSIENT_CONNECTION_MESSAGE,
+          }))
+          if (!serverSnapshotReceived) void applyCachedFallback()
           scheduleResumeReconnect()
         }
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') {
+          if (timedOutPhase !== null && !cancelled) {
+            setState(prev => ({
+              ...prev,
+              isLoadingHistory: false,
+              error: TRANSIENT_CONNECTION_MESSAGE,
+            }))
+            if (timedOutPhase === 'snapshot') void applyCachedFallback()
+            scheduleResumeReconnect()
+          }
+          return
+        }
         if (!cancelled) {
           const transient = isTransientConnectionError(err)
           setState(prev => ({
             ...prev,
             isLoadingHistory: false,
-            error: preserveExistingMessages && transient
-              ? TRANSIENT_CONNECTION_MESSAGE
-              : prev.error,
+            error: transient ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
           }))
           // Auto-reconnect after a transient drop so the chat keeps streaming
           // without the user having to reload or switch sessions.
@@ -1410,6 +1489,7 @@ export function useChat(
           else void applyCachedFallback()
         }
       } finally {
+        clearStreamTimeout()
         textPacer?.cancel()
         cancelPendingSubscribeFlush?.()
         if (streamAbortRef.current === streamController) streamAbortRef.current = null

@@ -10,6 +10,7 @@
  *   POST   /api/providers/:id/auth/logout  — log out provider
  *   GET    /api/providers/:id/models       — list models for a provider
  *   POST   /api/providers/omniroute/test   — probe a self-hosted OmniRoute router
+ *   POST   /api/providers/models/reset     — drop cached model catalogues so the next fetch is fresh
  */
 
 import type { FastifyInstance } from "fastify";
@@ -23,6 +24,7 @@ import type { ProviderUsageService } from "../services/provider-usage.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
+import { resetModelFetcherCaches } from "../providers/model-fetchers.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 
 // ── Route registration ───────────────────────────────────────────
@@ -423,6 +425,14 @@ export function registerProviderRoutes(
     } finally {
       clearTimeout(timeout);
     }
+  });
+
+  /** Drop the in-memory model catalogues so the next fetch hits the router fresh. */
+  app.post("/api/providers/models/reset", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    resetModelFetcherCaches();
+    return { ok: true };
   });
 
   /** List models for a specific provider */

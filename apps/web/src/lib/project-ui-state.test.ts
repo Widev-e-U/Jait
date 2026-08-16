@@ -21,6 +21,26 @@ describe('mergeProjectLayout', () => {
     })
   })
 
+  it('preserves terminal dimensions when editor visibility changes', () => {
+    const existing = {
+      tree: true,
+      editor: true,
+      panelSize: 720,
+      treeSize: 260,
+      terminalHeight: 420,
+      terminalColumnWidth: 520,
+    }
+
+    expect(mergeProjectLayout(existing, { tree: false, editor: true })).toEqual({
+      tree: false,
+      editor: true,
+      panelSize: 720,
+      treeSize: 260,
+      terminalHeight: 420,
+      terminalColumnWidth: 520,
+    })
+  })
+
   it('preserves tree/editor visibility when only sizes change', () => {
     const existing = { tree: false, editor: true, panelSize: 720, treeSize: 260 }
 

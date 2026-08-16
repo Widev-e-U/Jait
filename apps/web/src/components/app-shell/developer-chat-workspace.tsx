@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
-import { shouldShowNormalChatComposer } from '@/components/chat/message-edit-layout'
+import {
+  shouldShowChatContextIndicator,
+  shouldShowNormalChatComposer,
+} from '@/components/chat/message-edit-layout'
 import { GitDiffIndicator } from '@/components/chat/git-diff-indicator'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
@@ -519,7 +522,7 @@ export function DeveloperChatWorkspace({
               />
             </div>
           )}
-          {contextUsage && (
+          {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
             // On desktop the conversation shows the minimap scrollbar (w-24) flush to
             // the right edge; offset the indicator so it sits to its left, not under it.
             <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[104px]'}`}>
