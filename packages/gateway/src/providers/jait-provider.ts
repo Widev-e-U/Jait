@@ -274,6 +274,14 @@ export class JaitProvider implements CliProviderAdapter {
                 streamedAssistantContent += event.content;
               } else if (event.type === "tool_start") {
                 flushStreamedAssistantMessage();
+              } else if (event.type === "content_rollback") {
+                // The agent loop discarded a generation after streaming; drop the
+                // unflushed tokens past the rollback point so they never get
+                // flushed (and persisted) as if they were a real answer.
+                const target = Math.max(0, event.contentLength - persistedAssistantContent.length);
+                if (streamedAssistantContent.length > target) {
+                  streamedAssistantContent = streamedAssistantContent.slice(0, target);
+                }
               }
               this.forwardAgentLoopEvent(sessionId, event);
             },
@@ -517,6 +525,10 @@ export class JaitProvider implements CliProviderAdapter {
         break;
       case "error":
         this.emit({ type: "activity", sessionId, kind: "error", summary: event.message });
+        break;
+      case "content_rollback":
+        // Let the CLI-provider chat route truncate its token accumulator too.
+        this.emit({ type: "content_rollback", sessionId, contentLength: event.contentLength, segments: event.segments });
         break;
       default:
         break;

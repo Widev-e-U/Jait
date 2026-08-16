@@ -66,7 +66,11 @@ export type ProviderEvent =
   | { type: "tool.result"; sessionId: string; tool: string; ok: boolean; message: string; callId?: string; parentCallId?: string; data?: unknown }
   | { type: "tool.approval-required"; sessionId: string; tool: string; args: unknown; requestId: string }
   | { type: "message"; sessionId: string; role: "assistant" | "user"; content: string }
-  | { type: "activity"; sessionId: string; kind: string; summary: string; payload?: unknown };
+  | { type: "activity"; sessionId: string; kind: string; summary: string; payload?: unknown }
+  // The Jait provider's agent loop discarded a generation after streaming
+  // (runaway repetition / replayed-reasoning loop); the receiving chat route
+  // should truncate its token accumulator to these post-rollback lengths.
+  | { type: "content_rollback"; sessionId: string; contentLength: number; segments: number };
 
 // ── Provider interface ───────────────────────────────────────────────
 

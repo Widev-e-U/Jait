@@ -595,6 +595,69 @@ describe("runAgentLoop repetition containment", () => {
     expect(assistantTurn.content).toBe("Provider selector fixed.");
   });
 
+  it("emits content_rollback when a generation is discarded so live accumulators drop the garbage", async () => {
+    // Round 1 streams a preamble then a runaway wall; the loop discards it and
+    // resamples. The rollback event lets the chat route truncate its
+    // accumulator to the pre-discard content length instead of persisting the
+    // streamed garbage.
+    const preamble = "Let me check the selector.\n";
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      fetchCalls++;
+      if (fetchCalls === 2) {
+        return new Response([
+          'data: {"choices":[{"delta":{"content":"Provider selector fixed."}}]}\n\n',
+          'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ].join(""));
+      }
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode(`data: {"choices":[{"delta":{"content":${JSON.stringify(preamble)}}}]}\n\n`));
+          for (const chunk of loopingResponse()) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Fix the provider selector." },
+    ];
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [],
+        hasTools: false,
+        sessionId: "session-rollback",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => ({ ok: true, message: "unused" }),
+    );
+
+    const rollbacks = events.filter((event): event is Extract<AgentLoopEvent, { type: "content_rollback" }> =>
+      event.type === "content_rollback");
+    // The first (discarded) generation must have signaled a rollback; the
+    // clean resample must not add another one.
+    expect(rollbacks.length).toBeGreaterThanOrEqual(1);
+    // The rollback happened before any clean content existed.
+    expect(rollbacks[0]!.contentLength).toBe(0);
+    expect(result.content).toBe("Provider selector fixed.");
+    // The streamed preamble never reaches the final transcript.
+    expect(result.content).not.toContain(preamble.trim());
+  });
+
   it("drops the run-up into the loop instead of replaying it to the resample", async () => {
     // The prefix the model wrote on its way into the loop is the context it was
     // following when it fell in, so a discarded attempt must contribute nothing
@@ -2602,6 +2665,225 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(result.content).toBe("Recovered after the unavailable call was rejected.");
     expect(result.content).not.toContain("Stopped:");
     expect(result.content).not.toContain("DSML");
+  });
+
+  it("steers a turn that replays the same thinking + same rejected tool call every round, then stops as a backstop", async () => {
+    // Regression for the deepseek-v4-flash degeneration (2026-08-16): the model
+    // re-emitted the exact same reasoning block and the exact same (quarantined)
+    // tool call on every round. No guard fired because the thinking repeat was
+    // *across* rounds (tool groups sit between the thinking segments, so
+    // isVerbatimThinkingRepeat never sees them back-to-back) and there was a
+    // tool call each round (so the empty-response recovery never ran). The turn
+    // burned all 14 rounds and persisted a wall of "cripplenope...nope" garbage.
+    const THINKING = [
+      "The user is describing a chat streaming issue. They mention \"after updating chat\" they got ",
+      "loading stuckness again, and it didn't stream in new tool cards and content. They thought since ",
+      "they made their SSH connection the same as DeepSeek Harness, it worked pretty good, so they ",
+      "expected it to now be fixed. This is a Jait project. The user is talking about the Jait chat app ",
+      "itself. Let me understand the context better.\n",
+    ].join("");
+    let fetchCalls = 0;
+    let executedExecutes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      // Every round: identical thinking + identical (already-rejected) call.
+      const thinkingPayload = JSON.stringify({ choices: [{ delta: { reasoning_content: THINKING } }] });
+      const toolPayload = JSON.stringify({
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: `call-exec-${round}`,
+                  type: "function",
+                  function: {
+                    name: "execute",
+                    arguments: JSON.stringify({ command: "cd /home/jakob/jait && git log --oneline -30", explanation: "Check git history" }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      const finish = JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] });
+      return sseResponse([
+        `data: ${thinkingPayload}\n\n`,
+        `data: ${toolPayload}\n\n`,
+        `data: ${finish}\n\n`,
+        "data: [DONE]\n\n",
+      ]);
+    });
+
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "deepseek-v4-flash:0731-cloud",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the chat streaming issue." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "execute",
+              description: "Run a shell command",
+              parameters: {
+                type: "object",
+                properties: { command: { type: "string" }, explanation: { type: "string" } },
+              },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-replayed-thinking-loop",
+        abort: new AbortController(),
+        maxRounds: 12,
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => {
+        executedExecutes++;
+        // Simulate the quarantine: the call keeps failing identically.
+        return { ok: false, message: "Provider repeated an unavailable tool call (execute); rejected it" };
+      },
+    );
+
+    // It must not stop on the first violation: it steers once, gives the model
+    // a couple more rounds, and then falls back to stopping — never burning the
+    // whole 12-round budget on the same reasoning + same rejected call.
+    expect(result.rounds).toBeGreaterThanOrEqual(5);
+    expect(result.rounds).toBeLessThan(12);
+    // The call returns an identical failure every round, so the identical-failure
+    // cap (MAX_IDENTICAL_FAILURES_PER_CALL=2) limits actual executions to 2. The
+    // point is the turn was not stopped after the very first round.
+    expect(executedExecutes).toBeGreaterThanOrEqual(2);
+    expect(executedExecutes).toBeLessThan(12);
+    // The persisted content must not be the degenerate wall.
+    expect(result.content).not.toMatch(/nope/);
+    expect(result.content).not.toMatch(/response(\W|$)/);
+    // And a steering event should explain the stop.
+    expect(
+      events.some(
+        (event) =>
+          event.type === "steering" &&
+          /repeating the same reasoning/i.test(event.message ?? ""),
+      ),
+    ).toBe(true);
+  });
+
+  it("lets the model recover after being steered out of a replay loop instead of stopping", async () => {
+    // A provider that replays the same reasoning + same tool call for a few
+    // rounds is steered back on track (the turn continues), and if it then
+    // answers the turn completes normally. Stopping should be the backstop,
+    // not the first response.
+    const THINKING = [
+      "The user is describing a chat streaming issue. They mention \\\"after updating chat\\\" they got ",
+      "loading stuckness again. This is a Jait project.\\n",
+    ].join("");
+    let fetchCalls = 0;
+    let executedExecutes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      if (fetchCalls <= 4) {
+        const thinkingPayload = JSON.stringify({ choices: [{ delta: { reasoning_content: THINKING } }] });
+        const toolPayload = JSON.stringify({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: `call-exec-${round}`,
+                    type: "function",
+                    function: {
+                      name: "execute",
+                      arguments: JSON.stringify({ command: "git status", explanation: "Check state" }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        });
+        const finish = JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] });
+        return sseResponse([
+          `data: ${thinkingPayload}\n\n`,
+          `data: ${toolPayload}\n\n`,
+          `data: ${finish}\n\n`,
+          "data: [DONE]\n\n",
+        ]);
+      }
+      return textResponse("Fixed the streaming issue by reverting the change.");
+    });
+
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "deepseek-v4-flash:0731-cloud",
+          contextWindow: 100_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Fix the chat streaming issue." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "execute",
+              description: "Run a shell command",
+              parameters: {
+                type: "object",
+                properties: { command: { type: "string" }, explanation: { type: "string" } },
+              },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-replayed-thinking-recovered",
+        abort: new AbortController(),
+        maxRounds: 12,
+        mode: "agent",
+        onEvent: (event) => events.push(event),
+      },
+      async () => {
+        executedExecutes++;
+        return { ok: false, message: "Provider repeated an unavailable tool call (execute); rejected it" };
+      },
+    );
+
+    // It was steered (not stopped) once, and the model then recovered with a
+    // final answer instead of the turn being killed. The steer message says the
+    // model *repeated* the same reasoning — distinct from the backstop message,
+    // which says it kept *repeating* even after being steered.
+    expect(
+      events.some(
+        (event) =>
+          event.type === "steering" &&
+          /repeated the same reasoning/i.test(event.message ?? ""),
+      ),
+    ).toBe(true);
+    // Steering must hand control back, never kill the turn: no "Stopped" event.
+    expect(
+      events.some(
+        (event) =>
+          event.type === "steering" && /^Stopped:/i.test(event.message ?? ""),
+      ),
+    ).toBe(false);
+    expect(executedExecutes).toBe(2);
+    expect(result.content).toContain("Fixed the streaming issue");
+    expect(result.rounds).toBeGreaterThanOrEqual(4);
   });
 
   it("executes an identical tool call only once when the provider repeats it within one round", async () => {

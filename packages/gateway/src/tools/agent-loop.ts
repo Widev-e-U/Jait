@@ -157,6 +157,12 @@ export type AgentLoopEvent =
   | { type: "mode_notice"; mode: ChatMode; message: string }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
+  // A generation was discarded after streaming (runaway repetition, or a
+  // replayed-reasoning loop) and its tokens must be removed from any live
+  // accumulator that mirrors the turn, so a reload does not persist content
+  // the loop itself rolled back. `contentLength` / `segments` are the
+  // post-rollback lengths of the loop's own transcript.
+  | { type: "content_rollback"; contentLength: number; segments: number }
   // `status` is the provider's HTTP status when the error came from the LLM
   // call. Carried alongside the prose so callers can act on *which* failure it
   // was — retrying a rejected key on another model, say — without matching on
@@ -1611,6 +1617,31 @@ const DEFAULT_TOOL_ROUND_CHECKPOINT = 64;
 const ABSOLUTE_TOOL_ROUND_BUDGET = 200;
 
 /**
+ * Consecutive rounds that replay the exact same reasoning block AND the exact
+ * same tool call before the turn is stopped outright.
+ *
+ * A deterministic provider (Ollama, or a degraded model) can reproduce its
+ * previous thinking word-for-word every round while re-issuing the same
+ * (usually quarantined) call. Nothing upstream stops that: the per-round
+ * repetition guard only sees one copy per stream, `isVerbatimThinkingRepeat`
+ * only checks back-to-back thinking segments (tool groups sit between them),
+ * and the empty-response recovery never runs because a tool call exists. The
+ * duplicate-call guards block the call, but the model keeps replaying the same
+ * reasoning and request, so the turn burns its whole round budget and ends in
+ * garbage (observed with deepseek-v4-flash:0731-cloud, 2026-08-16).
+ */
+const MAX_REPLAYED_THINKING_ROUNDS = 3;
+
+/**
+ * How many times the cross-round replayed-reasoning guard *steers* the model
+ * back on track (injecting a corrective directive) before it falls back to
+ * stopping the turn as a hard backstop. Steer-first: a deterministic provider
+ * that replays identical reasoning + the same tool call gets a nudge to change
+ * approach instead of the turn being killed on the first violation.
+ */
+const MAX_REPLAY_STEERINGS = 1;
+
+/**
  * Consecutive rounds that only investigate — read-only tools, no plan step
  * completed — before Jait re-anchors the model on the goal, and before it
  * withholds tools for one round so the model has to answer.
@@ -2485,6 +2516,18 @@ export async function runAgentLoop(
   /** Thinking from the last answer-less round, to detect a replayed reasoning loop. */
   let lastEmptyThinking = "";
   const emptyResponseRecoveryPrompts = new Set<AgentMessage>();
+  /** The previous round's reasoning text, to detect verbatim replays across rounds. */
+  let lastRoundThinking = "";
+  /** Tool-call signature of the previous round, paired with the replay check. */
+  let lastRoundToolSignature: string | null = null;
+  /** Consecutive rounds that replayed the same reasoning + same tool call. */
+  let replayedLoopRounds = 0;
+  /** `fullContent` length at the start of the replay loop (rollback point). */
+  let replayedLoopStartContent = 0;
+  /** `segments` length at the start of the replay loop (rollback point). */
+  let replayedLoopStartSegments = 0;
+  /** Times we've steered (rather than stopped) this replay loop so far. */
+  let replaySteerings = 0;
   let autonomousCheckpointPrompt: AgentMessage | null = null;
   const clearEmptyResponseRecoveryPrompts = () => {
     for (const prompt of emptyResponseRecoveryPrompts) {
@@ -2978,6 +3021,10 @@ export async function runAgentLoop(
         };
         history.push(recoveryPrompt);
         emptyResponseRecoveryPrompts.add(recoveryPrompt);
+        // The discarded generation already streamed tokens to subscribers; tell
+        // any live accumulator mirroring this turn to roll back to the same
+        // point so a reload doesn't persist the garbage.
+        onEvent?.({ type: "content_rollback", contentLength: fullContent.length, segments: segments.length });
         continue;
       }
 
@@ -2998,6 +3045,9 @@ export async function runAgentLoop(
           segments.push({ type: "text", content: cleanContent });
         }
       }
+      // Same rollback for the final (non-recovering) salvage: the accumulator
+      // must not keep the repeated wall the guard just cut.
+      onEvent?.({ type: "content_rollback", contentLength: fullContent.length, segments: segments.length });
 
       // Recovery is intentionally quiet: retain any clean prefix and end with
       // the best usable result instead of exposing an internal loop guard as a
@@ -3010,6 +3060,107 @@ export async function runAgentLoop(
           executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
           segments.length > 0 ? JSON.stringify(segments) : undefined,
           capThinking(thinkingText) || undefined,
+        );
+        persisted = true;
+      }
+      return {
+        content: fullContent,
+        executedToolCalls,
+        segments,
+        rounds: round + 1,
+        aborted: false,
+        hitMaxRounds: false,
+        persisted,
+      };
+    }
+
+    // ── Cross-round replayed-reasoning guard ──────────────────────────
+    // A deterministic provider can replay its exact previous reasoning every
+    // round while re-issuing the same (often quarantined) tool call. Nothing
+    // upstream stops that: the per-round repetition guard only sees one copy
+    // per stream, `isVerbatimThinkingRepeat` only checks back-to-back thinking
+    // segments (tool groups sit between them), and the empty-response recovery
+    // never runs because a tool call exists. This guard pairs a verbatim
+    // thinking replay with the same tool-call signature and stops the turn
+    // after a few rounds instead of burning the round budget on duplicates.
+    const thinkingReplay =
+      thinkingText.length >= MIN_REPEAT_THINKING_CHARS
+      && isVerbatimThinkingRepeat(lastRoundThinking, thinkingText);
+    const roundToolSignature = toolCalls.length > 0
+      ? JSON.stringify(toolCalls.map(toolCallSignature).sort())
+      : null;
+    const sameCallAsLastRound =
+      roundToolSignature !== null && roundToolSignature === lastRoundToolSignature;
+    if (thinkingReplay && sameCallAsLastRound) {
+      if (replayedLoopRounds === 0) {
+        replayedLoopStartContent = fullContent.length;
+        replayedLoopStartSegments = segments.length;
+      }
+      replayedLoopRounds++;
+    } else {
+      replayedLoopRounds = 0;
+    }
+    lastRoundThinking = thinkingText;
+    // Update every round (null when the round made no calls) so the pairing
+    // below is strictly "same call as the immediately preceding round".
+    lastRoundToolSignature = roundToolSignature;
+
+    if (replayedLoopRounds >= MAX_REPLAYED_THINKING_ROUNDS) {
+      // Roll the loop's streamed text out of the transcript so the persisted
+      // turn keeps the useful work, not the repeated reasoning. The reasoning
+      // itself never belonged in the visible transcript anyway.
+      fullContent = fullContent.slice(0, replayedLoopStartContent);
+      segments.splice(replayedLoopStartSegments);
+      onEvent?.({ type: "content_rollback", contentLength: fullContent.length, segments: segments.length });
+
+      // Steer-first: nudge the model back on track instead of killing the turn.
+      // Only fall back to stopping once the steer allowance is exhausted (or we
+      // have no budget left to continue), so a deterministic provider stuck in a
+      // replay gets a corrective directive before the hard backstop.
+      if (replaySteerings < MAX_REPLAY_STEERINGS && round + 1 < roundLimit) {
+        replaySteerings++;
+        log.warn(
+          `Model replayed the same reasoning + tool call for ${replayedLoopRounds} consecutive rounds for session ${sessionId} — steering the turn back on track (${replaySteerings}/${MAX_REPLAY_STEERINGS})`,
+        );
+        const steerPrompt: AgentMessage = {
+          role: "system",
+          content:
+            `You are replaying the same reasoning and tool call (${roundToolSignature ?? "unknown call"}) ` +
+            `for ${replayedLoopRounds} consecutive rounds without making progress. Stop that. Do not re-issue that ` +
+            `call and do not repeat that reasoning. Change approach: take a smaller, different next step, verify the ` +
+            `last tool's actual output before calling anything, or give the user a final answer now.`,
+        };
+        history.push(steerPrompt);
+        emptyResponseRecoveryPrompts.add(steerPrompt);
+        onEvent?.({
+          type: "steering",
+          message:
+            "Steering: the model repeated the same reasoning and tool call every round. It has been asked to change approach instead of looping.",
+        });
+        // Reset the counter so a model that listens gets fresh chances; the
+        // loop continues on the corrected context.
+        replayedLoopRounds = 0;
+        replayedLoopStartContent = fullContent.length;
+        replayedLoopStartSegments = segments.length;
+        continue;
+      }
+
+      log.warn(
+        `Model replayed the same reasoning + tool call for ${replayedLoopRounds} consecutive rounds for session ${sessionId} — stopping the turn`,
+      );
+      onEvent?.({
+        type: "steering",
+        message:
+          "Stopped: the model kept repeating the same reasoning and tool call even after being steered, instead of making progress.",
+      });
+      if (fullContent || segments.length > 0 || executedToolCalls.length > 0) {
+        onPersist?.(
+          sessionId,
+          "assistant",
+          fullContent,
+          executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
+          segments.length > 0 ? JSON.stringify(segments) : undefined,
+          undefined,
         );
         persisted = true;
       }

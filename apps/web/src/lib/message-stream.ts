@@ -103,6 +103,12 @@ export interface MessageStreamWriter {
   /** Convenience: finalize a tool with a result. */
   pushToolResult(callId: string, ok: boolean, message: string, data: unknown, parentCallId?: string): void
   /**
+   * Truncate streamed visible text back to `targetLength` chars after the
+   * gateway discarded a degenerate generation (runaway repetition / replayed
+   * reasoning loop). Non-text segments (tool groups, thinking) are kept.
+   */
+  rollbackText(targetLength: number): void
+  /**
    * Register a callback to be invoked whenever the stream mutates. The caller is
    * responsible for scheduling the flush (rAF, interval, etc). `markDirty` is
    * deduplicated: multiple mutations between flushes only enqueue one call.
@@ -383,6 +389,31 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
     pushToolOutput: (callId, content, channel) => pushEvent({ type: 'tool_output', callId, content, channel }),
     pushToolResult: (callId, ok, message, data, parentCallId) =>
       pushEvent({ type: 'tool_result', callId, ok, message, data, parentCallId }),
+
+    rollbackText: (targetLength: number) => {
+      if (targetLength >= content.length) return
+      content = content.slice(0, targetLength)
+      // Rebuild text segments so their concatenation matches `content`;
+      // non-text segments (tool groups, thinking, steering) stay in place.
+      let remaining = targetLength
+      const rebuilt: MessageSegment[] = []
+      for (const seg of segments) {
+        if (seg.type !== 'text') {
+          rebuilt.push(seg)
+          continue
+        }
+        if (remaining <= 0) continue
+        if (seg.content.length <= remaining) {
+          rebuilt.push(seg)
+          remaining -= seg.content.length
+        } else {
+          rebuilt.push({ type: 'text', content: seg.content.slice(0, remaining) })
+          remaining = 0
+        }
+      }
+      segments = rebuilt
+      mark()
+    },
 
     markDirty: (callback) => {
       onDirty = callback

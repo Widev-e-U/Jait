@@ -1127,6 +1127,43 @@ function accumulateToken(sessionId: string, token: string): void {
   }
 }
 
+/**
+ * Truncate a streaming accumulator after the agent loop discarded a degenerate
+ * generation. `targetContent` is the loop's post-rollback visible-text length;
+ * `targetSegments` is its post-rollback segment count (a safe upper bound — the
+ * loop and the accumulator can drift by a steering segment or a merged tool
+ * group, so text truncation is driven by the character count, not the count).
+ */
+function rollbackAccumulator(
+  acc: StreamingAccumulator,
+  targetContent: number,
+  targetSegments: number,
+): void {
+  if (acc.content.length > targetContent) {
+    acc.content = acc.content.slice(0, targetContent);
+  }
+  const capped = targetSegments < acc.segments.length
+    ? acc.segments.slice(0, targetSegments)
+    : acc.segments;
+  let remaining = targetContent;
+  const rebuilt: StreamingAccumulator["segments"] = [];
+  for (const seg of capped) {
+    if (seg.type !== "text") {
+      rebuilt.push(seg);
+      continue;
+    }
+    if (remaining <= 0) continue;
+    if (seg.content.length <= remaining) {
+      rebuilt.push(seg);
+      remaining -= seg.content.length;
+    } else {
+      rebuilt.push({ type: "text", content: seg.content.slice(0, remaining) });
+      remaining = 0;
+    }
+  }
+  acc.segments = rebuilt;
+}
+
 /** Append a thinking/reasoning token to the streaming accumulator */
 function accumulateThinking(sessionId: string, content: string): void {
   const acc = getOrCreateAccumulator(sessionId);
@@ -3184,6 +3221,24 @@ export function registerChatRoutes(
               safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
               emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
               break;
+            case "content_rollback":
+              // The Jait provider's agent loop discarded a generation after
+              // streaming (runaway repetition / replayed-reasoning loop). Drop
+              // the already-accumulated tokens past the rollback point so the
+              // persisted message and reload snapshots don't keep the garbage.
+              {
+                const joined = contentChunks.join("");
+                if (joined.length > event.contentLength) {
+                  contentChunks.length = 0;
+                  contentChunks.push(joined.slice(0, event.contentLength));
+                }
+                tokenBytesThisBlock = 0;
+                const acc = sessionStreamingState.get(sessionId);
+                if (acc) {
+                  rollbackAccumulator(acc, event.contentLength, event.segments);
+                }
+              }
+              break;
             case "thinking":
               // ACP providers stream reasoning via agent_thought_chunk. Forward it
               // as a thinking event (matching the native agent-loop) so the web UI
@@ -3674,6 +3729,16 @@ export function registerChatRoutes(
           if (event.type === "token") accumulateToken(sessionId, event.content);
           else if (event.type === "thinking") accumulateThinking(sessionId, event.content);
           else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args, event.parent_call_id);
+          // The loop discarded a generation after streaming (runaway repetition,
+          // replayed-reasoning loop). Roll the accumulator back to the same
+          // post-rollback lengths so a reload snapshot does not keep the garbage
+          // the loop itself removed from its transcript.
+          else if (event.type === "content_rollback") {
+            const acc = sessionStreamingState.get(sessionId);
+            if (acc) {
+              rollbackAccumulator(acc, event.contentLength, event.segments);
+            }
+          }
           // Sub-agent reasoning streams on its own channel — keep it out of the
           // call's output accumulator so reload snapshots don't mix the two.
           else if (event.type === "tool_output" && event.channel !== "thinking") accumulateToolOutput(sessionId, event.call_id, event.content);

@@ -1825,6 +1825,13 @@ export function useChat(
             } else if (data.type === 'mode_notice') {
               // Mode notice — append as assistant content
               textPacer.enqueueText(`\n\n*${data.message as string}*`)
+            } else if (data.type === 'content_rollback') {
+              // The gateway discarded a degenerate generation after streaming
+              // (runaway repetition / replayed-reasoning loop); drop the
+              // already-rendered text past the rollback point.
+              textPacer.flushNow()
+              stream.rollbackText((data.contentLength as number) ?? 0)
+              updateMessage({ immediate: true })
             } else if (data.type === 'todo_list') {
               // AI updated the task list
               setTodoList(normalizeTodoStateValue(data.items))

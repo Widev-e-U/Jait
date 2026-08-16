@@ -17,6 +17,28 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('rollbackText truncates streamed text and keeps non-text segments', () => {
+    const stream = createMessageStream()
+    stream.pushText('Hello ')
+    stream.pushThinking('(thinking)')
+    stream.pushText('world and garbage')
+    stream.rollbackText('Hello world'.length)
+    const snap = stream.snapshot()
+    expect(snap.content).toBe('Hello world')
+    expect(snap.segments).toEqual([
+      { type: 'text', content: 'Hello ' },
+      { type: 'thinking', content: '(thinking)' },
+      { type: 'text', content: 'world' },
+    ])
+  })
+
+  it('rollbackText is a no-op when the target is at or past the current length', () => {
+    const stream = createMessageStream()
+    stream.pushText('abc')
+    stream.rollbackText(10)
+    expect(stream.snapshot().content).toBe('abc')
+  })
+
   it('merges consecutive same-type segments', () => {
     const stream = createMessageStream()
     stream.pushText('a')
