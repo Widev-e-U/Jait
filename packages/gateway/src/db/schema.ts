@@ -373,6 +373,24 @@ export const subAgentHistory = sqliteTable(
   ],
 );
 
+// ─── Session trajectory events (per-session SSE/stream event log) ────
+// Append-only log of stream events (request/thinking/token/tool_*/done/error)
+// per session, ordered by a monotonically increasing log_id. Used to replay a
+// chat's trajectory history and to feed live trajectory updates.
+export const sessionEvents = sqliteTable(
+  "session_events",
+  {
+    sessionId: text("session_id").notNull(),
+    logId: integer("log_id").notNull(),
+    type: text("type").notNull(),
+    payload: text("payload").notNull(), // JSON serialized stream event
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.sessionId, table.logId] }),
+  ],
+);
+
 export const messageContextMetadata = sqliteTable(
   "message_context_metadata",
   {

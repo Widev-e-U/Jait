@@ -21,8 +21,8 @@ import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from 
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
-import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable, subAgentHistory as subAgentHistoryTable } from "../db/schema.js";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable, sessionEvents as sessionEventsTable, subAgentHistory as subAgentHistoryTable } from "../db/schema.js";
+import { and, asc, desc, eq, lt, ne, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { persistSubAgentHistories, stripSubAgentPayloads } from "../lib/sub-agent-persistence.js";
@@ -1439,10 +1439,21 @@ function nextStreamSeq(sessionId: string): number {
 }
 
 function emitToSubscribers(sessionId: string, event: StreamEvent) {
+  // Append to the per-session trajectory log regardless of whether any live
+  // subscriber is connected, so trajectory/debug views can replay history.
+  persistStreamEvent(sessionId, event, Date.now());
   const subs = sessionSubscribers.get(sessionId);
   if (!subs || subs.size === 0) return;
   const sequenced = { ...event, seq: nextStreamSeq(sessionId) } as SequencedStreamEvent;
-  for (const fn of subs) fn(sequenced);
+  for (const fn of subs) {
+    try {
+      fn(sequenced);
+    } catch {
+      // A failing subscriber (e.g. a client that disconnected a moment ago and
+      // whose close event hasn't been processed yet) must not abort delivery
+      // to the other subscribers.
+    }
+  }
 }
 
 function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscriber) {
@@ -1471,6 +1482,91 @@ function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscri
 export function emitTurnDone(sessionId: string, doneEvent: StreamEvent) {
   emitToSubscribers(sessionId, doneEvent);
   sessionStreamSeq.delete(sessionId);
+}
+
+// ── Session trajectory event log ─────────────────────────────────────
+// Every stream event is appended to a per-session log (SQLite when a DB is
+// present, an in-memory ring buffer otherwise) so the trajectory view can
+// replay a session's history in addition to receiving live events. `log_id`
+// is a monotonic per-session counter; the trajectory SSE endpoint uses it to
+// dedup replay vs live delivery without relying on the per-turn `seq` field
+// (which resets on every turn and is only meaningful to live resume clients).
+const MAX_PERSISTED_EVENTS_PER_SESSION = 20_000;
+const sessionEventCounter = new Map<string, number>();
+const sessionEventBuffer = new Map<string, Array<{ log_id: number; type: string; payload: string; created_at: number }>>();
+
+type SessionEventRow = { log_id: number; type: string; payload: string; created_at: number };
+
+function seedSessionEventCounter(sessionId: string): void {
+  if (sessionEventCounter.has(sessionId)) return;
+  if (!_dbRef) {
+    sessionEventCounter.set(sessionId, 0);
+    return;
+  }
+  try {
+    const row = _dbRef
+      .select({ maxLogId: sql<number>`COALESCE(MAX(${sessionEventsTable.logId}), 0)` })
+      .from(sessionEventsTable)
+      .where(eq(sessionEventsTable.sessionId, sessionId))
+      .get();
+    sessionEventCounter.set(sessionId, row?.maxLogId ?? 0);
+  } catch {
+    sessionEventCounter.set(sessionId, 0);
+  }
+}
+
+function persistStreamEvent(sessionId: string, event: StreamEvent, ts: number): number | null {
+  seedSessionEventCounter(sessionId);
+  const logId = (sessionEventCounter.get(sessionId) ?? 0) + 1;
+  sessionEventCounter.set(sessionId, logId);
+  const payload = JSON.stringify(event);
+  if (_dbRef) {
+    try {
+      _dbRef.insert(sessionEventsTable)
+        .values({ sessionId, logId, type: event.type, payload, createdAt: ts })
+        .run();
+      // Keep the log bounded: prune the oldest rows occasionally.
+      if (logId % 200 === 0) {
+        _dbRef.delete(sessionEventsTable)
+          .where(and(
+            eq(sessionEventsTable.sessionId, sessionId),
+            lt(sessionEventsTable.logId, logId - MAX_PERSISTED_EVENTS_PER_SESSION),
+          ))
+          .run();
+      }
+    } catch {
+      return null;
+    }
+  } else {
+    const buf = sessionEventBuffer.get(sessionId) ?? [];
+    buf.push({ log_id: logId, type: event.type, payload, created_at: ts });
+    if (buf.length > MAX_PERSISTED_EVENTS_PER_SESSION) {
+      buf.splice(0, buf.length - MAX_PERSISTED_EVENTS_PER_SESSION);
+    }
+    sessionEventBuffer.set(sessionId, buf);
+  }
+  return logId;
+}
+
+function loadSessionEvents(sessionId: string): SessionEventRow[] {
+  if (_dbRef) {
+    try {
+      return _dbRef
+        .select({
+          log_id: sessionEventsTable.logId,
+          type: sessionEventsTable.type,
+          payload: sessionEventsTable.payload,
+          created_at: sessionEventsTable.createdAt,
+        })
+        .from(sessionEventsTable)
+        .where(eq(sessionEventsTable.sessionId, sessionId))
+        .orderBy(asc(sessionEventsTable.logId))
+        .all();
+    } catch {
+      return [];
+    }
+  }
+  return sessionEventBuffer.get(sessionId) ?? [];
 }
 
 function parseMessageLimit(raw: unknown): number {
@@ -2791,6 +2887,22 @@ export function registerChatRoutes(
       safeWrite(`: keepalive\n\n`);
     }, 15_000);
     reply.raw.on("close", () => { clearInterval(keepalive); });
+
+    // Start of a new turn: emit a synthetic `request` event so trajectory/
+    // debug consumers get a turn boundary with the prompt + provider metadata.
+    // The existing message consumers ignore unknown event types, so this is
+    // purely additive. The client-side debug log no longer synthesizes its own
+    // `request` push — the gateway is the single source for turn boundaries.
+    const requestEvent = {
+      type: "request",
+      content,
+      provider: requestProvider ?? "jait",
+      ...(requestBodyModel ? { model: requestBodyModel } : {}),
+      mode: chatMode,
+      ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
+    } as unknown as StreamEvent;
+    safeWrite(`data: ${JSON.stringify(requestEvent)}\n\n`);
+    emitToSubscribers(sessionId, requestEvent);
 
     const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
@@ -4380,6 +4492,92 @@ export function registerChatRoutes(
     // Clean up subscription if client disconnects before stream finishes
     request.raw.on("close", () => {
       closeStream();
+    });
+  });
+
+  // ══ GET /api/sessions/:sessionId/trajectory — trajectory history + live ══
+  // SSE stream that first replays the session's persisted stream-event log
+  // (old data), then forwards live events as the agent streams. Clients dedup
+  // by `log_id` (replay events carry `replay: true`). Unlike the resume stream
+  // it stays open across turns — a keepalive keeps idle sockets alive — so an
+  // open trajectory panel keeps receiving every new turn's events without
+  // reconnecting between turns.
+  app.get("/api/sessions/:sessionId/trajectory", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    const reqOrigin = request.headers.origin ?? "*";
+    writeSseHead(reply, {
+      "Access-Control-Allow-Origin": String(reqOrigin),
+      "Access-Control-Allow-Credentials": "true",
+    });
+
+    let closed = false;
+    let unsubscribe = () => {};
+    let keepalive: ReturnType<typeof setInterval> | null = null;
+    const closeStream = () => {
+      if (closed) return;
+      closed = true;
+      if (keepalive) clearInterval(keepalive);
+      unsubscribe();
+      try { reply.raw.end(); } catch { /* already closed */ }
+    };
+    reply.raw.on("close", () => closeStream());
+    request.raw.on("close", () => closeStream());
+
+    // Replay the persisted log first. The replay-read + subscribe-registration
+    // block below is synchronous, so no event can be logged between the two:
+    // every event already in the log was replayed, and every event emitted from
+    // here on has log_id > lastLogId and is forwarded exactly once.
+    const history = loadSessionEvents(sessionId);
+    let lastLogId = 0;
+    for (const ev of history) {
+      lastLogId = ev.log_id;
+      let payloadObj: unknown;
+      try { payloadObj = JSON.parse(ev.payload); } catch { payloadObj = {}; }
+      writeSseChunk(reply, `data: ${JSON.stringify({
+        type: "trajectory_event",
+        log_id: ev.log_id,
+        ts: ev.created_at,
+        replay: true,
+        payload: payloadObj,
+      })}\n\n`);
+    }
+
+    // Keep the connection alive during idle periods between turns so browsers
+    // /proxies don't drop it with "fetch failed".
+    keepalive = setInterval(() => {
+      if (closed) return;
+      try { writeSseChunk(reply, `: keepalive\n\n`); } catch { closeStream(); }
+    }, 15_000);
+
+    unsubscribe = subscribe(sessionId, 0, (event) => {
+      if (closed) return;
+      // Only forward events not already covered by the replay above. Events
+      // logged before this subscription registered were replayed; the counter
+      // is advanced synchronously at emit time, so a delivered event's counter
+      // value is its true log id.
+      const logId = sessionEventCounter.get(sessionId) ?? lastLogId;
+      if (logId <= lastLogId) return;
+      try {
+        writeSseChunk(reply, `data: ${JSON.stringify({
+          type: "trajectory_event",
+          log_id: logId,
+          ts: Date.now(),
+          replay: false,
+          payload: event,
+        })}\n\n`);
+      } catch {
+        // Client went away mid-fan-out — drop this connection without letting
+        // the write error abort delivery to the other subscribers.
+        closeStream();
+      }
     });
   });
 

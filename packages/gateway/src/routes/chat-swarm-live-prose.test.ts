@@ -125,7 +125,10 @@ describe("swarm specialist live prose (native jait provider)", () => {
       console.log("TYPES:", types.join(","));
       const prose = events.find((e) => e.type === "tool_output" && String(e.content).includes("specialist live prose"));
       const agentResultIdx = events.findIndex((e) => e.type === "tool_result");
-      expect(types[0]).toBe("mode_notice");
+      // The gateway emits a synthetic `request` turn-boundary event first, then
+      // the agent loop emits the `mode_notice`.
+      expect(types[0]).toBe("request");
+      expect(types).toContain("mode_notice");
       expect(prose, "expected a live tool_output with specialist prose. Types: " + types.join(",")).toBeTruthy();
       const proseIdx = events.indexOf(prose);
       if (agentResultIdx !== -1) expect(proseIdx).toBeLessThan(agentResultIdx);

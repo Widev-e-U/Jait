@@ -1496,5 +1496,22 @@ export const migrations: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_agent_history_message ON sub_agent_history(message_id)`);
     },
   },
+  // ─── 061: Session trajectory event log ────────────────────────────
+  {
+    id: 61,
+    name: "session_events_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_events (
+          session_id TEXT NOT NULL,
+          log_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (session_id, log_id)
+        )
+      `);
+    },
+  },
 
 ];

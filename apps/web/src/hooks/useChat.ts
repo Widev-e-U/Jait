@@ -1680,7 +1680,9 @@ export function useChat(
         ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
         ...(outboundAttachments?.length ? { attachments: outboundAttachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
       }
-      pushSSEDebugEvent('request', JSON.stringify(requestBody))
+      // The gateway emits its own `request` event at turn start (with prompt +
+      // provider metadata), so the trajectory/debug log gets a single source.
+      // The full request body is still sent below.
 
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',

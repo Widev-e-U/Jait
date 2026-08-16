@@ -508,7 +508,7 @@ export function DeveloperChatWorkspace({
     >
       {!chatCollapsed && (
         <>
-          {isProjectChat && activeProjectHasRepo && (
+          {!showDebugPanel && isProjectChat && activeProjectHasRepo && (
             <div className="absolute top-2 left-2 z-10">
               <GitDiffIndicator
                 projectRoot={activeProjectRoot}
@@ -530,7 +530,7 @@ export function DeveloperChatWorkspace({
             // Trajectory/debug mode replaces only the transcript — the composer
             // and its controls stay, and auto-scroll keeps matching the chat.
             <ErrorBoundary name="Trajectory panel" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, showDebugPanel]}>
-              <TrajectoryPanel onClose={onCloseDebugPanel} />
+              <TrajectoryPanel onClose={onCloseDebugPanel} sessionId={activeSessionId} token={token} />
             </ErrorBoundary>
           ) : (
             <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>

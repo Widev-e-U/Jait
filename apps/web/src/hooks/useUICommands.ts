@@ -766,7 +766,14 @@ export function useUICommands(opts: UseUICommandsOptions) {
         closeSocket()
         return
       }
-      if (!wsRef.current) connect()
+      // Force a fresh connection on resume. Mobile browsers often suspend the
+      // socket in the background without firing `close` (or the close races
+      // with resume), so wsRef.current can still be set here even though we
+      // missed broadcasts. Reconnect unconditionally so the gateway re-pushes
+      // the authoritative `session.streaming-snapshot` and the sidebar never
+      // keeps a stale streaming spinner after the tab was hidden.
+      closeSocket()
+      connect()
     }
 
     connect()

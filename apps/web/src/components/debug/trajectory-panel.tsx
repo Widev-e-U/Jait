@@ -3,11 +3,17 @@ import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search } from 'lucid
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { clearSSEDebugEvents, useSSEDebugEvents } from './sse-debug-panel'
+import { useSessionTrajectory } from './use-session-trajectory'
 import type { TrajectoryStep } from './trajectory-builder'
 import { buildTrajectory } from './trajectory-builder'
 
 interface TrajectoryPanelProps {
   onClose: () => void
+  /** Active chat session — when present the panel streams the session's
+   *  trajectory (replay of persisted history + live events) from the gateway. */
+  sessionId?: string | null
+  /** Auth token for the trajectory SSE stream. */
+  token?: string | null
 }
 
 const STEP_ROW_HEIGHT = 24
@@ -118,8 +124,14 @@ function stepDetailText(step: TrajectoryStep): string {
   }
 }
 
-export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
-  const events = useSSEDebugEvents()
+export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelProps) {
+  // When an active session is available, consume the gateway's per-session
+  // trajectory stream (persisted history replay + live events) instead of the
+  // in-memory debug log — so the panel shows the session's old data and keeps
+  // receiving live events even after a reload or session switch.
+  const sessionTrajectory = useSessionTrajectory(sessionId ?? null, token ?? null)
+  const globalEvents = useSSEDebugEvents()
+  const events = sessionId ? sessionTrajectory.events : globalEvents
   const { meta, steps } = useMemo(() => buildTrajectory(events), [events])
   const scrollRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState('')
@@ -233,6 +245,15 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {sessionId && (
+            <span
+              title={sessionTrajectory.connected ? 'Live stream connected' : 'Live stream reconnecting…'}
+              className={cn(
+                'h-1.5 w-1.5 rounded-full shrink-0',
+                sessionTrajectory.connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse',
+              )}
+            />
+          )}
           <div className="relative">
             <Search className="h-3 w-3 text-zinc-500 absolute left-1.5 top-1/2 -translate-y-1/2" />
             <input
@@ -246,7 +267,7 @@ export function TrajectoryPanel({ onClose }: TrajectoryPanelProps) {
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy} title="Copy trajectory">
             {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
           </Button>
-          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={clearSSEDebugEvents} title="Clear events">
+          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => (sessionId ? sessionTrajectory.clear() : clearSSEDebugEvents())} title="Clear events">
             <Trash2 className="h-3 w-3" />
           </Button>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onClose}>

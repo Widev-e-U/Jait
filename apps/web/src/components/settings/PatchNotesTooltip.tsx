@@ -21,6 +21,19 @@ export function PatchNotesTooltip({
 }) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  // Only show the hover card on devices that actually support hover. On touch
+  // devices tapping the update button fires onMouseEnter/onFocus, which would
+  // open this full-width bottom sheet and cover the button — making it
+  // impossible to click or read. So we gate the tooltip behind hover support.
+  const [canHover, setCanHover] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)')
+    setCanHover(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setCanHover(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const release = notes?.find((n) => n.version === targetVersion)
 
@@ -39,10 +52,10 @@ export function PatchNotesTooltip({
     <div
       ref={wrapperRef}
       className="relative inline-flex"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
+      onMouseEnter={() => canHover && setOpen(true)}
+      onMouseLeave={() => canHover && setOpen(false)}
+      onFocus={() => canHover && setOpen(true)}
+      onBlur={() => canHover && setOpen(false)}
     >
       {children}
       {open && release && (
