@@ -268,18 +268,6 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       ),
     [messageEstimateInputs],
   )
-  const minimapErrorContents = useMemo<string[][]>(
-    () =>
-      (messageEstimateInputs ?? []).map((message) => {
-        const segments = message && typeof message === 'object' && Array.isArray(message.segments) ? message.segments : []
-        const segmentErrors = segments.flatMap((segment) =>
-          segment && typeof segment === 'object' && 'type' in segment && segment.type === 'error'
-            && 'content' in segment && typeof segment.content === 'string' ? [segment.content] : [],
-        )
-        return segmentErrors.length > 0 ? segmentErrors : typeof message?.error === 'string' ? [message.error] : []
-      }),
-    [messageEstimateInputs],
-  )
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
@@ -953,7 +941,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           scrollElement={scrollElement}
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
-          errorContents={minimapErrorContents}
+          messageInputs={messageEstimateInputs ?? []}
           textWidth={containerWidth}
           onScrub={detachFromBottom}
         />
@@ -970,8 +958,8 @@ interface ConversationMinimapProps {
   roles: Array<'user' | 'agent'>
   /** Per-child raw text, index-aligned with the virtualizer items. */
   texts: string[]
-  /** Error-segment text per child, rendered as red minimap lines. */
-  errorContents: string[][]
+  /** Per-child message structure, including interleaved thinking and tool rows. */
+  messageInputs: MinimapMessageInput[]
   /**
    * Width of the inner text column, in px. Used to wrap preview lines at the
    * same width the real prose wraps at, so each rail line mirrors an actual
@@ -1051,6 +1039,132 @@ function minimapLineShapeFallback(text: string, wrapWidth: number): number[] {
     }
   }
   return widths.length > 0 ? widths : MINIMAP_EMPTY_SHAPE
+}
+
+interface MinimapMessageInput {
+  content?: unknown
+  thinking?: unknown
+  toolCalls?: unknown
+  segments?: unknown
+  role?: 'user' | 'agent'
+  error?: unknown
+}
+
+export interface MinimapMessageShape {
+  widths: number[]
+  errorLines: boolean[]
+  userLines: boolean[]
+}
+
+/** Build the minimap rows represented by one rendered message. */
+export function computeMinimapMessageShape(
+  message: MinimapMessageInput | null | undefined,
+  text: string,
+  wrapWidth: number,
+): MinimapMessageShape {
+  const widths: number[] = []
+  const errorLines: boolean[] = []
+  const userLines: boolean[] = []
+  const messageIsUser = message?.role === 'user'
+  const push = (lineWidths: number[], options?: { error?: boolean; user?: boolean }) => {
+    for (const width of lineWidths) {
+      widths.push(width)
+      errorLines.push(options?.error === true)
+      userLines.push(options?.user ?? messageIsUser)
+    }
+  }
+
+  const rawToolCalls = Array.isArray(message?.toolCalls) ? message.toolCalls : []
+  const toolCalls = rawToolCalls.filter((call): call is Record<string, unknown> => call != null && typeof call === 'object')
+  const toolCallsById = new Map(
+    toolCalls.flatMap((call) => typeof call.callId === 'string' ? [[call.callId, call] as const] : []),
+  )
+  const segments = message && Array.isArray(message.segments) ? message.segments : []
+  let renderedStructuredRow = false
+  let hasErrorSegment = false
+
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index]
+    if (!segment || typeof segment !== 'object' || !('type' in segment)) continue
+    const type = segment.type
+    const content = 'content' in segment && typeof segment.content === 'string' ? segment.content : ''
+
+    if (type === 'text' && content.trim()) {
+      push(computeMinimapLineShape(content, wrapWidth))
+      renderedStructuredRow = true
+    } else if (type === 'thinking' && content.trim()) {
+      push([0.42])
+      renderedStructuredRow = true
+    } else if (type === 'toolGroup') {
+      const rawCallIds: unknown[] = 'callIds' in segment && Array.isArray(segment.callIds)
+        ? segment.callIds
+        : []
+      const callIds = rawCallIds.filter((callId: unknown): callId is string =>
+        typeof callId === 'string' && callId.length > 0,
+      )
+      if (callIds.length === 0) continue
+      const calls: Record<string, unknown>[] = callIds.flatMap((callId: string) => {
+        const call = toolCallsById.get(callId)
+        return call ? [call] : []
+      })
+      const topLevelCalls = calls.filter((call: Record<string, unknown>) => {
+        const parentCallId = typeof call.parentCallId === 'string' ? call.parentCallId : undefined
+        return !parentCallId || !callIds.includes(parentCallId)
+      })
+      const representedCallCount = topLevelCalls.length > 0 ? topLevelCalls.length : callIds.length
+      const allComplete = calls.length === callIds.length && calls.every((call: Record<string, unknown>) =>
+        call.status !== 'running' && call.status !== 'pending',
+      )
+      const followedByText = segments.slice(index + 1).some((candidate) =>
+        candidate && typeof candidate === 'object' && 'type' in candidate && candidate.type === 'text'
+          && 'content' in candidate && typeof candidate.content === 'string' && candidate.content.trim(),
+      )
+      const visibleRows = allComplete && followedByText && representedCallCount >= 3
+        ? 1
+        : Math.min(representedCallCount, 6) + (representedCallCount > 6 ? 1 : 0)
+      push(Array.from({ length: Math.max(visibleRows, 1) }, () => 0.72))
+      renderedStructuredRow = true
+    } else if (type === 'error') {
+      push(computeMinimapLineShape(content, wrapWidth), { error: true })
+      renderedStructuredRow = true
+      hasErrorSegment = true
+    } else if (type === 'steering') {
+      const displayContent = 'displayContent' in segment && typeof segment.displayContent === 'string'
+        ? segment.displayContent
+        : content
+      push([0.38], { user: true })
+      if (displayContent.trim()) push(computeMinimapLineShape(displayContent, wrapWidth), { user: true })
+      renderedStructuredRow = true
+    }
+  }
+
+  if (!renderedStructuredRow) {
+    if (typeof message?.thinking === 'string' && message.thinking.trim()) push([0.42])
+    if (toolCalls.length > 0) {
+      const allComplete = toolCalls.every((call) => call.status !== 'running' && call.status !== 'pending')
+      const visibleRows = allComplete && toolCalls.length >= 3
+        ? 1
+        : Math.min(toolCalls.length, 6) + (toolCalls.length > 6 ? 1 : 0)
+      push(Array.from({ length: visibleRows }, () => 0.72))
+    }
+    if (text.trim()) push(computeMinimapLineShape(text, wrapWidth))
+  }
+
+  if (!hasErrorSegment && typeof message?.error === 'string' && message.error.trim() && message.error !== text) {
+    push(computeMinimapLineShape(message.error, wrapWidth), { error: true })
+  }
+  if (widths.length === 0) push(MINIMAP_EMPTY_SHAPE)
+
+  return { widths, errorLines, userLines }
+}
+
+export function canReuseMinimapMessageShape(
+  cached: { text: string; message: MinimapMessageInput | undefined; wrapWidth: number },
+  current: { text: string; message: MinimapMessageInput | undefined; wrapWidth: number },
+): boolean {
+  return cached.text === current.text
+    && cached.message === current.message
+    && cached.wrapWidth === current.wrapWidth
 }
 
 /**
@@ -1149,8 +1263,9 @@ export function computeMinimapRows({
         key: `${blockIndex}:${lineIndex}`,
         y: documentOffset * scale,
         width,
-        isUser: block.role === 'user',
-        isError: block.errorStart !== undefined && lineIndex >= block.errorStart,
+        isUser: block.userLines?.[lineIndex] ?? block.role === 'user',
+        isError: block.errorLines?.[lineIndex]
+          ?? (block.errorStart !== undefined && lineIndex >= block.errorStart),
       })
     }
   }
@@ -1163,7 +1278,7 @@ export function computeMinimapRows({
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-function ConversationMinimap({ virtualizer, scrollElement, roles, texts, errorContents, textWidth, onScrub }: ConversationMinimapProps) {
+function ConversationMinimap({ virtualizer, scrollElement, roles, texts, messageInputs, textWidth, onScrub }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -1187,9 +1302,14 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, errorCo
   // Reads (and populates) the virtualizer's measurement cache below.
   const totalSize = virtualizer.getTotalSize()
 
-  // Line shapes are derived once per message and reused until its text changes,
-  // so a streaming turn only re-splits its own content, not the whole history.
-  const shapeCacheRef = useRef(new Map<number, { text: string; errorsKey: string; widths: number[]; errorStart?: number }>())
+  // Line shapes are derived once per message and reused until its content or
+  // wrapping width changes, so a streaming turn only re-splits its own rows.
+  const shapeCacheRef = useRef(new Map<number, {
+    text: string
+    message: MinimapMessageInput | undefined
+    wrapWidth: number
+    shape: MinimapMessageShape
+  }>())
 
   // Wrap preview lines at the same column width the real prose wraps at, so the
   // rail's line breaks line up with the transcript's.
@@ -1225,30 +1345,29 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, errorCo
       if (!measurement || measurement.size <= 0) continue
       const role = roles[index] ?? 'agent'
       const text = texts[index] ?? ''
-      const errors = errorContents[index] ?? []
-      const errorsKey = errors.join('\u0000')
+      const message = messageInputs[index]
       const cached = cache.get(index)
-      let widths: number[]
-      let errorStart: number | undefined
-      if (cached && cached.text === text && cached.errorsKey === errorsKey) {
-        widths = cached.widths
-        errorStart = cached.errorStart
+      const current = { text, message, wrapWidth }
+      let shape: MinimapMessageShape
+      if (cached && canReuseMinimapMessageShape(cached, current)) {
+        shape = cached.shape
       } else {
-        const contentIsOnlyError = errors.length === 1 && errors[0] === text
-        const contentWidths = errors.length > 0 && (!text.trim() || contentIsOnlyError)
-          ? []
-          : computeMinimapLineShape(text, wrapWidth)
-        const errorWidths = errors.flatMap((error) => computeMinimapLineShape(error, wrapWidth))
-        widths = [...contentWidths, ...errorWidths]
-        errorStart = errorWidths.length > 0 ? contentWidths.length : undefined
-        cache.set(index, { text, errorsKey, widths, errorStart })
+        shape = computeMinimapMessageShape(message, text, wrapWidth)
+        cache.set(index, { ...current, shape })
       }
-      out.push({ start: measurement.start, end: measurement.start + measurement.size, role, widths, errorStart })
+      out.push({
+        start: measurement.start,
+        end: measurement.start + measurement.size,
+        role,
+        widths: shape.widths,
+        errorLines: shape.errorLines,
+        userLines: shape.userLines,
+      })
     }
     return out
     // `totalSize` stands in for the measurement cache, which mutates in place:
     // it changes whenever an item is measured or the list grows.
-  }, [errorContents, roles, texts, totalSize, virtualizer, wrapWidth])
+  }, [messageInputs, roles, texts, totalSize, virtualizer, wrapWidth])
 
   const rows = useMemo(
     () => computeMinimapRows({ blocks, viewportHeight, totalSize }),
@@ -1314,6 +1433,10 @@ export interface MinimapBlock {
   role: 'user' | 'agent'
   /** First line belonging to an error segment, when present. */
   errorStart?: number
+  /** Per-line error classification for interleaved content. */
+  errorLines?: boolean[]
+  /** Per-line right-alignment override for steered user content. */
+  userLines?: boolean[]
 }
 
 export interface MinimapRow {

@@ -32,7 +32,9 @@ vi.mock('@chenglou/pretext', () => {
 import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
+  canReuseMinimapMessageShape,
   computeMinimapLineShape,
+  computeMinimapMessageShape,
   computeMinimapRows,
   computeNewTurnTailPadding,
   computeMinimapScrollTop,
@@ -272,6 +274,38 @@ describe('computeMinimapLineShape', () => {
 
   it('bounds the shape of a huge paste', () => {
     expect(computeMinimapLineShape('a'.repeat(2_000_000), 512).length).toBeLessThanOrEqual(4000)
+  })
+})
+
+describe('computeMinimapMessageShape', () => {
+  it('includes interleaved thinking and tool-card rows instead of dropping them', () => {
+    const message = {
+      role: 'agent' as const,
+      segments: [
+        { type: 'text', content: 'before' },
+        { type: 'thinking', content: 'checking the implementation' },
+        { type: 'toolGroup', callIds: ['read-1', 'read-2'] },
+        { type: 'text', content: 'after' },
+        { type: 'error', content: 'failed' },
+      ],
+      toolCalls: [
+        { callId: 'read-1', status: 'success' },
+        { callId: 'read-2', status: 'success' },
+      ],
+    }
+
+    const shape = computeMinimapMessageShape(message, 'before\nafter', 512)
+
+    expect(shape.widths).toHaveLength(6)
+    expect(shape.errorLines).toEqual([false, false, false, false, false, true])
+  })
+
+  it('invalidates a cached shape when the transcript width changes', () => {
+    const message = { role: 'agent' as const, content: 'wrapped text' }
+    expect(canReuseMinimapMessageShape(
+      { text: 'wrapped text', message, wrapWidth: 512 },
+      { text: 'wrapped text', message, wrapWidth: 256 },
+    )).toBe(false)
   })
 })
 
