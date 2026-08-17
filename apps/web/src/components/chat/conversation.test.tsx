@@ -331,8 +331,17 @@ describe('computeMinimapRows', () => {
     })
 
     expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.y)).toEqual([0, 75, 225])
+    expect(rows.map((row) => row.y)).toEqual([0, 8, 24])
     expect(rows.map((row) => row.width)).toEqual([1, 0.75, 0.5])
+  })
+
+  it('marks only error-segment lines as errors', () => {
+    const rows = computeMinimapRows({
+      blocks: [{ start: 0, end: 120, role: 'agent', widths: [1, 0.8, 0.6], errorStart: 2 }],
+      viewportHeight: 120,
+      totalSize: 120,
+    })
+    expect(rows.map((row) => row.isError)).toEqual([false, false, true])
   })
 
   it('keeps a rail row and the scroll it scrubs to pointing at the same message', () => {

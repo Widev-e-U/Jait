@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
 import { ProjectMoveError, type ProjectService } from "../services/projects.js";
@@ -21,6 +22,32 @@ export interface ProjectEntityRouteDeps {
   gitService?: GitService;
   ws?: WsControlPlane;
   userService?: UserService;
+}
+
+export type RootPathStatus = "available" | "missing" | "unreachable";
+
+export async function resolveProjectRootPathStatus(
+  rootPath: string | null | undefined,
+  nodeId: string | null | undefined,
+  ws?: WsControlPlane,
+): Promise<RootPathStatus | null> {
+  const normalizedRoot = rootPath?.trim();
+  if (!normalizedRoot) return null;
+
+  const targetNodeId = nodeId?.trim() || "gateway";
+  if (targetNodeId === "gateway") {
+    return existsSync(normalizedRoot) ? "available" : "missing";
+  }
+
+  const connected = ws?.getFsNodes().some((node) => node.id === targetNodeId && !node.isGateway) ?? false;
+  if (!connected || !ws) return "unreachable";
+
+  try {
+    const exists = await ws.proxyFsOp<boolean>(targetNodeId, "exists", { path: normalizedRoot });
+    return exists ? "available" : "missing";
+  } catch {
+    return "unreachable";
+  }
 }
 
 export function registerProjectEntityRoutes(
@@ -84,6 +111,13 @@ export function registerProjectEntityRoutes(
     } | null | undefined;
     return { ...project, editorModeActive: ui?.panel?.open === true };
   };
+
+  const withProjectStatus = async <
+    T extends { id: string; rootPath?: string | null; nodeId?: string | null },
+  >(project: T): Promise<T & { editorModeActive: boolean; rootPathStatus: RootPathStatus | null }> => ({
+    ...withEditorModeStatus(project),
+    rootPathStatus: await resolveProjectRootPathStatus(project.rootPath, project.nodeId, deps.ws),
+  });
 
   /** Broadcast a project event over WS to the owning user's other clients */
   const broadcastProjectEvent = (
@@ -186,8 +220,9 @@ export function registerProjectEntityRoutes(
 
     await maybeAssignProjectRepo(project.id, authUser.id);
     const created = projectService.getById(project.id, authUser.id) ?? project;
-    broadcastProjectEvent(authUser.id, "created", { project: created });
-    return reply.status(201).send(created);
+    const projectWithStatus = await withProjectStatus(created);
+    broadcastProjectEvent(authUser.id, "created", { project: projectWithStatus });
+    return reply.status(201).send(projectWithStatus);
   });
 
   app.get("/api/projects", async (request, reply) => {
@@ -200,7 +235,7 @@ export function registerProjectEntityRoutes(
     const result = projectService.listWithSessions(authUser.id, status, limit);
     return {
       ...result,
-      projects: result.projects.map(withEditorModeStatus),
+      projects: await Promise.all(result.projects.map(withProjectStatus)),
     };
   });
 
@@ -213,7 +248,7 @@ export function registerProjectEntityRoutes(
     const result = projectService.searchWithSessions(authUser.id, search);
     return {
       ...result,
-      projects: result.projects.map(withEditorModeStatus),
+      projects: await Promise.all(result.projects.map(withProjectStatus)),
     };
   });
 
@@ -287,7 +322,7 @@ export function registerProjectEntityRoutes(
     if (!project) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
-    return withEditorModeStatus({
+    return withProjectStatus({
       ...project,
       sessions: sessionService.listByProject(id, "active", authUser.id),
     });
@@ -340,8 +375,9 @@ export function registerProjectEntityRoutes(
     if (rootPath !== undefined && !rootPath?.trim()) projectService.clearRepository(id, authUser.id);
     await maybeAssignProjectRepo(id, authUser.id);
     const updated = projectService.getById(id, authUser.id);
-    broadcastProjectEvent(authUser.id, "updated", { project: updated });
-    return updated;
+    const projectWithStatus = updated ? await withProjectStatus(updated) : updated;
+    broadcastProjectEvent(authUser.id, "updated", { project: projectWithStatus });
+    return projectWithStatus;
   });
 
   app.post("/api/projects/:id/move", async (request, reply) => {
@@ -359,8 +395,12 @@ export function registerProjectEntityRoutes(
 
     try {
       const moved = projectService.move(id, parentId, authUser.id);
-      broadcastProjectEvent(authUser.id, "updated", { project: moved });
-      return moved;
+      if (!moved) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
+      }
+      const projectWithStatus = await withProjectStatus(moved);
+      broadcastProjectEvent(authUser.id, "updated", { project: projectWithStatus });
+      return projectWithStatus;
     } catch (err) {
       if (err instanceof ProjectMoveError) {
         return reply.status(400).send({ error: err.code, details: err.message });
@@ -407,8 +447,9 @@ export function registerProjectEntityRoutes(
         repoId,
         ws: deps.ws,
       });
-      broadcastProjectEvent(authUser.id, "updated", { project: assignment.project });
-      return assignment;
+      const projectWithStatus = await withProjectStatus(assignment.project);
+      broadcastProjectEvent(authUser.id, "updated", { project: projectWithStatus });
+      return { ...assignment, project: projectWithStatus };
     } catch (err) {
       return sendAssignmentError(reply, err);
     }
@@ -449,8 +490,9 @@ export function registerProjectEntityRoutes(
     sessionService.restoreByProject(id, authUser.id);
     projectService.restore(id, authUser.id);
     const restored = projectService.getById(id, authUser.id);
-    broadcastProjectEvent(authUser.id, "restored", { project: restored });
-    return restored;
+    const projectWithStatus = restored ? await withProjectStatus(restored) : restored;
+    broadcastProjectEvent(authUser.id, "restored", { project: projectWithStatus });
+    return projectWithStatus;
   });
 
   app.delete("/api/projects/:id", async (request, reply) => {

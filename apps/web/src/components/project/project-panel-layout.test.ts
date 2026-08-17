@@ -5,6 +5,7 @@ import {
   DRAG_SNAP_MIN,
   getDesktopProjectPanelStyle,
   resolveDragEndSize,
+  resolvePersistedResizeSize,
   toggleDesktopProjectTreeVisibility,
 } from './project-panel-layout'
 
@@ -75,6 +76,17 @@ describe('project panel desktop layout', () => {
       tree: true,
       editor: false,
     })
+  })
+})
+
+describe('resolvePersistedResizeSize', () => {
+  it('restores a valid per-project panel width below the default width', () => {
+    expect(resolvePersistedResizeSize(640, 400, 1316)).toBe(640)
+  })
+
+  it('still clamps persisted widths to the current viewport constraints', () => {
+    expect(resolvePersistedResizeSize(320, 400, 1316)).toBe(400)
+    expect(resolvePersistedResizeSize(1600, 400, 1316)).toBe(1316)
   })
 })
 

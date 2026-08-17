@@ -4407,7 +4407,7 @@ function App() {
     onSearchFiles: handleSearchFiles,
     projectOpen: showProject,
     sessionInfo,
-    projectNodeId: activeProject?.nodeId,
+    projectNodeId: activeProject?.nodeId ?? activeProjectRecord?.nodeId ?? undefined,
     projectId: activeProjectId,
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
@@ -4415,7 +4415,7 @@ function App() {
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
     chatReasoningEffort, handleChatReasoningEffortChange,
-    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectId,
+    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectRecord?.nodeId, activeProjectId,
   ])
 
   const activityEvents: ActivityEvent[] = [
@@ -4849,7 +4849,7 @@ function App() {
                 promptBeforeProcessingQueuedMessage={promptBeforeProcessingQueuedMessage}
                 pendingPlan={pendingPlan}
                 previewOpen={previewOpen}
-                projectNodeId={activeProject?.nodeId}
+                projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
                 projectSuggestions={projectSuggestions}
                 projects={projects}
                 projectsLoading={projectsLoading}

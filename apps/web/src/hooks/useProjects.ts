@@ -44,6 +44,8 @@ export interface ProjectRecord {
   metadata: string | null
   /** Persisted project editor-panel activation state. */
   editorModeActive?: boolean
+  /** Current reachability of the saved project directory on its assigned node. */
+  rootPathStatus?: 'available' | 'missing' | 'unreachable' | null
   sessions: ProjectSession[]
 }
 

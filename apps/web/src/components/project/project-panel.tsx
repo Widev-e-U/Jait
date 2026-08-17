@@ -23,7 +23,13 @@ import { saveDetachedProjectTab, type DetachedProjectTabPayload } from '@/lib/de
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchProjectContent } from '@/lib/project-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './project-git-actions'
-import { DRAG_SNAP_MAX, DRAG_SNAP_MIN, getDesktopProjectPanelStyle, resolveDragEndSize } from './project-panel-layout'
+import {
+  DRAG_SNAP_MAX,
+  DRAG_SNAP_MIN,
+  getDesktopProjectPanelStyle,
+  resolveDragEndSize,
+  resolvePersistedResizeSize,
+} from './project-panel-layout'
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import type { FsChangesPayload } from '@jait/shared'
 import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
@@ -860,7 +866,7 @@ function useDragResize(
     if (typeof window === 'undefined') return initial
     // Per-project persisted value wins over the global localStorage fallback.
     if (persistedInitial != null && Number.isFinite(persistedInitial)) {
-      return Math.min(max, Math.max(min, minStoredSize, persistedInitial))
+      return resolvePersistedResizeSize(persistedInitial, min, max)
     }
     if (!storageKey) return initial
     const raw = window.localStorage.getItem(storageKey)
@@ -905,9 +911,9 @@ function useDragResize(
     if (appliedPersistedRef.current || userDraggedRef.current) return
     if (collapsed || maxCollapsed) return
     appliedPersistedRef.current = true
-    const clamped = Math.min(max, Math.max(min, minStoredSize, persistedInitial))
+    const clamped = resolvePersistedResizeSize(persistedInitial, min, max)
     setSize((prev) => (prev === clamped ? prev : clamped))
-  }, [persistedInitial, min, max, minStoredSize, collapsed, maxCollapsed])
+  }, [persistedInitial, min, max, collapsed, maxCollapsed])
 
   // Keep cachedSizeRef in sync with actual size when not collapsed
   useEffect(() => {

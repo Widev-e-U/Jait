@@ -81,6 +81,22 @@ describe('SessionSelector', () => {
     expect(markup).not.toContain('Personal chats')
   })
 
+  it('marks projects whose folder path is missing', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject({ rootPathStatus: 'missing' })]}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('Path not found')
+    expect(markup).toContain('/workspace/jait')
+  })
+
   it('shows five recent personal chats and offers to reveal older ones', () => {
     const personalSessions = Array.from({ length: 6 }, (_, index) => ({
       id: `personal-${index + 1}`,

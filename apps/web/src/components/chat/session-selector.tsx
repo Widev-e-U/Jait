@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -549,6 +549,7 @@ export function SessionSelector({
                     ? nodes.find((n) => n.id === project.nodeId)
                     : null
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
+                  const pathMissing = project.rootPathStatus === 'missing'
                   const repository = getProjectRepository(project, repositories)
                   const sortedSessions = [...project.sessions]
                     .sort((a, b) => (
@@ -627,6 +628,8 @@ export function SessionSelector({
                         >
                           {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                         </button>
+                      ) : pathMissing ? (
+                        <FolderX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
                       ) : isActiveProject ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                       ) : (
@@ -676,6 +679,15 @@ export function SessionSelector({
                           <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">Node offline</span>
+                          </div>
+                        )}
+                        {pathMissing && (
+                          <div
+                            className="mt-0.5 flex items-center gap-1 text-2xs text-red-500"
+                            title={project.rootPath ? `Folder not found: ${project.rootPath}` : undefined}
+                          >
+                            <FolderX className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">Path not found</span>
                           </div>
                         )}
                         {remoteNode && !offline && (

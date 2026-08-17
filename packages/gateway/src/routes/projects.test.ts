@@ -13,6 +13,7 @@ import { GitService } from "../services/git.js";
 import { UserService } from "../services/users.js";
 import { AuditWriter } from "../services/audit.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { resolveProjectRootPathStatus } from "./projects.js";
 
 const testConfig = {
   ...loadConfig(),
@@ -26,6 +27,19 @@ async function authHeaders(userId: string, username: string, jwtSecret: string) 
   const token = await signAuthToken({ id: userId, username }, jwtSecret);
   return { authorization: `Bearer ${token}` };
 }
+
+describe("resolveProjectRootPathStatus", () => {
+  it("checks a connected Windows node for a moved project folder", async () => {
+    const proxyFsOp = vi.fn(async () => false);
+    const ws = {
+      getFsNodes: () => [{ id: "windows-node", isGateway: false }],
+      proxyFsOp,
+    } as unknown as Parameters<typeof resolveProjectRootPathStatus>[2];
+
+    await expect(resolveProjectRootPathStatus("E:\\moved-project", "windows-node", ws)).resolves.toBe("missing");
+    expect(proxyFsOp).toHaveBeenCalledWith("windows-node", "exists", { path: "E:\\moved-project" });
+  });
+});
 
 describe("project routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
@@ -128,6 +142,39 @@ describe("project routes", () => {
       sessions: Array<{ name: string; projectId: string | null }>;
     };
     expect(sessionsBody.sessions.some((session) => session.name === "Chat one" && session.projectId === null)).toBe(true);
+  });
+
+  it("marks project roots that no longer exist", async () => {
+    const user = userService.createUser("missing-root-user", "password123");
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+    const existingRoot = mkdtempSync(join(tmpdir(), "jait-existing-project-"));
+    tempRoots.push(existingRoot);
+    const missingRoot = join(existingRoot, "moved-away");
+
+    await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Still here", rootPath: existingRoot }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      headers,
+      payload: { title: "Moved", rootPath: missingRoot }
+    });
+
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/api/projects?status=active",
+      headers
+    });
+    expect(listRes.statusCode).toBe(200);
+    const projects = (JSON.parse(listRes.body) as {
+      projects: Array<{ title: string; rootPathStatus: string }>;
+    }).projects;
+    expect(projects.find((project) => project.title === "Still here")?.rootPathStatus).toBe("available");
+    expect(projects.find((project) => project.title === "Moved")?.rootPathStatus).toBe("missing");
   });
 
   it("generates an LLM title for a new chat", async () => {

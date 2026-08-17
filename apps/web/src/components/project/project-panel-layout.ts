@@ -41,6 +41,14 @@ export interface ProjectPaneVisibility {
 export const DRAG_SNAP_MIN = -1
 export const DRAG_SNAP_MAX = -2
 
+export function resolvePersistedResizeSize(
+  persistedSize: number,
+  min: number,
+  max: number,
+): number {
+  return Math.min(max, Math.max(min, persistedSize))
+}
+
 /**
  * Resolve the size to report to the parent when a drag ends.
  *

@@ -28,6 +28,7 @@ interface ConversationProps {
     toolCalls?: unknown
     segments?: unknown
     role?: 'user' | 'agent'
+    error?: unknown
   }>
   /** Whether there are older messages available to load. */
   hasMore?: boolean
@@ -265,6 +266,18 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           ? 'user'
           : 'agent',
       ),
+    [messageEstimateInputs],
+  )
+  const minimapErrorContents = useMemo<string[][]>(
+    () =>
+      (messageEstimateInputs ?? []).map((message) => {
+        const segments = message && typeof message === 'object' && Array.isArray(message.segments) ? message.segments : []
+        const segmentErrors = segments.flatMap((segment) =>
+          segment && typeof segment === 'object' && 'type' in segment && segment.type === 'error'
+            && 'content' in segment && typeof segment.content === 'string' ? [segment.content] : [],
+        )
+        return segmentErrors.length > 0 ? segmentErrors : typeof message?.error === 'string' ? [message.error] : []
+      }),
     [messageEstimateInputs],
   )
   const [isAtBottom, setIsAtBottom] = useState(true)
@@ -940,6 +953,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           scrollElement={scrollElement}
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
+          errorContents={minimapErrorContents}
           textWidth={containerWidth}
           onScrub={detachFromBottom}
         />
@@ -956,6 +970,8 @@ interface ConversationMinimapProps {
   roles: Array<'user' | 'agent'>
   /** Per-child raw text, index-aligned with the virtualizer items. */
   texts: string[]
+  /** Error-segment text per child, rendered as red minimap lines. */
+  errorContents: string[][]
   /**
    * Width of the inner text column, in px. Used to wrap preview lines at the
    * same width the real prose wraps at, so each rail line mirrors an actual
@@ -972,6 +988,8 @@ interface ConversationMinimapProps {
 
 /** Height of each actual transcript-line mark on the minimap. */
 const MINIMAP_ROW_HEIGHT_PX = 2
+/** Normal rendered line height in the transcript before document scaling. */
+const MINIMAP_TRANSCRIPT_LINE_HEIGHT_PX = 24
 /**
  * User turns read as right-aligned bubbles (like the real layout, where they
  * sit on the right edge of the chat), so their preview lines are capped to
@@ -1100,10 +1118,9 @@ export function computeMinimapScrollTop({
 
 /**
  * Place exactly one minimap mark for each nonblank wrapped transcript line.
- * Each message keeps its real document band from the virtualizer, and its lines
- * are distributed through that band before the whole document is scaled onto
- * the rail. This preserves the exact scroll mapping without inventing repeated
- * marks merely because a message also contains tall non-text UI.
+ * Each message keeps its real document start from the virtualizer, then its
+ * lines follow normal transcript line-height. Extra message height remains
+ * empty on the rail instead of stretching a few lines through tool cards.
  */
 export function computeMinimapRows({
   blocks,
@@ -1127,12 +1144,13 @@ export function computeMinimapRows({
     for (let lineIndex = 0; lineIndex < count; lineIndex++) {
       const width = block.widths[lineIndex] ?? 0
       if (width <= 0) continue
-      const documentOffset = block.start + (lineIndex / count) * span
+      const documentOffset = block.start + lineIndex * MINIMAP_TRANSCRIPT_LINE_HEIGHT_PX
       out.push({
         key: `${blockIndex}:${lineIndex}`,
         y: documentOffset * scale,
         width,
         isUser: block.role === 'user',
+        isError: block.errorStart !== undefined && lineIndex >= block.errorStart,
       })
     }
   }
@@ -1145,7 +1163,7 @@ export function computeMinimapRows({
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWidth, onScrub }: ConversationMinimapProps) {
+function ConversationMinimap({ virtualizer, scrollElement, roles, texts, errorContents, textWidth, onScrub }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -1171,7 +1189,7 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
 
   // Line shapes are derived once per message and reused until its text changes,
   // so a streaming turn only re-splits its own content, not the whole history.
-  const shapeCacheRef = useRef(new Map<number, { text: string; widths: number[] }>())
+  const shapeCacheRef = useRef(new Map<number, { text: string; errorsKey: string; widths: number[]; errorStart?: number }>())
 
   // Wrap preview lines at the same column width the real prose wraps at, so the
   // rail's line breaks line up with the transcript's.
@@ -1207,20 +1225,30 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, textWid
       if (!measurement || measurement.size <= 0) continue
       const role = roles[index] ?? 'agent'
       const text = texts[index] ?? ''
+      const errors = errorContents[index] ?? []
+      const errorsKey = errors.join('\u0000')
       const cached = cache.get(index)
       let widths: number[]
-      if (cached && cached.text === text) {
+      let errorStart: number | undefined
+      if (cached && cached.text === text && cached.errorsKey === errorsKey) {
         widths = cached.widths
+        errorStart = cached.errorStart
       } else {
-        widths = computeMinimapLineShape(text, wrapWidth)
-        cache.set(index, { text, widths })
+        const contentIsOnlyError = errors.length === 1 && errors[0] === text
+        const contentWidths = errors.length > 0 && (!text.trim() || contentIsOnlyError)
+          ? []
+          : computeMinimapLineShape(text, wrapWidth)
+        const errorWidths = errors.flatMap((error) => computeMinimapLineShape(error, wrapWidth))
+        widths = [...contentWidths, ...errorWidths]
+        errorStart = errorWidths.length > 0 ? contentWidths.length : undefined
+        cache.set(index, { text, errorsKey, widths, errorStart })
       }
-      out.push({ start: measurement.start, end: measurement.start + measurement.size, role, widths })
+      out.push({ start: measurement.start, end: measurement.start + measurement.size, role, widths, errorStart })
     }
     return out
     // `totalSize` stands in for the measurement cache, which mutates in place:
     // it changes whenever an item is measured or the list grows.
-  }, [roles, texts, totalSize, virtualizer, wrapWidth])
+  }, [errorContents, roles, texts, totalSize, virtualizer, wrapWidth])
 
   const rows = useMemo(
     () => computeMinimapRows({ blocks, viewportHeight, totalSize }),
@@ -1284,6 +1312,8 @@ export interface MinimapBlock {
   /** Relative widths of the message's rendered text lines, top to bottom. */
   widths: number[]
   role: 'user' | 'agent'
+  /** First line belonging to an error segment, when present. */
+  errorStart?: number
 }
 
 export interface MinimapRow {
@@ -1294,6 +1324,7 @@ export interface MinimapRow {
   /** Line length as a fraction of the rail's usable width. */
   width: number
   isUser: boolean
+  isError: boolean
 }
 
 /**
@@ -1309,7 +1340,9 @@ const MinimapLines = memo(function MinimapLines({ rows }: { rows: MinimapRow[] }
           key={row.key}
           className={cn(
             'absolute',
-            row.isUser ? 'bg-blue-500/80' : 'bg-muted-foreground/45',
+            row.isError
+              ? 'bg-red-500/90'
+              : row.isUser ? 'bg-blue-500/80' : 'bg-muted-foreground/45',
           )}
           style={{
             top: row.y,
