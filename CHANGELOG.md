@@ -4,6 +4,24 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.734](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.734) — 2026-08-17
+- chore(release): retry npm publishing after GitHub rate-limited the checkout action during the v0.1.733 release
+
+## [v0.1.733](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.733) — 2026-08-17
+- fix(web): map minimap rows to persisted semantic bands and stabilize provider picker — 3c9dd9e9
+
+## [v0.1.732](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.732) — 2026-08-17
+- fix(web): render all chat lines in minimap including thinking and tool rows — 0f398916
+
+## [v0.1.731](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.731) — 2026-08-17
+- fix(web): persist per-project panel layout and surface missing project paths — eb728631
+
+## [v0.1.730](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.730) — 2026-08-17
+- fix(web): refine chat scrolling and provider picker — d2cf0793
+
+## [v0.1.729](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.729) — 2026-08-17
+- release: v0.1.729 — c59961c7
+
 ## [v0.1.728](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.728) — 2026-08-16
 - fix(web): make resumed chat streams generation-owned and self-healing — a 3s snapshot handshake timeout and 40s heartbeat watchdog abort hung SSE connections, fresh snapshots repair missed events, retryable HTTP/body/EOF failures reconnect, stale generations cannot write, and failed handshakes keep jittered exponential backoff until a healthy snapshot resets it
 - feat(web): expand the trajectory view into a full step inspector with request/provider metadata, context-usage steps, complete tool payloads/results, nested call ids, completion timing, searchable details, and responsive tabbed summary panels while keeping the chat composer outside the trajectory pane
