@@ -35,6 +35,7 @@ import {
   canReuseMinimapMessageShape,
   computeMinimapLineShape,
   computeMinimapMessageShape,
+  computeMinimapMessageWrapWidth,
   computeMinimapRows,
   computeNewTurnTailPadding,
   computeMinimapScrollTop,
@@ -300,6 +301,15 @@ describe('computeMinimapMessageShape', () => {
     expect(shape.errorLines).toEqual([false, false, false, false, false, true])
   })
 
+  it('wraps agent previews at the same 85 percent width as rendered agent messages', () => {
+    const wrapWidth = computeMinimapMessageWrapWidth(512, 'agent')
+    const shape = computeMinimapMessageShape({ role: 'agent' }, 'a'.repeat(115), wrapWidth)
+
+    expect(wrapWidth).toBeCloseTo(512 * 0.85)
+    expect(shape.widths).toHaveLength(3)
+    expect(computeMinimapMessageWrapWidth(512, 'user')).toBeCloseTo(512 * 0.85 - 32)
+  })
+
   it('invalidates a cached shape when the transcript width changes', () => {
     const message = { role: 'agent' as const, content: 'wrapped text' }
     expect(canReuseMinimapMessageShape(
@@ -365,8 +375,35 @@ describe('computeMinimapRows', () => {
     })
 
     expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.y)).toEqual([0, 8, 24])
+    expect(rows.map((row) => row.y)).toEqual([0, 75, 225])
+    expect(rows.map((row) => row.height)).toEqual([75, 75, 75])
     expect(rows.map((row) => row.width)).toEqual([1, 0.75, 0.5])
+  })
+
+  it('gives each persisted row its measured share of the message band', () => {
+    const rows = computeMinimapRows({
+      blocks: [block(0, 72, 'agent', [1, 0.8, 0.6, 0.4])],
+      viewportHeight: 120,
+      totalSize: 120,
+    })
+
+    expect(rows).toHaveLength(4)
+    expect(rows.map((row) => row.y)).toEqual([0, 18, 36, 54])
+    expect(rows.map((row) => row.height)).toEqual([18, 18, 18, 18])
+  })
+
+  it('does not synthesize filler rows for a sparse message', () => {
+    const rows = computeMinimapRows({
+      blocks: [block(0, 120, 'agent', [0.8]), block(120, 144, 'user', [0.9])],
+      viewportHeight: 144,
+      totalSize: 144,
+    })
+
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => ({ y: row.y, height: row.height, isUser: row.isUser }))).toEqual([
+      { y: 0, height: 120, isUser: false },
+      { y: 120, height: 24, isUser: true },
+    ])
   })
 
   it('marks only error-segment lines as errors', () => {

@@ -976,8 +976,6 @@ interface ConversationMinimapProps {
 
 /** Height of each actual transcript-line mark on the minimap. */
 const MINIMAP_ROW_HEIGHT_PX = 2
-/** Normal rendered line height in the transcript before document scaling. */
-const MINIMAP_TRANSCRIPT_LINE_HEIGHT_PX = 24
 /**
  * User turns read as right-aligned bubbles (like the real layout, where they
  * sit on the right edge of the chat), so their preview lines are capped to
@@ -995,14 +993,17 @@ const MINIMAP_MIN_LINE_RATIO = 0.12
 const MINIMAP_MAX_LINES_PER_MESSAGE = 4000
 /** Shape used for messages with no text of their own (tool-only turns, queue items). */
 const MINIMAP_EMPTY_SHAPE = [0.3]
-/**
- * Horizontal inset the height estimator (`pretext-height.ts`) subtracts from the
- * container width before wrapping (`Math.max(maxWidth - 32, 100)`). The minimap
- * must wrap at this same width so its line count matches the line count the
- * height model assumes — otherwise a message's preview lines and its estimated
- * height disagree and the rail's lines drift out of sync with the transcript.
- */
-const MINIMAP_COLUMN_H_PADDING = 32
+const MINIMAP_MESSAGE_MAX_WIDTH = 0.85
+const MINIMAP_USER_BUBBLE_H_PADDING = 32
+
+export function computeMinimapMessageWrapWidth(
+  textWidth: number,
+  role: 'user' | 'agent',
+): number {
+  const bubbleWidth = textWidth * MINIMAP_MESSAGE_MAX_WIDTH
+  return Math.max(bubbleWidth - (role === 'user' ? MINIMAP_USER_BUBBLE_H_PADDING : 0), 100)
+}
+
 /** Font the transcript's assistant prose is rendered with, used for measurement. */
 const MINIMAP_FONT = '16px Inter'
 /**
@@ -1231,10 +1232,11 @@ export function computeMinimapScrollTop({
 }
 
 /**
- * Place exactly one minimap mark for each nonblank wrapped transcript line.
- * Each message keeps its real document start from the virtualizer, then its
- * lines follow normal transcript line-height. Extra message height remains
- * empty on the rail instead of stretching a few lines through tool cards.
+ * Place exactly one minimap mark for each persisted semantic row. The
+ * virtualizer owns the message's measured document band, so divide that band
+ * among the rows instead of inventing filler marks or assuming a fixed line
+ * pitch. This keeps every text/thinking/tool row represented while preserving
+ * the real message-to-message document mapping.
  */
 export function computeMinimapRows({
   blocks,
@@ -1255,13 +1257,15 @@ export function computeMinimapRows({
     const span = block.end - block.start
     const count = block.widths.length
     if (span <= 0 || count === 0) continue
+    const rowDocumentHeight = span / count
     for (let lineIndex = 0; lineIndex < count; lineIndex++) {
       const width = block.widths[lineIndex] ?? 0
       if (width <= 0) continue
-      const documentOffset = block.start + lineIndex * MINIMAP_TRANSCRIPT_LINE_HEIGHT_PX
+      const documentOffset = block.start + lineIndex * rowDocumentHeight
       out.push({
         key: `${blockIndex}:${lineIndex}`,
         y: documentOffset * scale,
+        height: rowDocumentHeight * scale,
         width,
         isUser: block.userLines?.[lineIndex] ?? block.role === 'user',
         isError: block.errorLines?.[lineIndex]
@@ -1311,10 +1315,6 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, message
     shape: MinimapMessageShape
   }>())
 
-  // Wrap preview lines at the same column width the real prose wraps at, so the
-  // rail's line breaks line up with the transcript's.
-  const wrapWidth = Math.max(textWidth - MINIMAP_COLUMN_H_PADDING, 100)
-
   // Each message's *document* band (its real vertical range inside the scroll
   // container) paired with the shape of its text lines.
   //
@@ -1347,6 +1347,7 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, message
       const text = texts[index] ?? ''
       const message = messageInputs[index]
       const cached = cache.get(index)
+      const wrapWidth = computeMinimapMessageWrapWidth(textWidth, role)
       const current = { text, message, wrapWidth }
       let shape: MinimapMessageShape
       if (cached && canReuseMinimapMessageShape(cached, current)) {
@@ -1367,7 +1368,7 @@ function ConversationMinimap({ virtualizer, scrollElement, roles, texts, message
     return out
     // `totalSize` stands in for the measurement cache, which mutates in place:
     // it changes whenever an item is measured or the list grows.
-  }, [messageInputs, roles, texts, totalSize, virtualizer, wrapWidth])
+  }, [messageInputs, roles, texts, textWidth, totalSize, virtualizer])
 
   const rows = useMemo(
     () => computeMinimapRows({ blocks, viewportHeight, totalSize }),
@@ -1442,8 +1443,10 @@ export interface MinimapBlock {
 export interface MinimapRow {
   /** Stable identity even when compressed lines overlap at the same pixel. */
   key: string
-  /** Offset of this line from the top of the rail, in px. */
+  /** Offset of this row from the top of the rail, in px. */
   y: number
+  /** Scaled height of the persisted row's measured document band. */
+  height: number
   /** Line length as a fraction of the rail's usable width. */
   width: number
   isUser: boolean
@@ -1469,7 +1472,7 @@ const MinimapLines = memo(function MinimapLines({ rows }: { rows: MinimapRow[] }
           )}
           style={{
             top: row.y,
-            height: MINIMAP_ROW_HEIGHT_PX,
+            height: Math.max(row.height, MINIMAP_ROW_HEIGHT_PX),
             // User turns hug the right edge like chat bubbles; agent prose stays
             // left-aligned but capped below the full rail so short paragraphs
             // read as short lines rather than full-width bars.

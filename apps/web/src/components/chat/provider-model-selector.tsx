@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from 'react'
 import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
@@ -122,6 +122,11 @@ export function providerLabelFor(providerType: string | undefined, id: string): 
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
 const MAX_RECENTS = 10
+
+export const PROVIDER_SELECTOR_POPOVER_STYLE: CSSProperties = {
+  height: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
+  maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
+}
 
 function summariseReason(reason: string): string {
   const lower = reason.toLowerCase()
@@ -604,17 +609,19 @@ export function ProviderModelSelector({
       <CurrentIcon className="h-4 w-4 shrink-0" />
       {!compact && (
         <>
-          <span>{currentProvider.label}</span>
-          <span className="max-w-[112px] truncate font-mono text-xs opacity-80">{displayModelLabel}</span>
+          <span className="w-[72px] truncate">{currentProvider.label}</span>
+          <span className="w-[112px] truncate font-mono text-xs opacity-80">{displayModelLabel}</span>
         </>
       )}
       {!compact && locationLabel && (
-        <span className="flex max-w-[72px] items-center gap-0.5 truncate text-2xs text-blue-500">
+        <span className="flex w-[72px] items-center gap-0.5 truncate text-2xs text-blue-500">
           <Monitor className="h-3 w-3" />
           {locationLabel}
         </span>
       )}
-      {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
+      <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center">
+        {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
+      </span>
       <ChevronDown className="h-3 w-3 opacity-60" />
     </button>
   )
@@ -883,6 +890,7 @@ export function ProviderModelSelector({
                 width: 'auto',
                 maxWidth: 'calc(100vw - 1rem)',
                 maxHeight: 'min(36rem, calc(100dvh - 1rem))',
+                height: 'min(36rem, calc(100dvh - 1rem))',
                 boxSizing: 'border-box',
                 transform: 'translateZ(0)',
               }}
@@ -907,7 +915,7 @@ export function ProviderModelSelector({
             side="top"
             collisionPadding={8}
             className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
-            style={{ maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))' }}
+            style={PROVIDER_SELECTOR_POPOVER_STYLE}
           >
             {selectorContent}
           </PopoverContent>
