@@ -217,6 +217,7 @@ export function SessionSelector({
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
+  const [visiblePersonalSessions, setVisiblePersonalSessions] = useState(RECENT_SESSIONS_LIMIT)
   const [sessionContextMenu, setSessionContextMenu] = useState<
     { sessionId: string; projectId: string | null; left: number; top: number } | null
   >(null)
@@ -431,6 +432,11 @@ export function SessionSelector({
         .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     ))
   }, [displayedPersonalSessions, normalizedSearchQuery, onSearch])
+  const recentPersonalSessions = normalizedSearchQuery
+    ? filteredPersonalSessions
+    : filteredPersonalSessions.slice(0, visiblePersonalSessions)
+  const hasOlderPersonalSessions = !normalizedSearchQuery
+    && filteredPersonalSessions.length > recentPersonalSessions.length
 
   return (
     <div className="flex flex-col h-full">
@@ -944,7 +950,7 @@ export function SessionSelector({
               </div>
               <div className="mx-1.5 my-1 border-t" />
               <div className="space-y-0.5 px-1.5 pb-1.5">
-                {filteredPersonalSessions.map((session) => {
+                {recentPersonalSessions.map((session) => {
                   const isActive = activeProjectId === null && session.id === activeSessionId
                   const isStreaming = streamingSessionIds?.has(session.id) ?? false
                   return (
@@ -984,6 +990,15 @@ export function SessionSelector({
                     </div>
                   )
                 })}
+                {hasOlderPersonalSessions && (
+                  <button
+                    type="button"
+                    className="w-full rounded-md px-1.5 py-1 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                    onClick={() => setVisiblePersonalSessions((current) => current + RECENT_SESSIONS_LIMIT)}
+                  >
+                    Show older
+                  </button>
+                )}
               </div>
             </ScrollArea>
           </div>

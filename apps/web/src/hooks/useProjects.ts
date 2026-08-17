@@ -10,7 +10,7 @@ import {
 } from '@/lib/chat-history-cache'
 
 const API_URL = getApiUrl()
-const PROJECT_LIST_LIMIT = 10
+const PROJECT_LIST_LIMIT = 3
 
 export interface ProjectSession {
   id: string

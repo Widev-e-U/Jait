@@ -65,6 +65,19 @@ export function positionConversationAtBottom(
   element.scrollTop = element.scrollHeight
 }
 
+export function computeNewTurnTailPadding({
+  viewportHeight,
+  messageStart,
+  totalSize,
+}: {
+  viewportHeight: number
+  messageStart: number
+  totalSize: number
+}): number {
+  if (viewportHeight <= 0 || messageStart < 0 || totalSize < messageStart) return 0
+  return Math.max(viewportHeight - (totalSize - messageStart), 0)
+}
+
 /** Sub-pixel jitter isn't worth a scroll write — it would itself look like flicker. */
 const ANCHOR_EPSILON_PX = 0.5
 
@@ -257,6 +270,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
+  const [conversationViewportHeight, setConversationViewportHeight] = useState(0)
+  const [topAnchoredMessageId, setTopAnchoredMessageId] = useState<string | null>(null)
   const prevChildCount = useRef(0)
   const prevLoadingRef = useRef(loading)
   const prevScrollTopRef = useRef(0)
@@ -266,7 +281,13 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const detachedRef = useRef(false)
   // Last scrollToMessageId handled, so we only force-scroll on a genuinely new
   // target (not on every re-render while the value stays constant).
-  const prevScrollTargetRef = useRef(scrollToMessageId ?? null)
+  const prevScrollTargetRef = useRef(
+    childItems.length === 1 && messageEstimateInputs?.[0]?.role === 'user'
+      ? null
+      : scrollToMessageId ?? null,
+  )
+  const pendingTopAlignIdRef = useRef<string | null>(null)
+  const heldNewTurnSpaceRef = useRef(false)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
@@ -410,6 +431,37 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // without needing the (identity-unstable) virtualizer in their deps.
   const virtualizerRef = useRef(virtualizer)
   virtualizerRef.current = virtualizer
+
+  useLayoutEffect(() => {
+    if (!scrollElement) return
+    const updateViewportHeight = () => setConversationViewportHeight(scrollElement.clientHeight)
+    updateViewportHeight()
+    const observer = new ResizeObserver(updateViewportHeight)
+    observer.observe(scrollElement)
+    return () => observer.disconnect()
+  }, [scrollElement])
+
+  const topAnchoredMessageIndex = topAnchoredMessageId == null
+    ? -1
+    : childItems.findIndex((child) =>
+        typeof child === 'object'
+        && child !== null
+        && 'key' in child
+        && String(child.key) === topAnchoredMessageId)
+  const topAnchoredMeasurement = topAnchoredMessageIndex < 0
+    ? undefined
+    : virtualizer.measurementsCache[topAnchoredMessageIndex]
+  const newTurnTailPadding = topAnchoredMeasurement
+    ? computeNewTurnTailPadding({
+        viewportHeight: conversationViewportHeight,
+        messageStart: topAnchoredMeasurement.start,
+        totalSize: virtualizer.getTotalSize(),
+      })
+    : 0
+
+  useLayoutEffect(() => {
+    if (newTurnTailPadding > 0) heldNewTurnSpaceRef.current = true
+  }, [newTurnTailPadding])
 
   // Track user-initiated scroll gestures (wheel/touch) so we don't
   // confuse layout-induced scrollTop changes (tool cards collapsing)
@@ -677,9 +729,10 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     })
   }, [captureScrollAnchor])
 
-  // When a new user message lands, re-attach to the bottom and bring that
-  // message into view — even if the user had scrolled up to read history.
-  // Runs in layout so the scroll happens before paint, avoiding a visible jump.
+  // When a new user message lands, reserve one viewport below its top edge.
+  // This lets the prompt jump to the top immediately, then the reserve shrinks
+  // one-for-one as the reply grows. Once real content reaches the bottom edge,
+  // the normal stick-to-bottom behavior takes over.
   useLayoutEffect(() => {
     const target = scrollToMessageId ?? null
     if (target == null || target === prevScrollTargetRef.current) return
@@ -688,23 +741,29 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const el = scrollRef.current
     if (!el) return
 
-    // Cancel any in-flight "stay where I am" gesture so this reveal isn't
-    // immediately fought by the scroll/detach handlers.
     detachedRef.current = false
     stickToBottomRef.current = true
     setStickToBottom(true)
     setIsAtBottom(true)
+    heldNewTurnSpaceRef.current = false
+    pendingTopAlignIdRef.current = target
+    setTopAnchoredMessageId(target)
+  }, [scrollToMessageId])
 
-    const index = childItems.findIndex((child) =>
-      typeof child === 'object' && child !== null && 'key' in child && String(child.key) === target,
-    )
-    if (index < 0) {
-      // Not (yet) rendered as an item — fall back to the bottom edge.
-      positionConversationAtBottom(el)
-      return
-    }
-    virtualizerRef.current.scrollToIndex(index, { align: 'end' })
-  }, [scrollToMessageId, childItems])
+  useLayoutEffect(() => {
+    const target = topAnchoredMessageId
+    if (target == null || pendingTopAlignIdRef.current !== target) return
+    if (topAnchoredMessageIndex < 0 || !topAnchoredMeasurement) return
+    pendingTopAlignIdRef.current = null
+    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start' })
+  }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding])
+
+  useLayoutEffect(() => {
+    if (topAnchoredMessageId == null || newTurnTailPadding > 0 || !heldNewTurnSpaceRef.current) return
+    heldNewTurnSpaceRef.current = false
+    setTopAnchoredMessageId(null)
+    scrollToBottom('auto')
+  }, [newTurnTailPadding, scrollToBottom, topAnchoredMessageId])
 
   useLayoutEffect(() => {
     updateBottomState()
@@ -775,6 +834,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!sizerEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
+      if (newTurnTailPadding > 0) return
       if (!stickToBottomRef.current || suppressAutoScrollRef.current) {
         // Detached: the total size just changed under us. A streaming nested
         // sub-agent card grows an item continuously, and every growth above
@@ -789,7 +849,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     observer.observe(sizerEl)
     return () => observer.disconnect()
-  }, [restoreScrollAnchor, scrollToBottom, updateBottomState])
+  }, [newTurnTailPadding, restoreScrollAnchor, scrollToBottom, updateBottomState])
 
   return (
     <AIConversation className={cn('relative flex flex-1 overflow-hidden', className)}>
@@ -829,7 +889,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
             <div
               ref={sizerRef}
               style={{
-                height: virtualizer.getTotalSize(),
+                height: virtualizer.getTotalSize() + newTurnTailPadding,
                 width: '100%',
                 position: 'relative',
               }}
@@ -910,8 +970,7 @@ interface ConversationMinimapProps {
   onScrub: () => void
 }
 
-/** Vertical distance between two preview lines, and how tall each line paints. */
-const MINIMAP_ROW_PITCH_PX = 3
+/** Height of each actual transcript-line mark on the minimap. */
 const MINIMAP_ROW_HEIGHT_PX = 2
 /**
  * User turns read as right-aligned bubbles (like the real layout, where they
@@ -1040,21 +1099,11 @@ export function computeMinimapScrollTop({
 }
 
 /**
- * Paint the rail: walk it one row at a time and ask what the document holds at
- * that offset.
- *
- * The whole document (`totalSize`) is scaled onto the rail's content band, so
- * row `y` shows what lives at document offset `y / scale` — the same offset a
- * click at `y` scrolls to (see `computeMinimapScrollTop`). That shared mapping
- * is what makes a user turn's blue band actually point at that user turn.
- *
- * Walking rows rather than messages also keeps the DOM bounded: the row count
- * is fixed by the rail's height no matter how long the conversation is.
- *
- * A row usually covers several lines of text once the document is compressed,
- * so it paints the widest line in its slice — sampling a single line would
- * punch holes into a paragraph wherever the sample happened to land on a blank
- * line between paragraphs.
+ * Place exactly one minimap mark for each nonblank wrapped transcript line.
+ * Each message keeps its real document band from the virtualizer, and its lines
+ * are distributed through that band before the whole document is scaled onto
+ * the rail. This preserves the exact scroll mapping without inventing repeated
+ * marks merely because a message also contains tall non-text UI.
  */
 export function computeMinimapRows({
   blocks,
@@ -1069,34 +1118,23 @@ export function computeMinimapRows({
 }): MinimapRow[] {
   if (blocks.length === 0 || viewportHeight <= 0 || totalSize <= 0) return []
   const scale = Math.min(viewportHeight / totalSize, 1)
-  const contentHeight = totalSize * scale
-  const rowCount = Math.floor(contentHeight / MINIMAP_ROW_PITCH_PX)
-  const rowSpan = MINIMAP_ROW_PITCH_PX / scale
   const out: MinimapRow[] = []
-  // Blocks are ordered and contiguous, so the walk only ever moves forward.
-  let cursor = 0
-  for (let row = 0; row < rowCount; row++) {
-    const y = row * MINIMAP_ROW_PITCH_PX
-    const docOffset = y / scale
-    while (cursor < blocks.length - 1 && blocks[cursor].end <= docOffset) cursor++
-    const block = blocks[cursor]
-    if (docOffset < block.start || docOffset >= block.end) continue
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex]
     const span = block.end - block.start
     const count = block.widths.length
     if (span <= 0 || count === 0) continue
-    // Which of the message's lines this row covers. Lines are spread evenly
-    // across the message's band: a turn's non-prose height (tool cards,
-    // reasoning, code chrome) is part of the band it occupies, so spreading is
-    // what keeps the message's shape aligned with the message's real extent.
-    const from = Math.min(Math.floor(((docOffset - block.start) / span) * count), count - 1)
-    const to = Math.min(Math.ceil(((docOffset + rowSpan - block.start) / span) * count), count)
-    let width = 0
-    for (let i = from; i < Math.max(to, from + 1); i++) {
-      const w = block.widths[i] ?? 0
-      if (w > width) width = w
+    for (let lineIndex = 0; lineIndex < count; lineIndex++) {
+      const width = block.widths[lineIndex] ?? 0
+      if (width <= 0) continue
+      const documentOffset = block.start + (lineIndex / count) * span
+      out.push({
+        key: `${blockIndex}:${lineIndex}`,
+        y: documentOffset * scale,
+        width,
+        isUser: block.role === 'user',
+      })
     }
-    if (width <= 0) continue
-    out.push({ y, width, isUser: block.role === 'user' })
   }
   return out
 }
@@ -1249,6 +1287,8 @@ export interface MinimapBlock {
 }
 
 export interface MinimapRow {
+  /** Stable identity even when compressed lines overlap at the same pixel. */
+  key: string
   /** Offset of this line from the top of the rail, in px. */
   y: number
   /** Line length as a fraction of the rail's usable width. */
@@ -1266,7 +1306,7 @@ const MinimapLines = memo(function MinimapLines({ rows }: { rows: MinimapRow[] }
     <>
       {rows.map((row) => (
         <div
-          key={row.y}
+          key={row.key}
           className={cn(
             'absolute',
             row.isUser ? 'bg-blue-500/80' : 'bg-muted-foreground/45',

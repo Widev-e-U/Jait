@@ -34,6 +34,7 @@ import {
   Conversation,
   computeMinimapLineShape,
   computeMinimapRows,
+  computeNewTurnTailPadding,
   computeMinimapScrollTop,
   type MinimapBlock,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
@@ -219,6 +220,29 @@ describe('scroll anchoring', () => {
   })
 })
 
+describe('computeNewTurnTailPadding', () => {
+  it('reserves the rest of the viewport below a newly sent user message', () => {
+    expect(computeNewTurnTailPadding({
+      viewportHeight: 800,
+      messageStart: 4_000,
+      totalSize: 4_120,
+    })).toBe(680)
+  })
+
+  it('shrinks to zero once real reply content reaches the viewport bottom', () => {
+    expect(computeNewTurnTailPadding({
+      viewportHeight: 800,
+      messageStart: 4_000,
+      totalSize: 4_800,
+    })).toBe(0)
+    expect(computeNewTurnTailPadding({
+      viewportHeight: 800,
+      messageStart: 4_000,
+      totalSize: 5_200,
+    })).toBe(0)
+  })
+})
+
 describe('computeMinimapLineShape', () => {
   it('turns a short paragraph into one partial-width line', () => {
     const [width, ...rest] = computeMinimapLineShape('a'.repeat(32), 512)
@@ -299,6 +323,18 @@ describe('computeMinimapRows', () => {
     expect(Math.max(...userRows.map((r) => r.y))).toBeLessThan(480)
   })
 
+  it('renders one minimap mark per actual nonblank wrapped line', () => {
+    const rows = computeMinimapRows({
+      blocks: [block(0, 900, 'agent', [1, 0.75, 0, 0.5])],
+      viewportHeight: 300,
+      totalSize: 900,
+    })
+
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.y)).toEqual([0, 75, 225])
+    expect(rows.map((row) => row.width)).toEqual([1, 0.75, 0.5])
+  })
+
   it('keeps a rail row and the scroll it scrubs to pointing at the same message', () => {
     const blocks = [block(0, 5_000, 'agent'), block(5_000, 6_000, 'user'), block(6_000, 10_000, 'agent')]
     const rows = computeMinimapRows({ blocks, viewportHeight: 800, totalSize: 10_000 })
@@ -327,14 +363,13 @@ describe('computeMinimapRows', () => {
     expect(Math.max(...rows.map((r) => r.y))).toBeLessThan(600)
   })
 
-  it('paints the widest line a compressed row covers', () => {
-    // One 1 000px message compressed into 80 rail px: each row spans 12.5px of
-    // the document, so blank lines between paragraphs must not punch holes.
+  it('preserves each nonblank line when the document is compressed', () => {
     const rows = computeMinimapRows({
       blocks: [block(0, 1_000, 'agent', [1, 0, 1, 0, 1, 0, 1, 0])],
       viewportHeight: 80,
       totalSize: 1_000,
     })
+    expect(rows).toHaveLength(4)
     expect(rows.every((r) => r.width === 1)).toBe(true)
   })
 

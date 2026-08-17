@@ -81,6 +81,36 @@ describe('SessionSelector', () => {
     expect(markup).not.toContain('Personal chats')
   })
 
+  it('shows five recent personal chats and offers to reveal older ones', () => {
+    const personalSessions = Array.from({ length: 6 }, (_, index) => ({
+      id: `personal-${index + 1}`,
+      projectId: null,
+      name: `Personal ${index + 1}`,
+      projectPath: null,
+      status: 'active' as const,
+      createdAt: `2026-07-0${6 - index}T00:00:00.000Z`,
+      lastActiveAt: `2026-07-0${6 - index}T00:00:00.000Z`,
+      viewedAt: null,
+      metadata: null,
+    }))
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[]}
+        personalSessions={personalSessions}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('Personal 1')
+    expect(markup).toContain('Personal 5')
+    expect(markup).not.toContain('Personal 6')
+    expect(markup).toContain('Show older')
+  })
+
   it('renders personal chats with the compact project-chat sizing', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
