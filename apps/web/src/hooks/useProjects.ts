@@ -511,6 +511,18 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [onLoginRequired, token, visibleLimit])
 
+  const persistSelection = useCallback((projectId: string | null, sessionId?: string | null) => {
+    if (!token) return
+    fetch(`${API_URL}/api/projects/select`, {
+      method: 'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, sessionId }),
+      // Mobile reloads/navigations can tear down the document mid-request;
+      // keepalive lets the browser finish sending this best-effort write.
+      keepalive: true,
+    }).catch(() => { /* best-effort */ })
+  }, [token])
+
   const createSession = useCallback(async (projectIdOverride?: string | null, name?: string) => {
     if (!token) {
       onLoginRequired?.()
@@ -549,24 +561,13 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       }
       setActiveProjectId(targetProjectId ?? null)
       setActiveSessionId(session.id)
+      persistSelection(targetProjectId ?? null, session.id)
       return session
     } catch (err) {
       console.error('Failed to create session:', err)
       return null
     }
-  }, [activeProjectId, onLoginRequired, token])
-
-  const persistSelection = useCallback((projectId: string | null, sessionId?: string | null) => {
-    if (!token) return
-    fetch(`${API_URL}/api/projects/select`, {
-      method: 'POST',
-      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, sessionId }),
-      // Mobile reloads/navigations can tear down the document mid-request;
-      // keepalive lets the browser finish sending this best-effort write.
-      keepalive: true,
-    }).catch(() => { /* best-effort */ })
-  }, [token])
+  }, [activeProjectId, onLoginRequired, persistSelection, token])
 
   // Writes the new selection to localStorage synchronously, instead of
   // relying on the debounced effect below, so a reload that happens right

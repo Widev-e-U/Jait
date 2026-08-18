@@ -4121,7 +4121,7 @@ function App() {
   const openNewChatSurface = useCallback(async (target: 'tab' | 'window') => {
     const previousProjectId = activeProjectId
     const previousSessionId = activeSessionId
-    const session = await createSession()
+    const session = await createSession(null)
     if (!session) return
 
     const url = buildChatSessionUrl(session.id, session.projectId ?? null)
@@ -4155,7 +4155,7 @@ function App() {
 
   const handleStartNewChat = useCallback(() => {
     clearMessages()
-    void createSession()
+    void createSession(null)
   }, [clearMessages, createSession])
 
   const handleStartNewChatInTab = useCallback(() => {
