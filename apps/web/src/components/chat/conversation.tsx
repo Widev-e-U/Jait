@@ -115,6 +115,32 @@ export function scrollAnchorDelta(currentTop: number, anchoredOffset: number): n
   return Math.abs(delta) < ANCHOR_EPSILON_PX ? 0 : delta
 }
 
+/**
+ * Undo React's `Children.toArray` key mangling.
+ *
+ * `toArray` rewrites every key to encode the child's position in the tree: a
+ * message keyed `m-1`, passed inside the nested `{messageElements}` array,
+ * comes back as `.0:$m-1`, and any `=`/`:` in the original key is escaped as
+ * `=0`/`=2`. Matching a raw message id against the mangled key therefore never
+ * succeeds — which is what silently disabled the new-turn top anchoring.
+ */
+export function unwrapConversationChildKey(key: string): string {
+  if (!key.startsWith('.')) return key
+  const marker = key.indexOf('$')
+  if (marker < 0) return key
+  return key.slice(marker + 1).replace(/=[02]/g, (escaped) => (escaped === '=0' ? '=' : ':'))
+}
+
+/** Index of the rendered child that carries `messageId`, or -1 if it isn't rendered. */
+export function findConversationItemIndex(items: readonly unknown[], messageId: string | null): number {
+  if (messageId == null) return -1
+  return items.findIndex((child) => {
+    if (typeof child !== 'object' || child === null || !('key' in child)) return false
+    const key = (child as { key: unknown }).key
+    return key != null && unwrapConversationChildKey(String(key)) === messageId
+  })
+}
+
 /** Scroll distance from the top that arms the lazy-load of older messages. */
 export const LOAD_MORE_SCROLL_THRESHOLD_PX = 200
 
@@ -442,13 +468,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     return () => observer.disconnect()
   }, [scrollElement])
 
-  const topAnchoredMessageIndex = topAnchoredMessageId == null
-    ? -1
-    : childItems.findIndex((child) =>
-        typeof child === 'object'
-        && child !== null
-        && 'key' in child
-        && String(child.key) === topAnchoredMessageId)
+  // Read the total first: `measurementsCache` is only rebuilt as a side effect
+  // of measuring, so touching it before `getTotalSize()` on the render that
+  // added a message hands back a cache that predates that message.
+  const totalSize = virtualizer.getTotalSize()
+  const topAnchoredMessageIndex = findConversationItemIndex(childItems, topAnchoredMessageId)
   const topAnchoredMeasurement = topAnchoredMessageIndex < 0
     ? undefined
     : virtualizer.measurementsCache[topAnchoredMessageIndex]
@@ -456,7 +480,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     ? computeNewTurnTailPadding({
         viewportHeight: conversationViewportHeight,
         messageStart: topAnchoredMeasurement.start,
-        totalSize: virtualizer.getTotalSize(),
+        totalSize,
       })
     : 0
 
@@ -653,7 +677,12 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const el = scrollRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    // A held new-turn reserve leaves deliberate slack below the prompt. That's
+    // the feature, not the user having scrolled away, so keep reporting "at the
+    // bottom" until they scroll off it themselves — otherwise the scroll-to-
+    // bottom button pops up the instant a message is sent.
     const nextIsAtBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
+      || (heldNewTurnSpaceRef.current && !detachedRef.current)
     const atVeryBottom = distanceFromBottom < 4
     const scrollingUp = el.scrollTop < prevScrollTopRef.current
     prevScrollTopRef.current = el.scrollTop
@@ -755,6 +784,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const target = topAnchoredMessageId
     if (target == null || pendingTopAlignIdRef.current !== target) return
     if (topAnchoredMessageIndex < 0 || !topAnchoredMeasurement) return
+    // The reserved tail padding is what makes the top of the list reachable at
+    // all: without it the last message's top is below the maximum scroll
+    // offset, and `scrollToIndex` silently clamps back to the end of the
+    // transcript. Wait for the render that actually holds the space.
+    if (newTurnTailPadding <= 0) return
     pendingTopAlignIdRef.current = null
     virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start' })
   }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding])
@@ -762,8 +796,12 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   useLayoutEffect(() => {
     if (topAnchoredMessageId == null || newTurnTailPadding > 0 || !heldNewTurnSpaceRef.current) return
     heldNewTurnSpaceRef.current = false
+    pendingTopAlignIdRef.current = null
     setTopAnchoredMessageId(null)
-    scrollToBottom('auto')
+    // The reply now fills the viewport on its own, so hand back to the normal
+    // follow-the-stream behavior — unless the user scrolled away mid-turn, in
+    // which case yanking them to the bottom is exactly what detaching forbids.
+    if (stickToBottomRef.current) scrollToBottom('auto')
   }, [newTurnTailPadding, scrollToBottom, topAnchoredMessageId])
 
   useLayoutEffect(() => {
@@ -795,8 +833,15 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         initialRevealFrameRef.current = null
         const currentEl = scrollRef.current
         if (!currentEl) return
-        positionConversationAtBottom(currentEl)
-        setIsAtBottom(true)
+        // A first message that opened the chat has already been anchored to the
+        // top by the time this frame runs (the align effect flushes before
+        // paint). Dropping back to the bottom here would undo it — and on a
+        // one-message chat "the bottom" is a screen of reserved empty space.
+        const holdingNewTurnSpace = heldNewTurnSpaceRef.current || pendingTopAlignIdRef.current != null
+        if (!holdingNewTurnSpace) {
+          positionConversationAtBottom(currentEl)
+          setIsAtBottom(true)
+        }
         setInitialScrollReady(true)
       })
     }
@@ -818,6 +863,10 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // several times per second during long streams.
   useEffect(() => {
     if (!stickToBottom || loading) return
+    // While a new turn holds reserved space below it, "not at the bottom" is
+    // the intended state — the reserve is exactly the gap this poll would
+    // otherwise close, dragging the fresh prompt back off the top of the view.
+    if (newTurnTailPadding > 0) return
     const el = scrollRef.current
     if (!el) return
     const id = setInterval(() => {
@@ -826,7 +875,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       if (dist > BOTTOM_SYNC_DELTA_PX) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
     }, BOTTOM_SYNC_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [stickToBottom, loading])
+  }, [stickToBottom, loading, newTurnTailPadding])
 
   // Observe the virtual sizer for immediate stick-to-bottom response
   // when virtualizer recalculates total height.
@@ -890,7 +939,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
             <div
               ref={sizerRef}
               style={{
-                height: virtualizer.getTotalSize() + newTurnTailPadding,
+                height: totalSize + newTurnTailPadding,
                 width: '100%',
                 position: 'relative',
               }}

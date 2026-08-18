@@ -1,3 +1,4 @@
+import { Children } from 'react'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -5,12 +6,14 @@ import {
   CONVERSATION_SKELETON_TURNS,
   Conversation,
   computeNewTurnTailPadding,
+  findConversationItemIndex,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
   positionConversationAtBottom,
   scrollAnchorDelta,
   shouldLoadOlderMessages,
+  unwrapConversationChildKey,
 } from './conversation'
 
 describe('Conversation', () => {
@@ -185,6 +188,47 @@ describe('scroll anchoring', () => {
     // Rounding jitter every animation frame would itself read as flicker.
     expect(scrollAnchorDelta(-120.2, -120)).toBe(0)
     expect(scrollAnchorDelta(-120, -120)).toBe(0)
+  })
+})
+
+describe('locating the message to anchor at the top', () => {
+  // Mirrors the real call shape: the transcript is passed as a nested array of
+  // keyed messages, followed by the conditionally-rendered queue.
+  const conversationChildren = (ids: string[], queue = false) =>
+    Children.toArray([ids.map((id) => <div key={id} />), queue ? <div key="queue" /> : false])
+
+  it('finds a message whose key React rewrote when flattening the children', () => {
+    // The regression: `Children.toArray` turns key `m-2` into `.0:$m-2`, so
+    // comparing the raw message id against the rendered key never matched and
+    // the whole new-turn top anchoring silently did nothing.
+    const items = conversationChildren(['m-1', 'm-2', 'm-3'])
+
+    expect(String((items[1] as { key: string }).key)).not.toBe('m-2')
+    expect(findConversationItemIndex(items, 'm-2')).toBe(1)
+    expect(findConversationItemIndex(items, 'm-3')).toBe(2)
+  })
+
+  it('still finds the newest message when the queue renders below it', () => {
+    expect(findConversationItemIndex(conversationChildren(['m-1', 'm-2'], true), 'm-2')).toBe(1)
+  })
+
+  it('reports -1 for an unknown or absent target', () => {
+    expect(findConversationItemIndex(conversationChildren(['m-1']), 'm-9')).toBe(-1)
+    expect(findConversationItemIndex(conversationChildren(['m-1']), null)).toBe(-1)
+    expect(findConversationItemIndex([], 'm-1')).toBe(-1)
+  })
+
+  it('restores keys that React escaped', () => {
+    // `:` and `=` are the two characters toArray escapes on the way in, so a
+    // round trip through React is the only honest check here.
+    const weird = '019f:99=80'
+    const [child] = conversationChildren([weird])
+    expect(unwrapConversationChildKey(String((child as { key: string }).key))).toBe(weird)
+
+    expect(unwrapConversationChildKey('.$m-1')).toBe('m-1')
+    // Positional keys (an unkeyed child) have no original key to recover.
+    expect(unwrapConversationChildKey('.0:1')).toBe('.0:1')
+    expect(unwrapConversationChildKey('m-1')).toBe('m-1')
   })
 })
 
