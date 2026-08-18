@@ -524,7 +524,7 @@ export function DeveloperChatWorkspace({
           )}
           {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
             // On desktop the conversation shows the minimap scrollbar (96px) flush to
-            // the right edge, and the jump-to-previous-message button sits just left
+            // the right edge, and the jump-to-previous-user-message button sits just left
             // of that; offset the indicator clear of both, not under them.
             <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[156px]'}`}>
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />

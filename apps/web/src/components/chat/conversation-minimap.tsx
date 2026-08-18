@@ -7,6 +7,15 @@ interface ConversationMinimapProps {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   /** The conversation's scroll container; null until the transcript renders. */
   scrollElement: HTMLDivElement | null
+  /**
+   * Offset of the virtualized sizer from the top of the scroll container, in px.
+   * The sizer (whose height is `totalSize`) sits below the container's top
+   * padding and the "load earlier messages" button, so a `scrollTop` of 0 does
+   * not mean the top of the transcript — the document offset is
+   * `scrollTop - sizerOffset`. Without this the rail's indicator and scrubbing
+   * drift from the real transcript by however much the sizer is inset.
+   */
+  sizerOffset: number
   /** Per-child role ('user' | 'agent'), index-aligned with the virtualizer items. */
   roles: Array<'user' | 'agent'>
   /** Per-child raw text, index-aligned with the virtualizer items. */
@@ -370,17 +379,21 @@ export function computeMinimapRailOffset({
   contentHeight,
   viewportHeight,
   scrollTop,
-  totalSize,
+  maxScroll,
 }: {
   contentHeight: number
   /** Height of the rail / viewport, in px. */
   viewportHeight: number
   scrollTop: number
-  /** Height of the whole virtualized document, in px. */
-  totalSize: number
+  /**
+   * Total scrollable range of the container, in px — `scrollHeight - clientHeight`.
+   * This is the real distance the transcript can travel, not the virtualized
+   * sizer height, which is inset inside the container by the top padding and
+   * the "load earlier messages" button.
+   */
+  maxScroll: number
 }): number {
   const overflow = contentHeight - viewportHeight
-  const maxScroll = totalSize - viewportHeight
   if (overflow <= 0 || maxScroll <= 0) return 0
   return overflow * Math.min(Math.max(scrollTop / maxScroll, 0), 1)
 }
@@ -398,7 +411,8 @@ export function computeMinimapScrollTop({
   railOffset,
   spans,
   viewportHeight,
-  totalSize,
+  maxScroll,
+  sizerOffset,
 }: {
   /** Pointer position relative to the top of the rail, in px. */
   pointerOffset: number
@@ -407,12 +421,21 @@ export function computeMinimapScrollTop({
   spans: MinimapSpan[]
   /** Height of the rail / viewport, in px. */
   viewportHeight: number
-  totalSize: number
+  /**
+   * Total scrollable range of the container, in px — `scrollHeight - clientHeight`.
+   */
+  maxScroll: number
+  /**
+   * Offset of the virtualized sizer from the top of the scroll container, in px.
+   * The document spans are in sizer coordinates, so a resolved document offset
+   * must be shifted down by this much to become a real `scrollTop`.
+   */
+  sizerOffset: number
 }): number {
   if (spans.length === 0) return 0
   const document = minimapContentToDocument(pointerOffset + railOffset, spans)
-  const max = Math.max(totalSize - viewportHeight, 0)
-  return Math.min(Math.max(document - viewportHeight / 2, 0), max)
+  const max = Math.max(maxScroll, 0)
+  return Math.min(Math.max(document - viewportHeight / 2 + sizerOffset, 0), max)
 }
 
 /**
@@ -421,7 +444,7 @@ export function computeMinimapScrollTop({
  * turns, muted for agent turns — so the rail looks like the transcript seen
  * from very far away. Clicking or dragging it scrolls to that position.
  */
-export function ConversationMinimap({ virtualizer, scrollElement, roles, texts, messageInputs, textWidth, onScrub }: ConversationMinimapProps) {
+export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, roles, texts, messageInputs, textWidth, onScrub }: ConversationMinimapProps) {
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
@@ -513,12 +536,21 @@ export function ConversationMinimap({ virtualizer, scrollElement, roles, texts, 
 
   if (totalSize <= 0 || viewportHeight <= 0) return null
 
+  // The real scrollable range of the container. The virtualized sizer is inset
+  // inside it (top padding + "load earlier messages" button), so its height is
+  // not the distance the transcript can actually travel — using it here would
+  // make the rail's pan and indicator drift from the real scroll position.
+  const maxScroll = scrollElement ? scrollElement.scrollHeight - scrollElement.clientHeight : 0
+  // The document spans are in sizer coordinates; the container's scrollTop is
+  // measured from the container top, which is `sizerOffset` above the sizer.
+  const documentScrollTop = scrollTop - sizerOffset
+
   // The preview keeps its own fixed scale; the rail pans over it when the
   // conversation has more lines than the rail has room for.
-  const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, scrollTop, totalSize })
-  const indicatorTop = minimapDocumentToContent(scrollTop, spans) - railOffset
-  const indicatorHeight = minimapDocumentToContent(scrollTop + viewportHeight, spans)
-    - minimapDocumentToContent(scrollTop, spans)
+  const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, scrollTop, maxScroll })
+  const indicatorTop = minimapDocumentToContent(documentScrollTop, spans) - railOffset
+  const indicatorHeight = minimapDocumentToContent(documentScrollTop + viewportHeight, spans)
+    - minimapDocumentToContent(documentScrollTop, spans)
 
   const handlePointer = (rail: HTMLElement, clientY: number) => {
     if (!scrollElement) return
@@ -528,7 +560,8 @@ export function ConversationMinimap({ virtualizer, scrollElement, roles, texts, 
       railOffset,
       spans,
       viewportHeight,
-      totalSize,
+      maxScroll,
+      sizerOffset,
     })
     onScrub()
   }

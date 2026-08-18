@@ -185,12 +185,12 @@ describe('computeMinimapLayout', () => {
 
 describe('computeMinimapRailOffset', () => {
   it('never pans a preview that fits the rail', () => {
-    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 0, totalSize: 10_000 })).toBe(0)
-    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 9_200, totalSize: 10_000 })).toBe(0)
+    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 0, maxScroll: 9_200 })).toBe(0)
+    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 9_200, maxScroll: 9_200 })).toBe(0)
   })
 
   it('pans an overflowing preview in step with the transcript', () => {
-    const rail = { contentHeight: 2_400, viewportHeight: 800, totalSize: 10_000 }
+    const rail = { contentHeight: 2_400, viewportHeight: 800, maxScroll: 9_200 }
     expect(computeMinimapRailOffset({ ...rail, scrollTop: 0 })).toBe(0)
     // Halfway through the scrollable range → halfway through the overflow.
     expect(computeMinimapRailOffset({ ...rail, scrollTop: 4_600 })).toBeCloseTo(800)
@@ -207,7 +207,7 @@ describe('computeMinimapScrollTop', () => {
     blocks: [block(0, 10_000, 'agent', Array.from({ length: 100 }, () => 1))],
     rowPitch: 3,
   })
-  const rail = { railOffset: 0, spans, viewportHeight: 800, totalSize: 10_000 }
+  const rail = { railOffset: 0, spans, viewportHeight: 800, maxScroll: 9_200, sizerOffset: 0 }
 
   it('centers the viewport on the pressed point', () => {
     // Halfway down the 300px preview → the middle of the transcript, offset up
@@ -238,13 +238,23 @@ describe('computeMinimapScrollTop', () => {
       railOffset: 1_600,
       spans: long.spans,
       viewportHeight: 800,
-      totalSize: 10_000,
+      maxScroll: 9_200,
+      sizerOffset: 0,
     })
     expect(scrollTop).toBeCloseTo(10_000 * (1_600 / 2_400) - 400)
   })
 
   it('stays at the top when there is nothing laid out', () => {
-    expect(computeMinimapScrollTop({ pointerOffset: 400, railOffset: 0, spans: [], viewportHeight: 800, totalSize: 10_000 })).toBe(0)
+    expect(computeMinimapScrollTop({ pointerOffset: 400, railOffset: 0, spans: [], viewportHeight: 800, maxScroll: 9_200, sizerOffset: 0 })).toBe(0)
+  })
+
+  it('shifts the resolved scroll by the sizer offset below the container top', () => {
+    // The sizer sits 200px below the container top (top padding + the "load
+    // earlier messages" button), so a document offset of 5000 (the middle of the
+    // transcript) needs scrollTop 4800 to center it, not 4600.
+    expect(computeMinimapScrollTop({ pointerOffset: 150, railOffset: 0, spans, viewportHeight: 800, maxScroll: 9_200, sizerOffset: 200 })).toBeCloseTo(4_800)
+    // The clamp still uses the real maxScroll, not the sizer height.
+    expect(computeMinimapScrollTop({ pointerOffset: 300, railOffset: 0, spans, viewportHeight: 800, maxScroll: 9_200, sizerOffset: 200 })).toBeCloseTo(9_200)
   })
 
   it('keeps a rail row and the scroll it scrubs to pointing at the same message', () => {
@@ -256,7 +266,8 @@ describe('computeMinimapScrollTop', () => {
       railOffset: 0,
       spans: layout.spans,
       viewportHeight: 800,
-      totalSize: 10_000,
+      maxScroll: 9_200,
+      sizerOffset: 0,
     })
     expect(scrollTop).toBeLessThanOrEqual(6_000)
     expect(scrollTop + 800).toBeGreaterThanOrEqual(5_000)

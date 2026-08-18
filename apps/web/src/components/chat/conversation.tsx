@@ -63,13 +63,28 @@ const STICKY_BOTTOM_THRESHOLD_PX = 24
 const BOTTOM_SETTLE_MS = 900
 /** Target drift below this isn't worth re-issuing a scroll for. */
 const BOTTOM_SETTLE_EPSILON_PX = 1
+/**
+ * Consecutive frames the view has to already be flush with the end before the
+ * settle stops chasing. One frame isn't enough: a measurement pass lands a
+ * frame after the render that triggered it, so a single flush frame is
+ * routinely followed by the container growing again.
+ */
+const BOTTOM_SETTLE_STABLE_FRAMES = 3
 /** Ignore the message the viewport is already parked on when jumping upward. */
 const PREVIOUS_MESSAGE_EPSILON_PX = 8
 /** Breathing room between the floating scroll controls and the minimap rail. */
 const FLOATING_CONTROL_GAP_PX = 12
 const DEFAULT_ITEM_HEIGHT = 120
 const BOTTOM_SYNC_INTERVAL_MS = 500
-const BOTTOM_SYNC_DELTA_PX = 8
+/**
+ * Drift the bottom-sync poll will close. Deliberately tight: the sizer only
+ * reports the virtualizer's *total size*, so a last row whose measurement lags
+ * a frame overflows it without ever resizing it. That leftover — usually only a
+ * handful of pixels — is invisible to the ResizeObserver, and a coarse
+ * threshold here is what let it survive as a permanent gap under the last
+ * message. Re-pinning when already flush is a no-op, so a tight value is free.
+ */
+const BOTTOM_SYNC_DELTA_PX = 1
 const TOUCH_DETACH_THRESHOLD_PX = 4
 const ESTIMATE_TEXT_LIMIT = 12_000
 /** Stable identity so an absent `messageContents` doesn't rebuild the minimap. */
@@ -100,21 +115,29 @@ export function computeNewTurnTailPadding({
  * the last one that starts above the current viewport top. A message whose top
  * is only just above the fold counts as the one already in view, so repeated
  * jumps walk the transcript instead of toggling between two positions.
+ *
+ * `isEligible` narrows which messages count as a stop — the chat only jumps
+ * between the user's own prompts, since those are the turn boundaries anyone
+ * actually navigates by.
  */
 export function findPreviousMessageIndex(
   items: Array<{ index: number; start: number }>,
   scrollOffset: number,
+  isEligible?: (index: number) => boolean,
 ): number | null {
+  const stops = isEligible ? items.filter((item) => isEligible(item.index)) : items
   let previous: number | null = null
-  for (const item of items) {
+  for (const item of stops) {
     if (item.start < scrollOffset - PREVIOUS_MESSAGE_EPSILON_PX) {
       if (previous == null || item.index > previous) previous = item.index
     }
   }
-  // Scrolled past the top of the first rendered message but with nothing above
-  // it — the leading padding. Treat the first message as the target.
-  if (previous == null && scrollOffset > 0 && items.length > 0) {
-    return items.reduce((min, item) => Math.min(min, item.index), items[0].index)
+  // Scrolled past the top of the first candidate but with nothing above it —
+  // the leading padding. Treat the first candidate as the target, unless it
+  // starts below the fold: jumping "up" must never scroll the view down.
+  if (previous == null && scrollOffset > 0 && stops.length > 0) {
+    const first = stops.reduce((earliest, item) => (item.index < earliest.index ? item : earliest), stops[0])
+    return first.start <= scrollOffset ? first.index : null
   }
   return previous
 }
@@ -321,6 +344,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     setScrollElement(el)
   }, [])
   const sizerRef = useRef<HTMLDivElement | null>(null)
+  // Distance from the top of the scroll container to the top of the virtual
+  // sizer (top padding + the "load earlier messages" button). The minimap's
+  // document spans live in sizer coordinates, so this is what converts a
+  // resolved document offset back into a real `scrollTop`.
+  const [sizerOffset, setSizerOffset] = useState(0)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const hasContent = childItems.length > 0
   // Per-child role for the minimap, index-aligned with childItems. Anything
@@ -334,6 +362,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       ),
     [messageEstimateInputs],
   )
+  // Mirrored so the scroll callbacks that consult roles stay identity-stable.
+  const minimapRolesRef = useRef(minimapRoles)
+  minimapRolesRef.current = minimapRoles
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [canJumpUp, setCanJumpUp] = useState(false)
   const [stickToBottom, setStickToBottom] = useState(true)
@@ -501,6 +532,23 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // without needing the (identity-unstable) virtualizer in their deps.
   const virtualizerRef = useRef(virtualizer)
   virtualizerRef.current = virtualizer
+
+  // Index of the user prompt the jump-up button would land on, or null when
+  // there is none above the fold. Measurements cover the whole transcript, not
+  // just the rendered window, so a prompt far above the viewport is still a
+  // valid target.
+  const findPreviousUserMessage = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return null
+    const roles = minimapRolesRef.current
+    const measurements = virtualizerRef.current.measurementsCache
+    const items = measurements.length > 0 ? measurements : virtualizerRef.current.getVirtualItems()
+    return findPreviousMessageIndex(
+      items,
+      virtualizerRef.current.scrollOffset ?? el.scrollTop,
+      (index) => roles[index] === 'user',
+    )
+  }, [])
 
   useLayoutEffect(() => {
     if (!scrollElement) return
@@ -737,7 +785,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     prevScrollTopRef.current = el.scrollTop
 
     setIsAtBottom(nextIsAtBottom)
-    setCanJumpUp(el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX)
+    setCanJumpUp(el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX && findPreviousUserMessage() != null)
 
     // Keep the anchor current while detached, so a height change from streamed
     // content can put the view back exactly where the user left it. Not needed
@@ -776,7 +824,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       stickToBottomRef.current = true
       setStickToBottom(true)
     }
-  }, [])
+  }, [findPreviousUserMessage])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false) => {
     const el = scrollRef.current
@@ -789,11 +837,18 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (!settle) return
 
     // Rows measure only as they render, so the ones this scroll reveals push
-    // the real bottom further down while the scroll is still running — which
-    // is why a single scrollTo lands short of the end. Keep re-targeting until
-    // the height stops growing, then pin exactly.
-    let lastTarget = el.scrollHeight
+    // the real bottom further down while the scroll is still running — which is
+    // why a single scrollTo lands short of the end.
+    //
+    // Watching the container *grow* isn't enough to catch that: the last row
+    // can settle a few pixels taller than the virtualizer's total size without
+    // the sizer changing height at all, so the scroll height never "grows" and
+    // the chase gives up on a view that is still short of the end. Track the
+    // remaining distance to the bottom instead, and only stop once it has stayed
+    // closed for a few consecutive frames.
     const deadline = Date.now() + BOTTOM_SETTLE_MS
+    let lastTarget = el.scrollHeight
+    let stableFrames = 0
     const step = () => {
       bottomSettleFrameRef.current = null
       const current = scrollRef.current
@@ -801,14 +856,25 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       // someone scrolling up is exactly the yank detaching exists to prevent.
       if (!current || !stickToBottomRef.current || detachedRef.current) return
       const target = current.scrollHeight
-      if (target - lastTarget > BOTTOM_SETTLE_EPSILON_PX) {
-        lastTarget = target
-        current.scrollTo({ top: target, behavior })
+      const remaining = target - current.scrollTop - current.clientHeight
+      if (remaining > BOTTOM_SETTLE_EPSILON_PX) {
+        stableFrames = 0
+        // Only re-issue when the destination actually moved; re-targeting the
+        // same offset every frame would restart the smooth animation instead of
+        // letting it finish.
+        if (Math.abs(target - lastTarget) > BOTTOM_SETTLE_EPSILON_PX) {
+          lastTarget = target
+          current.scrollTo({ top: target, behavior })
+        }
+      } else {
+        stableFrames += 1
       }
-      if (Date.now() < deadline) {
+      if (stableFrames < BOTTOM_SETTLE_STABLE_FRAMES && Date.now() < deadline) {
         bottomSettleFrameRef.current = requestAnimationFrame(step)
         return
       }
+      // Out of time with the view still short of the end: a smooth animation
+      // can't converge on a target that keeps moving, so land it outright.
       if (current.scrollHeight - current.scrollTop - current.clientHeight > BOTTOM_SETTLE_EPSILON_PX) {
         current.scrollTop = current.scrollHeight
       }
@@ -847,18 +913,13 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   }, [captureScrollAnchor])
 
   const jumpToPreviousMessage = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const target = findPreviousMessageIndex(
-      virtualizerRef.current.getVirtualItems(),
-      virtualizerRef.current.scrollOffset ?? el.scrollTop,
-    )
+    const target = findPreviousUserMessage()
     if (target == null) return
     virtualizerRef.current.scrollToIndex(target, { align: 'start' })
     // A programmatic jump is the same intent as scrolling by hand: stop
     // following the stream, and anchor wherever it lands.
     detachFromBottom()
-  }, [detachFromBottom])
+  }, [detachFromBottom, findPreviousUserMessage])
 
   // When a new user message lands, reserve one viewport below its top edge.
   // This lets the prompt jump to the top immediately, then the reserve shrinks
@@ -998,12 +1059,28 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         updateBottomState()
         return
       }
-      scrollToBottom('auto')
+      // Settle here too. A plain follow lands on the height this resize
+      // reported, but the row that caused it is measured a frame later — and
+      // this call cancels any settle already chasing that, so without one of
+      // its own the follow silently gives up a few pixels short.
+      scrollToBottom('auto', true)
     })
 
     observer.observe(sizerEl)
     return () => observer.disconnect()
   }, [newTurnTailPadding, restoreScrollAnchor, scrollToBottom, updateBottomState])
+
+  // Track how far the virtual sizer sits below the top of the scroll container.
+  // The minimap's document spans are in sizer coordinates, so this offset is
+  // what turns a resolved document position into a real `scrollTop`. It only
+  // changes when the "load earlier messages" button appears/disappears above the
+  // sizer, so it is recomputed on mount and whenever that button toggles.
+  useEffect(() => {
+    const sizerEl = sizerRef.current
+    const scrollEl = scrollRef.current
+    if (!sizerEl || !scrollEl) return
+    setSizerOffset(sizerEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top)
+  }, [hasMore])
 
   // Park the floating controls just left of the minimap rail rather than on top
   // of it — a click meant for a button would otherwise scrub the transcript.
@@ -1083,8 +1160,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       {initialScrollReady && !loading && canJumpUp && (
         <ConversationScrollButton
           direction="up"
-          aria-label="Jump to previous message"
-          title="Jump to previous message"
+          aria-label="Jump to previous user message"
+          title="Jump to previous user message"
           className="left-auto top-4 bottom-auto translate-x-0"
           style={{ right: floatingControlInset }}
           onClick={jumpToPreviousMessage}
@@ -1110,6 +1187,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <ConversationMinimap
           virtualizer={virtualizer}
           scrollElement={scrollElement}
+          sizerOffset={sizerOffset}
           roles={minimapRoles}
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
           messageInputs={messageEstimateInputs ?? []}

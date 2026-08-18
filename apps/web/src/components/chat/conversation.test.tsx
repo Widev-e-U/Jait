@@ -48,6 +48,32 @@ describe('Conversation', () => {
       expect(findPreviousMessageIndex(items, 0)).toBeNull()
       expect(findPreviousMessageIndex([], 500)).toBeNull()
     })
+
+    describe('restricted to the user\'s own prompts', () => {
+      // A realistic turn layout: prompt, reply, prompt, reply.
+      const turns = [
+        { index: 0, start: 0 },
+        { index: 1, start: 200 },
+        { index: 2, start: 900 },
+        { index: 3, start: 1000 },
+      ]
+      const isUser = (index: number) => index % 2 === 0
+
+      it('skips assistant replies and lands on the prompt that started the turn', () => {
+        // Reading the second reply — jumping up goes to prompt 2, not reply 1.
+        expect(findPreviousMessageIndex(turns, 1200, isUser)).toBe(2)
+      })
+
+      it('walks turn by turn on repeated jumps', () => {
+        expect(findPreviousMessageIndex(turns, 900, isUser)).toBe(0)
+        expect(findPreviousMessageIndex(turns, 0, isUser)).toBeNull()
+      })
+
+      it('never jumps down to a prompt that is still below the fold', () => {
+        // Only assistant content above the viewport: nothing to jump up to.
+        expect(findPreviousMessageIndex(turns, 500, (index) => index === 3)).toBeNull()
+      })
+    })
   })
 
   it('positions the scroll element at the bottom synchronously', () => {
