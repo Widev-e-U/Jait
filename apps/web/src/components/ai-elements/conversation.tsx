@@ -1,4 +1,4 @@
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { type ComponentProps } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,8 +27,10 @@ export function ConversationContent({
 
 export function ConversationScrollButton({
   className,
+  direction = 'down',
   ...props
-}: ComponentProps<typeof Button>) {
+}: ComponentProps<typeof Button> & { direction?: 'up' | 'down' }) {
+  const Icon = direction === 'up' ? ArrowUp : ArrowDown
   return (
     <Button
       variant="outline"
@@ -39,7 +41,7 @@ export function ConversationScrollButton({
       )}
       {...props}
     >
-      <ArrowDown className="h-4 w-4" />
+      <Icon className="h-4 w-4" />
     </Button>
   )
 }

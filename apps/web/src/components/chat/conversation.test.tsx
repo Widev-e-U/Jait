@@ -7,6 +7,7 @@ import {
   Conversation,
   computeNewTurnTailPadding,
   findConversationItemIndex,
+  findPreviousMessageIndex,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
@@ -19,6 +20,34 @@ import {
 describe('Conversation', () => {
   it('starts at the lowest available scroll position before the chat paints', () => {
     expect(INITIAL_CONVERSATION_SCROLL_OFFSET).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  describe('findPreviousMessageIndex', () => {
+    const items = [
+      { index: 3, start: 0 },
+      { index: 4, start: 400 },
+      { index: 5, start: 900 },
+    ]
+
+    it('targets the top of the message the viewport is reading', () => {
+      // Scrolled 50px into message 5 — jumping up reveals that message's start.
+      expect(findPreviousMessageIndex(items, 950)).toBe(5)
+      expect(findPreviousMessageIndex(items, 450)).toBe(4)
+    })
+
+    it('walks upward instead of re-targeting the message already at the top', () => {
+      // Parked exactly on message 4 — jumping again must reach 3, not 4.
+      expect(findPreviousMessageIndex(items, 400)).toBe(3)
+    })
+
+    it('falls back to the first rendered message while inside the leading padding', () => {
+      expect(findPreviousMessageIndex(items, 4)).toBe(3)
+    })
+
+    it('has nothing to jump to at the very top', () => {
+      expect(findPreviousMessageIndex(items, 0)).toBeNull()
+      expect(findPreviousMessageIndex([], 500)).toBeNull()
+    })
   })
 
   it('positions the scroll element at the bottom synchronously', () => {

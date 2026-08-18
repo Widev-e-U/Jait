@@ -27,6 +27,12 @@ interface ConversationMinimapProps {
   onScrub: () => void
 }
 
+/**
+ * Rail width. Exported so the conversation can inset its floating controls by
+ * exactly this much and park them alongside the rail rather than under it.
+ */
+export const MINIMAP_RAIL_WIDTH_PX = 96
+
 /** Painted height of each actual transcript-line mark on the minimap. */
 const MINIMAP_ROW_HEIGHT_PX = 2
 /**
@@ -536,7 +542,8 @@ export function ConversationMinimap({ virtualizer, scrollElement, roles, texts, 
       onPointerMove={(e) => {
         if (e.buttons > 0) handlePointer(e.currentTarget, e.clientY)
       }}
-      className="relative h-full w-24 shrink-0 cursor-pointer select-none overflow-hidden border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
+      className="relative h-full shrink-0 cursor-pointer select-none overflow-hidden border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
+      style={{ width: MINIMAP_RAIL_WIDTH_PX }}
       role="slider"
       aria-label="Conversation minimap"
     >

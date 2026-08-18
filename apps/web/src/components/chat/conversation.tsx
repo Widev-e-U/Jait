@@ -2,7 +2,7 @@ import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
-import { ConversationMinimap } from './conversation-minimap'
+import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { cn } from '@/lib/utils'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 
@@ -51,6 +51,22 @@ interface ConversationProps {
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
+/**
+ * How long a scroll-to-bottom keeps chasing the end of the list.
+ *
+ * Virtual rows are measured only once they render, so the rows a scroll to the
+ * end reveals routinely turn out taller than their estimates: the container
+ * grows mid-scroll and the real bottom moves further down, leaving the view
+ * short of it. Long enough to outlast a smooth scroll plus a few measurement
+ * passes.
+ */
+const BOTTOM_SETTLE_MS = 900
+/** Target drift below this isn't worth re-issuing a scroll for. */
+const BOTTOM_SETTLE_EPSILON_PX = 1
+/** Ignore the message the viewport is already parked on when jumping upward. */
+const PREVIOUS_MESSAGE_EPSILON_PX = 8
+/** Breathing room between the floating scroll controls and the minimap rail. */
+const FLOATING_CONTROL_GAP_PX = 12
 const DEFAULT_ITEM_HEIGHT = 120
 const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 8
@@ -77,6 +93,30 @@ export function computeNewTurnTailPadding({
 }): number {
   if (viewportHeight <= 0 || messageStart < 0 || totalSize < messageStart) return 0
   return Math.max(viewportHeight - (totalSize - messageStart), 0)
+}
+
+/**
+ * Index of the message to jump to when moving one message up the transcript:
+ * the last one that starts above the current viewport top. A message whose top
+ * is only just above the fold counts as the one already in view, so repeated
+ * jumps walk the transcript instead of toggling between two positions.
+ */
+export function findPreviousMessageIndex(
+  items: Array<{ index: number; start: number }>,
+  scrollOffset: number,
+): number | null {
+  let previous: number | null = null
+  for (const item of items) {
+    if (item.start < scrollOffset - PREVIOUS_MESSAGE_EPSILON_PX) {
+      if (previous == null || item.index > previous) previous = item.index
+    }
+  }
+  // Scrolled past the top of the first rendered message but with nothing above
+  // it — the leading padding. Treat the first message as the target.
+  if (previous == null && scrollOffset > 0 && items.length > 0) {
+    return items.reduce((min, item) => Math.min(min, item.index), items[0].index)
+  }
+  return previous
 }
 
 /** Sub-pixel jitter isn't worth a scroll write — it would itself look like flicker. */
@@ -295,6 +335,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     [messageEstimateInputs],
   )
   const [isAtBottom, setIsAtBottom] = useState(true)
+  const [canJumpUp, setCanJumpUp] = useState(false)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
   const [conversationViewportHeight, setConversationViewportHeight] = useState(0)
@@ -321,6 +362,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const initialRevealFrameRef = useRef<number | null>(null)
   // Pending re-anchor after a minimap scrub (see detachFromBottom).
   const scrubAnchorFrameRef = useRef<number | null>(null)
+  // In-flight "chase the end of the list" frame (see scrollToBottom).
+  const bottomSettleFrameRef = useRef<number | null>(null)
   // Set briefly after a click inside the conversation (e.g. expanding a tool
   // call or reasoning block) so the resize this causes doesn't get treated
   // as new streamed content and yank the view down to the bottom.
@@ -683,11 +726,18 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     // bottom button pops up the instant a message is sent.
     const nextIsAtBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
       || (heldNewTurnSpaceRef.current && !detachedRef.current)
-    const atVeryBottom = distanceFromBottom < 4
+    // Re-attaching used to demand a near-exact hit on the bottom edge, which a
+    // virtualized list can make unreachable: every wheel tick that lands at the
+    // end renders more rows, they measure taller than estimated, and the bottom
+    // moves down by more than the tolerance. The user scrolls down forever and
+    // never gets stuck to the bottom again. Same tolerance as the button's, so
+    // "the button is hidden" and "following the stream" can't disagree.
+    const atVeryBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
     const scrollingUp = el.scrollTop < prevScrollTopRef.current
     prevScrollTopRef.current = el.scrollTop
 
     setIsAtBottom(nextIsAtBottom)
+    setCanJumpUp(el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX)
 
     // Keep the anchor current while detached, so a height change from streamed
     // content can put the view back exactly where the user left it. Not needed
@@ -728,11 +778,44 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     }
   }, [])
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth', settle = false) => {
     const el = scrollRef.current
     if (!el) return
+    if (bottomSettleFrameRef.current !== null) {
+      cancelAnimationFrame(bottomSettleFrameRef.current)
+      bottomSettleFrameRef.current = null
+    }
     el.scrollTo({ top: el.scrollHeight, behavior })
-  }, [])
+    if (!settle) return
+
+    // Rows measure only as they render, so the ones this scroll reveals push
+    // the real bottom further down while the scroll is still running — which
+    // is why a single scrollTo lands short of the end. Keep re-targeting until
+    // the height stops growing, then pin exactly.
+    let lastTarget = el.scrollHeight
+    const deadline = Date.now() + BOTTOM_SETTLE_MS
+    const step = () => {
+      bottomSettleFrameRef.current = null
+      const current = scrollRef.current
+      // Bail out the moment the user takes over — chasing the bottom against
+      // someone scrolling up is exactly the yank detaching exists to prevent.
+      if (!current || !stickToBottomRef.current || detachedRef.current) return
+      const target = current.scrollHeight
+      if (target - lastTarget > BOTTOM_SETTLE_EPSILON_PX) {
+        lastTarget = target
+        current.scrollTo({ top: target, behavior })
+      }
+      if (Date.now() < deadline) {
+        bottomSettleFrameRef.current = requestAnimationFrame(step)
+        return
+      }
+      if (current.scrollHeight - current.scrollTop - current.clientHeight > BOTTOM_SETTLE_EPSILON_PX) {
+        current.scrollTop = current.scrollHeight
+      }
+      updateBottomState()
+    }
+    bottomSettleFrameRef.current = requestAnimationFrame(step)
+  }, [updateBottomState])
 
   // The minimap moves the container by writing `scrollTop` directly, which no
   // wheel/touch handler ever sees — so `updateBottomState` used to read the
@@ -744,6 +827,10 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // is written, so the anchor is captured at the new position.
   const detachFromBottom = useCallback(() => {
     detachedRef.current = true
+    if (bottomSettleFrameRef.current !== null) {
+      cancelAnimationFrame(bottomSettleFrameRef.current)
+      bottomSettleFrameRef.current = null
+    }
     if (stickToBottomRef.current) {
       stickToBottomRef.current = false
       setStickToBottom(false)
@@ -758,6 +845,20 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       captureScrollAnchor()
     })
   }, [captureScrollAnchor])
+
+  const jumpToPreviousMessage = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const target = findPreviousMessageIndex(
+      virtualizerRef.current.getVirtualItems(),
+      virtualizerRef.current.scrollOffset ?? el.scrollTop,
+    )
+    if (target == null) return
+    virtualizerRef.current.scrollToIndex(target, { align: 'start' })
+    // A programmatic jump is the same intent as scrolling by hand: stop
+    // following the stream, and anchor wherever it lands.
+    detachFromBottom()
+  }, [detachFromBottom])
 
   // When a new user message lands, reserve one viewport below its top edge.
   // This lets the prompt jump to the top immediately, then the reserve shrinks
@@ -855,6 +956,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       if (scrubAnchorFrameRef.current !== null) {
         cancelAnimationFrame(scrubAnchorFrameRef.current)
       }
+      if (bottomSettleFrameRef.current !== null) {
+        cancelAnimationFrame(bottomSettleFrameRef.current)
+      }
     }
   }, [])
 
@@ -900,6 +1004,10 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     observer.observe(sizerEl)
     return () => observer.disconnect()
   }, [newTurnTailPadding, restoreScrollAnchor, scrollToBottom, updateBottomState])
+
+  // Park the floating controls just left of the minimap rail rather than on top
+  // of it — a click meant for a button would otherwise scrub the transcript.
+  const floatingControlInset = (showMinimap ? MINIMAP_RAIL_WIDTH_PX : 0) + FLOATING_CONTROL_GAP_PX
 
   return (
     <AIConversation className={cn('relative flex flex-1 overflow-hidden', className)}>
@@ -972,14 +1080,28 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <ConversationPositioningSkeleton label={loading ? loadingLabel : 'Preparing conversation'} />
       )}
 
+      {initialScrollReady && !loading && canJumpUp && (
+        <ConversationScrollButton
+          direction="up"
+          aria-label="Jump to previous message"
+          title="Jump to previous message"
+          className="left-auto top-4 bottom-auto translate-x-0"
+          style={{ right: floatingControlInset }}
+          onClick={jumpToPreviousMessage}
+        />
+      )}
+
       {initialScrollReady && !loading && !isAtBottom && (
         <ConversationScrollButton
-          className="bottom-5"
+          aria-label="Scroll to latest message"
+          title="Scroll to latest message"
+          className="left-auto bottom-5 translate-x-0"
+          style={{ right: floatingControlInset }}
           onClick={() => {
             detachedRef.current = false
             setStickToBottom(true)
             stickToBottomRef.current = true
-            scrollToBottom()
+            scrollToBottom('smooth', true)
           }}
         />
       )}
