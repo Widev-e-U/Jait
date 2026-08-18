@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.736](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.736) — 2026-08-18
+- fix(web): keep global new chat personal after opening a project — 4add9d3d
+- refactor(web): extract chat minimap into a dedicated component with tests — 3f6460da
+
 ## [v0.1.735](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.735) — 2026-08-17
 - fix(web): persist per-project editor layout across switches and reloads — 0c499945
 
