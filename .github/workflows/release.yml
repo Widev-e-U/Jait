@@ -592,6 +592,11 @@ jobs:
           files: ${{ env.RELEASE_ASSET_DIR }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Self-hosted runner sits behind a TLS-intercepting proxy; Node does
+          # not trust the OS CA store by default. Tell it to use the system
+          # store (same roots gh and the shell already trust) so asset uploads
+          # to api.github.com don't fail with "self-signed certificate".
+          NODE_OPTIONS: --use-system-ca
 
       - name: Clean up staged release assets
         if: always()
