@@ -9,6 +9,7 @@ import type { ActiveProjectState } from '@/lib/active-project'
 
 interface DeveloperWorkspacePanesProps {
   activeProject: ActiveProjectState
+  activeProjectId: string | null
   activeProjectFileId: string | null
   activeProjectRoot: string | null
   activeSessionId: string | null
@@ -83,6 +84,7 @@ interface DeveloperWorkspacePanesProps {
 
 export function DeveloperWorkspacePanes({
   activeProject,
+  activeProjectId,
   activeProjectFileId,
   activeProjectRoot,
   activeSessionId,
@@ -175,6 +177,7 @@ export function DeveloperWorkspacePanes({
       resetKeys={[activeProject?.projectRoot, showProjectTree, showProjectEditor, mobileTreeTab]}
     >
       <ProjectPanel
+        key={activeProjectId ?? `${activeProject?.nodeId ?? 'gateway'}:${activeProject?.projectRoot ?? 'project'}`}
         ref={projectRef}
         autoOpenRemotePath={activeProject?.projectRoot ?? null}
         surfaceId={activeProject?.surfaceId ?? null}

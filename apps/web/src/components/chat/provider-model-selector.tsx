@@ -597,7 +597,7 @@ export function ProviderModelSelector({
       disabled={disabled}
       onClick={isMobile ? () => handleOpenChange(true) : undefined}
       className={cn(
-        'flex h-10 items-center gap-1 rounded-md border border-transparent px-2 py-1 text-sm font-medium text-muted-foreground sm:h-8 sm:px-1.5 sm:text-xs',
+        'inline-flex h-10 max-w-full items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium text-muted-foreground sm:h-8 sm:px-1.5 sm:text-xs',
         'hover:text-foreground hover:bg-muted/60 transition-colors',
         'focus-visible:outline-none focus-visible:border-ring/60 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50',
         'disabled:pointer-events-none disabled:opacity-50',
@@ -608,21 +608,20 @@ export function ProviderModelSelector({
     >
       <CurrentIcon className="h-4 w-4 shrink-0" />
       {!compact && (
-        <>
-          <span className="w-[72px] truncate">{currentProvider.label}</span>
-          <span className="w-[112px] truncate font-mono text-xs opacity-80">{displayModelLabel}</span>
-        </>
-      )}
-      {!compact && locationLabel && (
-        <span className="flex w-[72px] items-center gap-0.5 truncate text-2xs text-blue-500">
-          <Monitor className="h-3 w-3" />
-          {locationLabel}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="max-w-32 truncate text-foreground/90">{currentProvider.label}</span>
+          <span className="h-3 w-px shrink-0 bg-border" aria-hidden="true" />
+          <span className="max-w-36 truncate font-mono text-[11px] font-normal opacity-75">{displayModelLabel}</span>
         </span>
       )}
-      <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center">
-        {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
-      </span>
-      <ChevronDown className="h-3 w-3 opacity-60" />
+      {!compact && locationLabel && (
+        <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-blue-500">
+          <Monitor className="h-3 w-3 shrink-0" />
+          <span className="truncate">{locationLabel}</span>
+        </span>
+      )}
+      {loadingModels && <Loader2 className="h-3 w-3 shrink-0 animate-spin opacity-70" />}
+      <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   )
 

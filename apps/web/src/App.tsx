@@ -1193,7 +1193,11 @@ function App() {
     activeSessionId, 'manager.selectedRepo', token,
   )
   const [projectTabsState, setProjectTabsState] = useState<ProjectTabsState | null>(null)
-  const [projectStateReady, setProjectStateReady] = useState(false)
+  const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null)
+  const projectStateReady = activeProjectId !== null && projectStateReadyId === activeProjectId
+  const setProjectStateReady = useCallback((ready: boolean) => {
+    setProjectStateReadyId(ready ? activeProjectId : null)
+  }, [activeProjectId])
   const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
   const projectUiRestoreKeyRef = useRef<string | null>(null)
   const projectSurfaceFallbackKeyRef = useRef<string | null>(null)
@@ -4649,6 +4653,7 @@ function App() {
 
               <DeveloperWorkspacePanes
                 activeProject={activeProject}
+                activeProjectId={activeProjectId}
                 activeProjectFileId={activeProjectFileId}
                 activeProjectRoot={activeProjectRoot}
                 activeSessionId={activeSessionId}

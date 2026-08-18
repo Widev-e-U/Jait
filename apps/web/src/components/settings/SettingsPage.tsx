@@ -781,9 +781,10 @@ export function SettingsPage({
     'desktop tray close window quit minimize app',
     appVersion,
   )
+  const wearWatches = Array.isArray(wearStatus?.watches) ? wearStatus.watches : []
   const showWatchSection = platform === 'capacitor' && matchesSearch(
     'watch wear os companion connected paired update apk transfer channel',
-    ...((wearStatus?.watches ?? []).map((watch) => watch.name)),
+    ...wearWatches.map((watch) => watch.name),
   )
   const showGatewaySection = platform !== 'web' && matchesSearch(
     'gateway connection url domain ip server host network',
@@ -1259,7 +1260,7 @@ const providerAccountsCard = (
                 {wearStatusLoading && !wearStatus ? (
                   <Badge variant="outline"><Loader2 className="mr-1 h-3 w-3 animate-spin" />Checking...</Badge>
                 ) : wearStatus?.connected ? (
-                  wearStatus.watches.map((watch) => (
+                  wearWatches.map((watch) => (
                     <Badge key={watch.id} variant={watch.nearby ? 'success' : 'outline'}>
                       {watch.name}
                     </Badge>
