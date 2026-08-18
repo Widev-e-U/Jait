@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.735](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.735) — 2026-08-17
+- fix(web): persist per-project editor layout across switches and reloads — 0c499945
+
 ## [v0.1.734](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.734) — 2026-08-17
 - chore(release): retry npm publishing after GitHub rate-limited the checkout action during the v0.1.733 release
 
