@@ -1070,17 +1070,29 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     return () => observer.disconnect()
   }, [newTurnTailPadding, restoreScrollAnchor, scrollToBottom, updateBottomState])
 
-  // Track how far the virtual sizer sits below the top of the scroll container.
+  // Track how far the virtual sizer sits below the top of the scroll *content*.
   // The minimap's document spans are in sizer coordinates, so this offset is
-  // what turns a resolved document position into a real `scrollTop`. It only
-  // changes when the "load earlier messages" button appears/disappears above the
-  // sizer, so it is recomputed on mount and whenever that button toggles.
-  useEffect(() => {
+  // what turns a resolved document position into a real `scrollTop`.
+  //
+  // `getBoundingClientRect` is in viewport coordinates, so the raw difference
+  // between the two rects is the sizer's position on screen — which is hugely
+  // negative whenever the transcript is scrolled down (and the conversation
+  // opens scrolled to the bottom). Adding `scrollTop` converts it back into a
+  // position inside the scrollable content, which is the only frame the spans
+  // are expressed in. Without this the minimap resolved every scrub through a
+  // multi-thousand-pixel offset and clamped to the top or bottom of the chat.
+  //
+  // The offset only changes when something above the sizer appears or
+  // disappears — the "load earlier messages" button and the loading banner —
+  // so it is recomputed on mount and whenever either toggles.
+  useLayoutEffect(() => {
     const sizerEl = sizerRef.current
     const scrollEl = scrollRef.current
     if (!sizerEl || !scrollEl) return
-    setSizerOffset(sizerEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top)
-  }, [hasMore])
+    setSizerOffset(
+      sizerEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop,
+    )
+  }, [hasMore, loading, hasContent, initialScrollReady])
 
   // Park the floating controls just left of the minimap rail rather than on top
   // of it — a click meant for a button would otherwise scrub the transcript.

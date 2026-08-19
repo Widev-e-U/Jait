@@ -371,31 +371,35 @@ export function minimapContentToDocument(contentOffset: number, spans: MinimapSp
 /**
  * How far the fixed-pitch preview is panned up inside the rail. Nothing pans
  * while the whole conversation fits: it simply sits at the top and the rest of
- * the rail stays empty. Once it overflows, the preview slides proportionally
- * with the transcript so the top of the chat is on the rail at scroll 0 and the
- * bottom is on it at the last screenful.
+ * the rail stays empty. Once it overflows, the preview slides so the top of the
+ * chat is on the rail at scroll 0 and the bottom is on it at the last screenful.
+ *
+ * Progress is measured in *rail* coordinates (how far down the preview the
+ * viewport's top edge currently is), not in raw scrolled pixels. Those two
+ * scales are not the same conversation: the preview is a fixed pitch per line
+ * of text, while document pixels are dominated by whatever isn't text — tool
+ * cards, collapsed reasoning, diffs, images. Panning by the pixel ratio while
+ * painting marks by the line ratio made the rail drift away from its own marks,
+ * so a click landed nowhere near the row that was under the cursor. Deriving
+ * both from `spans` keeps the pan, the indicator and the scrub on one scale.
  */
 export function computeMinimapRailOffset({
   contentHeight,
   viewportHeight,
-  scrollTop,
-  maxScroll,
+  contentTop,
+  contentTopMax,
 }: {
   contentHeight: number
   /** Height of the rail / viewport, in px. */
   viewportHeight: number
-  scrollTop: number
-  /**
-   * Total scrollable range of the container, in px — `scrollHeight - clientHeight`.
-   * This is the real distance the transcript can travel, not the virtualized
-   * sizer height, which is inset inside the container by the top padding and
-   * the "load earlier messages" button.
-   */
-  maxScroll: number
+  /** Rail offset of the document position at the top of the viewport right now. */
+  contentTop: number
+  /** Rail offset the top of the viewport reaches at maximum scroll. */
+  contentTopMax: number
 }): number {
   const overflow = contentHeight - viewportHeight
-  if (overflow <= 0 || maxScroll <= 0) return 0
-  return overflow * Math.min(Math.max(scrollTop / maxScroll, 0), 1)
+  if (overflow <= 0 || contentTopMax <= 0) return 0
+  return overflow * Math.min(Math.max(contentTop / contentTopMax, 0), 1)
 }
 
 /**
@@ -590,13 +594,17 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
   // measured from the container top, which is `sizerOffset` above the sizer.
   const documentScrollTop = scrollTop - sizerOffset
 
+  // Where the viewport's top edge sits on the rail now, and where it lands at
+  // the end of the transcript — the two ends of the pan.
+  const contentTop = minimapDocumentToContent(documentScrollTop, spans)
+  const contentTopMax = minimapDocumentToContent(Math.max(maxScroll - sizerOffset, 0), spans)
+
   // The preview keeps its own fixed scale; the rail pans over it when the
   // conversation has more lines than the rail has room for.
-  const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, scrollTop, maxScroll })
+  const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, contentTop, contentTopMax })
   const indicator = clampMinimapIndicator({
-    top: minimapDocumentToContent(documentScrollTop, spans) - railOffset,
-    height: minimapDocumentToContent(documentScrollTop + viewportHeight, spans)
-      - minimapDocumentToContent(documentScrollTop, spans),
+    top: contentTop - railOffset,
+    height: minimapDocumentToContent(documentScrollTop + viewportHeight, spans) - contentTop,
     viewportHeight,
     maxScroll,
   })
@@ -619,11 +627,16 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
     <div
       onPointerDown={(e) => {
         e.preventDefault()
+        // Without capture the rail stops receiving move events the moment the
+        // drag wanders off it — which is most of a drag, since the rail is 96px
+        // wide and the pointer chases the transcript.
+        e.currentTarget.setPointerCapture?.(e.pointerId)
         handlePointer(e.currentTarget, e.clientY)
       }}
       onPointerMove={(e) => {
         if (e.buttons > 0) handlePointer(e.currentTarget, e.clientY)
       }}
+      onPointerUp={(e) => e.currentTarget.releasePointerCapture?.(e.pointerId)}
       className="relative h-full shrink-0 cursor-pointer select-none overflow-hidden border-l border-border/30 bg-transparent transition-colors hover:bg-muted/30"
       style={{ width: MINIMAP_RAIL_WIDTH_PX }}
       role="slider"

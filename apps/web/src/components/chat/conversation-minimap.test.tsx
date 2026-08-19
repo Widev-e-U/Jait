@@ -186,17 +186,40 @@ describe('computeMinimapLayout', () => {
 
 describe('computeMinimapRailOffset', () => {
   it('never pans a preview that fits the rail', () => {
-    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 0, maxScroll: 9_200 })).toBe(0)
-    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, scrollTop: 9_200, maxScroll: 9_200 })).toBe(0)
+    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, contentTop: 0, contentTopMax: 276 })).toBe(0)
+    expect(computeMinimapRailOffset({ contentHeight: 300, viewportHeight: 800, contentTop: 276, contentTopMax: 276 })).toBe(0)
   })
 
   it('pans an overflowing preview in step with the transcript', () => {
-    const rail = { contentHeight: 2_400, viewportHeight: 800, maxScroll: 9_200 }
-    expect(computeMinimapRailOffset({ ...rail, scrollTop: 0 })).toBe(0)
-    // Halfway through the scrollable range → halfway through the overflow.
-    expect(computeMinimapRailOffset({ ...rail, scrollTop: 4_600 })).toBeCloseTo(800)
+    const rail = { contentHeight: 2_400, viewportHeight: 800, contentTopMax: 2_208 }
+    expect(computeMinimapRailOffset({ ...rail, contentTop: 0 })).toBe(0)
+    // Halfway down the preview → halfway through the overflow.
+    expect(computeMinimapRailOffset({ ...rail, contentTop: 1_104 })).toBeCloseTo(800)
     // Last screenful → the bottom of the preview is on the rail.
-    expect(computeMinimapRailOffset({ ...rail, scrollTop: 9_200 })).toBeCloseTo(1_600)
+    expect(computeMinimapRailOffset({ ...rail, contentTop: 2_208 })).toBeCloseTo(1_600)
+  })
+
+  it('pans by the rail scale, not by scrolled pixels', () => {
+    // Two messages with the same line count, but the first is 10x taller in the
+    // document (a tool-heavy turn). At its bottom edge the transcript is 91%
+    // scrolled but only halfway down the rail — the pan has to follow the rail,
+    // otherwise the marks slide out from under the cursor.
+    const { spans, contentHeight } = computeMinimapLayout({
+      blocks: [
+        { start: 0, end: 10_000, role: 'agent', widths: Array.from({ length: 400 }, () => 1) },
+        { start: 10_000, end: 11_000, role: 'agent', widths: Array.from({ length: 400 }, () => 1) },
+      ],
+      rowPitch: 3,
+    })
+    const contentTopMax = minimapDocumentToContent(10_200, spans)
+
+    expect(contentHeight).toBe(2_400)
+    expect(computeMinimapRailOffset({
+      contentHeight,
+      viewportHeight: 800,
+      contentTop: minimapDocumentToContent(10_000, spans),
+      contentTopMax,
+    })).toBeCloseTo(1_600 * (1_200 / contentTopMax))
   })
 })
 
