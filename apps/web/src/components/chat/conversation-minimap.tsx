@@ -399,6 +399,51 @@ export function computeMinimapRailOffset({
 }
 
 /**
+ * Clamp the viewport indicator so it always sits inside the rail and never
+ * fills it.
+ *
+ * The preview is painted at a fixed pitch per line, which is *not* proportional
+ * to the document, so one screenful of a long conversation can map to a band
+ * taller than the rail — the document ratio and the preview ratio disagree,
+ * especially with estimated measurements while content is still streaming. When
+ * the mapped band exceeds the rail we fall back to a real proportional
+ * scrollbar thumb (`viewportHeight * viewportHeight / docHeight`) so a
+ * scrollable conversation never shows a full-rail indicator. In the normal case
+ * (band fits) the mapped band height is kept so the indicator still tracks the
+ * visible screenful of lines, and in both cases the top is clamped so the
+ * indicator can never hang off the bottom of the rail.
+ */
+export function clampMinimapIndicator({
+  top,
+  height,
+  viewportHeight,
+  maxScroll,
+}: {
+  top: number
+  height: number
+  viewportHeight: number
+  /** Total scrollable range of the container — `scrollHeight - clientHeight`. */
+  maxScroll: number
+}): { top: number; height: number } {
+  const docHeight = maxScroll + viewportHeight
+  let resultHeight = height
+  // A mapped band taller than the rail means the preview scale and the document
+  // scale disagree; fall back to a proper proportional scrollbar thumb. Guarded
+  // against a degenerate `docHeight <= 0`.
+  if (docHeight > 0 && resultHeight > viewportHeight) {
+    resultHeight = viewportHeight * (viewportHeight / docHeight)
+  }
+  // Keep the min height floor so a tiny band still reads as a thumb.
+  resultHeight = Math.max(resultHeight, 2)
+  // Clamp the top so the indicator never extends past the rail. When a
+  // non-scrollable document's content band is larger than the rail this keeps
+  // the indicator within it (it may span the content band but stays on the rail).
+  const maxTop = Math.max(viewportHeight - resultHeight, 0)
+  const resultTop = Math.min(Math.max(top, 0), maxTop)
+  return { top: resultTop, height: resultHeight }
+}
+
+/**
  * Maps a pointer position on the rail back to a scroll offset so the pressed
  * point lands in the *middle* of the viewport indicator (like Rider/VS Code
  * scrollbar annotations), instead of snapping the indicator's top edge to the
@@ -548,9 +593,13 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
   // The preview keeps its own fixed scale; the rail pans over it when the
   // conversation has more lines than the rail has room for.
   const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, scrollTop, maxScroll })
-  const indicatorTop = minimapDocumentToContent(documentScrollTop, spans) - railOffset
-  const indicatorHeight = minimapDocumentToContent(documentScrollTop + viewportHeight, spans)
-    - minimapDocumentToContent(documentScrollTop, spans)
+  const indicator = clampMinimapIndicator({
+    top: minimapDocumentToContent(documentScrollTop, spans) - railOffset,
+    height: minimapDocumentToContent(documentScrollTop + viewportHeight, spans)
+      - minimapDocumentToContent(documentScrollTop, spans),
+    viewportHeight,
+    maxScroll,
+  })
 
   const handlePointer = (rail: HTMLElement, clientY: number) => {
     if (!scrollElement) return
@@ -584,8 +633,8 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
       <div
         className="absolute left-0 right-0 bg-foreground/10"
         style={{
-          top: `${indicatorTop}px`,
-          height: `${Math.max(indicatorHeight, 2)}px`,
+          top: `${indicator.top}px`,
+          height: `${indicator.height}px`,
         }}
       />
       <div className="absolute inset-x-0 top-0" style={{ transform: `translateY(${-railOffset}px)` }}>

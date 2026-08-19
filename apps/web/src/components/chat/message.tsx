@@ -321,11 +321,19 @@ function MessageInner({
     }
   }, [])
 
+  // Tracks the last value we synced into the edit draft. `userDisplaySegments`
+  // can be a freshly-allocated array each render (e.g. derived/legacy fallback
+  // paths), so writing it back to state unconditionally would re-trigger this
+  // effect forever — React error #185 "Maximum update depth exceeded". We only
+  // write state when the *content* actually changed.
+  const lastEditSyncRef = useRef<{ text: string; segmentsKey: string }>({ text: '', segmentsKey: '' })
   useEffect(() => {
-    if (!isEditing) {
-      setEditDraft(userDisplayText)
-      setEditSegments(userDisplaySegments)
-    }
+    if (isEditing) return
+    const segmentsKey = JSON.stringify(userDisplaySegments)
+    if (lastEditSyncRef.current.text === userDisplayText && lastEditSyncRef.current.segmentsKey === segmentsKey) return
+    lastEditSyncRef.current = { text: userDisplayText, segmentsKey }
+    setEditDraft(userDisplayText)
+    setEditSegments(userDisplaySegments)
   }, [isEditing, userDisplaySegments, userDisplayText])
 
   useEffect(() => {

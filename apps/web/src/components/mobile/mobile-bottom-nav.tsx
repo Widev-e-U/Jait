@@ -30,9 +30,11 @@ interface NavButtonProps {
   badge?: string
   icon: typeof MessageSquare
   onClick: () => void
+  /** Stretch the button to fill its share of the bar (default). */
+  fill?: boolean
 }
 
-function NavButton({ label, active, disabled, badge, icon: Icon, onClick }: NavButtonProps) {
+function NavButton({ label, active, disabled, badge, icon: Icon, onClick, fill = true }: NavButtonProps) {
   return (
     <button
       type="button"
@@ -40,7 +42,7 @@ function NavButton({ label, active, disabled, badge, icon: Icon, onClick }: NavB
       disabled={disabled}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-2xs transition-colors ${
+      className={`relative flex flex-col items-center justify-center gap-0.5 py-1 text-2xs transition-colors ${fill ? 'flex-1' : ''} ${
         active
           ? 'text-foreground'
           : 'text-muted-foreground hover:text-foreground'
@@ -77,10 +79,15 @@ export function MobileBottomNav({
   // shown fullscreen — i.e. the chat workspace is the visible surface.
   const activeTarget = getMobileProjectActiveTarget(mobileProjectControlState)
   const chatActive = !showProject && !showTerminal && !showSidebar
+  // Personal chats have no project, so the project panes (files/changes/editor)
+  // are hidden entirely and the remaining actions spread across the bar.
+  const isPersonalChat = !activeProjectId
 
   return (
     <nav
-      className="pointer-events-auto flex h-14 shrink-0 items-stretch border-t bg-background/95 backdrop-blur-lg safe-bottom"
+      className={`pointer-events-auto flex h-14 shrink-0 items-stretch border-t bg-background/95 backdrop-blur-lg safe-bottom ${
+        isPersonalChat ? 'justify-between' : ''
+      }`}
       aria-label="Mobile navigation"
     >
       <NavButton
@@ -88,35 +95,41 @@ export function MobileBottomNav({
         active={chatActive}
         icon={MessageSquare}
         onClick={onChatClick}
+        fill={!isPersonalChat}
       />
       <NavButton
         label="Terminal"
         active={activeTarget === 'terminal'}
         icon={TerminalIcon}
         onClick={() => onProjectTargetAction('terminal')}
+        fill={!isPersonalChat}
       />
-      <NavButton
-        label="Files"
-        active={activeTarget === 'files'}
-        disabled={!activeProjectId}
-        icon={FolderOpen}
-        onClick={() => onProjectTargetAction('files')}
-      />
-      <NavButton
-        label="Changes"
-        active={activeTarget === 'git'}
-        disabled={!activeProjectId}
-        badge={changedFilesCount > 0 ? (changedFilesCount > 99 ? '99+' : String(changedFilesCount)) : undefined}
-        icon={GitBranch}
-        onClick={() => onProjectTargetAction('git')}
-      />
-      <NavButton
-        label="Editor"
-        active={activeTarget === 'editor'}
-        disabled={!activeProjectId}
-        icon={Code}
-        onClick={() => onProjectTargetAction('editor')}
-      />
+      {!isPersonalChat && (
+        <>
+          <NavButton
+            label="Files"
+            active={activeTarget === 'files'}
+            disabled={!activeProjectId}
+            icon={FolderOpen}
+            onClick={() => onProjectTargetAction('files')}
+          />
+          <NavButton
+            label="Changes"
+            active={activeTarget === 'git'}
+            disabled={!activeProjectId}
+            badge={changedFilesCount > 0 ? (changedFilesCount > 99 ? '99+' : String(changedFilesCount)) : undefined}
+            icon={GitBranch}
+            onClick={() => onProjectTargetAction('git')}
+          />
+          <NavButton
+            label="Editor"
+            active={activeTarget === 'editor'}
+            disabled={!activeProjectId}
+            icon={Code}
+            onClick={() => onProjectTargetAction('editor')}
+          />
+        </>
+      )}
     </nav>
   )
 }

@@ -54,7 +54,78 @@ function normalizeText(value) {
 
 const MAX_BROWSER_RUNTIME_EVENTS = 200;
 
-function pushRuntimeEvent(events, next) {
+const CONSOLE_FLOOD_WINDOW_MS = 2000;
+const CONSOLE_FLOOD_THRESHOLD = 60;
+const CONSOLE_FLOOD_COOLDOWN_MS = 30000;
+
+/**
+ * Flood guard mirroring the gateway-side guard in browser.ts.
+ * Pauses console capture for a cooldown timeout when the page emits a burst
+ * of console messages, so a chatty page cannot saturate the stdio pipe or the
+ * bounded runtime-event buffer.
+ */
+function createConsoleFloodGuard(env) {
+  const windowMs = parsePositiveIntegerEnv(env.BROWSER_CONSOLE_FLOOD_WINDOW_MS, CONSOLE_FLOOD_WINDOW_MS);
+  const threshold = parsePositiveIntegerEnv(env.BROWSER_CONSOLE_FLOOD_THRESHOLD, CONSOLE_FLOOD_THRESHOLD);
+  const cooldownMs = parsePositiveIntegerEnv(env.BROWSER_CONSOLE_FLOOD_COOLDOWN_MS, CONSOLE_FLOOD_COOLDOWN_MS);
+  const recent = [];
+  let resumesAt = null;
+  let dropped = 0;
+
+  function isPaused(at) {
+    if (resumesAt === null) return false;
+    if (at >= resumesAt) {
+      resumesAt = null;
+      return false;
+    }
+    return true;
+  }
+
+  return {
+    record(at = Date.now()) {
+      const wasPaused = resumesAt !== null;
+      if (isPaused(at)) {
+        dropped += 1;
+        return { drop: true, notice: null };
+      }
+      if (wasPaused) {
+        return {
+          drop: false,
+          notice: { type: "console", level: "info", text: "Console capture resumed after flood pause." },
+        };
+      }
+      while (recent.length > 0 && at - recent[0] > windowMs) recent.shift();
+      recent.push(at);
+      if (recent.length >= threshold) {
+        recent.length = 0;
+        resumesAt = at + cooldownMs;
+        return {
+          drop: true,
+          notice: {
+            type: "console",
+            level: "warn",
+            text: `Console capture paused for ${Math.round(cooldownMs / 1000)}s — the page emitted ${threshold} console messages in the last ${Math.round(windowMs / 1000)}s (flood detected). New console messages are skipped until the cooldown expires.`,
+          },
+        };
+      }
+      return { drop: false, notice: null };
+    },
+    isPaused(at = Date.now()) {
+      return resumesAt !== null && at < resumesAt;
+    },
+  };
+}
+
+function pushRuntimeEvent(events, next, guard) {
+  if (next.type === "console" && guard) {
+    const result = guard.record();
+    if (result.notice) appendRuntimeEvent(events, result.notice);
+    if (result.drop) return;
+  }
+  appendRuntimeEvent(events, next);
+}
+
+function appendRuntimeEvent(events, next) {
   const event = {
     id: (events.length > 0 ? events[events.length - 1].id : 0) + 1,
     timestamp: new Date().toISOString(),
@@ -131,6 +202,7 @@ async function main() {
   });
   let page = await selectInitialPage(context);
   const events = [];
+  const consoleGuard = createConsoleFloodGuard(process.env);
 
   const instrumentedPages = new WeakSet();
   const attachPageEvents = (targetPage) => {
@@ -139,7 +211,7 @@ async function main() {
     targetPage.on?.("console", (msg) => {
       const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
       const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
-      pushRuntimeEvent(events, { type: "console", level, text });
+      pushRuntimeEvent(events, { type: "console", level, text }, consoleGuard);
     });
     targetPage.on?.("pageerror", (err) => {
       pushRuntimeEvent(events, {

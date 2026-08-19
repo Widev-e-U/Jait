@@ -4121,7 +4121,9 @@ function App() {
   const openNewChatSurface = useCallback(async (target: 'tab' | 'window') => {
     const previousProjectId = activeProjectId
     const previousSessionId = activeSessionId
-    const session = await createSession(null)
+    // Create the new chat in the active project (if any) rather than always
+    // as a personal chat.
+    const session = await createSession()
     if (!session) return
 
     const url = buildChatSessionUrl(session.id, session.projectId ?? null)
@@ -4155,7 +4157,9 @@ function App() {
 
   const handleStartNewChat = useCallback(() => {
     clearMessages()
-    void createSession(null)
+    // Assign the new chat to the active project when in one, instead of
+    // always creating a personal chat.
+    void createSession()
   }, [clearMessages, createSession])
 
   const handleStartNewChatInTab = useCallback(() => {

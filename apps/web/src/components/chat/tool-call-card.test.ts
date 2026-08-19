@@ -225,7 +225,7 @@ describe('sub-agent activity', () => {
     const afterChildCalls = renderToStaticMarkup(createElement(ToolCallCard, { call, childCalls }))
 
     for (const markup of [beforeChildCalls, afterChildCalls]) {
-      expect(markup).toContain('sticky top-0 z-10')
+      expect(markup).toContain('sticky top-0 z-20')
       expect(markup).toContain('file.read')
       expect(markup).toContain('terminal.run')
     }

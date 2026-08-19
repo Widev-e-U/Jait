@@ -30,6 +30,7 @@ vi.mock('@chenglou/pretext', () => {
 })
 import {
   canReuseMinimapMessageShape,
+  clampMinimapIndicator,
   computeMinimapLayout,
   computeMinimapLineShape,
   computeMinimapMessageShape,
@@ -196,6 +197,104 @@ describe('computeMinimapRailOffset', () => {
     expect(computeMinimapRailOffset({ ...rail, scrollTop: 4_600 })).toBeCloseTo(800)
     // Last screenful → the bottom of the preview is on the rail.
     expect(computeMinimapRailOffset({ ...rail, scrollTop: 9_200 })).toBeCloseTo(1_600)
+  })
+})
+
+describe('clampMinimapIndicator', () => {
+  it('keeps a mapped band that fits the rail, clamped to it', () => {
+    const viewportHeight = 800
+    // A 300px band in an 800px rail, partway down.
+    const result = clampMinimapIndicator({
+      top: 200,
+      height: 300,
+      viewportHeight,
+      maxScroll: 9_200,
+    })
+    expect(result).toEqual({ top: 200, height: 300 })
+  })
+
+  it('falls back to a proportional thumb when the band exceeds the rail', () => {
+    const viewportHeight = 800
+    const maxScroll = 9_200
+    // docHeight = 10 000. A 1 200px band is taller than the 800px rail, so it
+    // collapses to a proportional scrollbar thumb that never fills the rail.
+    const result = clampMinimapIndicator({
+      top: 0,
+      height: 1_200,
+      viewportHeight,
+      maxScroll,
+    })
+    expect(result.height).toBeCloseTo(800 * (800 / 10_000))
+    expect(result.height).toBeLessThan(viewportHeight)
+    expect(result.top).toBe(0)
+  })
+
+  it('clamps the top when the indicator would hang off the bottom of the rail', () => {
+    const viewportHeight = 800
+    // top + height would be 850 > 800, so the top is pulled up to 700.
+    const result = clampMinimapIndicator({
+      top: 750,
+      height: 100,
+      viewportHeight,
+      maxScroll: 9_200,
+    })
+    expect(result.top).toBe(700)
+    expect(result.height).toBe(100)
+    expect(result.top + result.height).toBeLessThanOrEqual(viewportHeight)
+  })
+
+  it('clamps a negative top to the top of the rail', () => {
+    const result = clampMinimapIndicator({
+      top: -40,
+      height: 120,
+      viewportHeight: 800,
+      maxScroll: 9_200,
+    })
+    expect(result.top).toBe(0)
+  })
+
+  it('applies the min-height floor to a tiny mapped band', () => {
+    const result = clampMinimapIndicator({
+      top: 10,
+      height: 0.5,
+      viewportHeight: 800,
+      maxScroll: 9_200,
+    })
+    expect(result.height).toBe(2)
+  })
+
+  it('keeps a non-scrollable document band clamped within the rail', () => {
+    // Everything visible (maxScroll = 0): a band that fits is unchanged...
+    const fitting = clampMinimapIndicator({
+      top: 100,
+      height: 100,
+      viewportHeight: 800,
+      maxScroll: 0,
+    })
+    expect(fitting).toEqual({ top: 100, height: 100 })
+
+    // ...and one that would hang off the bottom is pulled back in.
+    const hanging = clampMinimapIndicator({
+      top: 750,
+      height: 200,
+      viewportHeight: 800,
+      maxScroll: 0,
+    })
+    expect(hanging.top).toBe(600)
+    expect(hanging.top + hanging.height).toBeLessThanOrEqual(800)
+  })
+
+  it('never lets a proportional fallback exceed the rail for a scrollable document', () => {
+    const viewportHeight = 800
+    const result = clampMinimapIndicator({
+      top: 0,
+      height: 8_000,
+      viewportHeight,
+      maxScroll: 3_200,
+    })
+    expect(result.height).toBeCloseTo(800 * (800 / 4_000))
+    expect(result.height).toBeLessThanOrEqual(viewportHeight)
+    expect(result.top + result.height).toBeLessThanOrEqual(viewportHeight)
   })
 })
 

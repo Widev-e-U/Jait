@@ -915,7 +915,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const jumpToPreviousMessage = useCallback(() => {
     const target = findPreviousUserMessage()
     if (target == null) return
-    virtualizerRef.current.scrollToIndex(target, { align: 'start' })
+    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'smooth' })
     // A programmatic jump is the same intent as scrolling by hand: stop
     // following the stream, and anchor wherever it lands.
     detachFromBottom()
@@ -952,7 +952,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     // transcript. Wait for the render that actually holds the space.
     if (newTurnTailPadding <= 0) return
     pendingTopAlignIdRef.current = null
-    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start' })
+    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start', behavior: 'smooth' })
   }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding])
 
   useLayoutEffect(() => {
@@ -1160,6 +1160,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       {initialScrollReady && !loading && canJumpUp && (
         <ConversationScrollButton
           direction="up"
+          userTone
           aria-label="Jump to previous user message"
           title="Jump to previous user message"
           className="left-auto top-4 bottom-auto translate-x-0"

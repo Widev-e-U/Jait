@@ -216,10 +216,127 @@ const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 45_000;
 const DEFAULT_NODE_BRIDGE_READY_TIMEOUT_MS = 60_000;
 const DEFAULT_NODE_BRIDGE_COMMAND_TIMEOUT_MS = 60_000;
 const MAX_BROWSER_RUNTIME_EVENTS = 200;
+const CONSOLE_FLOOD_WINDOW_MS = 2_000;
+const CONSOLE_FLOOD_THRESHOLD = 60;
+const CONSOLE_FLOOD_COOLDOWN_MS = 30_000;
 
-function pushBrowserRuntimeEvent(
+type BrowserRuntimeEventInput = Omit<BrowserRuntimeEvent, "id" | "timestamp">;
+
+/**
+ * Flood guard for browser console capture.
+ *
+ * A previewed page can spam `console.*` (error loops, HMR storms, interval
+ * logging), which churns the bounded event buffer, pollutes tool output
+ * (`preview.logs` / `preview.inspect`) with noise, and floods the Console tab.
+ * Once a burst exceeds the window threshold, console capture is paused for a
+ * cooldown timeout; messages arriving during the pause are dropped and a
+ * synthetic notice event is surfaced so both the UI and agent context know
+ * why the console went quiet. Capture resumes automatically after the
+ * cooldown expires (with a resume notice). Non-console events (page errors,
+ * failed requests, HTTP responses) are never dropped.
+ */
+export interface ConsoleFloodGuard {
+  /**
+   * Feed one captured console event. Returns whether the event must be
+   * dropped (capture is paused) and an optional synthetic notice event to
+   * surface when a pause starts or capture resumes.
+   */
+  record(now?: number): { drop: boolean; notice: BrowserRuntimeEventInput | null };
+  /** Whether console capture is currently paused (cooldown active). */
+  isPaused(now?: number): boolean;
+  /** Diagnostic state (used by tests and tooling). */
+  state(now?: number): { paused: boolean; resumesAt: number | null; dropped: number };
+}
+
+export function createConsoleFloodGuard(options: {
+  windowMs?: number;
+  threshold?: number;
+  cooldownMs?: number;
+  now?: () => number;
+} = {}): ConsoleFloodGuard {
+  const windowMs = options.windowMs ?? CONSOLE_FLOOD_WINDOW_MS;
+  const threshold = options.threshold ?? CONSOLE_FLOOD_THRESHOLD;
+  const cooldownMs = options.cooldownMs ?? CONSOLE_FLOOD_COOLDOWN_MS;
+  const nowFn = options.now ?? (() => Date.now());
+
+  const recent: number[] = [];
+  let resumesAt: number | null = null;
+  let dropped = 0;
+
+  const isPaused = (at: number): boolean => {
+    if (resumesAt === null) return false;
+    if (at >= resumesAt) {
+      // Cooldown expired — clear the pause lazily on first observation.
+      resumesAt = null;
+      return false;
+    }
+    return true;
+  };
+
+  return {
+    record(at = nowFn()) {
+      const wasPaused = resumesAt !== null;
+      if (isPaused(at)) {
+        dropped += 1;
+        return { drop: true, notice: null };
+      }
+      if (wasPaused) {
+        // Cooldown just expired and this is the first event after it.
+        return {
+          drop: false,
+          notice: {
+            type: "console",
+            level: "info",
+            text: "Console capture resumed after flood pause.",
+          },
+        };
+      }
+      // Sliding-window flood detection: keep only events inside the window.
+      while (recent.length > 0 && at - recent[0]! > windowMs) recent.shift();
+      recent.push(at);
+      if (recent.length >= threshold) {
+        recent.length = 0;
+        resumesAt = at + cooldownMs;
+        return {
+          drop: true,
+          notice: {
+            type: "console",
+            level: "warn",
+            text: `Console capture paused for ${Math.round(cooldownMs / 1000)}s — the page emitted ${threshold} console messages in the last ${Math.round(windowMs / 1000)}s (flood detected). New console messages are skipped until the cooldown expires.`,
+          },
+        };
+      }
+      return { drop: false, notice: null };
+    },
+    isPaused(at = nowFn()) {
+      return resumesAt !== null && at < resumesAt;
+    },
+    state(at = nowFn()) {
+      return {
+        paused: resumesAt !== null && at < resumesAt,
+        resumesAt,
+        dropped,
+      };
+    },
+  };
+}
+
+export function pushBrowserRuntimeEvent(
   events: BrowserRuntimeEvent[],
-  next: Omit<BrowserRuntimeEvent, "id" | "timestamp">,
+  next: BrowserRuntimeEventInput,
+  consoleGuard?: ConsoleFloodGuard,
+): void {
+  if (next.type === "console" && consoleGuard) {
+    const result = consoleGuard.record();
+    if (result.notice) appendBrowserRuntimeEvent(events, result.notice);
+    if (result.drop) return;
+  }
+  appendBrowserRuntimeEvent(events, next);
+}
+
+function appendBrowserRuntimeEvent(
+  events: BrowserRuntimeEvent[],
+  next: BrowserRuntimeEventInput,
 ): void {
   const previousId = events[events.length - 1]?.id ?? 0;
   events.push({
@@ -622,6 +739,11 @@ async function createInProcessPlaywrightDriver(
   const activeContext = context;
   let activePage = page;
   const events: BrowserRuntimeEvent[] = [];
+  const consoleGuard = createConsoleFloodGuard({
+    windowMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_WINDOW_MS"], CONSOLE_FLOOD_WINDOW_MS),
+    threshold: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_THRESHOLD"], CONSOLE_FLOOD_THRESHOLD),
+    cooldownMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_COOLDOWN_MS"], CONSOLE_FLOOD_COOLDOWN_MS),
+  });
 
   const instrumentedPages = new WeakSet<object>();
   const attachPageEvents = (targetPage: PlaywrightPage): void => {
@@ -630,7 +752,7 @@ async function createInProcessPlaywrightDriver(
     targetPage.on?.("console", (msg: any) => {
       const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
       const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
-      pushBrowserRuntimeEvent(events, { type: "console", level, text });
+      pushBrowserRuntimeEvent(events, { type: "console", level, text }, consoleGuard);
     });
     targetPage.on?.("pageerror", (err: Error) => {
       pushBrowserRuntimeEvent(events, {
@@ -1223,6 +1345,11 @@ async function createNodeBridgePlaywrightDriver(
   };
   const pending = new Map<number, PendingRequest>();
   const events: BrowserRuntimeEvent[] = [];
+  const consoleGuard = createConsoleFloodGuard({
+    windowMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_WINDOW_MS"], CONSOLE_FLOOD_WINDOW_MS),
+    threshold: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_THRESHOLD"], CONSOLE_FLOOD_THRESHOLD),
+    cooldownMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_COOLDOWN_MS"], CONSOLE_FLOOD_COOLDOWN_MS),
+  });
   let nextId = 1;
   let stopped = false;
 
@@ -1262,7 +1389,7 @@ async function createNodeBridgePlaywrightDriver(
         return;
       }
       if (payload.event === "runtime") {
-        if (payload.payload) pushBrowserRuntimeEvent(events, payload.payload);
+        if (payload.payload) pushBrowserRuntimeEvent(events, payload.payload, consoleGuard);
         return;
       }
       if (payload.event === "fatal") {

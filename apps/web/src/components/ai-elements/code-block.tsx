@@ -75,7 +75,7 @@ export function CodeBlockTitle({
   className,
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex min-w-0 items-center gap-1.5 text-2xs font-medium text-muted-foreground', className)} {...props} />
+  return <div className={cn('flex min-w-0 items-center gap-1.5 text-base font-medium text-muted-foreground', className)} {...props} />
 }
 
 export function CodeBlockFilename({

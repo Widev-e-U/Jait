@@ -228,6 +228,11 @@ export function SessionContextMenu({
   const [submenu, setSubmenu] = useState<{ left: number; top: number } | null>(null)
   const moveRowRef = useRef<HTMLButtonElement | null>(null)
   const closeTimerRef = useRef<number | null>(null)
+  // Whether the submenu was open when the row was pressed. On touch, tapping
+  // fires pointerenter + focus (which open the submenu) before click, so the
+  // click must toggle against the state at pointerdown, not the already-opened
+  // state, or it would open and immediately close.
+  const wasOpenAtPointerDownRef = useRef(false)
 
   const canMove = Boolean(onMoveSession) && !isStreaming
 
@@ -302,9 +307,23 @@ export function SessionContextMenu({
               aria-expanded={submenu !== null}
               disabled={!canMove}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-expanded:bg-accent"
-              onClick={() => (submenu ? setSubmenu(null) : openSubmenu())}
-              onPointerEnter={openSubmenu}
-              onPointerLeave={scheduleSubmenuClose}
+              onPointerDown={() => {
+                wasOpenAtPointerDownRef.current = submenu !== null
+              }}
+              onClick={() => {
+                if (wasOpenAtPointerDownRef.current) setSubmenu(null)
+                else openSubmenu()
+              }}
+              // Hover only opens the submenu for a real mouse. On touch, tapping
+              // fires pointerenter + focus (which open the submenu) before click,
+              // so the click toggles against the state captured at pointerdown
+              // rather than the already-opened state.
+              onPointerEnter={(event) => {
+                if (event.pointerType === 'mouse') openSubmenu()
+              }}
+              onPointerLeave={(event) => {
+                if (event.pointerType === 'mouse') scheduleSubmenuClose()
+              }}
               onFocus={openSubmenu}
               onKeyDown={(event) => {
                 if (event.key === 'ArrowRight') openSubmenu()

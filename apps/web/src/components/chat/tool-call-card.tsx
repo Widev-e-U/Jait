@@ -1,7 +1,7 @@
 import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
@@ -1959,33 +1959,32 @@ export function getLatestSubAgentActivity(streamingOutput: string | undefined): 
 function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   const prompt = displayStr(args.prompt ?? args.message ?? args.description).trim()
   const allowedTools = displayStr(args.allowedTools).trim()
-  const [expanded, setExpanded] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
   if (!prompt && !allowedTools) return null
 
   const canToggle = prompt.length > 120
 
   // The delegation prompt is, from the sub-agent's perspective, the message it
   // received. It is pinned to the top of the sub-agent's inline chat (sticky)
-  // so it always stays in view while you scroll the run's history. Collapsed it
-  // shares one line with the toggle — the text truncates with an ellipsis and
-  // "Show more" sits on the right, matching how the normal chat reads.
+  // so it always stays in view while you scroll the run's history. The text
+  // truncates with an ellipsis and "Show more" opens the full prompt in a modal.
+  //
+  // The sticky box must create its own stacking context and sit at a higher
+  // z-index than the tool-call cards' absolute icon badges (z-10, rendered later
+  // in the DOM), so the pinned description always paints above the icons instead
+  // of the icons overlapping it as content scrolls underneath.
   return (
-    <div className="sticky top-0 z-10 space-y-2 border-b border-border/50 bg-card/95 px-3 py-2.5 backdrop-blur">
+    <div className="sticky top-0 z-20 space-y-2 border-b border-border/50 bg-card/95 px-3 py-2.5 backdrop-blur">
       {prompt && (
         <div className="flex items-center gap-2 text-xs leading-5 text-foreground/90">
-          {expanded ? (
-            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{prompt}</span>
-          ) : (
-            <span className="min-w-0 flex-1 truncate">{prompt}</span>
-          )}
+          <span className="min-w-0 flex-1 truncate">{prompt}</span>
           {canToggle && (
             <button
               type="button"
-              onClick={() => setExpanded(v => !v)}
-              className="shrink-0 flex items-center gap-0.5 text-2xs font-medium text-primary hover:underline"
+              onClick={() => setModalOpen(true)}
+              className="shrink-0 text-2xs font-medium text-primary hover:underline"
             >
-              {expanded ? 'Show less' : 'Show more'}
-              <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
+              Show more
             </button>
           )}
         </div>
@@ -1996,6 +1995,19 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
             <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
           ))}
         </div>
+      )}
+
+      {canToggle && (
+        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Mission details</DialogTitle>
+              <DialogDescription asChild className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
+                <span>{prompt}</span>
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
@@ -3191,6 +3203,8 @@ function ToolCallCardInner({
   const [now, setNow] = useState(() => Date.now())
   const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
   const prevStatusRef = useRef(call.status)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const collapseScrollFrameRef = useRef<number | null>(null)
   const normalizedTool = normalizeTool(call.tool)
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
@@ -3272,6 +3286,17 @@ function ToolCallCardInner({
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
     setOpen(nextOpen)
+    // Collapsing makes the card dramatically shorter. The surrounding content
+    // (text + sibling cards) gets pulled up and can land out of view, leaving
+    // the collapsed header dangling off-screen. Bring it back into view so the
+    // user still sees it, with a quick smooth scroll instead of a jarring jump.
+    if (!nextOpen && headerRef.current) {
+      if (collapseScrollFrameRef.current !== null) cancelAnimationFrame(collapseScrollFrameRef.current)
+      collapseScrollFrameRef.current = requestAnimationFrame(() => {
+        collapseScrollFrameRef.current = null
+        headerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
   }, [hasInlineSecretPrompt])
 
   const StatusIcon = call.status === 'pending'
@@ -3566,10 +3591,13 @@ function ToolCallCardInner({
         </div>
 
         <div className="group pb-1">
-          <div className={cn(
-            'flex min-h-8 items-center gap-2 rounded-md px-2 py-1 transition-colors',
-            stateClasses.row,
-          )}>
+          <div
+            ref={headerRef}
+            className={cn(
+              'flex min-h-8 items-center gap-2 rounded-md px-2 py-1 transition-colors',
+              stateClasses.row,
+            )}
+          >
             {hasExpandableContent ? (
               <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 <ChevronRight className={cn(
@@ -3629,7 +3657,7 @@ function ToolCallCardInner({
       </div>
 
       {hasExpandableContent && (
-        <CollapsibleContent>
+        <CollapsibleContent className="tool-call-collapsible">
           <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
             {bodyContent}
           </div>

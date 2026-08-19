@@ -28,8 +28,9 @@ export function ConversationContent({
 export function ConversationScrollButton({
   className,
   direction = 'down',
+  userTone = false,
   ...props
-}: ComponentProps<typeof Button> & { direction?: 'up' | 'down' }) {
+}: ComponentProps<typeof Button> & { direction?: 'up' | 'down'; userTone?: boolean }) {
   const Icon = direction === 'up' ? ArrowUp : ArrowDown
   return (
     <Button
@@ -37,6 +38,8 @@ export function ConversationScrollButton({
       size="icon"
       className={cn(
         'absolute bottom-4 left-1/2 h-9 w-9 -translate-x-1/2 rounded-full border-border/80 bg-background shadow-lg',
+        userTone &&
+          'border-blue-500/40 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 hover:text-blue-500',
         className,
       )}
       {...props}
