@@ -20,6 +20,64 @@ import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 
 /**
+ * Comfortable breathing room kept between the collapsed card's header and the
+ * chat viewport edges after a collapse. Mirrors Copilot's behavior of nudging
+ * the surrounding content so the toggle stays in view.
+ */
+const COLLAPSE_SCROLL_MARGIN = 12
+
+/**
+ * Walk up from the header to the nearest scrollable ancestor. The chat list is
+ * virtualized (TanStack Virtual) with `position: absolute; transform: translateY`
+ * items inside an `overflow-y-auto` container, so we can't rely on
+ * `scrollIntoView`'s internal container detection — we resolve the real
+ * scrollable element ourselves.
+ */
+function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = el.parentElement
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+      return node
+    }
+    node = node.parentElement
+  }
+  return null
+}
+
+/**
+ * Bring a collapsed tool card's header back into view by nudging the chat
+ * content, matching Copilot's "content always moves in screen" behavior.
+ *
+ * Unlike `scrollIntoView({ block: 'nearest' })` — which only scrolls when the
+ * element is fully out of view — this scrolls whenever the header sits too
+ * close to either edge of the viewport:
+ *   - header near/above the top edge  -> scroll content down (header moves down)
+ *   - header near/below the bottom edge -> scroll content up (header moves up)
+ */
+function scrollCollapsedCardIntoView(header: HTMLElement) {
+  const container = findScrollableAncestor(header)
+  if (!container) return
+  const headerRect = header.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  const viewportTop = 0
+  const viewportBottom = containerRect.height
+  const headerTop = headerRect.top - containerRect.top
+  const headerBottom = headerRect.bottom - containerRect.top
+  let target: number | null = null
+  if (headerTop < viewportTop + COLLAPSE_SCROLL_MARGIN) {
+    // Too close to (or above) the top edge — scroll content down.
+    target = container.scrollTop + headerTop - (viewportTop + COLLAPSE_SCROLL_MARGIN)
+  } else if (headerBottom > viewportBottom - COLLAPSE_SCROLL_MARGIN) {
+    // Too close to (or below) the bottom edge — scroll content up.
+    target = container.scrollTop + headerBottom - (viewportBottom - COLLAPSE_SCROLL_MARGIN)
+  }
+  if (target !== null) {
+    container.scrollTo({ top: target, behavior: 'smooth' })
+  }
+}
+
+/**
  * Session + auth context used to lazy-load persisted sub-agent bodies. Provided
  * by the message renderer so nested sub-agent cards (which otherwise only see the
  * lightweight stub embedded in the parent tool-call data) can fetch their full
@@ -3294,7 +3352,13 @@ function ToolCallCardInner({
       if (collapseScrollFrameRef.current !== null) cancelAnimationFrame(collapseScrollFrameRef.current)
       collapseScrollFrameRef.current = requestAnimationFrame(() => {
         collapseScrollFrameRef.current = null
-        headerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        // Wait one more frame so the virtualizer has re-measured the collapsed
+        // card before computing the scroll target. The header itself stays put
+        // (the card shrinks from the bottom), but the extra frame keeps the
+        // measurement stable.
+        requestAnimationFrame(() => {
+          if (headerRef.current) scrollCollapsedCardIntoView(headerRef.current)
+        })
       })
     }
   }, [hasInlineSecretPrompt])
@@ -3392,6 +3456,16 @@ function ToolCallCardInner({
     const id = window.setInterval(() => setNow(Date.now()), 250)
     return () => window.clearInterval(id)
   }, [call.status])
+
+  // Cancel any pending collapse-scroll frame if the card unmounts mid-collapse.
+  useEffect(() => {
+    return () => {
+      if (collapseScrollFrameRef.current !== null) {
+        cancelAnimationFrame(collapseScrollFrameRef.current)
+        collapseScrollFrameRef.current = null
+      }
+    }
+  }, [])
 
   const invocationLabels = getToolInvocationLabels(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const isActive = call.status === 'running' || call.status === 'pending'
