@@ -1021,6 +1021,34 @@ export function SessionSelector({
                 )}
               </div>
               <div className="mx-1.5 my-1 border-t" />
+              {/* Dropping a chat here moves it back to the personal chats
+                  (top level), mirroring the "Projects & Chats" header. */}
+              <div
+                className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
+                  dropTargetId === '__personal__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
+                }`}
+                onDragOver={(e) => {
+                  const kind = getSidebarDragKind(e.dataTransfer.types)
+                  if (kind !== 'session' || !onMoveSession) return
+                  // A chat already in the personal list has nowhere to go here.
+                  if (dragSessionRef.current?.sourceProjectId === null) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDropTargetId('__personal__')
+                }}
+                onDragLeave={() => setDropTargetId((current) => (current === '__personal__' ? null : current))}
+                onDrop={(e) => {
+                  setDropTargetId(null)
+                  const kind = getSidebarDragKind(e.dataTransfer.types)
+                  if (kind !== 'session' || !onMoveSession) return
+                  const sessionId = e.dataTransfer.getData(JAIT_SESSION_MOVE_MIME)
+                  if (!sessionId || dragSessionRef.current?.sourceProjectId === null) return
+                  e.preventDefault()
+                  onMoveSession(sessionId, null)
+                }}
+              >
+                <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+              </div>
               <div className="space-y-0.5 px-1.5 pb-1.5">
                 {recentPersonalSessions.map((session) => {
                   const isActive = activeProjectId === null && session.id === activeSessionId

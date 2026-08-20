@@ -1175,7 +1175,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           userTone
           aria-label="Jump to previous user message"
           title="Jump to previous user message"
-          className="left-auto top-4 bottom-auto translate-x-0"
+          className="left-auto bottom-auto translate-x-0 top-24 sm:top-4"
           style={{ right: floatingControlInset }}
           onClick={jumpToPreviousMessage}
         />

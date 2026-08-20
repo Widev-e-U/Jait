@@ -1940,55 +1940,59 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterLeftContent && (
           <div className="min-w-0 flex-1">
             {hasFooterControls && (
-              <div className="min-w-0 overflow-x-auto scrollbar-none">
-                <div className="flex min-w-max items-center gap-1 pr-1">
-                  {footerLeadingContent}
-                  {shouldShowSendTargetSelector && (
+              <div className="min-w-0">
+                <div className="min-w-0 overflow-x-auto scrollbar-none">
+                  <div className="flex min-w-max items-center gap-1 pr-1">
+                    {footerLeadingContent}
+                    {showResponseStyleSelector && (
+                      <StyleSelector
+                        value={responseStyle!}
+                        onChange={onResponseStyleChange!}
+                        disabled={selectorsDisabled}
+                        compact={compactFooterControls}
+                      />
+                    )}
+                    {showProviderModelSelector && (
+                      <ProviderModelSelector
+                        provider={provider!}
+                        model={cliModel ?? null}
+                        onProviderChange={onProviderChange!}
+                        onModelChange={onCliModelChange!}
+                        disabled={selectorsDisabled}
+                        compact={compactFooterControls}
+                        repoRuntime={repoRuntime}
+                        onMoveToGateway={onMoveToGateway}
+                        sessionInfo={sessionInfo}
+                        projectNodeId={projectNodeId}
+                        projectId={projectId}
+                        reasoningEffort={reasoningEffort}
+                        onReasoningEffortChange={onReasoningEffortChange}
+                      />
+                    )}
+                    {showProviderRuntimeSelector && (
+                      <ProviderRuntimeSelector
+                        provider={provider!}
+                        value={providerRuntimeMode!}
+                        onChange={onProviderRuntimeModeChange!}
+                        disabled={selectorsDisabled}
+                        compact={compactFooterControls}
+                      />
+                    )}
+                    {showModeSelector && (
+                      <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
+                    )}
+                  </div>
+                </div>
+                {shouldShowSendTargetSelector && (
+                  <div className="mt-1.5">
                     <SendTargetSelector
                       target={sendTarget!}
                       onChange={onSendTargetChange!}
                       disabled={selectorsDisabled}
                       compact={compactFooterControls}
                     />
-                  )}
-                  {showResponseStyleSelector && (
-                    <StyleSelector
-                      value={responseStyle!}
-                      onChange={onResponseStyleChange!}
-                      disabled={selectorsDisabled}
-                      compact={compactFooterControls}
-                    />
-                  )}
-                  {showProviderModelSelector && (
-                    <ProviderModelSelector
-                      provider={provider!}
-                      model={cliModel ?? null}
-                      onProviderChange={onProviderChange!}
-                      onModelChange={onCliModelChange!}
-                      disabled={selectorsDisabled}
-                      compact={compactFooterControls}
-                      repoRuntime={repoRuntime}
-                      onMoveToGateway={onMoveToGateway}
-                      sessionInfo={sessionInfo}
-                      projectNodeId={projectNodeId}
-                      projectId={projectId}
-                      reasoningEffort={reasoningEffort}
-                      onReasoningEffortChange={onReasoningEffortChange}
-                    />
-                  )}
-                  {showProviderRuntimeSelector && (
-                    <ProviderRuntimeSelector
-                      provider={provider!}
-                      value={providerRuntimeMode!}
-                      onChange={onProviderRuntimeModeChange!}
-                      disabled={selectorsDisabled}
-                      compact={compactFooterControls}
-                    />
-                  )}
-                  {showModeSelector && (
-                    <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
