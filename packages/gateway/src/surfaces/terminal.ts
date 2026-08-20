@@ -341,6 +341,11 @@ export class TerminalSurface implements Surface {
       // Wire PTY output → surface listeners + buffer
       // Also watch for OSC 633;B to know when prompt is ready
       pty.onData((data: string) => {
+        // A command that is still printing is not idle. Without this, a build
+        // or test run longer than the reaper's window had its PTY killed
+        // mid-run, taking the running command (and any background-completion
+        // watcher) with it.
+        this._lastActivityAt = Date.now();
         this._outputBuffer.push(data);
         if (this._outputBuffer.length > 10000) {
           this._outputBuffer = this._outputBuffer.slice(-5000);

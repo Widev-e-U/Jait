@@ -9,7 +9,7 @@
 import { exec as execCb, spawn } from "node:child_process";
 import { readFile, writeFile, unlink, mkdir, rm, readdir, stat, lstat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
 function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -62,6 +62,13 @@ async function readDiffFileCapped(absPath: string): Promise<string> {
 
 function escapeShellArg(value: string): string {
   return value.replace(/(["\\$`])/g, "\\$1");
+}
+
+/** True only for descendants of Jait's owned worktree root. */
+export function isManagedWorktreePath(worktreePath: string): boolean {
+  const managedRoot = resolve(homedir(), ".jait", "worktrees");
+  const candidate = resolve(worktreePath);
+  return candidate !== managedRoot && candidate.startsWith(`${managedRoot}${sep}`);
 }
 
 async function getBranchUpstream(cwd: string, branch: string): Promise<string | null> {
@@ -1658,14 +1665,14 @@ export class GitService {
     const d = escapeShellArg(dst);
     if (process.platform === "darwin") {
       // macOS APFS: `cp -c` uses clonefile(2) — copy-on-write, near-instant.
-      return `cp -c -R "${s}" "${d}"`;
+      return `cp -c -R "${s}/." "${d}"`;
     }
     if (process.platform === "linux") {
       // Linux Btrfs/XFS: `cp --reflink=auto` uses reflink when available and
       // falls back to a plain copy otherwise.
-      return `cp --reflink=auto -R "${s}" "${d}"`;
+      return `cp --reflink=auto -R "${s}/." "${d}"`;
     }
-    return `cp -R "${s}" "${d}"`;
+    return `cp -R "${s}/." "${d}"`;
   }
 
   /** Remove a git worktree. */
@@ -1697,9 +1704,9 @@ export class GitService {
     options?: { branch?: string | null; preserveBranch?: boolean },
   ): Promise<void> {
     if (!worktreePath || !existsSync(worktreePath)) return;
-    // Only act on paths that live inside the managed worktrees directory
-    const worktreeMarker = join(".jait", "worktrees");
-    if (!worktreePath.includes(worktreeMarker)) return;
+    // Only act on paths inside the managed worktree root. A substring check
+    // would accept lookalike paths such as `/tmp/.jait/worktrees-copy`.
+    if (!isManagedWorktreePath(worktreePath)) return;
     const branch = options?.branch ?? null;
     const preserveBranch = options?.preserveBranch === true;
 

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mobile Actions Static Repro</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; background: #fff; }
+      .row { display: flex; width: 100%; justify-content: flex-end; padding: 4px 12px; }
+      .bubble-wrap { position: relative; max-width: 85%; }
+      /* user bubble: min-w-0 rounded-lg bg-muted pl-4 pt-3 pr-6 pb-6 break-words */
+      .bubble {
+        min-width: 0;
+        border-radius: 8px;
+        background: #f4f4f5; /* bg-muted */
+        padding: 12px 24px 24px 16px; /* pt-3 pr-6 pb-6 pl-4 */
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #18181b;
+      }
+      /* mobile actions: absolute z-10 right-0 bottom-0 */
+      .actions {
+        position: absolute;
+        z-index: 10;
+        right: 0;
+        bottom: 0;
+      }
+      /* button: flex h-6 w-6 items-center justify-center text-muted-foreground */
+      .dots-btn {
+        display: flex;
+        width: 24px;
+        height: 24px;
+        align-items: center;
+        justify-content: center;
+        color: #71717a; /* text-muted-foreground */
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+      }
+      .dots {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .dots svg { width: 16px; height: 16px; display: block; }
+      .label { font-size: 12px; color: #71717a; margin: 8px 12px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="label">Long message — dots must sit in the corner with a tiny gap from the text</div>
+    <div class="row">
+      <div class="bubble-wrap">
+        <div class="bubble">This is a user message with a fair amount of text so the three-dot menu overlaps the last line of text on mobile.</div>
+        <div class="actions">
+          <button class="dots-btn" aria-label="Message actions">
+            <span class="dots">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="5" r="1"></circle>
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="12" cy="19" r="1"></circle>
+              </svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="label">Short message</div>
+    <div class="row">
+      <div class="bubble-wrap">
+        <div class="bubble">Short message.</div>
+        <div class="actions">
+          <button class="dots-btn" aria-label="Message actions">
+            <span class="dots">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="5" r="1"></circle>
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="12" cy="19" r="1"></circle>
+              </svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

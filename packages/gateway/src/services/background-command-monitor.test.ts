@@ -135,6 +135,78 @@ describe("BackgroundCommandMonitor", () => {
     }
   });
 
+  it("prefers the sentinel's exit code over the OSC marker's", async () => {
+    // The shell's prompt hook emits D before the sentinel `printf` runs, and
+    // the sentinel reads `$?` for the command itself — so when the two
+    // disagree, the sentinel wins.
+    const results: BackgroundCommandResult[] = [];
+    backgroundCommandMonitor.setCompletionHandler((r) => {
+      results.push(r);
+    });
+    const surface = new FakeSurface();
+    const completionToken = "__JAIT_BACKGROUND_DONE_019f74ed-1111-7222-a333-abcdefabcdef__";
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "pytest", surface, completionToken });
+
+    surface.emit("pytest\r\n1 failed\r\n" + oscDone(0));
+    await flush();
+    // D alone does not resolve the command while a sentinel is still expected.
+    expect(results).toHaveLength(0);
+
+    surface.emit(completionToken + ":1\r\n");
+    await flush();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.exitCode).toBe(1);
+  });
+
+  it("falls back to the OSC exit code when the sentinel never arrives", async () => {
+    vi.useFakeTimers();
+    try {
+      const results: BackgroundCommandResult[] = [];
+      backgroundCommandMonitor.setCompletionHandler((r) => {
+        results.push(r);
+      });
+      const surface = new FakeSurface();
+      const completionToken = "__JAIT_BACKGROUND_DONE_019f74ed-1111-7222-a333-abcdefabcdef__";
+      backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "npm test", surface, completionToken });
+
+      // A command that consumes stdin swallows the sentinel line entirely.
+      surface.emit("npm test\r\ndone\r\n" + oscDone(3));
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.exitCode).toBe(3);
+      expect(backgroundCommandMonitor.activeCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports whether the command is actually being watched", () => {
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    const surface = new FakeSurface();
+    expect(backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "x", surface })).toBe(true);
+
+    // Saturate the watcher cap; further commands run unwatched and must say so
+    // rather than promising a notification that will never arrive.
+    for (let i = 0; i < 60; i++) {
+      backgroundCommandMonitor.track({ sessionId: `s${i}`, terminalId: `t${i}`, command: "x", surface: new FakeSurface() });
+    }
+    expect(backgroundCommandMonitor.track({ sessionId: "late", terminalId: "late", command: "x", surface: new FakeSurface() })).toBe(false);
+  });
+
+  it("knows which terminals have a live watcher so they are not reaped", () => {
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    const surface = new FakeSurface();
+    backgroundCommandMonitor.track({ sessionId: "s1", terminalId: "term-busy", command: "npm test", surface });
+
+    expect(backgroundCommandMonitor.hasWatcherForTerminal("term-busy")).toBe(true);
+    expect(backgroundCommandMonitor.hasWatcherForTerminal("term-free")).toBe(false);
+
+    backgroundCommandMonitor.stopForSession("s1");
+    expect(backgroundCommandMonitor.hasWatcherForTerminal("term-busy")).toBe(false);
+  });
+
   it("stopForSession detaches only that session's watchers", () => {
     backgroundCommandMonitor.setCompletionHandler(() => {});
     const a = new FakeSurface();
@@ -163,5 +235,24 @@ describe("extractCompletionOutput", () => {
 
   it("returns (no output) when nothing but markers were captured", () => {
     expect(extractCompletionOutput("\x1b]633;D;0\x07", "ls")).toBe("(no output)");
+  });
+
+  it("drops the sentinel's echoed printf, its result line, and the trailing prompt", () => {
+    const token = "__JAIT_BACKGROUND_DONE_019f74ed-1111-7222-a333-abcdefabcdef__";
+    const raw =
+      "sleep 1; echo hi\r\nhi\r\n"
+      + `jakob@host:/tmp$ printf '\\n${token}:%s\\n' "$?"\r\n`
+      + `\r\n${token}:0\r\n`
+      + "jakob@host:/tmp$ ";
+    expect(extractCompletionOutput(raw, "sleep 1; echo hi", "/bin/bash")).toBe("hi");
+  });
+
+  it("drops the sourcing line used to run multi-line commands atomically", () => {
+    const out = extractCompletionOutput(
+      ". '/tmp/jait-terminal/cmd-019f.ps1'\r\none\r\ntwo\r\njakob@host:/tmp$ ",
+      "echo one\nsleep 3\necho two",
+      "/bin/bash",
+    );
+    expect(out).toBe("one\ntwo");
   });
 });

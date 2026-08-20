@@ -374,9 +374,9 @@ describe("DatabaseRetentionService", () => {
     ).get()).toBeUndefined();
   });
 
-  it("loads conservative opt-in defaults from environment", () => {
+  it("enables bounded metadata retention by default", () => {
     expect(loadDatabaseRetentionPolicy({})).toMatchObject({
-      enabled: false,
+      enabled: true,
       searchIndexCleanupEnabled: true,
       contextFlowDays: 90,
       toolDetailDays: 90,

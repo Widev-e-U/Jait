@@ -325,7 +325,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         void handleProviderOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
       } else if (msg.type === 'tool.op-request') {
         // Gateway is asking us to execute a Jait tool locally (terminal.run, file.write, etc.)
-        void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; projectRoot?: string })
+        void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; projectRoot?: string; backgroundId?: string })
       } else if (msg.type === 'terminal.op-request') {
         // Gateway is asking us to run an interactive terminal operation on this node.
         void handleTerminalOpRequest(msg.payload as { requestId?: string; op: string; [key: string]: unknown })
@@ -543,18 +543,18 @@ export function useUICommands(opts: UseUICommandsOptions) {
    */
   const handleToolOpRequest = useCallback(async (payload: {
     requestId: string; tool: string; args: Record<string, unknown>;
-    sessionId?: string; projectRoot?: string
+    sessionId?: string; projectRoot?: string; backgroundId?: string
   }) => {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
-    const { requestId, tool, args, sessionId, projectRoot } = payload
+    const { requestId, tool, args, sessionId, projectRoot, backgroundId } = payload
     try {
       const platform = detectPlatform()
       if (platform === 'electron' && window.jaitDesktop?.toolOp) {
         const result = await window.jaitDesktop.toolOp(
           tool,
           args,
-          { sessionId, projectRoot },
+          { sessionId, projectRoot, backgroundId },
         )
         ws.send(JSON.stringify({
           type: 'tool.op-response',
@@ -799,6 +799,16 @@ export function useUICommands(opts: UseUICommandsOptions) {
         const msg = JSON.stringify({
           type: 'terminal.output',
           payload: { terminalId: data.terminalId, data: data.data },
+        })
+        const ws = wsRef.current
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg)
+        else outgoingQueueRef.current.push(msg)
+      } else if (data?.type === 'tool.background-complete-from-child') {
+        // A background command finished on this node — the gateway is waiting
+        // on this to wake the agent that started it.
+        const msg = JSON.stringify({
+          type: 'tool.background-complete',
+          payload: { backgroundId: data.backgroundId, exitCode: data.exitCode, output: data.output },
         })
         const ws = wsRef.current
         if (ws && ws.readyState === WebSocket.OPEN) ws.send(msg)

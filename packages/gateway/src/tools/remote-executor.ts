@@ -68,6 +68,23 @@ const REMOTE_EXECUTABLE_TOOLS = new Set<string>([
   "os.query",
 ]);
 
+/** Subset of the allow-list that runs shell commands and honours `isBackground`. */
+const REMOTE_TERMINAL_TOOLS = new Set<string>(["execute", "terminal.run", "jait.terminal"]);
+
+function isBackgroundInput(input: unknown): boolean {
+  return Boolean(input && typeof input === "object" && (input as { isBackground?: unknown }).isBackground === true);
+}
+
+/**
+ * Whether the node confirmed it will report this command's completion.
+ * Nodes that predate the completion channel simply omit the flag.
+ */
+function nodeAcceptedBackgroundCommand(result: ToolResult): boolean {
+  const data = result.data;
+  if (!data || typeof data !== "object") return false;
+  return (data as { watched?: unknown }).watched === true;
+}
+
 export interface RemoteToolExecutorOptions {
   ws: WsControlPlane;
   /** Local executor — called when the tool should run on the gateway */
@@ -166,6 +183,21 @@ export function createRemoteToolExecutor(
       return localExecutor(toolName, input, context, execOptions);
     }
 
+    // Background commands return as soon as the node spawns them, so the node
+    // pushes the result back later against this id. Reserve it before dispatch
+    // — a command that exits immediately would otherwise report completion
+    // before the gateway knew to expect it.
+    const backgroundCommand = REMOTE_TERMINAL_TOOLS.has(toolName) && isBackgroundInput(input)
+      ? String((input as { command?: unknown }).command ?? "")
+      : null;
+    const backgroundId = backgroundCommand === null
+      ? undefined
+      : ws.registerRemoteBackgroundCommand({
+          nodeId: remoteNodeId,
+          sessionId: context.sessionId,
+          command: backgroundCommand,
+        });
+
     // Delegate to the remote node
     try {
       const result = await ws.proxyToolOp<ToolResult>(
@@ -177,10 +209,23 @@ export function createRemoteToolExecutor(
           sessionId: context.sessionId,
           projectRoot: context.projectRoot,
           onOutputChunk: context.onOutputChunk,
+          ...(backgroundId ? { backgroundId } : {}),
         },
       );
+      // An older node that ignores `backgroundId` never reports back, so don't
+      // hold the slot (and don't let the agent think it will be notified).
+      if (backgroundId && !nodeAcceptedBackgroundCommand(result)) {
+        ws.unregisterRemoteBackgroundCommand(backgroundId);
+        return {
+          ...result,
+          message:
+            `${result.message} (This node does not report background command completion — `
+            + "you will NOT be notified when it finishes, so check on it yourself.)",
+        };
+      }
       return result;
     } catch (err) {
+      if (backgroundId) ws.unregisterRemoteBackgroundCommand(backgroundId);
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[remote-executor] Remote tool '${toolName}' failed on node ${remoteNodeId}: ${message}`);
       return { ok: false, message: `Remote execution failed: ${message}` };

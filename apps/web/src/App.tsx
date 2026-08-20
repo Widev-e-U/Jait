@@ -74,6 +74,7 @@ import { useVoiceSession } from '@/hooks/useVoiceSession'
 import { useGatewayReachable } from '@/hooks/useGatewayReachable'
 import { useViewRouting } from '@/hooks/useViewRouting'
 import { parseAppView, type AppView } from '@/lib/app-view'
+import { createDraftPrewarmTrigger } from '@/lib/chat-prewarm'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 import {
   normalizePersistedSelectedRepo,
@@ -225,6 +226,16 @@ function App() {
     inputSegments: UserMessageSegment[] | undefined
     setInputSegments: React.Dispatch<React.SetStateAction<UserMessageSegment[] | undefined>>
   }
+  // Draft-triggered CLI provider pre-warm. The trigger keeps the "already
+  // warmed" bookkeeping, the ref supplies the current provider selection (it
+  // is only in scope further down), and both stay out of the manager
+  // composer — pre-warming only applies to the developer chat path.
+  const draftPrewarm = useMemo(() => createDraftPrewarmTrigger(), [])
+  const prewarmDraftRef = useRef<(draft: string) => void>(() => {})
+  const handleChatInputChange = useCallback((text: string) => {
+    handleInputChange(text)
+    prewarmDraftRef.current(text)
+  }, [handleInputChange])
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
@@ -545,6 +556,29 @@ function App() {
     onLoginRequired,
   )
   fetchProjectsRef.current = fetchProjects
+  // Pre-warm the CLI provider once the user starts typing, so the provider's
+  // subprocess spawn (~3s for claude-code) overlaps with the rest of the
+  // message instead of delaying the first answer. Assigned here — rather than
+  // at chat creation — because a brand-new chat is exactly where the provider
+  // selector still changes; see createDraftPrewarmTrigger.
+  prewarmDraftRef.current = (draft: string) => {
+    // Until the session's saved selection has arrived, `chatProvider` is still
+    // the default rather than this chat's provider — warming that would spawn
+    // the wrong process. The trigger only records a chat as warmed when it
+    // actually sends, so the next keystroke retries.
+    if (activeSessionId && token && (!wsFullStateReceivedRef.current
+      || loadingChatProvider || loadingCliModels || loadingChatReasoningEffort)) return
+    draftPrewarm({
+      draft,
+      apiUrl: API_URL,
+      token,
+      sessionId: activeSessionId ?? '',
+      provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      model: cliModel,
+      reasoningEffort: chatReasoningEffort,
+    })
+  }
   const handleProjectEventRef = useRef(handleProjectEvent)
   handleProjectEventRef.current = handleProjectEvent
 
@@ -4888,7 +4922,7 @@ function App() {
                 onDequeueMessage={dequeueMessage}
                 onEditPreviousMessage={handleEditPreviousMessage}
                 onExecutePlan={executePlan}
-                onHandleInputChange={handleInputChange}
+                onHandleInputChange={handleChatInputChange}
                 onHandleMemoryFeedback={handleMemoryFeedback}
                 onHandleSuggestion={handleSuggestion}
                 onMemorySourceOpen={handleOpenMemorySource}

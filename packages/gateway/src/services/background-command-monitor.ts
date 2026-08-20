@@ -13,6 +13,8 @@
  * so they never fire the handler (and are dropped after `maxWatchMs`).
  */
 
+import { isShellPromptLine } from "../tools/shell-prompt.js";
+
 /** Minimal terminal-surface contract the monitor needs (satisfied by TerminalSurface). */
 export interface MonitorableSurface {
   addOutputListener(listener: (data: string) => void): void;
@@ -41,9 +43,11 @@ export interface TrackBackgroundCommandOptions {
   surface: MonitorableSurface;
   /** Optional sentinel printed by the terminal tool when shell integration is unavailable. */
   completionToken?: string;
+  /** Terminal's shell, used to recognise (and strip) the trailing prompt. */
+  shell?: string;
   /**
    * Stop watching after this long. Guards against never-ending processes
-   * (servers/watchers) leaking listeners forever. Default 30 minutes.
+   * (servers/watchers) leaking listeners forever. Default 6 hours.
    */
   maxWatchMs?: number;
 }
@@ -51,16 +55,33 @@ export interface TrackBackgroundCommandOptions {
 // OSC 633;D;{exitCode} — command finished (exit code may be empty/negative).
 // eslint-disable-next-line no-control-regex
 const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
-const SENTINEL_RE = /__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:(-?\d+)/;
+/** Any line mentioning the sentinel — the echoed `printf` as well as its output. */
+const SENTINEL_TOKEN_RE = /__JAIT_BACKGROUND_DONE_[0-9a-f-]+__/;
+/** The `. '<path>'` line used to source a multi-line command atomically. */
+const SOURCED_SCRIPT_RE = /^\.\s+'[^']*jait-terminal[^']*'$/;
 
-const DEFAULT_MAX_WATCH_MS = 30 * 60_000;
+/**
+ * Give up on a command after this long. Long builds and test suites routinely
+ * run past 30 minutes (the previous value), and expiry is silent from the
+ * agent's point of view — it is told it will be notified and then never is —
+ * so the cap is deliberately generous.
+ */
+const DEFAULT_MAX_WATCH_MS = 6 * 60 * 60_000;
 const MAX_OUTPUT_CHARS = 4000;
 /** Hard cap on simultaneously-watched background commands (safety valve). */
 const MAX_CONCURRENT_WATCHERS = 50;
+/**
+ * How long to wait for the completion sentinel after the OSC 633;D marker
+ * arrives. D is emitted by the shell's prompt hook, which runs *before* the
+ * sentinel `printf` on the next input line, so the sentinel — which captures
+ * `$?` directly — lands a few milliseconds later and is the more trustworthy
+ * exit code of the two.
+ */
+const SENTINEL_GRACE_MS = 250;
 
 /** Strip OSC 633 + ANSI, drop the echoed command line, and tail-truncate. */
-export function extractCompletionOutput(raw: string, command: string): string {
-  let out = raw
+export function extractCompletionOutput(raw: string, command: string, shell = ""): string {
+  const out = raw
     // OSC 633 shell-integration sequences (A/B/C/D/E/P …)
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "")
@@ -69,21 +90,33 @@ export function extractCompletionOutput(raw: string, command: string): string {
     .replace(/\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1b\\))/g, "")
     // eslint-disable-next-line no-control-regex
     .replace(/\x07/g, "")
-    .replace(SENTINEL_RE, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "");
 
-  const lines = out.split("\n");
+  // Drop the sentinel's echoed `printf` line and its result line. The token is
+  // unique per command, so matching it anywhere on a line is safe — and it
+  // takes the trailing shell prompt with it, since the shell echoes both on
+  // the same line.
+  const lines = out.split("\n").filter((line) => !SENTINEL_TOKEN_RE.test(line));
   while (lines.length > 0 && lines[0]!.trim() === "") lines.shift();
 
-  // Drop the first line if it is just the echoed command.
+  // Drop the first line if it is just the echoed command — or, for multi-line
+  // commands, the `. '<script>'` line used to source them atomically.
   const cmdHead = command.trim().split("\n")[0]?.trim();
-  if (cmdHead && lines.length > 0) {
+  if (lines.length > 0) {
     const head = lines[0]!.trim();
-    if (head === cmdHead || head.endsWith(cmdHead)) lines.shift();
+    if ((cmdHead && (head === cmdHead || head.endsWith(cmdHead))) || SOURCED_SCRIPT_RE.test(head)) {
+      lines.shift();
+    }
   }
 
-  while (lines.length > 0 && lines[lines.length - 1]!.trim() === "") lines.pop();
+  // The shell redraws its prompt once the command returns; that trailing
+  // prompt is terminal furniture, not command output.
+  while (lines.length > 0) {
+    const last = lines[lines.length - 1]!;
+    if (last.trim() !== "" && !isShellPromptLine(last, shell)) break;
+    lines.pop();
+  }
 
   let text = lines.join("\n").trim();
   if (text.length > MAX_OUTPUT_CHARS) {
@@ -98,6 +131,7 @@ function escapeRegExp(text: string): string {
 
 interface ActiveWatcher {
   sessionId: string;
+  terminalId: string;
   cancel: () => void;
 }
 
@@ -122,14 +156,41 @@ class BackgroundCommandMonitor {
     return this.active.size;
   }
 
+  /**
+   * Whether a background command is still being watched in this terminal.
+   * The idle reaper consults this so it never kills a PTY out from under a
+   * command whose completion someone is waiting on.
+   */
+  hasWatcherForTerminal(terminalId: string): boolean {
+    for (const entry of this.active) {
+      if (entry.terminalId === terminalId) return true;
+    }
+    return false;
+  }
+
   private invokeHandler(result: BackgroundCommandResult): void {
     const handler = this.handler;
-    if (!handler) return;
+    if (!handler) {
+      console.warn(
+        `[background-command] ${result.terminalId}: "${result.command.slice(0, 80)}" finished but no completion handler is registered — the agent will not be notified`,
+      );
+      return;
+    }
     void Promise.resolve()
       .then(() => handler(result))
       .catch(() => {
         /* handler errors must not crash the caller */
       });
+  }
+
+  /**
+   * Report a completion that was observed somewhere else — a remote node
+   * watching its own child process, for example. The caller owns correlating
+   * the result back to a trusted session; this only fans it out to the
+   * completion handler.
+   */
+  reportCompletion(result: BackgroundCommandResult): void {
+    this.invokeHandler(result);
   }
 
   /**
@@ -146,7 +207,11 @@ class BackgroundCommandMonitor {
   }): void {
     if (this.active.size >= MAX_CONCURRENT_WATCHERS) return;
 
-    const entry: ActiveWatcher = { sessionId: options.sessionId, cancel: () => this.active.delete(entry) };
+    const entry: ActiveWatcher = {
+      sessionId: options.sessionId,
+      terminalId: options.terminalId,
+      cancel: () => this.active.delete(entry),
+    };
     this.active.add(entry);
 
     void options.exitPromise
@@ -167,16 +232,28 @@ class BackgroundCommandMonitor {
   /**
    * Begin watching a background command for completion. Non-blocking: attaches
    * an output listener to the terminal surface and returns immediately.
+   *
+   * Returns `false` when the command is *not* being watched, so the caller can
+   * tell the agent the truth instead of promising a notification that will
+   * never arrive.
    */
-  track(options: TrackBackgroundCommandOptions): void {
-    if (this.active.size >= MAX_CONCURRENT_WATCHERS) return;
+  track(options: TrackBackgroundCommandOptions): boolean {
+    if (this.active.size >= MAX_CONCURRENT_WATCHERS) {
+      console.warn(
+        `[background-command] refusing to watch "${options.command.slice(0, 80)}" — ` +
+          `already watching ${this.active.size} commands (cap ${MAX_CONCURRENT_WATCHERS})`,
+      );
+      return false;
+    }
 
     const startedAt = Date.now();
     let raw = "";
     let finished = false;
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
       if (timer) clearTimeout(timer);
+      if (graceTimer) clearTimeout(graceTimer);
       try {
         options.surface.removeOutputListener(listener);
       } catch {
@@ -185,35 +262,68 @@ class BackgroundCommandMonitor {
       this.active.delete(entry);
     };
 
-    const listener = (data: string) => {
+    const finish = (exitCode: number | null) => {
       if (finished) return;
-      raw += data;
-      const tokenMatch = options.completionToken
-        ? raw.match(new RegExp(`${escapeRegExp(options.completionToken)}:(-?\\d+)`))
-        : null;
-      const match = raw.match(OSC_DONE_RE) ?? tokenMatch;
-      if (!match) return;
-
       finished = true;
-      const exitCode = match[1] ? parseInt(match[1], 10) : 0;
-      const output = extractCompletionOutput(raw, options.command);
+      const output = extractCompletionOutput(raw, options.command, options.shell);
       cleanup();
 
       this.invokeHandler({
         sessionId: options.sessionId,
         terminalId: options.terminalId,
         command: options.command,
-        exitCode: Number.isNaN(exitCode) ? null : exitCode,
+        exitCode,
         output,
         durationMs: Date.now() - startedAt,
       });
     };
 
-    const timer = setTimeout(cleanup, options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS);
-    const entry: ActiveWatcher = { sessionId: options.sessionId, cancel: cleanup };
+    const listener = (data: string) => {
+      if (finished) return;
+      raw += data;
+
+      // The sentinel echoes `$?` for the command itself, so it beats the OSC
+      // marker whenever both are available.
+      const tokenMatch = options.completionToken
+        ? raw.match(new RegExp(`${escapeRegExp(options.completionToken)}:(-?\\d+)`))
+        : null;
+      if (tokenMatch) {
+        const parsed = parseInt(tokenMatch[1]!, 10);
+        finish(Number.isNaN(parsed) ? null : parsed);
+        return;
+      }
+
+      const oscMatch = raw.match(OSC_DONE_RE);
+      if (!oscMatch) return;
+
+      const oscExit = oscMatch[1] ? parseInt(oscMatch[1], 10) : 0;
+      const oscResult = Number.isNaN(oscExit) ? null : oscExit;
+
+      // D has landed but the sentinel hasn't. Hold briefly — it runs on the
+      // next input line and is only milliseconds behind.
+      if (options.completionToken) {
+        if (!graceTimer) graceTimer = setTimeout(() => finish(oscResult), SENTINEL_GRACE_MS);
+        return;
+      }
+      finish(oscResult);
+    };
+
+    const timer = setTimeout(() => {
+      console.warn(
+        `[background-command] ${options.terminalId}: giving up on "${options.command.slice(0, 80)}" after ` +
+          `${Math.round((options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS) / 60_000)}min — no completion marker seen`,
+      );
+      cleanup();
+    }, options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS);
+    const entry: ActiveWatcher = {
+      sessionId: options.sessionId,
+      terminalId: options.terminalId,
+      cancel: cleanup,
+    };
 
     options.surface.addOutputListener(listener);
     this.active.add(entry);
+    return true;
   }
 
   /** Stop watching every background command for a session (e.g. on session close). */

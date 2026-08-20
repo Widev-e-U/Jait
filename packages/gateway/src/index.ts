@@ -48,6 +48,7 @@ import { RepositoryService } from "./services/repositories.js";
 import { PlanService } from "./services/plans.js";
 import { RepoProposalService } from "./services/repo-proposals.js";
 import { ReminderService } from "./services/reminders.js";
+import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { JaitProvider } from "./providers/jait-provider.js";
 import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
@@ -76,6 +77,7 @@ import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
 import { ChatTracesService } from "./services/chat-traces.js";
 import { DatabaseRetentionService } from "./services/database-retention.js";
+import { DiskJanitor } from "./services/disk-janitor.js";
 
 
 /**
@@ -188,6 +190,7 @@ async function main() {
   const sessionSearchService = new SessionSearchService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
   const databaseRetention = new DatabaseRetentionService(sqlite);
+  const diskJanitor = new DiskJanitor(sqlite);
 
   // ── Recover threads stuck in "running" from a previous crash/restart ──
   const staleThreads = threadService.listRunning();
@@ -1343,6 +1346,7 @@ async function main() {
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
   databaseRetention.start();
+  diskJanitor.start();
 
   // Auto-start channels (e.g. WhatsApp) that were previously enabled.
   void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));
@@ -1367,6 +1371,10 @@ async function main() {
       .filter((s) => s.type === "terminal" && s.state === "running") as import("./surfaces/terminal.js").TerminalSurface[];
     for (const term of terminals) {
       if (term.idleMs >= TERMINAL_IDLE_MS) {
+        // A background command that prints nothing (a long silent test run,
+        // `sleep`, a compile) looks idle. Killing it here means its completion
+        // marker never arrives and the waiting agent is never notified.
+        if (backgroundCommandMonitor.hasWatcherForTerminal(term.id)) continue;
         console.log(`[terminal] Stopping idle terminal ${term.id} (idle ${Math.round(term.idleMs / 1000)}s)`);
         surfaceRegistry.stopSurface(term.id, "idle timeout").catch((err) =>
           console.error(`Failed to stop idle terminal ${term.id}:`, err),
@@ -1450,6 +1458,7 @@ async function main() {
       scheduler.stop();
       threadReviewSync.stop();
       databaseRetention.stop();
+      diskJanitor.stop();
       primaryLink?.stop();
       ws.stop();
       await server.close();

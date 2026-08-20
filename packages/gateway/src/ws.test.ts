@@ -3,6 +3,8 @@ import WebSocket from "ws";
 import * as jose from "jose";
 import { WsControlPlane } from "./ws.js";
 import type { AppConfig } from "./config.js";
+import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
+import type { BackgroundCommandResult } from "./services/background-command-monitor.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
@@ -1183,6 +1185,148 @@ describe("WsControlPlane", () => {
 
 
 
+
+  describe("remote background commands", () => {
+    /** Register a node and grant it terminal access. */
+    async function connectNode(user: string, nodeId: string) {
+      const token = await createToken(user);
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: nodeId, name: nodeId, platform: "linux", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+      await grantPermissions(remote, nodeId, { terminal: true });
+      return remote;
+    }
+
+    it("routes a node-reported completion to the session that started it", async () => {
+      const remote = await connectNode("user-bg-ok", "bg-node");
+      const completions: BackgroundCommandResult[] = [];
+      const unregister = backgroundCommandMonitor.setCompletionHandler((r) => {
+        completions.push(r);
+      });
+
+      try {
+        const backgroundId = plane.registerRemoteBackgroundCommand({
+          nodeId: "bg-node",
+          sessionId: "chat-session-1",
+          command: "npm test",
+        });
+
+        remote.ws.send(JSON.stringify({
+          type: "tool.background-complete",
+          payload: { backgroundId, exitCode: 1, output: "3 failing" },
+        }));
+        await new Promise((r) => setTimeout(r, 100));
+
+        expect(completions).toHaveLength(1);
+        // The session comes from the gateway's own registration, never the node.
+        expect(completions[0]).toMatchObject({
+          sessionId: "chat-session-1",
+          command: "npm test",
+          exitCode: 1,
+          output: "3 failing",
+        });
+      } finally {
+        unregister();
+        remote.ws.close();
+      }
+    });
+
+    it("ignores completions for unknown or already-completed ids", async () => {
+      const remote = await connectNode("user-bg-unknown", "bg-node-2");
+      const completions: BackgroundCommandResult[] = [];
+      const unregister = backgroundCommandMonitor.setCompletionHandler((r) => {
+        completions.push(r);
+      });
+
+      try {
+        const backgroundId = plane.registerRemoteBackgroundCommand({
+          nodeId: "bg-node-2",
+          sessionId: "chat-session-2",
+          command: "npm test",
+        });
+
+        remote.ws.send(JSON.stringify({
+          type: "tool.background-complete",
+          payload: { backgroundId: "never-registered", exitCode: 0, output: "x" },
+        }));
+        // A replayed completion must not fire the handler twice.
+        remote.ws.send(JSON.stringify({
+          type: "tool.background-complete",
+          payload: { backgroundId, exitCode: 0, output: "done" },
+        }));
+        remote.ws.send(JSON.stringify({
+          type: "tool.background-complete",
+          payload: { backgroundId, exitCode: 0, output: "done again" },
+        }));
+        await new Promise((r) => setTimeout(r, 100));
+
+        expect(completions).toHaveLength(1);
+        expect(completions[0]?.output).toBe("done");
+      } finally {
+        unregister();
+        remote.ws.close();
+      }
+    });
+
+    it("ignores a completion sent by a different node", async () => {
+      const owner = await connectNode("user-bg-owner", "bg-owner");
+      const intruder = await connectNode("user-bg-intruder", "bg-intruder");
+      const completions: BackgroundCommandResult[] = [];
+      const unregister = backgroundCommandMonitor.setCompletionHandler((r) => {
+        completions.push(r);
+      });
+
+      try {
+        const backgroundId = plane.registerRemoteBackgroundCommand({
+          nodeId: "bg-owner",
+          sessionId: "chat-session-3",
+          command: "deploy",
+        });
+
+        intruder.ws.send(JSON.stringify({
+          type: "tool.background-complete",
+          payload: { backgroundId, exitCode: 0, output: "spoofed" },
+        }));
+        await new Promise((r) => setTimeout(r, 100));
+
+        expect(completions).toHaveLength(0);
+      } finally {
+        unregister();
+        owner.ws.close();
+        intruder.ws.close();
+      }
+    });
+
+    it("drops pending completions when the node disconnects", async () => {
+      const remote = await connectNode("user-bg-drop", "bg-node-3");
+      const completions: BackgroundCommandResult[] = [];
+      const unregister = backgroundCommandMonitor.setCompletionHandler((r) => {
+        completions.push(r);
+      });
+
+      try {
+        plane.registerRemoteBackgroundCommand({
+          nodeId: "bg-node-3",
+          sessionId: "chat-session-4",
+          command: "npm test",
+        });
+
+        remote.ws.close();
+        await new Promise((r) => setTimeout(r, 150));
+
+        expect(completions).toHaveLength(0);
+        expect((plane as any).remoteBackgroundCommands.size).toBe(0);
+      } finally {
+        unregister();
+      }
+    });
+  });
 
   describe("error handling", () => {
     it("returns error for invalid JSON", async () => {

@@ -2,9 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, readFile, rm, chmod, mkdir } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { platform } from "node:os";
-import { GitService } from "./git.js";
+import { homedir, platform, tmpdir } from "node:os";
+import { GitService, isManagedWorktreePath } from "./git.js";
 
 function git(cwd: string, cmd: string) {
   return execSync(`git ${cmd}`, { cwd, encoding: "utf-8" }).trim();
@@ -183,5 +182,24 @@ describe("runStackedAction – unstage on commit failure", () => {
       await rm(collaboratorDir, { recursive: true, force: true });
       await rm(bareRemote, { recursive: true, force: true });
     }
+  });
+});
+
+describe("GitService worktree cleanup", () => {
+  it("copies repository contents into the existing worktree instead of nesting a checkout", () => {
+    const service = new GitService() as unknown as {
+      pickCopyCommand(source: string, destination: string): string;
+    };
+
+    expect(service.pickCopyCommand("/source-repo", "/target-worktree"))
+      .toContain('"/source-repo/." "/target-worktree"');
+  });
+
+  it("accepts only descendants of Jait's managed worktree root", () => {
+    const managedRoot = join(homedir(), ".jait", "worktrees");
+
+    expect(isManagedWorktreePath(join(managedRoot, "repo", "thread"))).toBe(true);
+    expect(isManagedWorktreePath(managedRoot)).toBe(false);
+    expect(isManagedWorktreePath(`${managedRoot}-copy/repo/thread`)).toBe(false);
   });
 });

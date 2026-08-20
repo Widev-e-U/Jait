@@ -21,7 +21,8 @@ import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manag
 import type { WsControlPlane } from "../ws.js";
 import type { SecretInputService } from "../services/secret-input.js";
 import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
-import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { isShellPromptLine } from "./shell-prompt.js";
+import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -76,19 +77,6 @@ function cleanChunk(s: string): string {
   // Normalise carriage returns
   out = out.replace(/\r\n/g, "\n").replace(/\r/g, "");
   return out;
-}
-
-function isPowerShellShell(shell: string): boolean {
-  return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
-}
-
-function isShellPromptLine(line: string, shell: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  if (isPowerShellShell(shell)) return /^PS .+?>/.test(trimmed);
-  if (/^[^@\n]+@[^:]+:.*[$#]$/.test(trimmed)) return true;
-  if (/^(?:~|\/|\.{1,2}(?:\/|$)|[A-Za-z]:[\\/]).*[$#%]$/.test(trimmed)) return true;
-  return /^[A-Za-z][A-Za-z0-9_.-]*\s*[%$#]$/.test(trimmed);
 }
 
 function hasShellPrompt(rawOutput: string, shell: string): boolean {
@@ -170,6 +158,39 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
+/** Age at which leftover command scripts are swept (best effort). */
+const COMMAND_SCRIPT_TTL_MS = 24 * 60 * 60_000;
+
+/**
+ * Write a multi-line command to a temp script for the shell to source.
+ *
+ * Sourcing keeps the command atomic: PSReadLine otherwise treats each \n as a
+ * separate Enter keystroke, and every shell reports a separate exit code per
+ * line — which the background-completion watcher would read as the whole
+ * command having finished. Dot-sourcing runs in the current scope, so cwd and
+ * variables still persist across calls.
+ */
+function writeCommandScript(command: string): string {
+  const dir = join(tmpdir(), "jait-terminal");
+  mkdirSync(dir, { recursive: true });
+
+  // Background commands have no natural point at which to delete their script
+  // (the shell reads it while running), so sweep old ones here instead.
+  try {
+    const cutoff = Date.now() - COMMAND_SCRIPT_TTL_MS;
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      try {
+        if (statSync(path).mtimeMs < cutoff) unlinkSync(path);
+      } catch { /* raced with another sweep */ }
+    }
+  } catch { /* sweeping is best effort */ }
+
+  const file = join(dir, `cmd-${uuidv7()}.ps1`);
+  writeFileSync(file, command, "utf-8");
+  return file;
+}
+
 // ── Session terminal management ──────────────────────────────────
 
 /**
@@ -213,13 +234,23 @@ async function ensureSessionTerminal(
     .filter((s) => s.type === "terminal" && s.state === "running");
 
   if (allTerminals.length >= MAX_TERMINALS) {
-    const oldest = allTerminals[0]!;
-    await registry.stopSurface(oldest.id, "terminal limit reached");
-    // Clean up stale session mapping
-    for (const [sid, tid] of sessionTerminalMap.entries()) {
-      if (tid === oldest.id) { sessionTerminalMap.delete(sid); break; }
+    // Never evict a terminal running a watched background command — killing it
+    // loses both the command and the completion notification the agent is
+    // waiting on.
+    const evictable = allTerminals.filter(
+      (s) => !backgroundCommandMonitor.hasWatcherForTerminal(s.id),
+    );
+    const oldest = evictable[0];
+    if (oldest) {
+      await registry.stopSurface(oldest.id, "terminal limit reached");
+      // Clean up stale session mapping
+      for (const [sid, tid] of sessionTerminalMap.entries()) {
+        if (tid === oldest.id) { sessionTerminalMap.delete(sid); break; }
+      }
+      warning = `Terminal limit (${MAX_TERMINALS}) reached — stopped oldest terminal ${oldest.id}`;
+    } else {
+      warning = `Terminal limit (${MAX_TERMINALS}) reached, but every terminal is running a background command — starting an extra terminal`;
     }
-    warning = `Terminal limit (${MAX_TERMINALS}) reached — stopped oldest terminal ${oldest.id}`;
     console.log(`[terminal] ${warning}`);
   }
 
@@ -476,10 +507,7 @@ function executeInTerminal(
     // guarantees atomic execution.  Cleanup happens in finish().
     let tmpFile: string | null = null;
     if (command.includes("\n")) {
-      const dir = join(tmpdir(), "jait-terminal");
-      mkdirSync(dir, { recursive: true });
-      tmpFile = join(dir, `cmd-${Date.now()}.ps1`);
-      writeFileSync(tmpFile, command, "utf-8");
+      tmpFile = writeCommandScript(command);
       surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
     } else {
       surface.write(command + "\r");
@@ -590,18 +618,41 @@ export function createTerminalRunTool(
         //    automatically re-triggered when the command finishes.
         if (isBackground) {
           const completionToken = `__JAIT_BACKGROUND_DONE_${uuidv7()}__`;
-          backgroundCommandMonitor.track({
+          const watched = backgroundCommandMonitor.track({
             sessionId: context.sessionId,
             terminalId,
             command,
             surface,
             completionToken,
+            shell: String(surface.snapshot().metadata?.shell ?? ""),
           });
-          surface.write(`${command}\nprintf '\\n${completionToken}:%s\\n' "$?"\r`);
+          // Multi-line commands must reach the shell as a *single* command.
+          // Written raw, each line completes separately and the completion
+          // marker for line 1 was mistaken for the whole command finishing —
+          // so the agent got a "done" notification seconds in, and the real
+          // completion was never reported. Sourcing a temp file runs the
+          // whole thing in the current shell (cwd and variables persist) and
+          // produces exactly one completion marker.
+          const scriptFile = command.includes("\n") ? writeCommandScript(command) : null;
+          const commandLine = scriptFile
+            ? `. '${scriptFile.replace(/'/g, "''")}'`
+            : command;
+          surface.write(`${commandLine}\nprintf '\\n${completionToken}:%s\\n' "$?"\r`);
           return {
             ok: true,
-            message: `Background command started in terminal ${terminalId}. You'll be notified automatically when it finishes — end your turn and wait rather than polling.`,
-            data: { output: "(background — running; you'll be notified on completion)", exitCode: null, timedOut: false, terminalId, isBackground: true },
+            message: watched
+              ? `Background command started in terminal ${terminalId}. You'll be notified automatically when it finishes — end your turn and wait rather than polling.`
+              : `Background command started in terminal ${terminalId}, but it is NOT being watched (too many background commands are already running). You will NOT be notified when it finishes — check on it yourself with terminal.run.`,
+            data: {
+              output: watched
+                ? "(background — running; you'll be notified on completion)"
+                : "(background — running; NOT watched, no completion notification will be sent)",
+              exitCode: null,
+              timedOut: false,
+              terminalId,
+              isBackground: true,
+              watched,
+            },
           };
         }
 
@@ -709,7 +760,9 @@ export function createJaitTerminalTool(
     tier: "standard",
     description:
       "Jait terminal MCP tool. Execute a shell command in Jait and optionally target an existing terminal by terminalId. " +
-      "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal.",
+      "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
+      "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — Jait notifies you " +
+      "automatically when they finish, so prefer this over your own shell's background mode, which Jait cannot watch.",
   };
 }
 

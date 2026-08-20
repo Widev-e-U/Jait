@@ -120,7 +120,10 @@ export function loadDatabaseRetentionPolicy(
   env: NodeJS.ProcessEnv = process.env,
 ): DatabaseRetentionPolicy {
   return {
-    enabled: parseBoolean(env["JAIT_RETENTION_ENABLED"], false),
+    // On by default: left off, `context_flow` and tool-call payloads grow
+    // without bound (observed: 3.9 GB of debug metadata behind 11 MB of chat).
+    // Message content is never touched — only replay/debug detail is compacted.
+    enabled: parseBoolean(env["JAIT_RETENTION_ENABLED"], true),
     searchIndexCleanupEnabled: parseBoolean(env["JAIT_SEARCH_INDEX_CLEANUP_ENABLED"], true),
     contextFlowDays: parseOptionalDays(env["JAIT_RETENTION_CONTEXT_FLOW_DAYS"], 90),
     toolDetailDays: parseOptionalDays(env["JAIT_RETENTION_TOOL_DETAIL_DAYS"], 90),

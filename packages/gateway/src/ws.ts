@@ -21,6 +21,7 @@ import { NodeStateManager } from "./services/node-state-manager.js";
 import type { ToolOutputStreamMetadata } from "./tools/contracts.js";
 import type { JaitDB } from "./db/connection.js";
 import { NodePermissionsService, isNodeCapability } from "./services/node-permissions.js";
+import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import type {
   NodeCapability,
   NodePlatform,
@@ -28,6 +29,12 @@ import type {
   NodeWithPermissions,
 } from "@jait/shared";
 import type { NodeCapabilities } from "@jait/shared";
+
+/**
+ * How long the gateway keeps a slot open for a node to report a background
+ * command's completion. Mirrors the local monitor's window.
+ */
+const REMOTE_BACKGROUND_MAX_WATCH_MS = 6 * 60 * 60_000;
 
 const EMPTY_CAPABILITIES: NodeCapabilities = {
   providers: [],
@@ -124,6 +131,21 @@ export class WsControlPlane {
   private pendingTerminalOps = new Map<string, {
     resolve: (value: any) => void;
     reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+
+  /**
+   * Background commands running on remote nodes, awaiting a completion push.
+   *
+   * The gateway mints the id and remembers the session itself, so a node can
+   * only ever complete a command the gateway actually dispatched to it — a
+   * node-supplied session id is never trusted.
+   */
+  private remoteBackgroundCommands = new Map<string, {
+    nodeId: string;
+    sessionId: string;
+    command: string;
+    startedAt: number;
     timer: ReturnType<typeof setTimeout>;
   }>();
   private nodeStates = new NodeStateManager();
@@ -241,6 +263,7 @@ export class WsControlPlane {
 
       ws.on("close", () => {
         this.rejectPendingProviderOpsForClient(clientId);
+        this.dropRemoteBackgroundCommandsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
@@ -248,6 +271,7 @@ export class WsControlPlane {
 
       ws.on("error", () => {
         this.rejectPendingProviderOpsForClient(clientId);
+        this.dropRemoteBackgroundCommandsForClient(clientId);
         this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
@@ -910,6 +934,16 @@ export class WsControlPlane {
         }
         break;
       }
+      // A background command the node was asked to run has finished. Nodes
+      // have no other way to push this — the tool response returned as soon as
+      // the command was spawned.
+      case "tool.background-complete": {
+        this.completeRemoteBackgroundCommand(
+          client.id,
+          msg.payload as { backgroundId?: string; exitCode?: number | null; output?: string } | undefined,
+        );
+        break;
+      }
       case "tool.op-output": {
         const outPayload = msg.payload as {
           requestId?: string;
@@ -1506,9 +1540,16 @@ export class WsControlPlane {
     nodeId: string,
     tool: string,
     args: Record<string, unknown>,
-    options: { timeoutMs?: number; sessionId?: string; projectRoot?: string; onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void } = {},
+    options: {
+      timeoutMs?: number;
+      sessionId?: string;
+      projectRoot?: string;
+      onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
+      /** Correlation id for a background command the node should report back on. */
+      backgroundId?: string;
+    } = {},
   ): Promise<T> {
-    const { timeoutMs = 120_000, sessionId, projectRoot, onOutputChunk } = options;
+    const { timeoutMs = 120_000, sessionId, projectRoot, onOutputChunk, backgroundId } = options;
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local execution for gateway node"));
@@ -1532,9 +1573,91 @@ export class WsControlPlane {
         type: "tool.op-request" as WsEvent["type"],
         sessionId: sessionId ?? "",
         timestamp: new Date().toISOString(),
-        payload: { requestId, tool, args, sessionId, projectRoot },
+        payload: { requestId, tool, args, sessionId, projectRoot, backgroundId },
       });
     });
+  }
+
+  /**
+   * Reserve a correlation id for a background command about to be dispatched
+   * to a node. Registering *before* dispatch means a command that finishes
+   * almost immediately still finds its registration when it reports back.
+   */
+  registerRemoteBackgroundCommand(options: {
+    nodeId: string;
+    sessionId: string;
+    command: string;
+    maxWatchMs?: number;
+  }): string {
+    const backgroundId = nanoid();
+    const maxWatchMs = options.maxWatchMs ?? REMOTE_BACKGROUND_MAX_WATCH_MS;
+    const timer = setTimeout(() => {
+      if (!this.remoteBackgroundCommands.delete(backgroundId)) return;
+      console.warn(
+        `[ws] giving up on remote background command "${options.command.slice(0, 80)}" on node ${options.nodeId} ` +
+          `after ${Math.round(maxWatchMs / 60_000)}min — no completion reported`,
+      );
+    }, maxWatchMs);
+    if (timer.unref) timer.unref();
+    this.remoteBackgroundCommands.set(backgroundId, {
+      nodeId: options.nodeId,
+      sessionId: options.sessionId,
+      command: options.command,
+      startedAt: Date.now(),
+      timer,
+    });
+    return backgroundId;
+  }
+
+  /** Drop a reservation whose dispatch failed (the node never got the command). */
+  unregisterRemoteBackgroundCommand(backgroundId: string): void {
+    const entry = this.remoteBackgroundCommands.get(backgroundId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    this.remoteBackgroundCommands.delete(backgroundId);
+  }
+
+  /** Hand a node-reported completion to the background-command monitor. */
+  private completeRemoteBackgroundCommand(
+    clientId: string,
+    payload: { backgroundId?: string; exitCode?: number | null; output?: string } | undefined,
+  ): void {
+    const backgroundId = payload?.backgroundId;
+    if (!backgroundId) return;
+    const entry = this.remoteBackgroundCommands.get(backgroundId);
+    if (!entry) return;
+
+    // Only the node the command was dispatched to may complete it.
+    const node = this.fsNodes.get(entry.nodeId);
+    if (!node || node.clientId !== clientId) {
+      console.warn(`[ws] ignoring background completion for ${backgroundId} from unexpected client ${clientId}`);
+      return;
+    }
+
+    clearTimeout(entry.timer);
+    this.remoteBackgroundCommands.delete(backgroundId);
+    backgroundCommandMonitor.reportCompletion({
+      sessionId: entry.sessionId,
+      terminalId: `${entry.nodeId}:background`,
+      command: entry.command,
+      exitCode: typeof payload?.exitCode === "number" ? payload.exitCode : null,
+      output: typeof payload?.output === "string" && payload.output.trim() ? payload.output : "(no output)",
+      durationMs: Date.now() - entry.startedAt,
+    });
+  }
+
+  /** Drop background reservations for a node that went away. */
+  private dropRemoteBackgroundCommandsForClient(clientId: string): void {
+    for (const [backgroundId, entry] of [...this.remoteBackgroundCommands]) {
+      // Runs before the node is removed from `fsNodes`, so the mapping is live.
+      if (this.fsNodes.get(entry.nodeId)?.clientId !== clientId) continue;
+      clearTimeout(entry.timer);
+      this.remoteBackgroundCommands.delete(backgroundId);
+      console.warn(
+        `[ws] node ${entry.nodeId} disconnected while running "${entry.command.slice(0, 80)}" — ` +
+          "its completion will never be reported",
+      );
+    }
   }
 
   /**

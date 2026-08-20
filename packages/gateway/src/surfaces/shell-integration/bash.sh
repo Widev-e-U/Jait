@@ -15,7 +15,15 @@ __jait_osc() {
 # Wrap existing PS1 with A/B markers and D (exit code of last command).
 
 __jait_prompt_cmd() {
+  # $? MUST be read on the first line, and this function MUST be the first
+  # entry in PROMPT_COMMAND.  Any command running ahead of it — including a
+  # one-line helper like the old __jait_preexec_reset — overwrites $? with
+  # its own status, which made every command report "D;0" and reported every
+  # failing command as a success.
   local ec=$?
+  # Re-arm the DEBUG-trap guard here rather than from a separate
+  # PROMPT_COMMAND entry, for the same reason.
+  __jait_preexec_fired=0
   __jait_osc "D;$ec"
   __jait_osc "P;Cwd=$PWD"
   __jait_osc "A"
@@ -53,10 +61,6 @@ __jait_preexec() {
   fi
 }
 
-# Reset the preexec flag at each prompt
-__jait_preexec_reset() {
-  __jait_preexec_fired=0
-}
-
-PROMPT_COMMAND="__jait_preexec_reset;$PROMPT_COMMAND"
+# The preexec flag is reset from __jait_prompt_cmd (see above) so that
+# nothing runs before it and clobbers $?.
 trap '__jait_preexec' DEBUG

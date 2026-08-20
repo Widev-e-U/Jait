@@ -1392,7 +1392,45 @@ const activeCliSessions = new Map<string, {
    * events) instead of running. Only set for remote (non-gateway) sessions.
    */
   remoteClientId?: string;
+  /**
+   * Set only on sessions opened by the pre-warm path, which starts the CLI
+   * subprocess while the user is still typing. Two things depend on it:
+   *
+   * 1. `awaitingFirstTurn` — a pre-warmed session has never received a turn,
+   *    so the first real message must still be formatted as a first turn
+   *    (Jait's external-provider system prompt is pasted into it). Without
+   *    this the pre-warm would silently strip the system prompt from every
+   *    new chat, because the turn path would see a "reused" session.
+   * 2. `workingDirectory` — the pre-warm resolves the project root before the
+   *    turn does (surfaces may start in between). If the turn ends up wanting
+   *    a different root, the pre-warmed process is in the wrong directory and
+   *    must be discarded instead of reused.
+   */
+  awaitingFirstTurn?: boolean;
+  workingDirectory?: string;
 }>();
+
+/**
+ * In-flight CLI `startSession` calls, keyed by Jait session id.
+ *
+ * The pre-warm and the user's first message race by design: pre-warm fires
+ * when the chat is created, the turn arrives a moment later. Without this map
+ * both would spawn their own CLI subprocess, the second would overwrite the
+ * first in `activeCliSessions`, and the first would leak as an orphan process.
+ * Callers await the pending start and then re-check the cache.
+ */
+const cliSessionStarts = new Map<string, Promise<unknown>>();
+
+/** Await (and swallow errors from) a pending pre-warm/start for this session. */
+async function settlePendingCliSessionStart(sessionId: string): Promise<void> {
+  const pending = cliSessionStarts.get(sessionId);
+  if (!pending) return;
+  try {
+    await pending;
+  } catch {
+    /* the starter reports its own failure; the caller re-checks the cache */
+  }
+}
 
 const activeCliTurns = new Set<string>();
 
@@ -2391,6 +2429,15 @@ export function registerChatRoutes(
   // turn so the idle agent wakes up and reacts to the result.
   backgroundCommandMonitor.setCompletionHandler(async (result: BackgroundCommandResult) => {
     const note = formatBackgroundCommandNotification(result);
+    // Every `return` below drops the notification for good, and the agent has
+    // already told the user it would report back — so say why in the log.
+    const drop = (reason: string): void => {
+      app.log.warn(
+        { sessionId: result.sessionId, terminalId: result.terminalId, command: result.command.slice(0, 120) },
+        `Background command finished but the agent could not be notified: ${reason}`,
+      );
+    };
+
     try {
       const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note);
       if (steer.status === "steered") return;
@@ -2408,12 +2455,16 @@ export function registerChatRoutes(
       /* fall through to the idle path */
     }
 
-    if (activeStreams.has(result.sessionId)) return;
-    if (!sessionService || !userService) return;
+    if (activeStreams.has(result.sessionId)) {
+      return drop("a turn is streaming but neither the chat nor the thread resume registry accepted the message");
+    }
+    if (!sessionService || !userService) return drop("session/user services are unavailable");
     const session = sessionService.getById(result.sessionId);
-    if (!session || session.status !== "active" || !session.userId) return;
+    if (!session) return drop(`no chat session or thread matches sessionId ${result.sessionId}`);
+    if (session.status !== "active") return drop(`session is ${session.status ?? "unknown"}, not active`);
+    if (!session.userId) return drop("session has no owner");
     const user = userService.findById(session.userId);
-    if (!user) return;
+    if (!user) return drop(`session owner ${session.userId} no longer exists`);
     try {
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
       await app.inject({
@@ -2628,6 +2679,145 @@ export function registerChatRoutes(
       return { ok: false, message: err instanceof Error ? err.message : String(err) };
     }
   }
+
+  // ══ POST /api/chat/prewarm — start the CLI subprocess before the turn ═══
+  //
+  // The first message of a new chat used to pay for the whole CLI provider
+  // bootstrap (npx + ACP handshake + MCP wiring — ~3s measured for claude-code)
+  // before a single token could stream. The client calls this the moment a chat
+  // is created, so that cost overlaps with the user typing instead of landing
+  // after they hit send. The turn path then hits the normal "reuse" branch.
+  //
+  // Deliberately conservative: it never stops or replaces a live session, never
+  // touches a session with a turn in flight, and skips remote (other-device)
+  // providers — pre-warming those would spawn processes on someone else's
+  // machine. Every failure mode degrades to today's behaviour: the turn starts
+  // the session itself.
+  app.post("/api/chat/prewarm", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "";
+    if (!sessionId) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "sessionId is required" });
+    }
+    const requestProvider = typeof body["provider"] === "string"
+      ? (body["provider"] as ProviderId)
+      : undefined;
+    if (!requestProvider || requestProvider === "jait" || !providerRegistry) {
+      return reply.send({ status: "skipped", reason: "not-a-cli-provider" });
+    }
+    const sessionRecord = sessionService?.getById(sessionId, authUser.id);
+    if (sessionService && !sessionRecord) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+    // A running turn owns the provider session; stay out of its way.
+    if (activeStreams.has(sessionId) || activeCliTurns.has(sessionId)) {
+      return reply.send({ status: "skipped", reason: "busy" });
+    }
+
+    const projectRecord = sessionRecord?.projectId
+      ? projectService?.getById(sessionRecord.projectId, authUser.id)
+      : null;
+    const projectRootPath = projectService?.effectiveRootPath(projectRecord, authUser.id)
+      ?? sessionRecord?.projectPath;
+    const wsRoot = surfaceRegistry
+      ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
+      : (projectRootPath?.trim() || process.cwd());
+
+    // Only the gateway's own providers are pre-warmed (see route comment).
+    const projectNodeId = projectRecord?.nodeId?.trim();
+    const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
+      .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
+      .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
+      ?.nodeId as string | undefined;
+    if (!canUseGatewayProviderForProject(projectNodeId) || remoteSurfaceNodeId) {
+      return reply.send({ status: "skipped", reason: "remote-project" });
+    }
+    const cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
+    if (!cliProvider) {
+      return reply.send({ status: "skipped", reason: "provider-unavailable" });
+    }
+
+    const runtimeMode = resolveProviderRuntimeMode(cliProvider, parseRuntimeMode(body["runtimeMode"]));
+    const rawModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    const model = rawModel || undefined;
+    // Parsed exactly like POST /api/chat — these values form the reuse key, so
+    // any divergence would make the turn discard the pre-warmed session.
+    const rawReasoningEffort = typeof body["reasoningEffort"] === "string"
+      ? (body["reasoningEffort"] as string).trim()
+      : "";
+    const reasoningEffort = body["reasoningEffort"] === null
+      ? null
+      : (/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(rawReasoningEffort) ? rawReasoningEffort : undefined);
+
+    await settlePendingCliSessionStart(sessionId);
+    const cached = activeCliSessions.get(sessionId);
+    if (cached) {
+      // Already warm for these settings, or holding a real conversation we must
+      // not restart. Either way the turn path handles it.
+      // `workingDirectory` is only set by this route, so a session started by a
+      // turn never counts as "warm" — but it is a real conversation, so it is
+      // left alone either way.
+      const matches = cached.providerId === requestProvider
+        && cached.runtimeMode === runtimeMode
+        && cached.model === model
+        && cached.reasoningEffort === reasoningEffort
+        && cached.workingDirectory === wsRoot;
+      return reply.send(matches ? { status: "warm" } : { status: "skipped", reason: "session-in-use" });
+    }
+
+    try {
+      if (!(await cliProvider.checkAvailability())) {
+        return reply.send({ status: "skipped", reason: "provider-unavailable" });
+      }
+    } catch {
+      return reply.send({ status: "skipped", reason: "provider-unavailable" });
+    }
+
+    const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
+      sessionId,
+      projectRoot: wsRoot,
+    });
+
+    const startPromise = (async () => {
+      const providerSession = await cliProvider.startSession({
+        threadId: sessionId,
+        workingDirectory: wsRoot,
+        mode: runtimeMode,
+        model,
+        reasoningEffort: reasoningEffort ?? undefined,
+        mcpServers,
+      });
+      activeCliSessions.set(sessionId, {
+        providerId: requestProvider,
+        runtimeMode,
+        model,
+        reasoningEffort,
+        providerSessionId: providerSession.id,
+        provider: cliProvider,
+        awaitingFirstTurn: true,
+        workingDirectory: wsRoot,
+      });
+      return providerSession;
+    })();
+    cliSessionStarts.set(sessionId, startPromise);
+
+    try {
+      const providerSession = await startPromise;
+      console.log(`[chat/cli] Pre-warmed ${requestProvider}/${runtimeMode} session ${providerSession.id} for ${sessionId}`);
+      return reply.send({ status: "started", providerSessionId: providerSession.id });
+    } catch (error) {
+      // Pre-warming is best effort — the turn will start its own session.
+      console.warn(`[chat/cli] Pre-warm failed for ${sessionId}:`, error);
+      return reply.send({
+        status: "failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      if (cliSessionStarts.get(sessionId) === startPromise) cliSessionStarts.delete(sessionId);
+    }
+  });
 
   // ══ POST /api/chat — Main chat endpoint with agentic tool loop ═════
 
@@ -3177,6 +3367,10 @@ export function registerChatRoutes(
         });
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
+        // A pre-warm started while the user was typing may still be spawning
+        // the subprocess. Wait for it instead of racing it — otherwise both
+        // paths start a process and one is orphaned.
+        await settlePendingCliSessionStart(sessionId);
         const cachedCliSession = activeCliSessions.get(sessionId);
         let providerSessionId: string;
         let isNewCliSession = false;
@@ -3190,6 +3384,12 @@ export function registerChatRoutes(
           !!cachedCliSession?.remoteClientId && cachedCliSession.remoteClientId === remoteNodeClientId
         );
 
+        // A pre-warmed process was started before the turn resolved its project
+        // root. If the roots disagree the subprocess is running in the wrong
+        // directory, so it must be replaced rather than reused.
+        const prewarmRootMatches = cachedCliSession?.workingDirectory === undefined
+          || cachedCliSession.workingDirectory === cliWsRoot;
+
         if (
           cachedCliSession
           && cachedCliSession.providerId === requestProvider
@@ -3197,11 +3397,18 @@ export function registerChatRoutes(
           && cachedCliSession.model === (requestBodyModel || undefined)
           && cachedCliSession.reasoningEffort === requestReasoningEffort
           && remoteConnectionUnchanged
+          && prewarmRootMatches
         ) {
           // Existing session with the same provider — try to reuse it
           providerSessionId = cachedCliSession.providerSessionId;
           cliProvider = cachedCliSession.provider;
-          console.log(`[chat/cli] Reusing ${requestProvider}/${runtimeMode} session ${providerSessionId} for ${sessionId}`);
+          // A pre-warmed session exists but has never been sent a turn, so this
+          // message is still its first turn and must carry Jait's system prompt.
+          if (cachedCliSession.awaitingFirstTurn) {
+            isNewCliSession = true;
+            activeCliSessions.set(sessionId, { ...cachedCliSession, awaitingFirstTurn: false });
+          }
+          console.log(`[chat/cli] Reusing ${requestProvider}/${runtimeMode}${isNewCliSession ? " (pre-warmed)" : ""} session ${providerSessionId} for ${sessionId}`);
         } else {
           // If the user switched providers (or the remote node reconnected),
           // stop the old session first

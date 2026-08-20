@@ -35,6 +35,10 @@ import {
 
 const execAsync = promisify(exec);
 
+/** Tail of a background command's output reported back to the gateway. */
+const BACKGROUND_MAX_OUTPUT_CHARS = 4000;
+const BACKGROUND_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
+
 /** Directories to hide from browse listings (mirror of routes/filesystem.ts) */
 const HIDDEN = new Set([
   "$RECYCLE.BIN", "System Volume Information", "$WinREAgent",
@@ -409,8 +413,11 @@ export class PrimaryLink {
         const projectRoot = typeof payload["projectRoot"] === "string"
           ? payload["projectRoot"]
           : undefined;
+        const backgroundId = typeof payload["backgroundId"] === "string"
+          ? payload["backgroundId"]
+          : undefined;
         try {
-          const result = await this.toolOp(tool, args, projectRoot);
+          const result = await this.toolOp(tool, args, projectRoot, backgroundId);
           this.send({ type: "tool.op-response", payload: { requestId, result } });
         } catch (err) {
           this.send({ type: "tool.op-response", payload: { requestId, error: errMsg(err) } });
@@ -611,12 +618,17 @@ export class PrimaryLink {
     }
   }
 
-  private async toolOp(tool: string, args: Record<string, unknown>, projectRoot?: string): Promise<unknown> {
+  private async toolOp(
+    tool: string,
+    args: Record<string, unknown>,
+    projectRoot?: string,
+    backgroundId?: string,
+  ): Promise<unknown> {
     switch (tool) {
       case "terminal.run":
       case "jait.terminal":
       case "execute":
-        return this.runCommand(args, projectRoot);
+        return this.runCommand(args, projectRoot, backgroundId);
       // Aliases: the simplified core tool names map to the same handlers as
       // their canonical dotted counterparts (see REMOTE_EXECUTABLE_TOOLS).
       case "read":
@@ -671,20 +683,73 @@ export class PrimaryLink {
     }
   }
 
-  private async runCommand(args: Record<string, unknown>, projectRoot?: string): Promise<unknown> {
+  private async runCommand(
+    args: Record<string, unknown>,
+    projectRoot?: string,
+    backgroundId?: string,
+  ): Promise<unknown> {
     const command = String(args["command"] ?? "");
     if (!command.trim()) throw new Error("Missing command");
     const timeout = Math.max(Number(args["timeout"]) || 30_000, 0);
     const cwd = resolve(String(args["cwd"] ?? args["projectRoot"] ?? projectRoot ?? process.cwd()));
     if (args["isBackground"] === true) {
-      exec(command, {
+      // Return as soon as the child is spawned, then push the result to the
+      // gateway when it exits — the gateway correlates it by backgroundId and
+      // wakes the waiting agent. Without an id (an older gateway) there is
+      // nobody to report to, so say so rather than promising a notification.
+      const child = exec(command, {
         cwd,
+        maxBuffer: BACKGROUND_MAX_BUFFER_BYTES,
         env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       });
+
+      if (backgroundId) {
+        let out = "";
+        const append = (chunk: unknown): void => {
+          out += String(chunk);
+          // Only the tail is ever reported; don't buffer a whole build log.
+          if (out.length > BACKGROUND_MAX_OUTPUT_CHARS * 2) {
+            out = out.slice(-BACKGROUND_MAX_OUTPUT_CHARS);
+          }
+        };
+        child.stdout?.on("data", append);
+        child.stderr?.on("data", append);
+
+        let reported = false;
+        const report = (exitCode: number | null): void => {
+          if (reported) return;
+          reported = true;
+          let output = out.trim();
+          if (output.length > BACKGROUND_MAX_OUTPUT_CHARS) {
+            output = "…(truncated)\n" + output.slice(-BACKGROUND_MAX_OUTPUT_CHARS);
+          }
+          this.send({
+            type: "tool.background-complete",
+            payload: { backgroundId, exitCode, output: output || "(no output)" },
+          });
+        };
+        child.on("close", (code) => report(code));
+        child.on("error", (err) => {
+          append(`\n${errMsg(err)}`);
+          report(null);
+        });
+      }
+
       return {
         ok: true,
-        message: "Background command started on node",
-        data: { output: "(background — not waiting for output)", exitCode: null, timedOut: false },
+        message: backgroundId
+          ? "Background command started on node. You'll be notified automatically when it finishes — "
+            + "end your turn and wait rather than polling."
+          : "Background command started on node, but this gateway did not supply a completion id — "
+            + "you will NOT be notified when it finishes, so check on it yourself.",
+        data: {
+          output: backgroundId
+            ? "(background — running on node; you'll be notified on completion)"
+            : "(background — running on node; no completion notification will be sent)",
+          exitCode: null,
+          timedOut: false,
+          watched: Boolean(backgroundId),
+        },
       };
     }
 

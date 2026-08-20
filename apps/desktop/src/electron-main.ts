@@ -37,6 +37,8 @@ const require = createRequire(import.meta.url);
 const GATEWAY_URL = process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000";
 const DEV_SERVER_URL = process.env["JAIT_WEB_DEV_URL"] ?? "http://localhost:3000";
 const JAIT_CORE_MCP_SERVER_NAME = "jait_core";
+/** Tail of a background command's output reported back to the gateway. */
+const BACKGROUND_MAX_OUTPUT_CHARS = 4000;
 const IS_DEV = !app.isPackaged;
 
 // ── "Open with Jait" — extract folder path from CLI args ──────────────
@@ -1218,6 +1220,24 @@ function sendTerminalExitEvent(terminalId: string, exitCode: number | null, sign
     terminalId,
     exitCode,
     signal,
+  });
+}
+
+/**
+ * A background command finished on this node. The tool response returned when
+ * the command was spawned, so this is the only way the gateway learns the
+ * result — it correlates by backgroundId and wakes the waiting agent.
+ */
+function sendBackgroundCommandCompleteEvent(
+  backgroundId: string,
+  exitCode: number | null,
+  output: string,
+) {
+  mainWindow?.webContents.send("gateway:event", {
+    type: "tool.background-complete-from-child",
+    backgroundId,
+    exitCode,
+    output,
   });
 }
 
@@ -3225,7 +3245,7 @@ ipcMain.handle("desktop:tool-op", async (
   _event,
   tool: string,
   args: Record<string, unknown>,
-  meta: { sessionId?: string; projectRoot?: string },
+  meta: { sessionId?: string; projectRoot?: string; backgroundId?: string },
 ) => {
   const { resolve, dirname, basename } = await import("node:path");
   const { promisify } = await import("node:util");
@@ -3245,13 +3265,73 @@ ipcMain.handle("desktop:tool-op", async (
       if (!command) return { ok: false, message: "No command provided" };
       const timeout = typeof args.timeout === "number" ? args.timeout : 30_000;
       const cmdCwd = args.cwd ? resolve(String(args.cwd)) : cwd;
+      const shell = process.platform === "win32" ? "powershell.exe" : "/bin/bash";
+
+      // Background: return as soon as the child is spawned and report the
+      // result when it exits. Without a backgroundId (an older gateway) there
+      // is nobody to report to, so don't promise a notification.
+      if (args.isBackground === true) {
+        const child = execAsync(command, {
+          cwd: cmdCwd,
+          maxBuffer: 10 * 1024 * 1024,
+          env: process.env as Record<string, string>,
+          shell,
+        });
+
+        const backgroundId = meta.backgroundId;
+        if (backgroundId) {
+          let out = "";
+          const append = (chunk: unknown) => {
+            out += String(chunk);
+            if (out.length > BACKGROUND_MAX_OUTPUT_CHARS * 2) {
+              out = out.slice(-BACKGROUND_MAX_OUTPUT_CHARS);
+            }
+          };
+          child.stdout?.on("data", append);
+          child.stderr?.on("data", append);
+
+          let reported = false;
+          const report = (exitCode: number | null) => {
+            if (reported) return;
+            reported = true;
+            let output = out.trim();
+            if (output.length > BACKGROUND_MAX_OUTPUT_CHARS) {
+              output = "…(truncated)\n" + output.slice(-BACKGROUND_MAX_OUTPUT_CHARS);
+            }
+            sendBackgroundCommandCompleteEvent(backgroundId, exitCode, output || "(no output)");
+          };
+          child.on("close", (code: number | null) => report(code));
+          child.on("error", (err: Error) => {
+            append(`\n${err.message}`);
+            report(null);
+          });
+        }
+
+        return {
+          ok: true,
+          message: backgroundId
+            ? "Background command started on node. You'll be notified automatically when it finishes — "
+              + "end your turn and wait rather than polling."
+            : "Background command started on node, but this gateway did not supply a completion id — "
+              + "you will NOT be notified when it finishes, so check on it yourself.",
+          data: {
+            output: backgroundId
+              ? "(background — running on node; you'll be notified on completion)"
+              : "(background — running on node; no completion notification will be sent)",
+            exitCode: null,
+            timedOut: false,
+            watched: Boolean(backgroundId),
+          },
+        };
+      }
+
       try {
         const { stdout, stderr } = await execP(command, {
           cwd: cmdCwd,
           timeout: timeout || 120_000,
           maxBuffer: 10 * 1024 * 1024,
           env: process.env as Record<string, string>,
-          shell: process.platform === "win32" ? "powershell.exe" : "/bin/bash",
+          shell,
         });
         const output = (stdout + (stderr ? `\n${stderr}` : "")).trim();
         return { ok: true, message: output || "Command completed with no output" };
