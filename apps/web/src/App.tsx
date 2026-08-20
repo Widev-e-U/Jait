@@ -4435,6 +4435,8 @@ function App() {
     onVoiceStop: handleVoiceStop,
     mode: chatMode,
     onModeChange: setChatMode,
+    sendTarget,
+    onSendTargetChange: setSendTarget,
     provider: chatProvider,
     onProviderChange: handleChatProviderChange,
     responseStyle: chatResponseStyle,
@@ -4453,7 +4455,7 @@ function App() {
     projectId: activeProjectId,
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
-    chatMode, setChatMode, chatProvider, handleChatProviderChange,
+    chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange,
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
     chatReasoningEffort, handleChatReasoningEffortChange,

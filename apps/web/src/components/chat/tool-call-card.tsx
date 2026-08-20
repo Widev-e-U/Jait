@@ -2058,9 +2058,9 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
       {canToggle && (
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
           <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-base">Mission details</DialogTitle>
-              <DialogDescription asChild className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-left">Mission details</DialogTitle>
+              <DialogDescription asChild className="text-left max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
                 <span>{prompt}</span>
               </DialogDescription>
             </DialogHeader>

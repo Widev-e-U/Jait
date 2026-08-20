@@ -83,6 +83,8 @@ const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
 const FOLDER_INDENT_PX = 12
 /** Internal drag payload for re-parenting a folder within the sidebar. */
 const JAIT_PROJECT_MOVE_MIME = 'application/x-jait-project-move'
+/** Internal drag payload for moving a chat between projects / personal chats. */
+const JAIT_SESSION_MOVE_MIME = 'application/x-jait-session-move'
 const SESSION_CONTEXT_MENU_WIDTH = 256
 const SESSION_CONTEXT_MENU_HEIGHT = 40
 const SESSION_CONTEXT_MENU_MARGIN = 8
@@ -141,6 +143,14 @@ function formatTime(iso: string) {
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
   return d.toLocaleDateString()
+}
+
+/** Which internal sidebar drag is active, if any. Data payloads are unreadable
+ * during dragover, so we distinguish by the advertised MIME types instead. */
+function getSidebarDragKind(types: ReadonlyArray<string>): 'session' | 'project' | null {
+  if (types.includes(JAIT_SESSION_MOVE_MIME)) return 'session'
+  if (types.includes(JAIT_PROJECT_MOVE_MIME)) return 'project'
+  return null
 }
 
 /** True when a session has activity newer than when the user last opened it. */
@@ -227,6 +237,8 @@ export function SessionSelector({
   // Set when the project menu was opened via right-click or long-press so the
   // click that follows (esp. on touch) doesn't also select the project.
   const projectMenuJustOpenedRef = useRef(false)
+  // Tracks the chat being dragged so we can skip highlighting its own project.
+  const dragSessionRef = useRef<{ sessionId: string; sourceProjectId: string | null } | null>(null)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
   const displayedProjects = normalizedSearchQuery && onSearch
     ? searchResults?.projects ?? []
@@ -479,7 +491,16 @@ export function SessionSelector({
               // Dropping on the section header is the desktop equivalent of
               // "Move to top level".
               onDragOver={(e) => {
-                if (!onMoveProject || !e.dataTransfer.types.includes(JAIT_PROJECT_MOVE_MIME)) return
+                const kind = getSidebarDragKind(e.dataTransfer.types)
+                if (kind === 'session') {
+                  if (!onMoveSession) return
+                  // A chat already in the personal list has nowhere to go at the root.
+                  if (dragSessionRef.current?.sourceProjectId === null) return
+                } else if (kind === 'project') {
+                  if (!onMoveProject) return
+                } else {
+                  return
+                }
                 e.preventDefault()
                 e.dataTransfer.dropEffect = 'move'
                 setDropTargetId('__root__')
@@ -487,6 +508,14 @@ export function SessionSelector({
               onDragLeave={() => setDropTargetId((current) => (current === '__root__' ? null : current))}
               onDrop={(e) => {
                 setDropTargetId(null)
+                const kind = getSidebarDragKind(e.dataTransfer.types)
+                if (kind === 'session') {
+                  const sessionId = e.dataTransfer.getData(JAIT_SESSION_MOVE_MIME)
+                  if (!sessionId || !onMoveSession) return
+                  e.preventDefault()
+                  onMoveSession(sessionId, null)
+                  return
+                }
                 if (!onMoveProject) return
                 const draggedId = e.dataTransfer.getData(JAIT_PROJECT_MOVE_MIME)
                 if (!draggedId) return
@@ -591,12 +620,20 @@ export function SessionSelector({
                         }
                       }}
                       onDragOver={(e) => {
-                        if (!isFolder || !onMoveProject) return
-                        const draggedId = e.dataTransfer.types.includes(JAIT_PROJECT_MOVE_MIME)
-                        if (!draggedId) return
+                        const kind = getSidebarDragKind(e.dataTransfer.types)
+                        if (kind === 'session') {
+                          // Any project row (folder or workspace) can receive a chat.
+                          if (!onMoveSession) return
+                          // Don't highlight the chat's own project.
+                          if (dragSessionRef.current?.sourceProjectId === project.id) return
+                        } else if (kind === 'project') {
+                          if (!isFolder || !onMoveProject) return
+                        } else {
+                          return
+                        }
                         // The id itself is unreadable during dragover, so the
                         // precise legality check happens on drop; here we only
-                        // signal that a folder can receive something at all.
+                        // signal that the row can receive something at all.
                         e.preventDefault()
                         e.dataTransfer.dropEffect = 'move'
                         setDropTargetId(project.id)
@@ -604,6 +641,16 @@ export function SessionSelector({
                       onDragLeave={() => setDropTargetId((current) => (current === project.id ? null : current))}
                       onDrop={(e) => {
                         setDropTargetId(null)
+                        const kind = getSidebarDragKind(e.dataTransfer.types)
+                        if (kind === 'session') {
+                          if (!onMoveSession) return
+                          const sessionId = e.dataTransfer.getData(JAIT_SESSION_MOVE_MIME)
+                          if (!sessionId || dragSessionRef.current?.sourceProjectId === project.id) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onMoveSession(sessionId, project.id)
+                          return
+                        }
                         if (!isFolder || !onMoveProject) return
                         const draggedId = e.dataTransfer.getData(JAIT_PROJECT_MOVE_MIME)
                         if (!draggedId || !canDropProjectInto(draggedId, project.id)) return
@@ -895,6 +942,19 @@ export function SessionSelector({
                               className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors ${
                                 isActiveSession ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                               }`}
+                              draggable={Boolean(onMoveSession) && !isStreaming}
+                              onDragStart={(e) => {
+                                if (!onMoveSession || isStreaming) {
+                                  e.preventDefault()
+                                  return
+                                }
+                                e.dataTransfer.effectAllowed = 'move'
+                                e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                                dragSessionRef.current = { sessionId: session.id, sourceProjectId: project.id }
+                              }}
+                              onDragEnd={() => {
+                                dragSessionRef.current = null
+                              }}
                               onClick={() => {
                                 if (consumedByLongPress()) return
                                 onDismiss?.()
@@ -971,6 +1031,19 @@ export function SessionSelector({
                       className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
                         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
                       }`}
+                      draggable={Boolean(onMoveSession) && !isStreaming}
+                      onDragStart={(e) => {
+                        if (!onMoveSession || isStreaming) {
+                          e.preventDefault()
+                          return
+                        }
+                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                        dragSessionRef.current = { sessionId: session.id, sourceProjectId: null }
+                      }}
+                      onDragEnd={() => {
+                        dragSessionRef.current = null
+                      }}
                       onClick={() => {
                         if (consumedByLongPress()) return
                         onDismiss?.()

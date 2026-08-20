@@ -30,6 +30,7 @@ import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache
 import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
+import type { SendTarget } from './send-target-selector'
 import type { ReferencedFile } from './prompt-input'
 import { getInjectedMemoryProvenanceEntries, type MemoryProvenanceSource } from '@/lib/memory-provenance'
 import { getMemoryFeedbackLabel, type MemoryFeedbackKind } from '@/lib/memory-feedback'
@@ -116,6 +117,8 @@ interface MessageProps {
     onVoiceStop?: () => void
     mode?: ChatMode
     onModeChange?: (mode: ChatMode) => void
+    sendTarget?: SendTarget
+    onSendTargetChange?: (target: SendTarget) => void
     provider?: ProviderId
     onProviderChange?: (provider: ProviderId) => void
     responseStyle?: ResponseStyle
@@ -886,6 +889,8 @@ function MessageInner({
                           onVoiceStop={editComposer?.onVoiceStop}
                           mode={editComposer?.mode}
                           onModeChange={editComposer?.onModeChange}
+                          sendTarget={editComposer?.sendTarget}
+                          onSendTargetChange={editComposer?.onSendTargetChange}
                           provider={editComposer?.provider}
                           onProviderChange={editComposer?.onProviderChange}
                           responseStyle={editComposer?.responseStyle}
