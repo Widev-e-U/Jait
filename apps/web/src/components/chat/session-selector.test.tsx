@@ -78,7 +78,9 @@ describe('SessionSelector', () => {
     expect(markup).toContain('Projects &amp; Chats')
     expect(markup).toContain('Jait')
     expect(markup).toContain('Root chat')
-    expect(markup).not.toContain('Personal chats')
+    // The "Personal chats" header doubles as the drop target for moving a
+    // chat back to the top level, so it is always present.
+    expect(markup).toContain('Personal chats')
   })
 
   it('marks projects whose folder path is missing', () => {
