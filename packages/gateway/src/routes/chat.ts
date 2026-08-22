@@ -1421,12 +1421,38 @@ const activeCliSessions = new Map<string, {
  */
 const cliSessionStarts = new Map<string, Promise<unknown>>();
 
+// How long a pending pre-warm may take before the turn stops waiting on it.
+// A hung CLI subprocess spawn (stuck `startSession`) must not wedge the whole
+// turn: with no bound here the gateway never emits `done`, and because the
+// SSE keepalive keeps the frontend's idle watchdog from firing, the chat
+// stays frozen until a manual reload/switch.
+const PREWARM_START_TIMEOUT_MS = 20_000;
+
 /** Await (and swallow errors from) a pending pre-warm/start for this session. */
 async function settlePendingCliSessionStart(sessionId: string): Promise<void> {
   const pending = cliSessionStarts.get(sessionId);
   if (!pending) return;
   try {
-    await pending;
+    await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(resolve, PREWARM_START_TIMEOUT_MS)),
+    ]);
+    // If the pending start already settled (resolved or rejected) the pre-warm
+    // route's own `finally` removes it from the map, so re-checking here is
+    // enough to detect success.
+    if (cliSessionStarts.get(sessionId) === pending) {
+      // Still pending after the grace period: it is wedged. Drop it so the
+      // caller starts its own fresh session instead of deadlocking on it. The
+      // in-flight `startPromise` is left to settle on its own; the pre-warm's
+      // `finally` only deletes when it is still the current entry, so it will
+      // not resurrect a stale one.
+      cliSessionStarts.delete(sessionId);
+      // Drop any half-registered cached session too — if startSession ever
+      // resolves, it must not surface a process we already gave up on.
+      const stale = activeCliSessions.get(sessionId);
+      if (stale) stopAndDeleteActiveCliSession(sessionId);
+      console.warn(`[chat/cli] pre-warm start for ${sessionId} timed out after ${PREWARM_START_TIMEOUT_MS}ms; starting a fresh session`);
+    }
   } catch {
     /* the starter reports its own failure; the caller re-checks the cache */
   }
@@ -1967,6 +1993,75 @@ async function waitForCliProviderRequest<T>(
   } finally {
     if (onAbort) signal.removeEventListener("abort", onAbort);
   }
+}
+
+/**
+ * Inactivity watchdog for a CLI-provider turn (codex / claude-code).
+ *
+ * CLI agents can hang silently with no error event and no turn.completed —
+ * most commonly while generating a long thinking block that stops emitting
+ * any events. The `turn.completed` waiter below would otherwise block forever,
+ * wedging the session in "processing". This timer aborts a turn that streams
+ * no progress activity for `timeoutMs`; every token / thinking / tool /
+ * message / activity event resets it, so a genuinely active turn is never
+ * killed. `timeoutMs <= 0` disables the watchdog entirely.
+ */
+function createCliTurnWatchdog(opts: {
+  timeoutMs: number;
+  subscribe: (handler: (event: ProviderEvent) => void) => () => void;
+  onTimeout: () => void;
+}) {
+  const { timeoutMs, subscribe, onTimeout } = opts;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let unsub: (() => void) | null = null;
+
+  const clear = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const reset = () => {
+    clear();
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        timer = null;
+        unsub?.();
+        unsub = null;
+        onTimeout();
+      }, timeoutMs);
+    }
+  };
+
+  const arm = (sessionId: string) => {
+    unsub?.();
+    unsub = null;
+    unsub = subscribe((event) => {
+      if (event.sessionId !== sessionId) return;
+      if (
+        event.type === "token"
+        || event.type === "thinking"
+        || event.type === "tool.start"
+        || event.type === "tool.output"
+        || event.type === "tool.result"
+        || event.type === "tool.approval-required"
+        || event.type === "message"
+        || event.type === "activity"
+      ) {
+        reset();
+      }
+    });
+    reset();
+  };
+
+  const stop = () => {
+    clear();
+    unsub?.();
+    unsub = null;
+  };
+
+  return { arm, stop, reset };
 }
 
 function buildVisibleHistoryEntries(
@@ -3864,11 +3959,35 @@ export function registerChatRoutes(
         }
 
         // Wait for the turn-completion event (may already be resolved if
-        // turn.completed fired synchronously inside sendTurn)
-        await waitForCliProviderRequest(
-          () => turnDonePromise,
-          streamAbort.signal,
-        );
+        // turn.completed fired synchronously inside sendTurn). A watchdog arms
+        // on inactivity and force-resolves with a session error so a silently
+        // hung CLI turn (typically a stalled thinking block) can't wedge the
+        // session in "processing" forever. Every token / thinking / tool /
+        // message / activity event resets it, so an active turn is never killed.
+        const turnDoneWatchdog = createCliTurnWatchdog({
+          timeoutMs: config.cliTurnTimeoutMs,
+          subscribe: (handler) => cliProvider!.onEvent(handler),
+          onTimeout: () => {
+            console.warn(
+              `[chat/cli] Turn stalled ${config.cliTurnTimeoutMs}ms without activity (session ${sessionId}, provider session ${providerSessionId}); aborting.`,
+            );
+            // Ask the provider to stop generating, but never wait on it.
+            cliProvider!.interruptTurn(providerSessionId).catch(() => {});
+            if (!sessionError) {
+              sessionError = `The CLI provider (${requestProvider}) stalled for ${Math.round(config.cliTurnTimeoutMs / 1000)}s with no activity — most likely a hung thinking block — so this turn was aborted. You can send a new message to continue.`;
+            }
+            resolveTurnDone();
+          },
+        });
+        turnDoneWatchdog.arm(providerSessionId);
+        try {
+          await waitForCliProviderRequest(
+            () => turnDonePromise,
+            streamAbort.signal,
+          );
+        } finally {
+          turnDoneWatchdog.stop();
+        }
 
         // ── Drain steering messages: send follow-up turns for any messages
         // injected via the /steer endpoint while the CLI provider was running. ──
@@ -3907,6 +4026,23 @@ export function registerChatRoutes(
             }
           });
 
+          // Same inactivity watchdog as the main turn — a steered follow-up can
+          // hang on a stalled thinking block too.
+          const steerWatchdog = createCliTurnWatchdog({
+            timeoutMs: config.cliTurnTimeoutMs,
+            subscribe: (handler) => cliProvider!.onEvent(handler),
+            onTimeout: () => {
+              console.warn(
+                `[chat/cli] Steering turn stalled ${config.cliTurnTimeoutMs}ms without activity (session ${sessionId}, provider session ${providerSessionId}); aborting.`,
+              );
+              cliProvider!.interruptTurn(providerSessionId).catch(() => {});
+              if (!sessionError) {
+                sessionError = `The CLI provider (${requestProvider}) stalled for ${Math.round(config.cliTurnTimeoutMs / 1000)}s with no activity — most likely a hung thinking block — so this follow-up turn was aborted. You can send a new message to continue.`;
+              }
+              steerDoneResolve?.();
+            },
+          });
+          steerWatchdog.arm(providerSessionId);
           try {
             await waitForCliProviderRequest(
               () => cliProvider!.sendTurn(providerSessionId, steerContent),
@@ -3920,6 +4056,7 @@ export function registerChatRoutes(
             if (!isAbortError(steerError)) throw steerError;
             break;
           } finally {
+            steerWatchdog.stop();
             unsubSteerDone();
           }
         }
