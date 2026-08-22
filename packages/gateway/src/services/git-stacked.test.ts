@@ -86,6 +86,26 @@ describe("runStackedAction – unstage on commit failure", () => {
     expect(status).toBe("");
   });
 
+  it("commits only staged files when some changes are unstaged", { timeout: 15_000 }, async () => {
+    await writeFile(join(repoDir, "staged.txt"), "staged");
+    await writeFile(join(repoDir, "unstaged-a.txt"), "a");
+    await writeFile(join(repoDir, "unstaged-b.txt"), "b");
+
+    // Stage only the first file; the other two remain unstaged.
+    git(repoDir, "add staged.txt");
+
+    const result = await svc.runStackedAction(repoDir, "commit", "test: staged only");
+
+    expect(result.commit.status).toBe("created");
+    // Only the staged file should be in the commit.
+    expect(git(repoDir, "show --name-only --format= HEAD")).toBe("staged.txt");
+    // The unstaged files must NOT be committed nor pushed; they stay in the tree.
+    const status = git(repoDir, "status --porcelain");
+    expect(status).toContain("?? unstaged-a.txt");
+    expect(status).toContain("?? unstaged-b.txt");
+    expect(status).not.toContain("staged.txt");
+  });
+
   it("ignores untracked local release checkouts when committing", { timeout: 15_000 }, async () => {
     const releaseCheckoutDir = join(repoDir, ".jait", "release-checkout-20260729");
     await mkdir(releaseCheckoutDir, { recursive: true });

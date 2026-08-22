@@ -1213,10 +1213,21 @@ export class GitService {
       }
     }
 
-    // Commit step
-    const porcelain = await gitExec(cwd, `status --porcelain ${COMMITTABLE_PATHSPEC}`).catch(() => "");
-    if (porcelain.length > 0) {
-      await gitExec(cwd, `add -A ${COMMITTABLE_PATHSPEC}`);
+    // Commit step. Honor the user's staging: if anything is already staged,
+    // commit exactly those staged files and leave unstaged/untracked changes
+    // alone. Otherwise, stage all changes (excluding local release checkouts)
+    // and commit them. Without this, `git add -A` + `commit -- <pathspec>`
+    // would sweep every unstaged change into the commit and push it.
+    const stagedPaths = await gitExec(cwd, `diff --cached --name-only ${COMMITTABLE_PATHSPEC}`).catch(() => "");
+    const hasStaged = stagedPaths.trim().length > 0;
+    const hasWorkingChanges =
+      hasStaged ||
+      (await gitExec(cwd, `status --porcelain ${COMMITTABLE_PATHSPEC}`).catch(() => "")).length > 0;
+    if (hasWorkingChanges) {
+      // Only stage everything when the user hasn't staged anything yet.
+      if (!hasStaged) {
+        await gitExec(cwd, `add -A ${COMMITTABLE_PATHSPEC}`);
+      }
 
       try {
         let msg = commitMessage?.trim();
@@ -1230,7 +1241,10 @@ export class GitService {
           }
         }
 
-        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}" ${COMMITTABLE_PATHSPEC}`);
+        // Commit the whole index (i.e. exactly the staged content). A pathspec
+        // here would commit the *working-tree* content of matching files,
+        // which is what swept in the unstaged changes in the first place.
+        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}"`);
         const sha = await gitExec(cwd, "rev-parse HEAD");
         result.commit = { status: "created", commitSha: sha, subject: msg };
       } catch (err) {
