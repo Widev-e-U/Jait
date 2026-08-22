@@ -765,7 +765,7 @@ export function SessionSelector({
                               <span
                                 aria-label={`Editor mode ${project.editorModeActive ? 'active' : 'inactive'} for ${project.title || 'project'}`}
                                 className={`flex h-6 w-6 shrink-0 items-center justify-center ${
-                                  project.editorModeActive ? 'text-primary' : 'text-muted-foreground/40'
+                                  project.editorModeActive ? 'text-blue-500' : 'text-muted-foreground/40'
                                 }`}
                               >
                                 <Code className="h-3 w-3" />
