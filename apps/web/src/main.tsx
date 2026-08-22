@@ -5,8 +5,13 @@ import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { HotkeysProvider } from '@/components/hotkeys'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { AuthProvider } from '@/hooks/useAuth'
+import { installVersionWatchdog } from '@/lib/version-watchdog'
 import App from './App'
 import './index.css'
+
+// Auto-reload when a new bundle is deployed, so a long-lived tab never keeps
+// running stale code (e.g. an old bundle that surfaced React #185).
+installVersionWatchdog()
 
 function ThemeAwareToaster() {
   const [theme, setTheme] = React.useState<'light' | 'dark'>(() =>
