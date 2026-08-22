@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.749](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.749) — 2026-08-22
+- fix(mobile): restore Android release build — AgentOverlayPlugin still called the removed WearBridge.relayQuestion, so :app:compileReleaseJavaWithJavac failed and the v0.1.748 release never shipped an APK; switch it to relayAttention (the v0.1.747 attention rename)
+
 ## [v0.1.748](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.748) — 2026-08-22
 - fix(release): republish @jait/shared with the attentionKey export the gateway v0.1.747 imports at runtime — the previous release added it to shared source without bumping its version, so the published gateway resolved the stale @jait/shared@0.1.75 and crashed on startup with "does not provide an export named 'attentionKey'"
 

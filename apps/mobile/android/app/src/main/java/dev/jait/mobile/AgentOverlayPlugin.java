@@ -69,7 +69,7 @@ public class AgentOverlayPlugin extends Plugin {
 
         activeCall = call;
         activeRequestId = requestId;
-        WearBridge.relayQuestion(getContext(), request);
+        WearBridge.relayAttention(getContext(), request);
         if (
             AgentQuestionPresentation.shouldUseSystemOverlay(
                 AgentOverlayWindow.canShow(getContext())
