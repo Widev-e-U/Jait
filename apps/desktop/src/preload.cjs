@@ -18,8 +18,13 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
     getInfo: () => ipcRenderer.invoke(allowedIpcChannels.invoke[0]),
     /** Get available screen/window sources for screen sharing */
     getDesktopSources: () => ipcRenderer.invoke(allowedIpcChannels.invoke[1]),
-    /** Show a native notification */
+    /**
+     * Show a native notification. `id` is the attention key, so the same request
+     * answered on another device can be revoked here by that key.
+     */
     notify: (opts) => ipcRenderer.invoke(allowedIpcChannels.invoke[2], opts),
+    /** Dismiss a notification previously shown with this id. */
+    closeNotification: (id) => ipcRenderer.invoke(allowedIpcChannels.invoke[33], { id }),
     /** Show a native confirmation dialog for screen-share approval */
     confirmShare: (opts) => ipcRenderer.invoke(allowedIpcChannels.invoke[3], opts),
     /** Open a native directory picker and return the absolute path */

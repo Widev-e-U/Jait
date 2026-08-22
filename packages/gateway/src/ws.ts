@@ -45,12 +45,27 @@ const EMPTY_CAPABILITIES: NodeCapabilities = {
   preview: false,
 };
 
+/**
+ * Which shell a client is running in. Reported by the client at connect time
+ * (`?surface=`) and used to decide who raises an *OS-level* notification: a
+ * browser tab and the Electron app on the same machine are two clients but one
+ * human, so only one of them should light up the system tray.
+ */
+export type ClientSurface = "desktop" | "web" | "mobile" | "unknown";
+
+const CLIENT_SURFACES: readonly ClientSurface[] = ["desktop", "web", "mobile", "unknown"];
+
+export function parseClientSurface(value: string | null | undefined): ClientSurface {
+  return CLIENT_SURFACES.includes(value as ClientSurface) ? value as ClientSurface : "unknown";
+}
+
 interface ConnectedClient {
   id: string;
   ws: WebSocket;
   deviceId: string | null;
   sessionId: string | null;
   userId: string | null;
+  surface: ClientSurface;
   authenticated: boolean;
   connectedAt: Date;
   /** Terminal IDs this client is subscribed to for output streaming */
@@ -214,6 +229,7 @@ export class WsControlPlane {
         deviceId: null,
         sessionId: null,
         userId: null,
+        surface: "unknown",
         authenticated: false,
         connectedAt: new Date(),
         terminalSubscriptions: new Set(),
@@ -222,6 +238,7 @@ export class WsControlPlane {
 
       // Try to authenticate from query string token or Authorization header
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+      client.surface = parseClientSurface(url.searchParams.get("surface"));
       const token = url.searchParams.get("token")
         ?? this.extractBearerToken(req.headers.authorization)
         ?? this.extractCookieToken(req.headers.cookie);
@@ -1065,6 +1082,30 @@ export class WsControlPlane {
       if (client.userId === userId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
+    }
+  }
+
+  /** Surfaces with at least one live client. `userId === null` means any user. */
+  liveSurfaces(userId: string | null): Set<ClientSurface> {
+    const surfaces = new Set<ClientSurface>();
+    for (const client of this.clients.values()) {
+      if (client.ws.readyState !== 1) continue;
+      if (userId !== null && client.userId !== userId) continue;
+      surfaces.add(client.surface);
+    }
+    return surfaces;
+  }
+
+  /**
+   * Fan an event out per-client, letting the caller tailor the payload to the
+   * receiving client's surface. Attention uses this so the Electron app and a
+   * browser tab on the same machine agree on which one shows the OS toast.
+   */
+  broadcastBySurface(userId: string | null, build: (surface: ClientSurface) => WsEvent) {
+    for (const client of this.clients.values()) {
+      if (client.ws.readyState !== 1) continue;
+      if (userId !== null && client.userId !== userId) continue;
+      this.send(client.ws, build(client.surface));
     }
   }
 

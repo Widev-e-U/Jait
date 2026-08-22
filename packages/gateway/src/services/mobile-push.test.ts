@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
-import { MobilePushService, shouldDeliverQuestionPush } from "./mobile-push.js";
+import { attentionRevokeTargets, MobilePushService } from "./mobile-push.js";
+
+const registrations = [
+  { deviceId: "phone", userId: "user-a", token: "token-phone" },
+  { deviceId: "watch", userId: "user-a", token: "token-watch" },
+];
 
 describe("MobilePushService", () => {
-  it("delivers every question regardless of attention", () => {
-    expect(shouldDeliverQuestionPush({ userId: "user-a", attention: "normal" })).toBe(true);
-    expect(shouldDeliverQuestionPush({ userId: "user-a", attention: "urgent" })).toBe(true);
-    expect(shouldDeliverQuestionPush({ userId: null, attention: "normal" })).toBe(false);
+  it("revokes on every device except the one that answered", () => {
+    expect(attentionRevokeTargets(registrations, "watch")).toEqual([registrations[0]]);
+  });
+
+  it("revokes everywhere when the resolving device is unknown", () => {
+    expect(attentionRevokeTargets(registrations, null)).toEqual(registrations);
+    expect(attentionRevokeTargets(registrations, "desktop-electron")).toEqual(registrations);
   });
 
   it("persists registrations across service instances", async () => {

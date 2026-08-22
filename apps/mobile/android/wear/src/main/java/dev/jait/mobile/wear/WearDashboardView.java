@@ -22,23 +22,19 @@ final class WearDashboardView {
         void onOpenChat(WearSnapshotStore.Chat chat);
         void onOpenRequest(WearRequestStore.Entry entry);
         void onPage(int page);
+        void onToggleTheme();
     }
 
-    private static final int BACKGROUND = Color.rgb(13, 15, 18);
-    private static final int SURFACE = Color.rgb(24, 26, 31);
-    private static final int SURFACE_ACTIVE = Color.rgb(22, 31, 45);
-    private static final int BORDER = Color.rgb(52, 57, 66);
-    private static final int PRIMARY = Color.rgb(242, 244, 247);
-    private static final int SECONDARY = Color.rgb(174, 180, 189);
-    private static final int MUTED = Color.rgb(104, 111, 121);
-    private static final int BLUE = Color.rgb(96, 165, 250);
-    private static final int GREEN = Color.rgb(74, 222, 128);
-    private static final int RED = Color.rgb(248, 113, 113);
-
     private final Context context;
+    private final WearTheme theme;
 
     WearDashboardView(Context context) {
         this.context = context;
+        this.theme = WearTheme.load(context);
+    }
+
+    WearTheme theme() {
+        return theme;
     }
 
     View buildHome(
@@ -57,11 +53,11 @@ final class WearDashboardView {
         LinearLayout metrics = new LinearLayout(context);
         metrics.setOrientation(LinearLayout.HORIZONTAL);
         metrics.addView(
-            metric(String.valueOf(snapshot.activeThreads), "ACTIVE", snapshot.activeThreads > 0 ? GREEN : MUTED),
+            metric(String.valueOf(snapshot.activeThreads), "ACTIVE", snapshot.activeThreads > 0 ? theme.green() : theme.muted()),
             weightedHeight(1f, 40, 0, 0, 3, 0)
         );
         metrics.addView(
-            metric(String.valueOf(pending), "NEEDS REPLY", pending > 0 ? BLUE : MUTED),
+            metric(String.valueOf(pending), "NEEDS REPLY", pending > 0 ? theme.blue() : theme.muted()),
             weightedHeight(1f, 40, 3, 0, 0, 0)
         );
         root.addView(metrics, fixedHeight(40, 0, 0, 0, 4));
@@ -70,7 +66,7 @@ final class WearDashboardView {
             ? "Recent conversations"
             : snapshot.totalThreads + " chats · " + snapshot.updatedToday + " today";
         root.addView(
-            actionRow("Chats", chatsDetail, BLUE, listener::onChats),
+            actionRow("Chats", chatsDetail, theme.blue(), listener::onChats),
             fixedHeight(40, 0, 0, 0, 4)
         );
 
@@ -78,7 +74,7 @@ final class WearDashboardView {
             ? "No agent requests yet"
             : requests.size() + " recent · " + pending + " pending";
         root.addView(
-            actionRow("Requests", requestsDetail, pending > 0 ? BLUE : SECONDARY, listener::onRequests),
+            actionRow("Requests", requestsDetail, pending > 0 ? theme.blue() : theme.secondary(), listener::onRequests),
             fixedHeight(40, 0, 0, 0, 4)
         );
 
@@ -86,10 +82,10 @@ final class WearDashboardView {
         int syncColor;
         if (snapshot.connected) {
             syncText = "Synced " + WearPromptView.ageLabel(snapshot.syncedAt, System.currentTimeMillis()) + " ago";
-            syncColor = MUTED;
+            syncColor = theme.muted();
         } else {
             syncText = snapshot.error.isEmpty() ? "Tap refresh to sync" : snapshot.error;
-            syncColor = RED;
+            syncColor = theme.red();
         }
         TextView sync = text(syncText, 9, syncColor, false);
         sync.setGravity(Gravity.CENTER);
@@ -148,7 +144,7 @@ final class WearDashboardView {
         TextView provider = text(
             chat.providerId + " · " + chat.messages.size() + " messages",
             9,
-            MUTED,
+            theme.muted(),
             false
         );
         provider.setGravity(Gravity.CENTER);
@@ -225,7 +221,7 @@ final class WearDashboardView {
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         FrameLayout logo = new FrameLayout(context);
-        logo.setBackground(rounded(Color.WHITE, 8, Color.TRANSPARENT));
+        logo.setBackground(rounded(theme.logoBackground(), 8, Color.TRANSPARENT));
         ImageView logoMark = new ImageView(context);
         logoMark.setImageResource(R.drawable.ic_jait_mark_dark);
         logoMark.setPadding(dp(5), dp(5), dp(5), dp(5));
@@ -234,21 +230,29 @@ final class WearDashboardView {
 
         LinearLayout brandText = new LinearLayout(context);
         brandText.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("Jait", 14, PRIMARY, true);
+        TextView title = text("Jait", 14, theme.primary(), true);
         title.setSingleLine(true);
         brandText.addView(title);
-        TextView subtitle = text("WATCH", 8, BLUE, true);
+        TextView subtitle = text("WATCH", 8, theme.blue(), true);
         subtitle.setLetterSpacing(0.15f);
         brandText.addView(subtitle);
         header.addView(brandText, weightedWrap(1f, 8, 0, 0, 0));
 
-        TextView refresh = text("↻", 18, SECONDARY, false);
+        TextView refresh = text("↻", 18, theme.secondary(), false);
         refresh.setGravity(Gravity.CENTER);
-        refresh.setBackground(rounded(SURFACE, 12, BORDER));
+        refresh.setBackground(rounded(theme.surface(), 12, theme.border()));
         refresh.setClickable(true);
         refresh.setFocusable(true);
         refresh.setOnClickListener(view -> listener.onRefresh());
         header.addView(refresh, new LinearLayout.LayoutParams(dp(28), dp(28)));
+
+        TextView themeToggle = text(theme.isDark() ? "☾" : "☀", 15, theme.secondary(), false);
+        themeToggle.setGravity(Gravity.CENTER);
+        themeToggle.setBackground(rounded(theme.surface(), 12, theme.border()));
+        themeToggle.setClickable(true);
+        themeToggle.setFocusable(true);
+        themeToggle.setOnClickListener(view -> listener.onToggleTheme());
+        header.addView(themeToggle, new LinearLayout.LayoutParams(dp(28), dp(28)));
         return header;
     }
 
@@ -257,9 +261,9 @@ final class WearDashboardView {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView back = text("‹", 22, PRIMARY, false);
+        TextView back = text("‹", 22, theme.primary(), false);
         back.setGravity(Gravity.CENTER);
-        back.setBackground(rounded(SURFACE, 12, BORDER));
+        back.setBackground(rounded(theme.surface(), 12, theme.border()));
         back.setClickable(true);
         back.setFocusable(true);
         back.setOnClickListener(view -> listener.onHome());
@@ -267,11 +271,11 @@ final class WearDashboardView {
 
         LinearLayout heading = new LinearLayout(context);
         heading.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text(titleValue, 13, PRIMARY, true);
+        TextView title = text(titleValue, 13, theme.primary(), true);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         heading.addView(title);
-        TextView subtitle = text(subtitleValue, 8, MUTED, false);
+        TextView subtitle = text(subtitleValue, 8, theme.muted(), false);
         subtitle.setSingleLine(true);
         heading.addView(subtitle);
         header.addView(heading, weightedWrap(1f, 8, 0, 0, 0));
@@ -282,12 +286,12 @@ final class WearDashboardView {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER);
-        card.setBackground(rounded(SURFACE, 13, BORDER));
+        card.setBackground(rounded(theme.surface(), 13, theme.border()));
 
         TextView number = text(value, 17, accentColor, true);
         number.setGravity(Gravity.CENTER);
         card.addView(number);
-        TextView caption = text(label, 8, MUTED, true);
+        TextView caption = text(label, 8, theme.muted(), true);
         caption.setGravity(Gravity.CENTER);
         caption.setLetterSpacing(0.08f);
         card.addView(caption);
@@ -299,16 +303,16 @@ final class WearDashboardView {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), 0, dp(10), 0);
-        row.setBackground(rounded(SURFACE_ACTIVE, 13, Color.rgb(43, 61, 86)));
+        row.setBackground(rounded(theme.surfaceActive(), 13, theme.borderActive()));
         row.setClickable(true);
         row.setFocusable(true);
         row.setOnClickListener(view -> action.run());
 
         LinearLayout labels = new LinearLayout(context);
         labels.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text(titleValue, 12, PRIMARY, true);
+        TextView title = text(titleValue, 12, theme.primary(), true);
         labels.addView(title);
-        TextView subtitle = text(subtitleValue, 8, MUTED, false);
+        TextView subtitle = text(subtitleValue, 8, theme.muted(), false);
         subtitle.setSingleLine(true);
         subtitle.setEllipsize(TextUtils.TruncateAt.END);
         labels.addView(subtitle);
@@ -326,7 +330,7 @@ final class WearDashboardView {
 
         LinearLayout top = new LinearLayout(context);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = text(chat.title, 11, PRIMARY, true);
+        TextView title = text(chat.title, 11, theme.primary(), true);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(title, weightedWrap(1f, 0, 0, 0, 0));
@@ -337,7 +341,7 @@ final class WearDashboardView {
         String preview = chat.messages.isEmpty()
             ? chat.providerId
             : chat.messages.get(chat.messages.size() - 1).content;
-        TextView detail = text(preview, 9, SECONDARY, false);
+        TextView detail = text(preview, 9, theme.secondary(), false);
         detail.setSingleLine(true);
         detail.setEllipsize(TextUtils.TruncateAt.END);
         card.addView(detail, matchWrap(0, 4, 0, 0));
@@ -355,18 +359,18 @@ final class WearDashboardView {
 
         LinearLayout top = new LinearLayout(context);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = text(entry.title, 11, PRIMARY, true);
+        TextView title = text(entry.title, 11, theme.primary(), true);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(title, weightedWrap(1f, 0, 0, 0, 0));
         String state = entry.isPending()
             ? "REPLY"
             : WearRequestStore.STATE_ANSWERED.equals(entry.state) ? "DONE" : "CLOSED";
-        TextView status = text(state, 8, entry.isPending() ? BLUE : MUTED, true);
+        TextView status = text(state, 8, entry.isPending() ? theme.blue() : theme.muted(), true);
         top.addView(status);
         card.addView(top);
 
-        TextView detail = text(entry.question, 9, SECONDARY, false);
+        TextView detail = text(entry.question, 9, theme.secondary(), false);
         detail.setSingleLine(true);
         detail.setEllipsize(TextUtils.TruncateAt.END);
         card.addView(detail, matchWrap(0, 4, 0, 0));
@@ -379,15 +383,15 @@ final class WearDashboardView {
         card.setPadding(dp(10), dp(7), dp(10), dp(7));
         boolean fromUser = "user".equals(message.role);
         card.setBackground(rounded(
-            fromUser ? Color.rgb(24, 42, 66) : SURFACE,
+            fromUser ? theme.userBubble() : theme.surface(),
             12,
-            fromUser ? Color.rgb(48, 85, 132) : BORDER
+            fromUser ? theme.userBubbleBorder() : theme.border()
         ));
 
-        TextView role = text(fromUser ? "YOU" : "JAIT", 8, fromUser ? BLUE : GREEN, true);
+        TextView role = text(fromUser ? "YOU" : "JAIT", 8, fromUser ? theme.blue() : theme.green(), true);
         role.setLetterSpacing(0.08f);
         card.addView(role);
-        TextView content = text(message.content, 9, PRIMARY, false);
+        TextView content = text(message.content, 9, theme.primary(), false);
         content.setMaxLines(2);
         content.setEllipsize(TextUtils.TruncateAt.END);
         card.addView(content, matchWrap(0, 3, 0, 0));
@@ -399,7 +403,7 @@ final class WearDashboardView {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(dp(11), dp(7), dp(11), dp(7));
-        card.setBackground(rounded(SURFACE, 12, BORDER));
+        card.setBackground(rounded(theme.surface(), 12, theme.border()));
         card.setClickable(true);
         card.setFocusable(true);
         return card;
@@ -410,12 +414,12 @@ final class WearDashboardView {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER);
         card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(rounded(SURFACE, 14, BORDER));
+        card.setBackground(rounded(theme.surface(), 14, theme.border()));
 
-        TextView title = text(titleValue, 12, PRIMARY, true);
+        TextView title = text(titleValue, 12, theme.primary(), true);
         title.setGravity(Gravity.CENTER);
         card.addView(title);
-        TextView detail = text(detailValue == null ? "" : detailValue, 9, MUTED, false);
+        TextView detail = text(detailValue == null ? "" : detailValue, 9, theme.muted(), false);
         detail.setGravity(Gravity.CENTER);
         detail.setMaxLines(2);
         detail.setEllipsize(TextUtils.TruncateAt.END);
@@ -432,7 +436,7 @@ final class WearDashboardView {
         if (page > 0) previous.setOnClickListener(view -> listener.onPage(page - 1));
         row.addView(previous, new LinearLayout.LayoutParams(dp(42), dp(30)));
 
-        TextView indicator = text((page + 1) + " / " + pageCount, 9, MUTED, true);
+        TextView indicator = text((page + 1) + " / " + pageCount, 9, theme.muted(), true);
         indicator.setGravity(Gravity.CENTER);
         row.addView(indicator, weightedWrap(1f, 0, 0, 0, 0));
 
@@ -443,9 +447,9 @@ final class WearDashboardView {
     }
 
     private TextView pagerButton(String label, boolean enabled) {
-        TextView button = text(label, 20, enabled ? PRIMARY : Color.rgb(65, 70, 78), false);
+        TextView button = text(label, 20, enabled ? theme.primary() : theme.disabled(), false);
         button.setGravity(Gravity.CENTER);
-        button.setBackground(rounded(SURFACE, 13, BORDER));
+        button.setBackground(rounded(theme.surface(), 13, theme.border()));
         button.setClickable(enabled);
         button.setFocusable(enabled);
         return button;
@@ -454,7 +458,7 @@ final class WearDashboardView {
     private LinearLayout screen(int left, int top, int right, int bottom) {
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BACKGROUND);
+        root.setBackgroundColor(theme.background());
         root.setPadding(dp(left), dp(top), dp(right), dp(bottom));
         return root;
     }
@@ -468,10 +472,10 @@ final class WearDashboardView {
     }
 
     private int statusColor(String status) {
-        if ("running".equals(status)) return GREEN;
-        if ("error".equals(status)) return RED;
-        if ("completed".equals(status)) return BLUE;
-        return MUTED;
+        if ("running".equals(status)) return theme.green();
+        if ("error".equals(status)) return theme.red();
+        if ("completed".equals(status)) return theme.blue();
+        return theme.muted();
     }
 
     private TextView text(String value, int size, int color, boolean bold) {

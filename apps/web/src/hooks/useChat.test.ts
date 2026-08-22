@@ -399,9 +399,107 @@ describe('turn-ending error handling', () => {
     // The direct-stream catch is the *last* place the stream is finished — the
     // SSE handler above also calls stream.finish(), so anchor on the last one.
     const catchStart = source.lastIndexOf('const finalSnapshot = stream.finish()')
-    const catchBlock = source.slice(catchStart, catchStart + 4000)
+    // Anchor the end on the catch's own exit rather than a fixed length, so
+    // adding branches inside the catch can't silently slide the assertion out
+    // of the window and make this pass/fail for the wrong reason.
+    const catchBlock = source.slice(catchStart, source.indexOf("return 'retry'", catchStart))
 
     expect(catchBlock).toContain('segmentsWithError(finalSnapshot, errorMessage)')
     expect(catchBlock).toContain('m.id === assistantId')
+  })
+})
+
+describe('direct-stream stall recovery', () => {
+  const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
+  const directStreamBlock = () => {
+    const src = source()
+    const start = src.indexOf('const response = await fetch(`${API_URL}/api/chat`')
+    const end = src.indexOf("} catch (error) {", start)
+    return src.slice(start, end)
+  }
+
+  // ── The bug this guards against ──
+  // A black-holed socket (no FIN/RST) makes `reader.read()` park forever, so the
+  // direct stream never settles and `abortControllerRef` is never cleared. These
+  // three assertions show that state has no exit transition: every recovery
+  // entry point is refused while a direct stream is nominally active.
+  it('proves a live direct stream blocks every resume path, including forceRestart', () => {
+    const base = {
+      sessionId: 'session-1',
+      activeResumeSessionId: null,
+      hasActiveResumeStream: false,
+      directStreamSessionId: 'session-1',
+      hasActiveDirectStream: true,
+    }
+
+    // visibilitychange / online / pageshow all call through with forceRestart.
+    expect(shouldOpenResumeStream({ ...base, forceRestart: true })).toBe(false)
+    // A session switch away and back.
+    expect(shouldOpenResumeStream(base)).toBe(false)
+    // Re-entering the same chat with a resume stream also already open.
+    expect(shouldOpenResumeStream({
+      ...base,
+      activeResumeSessionId: 'session-1',
+      hasActiveResumeStream: true,
+      forceRestart: true,
+    })).toBe(false)
+  })
+
+  // This gate is deliberate — two consumers appending into one turn duplicates
+  // text that isn't in the gateway's persisted copy. So the fix must make the
+  // dead direct stream *settle*, not race a second consumer past the gate.
+  it('bounds the direct read loop so a dead socket cannot park it forever', () => {
+    const block = directStreamBlock()
+    expect(block).toContain('armDirectIdleTimer()')
+    // Rearmed inside the loop, so a live-but-slow turn never trips it.
+    const loopStart = block.indexOf('while (true) {')
+    expect(block.slice(loopStart)).toContain('armDirectIdleTimer()')
+  })
+
+  it('clears the watchdog on every exit path so no timer outlives its send', () => {
+    const src = source()
+    const sendStart = src.indexOf('const sendMessage = useCallback(')
+    // sendMessage has several `return 'sent'` exits, so close on its dependency
+    // array instead of the first one.
+    const sendBlock = src.slice(sendStart, src.indexOf('}, [authToken, clearUnfinishedTodoList', sendStart))
+    // Declared per-send (a local, not a ref or a map keyed by session).
+    expect(sendBlock).toContain('let directIdleTimer: ReturnType<typeof setTimeout> | null = null')
+    // Normal completion + catch entry.
+    expect(sendBlock.match(/clearDirectIdleTimer\(\)/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+    // Rearming clears first, so timers are replaced rather than stacked.
+    expect(sendBlock).toContain('const armDirectIdleTimer = () => {\n      clearDirectIdleTimer()')
+  })
+
+  it('treats a watchdog abort as a reconnect, not a user cancel', () => {
+    const src = source()
+    const catchStart = src.lastIndexOf('const finalSnapshot = stream.finish()')
+    const catchBlock = src.slice(catchStart, catchStart + 2000)
+    // The stalled branch must come before the cancel handling that marks running
+    // tool calls as "Cancelled" and drops the placeholder.
+    const stalledIdx = catchBlock.indexOf('if (directStreamStalled) {')
+    const cancelIdx = catchBlock.indexOf("message: 'Cancelled'")
+    expect(stalledIdx).toBeGreaterThan(-1)
+    expect(stalledIdx).toBeLessThan(cancelIdx)
+    // It hands off rather than tearing down the turn.
+    expect(catchBlock.slice(stalledIdx, cancelIdx)).toContain('finishOwnedDirectStream()')
+  })
+
+  it('arms the handoff so finishDirectStream actually opens the resume stream', () => {
+    const src = source()
+    const armStart = src.indexOf('const armDirectIdleTimer = () => {')
+    const armBlock = src.slice(armStart, src.indexOf('}, DIRECT_STREAM_IDLE_TIMEOUT_MS)', armStart))
+    // finishDirectStream early-returns unless this flag is set, so without it the
+    // watchdog would clear the ref but never re-attach.
+    expect(armBlock).toContain('pendingResumeAfterDirectStreamRef.current = true')
+    expect(armBlock).toContain('controller.abort()')
+  })
+
+  it('leaves headroom over the gateway keepalive so long tool runs never trip it', () => {
+    const src = source()
+    const match = src.match(/const DIRECT_STREAM_IDLE_TIMEOUT_MS = ([\d_]+)/)
+    const timeout = Number(match![1].replace(/_/g, ''))
+    // Gateway writes ": keepalive" every 15s for the whole turn.
+    expect(timeout).toBeGreaterThanOrEqual(15_000 * 2)
   })
 })

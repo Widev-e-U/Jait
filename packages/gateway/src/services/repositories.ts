@@ -4,7 +4,7 @@
  * Persists repos in SQLite so they sync across all devices.
  */
 
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { automationRepositories } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -25,23 +25,35 @@ export type RepoRow = typeof automationRepositories.$inferSelect;
 export class RepositoryService {
   constructor(private db: JaitDB) {}
 
+  /**
+   * One row per (user, path). Callers check `findByPath` first, but a device
+   * registering its folders sends those requests concurrently — every check can
+   * pass before the first insert lands. The unique index settles the race and
+   * the loser gets handed the row that won, instead of a duplicate.
+   */
   create(params: CreateRepoParams): RepoRow {
     const id = uuidv7();
     const now = new Date().toISOString();
-    this.db
-      .insert(automationRepositories)
-      .values({
-        id,
-        userId: params.userId ?? null,
-        deviceId: params.deviceId ?? null,
-        name: params.name,
-        defaultBranch: params.defaultBranch ?? "main",
-        localPath: params.localPath,
-        githubUrl: params.githubUrl ?? params.forgeUrl ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run();
+    try {
+      this.db
+        .insert(automationRepositories)
+        .values({
+          id,
+          userId: params.userId ?? null,
+          deviceId: params.deviceId ?? null,
+          name: params.name,
+          defaultBranch: params.defaultBranch ?? "main",
+          localPath: params.localPath,
+          githubUrl: params.githubUrl ?? params.forgeUrl ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+    } catch (error) {
+      const existing = this.findByPath(params.localPath, params.userId);
+      if (!existing) throw error;
+      return existing;
+    }
     return this.getById(id)!;
   }
 
@@ -65,8 +77,10 @@ export class RepositoryService {
   }
 
   findByPath(localPath: string, userId?: string): RepoRow | undefined {
-    const all = this.list(userId);
-    return all.find((r) => r.localPath === localPath);
+    const where = userId
+      ? and(eq(automationRepositories.localPath, localPath), eq(automationRepositories.userId, userId))
+      : eq(automationRepositories.localPath, localPath);
+    return this.db.select().from(automationRepositories).where(where).get();
   }
 
   update(id: string, params: UpdateRepoParams): RepoRow | undefined {

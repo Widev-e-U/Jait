@@ -43,6 +43,15 @@ const LAZY_LOAD_BATCH_SIZE = 60
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
 const RESUME_SNAPSHOT_TIMEOUT_MS = 3_000
 const RESUME_STREAM_IDLE_TIMEOUT_MS = 40_000
+/**
+ * Idle bound for the direct POST /api/chat stream, mirroring the resume stream's
+ * watchdog. The gateway writes a `: keepalive` comment every 15s for the whole
+ * turn, so any *live* socket rearms this timer well inside the window and long
+ * tool runs never trip it. Only a socket that has stopped delivering bytes
+ * entirely reaches 40s. See armDirectIdleTimer in sendMessage for why the
+ * unbounded read was a liveness bug rather than just a slow path.
+ */
+const DIRECT_STREAM_IDLE_TIMEOUT_MS = 40_000
 const RESUME_RECONNECT_BASE_DELAY_MS = 500
 const RESUME_RECONNECT_MAX_DELAY_MS = 30_000
 const RESUME_RECONNECT_MAX_ATTEMPTS = 20
@@ -1694,6 +1703,42 @@ export function useChat(
       if (ownsDirectStream) finishDirectStream(requestSessionId, controller)
     }
 
+    // ── Direct-stream stall watchdog ──
+    // A backgrounded phone, a Wi-Fi→LTE handoff, a sleeping Electron window or a
+    // proxy evicting an idle socket can black-hole this connection without a
+    // FIN or RST. `reader.read()` then never settles — no `done`, no throw — so
+    // the loop below parks forever. The turn keeps running and persisting on the
+    // gateway, but this client shows a spinner indefinitely, and because
+    // `abortControllerRef` stays set, shouldOpenResumeStream refuses every
+    // recovery path (visibilitychange / online / pageshow / session switch).
+    // finishDirectStream is the only thing that clears that ref and it only runs
+    // once the reader settles, so the state had no exit transition but a reload.
+    //
+    // Cost is one timer handle for the duration of one send: rearmed in place
+    // (never stacked) and cleared on all three exit paths, so nothing is
+    // retained per event, per turn or per session.
+    let directIdleTimer: ReturnType<typeof setTimeout> | null = null
+    let directStreamStalled = false
+    const clearDirectIdleTimer = () => {
+      if (directIdleTimer === null) return
+      clearTimeout(directIdleTimer)
+      directIdleTimer = null
+    }
+    const armDirectIdleTimer = () => {
+      clearDirectIdleTimer()
+      directIdleTimer = setTimeout(() => {
+        directIdleTimer = null
+        if (isStale()) return
+        directStreamStalled = true
+        // Aborting only drops *this* client's socket. The gateway's POST handler
+        // treats a client close as `clientDisconnected` and keeps the turn
+        // running (unlike stopGeneration, which also POSTs /cancel), so the
+        // answer is still being produced and persisted while we re-attach.
+        if (ownsDirectStream) pendingResumeAfterDirectStreamRef.current = true
+        controller.abort()
+      }, DIRECT_STREAM_IDLE_TIMEOUT_MS)
+    }
+
     // Guard: only update state if we are still on the same session/version.
     // Concurrent submits that are expected to queue do not take ownership of the
     // direct stream, so they cannot stale the in-flight answer.
@@ -1810,9 +1855,14 @@ export function useChat(
       let lineBuffer = ''
       let completed = false
 
+      armDirectIdleTimer()
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
+        // Any byte — including the gateway's 15s keepalive comment — proves the
+        // socket is alive, so push the deadline out rather than letting a long
+        // tool run look like a dead connection.
+        armDirectIdleTimer()
 
         lineBuffer += decoder.decode(value, { stream: true })
         const lines = lineBuffer.split('\n')
@@ -2027,6 +2077,7 @@ export function useChat(
           }
         }
       }
+      clearDirectIdleTimer()
       await textPacer.waitUntilIdle()
       flushBufferImmediately()
       if (!completed && !isStale()) {
@@ -2059,11 +2110,22 @@ export function useChat(
         }))
       }
     } catch (error) {
+      clearDirectIdleTimer()
       textPacer.flushNow()
       streamScheduler.cancel()
       const finalSnapshot = stream.finish()
       flushBufferImmediately()
       if (error instanceof Error && error.name === 'AbortError') {
+        if (directStreamStalled) {
+          // Watchdog abort, not a user cancel. The turn is still streaming on the
+          // gateway, so keep the partial answer and `isLoading` exactly as they
+          // are — no "Cancelled" tool markers, no placeholder cleanup. Clearing
+          // the controller ref here is what unblocks shouldOpenResumeStream, and
+          // finishDirectStream then opens the resume stream, whose snapshot
+          // reconciles whatever streamed while we were disconnected.
+          finishOwnedDirectStream()
+          return 'aborted'
+        }
         finishOwnedDirectStream()
         if (!isStale()) {
           setState(prev => ({

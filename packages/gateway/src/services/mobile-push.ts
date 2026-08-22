@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { SignJWT, importPKCS8 } from "jose";
 import type { JaitDB } from "../db/index.js";
 import { mobilePushRegistrations } from "../db/schema.js";
-import type { UserQuestionRequest } from "./user-questions.js";
+import type { AttentionCleared, AttentionItem } from "./attention.js";
 
 interface FirebaseServiceAccount {
   project_id: string;
@@ -16,10 +16,16 @@ export interface PushRegistration {
   token: string;
 }
 
-export function shouldDeliverQuestionPush(
-  request: Pick<UserQuestionRequest, "userId" | "attention">,
-): request is Pick<UserQuestionRequest, "userId" | "attention"> & { userId: string } {
-  return Boolean(request.userId);
+/**
+ * Devices that still need an attention item revoked. The device that resolved
+ * the request already tore its own notification down locally, so re-sending to
+ * it would race that teardown and can resurrect a dismissed card.
+ */
+export function attentionRevokeTargets(
+  registrations: PushRegistration[],
+  resolvedBy: string | null,
+): PushRegistration[] {
+  return registrations.filter((registration) => registration.deviceId !== resolvedBy);
 }
 
 export class MobilePushService {
@@ -79,13 +85,47 @@ export class MobilePushService {
     return targets.length;
   }
 
-  async sendQuestion(request: UserQuestionRequest): Promise<void> {
-    if (!this.serviceAccount || !shouldDeliverQuestionPush(request)) return;
-    const targets = this.list(request.userId);
-    await Promise.all(targets.map((entry) => this.send(entry, request)));
+  /**
+   * Deliver an attention item as a high-priority data message. The device uses
+   * `key` as its notification id so the matching `attention.cleared` push can
+   * cancel the exact same notification (and its Wear mirror) later.
+   */
+  async sendAttention(item: AttentionItem): Promise<void> {
+    if (!this.serviceAccount || !item.userId) return;
+    const ttlSeconds = Math.max(0, Math.floor((Date.parse(item.expiresAt) - Date.now()) / 1000));
+    await Promise.all(this.list(item.userId).map((registration) => this.sendData(
+      registration,
+      { type: "attention.raised", key: item.key, item: JSON.stringify(item) },
+      `${ttlSeconds}s`,
+    )));
   }
 
-  private async send(registration: PushRegistration, request: UserQuestionRequest): Promise<void> {
+  /**
+   * Revoke an attention item on every device except the one that resolved it —
+   * that device already dismissed its own notification locally, and re-sending
+   * would race its UI teardown.
+   */
+  async sendAttentionCleared(event: AttentionCleared): Promise<void> {
+    if (!this.serviceAccount || !event.userId) return;
+    const targets = attentionRevokeTargets(this.list(event.userId), event.resolvedBy);
+    await Promise.all(targets.map((registration) => this.sendData(
+      registration,
+      {
+        type: "attention.cleared",
+        key: event.key,
+        kind: event.kind,
+        requestId: event.requestId,
+        reason: event.reason,
+      },
+      "60s",
+    )));
+  }
+
+  private async sendData(
+    registration: PushRegistration,
+    data: Record<string, string>,
+    ttl: string,
+  ): Promise<void> {
     const account = this.serviceAccount;
     if (!account) return;
     const accessToken = await this.getAccessToken(account);
@@ -93,11 +133,7 @@ export class MobilePushService {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: {
-          token: registration.token,
-          data: { type: "user-question.requested", request: JSON.stringify(request) },
-          android: { priority: "high", ttl: `${Math.max(0, Math.floor((Date.parse(request.expiresAt) - Date.now()) / 1000))}s` },
-        },
+        message: { token: registration.token, data, android: { priority: "high", ttl } },
       }),
     });
     if (!response.ok) {

@@ -1514,4 +1514,91 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 062: Collapse duplicate repositories, one row per path ────────
+  {
+    id: 62,
+    name: "automation_repositories_unique_path",
+    run(db) {
+      // A device registering its folders fires several POST /api/repos at once.
+      // Each request checked "does this path exist?" before inserting, and with
+      // no unique index the checks all ran before the first insert landed — so
+      // the same repository appeared six times in the picker. Collapse the
+      // duplicates onto the oldest row and let the index enforce it from now on.
+      const duplicates = db.prepare(`
+        SELECT id, user_id, local_path
+        FROM automation_repositories
+        ORDER BY created_at ASC, id ASC
+      `).all() as Array<{ id: string; user_id: string | null; local_path: string }>;
+
+      /** First row seen for a path wins; every later one is redirected to it. */
+      const keeperByKey = new Map<string, string>();
+      const redirects = new Map<string, string>();
+      for (const row of duplicates) {
+        const key = `${row.user_id ?? ""} ${row.local_path}`;
+        const keeper = keeperByKey.get(key);
+        if (keeper) redirects.set(row.id, keeper);
+        else keeperByKey.set(key, row.id);
+      }
+
+      if (redirects.size > 0) {
+        const tableExists = (name: string): boolean =>
+          !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
+
+        // Anything pointing at a duplicate follows it to the surviving row, so
+        // plans, proposals and code graphs are not orphaned by the cleanup.
+        const references: Array<{ table: string; column: string }> = [
+          { table: "automation_plans", column: "repo_id" },
+          { table: "automation_repo_proposals", column: "repo_id" },
+          { table: "code_graph_indexes", column: "repository_id" },
+        ];
+        for (const { table, column } of references) {
+          if (!tableExists(table)) continue;
+          const hasColumn = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[])
+            .some((col) => col.name === column);
+          if (!hasColumn) continue;
+          const update = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`);
+          for (const [from, to] of redirects) update.run(to, from);
+        }
+
+        // Projects store their repository in the metadata JSON blob, under
+        // either key depending on when the row was written.
+        if (tableExists("projects")) {
+          const projects = db.prepare(`
+            SELECT id, metadata FROM projects WHERE metadata IS NOT NULL AND metadata != ''
+          `).all() as Array<{ id: string; metadata: string }>;
+          const updateProject = db.prepare(`UPDATE projects SET metadata = ? WHERE id = ?`);
+          for (const project of projects) {
+            let metadata: Record<string, unknown>;
+            try {
+              metadata = JSON.parse(project.metadata) as Record<string, unknown>;
+            } catch {
+              continue;
+            }
+            let changed = false;
+            for (const key of ["repositoryId", "repoId"]) {
+              const value = metadata[key];
+              const keeper = typeof value === "string" ? redirects.get(value.trim()) : undefined;
+              if (keeper) {
+                metadata[key] = keeper;
+                changed = true;
+              }
+            }
+            if (changed) updateProject.run(JSON.stringify(metadata), project.id);
+          }
+        }
+
+        const deleteRepo = db.prepare(`DELETE FROM automation_repositories WHERE id = ?`);
+        for (const id of redirects.keys()) deleteRepo.run(id);
+      }
+
+      // COALESCE keeps NULL user ids from slipping past the constraint, which a
+      // plain (user_id, local_path) index would allow — SQLite treats NULLs as
+      // distinct, and those rows are exactly the ones that duplicated.
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_repos_user_path
+        ON automation_repositories(COALESCE(user_id, ''), local_path)
+      `);
+    },
+  },
+
 ];

@@ -2,7 +2,9 @@ interface JaitDesktop {
   gatewayUrl?: string
   getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
-  notify: (opts: { title: string; body: string }) => Promise<void>
+  notify: (opts: { id?: string; title: string; body: string }) => Promise<void>
+  /** Dismiss a keyed notification — used when another device answers first. */
+  closeNotification?: (id: string) => Promise<{ ok: boolean }>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>
   pickDirectory: () => Promise<{ path: string } | null>
   browsePath: (dirPath: string) => Promise<{

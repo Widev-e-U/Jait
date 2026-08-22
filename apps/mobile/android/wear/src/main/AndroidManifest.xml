@@ -50,6 +50,12 @@
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <!--
+                  Wearable events carry a wear://<node>/<path> data URI. An intent filter with no
+                  <data> element only matches data-less intents, so without this the service is
+                  never bound and every phone message is silently dropped.
+                -->
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/jait" />
             </intent-filter>
         </service>
 

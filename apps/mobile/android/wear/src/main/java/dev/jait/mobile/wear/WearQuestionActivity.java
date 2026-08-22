@@ -84,6 +84,12 @@ public class WearQuestionActivity extends AppCompatActivity {
             else if (screen == Screen.CHAT) renderChat(nextPage);
             else if (screen == Screen.REQUESTS) renderRequests(nextPage);
         }
+
+        @Override
+        public void onToggleTheme() {
+            WearTheme.toggle(WearQuestionActivity.this);
+            refreshCurrentScreen();
+        }
     };
 
     @Override

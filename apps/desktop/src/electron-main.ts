@@ -899,13 +899,34 @@ const notificationIcon = (() => {
   return undefined;
 })();
 
-ipcMain.handle("desktop:notify", (_event, opts: { title: string; body: string }) => {
+// Live keyed notifications, so a request answered on the phone or watch can be
+// pulled off the Windows/macOS/Linux notification centre here too. Keyed by the
+// gateway's attention key; unkeyed notifications are fire-and-forget.
+const liveNotifications = new Map<string, Notification>();
+
+ipcMain.handle("desktop:notify", (_event, opts: { id?: string; title: string; body: string }) => {
   const notification = new Notification({
     title: opts.title,
     body: opts.body,
     ...(notificationIcon && !notificationIcon.isEmpty() ? { icon: notificationIcon } : {}),
   });
+  if (opts.id) {
+    // Re-notifying the same key replaces the previous card rather than stacking.
+    liveNotifications.get(opts.id)?.close();
+    liveNotifications.set(opts.id, notification);
+    const forget = () => { if (liveNotifications.get(opts.id!) === notification) liveNotifications.delete(opts.id!); };
+    notification.on("close", forget);
+    notification.on("click", forget);
+  }
   notification.show();
+  return { ok: true };
+});
+
+ipcMain.handle("desktop:notify-close", (_event, opts: { id: string }) => {
+  const notification = liveNotifications.get(opts.id);
+  if (!notification) return { ok: false };
+  liveNotifications.delete(opts.id);
+  notification.close();
   return { ok: true };
 });
 

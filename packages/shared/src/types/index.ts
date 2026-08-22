@@ -33,7 +33,9 @@ export type {
   FsChangeType,
   FsChangeEvent,
   FsChangesPayload,
+  AttentionKind,
 } from "./message.js";
+export { attentionKey } from "./message.js";
 export type { GatewayStatus, DeviceInfo, FsNode, FsBrowseEntry, FsBrowseResponse, FsRootsResponse } from "./gateway.js";
 export type {
   NodePlatform,

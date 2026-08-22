@@ -18,6 +18,24 @@ export interface ToolCall {
   status: "pending" | "approved" | "executing" | "completed" | "failed" | "rejected";
 }
 
+/**
+ * Kinds of blocking interaction that raise a cross-device attention item.
+ */
+export type AttentionKind = "consent" | "question";
+
+/**
+ * The shared notification identity for one open request. Every platform reuses
+ * this string as its *native* notification key — Android notification id,
+ * Electron notification map key, web `tag`, Wear data path — so a single
+ * `attention.cleared` event can revoke the same card on every device.
+ *
+ * Both the gateway (raising) and the clients (revoking) must derive the key the
+ * same way, which is why it lives in shared rather than in either one.
+ */
+export function attentionKey(kind: AttentionKind, requestId: string): string {
+  return `${kind}:${requestId}`;
+}
+
 // WebSocket event types
 export type WsEventType =
   | "session.created"
@@ -42,6 +60,11 @@ export type WsEventType =
   | "secret.resolved"
   | "user-question.requested"
   | "user-question.resolved"
+  // Cross-device attention layer: one item per "a chat needs the user", with a
+  // stable key every platform reuses as its native notification identity so a
+  // single "cleared" event revokes the toast on phone, watch, desktop and web.
+  | "attention.raised"
+  | "attention.cleared"
   | "surface.connected"
   | "surface.disconnected"
   | "surface.registry"

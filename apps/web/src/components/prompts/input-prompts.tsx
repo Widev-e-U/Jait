@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { attentionKey } from '@jait/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -550,7 +551,7 @@ export function useUserQuestionPrompt({
         return
       }
       await triggerSystemNotification({
-        id: `user-question:${request.id}`,
+        id: attentionKey('question', request.id),
         title: request.title,
         body: request.questions[0]?.question ?? 'Jait needs your input.',
         level: 'warning',
@@ -565,7 +566,7 @@ export function useUserQuestionPrompt({
       return
     }
     await triggerSystemNotification({
-      id: `user-question:${request.id}`,
+      id: attentionKey('question', request.id),
       title: request.title,
       body: request.questions[0]?.question ?? 'Jait needs your input.',
       level: 'warning',
@@ -615,7 +616,7 @@ export function useUserQuestionPrompt({
             appIsBackgrounded,
           }) && !hasAndroidUserQuestionPresenter()) {
             void triggerSystemNotification({
-              id: `user-question:${request.id}`,
+              id: attentionKey('question', request.id),
               title: request.title,
               body: request.questions[0]?.question ?? 'Jait needs your input.',
               level: 'info',

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeSystemNotification, triggerSystemNotification } from './system-notifications'
+import {
+  normalizeSystemNotification,
+  revokeSystemNotification,
+  setNativeNotificationsEnabled,
+  triggerSystemNotification,
+} from './system-notifications'
 
 const {
   toastInfo,
@@ -26,9 +31,23 @@ class NotificationMock {
   static permission: NotificationPermission = 'default'
   static requestPermission = vi.fn(async () => 'granted' as const)
   static instances: Array<{ title: string; options?: NotificationOptions }> = []
+  static live: NotificationMock[] = []
+
+  closed = false
+  readonly listeners = new Map<string, () => void>()
 
   constructor(title: string, options?: NotificationOptions) {
     NotificationMock.instances.push({ title, options })
+    NotificationMock.live.push(this)
+  }
+
+  addEventListener(event: string, handler: () => void) {
+    this.listeners.set(event, handler)
+  }
+
+  close() {
+    this.closed = true
+    this.listeners.get('close')?.()
   }
 }
 
@@ -42,6 +61,8 @@ describe('normalizeSystemNotification', () => {
     NotificationMock.requestPermission.mockReset()
     NotificationMock.requestPermission.mockResolvedValue('granted')
     NotificationMock.instances = []
+    NotificationMock.live = []
+    setNativeNotificationsEnabled(true)
     vi.stubGlobal('window', {
       Notification: NotificationMock,
       jaitDesktop: undefined,
@@ -106,7 +127,7 @@ describe('normalizeSystemNotification', () => {
       body: 'Retry the preview',
     })).resolves.toBeUndefined()
 
-    expect(notify).toHaveBeenCalledWith({ title: 'Build failed', body: 'Retry the preview' })
+    expect(notify).toHaveBeenCalledWith({ id: 'notif-4', title: 'Build failed', body: 'Retry the preview' })
     expect(NotificationMock.requestPermission).toHaveBeenCalledTimes(1)
     expect(NotificationMock.instances).toEqual([
       {
@@ -135,5 +156,43 @@ describe('normalizeSystemNotification', () => {
       },
     ])
     expect(toastSuccess).toHaveBeenCalledWith('Agent finished', { description: 'All checks passed' })
+  })
+
+  it('drops to an in-app toast when another surface owns the system notification', async () => {
+    NotificationMock.permission = 'granted'
+    setNativeNotificationsEnabled(false)
+
+    await triggerSystemNotification({
+      id: 'notif-6',
+      title: 'Approval needed',
+      body: 'terminal.run wants to run',
+    })
+
+    expect(NotificationMock.instances).toEqual([])
+    expect(toastInfo).toHaveBeenCalledWith('Approval needed', { description: 'terminal.run wants to run' })
+  })
+
+  it('closes the browser notification when the request is answered elsewhere', async () => {
+    NotificationMock.permission = 'granted'
+
+    await triggerSystemNotification({ id: 'consent:req-1', title: 'Approval needed', body: 'Allow?' })
+    await revokeSystemNotification('consent:req-1')
+
+    expect(NotificationMock.live.map((instance) => instance.closed)).toEqual([true])
+    // Revoking twice is normal (timeout racing an answer) and must stay quiet.
+    await expect(revokeSystemNotification('consent:req-1')).resolves.toBeUndefined()
+  })
+
+  it('asks the desktop shell to dismiss its keyed notification', async () => {
+    const closeNotification = vi.fn(async () => ({ ok: true }))
+    vi.stubGlobal('window', {
+      Notification: NotificationMock,
+      jaitDesktop: { notify: vi.fn(async () => {}), closeNotification },
+      Capacitor: undefined,
+    } as unknown as Window & typeof globalThis)
+
+    await revokeSystemNotification('question:req-9')
+
+    expect(closeNotification).toHaveBeenCalledWith('question:req-9')
   })
 })

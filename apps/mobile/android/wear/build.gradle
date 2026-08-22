@@ -13,7 +13,10 @@ android {
     namespace "dev.jait.mobile.wear"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "dev.jait.mobile.wear"
+        // MUST match the phone app's applicationId. The Wearable Data Layer only delivers
+        // messages to the app on the other node that shares this package name and signing key —
+        // with "dev.jait.mobile.wear" here, nothing the phone sent ever arrived.
+        applicationId "dev.jait.mobile"
         minSdkVersion 28
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode releaseVersionCode

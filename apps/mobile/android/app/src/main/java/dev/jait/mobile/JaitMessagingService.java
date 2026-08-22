@@ -7,12 +7,14 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.RemoteInput;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -59,17 +61,58 @@ public class JaitMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onMessageReceived(RemoteMessage message) {
-        if ("alarm.schedule".equals(message.getData().get("type"))) {
+        String type = message.getData().get("type");
+        if ("alarm.schedule".equals(type)) {
             scheduleAlarm(message);
             return;
         }
-        if (!"user-question.requested".equals(message.getData().get("type"))) return;
-        String rawRequest = message.getData().get("request");
-        if (rawRequest == null) return;
+        if ("attention.cleared".equals(type)) {
+            clearAttention(message.getData().get("requestId"));
+            return;
+        }
+        if (!"attention.raised".equals(type)) return;
+        String rawItem = message.getData().get("item");
+        if (rawItem == null) return;
         try {
-            showQuestion(new JSONObject(rawRequest));
+            showAttention(new JSONObject(rawItem));
         } catch (JSONException ignored) {
         }
+    }
+
+    /**
+     * Answered on another device — drop this phone's card and the watch mirror. The device that
+     * actually answered is excluded server-side, so this only ever arrives as news.
+     */
+    private void clearAttention(String requestId) {
+        if (requestId == null || requestId.isEmpty()) return;
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
+            .cancel(AgentPromptActivity.notificationId(requestId));
+        WearBridge.relayDismiss(this, requestId);
+        Intent dismissIntent = new Intent(AgentPromptActivity.ACTION_DISMISS);
+        dismissIntent.setPackage(getPackageName());
+        dismissIntent.putExtra(AgentPromptActivity.EXTRA_REQUEST_ID, requestId);
+        sendBroadcast(dismissIntent);
+    }
+
+    /**
+     * One entry point for every kind of "a chat needs you". Questions carry their full request in
+     * `detail` and keep the rich prompt UI; consent prompts are answered from the notification's
+     * own Approve/Reject buttons.
+     */
+    private void showAttention(JSONObject item) {
+        String requestId = item.optString("requestId", "");
+        if (requestId.isEmpty()) return;
+
+        WearBridge.relayAttention(this, item);
+
+        JSONObject detail = item.optJSONObject("detail");
+        if (AttentionApi.KIND_QUESTION.equals(item.optString("kind"))
+            && detail != null
+            && detail.optJSONArray("questions") != null) {
+            showQuestion(detail, item);
+            return;
+        }
+        showAttentionNotification(item, requestId, null, false, false);
     }
 
     private void scheduleAlarm(RemoteMessage message) {
@@ -88,11 +131,9 @@ public class JaitMessagingService extends FirebaseMessagingService {
         }
     }
 
-    private void showQuestion(JSONObject request) {
+    private void showQuestion(JSONObject request, JSONObject item) {
         String requestId = request.optString("id");
         if (requestId.isEmpty()) return;
-
-        WearBridge.relayQuestion(this, request);
 
         AgentDeviceState.Snapshot deviceState = AgentDeviceState.read(this);
         boolean overlayAvailable = AgentOverlayWindow.canShow(this);
@@ -109,41 +150,18 @@ public class JaitMessagingService extends FirebaseMessagingService {
             allowFullScreenIntent = launchActivityFallback;
         }
 
-        createChannel();
         Intent intent = new Intent(this, AgentPromptActivity.class);
         intent.putExtra(AgentPromptActivity.EXTRA_REQUEST, request.toString());
         intent.putExtra(AgentPromptActivity.EXTRA_DIRECT_SUBMIT, true);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-            this, AgentPromptActivity.notificationId(requestId), intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+
+        showAttentionNotification(
+            item,
+            requestId,
+            intent,
+            allowFullScreenIntent,
+            mode == AgentQuestionPresentation.Mode.NOTIFICATION_ONLY
         );
-        String body = "Jait needs your input to continue.";
-        if (request.optJSONArray("questions") != null && request.optJSONArray("questions").length() > 0) {
-            JSONObject first = request.optJSONArray("questions").optJSONObject(0);
-            if (first != null) body = first.optString("question", body);
-        }
-        NotificationCompat.Builder notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_jait_notification)
-            .setColor(Color.rgb(59, 130, 246))
-            .setContentTitle(AgentQuestionPresentation.titleFor(request.optString("title")))
-            .setContentText(body)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-            .setCategory(
-                mode == AgentQuestionPresentation.Mode.NOTIFICATION_ONLY
-                    ? NotificationCompat.CATEGORY_MESSAGE
-                    : NotificationCompat.CATEGORY_ALARM
-            )
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setTimeoutAfter(300_000L);
-        if (allowFullScreenIntent) {
-            notification.setFullScreenIntent(pendingIntent, true);
-        }
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
-            .notify(AgentPromptActivity.notificationId(requestId), notification.build());
 
         if (launchActivityFallback) {
             try {
@@ -151,6 +169,111 @@ public class JaitMessagingService extends FirebaseMessagingService {
             } catch (RuntimeException ignored) {
             }
         }
+    }
+
+    /**
+     * Posts the phone's card for an attention item.
+     *
+     * <p>The card is {@code localOnly}: the watch runs its own Jait app and posts a native card
+     * with the same actions, so letting this one bridge across would show the user the same
+     * request twice on the same wrist.
+     *
+     * @param promptIntent activity to open on tap, or null to just open the app
+     */
+    private void showAttentionNotification(
+        JSONObject item,
+        String requestId,
+        Intent promptIntent,
+        boolean allowFullScreenIntent,
+        boolean quiet
+    ) {
+        createChannel();
+        int notificationId = AgentPromptActivity.notificationId(requestId);
+        Intent contentIntent = promptIntent != null ? promptIntent : launchIntent();
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this, notificationId, contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String body = item.optString("body", "Jait needs your input to continue.");
+        NotificationCompat.Builder notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_jait_notification)
+            .setColor(Color.rgb(59, 130, 246))
+            .setContentTitle(AgentQuestionPresentation.titleFor(item.optString("title")))
+            .setContentText(body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(quiet ? NotificationCompat.CATEGORY_MESSAGE : NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setLocalOnly(true)
+            .setTimeoutAfter(300_000L);
+        if (allowFullScreenIntent) {
+            notification.setFullScreenIntent(pendingIntent, true);
+        }
+        addAttentionActions(notification, item, requestId);
+
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
+            .notify(notificationId, notification.build());
+    }
+
+    /**
+     * Turns the item's actions into notification buttons. Android shows at most three, which is
+     * exactly the cap the gateway already applies when it builds the list.
+     */
+    private void addAttentionActions(
+        NotificationCompat.Builder notification,
+        JSONObject item,
+        String requestId
+    ) {
+        JSONArray actions = item.optJSONArray("actions");
+        if (actions == null) return;
+        String kind = item.optString("kind");
+        for (int index = 0; index < actions.length(); index++) {
+            JSONObject action = actions.optJSONObject(index);
+            if (action == null) continue;
+            String actionId = action.optString("id", "");
+            String actionKind = action.optString("kind", "");
+            String label = action.optString("label", actionId);
+            if (actionId.isEmpty() || label.isEmpty()) continue;
+
+            Intent intent = new Intent(this, AttentionActionReceiver.class);
+            intent.setAction(AttentionActionReceiver.ACTION_RESOLVE);
+            intent.setPackage(getPackageName());
+            intent.putExtra(AttentionActionReceiver.EXTRA_KIND, kind);
+            intent.putExtra(AttentionActionReceiver.EXTRA_REQUEST_ID, requestId);
+            intent.putExtra(AttentionActionReceiver.EXTRA_ACTION_KIND, actionKind);
+            intent.putExtra(AttentionActionReceiver.EXTRA_ACTION_ID, actionId);
+            // Inline reply needs a mutable PendingIntent so the system can attach the typed text.
+            boolean isReply = AttentionApi.ACTION_REPLY.equals(actionKind);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this,
+                (requestId + ":" + actionId).hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT
+                    | (isReply ? PendingIntent.FLAG_MUTABLE : PendingIntent.FLAG_IMMUTABLE)
+            );
+
+            NotificationCompat.Action.Builder builder = new NotificationCompat.Action.Builder(
+                R.drawable.ic_jait_notification, label, pendingIntent
+            );
+            if (isReply) {
+                builder.addRemoteInput(
+                    new RemoteInput.Builder(AttentionActionReceiver.KEY_REPLY)
+                        .setLabel(label)
+                        .build()
+                );
+            }
+            notification.addAction(builder.build());
+        }
+    }
+
+    private Intent launchIntent() {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (intent == null) intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return intent;
     }
 
     private void createChannel() {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { clearSSEDebugEvents, useSSEDebugEvents } from './sse-debug-panel'
@@ -362,6 +362,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
 
   // ── Auto-scroll (same stick-to-bottom behaviour as the chat) ──
   const stickToBottomRef = useRef(true)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -369,7 +370,9 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
     const el = scrollRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    stickToBottomRef.current = distanceFromBottom < 24
+    const atBottom = distanceFromBottom < 24
+    stickToBottomRef.current = atBottom
+    setShowScrollToBottom(!atBottom)
   }, [])
 
   // Detach when the user scrolls up (wheel/touch); re-engage only once they
@@ -403,6 +406,15 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (el) {
+      stickToBottomRef.current = true
+      setShowScrollToBottom(false)
+      el.scrollTop = el.scrollHeight
+    }
   }, [])
 
   // Follow newly appended steps while stuck to the bottom (mirrors the chat's
@@ -516,6 +528,21 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
             )
           })}
         </div>
+
+        {/* Scroll-to-bottom indicator (same as the SSE debug panel / chat) */}
+        {showScrollToBottom && (
+          <div className="absolute bottom-2 left-4 z-30">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-6 w-6 rounded-full bg-muted border-border"
+              onClick={scrollToBottom}
+              title="Scroll to latest"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
 
         {selectedStep && (
           <StepDetails key={selectedStep.index} step={selectedStep} onClose={() => setSelected(null)} />

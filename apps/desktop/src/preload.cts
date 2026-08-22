@@ -220,9 +220,16 @@ if (isJaitRenderer()) {
   /** Get available screen/window sources for screen sharing */
   getDesktopSources: () => ipcRenderer.invoke(allowedIpcChannels.invoke[1]),
 
-  /** Show a native notification */
-  notify: (opts: { title: string; body: string }) =>
+  /**
+   * Show a native notification. `id` is the attention key, so the same request
+   * answered on another device can be revoked here by that key.
+   */
+  notify: (opts: { id?: string; title: string; body: string }) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[2], opts),
+
+  /** Dismiss a notification previously shown with this id. */
+  closeNotification: (id: string) =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[33], { id }),
 
   /** Show a native confirmation dialog for screen-share approval */
   confirmShare: (opts: { title: string; message: string }) =>

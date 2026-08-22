@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { SchedulerService } from "../scheduler/service.js";
 import type { ConsentManager } from "../security/consent-manager.js";
+import { attentionKey } from "../services/attention.js";
 import type { DeviceRegistry } from "../services/device-registry.js";
 import type { MobilePushService } from "../services/mobile-push.js";
 import type { SessionService } from "../services/sessions.js";
@@ -94,18 +95,23 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
     const message = typeof body["message"] === "string" && body["message"].trim()
       ? body["message"].trim()
       : "This is a test push from Jait.";
+    // Exercise the real attention push shape so a passing test genuinely proves
+    // the delivery path the agent uses, not a parallel one that can rot.
     const now = new Date();
-    await deps.mobilePush.sendQuestion({
-      id: uuidv7(),
+    const requestId = uuidv7();
+    await deps.mobilePush.sendAttention({
+      key: attentionKey("question", requestId),
+      kind: "question",
+      requestId,
       sessionId: "test",
       userId: authUser.id,
-      requestedBy: "mobile.test",
       title: "Jait test notification",
-      attention: "urgent",
-      questions: [{ id: uuidv7(), header: "Test", question: message }],
+      body: message,
+      urgent: true,
+      actions: [],
+      link: "/",
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
-      status: "pending",
     });
     return { ok: true, devices: deviceCount };
   });

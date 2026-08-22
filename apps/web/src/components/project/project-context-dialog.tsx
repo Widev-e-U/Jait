@@ -8,7 +8,7 @@
  * contradictory context.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { GitBranch, Info, X } from 'lucide-react'
+import { FolderOpen, GitBranch, Info, X } from 'lucide-react'
 import { MAX_INSTRUCTION_CHARS } from '@jait/shared'
 import {
   Dialog,
@@ -49,6 +49,16 @@ export interface ProjectContextDraft {
 const BROWSE_OPTION = '__browse__'
 /** Sentinel for a directory that is not one of the known repositories. */
 const CUSTOM_OPTION = '__custom__'
+
+/**
+ * Last segment of a path, for either separator — a folder picked on a Windows
+ * node comes back with backslashes. Empty when there is nothing to take.
+ */
+export function projectNameFromPath(path: string | null | undefined): string {
+  if (!path) return ''
+  const segments = path.replace(/[\\/]+$/, '').split(/[\\/]/)
+  return segments[segments.length - 1] ?? ''
+}
 
 interface ProjectContextDialogProps {
   open: boolean
@@ -124,6 +134,13 @@ export function ProjectContextDialog({
 
   const sourceValue = selectedRepository?.id ?? (rootPath ? CUSTOM_OPTION : '')
 
+  /**
+   * Name the row gets when the user leaves the field blank. Picking a folder is
+   * already a statement of what this is called, so typing the same word again
+   * is busywork — the repository's name, or the folder's own name, stands in.
+   */
+  const derivedName = selectedRepository?.name?.trim() || projectNameFromPath(rootPath)
+
   const handleSourceChange = (value: string) => {
     if (value === BROWSE_OPTION) {
       setPickerOpen(true)
@@ -176,7 +193,7 @@ export function ProjectContextDialog({
     setSaving(true)
     try {
       const ok = await onSave({
-        title: title.trim() || (isFolder ? 'New folder' : 'Untitled Project'),
+        title: title.trim() || derivedName || (isFolder ? 'New folder' : 'Untitled Project'),
         description: description.trim() || null,
         color,
         instructions: instructions.trim() || null,
@@ -212,8 +229,13 @@ export function ProjectContextDialog({
                 id="project-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={isFolder ? 'e.g. Work' : 'Project name'}
+                placeholder={derivedName || (isFolder ? 'e.g. Work' : 'Project name')}
               />
+              {derivedName && !title.trim() && (
+                <p className="text-2xs text-muted-foreground">
+                  Leave blank to use the folder name <span className="font-medium">{derivedName}</span>.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -253,6 +275,19 @@ export function ProjectContextDialog({
                   )}
                   <option value={BROWSE_OPTION}>Browse for a folder…</option>
                 </select>
+                {/* Same picker as the "Browse" option — a folder button is what
+                    people reach for first, so it sits where they look. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  aria-label="Browse for a folder"
+                  title="Browse for a folder"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
                 {rootPath && (
                   <Button
                     type="button"

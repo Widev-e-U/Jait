@@ -19,9 +19,21 @@ import {
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getWsUrl } from '@/lib/gateway-url'
 import { detectPlatform, initDeviceId } from '@/lib/device-id'
-import { triggerSystemNotification } from '@/lib/system-notifications'
+import {
+  revokeSystemNotification,
+  setNativeNotificationsEnabled,
+  triggerSystemNotification,
+} from '@/lib/system-notifications'
 
 const WS_URL = getWsUrl()
+
+/** Maps the build target onto the gateway's `ClientSurface` vocabulary. */
+function clientSurface(): 'desktop' | 'mobile' | 'web' {
+  const platform = detectPlatform()
+  if (platform === 'electron') return 'desktop'
+  if (platform === 'capacitor') return 'mobile'
+  return 'web'
+}
 
 // Tools this desktop node can execute remotely. MUST stay in sync with
 // REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts —
@@ -334,6 +346,16 @@ export function useUICommands(opts: UseUICommandsOptions) {
         void handleGatewayNotification(msg.payload as {
           id: string; title: string; body: string; level: string; link?: string
         })
+      } else if (msg.type === 'attention.raised') {
+        // The gateway decides which surface owns the OS notification for this
+        // machine. When Electron is connected it takes the toast and this tab
+        // shows the in-app prompt only, so one request never pops twice.
+        const attention = msg.payload as { native?: boolean }
+        setNativeNotificationsEnabled(attention.native !== false)
+      } else if (msg.type === 'attention.cleared') {
+        // Answered elsewhere — pull down whatever this client already showed.
+        const cleared = msg.payload as { key?: string }
+        if (cleared.key) void revokeSystemNotification(cleared.key)
       } else if (
         msg.type.startsWith('thread.') ||
         msg.type.startsWith('repo.') ||
@@ -642,7 +664,12 @@ export function useUICommands(opts: UseUICommandsOptions) {
       // Always-on (Electron) nodes stay connected in the background; only
       // browsers/capacitor skip connecting while the tab/window is hidden.
       if (!isAlwaysOnNode && typeof document !== 'undefined' && document.hidden) return
-      const ws = new WebSocket(`${WS_URL}?token=${tokenRef.current ?? 'dev'}`)
+      // Declare the surface so the gateway's attention fan-out can decide who
+      // owns the OS notification — an Electron window and a browser tab on the
+      // same machine are two clients but one human.
+      const ws = new WebSocket(
+        `${WS_URL}?token=${tokenRef.current ?? 'dev'}&surface=${clientSurface()}`,
+      )
       wsRef.current = ws
 
       ws.onopen = () => {

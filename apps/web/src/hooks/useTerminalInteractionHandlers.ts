@@ -185,10 +185,13 @@ export function useTerminalInteractionHandlers({
       return
     }
     setCurrentView('chat')
+    // Close the project panel so the terminal opens full height instead of
+    // rendering as a short bottom panel beneath the project.
+    closeProjectPanel()
     openTerminalPanel()
     const id = await ensureActiveTerminal()
     if (!id) closeTerminalPanel()
-  }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel, setCurrentView])
+  }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel, closeProjectPanel, setCurrentView])
 
   const handleKillTerminal = useCallback(async (id: string) => {
     const isLastProjectTerminal = projectTerminals.length === 1 && projectTerminals[0]?.id === id

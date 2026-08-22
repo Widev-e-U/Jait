@@ -15,15 +15,19 @@ import org.json.JSONObject;
  * Data Layer. Authentication remains on the phone; the watch only receives display snapshots.
  */
 final class WearBridge {
-    private static final String QUESTION_PATH = "/jait/question";
+    private static final String ATTENTION_PATH = "/jait/attention";
     private static final String DISMISS_PATH = "/jait/dismiss";
     private static final String SNAPSHOT_PATH = "/jait/snapshot";
 
     private WearBridge() {
     }
 
-    static void relayQuestion(Context context, JSONObject request) {
-        sendToAll(context, QUESTION_PATH, request.toString());
+    /**
+     * Relays a full attention item — consent prompts included, not just questions — so the watch
+     * can render the same actions the phone card offers.
+     */
+    static void relayAttention(Context context, JSONObject item) {
+        sendToAll(context, ATTENTION_PATH, item.toString());
     }
 
     static void relayDismiss(Context context, String requestId) {

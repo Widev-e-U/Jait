@@ -26,6 +26,7 @@ public class WearQuestionListenerService extends WearableListenerService {
     public static final String ACTION_SNAPSHOT_UPDATED = "dev.jait.mobile.wear.SNAPSHOT_UPDATED";
     private static final String CHANNEL_ID = "jait-wear-questions";
     private static final String QUESTION_PATH = "/jait/question";
+    private static final String ATTENTION_PATH = "/jait/attention";
     private static final String DISMISS_PATH = "/jait/dismiss";
     private static final String UPDATE_PATH = "/jait/update";
     private static final String SNAPSHOT_PATH = "/jait/snapshot";
@@ -63,6 +64,8 @@ public class WearQuestionListenerService extends WearableListenerService {
         String payload = new String(event.getData(), StandardCharsets.UTF_8);
         if (QUESTION_PATH.equals(event.getPath())) {
             showQuestion(payload);
+        } else if (ATTENTION_PATH.equals(event.getPath())) {
+            showAttention(payload);
         } else if (DISMISS_PATH.equals(event.getPath())) {
             dismiss(payload);
         } else if (UPDATE_PATH.equals(event.getPath())) {
@@ -73,6 +76,40 @@ public class WearQuestionListenerService extends WearableListenerService {
             refreshIntent.setPackage(getPackageName());
             sendBroadcast(refreshIntent);
         }
+    }
+
+    /**
+     * Handles the phone's current attention payload ({@code /jait/attention}). The phone sends a
+     * single attention item with a {@code detail.questions} block; we normalize it into the legacy
+     * {@code {id, title, questions}} shape the rest of the watch flow expects, then surface it.
+     */
+    private void showAttention(String rawItem) {
+        try {
+            JSONObject item = new JSONObject(rawItem);
+            JSONObject request = normalizeAttention(item);
+            if (request == null) return;
+            showQuestion(request.toString());
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /**
+     * Converts a phone attention item into the legacy question-request shape. Returns null when the
+     * item carries no actionable questions (e.g. a plain informational alert).
+     */
+    private static JSONObject normalizeAttention(JSONObject item) throws JSONException {
+        String requestId = item.optString("requestId", "");
+        if (requestId.isEmpty()) return null;
+
+        JSONObject detail = item.optJSONObject("detail");
+        JSONArray questions = detail == null ? null : detail.optJSONArray("questions");
+        if (questions == null || questions.length() == 0) return null;
+
+        JSONObject request = new JSONObject();
+        request.put("id", requestId);
+        request.put("title", item.optString("title", "Jait needs your input"));
+        request.put("questions", questions);
+        return request;
     }
 
     private void showQuestion(String rawRequest) {

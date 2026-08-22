@@ -45,6 +45,7 @@ final class WearPromptView {
 
     private final Context context;
     private final Listener listener;
+    private final WearTheme theme;
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
     private final Map<String, EditText> freeTextInputs = new LinkedHashMap<>();
     private final List<String> questionIds = new ArrayList<>();
@@ -52,6 +53,7 @@ final class WearPromptView {
     WearPromptView(Context context, Listener listener) {
         this.context = context;
         this.listener = listener;
+        this.theme = WearTheme.load(context);
     }
 
     View buildHome(List<WearRequestStore.Entry> entries, OpenListener openListener) {
@@ -69,7 +71,7 @@ final class WearPromptView {
         brand.setGravity(Gravity.CENTER_VERTICAL);
 
         FrameLayout mark = new FrameLayout(context);
-        mark.setBackground(rounded(Color.rgb(29, 65, 119), 9, Color.rgb(59, 130, 246)));
+        mark.setBackground(rounded(theme.blue(), 9, theme.blue()));
         ImageView markIcon = new ImageView(context);
         markIcon.setImageResource(R.drawable.ic_jait_mark);
         markIcon.setPadding(dp(7), dp(7), dp(7), dp(7));
@@ -78,16 +80,16 @@ final class WearPromptView {
 
         LinearLayout heading = new LinearLayout(context);
         heading.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("Jait", 18, Color.rgb(242, 244, 247), true);
+        TextView title = text("Jait", 18, theme.primary(), true);
         heading.addView(title);
-        TextView subtitle = text("Agent inbox", 10, Color.rgb(133, 139, 149), false);
+        TextView subtitle = text("Agent inbox", 10, theme.muted(), false);
         heading.addView(subtitle);
         brand.addView(heading, weightedLayoutWrap(1f, 10, 0, 0, 0));
 
         if (pendingCount > 0) {
-            TextView badge = text(String.valueOf(pendingCount), 10, Color.WHITE, true);
+            TextView badge = text(String.valueOf(pendingCount), 10, theme.primary(), true);
             badge.setGravity(Gravity.CENTER);
-            badge.setBackground(rounded(Color.rgb(37, 99, 235), 10, Color.TRANSPARENT));
+            badge.setBackground(rounded(theme.blue(), 10, Color.TRANSPARENT));
             brand.addView(badge, new LinearLayout.LayoutParams(dp(24), dp(24)));
         }
         content.addView(brand, layoutMatch(0, 0, 0, 18));
@@ -97,15 +99,15 @@ final class WearPromptView {
             empty.setOrientation(LinearLayout.VERTICAL);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(14), dp(34), dp(14), dp(34));
-            empty.setBackground(rounded(Color.rgb(21, 24, 29), 18, Color.rgb(42, 47, 55)));
+            empty.setBackground(rounded(theme.surface(), 18, theme.border()));
 
-            TextView emptyTitle = text("All quiet", 15, Color.rgb(226, 232, 240), true);
+            TextView emptyTitle = text("All quiet", 15, theme.primary(), true);
             emptyTitle.setGravity(Gravity.CENTER);
             empty.addView(emptyTitle);
             TextView emptyDetail = text(
                 "Questions from your agents will collect here.",
                 11,
-                Color.rgb(133, 139, 149),
+                theme.muted(),
                 false
             );
             emptyDetail.setGravity(Gravity.CENTER);
@@ -121,14 +123,14 @@ final class WearPromptView {
         ScrollView scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
         scrollView.setClipToPadding(false);
-        scrollView.setBackgroundColor(Color.rgb(13, 15, 18));
+        scrollView.setBackgroundColor(theme.background());
         scrollView.addView(content, new ScrollView.LayoutParams(
             ScrollView.LayoutParams.MATCH_PARENT,
             ScrollView.LayoutParams.WRAP_CONTENT
         ));
 
         FrameLayout background = new FrameLayout(context);
-        background.setBackgroundColor(Color.rgb(13, 15, 18));
+        background.setBackgroundColor(theme.background());
         background.addView(scrollView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -140,39 +142,39 @@ final class WearPromptView {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackground(rounded(Color.rgb(21, 24, 29), 14, Color.rgb(42, 47, 55)));
+        card.setBackground(rounded(theme.surface(), 14, theme.border()));
 
         LinearLayout metadata = new LinearLayout(context);
         metadata.setOrientation(LinearLayout.HORIZONTAL);
         metadata.setGravity(Gravity.CENTER_VERTICAL);
 
-        int stateColor = Color.rgb(133, 139, 149);
+        int stateColor = theme.muted();
         String stateLabel = "Dismissed";
         if (WearRequestStore.STATE_PENDING.equals(entry.state)) {
-            stateColor = Color.rgb(96, 165, 250);
+            stateColor = theme.blue();
             stateLabel = "Needs reply";
         } else if (WearRequestStore.STATE_ANSWERED.equals(entry.state)) {
-            stateColor = Color.rgb(74, 222, 128);
+            stateColor = theme.green();
             stateLabel = "Answered";
         }
 
         TextView state = text(stateLabel, 10, stateColor, true);
         metadata.addView(state, weightedLayoutWrap(1f, 0, 0, 0, 0));
-        TextView age = text(ageLabel(entry.receivedAt, System.currentTimeMillis()), 9, Color.rgb(100, 106, 116), false);
+        TextView age = text(ageLabel(entry.receivedAt, System.currentTimeMillis()), 9, theme.muted(), false);
         metadata.addView(age);
         card.addView(metadata, layoutMatch(0, 0, 0, 7));
 
-        TextView cardTitle = text(entry.title, 13, Color.rgb(242, 244, 247), true);
+        TextView cardTitle = text(entry.title, 13, theme.primary(), true);
         cardTitle.setMaxLines(1);
         card.addView(cardTitle);
 
-        TextView question = text(entry.question, 11, Color.rgb(177, 183, 193), false);
+        TextView question = text(entry.question, 11, theme.secondary(), false);
         question.setMaxLines(3);
         question.setLineSpacing(0, 1.12f);
         card.addView(question, layoutMatch(0, 5, 0, 0));
 
         if (entry.isPending()) {
-            TextView action = text("Tap to answer  →", 10, Color.rgb(96, 165, 250), true);
+            TextView action = text("Tap to answer  →", 10, theme.blue(), true);
             card.addView(action, layoutMatch(0, 9, 0, 0));
             card.setClickable(true);
             card.setFocusable(true);
@@ -201,7 +203,7 @@ final class WearPromptView {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(8), dp(8), dp(8), dp(8));
 
-        TextView title = text(request.optString("title", "Jait needs input"), 15, Color.rgb(248, 250, 252), true);
+        TextView title = text(request.optString("title", "Jait needs input"), 15, theme.primary(), true);
         title.setGravity(Gravity.CENTER);
         root.addView(title, layoutMatch(0, 4, 0, 8));
 
@@ -217,23 +219,23 @@ final class WearPromptView {
         actions.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(actions, layoutMatch(0, 6, 0, 8));
 
-        Button cancel = button("Cancel", Color.rgb(51, 65, 85), Color.rgb(226, 232, 240));
+        Button cancel = button("Cancel", theme.borderActive(), theme.primary());
         cancel.setOnClickListener(view -> dispatch(true));
         actions.addView(cancel, weightedLayout(1f, 0, 0, 4, 0));
 
-        Button submit = button("Send", Color.rgb(103, 232, 249), Color.rgb(8, 51, 68));
+        Button submit = button("Send", theme.blue(), theme.primary());
         submit.setOnClickListener(view -> dispatch(false));
         actions.addView(submit, weightedLayout(1f, 4, 0, 0, 0));
 
         ScrollView scrollView = new ScrollView(context);
         scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(Color.rgb(8, 16, 29));
+        scrollView.setBackgroundColor(theme.background());
         scrollView.addView(root, new ScrollView.LayoutParams(
             ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT
         ));
 
         BoxInsetLayout box = new BoxInsetLayout(context);
-        box.setBackgroundColor(Color.rgb(8, 16, 29));
+        box.setBackgroundColor(theme.background());
         BoxInsetLayout.LayoutParams boxParams = new BoxInsetLayout.LayoutParams(
             BoxInsetLayout.LayoutParams.MATCH_PARENT, BoxInsetLayout.LayoutParams.MATCH_PARENT
         );
@@ -253,9 +255,9 @@ final class WearPromptView {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(8), dp(8), dp(8), dp(8));
-        card.setBackground(rounded(Color.rgb(15, 23, 42), 10, Color.rgb(51, 65, 85)));
+        card.setBackground(rounded(theme.surface(), 10, theme.borderActive()));
 
-        TextView questionText = text(question.optString("question", ""), 12, Color.rgb(226, 232, 240), false);
+        TextView questionText = text(question.optString("question", ""), 12, theme.primary(), false);
         questionText.setLineSpacing(0, 1.1f);
         card.addView(questionText, layoutMatch(0, 0, 0, 6));
 
@@ -286,12 +288,12 @@ final class WearPromptView {
         if (question.optBoolean("allowFreeformInput", true)) {
             EditText freeText = new EditText(context);
             freeText.setHint("Answer...");
-            freeText.setHintTextColor(Color.rgb(100, 116, 139));
-            freeText.setTextColor(Color.rgb(248, 250, 252));
+            freeText.setHintTextColor(theme.muted());
+            freeText.setTextColor(theme.primary());
             freeText.setTextSize(12);
             freeText.setMinLines(1);
             freeText.setPadding(dp(8), dp(6), dp(8), dp(6));
-            freeText.setBackground(rounded(Color.rgb(8, 16, 29), 8, Color.rgb(51, 65, 85)));
+            freeText.setBackground(rounded(theme.background(), 8, theme.borderActive()));
             card.addView(freeText, layoutMatch(0, 6, 0, 0));
             freeTextInputs.put(questionId, freeText);
         }
@@ -303,10 +305,10 @@ final class WearPromptView {
         String label = option.optString("label", "");
         control.setText(label);
         control.setTag(label);
-        control.setTextColor(Color.rgb(226, 232, 240));
+        control.setTextColor(theme.primary());
         control.setTextSize(12);
         control.setPadding(dp(4), dp(4), dp(4), dp(4));
-        control.setButtonTintList(ColorStateList.valueOf(Color.rgb(34, 211, 238)));
+        control.setButtonTintList(ColorStateList.valueOf(theme.blue()));
     }
 
     private void dispatch(boolean cancelled) {

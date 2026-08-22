@@ -60,6 +60,11 @@ import type { FileChangeEvent } from "./services/project-watcher.js";
 import { GitService } from "./services/git.js";
 import { MaintenanceService } from "./services/maintenance.js";
 import { NotificationService } from "./services/notifications.js";
+import {
+  AttentionService,
+  attentionActionsForQuestion,
+  CONSENT_ATTENTION_ACTIONS,
+} from "./services/attention.js";
 import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
@@ -251,6 +256,16 @@ async function main() {
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
   providerUsageService.attachNotifications(notifications);
+
+  // Attention layer — every blocking prompt gets one keyed item so answering on
+  // any device revokes the notification on all the others.
+  const attention = new AttentionService(ws, {
+    resolveUserId: (sessionId) => sessionService.getById(sessionId)?.userId ?? null,
+  });
+  attention.addSink({
+    raised: (item) => mobilePush.sendAttention(item),
+    cleared: (event) => mobilePush.sendAttentionCleared(event),
+  });
 
   // Project file watcher — uses @parcel/watcher (same as VS Code) for
   // native recursive watching with event coalescing.
@@ -527,8 +542,18 @@ async function main() {
         payload: request,
       });
       console.log(`User question requested: ${request.title} (${request.id})`);
-      void mobilePush.sendQuestion(request).catch((error) => {
-        console.warn("[mobile-push] Failed to deliver question", error);
+      attention.raise({
+        kind: "question",
+        requestId: request.id,
+        sessionId: request.sessionId,
+        userId: request.userId,
+        title: request.title,
+        body: request.questions[0]?.question ?? "Jait needs your input to continue.",
+        urgent: request.attention === "urgent",
+        actions: attentionActionsForQuestion(request),
+        link: `/?session=${encodeURIComponent(request.sessionId)}&question=${encodeURIComponent(request.id)}`,
+        detail: request as unknown as Record<string, unknown>,
+        expiresAt: request.expiresAt,
       });
     },
     onResolved: (request) => {
@@ -538,6 +563,9 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: { id: request.id, sessionId: request.sessionId, status: request.status },
       });
+      attention.clear("question", request.id, request.status === "submitted"
+        ? "answered"
+        : request.status === "timeout" ? "timeout" : "cancelled");
       console.log(`User question ${request.status}: ${request.id}`);
     },
   });
@@ -558,6 +586,20 @@ async function main() {
       });
       // Mirror to the originating messaging channel (no-op for web sessions).
       channelConsentRequestBridge?.(request);
+      attention.raise({
+        kind: "consent",
+        requestId: request.id,
+        sessionId: request.sessionId,
+        title: "Approval needed",
+        body: request.summary || `${request.toolName} wants to run.`,
+        // High-risk actions block the agent on a 2-minute timer, so they get
+        // heads-up treatment; routine ones stay in the shade.
+        urgent: request.risk === "high",
+        actions: CONSENT_ATTENTION_ACTIONS,
+        link: `/?session=${encodeURIComponent(request.sessionId)}&consent=${encodeURIComponent(request.id)}`,
+        detail: request as unknown as Record<string, unknown>,
+        expiresAt: request.expiresAt,
+      });
       console.log(`Consent required: ${request.toolName} (${request.id})`);
     },
     onDecision: (decision) => {
@@ -568,6 +610,11 @@ async function main() {
         payload: decision,
       });
       channelConsentDecisionBridge?.(decision);
+      attention.clear(
+        "consent",
+        decision.requestId,
+        decision.decidedVia === "timeout" ? "timeout" : "answered",
+      );
       console.log(`Consent ${decision.approved ? "approved" : "rejected"}: ${decision.requestId}`);
     },
   });
