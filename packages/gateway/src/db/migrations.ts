@@ -1534,7 +1534,7 @@ export const migrations: Migration[] = [
       const keeperByKey = new Map<string, string>();
       const redirects = new Map<string, string>();
       for (const row of duplicates) {
-        const key = `${row.user_id ?? ""} ${row.local_path}`;
+        const key = `${row.user_id ?? ""}\u0000${row.local_path}`;
         const keeper = keeperByKey.get(key);
         if (keeper) redirects.set(row.id, keeper);
         else keeperByKey.set(key, row.id);

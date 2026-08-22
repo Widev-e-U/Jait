@@ -156,7 +156,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.747",
+      "version": "0.1.748",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -206,7 +206,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.75",
+      "version": "0.1.76",
       "dependencies": {
         "zod": "^3.25.76",
       },

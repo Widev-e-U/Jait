@@ -4,6 +4,38 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.748](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.748) — 2026-08-22
+- fix(release): republish @jait/shared with the attentionKey export the gateway v0.1.747 imports at runtime — the previous release added it to shared source without bumping its version, so the published gateway resolved the stale @jait/shared@0.1.75 and crashed on startup with "does not provide an export named 'attentionKey'"
+
+## [v0.1.747](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.747) — 2026-08-22
+- feat(gateway,web,mobile): once-per-device notifications via stable attention key; fix watch app + dark/light mode; release v0.1.747 — 2a2b4198
+
+## [v0.1.746](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.746) — 2026-08-22
+- fix(web): update session-selector test for always-present 'Personal chats' drop target; release v0.1.746 — 3f0c63d9
+- chore: sync bun.lock with workspace package versions — c8410624
+
+## [v0.1.745](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.745) — 2026-08-21
+- chore: release v0.1.745 — 17c74336
+
+## [v0.1.744](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.744) — 2026-08-21
+- feat(web): drag chats between projects/personal; fix edit-composer swarm target + sub-agent mission modal alignment; release v0.1.744 — 352eafff
+
+## [v0.1.743](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.743) — 2026-08-20
+- feat(gateway,web): remote bg-command completion routing, disk retention janitor, shell-prompt + prewarm; release v0.1.743 — a2a1d935
+
+## [v0.1.742](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.742) — 2026-08-20
+- fix(web): fix minimap rail scrubbing — pan on rail scale, sizer offset in content coords, pointer capture; release v0.1.742 — 79eedc0e
+
+## [v0.1.741](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.741) — 2026-08-19
+- fix(web): keep collapsed tool-card header in view via manual scroll nudge; release v0.1.741 — 0ca085de
+
+## [v0.1.740](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.740) — 2026-08-19
+- fix(web): slide content up and scroll collapsed tool card into view; smooth user-message alignment — a08d67f0
+- ci: use system CA for release asset upload — 2ae4ffd4
+
+## [v0.1.739](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.739) — 2026-08-18
+- fix(web): align minimap scroll math with real scroll range and sizer offset — 1d23bfed
+
 ## [v0.1.738](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.738) — 2026-08-18
 - fix(web): make chat scroll-to-bottom reach the true end and add jump-to-previous-message button — 4455a43b
 
