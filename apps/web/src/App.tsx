@@ -2816,16 +2816,29 @@ function App() {
     path: string,
     nodeId?: string | null,
     sessionIdOverride?: string | null,
-    options?: { mobileTarget?: 'background' | 'editor' },
+    options?: { mobileTarget?: 'background' | 'editor'; forceEditor?: boolean },
   ) => {
     await openRemoteProjectOnGateway(path, nodeId ?? undefined, sessionIdOverride, true)
     showProjectRef.current = true
     setShowProject(true)
     if (isMobile) {
       applyProjectLayout(getReopenedMobileProjectLayout(options?.mobileTarget), { immediateSync: true })
-    } else {
+    } else if (options?.forceEditor) {
+      // Explicit "open the editor" request (e.g. source control, architecture,
+      // preview) — force the editor pane visible regardless of saved layout.
       setShowProjectTree(true)
       showProjectEditorPanel()
+    } else {
+      // Auto-restore: respect the persisted per-project layout. Forcing the
+      // editor open here re-enabled "editor mode" that the user had disabled,
+      // and the layout-save effect then persisted it — so a reload (or a
+      // project switch) would resurrect a deactivated editor.
+      const savedLayout = normalizeHydratedProjectLayout({
+        tree: projectUIRef.current?.layout?.tree !== false,
+        editor: projectUIRef.current?.layout?.editor !== false,
+      }, isMobile)
+      setShowProjectTree(savedLayout.tree)
+      setShowProjectEditor(savedLayout.editor)
     }
     setSavedProject({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
   }, [applyProjectLayout, isMobile, openRemoteProjectOnGateway, setSavedProject, showProjectEditorPanel])
@@ -3416,7 +3429,7 @@ function App() {
     }
     const record = activeProjectRecordRef.current
     if (record?.rootPath) {
-      void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current, { mobileTarget: 'editor' })
+      void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current, { mobileTarget: 'editor', forceEditor: true })
         .then(() => setMobileTreeTab('git'))
         .catch(() => {})
     }
