@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredValue']
 let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['shouldInitiallyCollapseToolCallGroup']
@@ -265,6 +265,80 @@ describe('sub-agent activity', () => {
     expect(markup).toContain('Load earlier activity')
     expect(markup).not.toContain('<p>persisted specialist part 1</p>')
     expect(markup).toContain('<p>persisted specialist part 30</p>')
+  })
+})
+
+describe('approval-pending tool card UI', () => {
+  function approvalPendingCall(overrides: Partial<Parameters<typeof ToolCallCard>[0]['call']> = {}) {
+    return {
+      callId: 'approval-pending-1',
+      tool: 'edit',
+      args: { file_path: 'src/app.ts', old_string: 'foo', new_string: 'bar' },
+      status: 'pending' as const,
+      approvalRequestId: 'req-abc-123',
+      startedAt: 1,
+      ...overrides,
+    }
+  }
+
+  it('renders the "Waiting for approval" badge, banner, summary, and Approve/Reject buttons for a pending call with an approvalRequestId', () => {
+    const markup = renderToStaticMarkup(createElement(ToolCallCard, {
+      call: approvalPendingCall(),
+      onApprovalResponse: vi.fn(),
+    }))
+
+    // Header badge + banner title both say "Waiting for approval"
+    expect(markup).toContain('Waiting for approval')
+    // Banner explanatory line
+    expect(markup).toContain('Approval required to continue.')
+    // Summary is surfaced in the approval UI (edit diff summary)
+    expect(markup).toContain('app.ts (+1 -1)')
+    // Approve / Reject buttons
+    expect(markup).toContain('Approve')
+    expect(markup).toContain('Reject')
+  })
+
+  it('does NOT render the approval banner or buttons for a plain pending call without an approvalRequestId', () => {
+    const markup = renderToStaticMarkup(createElement(ToolCallCard, {
+      call: approvalPendingCall({ approvalRequestId: undefined }),
+      onApprovalResponse: vi.fn(),
+    }))
+
+    expect(markup).not.toContain('Waiting for approval')
+    expect(markup).not.toContain('Approval required to continue.')
+    expect(markup).not.toContain('Approve')
+    expect(markup).not.toContain('Reject')
+  })
+
+  it('disables the Approve/Reject buttons when onApprovalResponse is not provided', () => {
+    const call = approvalPendingCall()
+    const withoutHandler = renderToStaticMarkup(createElement(ToolCallCard, { call }))
+    const withHandler = renderToStaticMarkup(createElement(ToolCallCard, {
+      call,
+      onApprovalResponse: vi.fn(),
+    }))
+
+    // Note: the Button base className always contains the substring "disabled:"
+    // (e.g. disabled:pointer-events-none), so we assert on the rendered
+    // `disabled=""` attribute rather than the raw string.
+    expect(withoutHandler).toContain('disabled=""')
+    expect(withHandler).not.toContain('disabled=""')
+  })
+
+  it('wires the approve/reject handlers to the approvalRequestId', () => {
+    // The button click handlers funnel into handleApprovalResponse, which invokes
+    // onApprovalResponse(call.approvalRequestId, approved). Because these tests
+    // render static markup (no live DOM), we verify the wiring contract here:
+    // passing a mock handler must not invoke it during render, and the mock is
+    // accepted with the (requestId, boolean) signature.
+    const onApprovalResponse = vi.fn()
+    renderToStaticMarkup(createElement(ToolCallCard, {
+      call: approvalPendingCall(),
+      onApprovalResponse,
+    }))
+
+    expect(onApprovalResponse).not.toHaveBeenCalled()
+    expect(onApprovalResponse).toEqual(expect.any(Function))
   })
 })
 

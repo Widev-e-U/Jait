@@ -1,5 +1,5 @@
 import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -3363,21 +3363,25 @@ function ToolCallCardInner({
     }
   }, [hasInlineSecretPrompt])
 
-  const StatusIcon = call.status === 'pending'
-    ? Loader2
-    : call.status === 'running'
+  const StatusIcon = isApprovalPending
+    ? Clock
+    : call.status === 'pending'
       ? Loader2
-      : call.status === 'success'
-        ? CheckCircle2
-        : XCircle
+      : call.status === 'running'
+        ? Loader2
+        : call.status === 'success'
+          ? CheckCircle2
+          : XCircle
 
-  const statusColor = call.status === 'pending'
-    ? 'text-blue-400'
-    : call.status === 'running'
-      ? 'text-muted-foreground'
-      : call.status === 'success'
-        ? 'text-green-500'
-      : 'text-red-500'
+  const statusColor = isApprovalPending
+    ? 'text-amber-400'
+    : call.status === 'pending'
+      ? 'text-blue-400'
+      : call.status === 'running'
+        ? 'text-muted-foreground'
+        : call.status === 'success'
+          ? 'text-green-500'
+          : 'text-red-500'
 
   const stateClasses = call.status === 'error'
     ? {
@@ -3479,10 +3483,21 @@ function ToolCallCardInner({
       <StatusIcon className={cn(
         'h-4 w-4 shrink-0',
         statusColor,
-        (call.status === 'running' || call.status === 'pending') && 'animate-spin'
+        isApprovalPending
+          ? 'animate-pulse'
+          : (call.status === 'running' || call.status === 'pending') && 'animate-spin'
       )} />
       <span className="flex-1 truncate text-[13px] font-medium text-muted-foreground">
-        {isPending ? (
+        {isApprovalPending ? (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-2 text-amber-400">
+            <span className="shrink-0 rounded border border-amber-500/25 bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
+              Waiting for approval
+            </span>
+            {summary ? (
+              <span className="min-w-0 truncate text-xs text-muted-foreground" title={summary}>{summary}</span>
+            ) : null}
+          </span>
+        ) : isPending ? (
           <PendingToolLabel tool={displayTool} args={normalizedArgs} streamingArgs={call.streamingArgs} />
         ) : isAgentToolName(displayTool) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
@@ -3744,36 +3759,47 @@ function ToolCallCardInner({
       )}
       {isApprovalPending && (
         <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-2.5 py-2 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-background/35 px-2.5 py-2 sm:px-3">
-            <span className="text-xs text-muted-foreground">Approval required to continue.</span>
-            <div className="flex items-center gap-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                disabled={!onApprovalResponse || approvalSubmitting !== null}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  void handleApprovalResponse(false)
-                }}
-              >
-                {approvalSubmitting === 'reject' ? 'Rejecting...' : 'Reject'}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                disabled={!onApprovalResponse || approvalSubmitting !== null}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  void handleApprovalResponse(true)
-                }}
-              >
-                {approvalSubmitting === 'approve' ? 'Approving...' : 'Approve'}
-              </Button>
+          <div className="rounded-md bg-background/35 px-3 py-2.5 sm:px-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <span className="text-[13px] font-medium text-foreground">Waiting for approval</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Approval required to continue.
+                  {summary ? <span className="text-muted-foreground/70"> — {summary}</span> : null}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={!onApprovalResponse || approvalSubmitting !== null}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void handleApprovalResponse(false)
+                  }}
+                >
+                  {approvalSubmitting === 'reject' ? 'Rejecting...' : 'Reject'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={!onApprovalResponse || approvalSubmitting !== null}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void handleApprovalResponse(true)
+                  }}
+                >
+                  {approvalSubmitting === 'approve' ? 'Approving...' : 'Approve'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
