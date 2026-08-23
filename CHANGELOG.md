@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.755](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.755) — 2026-08-23
+- feat(web): show waiting-for-approval state and summary on pending tool calls — 29f9d383
+
+## [v0.1.754](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.754) — 2026-08-23
+- fix(gateway): keep CLI turns parked on approval past inactivity timeout — aab0501d
+
 ## [v0.1.753](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.753) — 2026-08-23
 - fix(web): stop auto-restore from re-enabling a deactivated code editor — ba7eb40f
 
