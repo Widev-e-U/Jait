@@ -1873,6 +1873,46 @@ function capThinking(thinking: string | undefined): string | undefined {
 }
 
 /**
+ * True when the thinking channel contains only timing/progress heartbeat
+ * markers (e.g. "25.0s", "25.0s25.0s", "3s") and no genuine reasoning. Some
+ * cloud model servers stream elapsed-time progress into the reasoning channel,
+ * and on a bad round that is all they deliver — no answer and no tool call.
+ * Treating that as recoverable reasoning wastes retries on a byte-identical
+ * payload, so it should short-circuit straight to a graceful fallback.
+ */
+function isTimingNoiseReasoning(thinking: string | undefined): boolean {
+  if (!thinking) return false;
+  // Strip every duration token like "25.0s" / "3s" and all surrounding
+  // whitespace. If only such tokens (and whitespace) remain, it's a heartbeat.
+  const remaining = thinking.replace(/\d+(?:\.\d+)?\s*s/gi, "").replace(/\s+/g, "");
+  return remaining.length === 0 && /^\s*\d+(?:\.\d+)?\s*s/i.test(thinking);
+}
+
+/**
+ * Build a concise, honest final answer to surface when the provider ended the
+ * turn with reasoning but no answer or tool call, so the loop never leaves the
+ * user staring at an empty thinking bubble. Prefers the most recent tool
+ * outcome; otherwise returns a plain status message.
+ */
+function buildEmptyResponseFallback(executedToolCalls: ExecutedToolCall[]): string {
+  const last = executedToolCalls[executedToolCalls.length - 1];
+  if (last && last.message) {
+    const outcome = last.ok ? "completed" : "encountered a problem";
+    const snippet = String(last.message).replace(/\s+/g, " ").trim();
+    const detail = snippet.length > 400 ? snippet.slice(0, 400) + "…" : snippet;
+    return (
+      `I couldn't compose a final answer from the model on this attempt, but the last tool step did finish:\n\n` +
+      `- \`${last.tool}\` ${outcome}: ${detail}\n\n` +
+      `Ask me to continue and I'll pick up from here.`
+    );
+  }
+  return (
+    `I processed your request but the model returned reasoning without a final answer on this attempt. ` +
+    `No further action was taken. Ask me to continue and I'll pick up from where it left off.`
+  );
+}
+
+/**
  * Detect if the model emitted a tool call as plain text instead of structured format.
  * Matches patterns like: `toolName\n{"arg": "value"}` or `toolName({"arg": "value"})`
  */
@@ -3956,6 +3996,44 @@ export async function runAgentLoop(
       const repeatedThinking = isVerbatimThinkingRepeat(lastEmptyThinking, thinkingText);
       lastEmptyThinking = thinkingText;
 
+      // Graceful completion path: emit a real assistant message so the turn
+      // never ends stuck on an empty thinking bubble.
+      const finishWithFallback = (reason: string): AgentLoopResult => {
+        const fallback = buildEmptyResponseFallback(executedToolCalls);
+        log.warn(`${reason} for session ${sessionId}`);
+        onEvent?.({ type: "token", content: fallback });
+        fullContent += fallback;
+        history.push({ role: "assistant", content: fallback, thinking: capThinking(thinkingText) });
+        segments.push({ type: "text", content: fallback });
+        const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+        const segJson = JSON.stringify(segments);
+        onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, capThinking(thinkingText) || undefined);
+        persisted = true;
+        const planResult =
+          mode === "plan" && plannedActions.length > 0
+            ? { id: planId, summary: fallback, actions: plannedActions }
+            : undefined;
+        return {
+          content: fullContent,
+          executedToolCalls,
+          segments,
+          rounds: round + 1,
+          aborted: false,
+          hitMaxRounds: false,
+          persisted,
+          plan: planResult,
+        };
+      };
+
+      // Some cloud model servers stream elapsed-time progress into the
+      // reasoning channel; when that is all a round delivers, retrying only
+      // replays the identical heartbeat. Skip straight to a graceful fallback.
+      if (isTimingNoiseReasoning(thinkingText)) {
+        return finishWithFallback(
+          `Provider returned only a timing heartbeat (reasoning="${String(thinkingText).slice(0, 60)}") with no answer — finishing with a graceful fallback`,
+        );
+      }
+
       if (repeatedThinking) {
         const canRecover =
           emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES && round + 1 < roundLimit;
@@ -4002,8 +4080,8 @@ export async function runAgentLoop(
       }
 
       const phase = executedToolCalls.length > 0 ? " after tool execution" : "";
-      throw new Error(
-        `LLM returned an empty response${phase} and did not recover after ${emptyResponseRetries + 1} attempt(s)`,
+      return finishWithFallback(
+        `LLM returned an empty response${phase} and did not recover after ${emptyResponseRetries + 1} attempt(s) — finishing with a graceful fallback`,
       );
     }
 

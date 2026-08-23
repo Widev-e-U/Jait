@@ -1284,7 +1284,7 @@ describe("runAgentLoop persistence", () => {
     )).toBe(false);
   });
 
-  it("surfaces an explicit error when empty post-tool completions exhaust recovery", async () => {
+  it("gracefully falls back with a persisted answer when empty post-tool completions exhaust recovery", async () => {
     const toolResponse = [
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
       'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
@@ -1316,7 +1316,7 @@ describe("runAgentLoop persistence", () => {
       { role: "user", content: "Finish the task." },
     ];
 
-    await expect(runAgentLoop(
+    const result = await runAgentLoop(
       {
         llm: {
           openaiApiKey: "test-key",
@@ -1344,12 +1344,23 @@ describe("runAgentLoop persistence", () => {
         toolExecutions++;
         return { ok: true, message: "Tool completed" };
       },
-    )).rejects.toThrow(/empty response after tool execution.*3 attempt/i);
+    );
 
     expect(fetchSpy).toHaveBeenCalledTimes(4);
     expect(toolExecutions).toBe(1);
-    expect(persist).not.toHaveBeenCalled();
+    // Instead of throwing (which left the turn stuck on a thinking bubble), the
+    // loop now finishes with a persisted, user-visible answer.
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(persist.mock.calls[0]![0]).toBe("session-empty-exhausted");
+    expect(persist.mock.calls[0]![1]).toBe("assistant");
+    expect(persist.mock.calls[0]![2]).toContain("the last tool step did finish");
+    expect(result.persisted).toBe(true);
+    expect(result.content).toContain("file.read");
+    expect(result.content).toContain("Tool completed");
     expect(history.some((message) => message.role === "tool" && message.tool_call_id === "call-1")).toBe(true);
+    // The fallback message is appended to history so the turn is not empty.
+    expect(history.at(-1)).toMatchObject({ role: "assistant" });
+    expect(String(history.at(-1)?.content)).toContain("last tool step did finish");
   });
 
   it("continues with a follow-up round when steering arrives during a final text response", async () => {
@@ -3402,6 +3413,66 @@ describe("runAgentLoop tool-loop detection", () => {
     const thinkingSegments = result.segments.filter((s) => s.type === "thinking");
     expect(thinkingSegments).toHaveLength(1);
     expect(thinkingSegments[0]!.content.split(thinking).length - 1).toBe(1);
+  });
+
+  it("finishes with a persisted fallback answer when a round streams only timing-noise reasoning like 25.0s", async () => {
+    // Some cloud model servers stream elapsed-time progress (e.g. "25.0s") into
+    // the reasoning channel. When that is all a round delivers, retrying just
+    // replays the identical heartbeat and the turn is left stuck on an empty
+    // thinking bubble. The loop must short-circuit to a graceful, persisted
+    // fallback answer instead of looping or throwing.
+    const timingNoiseOnly = [
+      'data: {"choices":[{"delta":{"content":"<thinking>25.0s</thinking>"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      "data: [DONE]\n\n",
+    ];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of timingNoiseOnly) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 }),
+    );
+    const persist = vi.fn();
+    const events: AgentLoopEvent[] = [];
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Run the checks." },
+    ];
+
+    const result = await runAgentLoop({
+      llm: {
+        openaiApiKey: "test-key",
+        openaiBaseUrl: "https://llm.test",
+        openaiModel: "test-model",
+        contextWindow: 100_000,
+      },
+      history,
+      toolSchemas: [],
+      hasTools: false,
+      sessionId: "session-timing-noise",
+      abort: new AbortController(),
+      maxRounds: 6,
+      mode: "agent",
+      onEvent: (e) => events.push(e),
+      onPersist: persist,
+    });
+
+    // Short-circuited: the single heartbeat is not retried or re-streamed.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // A real, user-visible answer was emitted and persisted.
+    expect(result.persisted).toBe(true);
+    expect(result.content).toContain("reasoning without a final answer");
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(persist.mock.calls[0]![1]).toBe("assistant");
+    expect(persist.mock.calls[0]![2]).toContain("reasoning without a final answer");
+    // A token event streamed the fallback so the UI shows text, not a bare bubble.
+    expect(events.some((e) => e.type === "token" && (e as { content: string }).content)).toBe(true);
+    // The turn ends with a persisted assistant message in history.
+    expect(history.at(-1)).toMatchObject({ role: "assistant" });
+    expect(String(history.at(-1)?.content)).toContain("reasoning without a final answer");
   });
 
   it("feeds answer-less reasoning back as an assistant turn so the retry request differs", async () => {
