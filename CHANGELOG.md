@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.753](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.753) — 2026-08-23
+- fix(web): stop auto-restore from re-enabling a deactivated code editor — ba7eb40f
+
 ## [v0.1.752](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.752) — 2026-08-22
 - fix(web): render editor-mode status icon blue (instead of theme primary) in the project list even when the project is not currently being viewed, and muted gray when inactive
 
