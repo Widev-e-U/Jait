@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.756](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.756) — 2026-08-23
+- fix(gateway): finish with a persisted fallback answer when a round delivers only empty/timing-noise reasoning — 489bb810
+
 ## [v0.1.755](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.755) — 2026-08-23
 - feat(web): show waiting-for-approval state and summary on pending tool calls — 29f9d383
 
