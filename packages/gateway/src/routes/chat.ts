@@ -1673,15 +1673,16 @@ function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscri
 }
 
 /**
- * Emit the terminal `done` event for a turn, then clear the per-session seq
- * counter. Order matters: the counter must still be present when the done event
- * is sequenced so resume subscribers (minSeqExclusive >= 1) receive it and their
- * SSE stream closes. Clearing first would give done seq=1 and drop it for every
- * mid-run resume subscriber, leaving their stream open forever (stuck loading).
+ * Emit the terminal `done` event for a turn, then leave the per-session `seq`
+ * counter in place so it stays monotonic across turns. Order still matters: the
+ * counter must be present when the done event is sequenced so resume
+ * subscribers (minSeqExclusive >= 1) receive it and their SSE stream closes. We
+ * deliberately do NOT delete/reset the counter afterwards — deleting would let
+ * a later turn restart at seq 1 and gate a subscriber whose minSeqExclusive was
+ * captured at a higher value, freezing its live stream until a manual reload.
  */
 export function emitTurnDone(sessionId: string, doneEvent: StreamEvent) {
   emitToSubscribers(sessionId, doneEvent);
-  sessionStreamSeq.delete(sessionId);
 }
 
 // ── Session trajectory event log ─────────────────────────────────────
@@ -2014,6 +2015,14 @@ function createCliTurnWatchdog(opts: {
   const { timeoutMs, subscribe, onTimeout } = opts;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let unsub: (() => void) | null = null;
+  // While an approval is awaiting the user's response the CLI agent is blocked
+  // on the host and emits nothing, so "no activity" there is NOT a hang — it's
+  // the agent parked on a "Needs approval" tool card. We suspend the watchdog
+  // for as long as an approval is pending and only re-arm once the user answers
+  // and the agent resumes emitting. Otherwise a user who takes longer than
+  // `timeoutMs` to approve (or reads the request before deciding) gets their
+  // whole turn aborted before the tool card can ever be approved.
+  let pendingApprovals = 0;
 
   const clear = () => {
     if (timer) {
@@ -2037,18 +2046,28 @@ function createCliTurnWatchdog(opts: {
   const arm = (sessionId: string) => {
     unsub?.();
     unsub = null;
+    pendingApprovals = 0;
     unsub = subscribe((event) => {
       if (event.sessionId !== sessionId) return;
+      if (event.type === "tool.approval-required") {
+        // Suspend the timeout (don't just reset it) while waiting on the user:
+        // the agent is blocked and will stay silent until the approval resolves.
+        pendingApprovals += 1;
+        clear();
+        return;
+      }
       if (
         event.type === "token"
         || event.type === "thinking"
         || event.type === "tool.start"
         || event.type === "tool.output"
         || event.type === "tool.result"
-        || event.type === "tool.approval-required"
         || event.type === "message"
         || event.type === "activity"
       ) {
+        // Any of these while an approval is pending means the user answered and
+        // the agent resumed — release the suspension and restart the timeout.
+        if (pendingApprovals > 0) pendingApprovals = 0;
         reset();
       }
     });
@@ -3271,8 +3290,14 @@ export function registerChatRoutes(
     // a mid-run snapshot taken before the first token sees no accumulator and
     // buildVisibleHistoryMessages emits no assistant bubble.
     getOrCreateAccumulator(sessionId);
-    sessionStreamSeq.set(sessionId, 0);
-    // Notify WS clients that an assistant turn began *outside* their own direct
+    // NOTE: the per-session resume `seq` counter is deliberately NOT reset here.
+    // It is monotonic and persists across turns (never reset to 0, never
+    // deleted) so resume subscribers that connected before this turn — or that
+    // re-subscribe while a queued/system turn is already running — never end up
+    // with a minSeqExclusive higher than the new turn's event seqs. A reset
+    // would gate every event of the new turn out (event.seq <= minSeqExclusive),
+    // freezing the live SSE until a manual reload.
+    // Notify WS clients that an assistant turn began
     // request so they attach to the live stream. This covers both queued-drain
     // turns and hidden system-notification turns (a background terminal command
     // finishing). Without this, a client sitting in the session only sees the
@@ -3363,6 +3388,9 @@ export function registerChatRoutes(
       return { status: "steered" as const };
     });
 
+    // Outer-scope handle to the main-turn inactivity watchdog so it can be
+    // stopped on every exit path (including error recovery and the outer catch).
+    let turnDoneWatchdog: ReturnType<typeof createCliTurnWatchdog> | null = null;
     try {
       let usedCliProvider = false;
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
@@ -3829,8 +3857,27 @@ export function registerChatRoutes(
           }
         });
 
-        // Send the turn — with recovery if the cached session died between messages
+        // Send the turn — with recovery if the session died between messages.
+        // The inactivity watchdog is armed *before* the first sendTurn and the
+        // send is raced against it, so a session that dies without emitting any
+        // "done" (the classic hang) still resolves this turn instead of awaiting
+        // a provider RPC that never settles.
         const turnStartedAt = Date.now();
+        turnDoneWatchdog = createCliTurnWatchdog({
+          timeoutMs: config.cliTurnTimeoutMs,
+          subscribe: (handler) => cliProvider!.onEvent(handler),
+          onTimeout: () => {
+            console.warn(
+              `[chat/cli] Turn stalled ${config.cliTurnTimeoutMs}ms without activity (session ${sessionId}, provider session ${providerSessionId}); aborting.`,
+            );
+            cliProvider!.interruptTurn(providerSessionId).catch(() => {});
+            if (!sessionError) {
+              sessionError = `The CLI provider (${requestProvider}) stalled for ${Math.round(config.cliTurnTimeoutMs / 1000)}s with no activity — most likely a hung thinking block — so this turn was aborted. You can send a new message to continue.`;
+            }
+            resolveTurnDone();
+          },
+        });
+        turnDoneWatchdog.arm(providerSessionId);
         try {
           const sentAt = new Date().toISOString();
           const setupContent = [
@@ -3859,11 +3906,21 @@ export function registerChatRoutes(
           );
           contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           await waitForCliProviderRequest(
-            () => cliProvider!.sendTurn(providerSessionId, cliContent),
+            () => Promise.race([
+              cliProvider!.sendTurn(providerSessionId, cliContent),
+              turnDonePromise,
+            ]),
             streamAbort.signal,
           );
         } catch (sendErr) {
           if (isAbortError(sendErr)) throw sendErr;
+          // If the watchdog fired mid-send, the turn is already resolved by
+          // recovery below — don't mistake it for a fatal send error.
+          if (sessionError) {
+            cliTurnDoneUnsubscribe?.();
+            cliTurnDoneUnsubscribe = null;
+            throw new Error(sessionError);
+          }
           const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
           if (isNonRecoverableProviderRequestError(sendErr)) {
             console.warn(`[chat/cli] sendTurn rejected without recovery: ${providerErrorMessage}`);
@@ -3949,44 +4006,33 @@ export function registerChatRoutes(
           contextFlowJson = serializePersistedContextFlow(cliContextFlow);
           try {
             await waitForCliProviderRequest(
-              () => cliProvider!.sendTurn(providerSessionId, recoveryContent),
+              () => Promise.race([
+                cliProvider!.sendTurn(providerSessionId, recoveryContent),
+                turnDonePromise,
+              ]),
               streamAbort.signal,
             );
           } catch (recoveryError) {
             if (isAbortError(recoveryError)) throw recoveryError;
+            if (sessionError) throw new Error(sessionError);
             throw new Error(getProviderRequestErrorMessage(recoveryError));
           }
+          // Re-arm the inactivity watchdog against the recovered provider session.
+          turnDoneWatchdog?.arm(providerSessionId);
         }
 
         // Wait for the turn-completion event (may already be resolved if
-        // turn.completed fired synchronously inside sendTurn). A watchdog arms
-        // on inactivity and force-resolves with a session error so a silently
-        // hung CLI turn (typically a stalled thinking block) can't wedge the
-        // session in "processing" forever. Every token / thinking / tool /
-        // message / activity event resets it, so an active turn is never killed.
-        const turnDoneWatchdog = createCliTurnWatchdog({
-          timeoutMs: config.cliTurnTimeoutMs,
-          subscribe: (handler) => cliProvider!.onEvent(handler),
-          onTimeout: () => {
-            console.warn(
-              `[chat/cli] Turn stalled ${config.cliTurnTimeoutMs}ms without activity (session ${sessionId}, provider session ${providerSessionId}); aborting.`,
-            );
-            // Ask the provider to stop generating, but never wait on it.
-            cliProvider!.interruptTurn(providerSessionId).catch(() => {});
-            if (!sessionError) {
-              sessionError = `The CLI provider (${requestProvider}) stalled for ${Math.round(config.cliTurnTimeoutMs / 1000)}s with no activity — most likely a hung thinking block — so this turn was aborted. You can send a new message to continue.`;
-            }
-            resolveTurnDone();
-          },
-        });
-        turnDoneWatchdog.arm(providerSessionId);
+        // turn.completed fired synchronously inside sendTurn). The watchdog
+        // armed before the first sendTurn force-resolves with a session error on
+        // inactivity so a silently hung CLI turn (typically a stalled thinking
+        // block) can't wedge the session in "processing" forever.
         try {
           await waitForCliProviderRequest(
             () => turnDonePromise,
             streamAbort.signal,
           );
         } finally {
-          turnDoneWatchdog.stop();
+          turnDoneWatchdog?.stop();
         }
 
         // ── Drain steering messages: send follow-up turns for any messages
@@ -4045,7 +4091,10 @@ export function registerChatRoutes(
           steerWatchdog.arm(providerSessionId);
           try {
             await waitForCliProviderRequest(
-              () => cliProvider!.sendTurn(providerSessionId, steerContent),
+              () => Promise.race([
+                cliProvider!.sendTurn(providerSessionId, steerContent),
+                steerDonePromise,
+              ]),
               streamAbort.signal,
             );
             await waitForCliProviderRequest(
@@ -4053,7 +4102,9 @@ export function registerChatRoutes(
               streamAbort.signal,
             );
           } catch (steerError) {
-            if (!isAbortError(steerError)) throw steerError;
+            // If the watchdog resolved the turn mid-steer, drop the steer instead
+            // of surfacing a spurious send error.
+            if (!isAbortError(steerError) && !sessionError) throw steerError;
             break;
           } finally {
             steerWatchdog.stop();
@@ -4341,6 +4392,7 @@ export function registerChatRoutes(
       }
     } catch (err) {
       cleanupCliListeners();
+      turnDoneWatchdog?.stop();
       // The OpenAI agentic loop now handles AbortError internally and returns
       // partial results. This catch only fires for non-abort errors (OpenAI)
       // or for Ollama stream errors (including abort).
@@ -4415,10 +4467,11 @@ export function registerChatRoutes(
       try {
         safeWrite(`data: ${JSON.stringify(wasCancelled ? { type: "done", session_id: sessionId } : { type: "error", message: errMsg })}\n\n`);
       } catch { /* client gone */ }
-      // Error/cancel path: emit happened above (before this delete), so the
-      // done/error event got a proper seq. Clear the counter now that the turn
-      // is over (the success path clears it inside emitTurnDone).
-      sessionStreamSeq.delete(sessionId);
+      // Error/cancel path: emit happened above (before the counter was cleared
+      // historically), so the done/error event got a proper seq. The counter is
+      // intentionally kept (monotonic, never reset) so a later turn can't start
+      // at seq 1 and gate a subscriber whose minSeqExclusive is higher, which
+      // would freeze its live SSE until a manual reload.
     }
 
     // Persist partial results BEFORE clearing stream state so a reload after
@@ -4456,6 +4509,7 @@ export function registerChatRoutes(
 
     activeStreams.delete(sessionId);
     activeCliTurns.delete(sessionId);
+    turnDoneWatchdog?.stop();
     cleanupCliListeners();
     ws?.broadcastToUser(authUser.id, {
       type: "session.streaming",

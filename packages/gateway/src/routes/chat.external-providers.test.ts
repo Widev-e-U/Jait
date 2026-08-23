@@ -463,6 +463,55 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
+  it("keeps the turn parked on the approval card past the inactivity timeout instead of aborting it", { timeout: 30_000 }, async () => {
+    const provider = new MockApprovalChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer({ ...testConfig, cliTurnTimeoutMs: 250 }, { providerRegistry });
+    const headers = await authHeaders();
+    const sessionId = "chat-approval-watchdog-session";
+
+    const responsePromise = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "edit the file",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "supervised",
+      },
+    });
+
+    await waitForAssertion(() => expect(provider.approvalEmitted).toBe(true));
+
+    // The watchdog timeout (250ms) elapses while the agent is blocked on the
+    // approval, but the turn must stay parked on the "Needs approval" card
+    // rather than being aborted. Give it several timeout windows to prove the
+    // watchdog is suspended, not merely reset.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    // The pending request is still resolvable after the timeout would have
+    // aborted the turn — this fails (409) if the watchdog killed the session.
+    const approval = await app.inject({
+      method: "POST",
+      url: `/api/sessions/${sessionId}/approve`,
+      headers,
+      payload: { requestId: "approval-request-1", approved: true },
+    });
+
+    expect(approval.statusCode).toBe(200);
+    expect(provider.respondToApproval).toHaveBeenCalledWith("mock-session-1", "approval-request-1", true);
+
+    const response = await responsePromise;
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"type":"approval_required"');
+    expect(response.body).toContain('"request_id":"approval-request-1"');
+    expect(response.body).toContain('"type":"done"');
+
+    await app.close();
+  });
+
   it("includes the Jait system prompt in the first external-provider turn without streaming the context trace", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();

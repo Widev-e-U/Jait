@@ -140,16 +140,13 @@ export function shouldProcessResumeStreamEvent(
 /**
  * Reset a session's last-seen resume seq baseline from a fresh snapshot.
  *
- * Unlike `shouldProcessResumeStreamEvent` (which only ever raises the baseline
- * to dedup live events), a snapshot must *overwrite* the baseline with the
- * gateway's current per-session counter. The gateway resets that counter to 0
- * whenever a NEW turn starts — e.g. a hidden background-command system
- * notification. If we only ever raised the baseline, a client reconnecting to
- * that newer turn would keep the previous turn's higher value and mistake every
- * live event of the new turn for a stale duplicate, dropping them all and
- * leaving the chat frozen. The gateway gates a fresh connection by
+ * The gateway keeps the per-session `seq` counter monotonic across turns (never
+ * reset to 0, never deleted at turn end), and gates a fresh connection by
  * minSeqExclusive = snapshot.seq, so events after this snapshot are always
- * strictly greater than this baseline.
+ * strictly greater than this baseline. This overwrite is therefore a harmless
+ * safety net rather than a correctness requirement: with a monotonic counter the
+ * snapshot seq is always >= the current baseline, which is exactly what
+ * `shouldProcessResumeStreamEvent` (raise-only dedup) needs.
  */
 export function applyResumeSnapshotSeq(
   lastSeqBySession: Map<string, number>,
@@ -1183,9 +1180,6 @@ export function useChat(
           const { done, value } = await reader.read()
           if (done) break
           if (!isCurrentResumeRun()) { reader.cancel(); break }
-          if (serverSnapshotReceived && wasStreaming) {
-            armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
-          }
 
           lineBuffer += decoder.decode(value, { stream: true })
           const lines = lineBuffer.split('\n')
@@ -1196,6 +1190,13 @@ export function useChat(
             if (!line.startsWith('data: ')) continue
             try {
               const data = JSON.parse(line.slice(6)) as Record<string, unknown>
+              // A parsed turn event proves real server progress (as opposed to a
+              // `: ping` keepalive comment). Re-arm the idle watchdog here so a
+              // turn that's stalled but still keepalive-heartbeating is reclaimed
+              // instead of freezing until a manual reload.
+              if (serverSnapshotReceived && wasStreaming) {
+                armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
+              }
               if (!isCurrentResumeRun()) break
               if (data.type !== 'snapshot' && !shouldProcessResumeStreamEvent(lastResumeSeqBySessionRef.current, sessionId, data)) {
                 continue
@@ -1859,10 +1860,14 @@ export function useChat(
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        // Any byte — including the gateway's 15s keepalive comment — proves the
-        // socket is alive, so push the deadline out rather than letting a long
-        // tool run look like a dead connection.
-        armDirectIdleTimer()
+        // Do NOT re-arm on raw bytes here. The gateway emits a 15s keepalive
+        // comment on an otherwise idle socket, so re-arming on any byte would
+        // mask a server-side stall where the answer has stopped streaming but
+        // the keepalive keeps the connection alive — leaving the UI frozen until
+        // a manual reload. We re-arm only when a real turn `data:` event is
+        // received below (see armDirectIdleTimer), so a turn that stops producing
+        // events (while keepalive bytes keep flowing) trips the watchdog and is
+        // auto-recovered by the resume/reconcile path instead.
 
         lineBuffer += decoder.decode(value, { stream: true })
         const lines = lineBuffer.split('\n')
@@ -1873,6 +1878,10 @@ export function useChat(
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
+            // A parsed turn event proves real turn progress (as opposed to the
+            // keepalive comment), so re-arm the idle watchdog. This includes the
+            // initial `request`/`queued` events and the terminal `done`/`error`.
+            armDirectIdleTimer()
             pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
             if (!shouldProcessDirectStreamEvent(data.type, !isStale())) continue
 

@@ -196,8 +196,14 @@ export function loadConfig(): AppConfig {
     windowsSshUsername: process.env["WINDOWS_SSH_USERNAME"]?.trim() ?? "Docker",
     windowsSshPassword: process.env["WINDOWS_SSH_PASSWORD"]?.trim() ?? "admin",
     nodeOnly,
+    // CLI turn inactivity timeout: if the provider emits no event (token /
+    // thinking / tool / message / activity) for this long, the turn is treated
+    // as hung and aborted so a live chat recovers instead of wedging in
+    // "processing". Default 30s keeps a streaming chat feeling live; any
+    // activity resets the timer, so a genuinely busy turn is never killed.
+    // Override with JAIT_CLI_TURN_TIMEOUT_MS.
     cliTurnTimeoutMs: parseInt(
-      process.env["JAIT_CLI_TURN_TIMEOUT_MS"] ?? "600000",
+      process.env["JAIT_CLI_TURN_TIMEOUT_MS"] ?? "30000",
       10,
     ) || 0,
   };

@@ -9,6 +9,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, N
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/shared";
@@ -1042,6 +1043,10 @@ interface RemoteProviderSession {
   pendingTurn?: { resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
   nextRpcId: number;
   sessionId: string;
+  /** Session ID passed to `claude --session-id`. Defaults to `sessionId`, but is
+   *  regenerated on retry when Claude Code reports the ID is already in use
+   *  (a stale lock left behind by a killed process, common on Windows). */
+  claudeSessionId?: string;
   providerId: DesktopRemoteProviderId;
   kind: "rpc" | "claude-print";
   workingDirectory: string;
@@ -1538,17 +1543,23 @@ function mapClaudeStreamEvent(session: RemoteProviderSession, event: Record<stri
   }
 }
 
+const CLAUDE_SESSION_IN_USE_RE = /already in use/i;
+
 function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): Promise<void> {
   if (session.child) {
     return Promise.reject(new Error("Claude Code turn already running"));
   }
+  sendProviderEvent(session.sessionId, { type: "turn.started", sessionId: session.sessionId });
+  return runClaudeRemoteTurnAttempt(session, message, 0);
+}
 
+function runClaudeRemoteTurnAttempt(session: RemoteProviderSession, message: string, attempt: number): Promise<void> {
   const args = [
     "--print",
     "--output-format", "stream-json",
     "--include-partial-messages",
     "--verbose",
-    "--session-id", session.sessionId,
+    "--session-id", session.claudeSessionId ?? session.sessionId,
   ];
 
   if (session.mode === "full-access") {
@@ -1589,7 +1600,6 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
   child.stdin?.on("error", () => {/* ignore broken pipe */});
   child.stdin?.write(message);
   child.stdin?.end();
-  sendProviderEvent(session.sessionId, { type: "turn.started", sessionId: session.sessionId });
 
   let buffer = "";
   child.stdout?.on("data", (data: Buffer) => {
@@ -1631,6 +1641,17 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
       if (code === 0) {
         sendProviderEvent(session.sessionId, { type: "turn.completed", sessionId: session.sessionId });
         resolve();
+        return;
+      }
+      // Claude Code reports "Session ID ... is already in use" when a stale
+      // lock is left behind by a previously killed process (common on Windows).
+      // Retry with a fresh Claude Code session ID — the full conversation is
+      // re-sent on stdin, so context is preserved across the retry.
+      const stderrTail = session.stderrBuffer?.trim() ?? "";
+      if (attempt < 2 && CLAUDE_SESSION_IN_USE_RE.test(stderrTail)) {
+        session.claudeSessionId = randomUUID();
+        console.error(`[claude-remote:${session.sessionId}] session id already in use, retrying with fresh id (attempt ${attempt + 1})`);
+        runClaudeRemoteTurnAttempt(session, message, attempt + 1).then(resolve, reject);
         return;
       }
       const baseError = new Error(`Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`);
