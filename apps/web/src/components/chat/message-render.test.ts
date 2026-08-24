@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { hasRenderableUserMessageContent } from './message-render-state'
 
@@ -29,5 +30,15 @@ describe('Message rendering', () => {
       userDisplaySegments: [],
       attachmentCount: 0,
     })).toBe(false)
+  })
+
+  it('provides session context to tool calls rendered from ordered assistant segments', () => {
+    const source = readFileSync(new URL('./message.tsx', import.meta.url), 'utf8')
+    const segmentedAssistantBranch = source.match(
+      /!isUser && segments && segments\.length > 0 \? \(([\s\S]*?)\n        \) : \(/,
+    )?.[1] ?? ''
+
+    expect(segmentedAssistantBranch).toContain('<SubAgentAuthProvider sessionId={sessionId} authToken={authToken}>')
+    expect(segmentedAssistantBranch).toContain('<AssistantBody')
   })
 })

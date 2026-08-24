@@ -795,30 +795,32 @@ function MessageInner({
         )}
 
         {!isUser && segments && segments.length > 0 ? (
-          <div className="relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]">
-            <AssistantBody
-              segments={segments}
-              toolCalls={toolCalls}
-              isStreaming={isStreaming}
-              hasStreamingText={!!content}
-              thinkingDuration={thinkingDuration}
-              provider={provider}
-              threadControlThreads={threadControlThreads}
-              onOpenTerminal={onOpenTerminal}
-              onOpenDiff={onOpenDiff}
-              renderInlineSecretPrompt={renderInlineSecretPrompt}
-              onApprovalResponse={onApprovalResponse}
-              compact={compact}
-              preferLlmUi={preferLlmUi}
-              onOpenPath={onOpenPath}
-              capNonSteeringWidth={hasSteeringSegment}
-            />
+          <SubAgentAuthProvider sessionId={sessionId} authToken={authToken}>
+            <div className="relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]">
+              <AssistantBody
+                segments={segments}
+                toolCalls={toolCalls}
+                isStreaming={isStreaming}
+                hasStreamingText={!!content}
+                thinkingDuration={thinkingDuration}
+                provider={provider}
+                threadControlThreads={threadControlThreads}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
+                compact={compact}
+                preferLlmUi={preferLlmUi}
+                onOpenPath={onOpenPath}
+                capNonSteeringWidth={hasSteeringSegment}
+              />
 
-            <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
-              {assistantActions}
-              {memoryProvenance}
+              <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
+                {assistantActions}
+                {memoryProvenance}
+              </div>
             </div>
-          </div>
+          </SubAgentAuthProvider>
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
