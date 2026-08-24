@@ -107,17 +107,6 @@ export interface AppConfig {
    * link used for remote filesystem and terminal access.
    */
   nodeOnly: boolean;
-  /**
-   * Inactivity timeout (ms) for a CLI-provider turn (codex / claude-code).
-   * CLI agents can hang silently — most often while generating a long thinking
-   * block that stops emitting events — with no error event and no
-   * turn.completed, leaving the session wedged in "processing" forever. This
-   * timer aborts a turn that streams no progress activity for the given window
-   * (it resets on every token / thinking / tool / message / activity event, so
-   * a genuinely active turn is never killed). `0` disables the watchdog.
-   * Override with env JAIT_CLI_TURN_TIMEOUT_MS.
-   */
-  cliTurnTimeoutMs: number;
 }
 
 /** Infer context window size from model name. Conservative defaults. */
@@ -196,15 +185,5 @@ export function loadConfig(): AppConfig {
     windowsSshUsername: process.env["WINDOWS_SSH_USERNAME"]?.trim() ?? "Docker",
     windowsSshPassword: process.env["WINDOWS_SSH_PASSWORD"]?.trim() ?? "admin",
     nodeOnly,
-    // CLI turn inactivity timeout: if the provider emits no event (token /
-    // thinking / tool / message / activity) for this long, the turn is treated
-    // as hung and aborted so a live chat recovers instead of wedging in
-    // "processing". Default 30s keeps a streaming chat feeling live; any
-    // activity resets the timer, so a genuinely busy turn is never killed.
-    // Override with JAIT_CLI_TURN_TIMEOUT_MS.
-    cliTurnTimeoutMs: parseInt(
-      process.env["JAIT_CLI_TURN_TIMEOUT_MS"] ?? "30000",
-      10,
-    ) || 0,
   };
 }
