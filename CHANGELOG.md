@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.760](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.760) — 2026-08-24
+- fix(web): provide session context to sub-agent tool calls in assistant segments — 77ed4e7f
+- fix(gateway): reattach requested remote terminals after surface state loss — c72759ae
+
 ## [v0.1.759](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.759) — 2026-08-24
 - feat: support multiple Jait backend instances — 931381e5
 
