@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.759](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.759) — 2026-08-24
+- feat: support multiple Jait backend instances — 931381e5
+
 ## [v0.1.758](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.758) — 2026-08-24
 - feat(web): show live read-only terminal in tool cards — 9553da12
 - feat(gateway): route provider terminals to Jait surfaces — 58871719
