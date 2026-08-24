@@ -53,7 +53,10 @@ function makePromptFallbackTool(chunks: string[], shell = "/bin/bash") {
   return { tool: createTerminalRunTool(registry), writes };
 }
 
-function makeSecretPromptTool(secret = "remote-password") {
+function makeSecretPromptTool(
+  secret = "remote-password",
+  scriptedCommand?: { command: string; output: string },
+) {
   let listener: ((data: string) => void) | null = null;
   const writes: string[] = [];
   const requests: Array<{ title: string; prompt: string; requestedBy: string | null }> = [];
@@ -81,6 +84,9 @@ function makeSecretPromptTool(secret = "remote-password") {
     },
     write(data: string) {
       writes.push(data);
+      if (scriptedCommand && data === `${scriptedCommand.command}\r`) {
+        queueMicrotask(() => listener?.(scriptedCommand.output));
+      }
       if (data === "ssh alice@host\r") {
         queueMicrotask(() => listener?.("alice@host's password: "));
       }
@@ -446,6 +452,23 @@ describe("terminal.run tool status reporting", () => {
       prompt: "alice@host's password:",
       requestedBy: "terminal.run",
     }]);
+  });
+
+  it("does not request a secret for a completed test log containing password prompt fixtures", async () => {
+    const command = "bunx vitest run packages/gateway/src/terminal-tools.test.ts";
+    const { tool, writes, requests } = makeSecretPromptTool("unused-secret", {
+      command,
+      output: "[sudo] password for alice: \r\n✓ password fixture passed\r\n\x1b]633;D;0\x07\x1b]633;B\x07",
+    });
+
+    const result = await tool.execute({ command, terminalId: "term-existing", timeout: 1000 }, {
+      ...makeContext(),
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(requests).toEqual([]);
+    expect(writes).not.toContain("unused-secret\r");
   });
 });
 

@@ -696,11 +696,13 @@ export function useUICommands(opts: UseUICommandsOptions) {
           type: 'resource.subscribe',
           payload: { resource: 'root:/browser' },
         }))
-        // Subscribe to current session on connect
+        // Flush pending state before subscribing. Otherwise the server can send
+        // a stale full-state snapshot that clears a locally queued chat message
+        // before its delayed state update reaches the gateway.
+        flushQueue(ws)
+        // Subscribe to current session only after pending state is authoritative.
         const sid = sessionIdRef.current
         if (sid) subscribeToSession(ws, sid)
-        // Flush any queued outgoing messages
-        flushQueue(ws)
         // Register as a filesystem node if this client can browse files locally
         if (canActAsFsNode()) {
           // Ensure device ID is initialised from persistent storage

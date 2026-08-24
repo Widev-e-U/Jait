@@ -2540,33 +2540,61 @@ function getStructuredTerminalId(call: ToolCallInfo): string | null {
   const argTerminalId = typeof call.args.terminalId === 'string' ? call.args.terminalId : null
   if (argTerminalId) return argTerminalId
 
-  const data = call.result?.data
-  if (data && typeof data === 'object') {
-    const record = data as Record<string, unknown>
-    const dataTerminalId = typeof record.terminalId === 'string' ? record.terminalId : null
-    if (dataTerminalId) return dataTerminalId
-    const dataId = typeof record.id === 'string' ? record.id : null
-    if (dataId) return dataId
-    const dataSurfaceId = typeof record.surfaceId === 'string' ? record.surfaceId : null
-    if (dataSurfaceId) return dataSurfaceId
-  }
+  const record = getStructuredTerminalResult(call)
+  if (!record) return null
+  const terminalId = [record.terminalId, record.id, record.surfaceId]
+    .find((value): value is string => typeof value === 'string' && value.length > 0)
+  if (terminalId) return terminalId
 
   return null
 }
 
+function findStructuredTerminalResult(value: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 8 || value == null) return null
+  if (typeof value === 'string') {
+    const parsed = parseStructuredOrEmbeddedRecord(value)
+    return parsed ? findStructuredTerminalResult(parsed, depth + 1) : null
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const terminalResult = findStructuredTerminalResult(entry, depth + 1)
+      if (terminalResult) return terminalResult
+    }
+    return null
+  }
+  if (typeof value !== 'object') return null
+
+  const record = value as Record<string, unknown>
+  const terminalId = typeof record.terminalId === 'string' ? record.terminalId : null
+  const surfaceId = typeof record.surfaceId === 'string' ? record.surfaceId : null
+  const typedTerminalId = record.type === 'terminal' && typeof record.id === 'string' ? record.id : null
+  if (terminalId || surfaceId || typedTerminalId) return record
+
+  for (const key of ['result', 'data', 'structuredContent', 'content', 'message', 'text', 'output']) {
+    const terminalResult = findStructuredTerminalResult(record[key], depth + 1)
+    if (terminalResult) return terminalResult
+  }
+  return null
+}
+
+export function getStructuredTerminalResult(call: ToolCallInfo): Record<string, unknown> | null {
+  return findStructuredTerminalResult(call.result?.data)
+    ?? findStructuredTerminalResult(call.result?.message)
+}
+
 function getStructuredTerminalOutputOffset(call: ToolCallInfo): number | null {
-  const data = call.result?.data
-  if (!data || typeof data !== 'object') return null
-  const outputOffset = (data as Record<string, unknown>).outputOffset
+  const record = getStructuredTerminalResult(call)
+  if (!record) return null
+  const outputOffset = record.outputOffset
   return typeof outputOffset === 'number' && Number.isFinite(outputOffset) && outputOffset >= 0
     ? Math.trunc(outputOffset)
     : null
 }
 
 function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null {
-  const data = call.result?.data
-  if (!data || typeof data !== 'object') return null
-  const outputEndOffset = (data as Record<string, unknown>).outputEndOffset
+  const record = getStructuredTerminalResult(call)
+  if (!record) return null
+  const outputEndOffset = record.outputEndOffset
   return typeof outputEndOffset === 'number' && Number.isFinite(outputEndOffset) && outputEndOffset >= 0
     ? Math.trunc(outputEndOffset)
     : null
@@ -2583,9 +2611,9 @@ export function shouldShowToolTerminalSlice(options: {
     && (options.outputEndOffset !== null || options.activeOrWaiting)
 }
 
-function isTerminalCreationCall(call: ToolCallInfo): boolean {
+export function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
-  const displayTool = getJaitMcpToolName(normalizedTool) ?? normalizedTool
+  const displayTool = getJaitMcpToolName(normalizedTool, undefined, call.args) ?? normalizedTool
   if (displayTool === 'surfaces.start') {
     if (call.args.type === 'terminal') return getStructuredTerminalId(call) !== null
 
@@ -3379,9 +3407,10 @@ function ToolCallCardInner({
   const isTerminal = isPersistentTerminal
     || displayTool.startsWith('ssh.') || displayTool === 'run.ssh' || displayTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
+  const structuredTerminalResult = isPersistentTerminal ? getStructuredTerminalResult(call) : null
   const structuredTerminalId = isTerminalCreationCall(call) ? getStructuredTerminalId(call) : null
-  const isBackgroundCall = normalizedArgs.isBackground === true || resultData?.isBackground === true
-  const backgroundWatchedResult = resultData?.watched === true
+  const isBackgroundCall = normalizedArgs.isBackground === true || structuredTerminalResult?.isBackground === true
+  const backgroundWatchedResult = structuredTerminalResult?.watched === true
   const runningHint = getRunningHint(displayTool, normalizedArgs)
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
   const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
@@ -3459,7 +3488,7 @@ function ToolCallCardInner({
     hasTerminal: toolTerminal !== null,
     outputOffset: terminalOutputOffset,
     outputEndOffset: terminalOutputEndOffset,
-    activeOrWaiting: call.status === 'running' || call.status === 'pending' || backgroundWaiting,
+    activeOrWaiting: call.status === 'running' || call.status === 'pending' || backgroundWaiting || isBackgroundCall,
   })
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
@@ -3697,11 +3726,6 @@ function ToolCallCardInner({
   ) : bodyKind === 'terminal' ? (
     showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
-        <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-2xs text-zinc-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          <span>Read-only terminal</span>
-          {backgroundWaiting && <span className="ml-auto text-amber-400">Background · waiting</span>}
-        </div>
         <TerminalView
           terminalId={toolTerminal.id}
           token={authToken}

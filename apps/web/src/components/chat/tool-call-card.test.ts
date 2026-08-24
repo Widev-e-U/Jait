@@ -24,6 +24,8 @@ let getNextSubAgentVisibleCount: typeof import('./tool-call-card')['getNextSubAg
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
 let shouldShowToolTerminalSlice: typeof import('./tool-call-card')['shouldShowToolTerminalSlice']
+let getStructuredTerminalResult: typeof import('./tool-call-card')['getStructuredTerminalResult']
+let isTerminalCreationCall: typeof import('./tool-call-card')['isTerminalCreationCall']
 let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
 let humanizeStructuredKey: typeof import('./tool-call-card')['humanizeStructuredKey']
 let StructuredDataView: typeof import('./tool-call-card')['StructuredDataView']
@@ -62,6 +64,8 @@ beforeAll(async () => {
     getToolInvocationLabels,
     shouldRenderToolCall,
     shouldShowToolTerminalSlice,
+    getStructuredTerminalResult,
+    isTerminalCreationCall,
     getToolSearchResultItems,
     humanizeStructuredKey,
     StructuredDataView,
@@ -80,6 +84,57 @@ describe('shouldShowToolTerminalSlice', () => {
     })).toBe(true)
   })
 })
+
+describe('getStructuredTerminalResult', () => {
+  it('extracts background terminal metadata from a nested MCP envelope', () => {
+    const call = {
+      callId: 'terminal-background',
+      tool: 'mcp-tool',
+      args: {},
+      status: 'success' as const,
+      startedAt: 1,
+      result: {
+        ok: true,
+        message: 'Tool completed',
+        data: {
+          result: {
+            content: [{
+              type: 'text',
+              text: 'Background command started {"terminalId":"term-live","outputOffset":0,"isBackground":true,"watched":true}',
+            }],
+            structuredContent: null,
+          },
+        },
+      },
+    }
+
+    expect(getStructuredTerminalResult(call)).toMatchObject({
+      terminalId: 'term-live',
+      outputOffset: 0,
+      isBackground: true,
+      watched: true,
+    })
+  })
+})
+
+  it('attaches wrapped Jait MCP terminal calls to their returned terminal', () => {
+    expect(isTerminalCreationCall({
+      callId: 'terminal-wrapped',
+      tool: 'mcp-tool',
+      args: {
+        server: 'jait_core',
+        tool: 'jait_terminal',
+        arguments: { command: 'bun run test', isBackground: true },
+      },
+      status: 'success',
+      startedAt: 1,
+      result: {
+        ok: true,
+        message: 'Tool completed',
+        data: { terminalId: 'term-live', outputOffset: 0 },
+      },
+    })).toBe(true)
+  })
 
 describe('formatElapsedDuration', () => {
   it('formats positive durations', () => {

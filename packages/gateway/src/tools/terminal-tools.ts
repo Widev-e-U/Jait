@@ -229,12 +229,11 @@ export function detectPagerPrompt(output: string): boolean {
 
 function getInteractivePromptLabel(output: string): string | null {
   const cleaned = stripAnsi(output).replace(/\r/g, "");
-  const lines = cleaned.split("\n").map((line) => line.trim()).filter(Boolean);
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index]!;
-    if (SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(line))) return line;
-  }
-  return SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(cleaned)) ? "Terminal input required" : null;
+  const promptLine = cleaned.slice(cleaned.lastIndexOf("\n") + 1).trim();
+  if (!promptLine) return null;
+  return SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(promptLine))
+    ? promptLine
+    : null;
 }
 
 function isPowerShellShell(shell: string): boolean {
@@ -980,6 +979,7 @@ export function createJaitTerminalTool(
     description:
       "Jait terminal MCP tool. Execute a shell command in Jait and optionally target an existing terminal by terminalId. " +
       "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
+      "Background commands appear as live terminals in the chat card, so do not create a separate terminal surface first. " +
       "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — Jait notifies you " +
       "automatically when they finish, so prefer this over your own shell's background mode, which Jait cannot watch.",
   };

@@ -21,7 +21,7 @@ import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-worksp
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
-import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId } from '@/components/terminal'
+import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId, resolveProjectTerminalSelection } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
 import { DetachedTabView } from '@/components/project/detached-tab-view'
@@ -3328,14 +3328,12 @@ function App() {
 
   useEffect(() => {
     if (!activeProjectId || loadingProjectUI) return
-    const savedTerminalId = projectUI?.terminal?.activeTerminalId ?? null
-    if (savedTerminalId && projectTerminals.some((terminal) => terminal.id === savedTerminalId)) {
-      if (activeTerminalId !== savedTerminalId) setActiveTerminalId(savedTerminalId)
-      return
-    }
-    if (activeTerminalId && !projectTerminals.some((terminal) => terminal.id === activeTerminalId)) {
-      setActiveTerminalId(null)
-    }
+    const nextTerminalId = resolveProjectTerminalSelection(
+      activeTerminalId,
+      projectUI?.terminal?.activeTerminalId ?? null,
+      projectTerminals,
+    )
+    if (nextTerminalId !== activeTerminalId) setActiveTerminalId(nextTerminalId)
   }, [activeProjectId, activeTerminalId, loadingProjectUI, projectTerminals, projectUI?.terminal?.activeTerminalId, setActiveTerminalId])
 
   useEffect(() => {

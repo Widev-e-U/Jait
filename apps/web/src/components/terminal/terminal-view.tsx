@@ -265,6 +265,19 @@ export function resolveProjectActiveTerminalId<T extends { id: string }>(activeT
   return projectTerminals.some((terminal) => terminal.id === activeTerminalId) ? activeTerminalId : null
 }
 
+export function resolveProjectTerminalSelection<T extends { id: string }>(
+  activeTerminalId: string | null,
+  savedTerminalId: string | null,
+  projectTerminals: T[],
+): string | null {
+  const activeProjectTerminalId = resolveProjectActiveTerminalId(activeTerminalId, projectTerminals)
+  if (activeProjectTerminalId) return activeProjectTerminalId
+  if (savedTerminalId && projectTerminals.some((terminal) => terminal.id === savedTerminalId)) {
+    return savedTerminalId
+  }
+  return null
+}
+
 export function useTerminals(token?: string | null) {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([])
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
