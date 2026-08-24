@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.757](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.757) — 2026-08-24
+- fix(web): keep SSE stream attached across send and mid-answer reconnect — 9c0b3141
+- fix(gateway): remove CLI turn inactivity watchdog — fe7f6fe0
+- fix(web): make empty header regions draggable in electron — 9e5f7a46
+
 ## [v0.1.756](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.756) — 2026-08-23
 - fix(gateway): finish with a persisted fallback answer when a round delivers only empty/timing-noise reasoning — 489bb810
 
