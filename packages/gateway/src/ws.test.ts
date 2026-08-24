@@ -637,6 +637,32 @@ describe("WsControlPlane", () => {
       observer.ws.close();
     });
 
+    it("replays only terminal output produced after the requested command offset", async () => {
+      const token = await createToken("user-terminal-command-slice");
+      plane.onTerminalReplay = ((terminalId: string, outputOffset?: number) => {
+        if (terminalId !== "term-command-slice") return null;
+        return outputOffset === 2 ? "current command output" : "older command output\ncurrent command output";
+      }) as typeof plane.onTerminalReplay;
+
+      const subscribed = openWs(port, { token });
+      await waitForOpen(subscribed.ws);
+      await subscribed.collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      subscribed.ws.send(JSON.stringify({ type: "subscribe", sessionId: "term-command-session" }));
+      await subscribed.collector.next();
+
+      subscribed.ws.send(JSON.stringify({
+        type: "terminal.subscribe",
+        terminalId: "term-command-slice",
+        outputOffset: 2,
+      }));
+      await subscribed.collector.next();
+      const replay = await subscribed.collector.next();
+
+      expect(replay.payload.data).toBe("current command output");
+      subscribed.ws.close();
+    });
+
     it("returns only authenticated device ids from connected clients", async () => {
       const token = await createToken("user-devices");
 

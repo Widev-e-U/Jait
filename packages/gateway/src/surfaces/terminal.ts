@@ -240,6 +240,7 @@ export class TerminalSurface implements Surface {
   private _pid: number | null = null;
   private _pty: PTYInstance | null = null;
   private _outputBuffer: string[] = [];
+  private _outputChunkCount = 0;
   private _cols: number;
   private _rows: number;
   private readonly shell: string;
@@ -346,6 +347,7 @@ export class TerminalSurface implements Surface {
         // mid-run, taking the running command (and any background-completion
         // watcher) with it.
         this._lastActivityAt = Date.now();
+        this._outputChunkCount += 1;
         this._outputBuffer.push(data);
         if (this._outputBuffer.length > 10000) {
           this._outputBuffer = this._outputBuffer.slice(-5000);
@@ -451,6 +453,17 @@ export class TerminalSurface implements Surface {
         cwd: this._cwd,
       },
     };
+  }
+
+  getOutputOffset(): number {
+    return this._outputChunkCount;
+  }
+
+  getRecentOutputSince(outputOffset: number, lines = 100): string {
+    const normalizedOffset = Number.isFinite(outputOffset) ? Math.max(0, Math.trunc(outputOffset)) : 0;
+    const retainedStart = Math.max(0, this._outputChunkCount - this._outputBuffer.length);
+    const offsetIndex = Math.max(0, Math.min(this._outputBuffer.length, normalizedOffset - retainedStart));
+    return this._outputBuffer.slice(Math.max(offsetIndex, this._outputBuffer.length - lines)).join("");
   }
 
   getRecentOutput(lines = 100): string {

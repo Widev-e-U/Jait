@@ -1148,12 +1148,16 @@ async function main() {
       console.error(`Terminal resize error (${terminalId}):`, err);
     }
   };
-  ws.onTerminalReplay = (terminalId) => {
+  ws.onTerminalReplay = (terminalId, outputOffset) => {
     try {
       const surface = surfaceRegistry.getSurface(terminalId);
       if (surface && surface.type === "terminal" && "getRecentOutput" in surface) {
-        (surface as import("./surfaces/terminal.js").TerminalSurface).touch();
-        return (surface as import("./surfaces/terminal.js").TerminalSurface).getRecentOutput();
+        const terminal = surface as import("./surfaces/terminal.js").TerminalSurface;
+        terminal.touch();
+        if (outputOffset !== undefined && "getRecentOutputSince" in terminal) {
+          return terminal.getRecentOutputSince(outputOffset);
+        }
+        return terminal.getRecentOutput();
       }
     } catch {
       // ignore

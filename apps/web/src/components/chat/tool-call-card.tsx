@@ -18,7 +18,7 @@ import { ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from '@/components/chat/use-stick-to-bottom'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
-import { TerminalView, findToolTerminal, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
+import { TerminalView, findToolTerminal, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
 
 /**
  * Comfortable breathing room kept between the collapsed card's header and the
@@ -2554,6 +2554,15 @@ function getStructuredTerminalId(call: ToolCallInfo): string | null {
   return null
 }
 
+function getStructuredTerminalOutputOffset(call: ToolCallInfo): number | null {
+  const data = call.result?.data
+  if (!data || typeof data !== 'object') return null
+  const outputOffset = (data as Record<string, unknown>).outputOffset
+  return typeof outputOffset === 'number' && Number.isFinite(outputOffset) && outputOffset >= 0
+    ? Math.trunc(outputOffset)
+    : null
+}
+
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
   const displayTool = getJaitMcpToolName(normalizedTool) ?? normalizedTool
@@ -3406,6 +3415,10 @@ function ToolCallCardInner({
   const toolTerminal = terminalSurfaceState.terminal
   const terminalId = toolTerminal?.id ?? structuredTerminalId
   const canOpenTerminal = terminalId !== null
+  const terminalCommand = getCommandFromToolArgs(normalizedArgs)
+  const terminalExecution = getToolTerminalExecution(toolTerminal)
+  const terminalOutputOffset = getStructuredTerminalOutputOffset(call)
+    ?? (terminalExecution?.command === terminalCommand ? terminalExecution.outputOffset : null)
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -3642,7 +3655,7 @@ function ToolCallCardInner({
   const bodyContent = bodyKind === 'pending' ? (
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
   ) : bodyKind === 'terminal' ? (
-    toolTerminal ? (
+    toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
         <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-2xs text-zinc-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -3653,6 +3666,7 @@ function ToolCallCardInner({
           terminalId={toolTerminal.id}
           token={authToken}
           readOnly
+          outputOffset={terminalOutputOffset}
           className="h-64 bg-zinc-950"
         />
       </div>

@@ -623,7 +623,13 @@ export class WsControlPlane {
           });
           return;
         }
-        const termId = (msg as { terminalId?: string }).terminalId;
+        const subscription = msg as { terminalId?: string; outputOffset?: number };
+        const termId = subscription.terminalId;
+        const outputOffset = typeof subscription.outputOffset === "number"
+          && Number.isFinite(subscription.outputOffset)
+          && subscription.outputOffset >= 0
+          ? Math.trunc(subscription.outputOffset)
+          : undefined;
         if (termId) {
           client.terminalSubscriptions.add(termId);
           this.send(client.ws, {
@@ -634,7 +640,7 @@ export class WsControlPlane {
           });
           // Replay buffered output so the client sees the shell banner/prompt
           if (this.onTerminalReplay) {
-            const buffered = this.onTerminalReplay(termId);
+            const buffered = this.onTerminalReplay(termId, outputOffset);
             if (buffered) {
               const replay = this.currentTerminalStreamEvent(termId);
               this.send(client.ws, {
@@ -1171,7 +1177,7 @@ export class WsControlPlane {
   /** Callback for terminal resize from WS clients */
   onTerminalResize?: (terminalId: string, cols: number, rows: number) => void;
   /** Callback to replay buffered output when a client subscribes to a terminal */
-  onTerminalReplay?: (terminalId: string) => string | null;
+  onTerminalReplay?: (terminalId: string, outputOffset?: number) => string | null;
   /** Callback for consent approval from WS clients */
   onConsentApprove?: (requestId: string) => void;
   /** Callback for consent rejection from WS clients */

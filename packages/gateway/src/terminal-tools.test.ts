@@ -209,6 +209,7 @@ describe("terminal.run tool status reporting", () => {
       type: "terminal",
       state: "running",
       touch() {},
+      getOutputOffset() { return 4; },
       addOutputListener() {},
       removeOutputListener() {},
       write(data: string) {
@@ -224,10 +225,12 @@ describe("terminal.run tool status reporting", () => {
     const result = await tool.execute({ command: "printf hi", terminalId: "term-existing", isBackground: true }, makeContext());
 
     expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({ outputOffset: 4 });
     expect(writes[0]).toMatch(/^printf hi\nprintf '\\n__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:%s\\n' "\$\?"\r$/);
     expect(getManagedTerminalExecution("term-existing")).toMatchObject({
       command: "printf hi",
       actionId: "a-test",
+      outputOffset: 4,
       isBackground: true,
       watched: true,
     });

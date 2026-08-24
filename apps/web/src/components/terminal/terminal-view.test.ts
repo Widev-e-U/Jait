@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildTerminalSubscribeMessage,
   findToolTerminal,
   getTerminalContextMenuPosition,
   getToolTerminalExecution,
@@ -15,6 +16,23 @@ import {
 } from './terminal-view'
 
 const originalWindow = globalThis.window
+
+describe('buildTerminalSubscribeMessage', () => {
+  it('includes a command-local output offset when provided', () => {
+    expect(buildTerminalSubscribeMessage('term-1', 12)).toEqual({
+      type: 'terminal.subscribe',
+      terminalId: 'term-1',
+      outputOffset: 12,
+    })
+  })
+
+  it('keeps ordinary terminal subscriptions unscoped', () => {
+    expect(buildTerminalSubscribeMessage('term-1')).toEqual({
+      type: 'terminal.subscribe',
+      terminalId: 'term-1',
+    })
+  })
+})
 
 afterEach(() => {
   if (originalWindow === undefined) {

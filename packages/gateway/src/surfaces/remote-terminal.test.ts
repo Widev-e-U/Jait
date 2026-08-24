@@ -60,6 +60,20 @@ describe("RemoteTerminalSurface", () => {
     });
   });
 
+  it("replays output from a command-local offset", () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+
+    surface.ingestOutput("older command output\r\n");
+    const outputOffset = surface.getOutputOffset();
+    surface.ingestOutput("current command output\r\n");
+
+    expect(surface.getRecentOutputSince(outputOffset)).toBe("current command output\r\n");
+  });
+
   it("forwards input, resize, output replay, and stop through the remote node", async () => {
     const fakeWs = new FakeWs();
     const surface = new RemoteTerminalSurface(

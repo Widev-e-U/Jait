@@ -29,6 +29,7 @@ export interface ToolTerminalExecutionMetadata {
   command: string
   actionId: string
   startedAt: string
+  outputOffset: number | null
   isBackground: boolean
   watched: boolean | null
 }
@@ -42,6 +43,9 @@ export function getToolTerminalExecution(terminal: TerminalInfo | null | undefin
     command: record.command,
     actionId: record.actionId,
     startedAt: typeof record.startedAt === 'string' ? record.startedAt : '',
+    outputOffset: typeof record.outputOffset === 'number' && Number.isFinite(record.outputOffset)
+      ? Math.max(0, Math.trunc(record.outputOffset))
+      : null,
     isBackground: record.isBackground === true,
     watched: typeof record.watched === 'boolean' ? record.watched : null,
   }
@@ -75,6 +79,16 @@ export function findToolTerminal(
   return matchingCommand
     ?? sessionTerminals.find((terminal) => getToolTerminalExecution(terminal) !== null)
     ?? null
+}
+
+export function buildTerminalSubscribeMessage(terminalId: string, outputOffset?: number | null) {
+  return {
+    type: 'terminal.subscribe',
+    terminalId,
+    ...(typeof outputOffset === 'number' && Number.isFinite(outputOffset) && outputOffset >= 0
+      ? { outputOffset: Math.trunc(outputOffset) }
+      : {}),
+  }
 }
 
 function authHeaders(token?: string | null): Record<string, string> {
@@ -353,6 +367,7 @@ interface TerminalViewProps {
   token?: string | null
   projectRoot?: string | null
   readOnly?: boolean
+  outputOffset?: number | null
   onReferenceSelection?: (terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
@@ -360,7 +375,7 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -491,7 +506,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
       ws.onopen = () => {
         reconnectDelay = 1000 // reset on successful connect
-        ws!.send(JSON.stringify({ type: 'terminal.subscribe', terminalId }))
+        ws!.send(JSON.stringify(buildTerminalSubscribeMessage(terminalId, outputOffset)))
         flushPendingInput()
       }
 
@@ -626,7 +641,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, readOnly, onReferenceSelection])
+  }, [terminalId, token, projectRoot, readOnly, outputOffset, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current

@@ -65,6 +65,7 @@ export interface ManagedTerminalExecution {
   command: string;
   actionId: string;
   startedAt: string;
+  outputOffset: number;
   isBackground: boolean;
   watched: boolean | null;
 }
@@ -79,6 +80,7 @@ function setManagedTerminalExecution(
   terminalId: string,
   context: ToolContext,
   command: string,
+  outputOffset: number,
   isBackground: boolean,
   watched: boolean | null,
 ): void {
@@ -86,6 +88,7 @@ function setManagedTerminalExecution(
     command,
     actionId: context.actionId,
     startedAt: new Date().toISOString(),
+    outputOffset,
     isBackground,
     watched,
   });
@@ -95,6 +98,13 @@ function clearManagedTerminalExecution(terminalId: string, actionId: string): vo
   if (managedTerminalExecutions.get(terminalId)?.actionId === actionId) {
     managedTerminalExecutions.delete(terminalId);
   }
+}
+
+function getTerminalOutputOffset(surface: ManagedTerminalSurface): number {
+  if ("getOutputOffset" in surface && typeof surface.getOutputOffset === "function") {
+    return surface.getOutputOffset();
+  }
+  return 0;
 }
 
 function sessionTerminalKey(context: ToolContext): string {
@@ -738,6 +748,7 @@ export function createTerminalRunTool(
         // 1. Get or create a persistent terminal
         const { surface, terminalId, isNew, warning } =
           await ensureSessionTerminal(registry, context, preferredId, ws);
+        const outputOffset = getTerminalOutputOffset(surface);
 
         // 2. Background mode: start the command and return immediately. Watch
         //    the terminal for completion (OSC 633) so the agent can be
@@ -753,7 +764,7 @@ export function createTerminalRunTool(
             shell: String(surface.snapshot().metadata?.shell ?? ""),
             onStop: () => clearManagedTerminalExecution(terminalId, context.actionId),
           });
-          setManagedTerminalExecution(terminalId, context, command, true, watched);
+          setManagedTerminalExecution(terminalId, context, command, outputOffset, true, watched);
           // Multi-line commands must reach the shell as a *single* command.
           // Written raw, each line completes separately and the completion
           // marker for line 1 was mistaken for the whole command finishing —
@@ -789,6 +800,7 @@ export function createTerminalRunTool(
               exitCode: null,
               timedOut: false,
               terminalId,
+              outputOffset,
               isBackground: true,
               watched,
             },
@@ -796,7 +808,7 @@ export function createTerminalRunTool(
         }
 
         // 3. Execute the command (sentinel-based)
-        setManagedTerminalExecution(terminalId, context, command, false, null);
+        setManagedTerminalExecution(terminalId, context, command, outputOffset, false, null);
         let result: Awaited<ReturnType<typeof executeInTerminal>>;
         try {
           const execPromise = executeInTerminal(
@@ -878,6 +890,7 @@ export function createTerminalRunTool(
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,
+            outputOffset,
             needsInteraction,
           },
         };

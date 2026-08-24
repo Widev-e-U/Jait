@@ -28,6 +28,7 @@ export class RemoteTerminalSurface implements Surface {
   private _cwd: string | null = null;
   private _pid: number | null = null;
   private _outputBuffer: string[] = [];
+  private _outputChunkCount = 0;
   private _outputListeners: ((data: string) => void)[] = [];
   private _cols: number;
   private _rows: number;
@@ -139,6 +140,7 @@ export class RemoteTerminalSurface implements Surface {
   ingestOutput(data: string): void {
     if (!data) return;
     this._lastActivityAt = Date.now();
+    this._outputChunkCount += 1;
     this._outputBuffer.push(data);
     if (this._outputBuffer.length > 10000) {
       this._outputBuffer = this._outputBuffer.slice(-5000);
@@ -174,6 +176,17 @@ export class RemoteTerminalSurface implements Surface {
         remote: true,
       },
     };
+  }
+
+  getOutputOffset(): number {
+    return this._outputChunkCount;
+  }
+
+  getRecentOutputSince(outputOffset: number, lines = 100): string {
+    const normalizedOffset = Number.isFinite(outputOffset) ? Math.max(0, Math.trunc(outputOffset)) : 0;
+    const retainedStart = Math.max(0, this._outputChunkCount - this._outputBuffer.length);
+    const offsetIndex = Math.max(0, Math.min(this._outputBuffer.length, normalizedOffset - retainedStart));
+    return this._outputBuffer.slice(Math.max(offsetIndex, this._outputBuffer.length - lines)).join("");
   }
 
   getRecentOutput(lines = 100): string {
