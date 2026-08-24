@@ -438,6 +438,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.toolRegistry) {
     registerMcpRoutes(app, {
       toolRegistry: deps.toolRegistry,
+      toolExecutor: deps.toolExecutor,
       config,
       sessionService: deps.sessionService,
       userService: deps.userService,

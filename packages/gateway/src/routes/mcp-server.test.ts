@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { SessionStateService } from "../services/session-state.js";
@@ -410,6 +410,57 @@ describe("mcp-server", () => {
     expect(response.body).toContain('"message":"first\\n"');
     expect(response.body).toContain('"message":"second\\n"');
     expect(response.body).toContain('"id":1');
+  });
+
+  it("routes MCP terminal calls through the configured tool executor", async () => {
+    const registry = new ToolRegistry();
+    const directExecute = vi.fn(async () => ({ ok: true, message: "direct execution" }));
+    registry.register({
+      name: "jait.terminal",
+      description: "Run a command",
+      tier: "standard",
+      category: "terminal",
+      source: "builtin",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      execute: directExecute,
+    });
+    const toolExecutor = vi.fn(async () => ({ ok: true, message: "remote execution" }));
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      toolExecutor,
+      config: { host: "127.0.0.1", port: 3000 } as any,
+    });
+
+    const projectRoot = "E:\\TimeToAct\\EVN\\FSM.FunctionApps";
+    const response = await app.inject({
+      method: "POST",
+      url: `/mcp?sessionId=remote-session&projectRoot=${encodeURIComponent(projectRoot)}`,
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "jait_terminal", arguments: { command: "pwd" } },
+      },
+    });
+
+    expect(response.json()).toMatchObject({
+      result: {
+        content: [{ text: "remote execution" }],
+        isError: false,
+      },
+    });
+    expect(toolExecutor).toHaveBeenCalledWith(
+      "jait.terminal",
+      { command: "pwd" },
+      expect.objectContaining({
+        sessionId: "remote-session",
+        projectRoot,
+        requestedBy: "mcp-client",
+      }),
+    );
+    expect(directExecute).not.toHaveBeenCalled();
   });
 
   it("accepts initialized notifications over streamable HTTP MCP", async () => {

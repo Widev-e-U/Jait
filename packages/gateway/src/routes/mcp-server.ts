@@ -20,8 +20,16 @@ import type { ThreadService } from "../services/threads.js";
 import type { WsControlPlane } from "../ws.js";
 import type { WsEventType } from "@jait/shared";
 
+type McpToolExecutor = (
+  toolName: string,
+  input: unknown,
+  context: ToolContext,
+  options?: { dryRun?: boolean; consentTimeoutMs?: number },
+) => Promise<ToolResult>;
+
 interface McpDeps {
   toolRegistry: ToolRegistry;
+  toolExecutor?: McpToolExecutor;
   config: AppConfig;
   sessionService?: SessionService;
   userService?: UserService;
@@ -303,7 +311,7 @@ export function listToolsForMcp(
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry, config, sessionService, userService, sessionState } = deps;
+  const { toolRegistry, toolExecutor, config, sessionService, userService, sessionState } = deps;
 
   // Callback for post-tool-execution side effects (e.g., thread todo activities)
   const onToolExecuted: McpToolExecutedCallback = (toolName, result, context) => {
@@ -410,6 +418,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
           reply.raw.write(`event: message\ndata: ${JSON.stringify(notification)}\n\n`);
         },
         toolSet,
+        toolExecutor,
       );
       reply.raw.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
       reply.raw.end();
@@ -424,6 +433,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       onToolExecuted,
       undefined,
       toolSet,
+      toolExecutor,
     );
     if (body.id == null) {
       return reply.status(202).send();
@@ -525,6 +535,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
           }
         : undefined,
       resolveMcpToolSet(request.query),
+      toolExecutor,
     );
 
     // Also push the response via SSE to the connected client
@@ -551,6 +562,7 @@ export async function handleMcpRequest(
   onToolExecuted?: McpToolExecutedCallback,
   onProgress?: McpToolProgressCallback,
   toolSet: McpToolSet = "all",
+  toolExecutor?: McpToolExecutor,
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
@@ -648,7 +660,9 @@ export async function handleMcpRequest(
       };
 
       try {
-        const result = await tool.execute(args, context);
+        const result = toolExecutor
+          ? await toolExecutor(tool.name, args, context)
+          : await tool.execute(args, context);
         onToolExecuted?.(toolName, result, context);
         return {
           jsonrpc: "2.0",
