@@ -10,6 +10,7 @@ import { SandboxManager } from "./security/sandbox-manager.js";
 import type { TerminalSurface } from "./surfaces/terminal.js";
 import { SecretInputService } from "./services/secret-input.js";
 import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
+import type { WsControlPlane } from "./ws.js";
 
 function makeContext() {
   return {
@@ -232,6 +233,76 @@ describe("terminal.run tool status reporting", () => {
     });
     backgroundCommandMonitor.clearForTests();
     expect(getManagedTerminalExecution("term-existing")).toBeNull();
+  });
+
+  it("reattaches a requested remote terminal after gateway surface state is lost", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const proxyCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown> }> = [];
+    const ws = {
+      async proxyTerminalOp<T>(nodeId: string, op: string, params: Record<string, unknown>): Promise<T> {
+        proxyCalls.push({ nodeId, op, params });
+        return { ok: true, pid: 1234, shell: "pwsh.exe", reused: true } as T;
+      },
+      sendTerminalOp() {},
+    } as unknown as WsControlPlane;
+    const registry = new SurfaceRegistry();
+    const tool = createTerminalRunTool(registry, undefined, ws);
+
+    const result = await tool.execute(
+      { command: "Write-Output hi", terminalId: "term-existing", isBackground: true },
+      { ...makeContext(), executionNodeId: "node-1" },
+    );
+
+    expect(result.ok).toBe(true);
+    expect((result.data as any).terminalId).toBe("term-existing");
+    expect(proxyCalls[0]).toMatchObject({
+      nodeId: "node-1",
+      op: "start",
+      params: { terminalId: "term-existing", reuseOnly: true },
+    });
+    backgroundCommandMonitor.clearForTests();
+  });
+
+  it("does not replace an unavailable requested remote terminal", async () => {
+    const proxyCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown> }> = [];
+    const ws = {
+      async proxyTerminalOp<T>(nodeId: string, op: string, params: Record<string, unknown>): Promise<T> {
+        proxyCalls.push({ nodeId, op, params });
+        throw new Error("Terminal term-missing is not running on this node");
+      },
+      sendTerminalOp() {},
+    } as unknown as WsControlPlane;
+    const registry = new SurfaceRegistry();
+    const tool = createTerminalRunTool(registry, undefined, ws);
+
+    const result = await tool.execute(
+      { command: "Write-Output hi", terminalId: "term-missing" },
+      { ...makeContext(), executionNodeId: "node-1" },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Requested terminal term-missing is unavailable");
+    expect(proxyCalls).toHaveLength(1);
+    expect(proxyCalls[0]).toMatchObject({
+      nodeId: "node-1",
+      op: "start",
+      params: { terminalId: "term-missing", reuseOnly: true },
+    });
+    expect(registry.listSurfaces()).toEqual([]);
+  });
+
+  it("does not replace an unavailable requested local terminal", async () => {
+    const registry = new SurfaceRegistry();
+    const tool = createTerminalRunTool(registry);
+
+    const result = await tool.execute(
+      { command: "printf hi", terminalId: "term-missing" },
+      makeContext(),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe("Requested terminal term-missing is not running");
+    expect(registry.listSurfaces()).toEqual([]);
   });
 
   it("completes when a non-OSC shell prompt returns", async () => {

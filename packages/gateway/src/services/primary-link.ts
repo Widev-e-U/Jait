@@ -451,7 +451,10 @@ export class PrimaryLink {
         const existing = this.terminalSessions.get(terminalId);
         if (existing) {
           const snapshot = existing.snapshot();
-          return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null };
+          return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null, reused: true };
+        }
+        if (params["reuseOnly"] === true) {
+          throw new Error(`Terminal ${terminalId} is not running on this node`);
         }
         const projectRoot = resolve(String(params["projectRoot"] ?? process.cwd()));
         const sessionId = String(params["sessionId"] ?? "default");
@@ -472,7 +475,7 @@ export class PrimaryLink {
           throw err;
         }
         const snapshot = terminal.snapshot();
-        return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null };
+        return { ok: true, pid: snapshot.metadata.pid ?? null, shell: snapshot.metadata.shell ?? null, reused: false };
       }
       case "input": {
         const terminal = this.terminalSessions.get(terminalId);

@@ -11,6 +11,7 @@ export interface RemoteTerminalSurfaceOptions {
   shell?: string;
   cols?: number;
   rows?: number;
+  reuseOnly?: boolean;
 }
 
 interface RemoteTerminalStartResult {
@@ -31,6 +32,7 @@ export class RemoteTerminalSurface implements Surface {
   private _cols: number;
   private _rows: number;
   private _shell: string | null;
+  private readonly _reuseOnly: boolean;
   private _lastActivityAt = Date.now();
 
   onOutput?: (data: string) => void;
@@ -45,6 +47,7 @@ export class RemoteTerminalSurface implements Surface {
     this._cols = opts.cols ?? 120;
     this._rows = opts.rows ?? 30;
     this._shell = opts.shell ?? null;
+    this._reuseOnly = opts.reuseOnly ?? false;
   }
 
   get state(): SurfaceState {
@@ -74,6 +77,7 @@ export class RemoteTerminalSurface implements Surface {
           cols: this._cols,
           rows: this._rows,
           ...(this._shell ? { shell: this._shell } : {}),
+          ...(this._reuseOnly ? { reuseOnly: true } : {}),
         },
         15_000,
       );

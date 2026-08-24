@@ -260,19 +260,45 @@ async function ensureSessionTerminal(
   preferredId?: string,
   ws?: WsControlPlane,
 ): Promise<{ surface: ManagedTerminalSurface; terminalId: string; isNew: boolean; warning?: string }> {
-  // 1. Try preferred terminal (if provided and alive)
+  const terminalKey = sessionTerminalKey(context);
+
   if (preferredId) {
+    const existingSurface = registry.getSurface(preferredId);
+    if (existingSurface?.type === "terminal" && existingSurface.state === "running") {
+      (existingSurface as ManagedTerminalSurface).touch();
+      return { surface: existingSurface as ManagedTerminalSurface, terminalId: preferredId, isNew: false };
+    }
+
+    const remoteNodeId = context.executionNodeId && context.executionNodeId !== "gateway"
+      ? context.executionNodeId
+      : null;
+    if (!remoteNodeId) {
+      throw new Error(`Requested terminal ${preferredId} is not running`);
+    }
+    if (!ws) {
+      throw new Error("Remote terminal execution requires the WebSocket control plane");
+    }
+
+    const remoteSurface = new RemoteTerminalSurface(preferredId, ws, remoteNodeId, { reuseOnly: true });
+    registry.registerInstance(preferredId, remoteSurface);
     try {
-      const s = registry.getSurface(preferredId);
-      if (s && s.type === "terminal" && s.state === "running") {
-        (s as ManagedTerminalSurface).touch();
-        return { surface: s as ManagedTerminalSurface, terminalId: preferredId, isNew: false };
-      }
-    } catch { /* gone — fall through */ }
+      await remoteSurface.start({
+        sessionId: context.sessionId,
+        projectRoot: context.projectRoot,
+        nodeId: remoteNodeId,
+      });
+      registry.onSurfaceStarted?.(preferredId, remoteSurface);
+      sessionTerminalMap.set(terminalKey, preferredId);
+      await remoteSurface.waitForPrompt();
+      return { surface: remoteSurface, terminalId: preferredId, isNew: false };
+    } catch (error) {
+      registry.unregister(preferredId);
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Requested terminal ${preferredId} is unavailable: ${reason}`);
+    }
   }
 
   // 2. Try the session's default terminal
-  const terminalKey = sessionTerminalKey(context);
   const existingId = sessionTerminalMap.get(terminalKey);
   if (existingId) {
     try {
