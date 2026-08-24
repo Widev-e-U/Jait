@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createTerminalRunTool,
+  getManagedTerminalExecution,
   detectInteractivePrompt,
   rewriteProjectPathForSandboxCommand,
 } from "./tools/terminal-tools.js";
@@ -223,7 +224,14 @@ describe("terminal.run tool status reporting", () => {
 
     expect(result.ok).toBe(true);
     expect(writes[0]).toMatch(/^printf hi\nprintf '\\n__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:%s\\n' "\$\?"\r$/);
+    expect(getManagedTerminalExecution("term-existing")).toMatchObject({
+      command: "printf hi",
+      actionId: "a-test",
+      isBackground: true,
+      watched: true,
+    });
     backgroundCommandMonitor.clearForTests();
+    expect(getManagedTerminalExecution("term-existing")).toBeNull();
   });
 
   it("completes when a non-OSC shell prompt returns", async () => {

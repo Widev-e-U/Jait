@@ -226,16 +226,10 @@ class JaitAcpClient implements Client {
     return terminal;
   }
 
-  async createTerminal(params: CreateTerminalRequest): Promise<CreateTerminalResponse> {
-    const terminalId = uuidv7();
-    this.terminals.set(terminalId, new AcpTerminal({
-      command: params.command,
-      args: params.args,
-      cwd: params.cwd,
-      env: params.env,
-      outputByteLimit: params.outputByteLimit,
-    }));
-    return { terminalId };
+  async createTerminal(_params: CreateTerminalRequest): Promise<CreateTerminalResponse> {
+    throw new Error(
+      "Provider-native terminals are disabled in Jait; use the jait.terminal MCP tool so the terminal remains visible to the user",
+    );
   }
 
   async terminalOutput(params: TerminalOutputRequest): Promise<TerminalOutputResponse> {
@@ -839,12 +833,8 @@ export class AcpProvider implements CliProviderAdapter {
         clientInfo: { name: "Jait", version: "0.1" },
         clientCapabilities: {
           fs: { readTextFile: false, writeTextFile: false },
-          // Backed by JaitAcpClient's createTerminal/terminalOutput/waitForTerminalExit/
-          // killTerminal/releaseTerminal so agents delegate shell execution to Jait
-          // instead of spawning their own subprocess — without this, commands the
-          // agent runs "in the background" finish invisibly to Jait and it can
-          // never wake the agent back up when they complete.
-          terminal: true,
+          // Shell work must go through the always-visible jait.terminal MCP tool.
+          terminal: false,
         },
       });
 

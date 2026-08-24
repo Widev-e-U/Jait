@@ -166,6 +166,27 @@ export function createRemoteToolExecutor(
       return localExecutor(toolName, input, context, execOptions);
     }
 
+    // Terminal tools are still executed by the gateway tool implementation,
+    // but with the owning node attached to the context. That implementation
+    // creates a RemoteTerminalSurface, so the command runs on the node while
+    // remaining a persistent, user-visible Jait terminal. Proxying these via
+    // tool.op-request would use the node's hidden one-shot child process.
+    if (REMOTE_TERMINAL_TOOLS.has(toolName)) {
+      const node = ws.findNodeByDeviceId(remoteNodeId);
+      if (!node) {
+        return {
+          ok: false,
+          message: `Project node ${remoteNodeId} is disconnected; terminal command was not run`,
+        };
+      }
+      return localExecutor(
+        toolName,
+        input,
+        { ...context, executionNodeId: remoteNodeId },
+        execOptions,
+      );
+    }
+
     // Installed skills and other gateway-owned absolute files are outside a
     // remote project filesystem. Sending a POSIX path to a Windows node
     // otherwise produces a bogus C:\\home\\... path.

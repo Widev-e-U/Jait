@@ -21,6 +21,8 @@ export interface ToolContext {
   sessionId: string;
   actionId: string;
   projectRoot: string;
+  /** Machine that owns the active project and must execute host terminal commands. */
+  executionNodeId?: string;
   requestedBy: string;
   userId?: string;
   apiKeys?: Record<string, string>;

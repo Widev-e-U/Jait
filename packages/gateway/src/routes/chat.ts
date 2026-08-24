@@ -214,7 +214,7 @@ function formatExternalProviderFirstTurn(systemPrompt: string, userContent: stri
  * Format the hidden system message injected when a background terminal command
  * (e.g. a test run) finishes, so the re-triggered agent can react to the result.
  */
-function formatBackgroundCommandNotification(result: BackgroundCommandResult): string {
+export function formatBackgroundCommandNotification(result: BackgroundCommandResult): string {
   const status = result.exitCode === 0
     ? "succeeded (exit code 0)"
     : result.exitCode == null
@@ -233,7 +233,7 @@ function formatBackgroundCommandNotification(result: BackgroundCommandResult): s
     result.output,
     "```",
     "",
-    "Continue the task: check whether this result completes what the user asked for, then proceed or report back. If nothing remains to be done, end your turn.",
+    "Continue the task: check whether this result completes what the user asked for, then proceed or report back. Always produce a user-visible final response before ending this turn, even if only a concise status update is needed. Do not ask the user to say continue.",
   ].join("\n");
 }
 
@@ -2030,11 +2030,11 @@ function buildVisibleHistoryEntries(
     const m = history[i]!;
     if (m.role === "tool") continue;
 
-    // Synthetic system messages are visible, lightweight notices (e.g. a
-    // background terminal command finishing) rendered as a small gray line where
-    // a user message would be. Everything else system/tool is hidden from the UI.
-    if (m.role === "system") {
-      if (m.synthetic && m.systemNotice) {
+    // Synthetic continuation messages stay hidden, except for their short
+    // human-facing notice rendered as a small gray line. Background command
+    // completions use role=user for model semantics without creating a user bubble.
+    if (m.synthetic) {
+      if (m.systemNotice) {
         out.push({
           id: `${sessionId}-sys-${visibleIndex}`,
           role: "system",
@@ -2046,6 +2046,8 @@ function buildVisibleHistoryEntries(
       }
       continue;
     }
+
+    if (m.role === "system") continue;
 
     let uiToolCalls: Array<Record<string, unknown>> | undefined;
     const isPendingAssistantRound =
@@ -3112,10 +3114,10 @@ export function registerChatRoutes(
     const history = sessionHistory.get(sessionId)!;
 
     // Build user message — multimodal if attachments are present. A background
-    // command notification is injected as a hidden system message (never
-    // persisted, never shown as a user bubble) so the agent reacts to it.
+    // command notification is injected as a hidden user turn (never persisted or
+    // shown as a user bubble), so every provider treats it as new work to answer.
     if (systemNotification) {
-      history.push({ role: "system", content: systemNotification, synthetic: true, systemNotice });
+      history.push({ role: "user", content: systemNotification, synthetic: true, systemNotice });
       // Persist the short display line as a system-notice row so the gray line
       // survives reloads. The full notification (with output) is only kept in
       // in-memory history for the live turn.

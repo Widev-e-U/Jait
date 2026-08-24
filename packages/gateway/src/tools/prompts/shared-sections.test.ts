@@ -33,4 +33,12 @@ describe("shared prompt sections", () => {
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS).toContain("Avoid saving transient chat details");
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain("Save only durable memories");
   });
+
+  it("requires external providers to use visible Jait terminals", () => {
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS).toContain("For every shell command, always use `jait.terminal`");
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS).toContain("Never use the provider's native shell");
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS).toContain("connected node uses that node's terminal");
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS).toContain("gateway project uses the gateway terminal");
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain("always use `jait.terminal`");
+  });
 });

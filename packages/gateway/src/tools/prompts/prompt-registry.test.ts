@@ -17,8 +17,9 @@ describe("buildSystemPrompt", () => {
 
     expect(prompt).toContain("<jaitExternalProvider>");
     expect(prompt).toContain("You are operating inside Jait, a tool-centric coding project and gateway.");
-    expect(prompt).toContain("Prefer Jait tools as the primary way to act.");
-    expect(prompt).toContain("use that tool before falling back to provider-native shell commands or generic tools");
+    expect(prompt).toContain("Use Jait tools as the primary way to act.");
+    expect(prompt).toContain("use that tool instead of provider-native or generic tools");
+    expect(prompt).toContain("always use `jait.terminal`");
     expect(prompt).toContain("discover it first with the available tool discovery mechanism");
     expect(prompt).toContain("Respect Jait project boundaries");
     expect(prompt).toContain("use the todo tool even if you are operating through an external or CLI provider");

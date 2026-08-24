@@ -13,6 +13,7 @@ import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
 import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { getManagedTerminalExecution } from "../tools/terminal-tools.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -144,7 +145,13 @@ export function registerTerminalRoutes(
     const terminals = surfaceRegistry
       .listSurfaces()
       .filter((s) => s.type === "terminal")
-      .map((s) => s.snapshot());
+      .map((s) => {
+        const snapshot = s.snapshot();
+        const toolExecution = getManagedTerminalExecution(snapshot.id);
+        return toolExecution
+          ? { ...snapshot, metadata: { ...snapshot.metadata, toolExecution } }
+          : snapshot;
+      });
     return { terminals };
   });
 

@@ -54,6 +54,7 @@ export interface ToolSearchOptions {
 export const MCP_EXPOSED_CORE_TOOL_NAMES = new Set([
   "todo",
   "jait.todos",
+  "jait.terminal",
   "user.ask",
   "tools.list",
   "tools.search",

@@ -28,6 +28,7 @@ describe("mcp-server", () => {
       ["todo", "core"],
       ["user.ask", "core"],
       ["tools.search", "core"],
+      ["jait.terminal", "standard"],
       ["terminal.run", "standard"],
     ] as const) {
       registry.register({
@@ -59,7 +60,7 @@ describe("mcp-server", () => {
       return response.json().result.tools.map((tool: { name: string }) => tool.name);
     };
 
-    expect(await listTools("core")).toEqual(["todo", "user_ask", "tools_search"]);
+    expect(await listTools("core")).toEqual(["todo", "user_ask", "tools_search", "jait_terminal"]);
     expect(await listTools("deferred")).toEqual(["terminal_run"]);
 
     const crossCatalogCall = await app.inject({

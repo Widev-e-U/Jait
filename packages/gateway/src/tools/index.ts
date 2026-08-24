@@ -327,7 +327,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
   tools.register(createReadTool(surfaceRegistry));
   tools.register(createEditTool(surfaceRegistry));
-  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService));
+  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService, deps.ws));
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());

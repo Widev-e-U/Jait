@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AcpProvider, loadAcpProviderConfigs, omnirouteAcpEnv } from "./acp-provider.js";
 import type { ProviderAuthStatus, ProviderEvent } from "./contracts.js";
-import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
@@ -1319,6 +1318,7 @@ const fakeAcpBackgroundTerminalScript = `
 process.stdin.setEncoding("utf8");
 let buffer = "";
 let sessionId = null;
+let terminalCapability = null;
 process.stdin.on("data", (chunk) => {
   buffer += chunk;
   let index;
@@ -1328,6 +1328,7 @@ process.stdin.on("data", (chunk) => {
     if (!line) continue;
     const request = JSON.parse(line);
     if (request.method === "initialize") {
+      terminalCapability = request.params.clientCapabilities.terminal;
       process.stdout.write(JSON.stringify({
         jsonrpc: "2.0",
         id: request.id,
@@ -1339,17 +1340,12 @@ process.stdin.on("data", (chunk) => {
     } else if (request.method === "session/set_mode") {
       process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
     } else if (request.method === "session/prompt") {
-      // Delegate to the client's native terminal instead of spawning our own
-      // subprocess, then end the turn immediately without waiting for exit —
-      // mirroring an agent that runs a command "in the background".
       process.stdout.write(JSON.stringify({
         jsonrpc: "2.0",
-        id: 9001,
-        method: "terminal/create",
+        method: "session/update",
         params: {
           sessionId,
-          command: process.execPath,
-          args: ["-e", "setTimeout(() => process.exit(3), 200)"],
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: String(terminalCapability) } },
         },
       }) + "\\n");
       process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { stopReason: "end_turn" } }) + "\\n");
@@ -1359,11 +1355,7 @@ process.stdin.on("data", (chunk) => {
 `;
 
 describe("AcpProvider native terminal capability", () => {
-  afterEach(() => {
-    backgroundCommandMonitor.clearForTests();
-  });
-
-  it("wakes the agent up when a command run via the ACP terminal finishes after the turn ends", async () => {
+  it("does not advertise the hidden ACP terminal to providers", async () => {
     const provider = new AcpProvider({
       id: "codex",
       name: "Codex",
@@ -1371,12 +1363,8 @@ describe("AcpProvider native terminal capability", () => {
       command: process.execPath,
       args: ["-e", fakeAcpBackgroundTerminalScript],
     });
-
-    const completion = new Promise<BackgroundCommandResult>((resolve) => {
-      backgroundCommandMonitor.setCompletionHandler((result) => {
-        resolve(result);
-      });
-    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
 
     try {
       const session = await provider.startSession({
@@ -1385,16 +1373,15 @@ describe("AcpProvider native terminal capability", () => {
         mode: "full-access",
       });
 
-      await provider.sendTurn(session.id, "run a background command");
+      await provider.sendTurn(session.id, "check terminal capability");
 
-      const result = await Promise.race([
-        completion,
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for completion")), 5000)),
-      ]);
-
-      expect(result.sessionId).toBe("thread-1");
-      expect(result.exitCode).toBe(3);
+      expect(events).toContainEqual({
+        type: "token",
+        sessionId: session.id,
+        content: "false",
+      });
     } finally {
+      unsubscribe();
       await provider.dispose();
     }
   });

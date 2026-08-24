@@ -195,7 +195,7 @@ describe("createRemoteToolExecutor", () => {
     expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
-  it("proxies non-local tools to the selected remote node", async () => {
+  it("routes terminal tools through a visible terminal on the selected node", async () => {
     const onOutputChunk = vi.fn();
     const ws = createMockWs();
     const localExecutor = vi.fn(async () => ({ ok: true, message: "local result" }));
@@ -204,38 +204,29 @@ describe("createRemoteToolExecutor", () => {
 
     await expect(execute("terminal.run", { command: "pwd" }, context)).resolves.toEqual({
       ok: true,
-      message: "remote result",
+      message: "local result",
     });
-    expect(localExecutor).not.toHaveBeenCalled();
-    expect(ws.proxyToolOp).toHaveBeenCalledWith(
-      remoteNode.id,
+    expect(localExecutor).toHaveBeenCalledWith(
       "terminal.run",
       { command: "pwd" },
-      {
-        timeoutMs: 120_000,
-        sessionId: context.sessionId,
-        projectRoot: context.projectRoot,
-        onOutputChunk,
-      },
+      { ...context, executionNodeId: remoteNode.id },
+      undefined,
     );
+    expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
-  it("falls back to local execution if the selected remote node disconnected", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("does not run a remote-project terminal command on the gateway when its node disconnected", async () => {
     const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => undefined) });
     const localExecutor = vi.fn(async () => ({ ok: true, message: "fallback result" }));
     const context = createToolContext();
     const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
 
     await expect(execute("terminal.run", { command: "pwd" }, context)).resolves.toEqual({
-      ok: true,
-      message: "fallback result",
+      ok: false,
+      message: `Project node ${remoteNode.id} is disconnected; terminal command was not run`,
     });
-    expect(localExecutor).toHaveBeenCalledOnce();
+    expect(localExecutor).not.toHaveBeenCalled();
     expect(ws.proxyToolOp).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("disconnected"));
-
-    warnSpy.mockRestore();
   });
 
   it("returns a failed tool result when remote execution rejects", async () => {
@@ -248,7 +239,7 @@ describe("createRemoteToolExecutor", () => {
     const localExecutor = vi.fn(async (): Promise<ToolResult> => ({ ok: true, message: "local result" }));
     const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
 
-    await expect(execute("terminal.run", { command: "pwd" }, createToolContext())).resolves.toEqual({
+    await expect(execute("file.write", { path: "/remote/project/out.txt", content: "ok" }, createToolContext())).resolves.toEqual({
       ok: false,
       message: "Remote execution failed: network timeout",
     });

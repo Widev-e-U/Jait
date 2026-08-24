@@ -17,6 +17,7 @@ import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
+import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SecretInputService } from "../services/secret-input.js";
@@ -57,6 +58,51 @@ const SECRET_INPUT_PROMPT_PATTERNS = INTERACTIVE_PROMPT_PATTERNS.filter(
 
 /** sessionId → terminalId of the session's "default" terminal */
 const sessionTerminalMap = new Map<string, string>();
+
+type ManagedTerminalSurface = TerminalSurface | RemoteTerminalSurface;
+
+export interface ManagedTerminalExecution {
+  command: string;
+  actionId: string;
+  startedAt: string;
+  isBackground: boolean;
+  watched: boolean | null;
+}
+
+const managedTerminalExecutions = new Map<string, ManagedTerminalExecution>();
+
+export function getManagedTerminalExecution(terminalId: string): ManagedTerminalExecution | null {
+  return managedTerminalExecutions.get(terminalId) ?? null;
+}
+
+function setManagedTerminalExecution(
+  terminalId: string,
+  context: ToolContext,
+  command: string,
+  isBackground: boolean,
+  watched: boolean | null,
+): void {
+  managedTerminalExecutions.set(terminalId, {
+    command,
+    actionId: context.actionId,
+    startedAt: new Date().toISOString(),
+    isBackground,
+    watched,
+  });
+}
+
+function clearManagedTerminalExecution(terminalId: string, actionId: string): void {
+  if (managedTerminalExecutions.get(terminalId)?.actionId === actionId) {
+    managedTerminalExecutions.delete(terminalId);
+  }
+}
+
+function sessionTerminalKey(context: ToolContext): string {
+  const nodeId = context.executionNodeId && context.executionNodeId !== "gateway"
+    ? context.executionNodeId
+    : "gateway";
+  return `${nodeId}:${context.sessionId}`;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -137,6 +183,16 @@ function getInteractivePromptLabel(output: string): string | null {
   return SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(cleaned)) ? "Terminal input required" : null;
 }
 
+function isPowerShellShell(shell: string): boolean {
+  return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
+}
+
+export function buildTerminalExitMarkerCommand(shell: string, token: string): string {
+  return isPowerShellShell(shell)
+    ? `$jaitExitCode = if ($?) { 0 } elseif ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }; Write-Output "${token}:$jaitExitCode"`
+    : `printf '\\n${token}:%s\\n' "$?"`;
+}
+
 function isSshCommand(command: string): boolean {
   return /^\s*ssh(?:\s|$)/.test(command);
 }
@@ -202,29 +258,31 @@ async function ensureSessionTerminal(
   registry: SurfaceRegistry,
   context: ToolContext,
   preferredId?: string,
-): Promise<{ surface: TerminalSurface; terminalId: string; isNew: boolean; warning?: string }> {
+  ws?: WsControlPlane,
+): Promise<{ surface: ManagedTerminalSurface; terminalId: string; isNew: boolean; warning?: string }> {
   // 1. Try preferred terminal (if provided and alive)
   if (preferredId) {
     try {
       const s = registry.getSurface(preferredId);
       if (s && s.type === "terminal" && s.state === "running") {
-        (s as TerminalSurface).touch();
-        return { surface: s as TerminalSurface, terminalId: preferredId, isNew: false };
+        (s as ManagedTerminalSurface).touch();
+        return { surface: s as ManagedTerminalSurface, terminalId: preferredId, isNew: false };
       }
     } catch { /* gone — fall through */ }
   }
 
   // 2. Try the session's default terminal
-  const existingId = sessionTerminalMap.get(context.sessionId);
+  const terminalKey = sessionTerminalKey(context);
+  const existingId = sessionTerminalMap.get(terminalKey);
   if (existingId) {
     try {
       const s = registry.getSurface(existingId);
       if (s && s.type === "terminal" && s.state === "running") {
-        (s as TerminalSurface).touch();
-        return { surface: s as TerminalSurface, terminalId: existingId, isNew: false };
+        (s as ManagedTerminalSurface).touch();
+        return { surface: s as ManagedTerminalSurface, terminalId: existingId, isNew: false };
       }
     } catch { /* gone */ }
-    sessionTerminalMap.delete(context.sessionId);
+    sessionTerminalMap.delete(terminalKey);
   }
 
   // 3. Enforce global limit — stop oldest terminal(s) if at cap
@@ -256,12 +314,34 @@ async function ensureSessionTerminal(
 
   // 4. Create a new terminal
   const terminalId = `term-${uuidv7()}`;
-  const surface = (await registry.startSurface("terminal", terminalId, {
-    sessionId: context.sessionId,
-    projectRoot: context.projectRoot,
-  })) as TerminalSurface;
+  let surface: ManagedTerminalSurface;
+  const remoteNodeId = context.executionNodeId && context.executionNodeId !== "gateway"
+    ? context.executionNodeId
+    : null;
+  if (remoteNodeId) {
+    if (!ws) throw new Error("Remote terminal execution requires the WebSocket control plane");
+    const remoteSurface = new RemoteTerminalSurface(terminalId, ws, remoteNodeId);
+    registry.registerInstance(terminalId, remoteSurface);
+    try {
+      await remoteSurface.start({
+        sessionId: context.sessionId,
+        projectRoot: context.projectRoot,
+        nodeId: remoteNodeId,
+      });
+      registry.onSurfaceStarted?.(terminalId, remoteSurface);
+      surface = remoteSurface;
+    } catch (error) {
+      registry.unregister(terminalId);
+      throw error;
+    }
+  } else {
+    surface = (await registry.startSurface("terminal", terminalId, {
+      sessionId: context.sessionId,
+      projectRoot: context.projectRoot,
+    })) as TerminalSurface;
+  }
 
-  sessionTerminalMap.set(context.sessionId, terminalId);
+  sessionTerminalMap.set(terminalKey, terminalId);
 
   // Wait for shell integration to signal prompt-ready (OSC 633;B)
   await surface.waitForPrompt();
@@ -311,7 +391,7 @@ const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
  * treats each \n as a separate Enter keystroke, garbling execution order.
  */
 function executeInTerminal(
-  surface: TerminalSurface,
+  surface: ManagedTerminalSurface,
   command: string,
   timeoutMs: number,
   shell: string,
@@ -324,6 +404,9 @@ function executeInTerminal(
     let settled = false;
     let promptRequestInFlight = false;
     let promptAnswered = false;
+    const remoteCompletionToken = surface instanceof RemoteTerminalSurface
+      ? `__JAIT_REMOTE_DONE_${uuidv7()}__`
+      : null;
 
     // Cached D-marker result so we only scan for it once
     let dMatch: { exitCode: number; end: number } | null = null;
@@ -379,6 +462,15 @@ function executeInTerminal(
             surface.write(`${secret}\r`);
             armTimer();
           });
+          return;
+        }
+      }
+
+      if (remoteCompletionToken) {
+        const completionMatch = raw.match(new RegExp(`${remoteCompletionToken}:(-?\\d+)`));
+        if (completionMatch) {
+          settleExitCode = parseInt(completionMatch[1]!, 10);
+          settleTimer = setTimeout(() => finish(false, settleExitCode), 50);
           return;
         }
       }
@@ -443,7 +535,9 @@ function executeInTerminal(
       output = stripAnsi(output).replace(/\r/g, "");
 
       // Split into lines for targeted cleanup
-      const lines = output.split("\n");
+      const lines = output
+        .split("\n")
+        .filter((line) => !remoteCompletionToken || !line.includes(remoteCompletionToken));
 
       // Remove the echoed command.  For single-line commands PSReadLine
       // echoes the command text.  For multi-line (dot-sourced via temp
@@ -506,7 +600,13 @@ function executeInTerminal(
     // runs the script in the current scope (variables persist) and
     // guarantees atomic execution.  Cleanup happens in finish().
     let tmpFile: string | null = null;
-    if (command.includes("\n")) {
+    if (surface instanceof RemoteTerminalSurface && remoteCompletionToken) {
+      const terminalInput = [
+        command,
+        buildTerminalExitMarkerCommand(shell, remoteCompletionToken),
+      ].join("\n");
+      surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
+    } else if (command.includes("\n")) {
       tmpFile = writeCommandScript(command);
       surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
     } else {
@@ -611,7 +711,7 @@ export function createTerminalRunTool(
       try {
         // 1. Get or create a persistent terminal
         const { surface, terminalId, isNew, warning } =
-          await ensureSessionTerminal(registry, context, preferredId);
+          await ensureSessionTerminal(registry, context, preferredId, ws);
 
         // 2. Background mode: start the command and return immediately. Watch
         //    the terminal for completion (OSC 633) so the agent can be
@@ -625,7 +725,9 @@ export function createTerminalRunTool(
             surface,
             completionToken,
             shell: String(surface.snapshot().metadata?.shell ?? ""),
+            onStop: () => clearManagedTerminalExecution(terminalId, context.actionId),
           });
+          setManagedTerminalExecution(terminalId, context, command, true, watched);
           // Multi-line commands must reach the shell as a *single* command.
           // Written raw, each line completes separately and the completion
           // marker for line 1 was mistaken for the whole command finishing —
@@ -633,11 +735,22 @@ export function createTerminalRunTool(
           // completion was never reported. Sourcing a temp file runs the
           // whole thing in the current shell (cwd and variables persist) and
           // produces exactly one completion marker.
-          const scriptFile = command.includes("\n") ? writeCommandScript(command) : null;
+          const shell = String(surface.snapshot().metadata?.shell ?? "");
+          const scriptFile = command.includes("\n") && !(surface instanceof RemoteTerminalSurface)
+            ? writeCommandScript(command)
+            : null;
           const commandLine = scriptFile
             ? `. '${scriptFile.replace(/'/g, "''")}'`
             : command;
-          surface.write(`${commandLine}\nprintf '\\n${completionToken}:%s\\n' "$?"\r`);
+          const terminalInput = [
+            commandLine,
+            buildTerminalExitMarkerCommand(shell, completionToken),
+          ].join("\n");
+          if (surface instanceof RemoteTerminalSurface) {
+            surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
+          } else {
+            surface.write(`${terminalInput}\r`);
+          }
           return {
             ok: true,
             message: watched
@@ -657,29 +770,35 @@ export function createTerminalRunTool(
         }
 
         // 3. Execute the command (sentinel-based)
-        const execPromise = executeInTerminal(
-          surface,
-          command,
-          timeout,
-          String(surface.snapshot().metadata?.shell ?? ""),
-          context.onOutputChunk,
-          context.signal,
-          secretInput
-            ? (prompt) => secretInput.requestSecret({
-                sessionId: context.sessionId,
-                userId: context.userId,
-                title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
-                prompt,
-                requestedBy: "terminal.run",
-                command,
-                timeoutMs: 120_000,
-              })
-            : undefined,
-        );
+        setManagedTerminalExecution(terminalId, context, command, false, null);
+        let result: Awaited<ReturnType<typeof executeInTerminal>>;
+        try {
+          const execPromise = executeInTerminal(
+            surface,
+            command,
+            timeout,
+            String(surface.snapshot().metadata?.shell ?? ""),
+            context.onOutputChunk,
+            context.signal,
+            secretInput
+              ? (prompt) => secretInput.requestSecret({
+                  sessionId: context.sessionId,
+                  userId: context.userId,
+                  title: isSshSecretPrompt(command, prompt) ? "SSH password" : "Terminal input required",
+                  prompt,
+                  requestedBy: "terminal.run",
+                  command,
+                  timeoutMs: 120_000,
+                })
+              : undefined,
+          );
 
-        const result = context.signal
-          ? await raceAbort(execPromise, context.signal)
-          : await execPromise;
+          result = context.signal
+            ? await raceAbort(execPromise, context.signal)
+            : await execPromise;
+        } finally {
+          clearManagedTerminalExecution(terminalId, context.actionId);
+        }
 
         // 3. Build response
         // Mark as failed if exit code != 0 or timed out.

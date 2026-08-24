@@ -51,10 +51,10 @@ export interface AgentMessage {
    */
   thinking?: string;
   /**
-   * True for messages injected into the working context by the agent loop
-   * itself (e.g. a task re-injected after pruning) rather than sent by the
-   * user. Stripped by `serializeMessages`, so it never reaches the model, is
-   * never persisted, and must be excluded from user-facing counts.
+   * True for messages injected into the working context by the gateway or
+   * agent loop rather than sent by the user. Synthetic messages still reach
+   * the model, but callers exclude them from user-facing history, persistence,
+   * and prompt counts.
    */
   synthetic?: boolean;
 }

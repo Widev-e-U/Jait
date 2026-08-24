@@ -1,5 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServer } from "../server.js";
+import { formatBackgroundCommandNotification } from "./chat.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
@@ -19,6 +20,8 @@ async function collectBody(req: IncomingMessage): Promise<string> {
   return body;
 }
 
+const receivedBodies: Array<Record<string, unknown>> = [];
+
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -27,7 +30,7 @@ function startMockOllama(): Promise<Server> {
         res.end();
         return;
       }
-      await collectBody(req);
+      receivedBodies.push(JSON.parse(await collectBody(req)) as Record<string, unknown>);
       res.writeHead(200, { "Content-Type": "application/x-ndjson" });
       res.write(JSON.stringify({ message: { role: "assistant", content: "acknowledged" }, done: false }) + "\n");
       res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
@@ -51,6 +54,10 @@ describe("background-command system notice", () => {
   afterEach(async () => {
     await app?.close();
     app = null;
+  });
+
+  beforeEach(() => {
+    receivedBodies.length = 0;
   });
 
   afterAll(async () => {
@@ -85,7 +92,14 @@ describe("background-command system notice", () => {
     });
 
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
-    const fullNotification = "[system-notification: background command finished]\nA background terminal command finished.";
+    const fullNotification = formatBackgroundCommandNotification({
+      sessionId: session.id,
+      terminalId: "tty1",
+      command: "bun run test",
+      exitCode: 0,
+      output: "tests passed",
+      durationMs: 5_000,
+    });
     const notice = "Background terminal #tty1 finished in ~5s (exit 0)";
 
     const response = await app.inject({
@@ -99,6 +113,13 @@ describe("background-command system notice", () => {
       },
     });
     expect(response.statusCode).toBe(200);
+
+    const modelMessages = receivedBodies.at(-1)?.["messages"] as Array<{ role: string; content: string }>;
+    expect(modelMessages.at(-1)).toMatchObject({
+      role: "user",
+      content: expect.stringContaining(fullNotification),
+    });
+    expect(modelMessages.at(-1)?.content).toContain("Always produce a user-visible final response");
 
     const messagesResponse = await app.inject({
       method: "GET",
