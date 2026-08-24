@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { shouldShowProviderLoginAction } from './provider-account-actions'
-import { getBackendInstanceDrafts } from './SettingsPage'
+import { getBackendInstanceDrafts, mergeApiSettingsDraft } from './SettingsPage'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 
 describe('highlightSearchMatch', () => {
@@ -24,6 +24,25 @@ describe('highlightSearchMatch', () => {
     )
 
     expect(markup).toBe('Session archive')
+  })
+})
+
+describe('mergeApiSettingsDraft', () => {
+  it('preserves named backend instances and legacy backend values', () => {
+    const instances = '[{"id":"current"}]'
+    expect(mergeApiSettingsDraft({
+      JAIT_BACKEND_INSTANCES: instances,
+      OPENAI_BASE_URL: 'http://legacy-openai.test/v1',
+      OLLAMA_URL: 'http://legacy-ollama.test',
+      OPENAI_API_KEY: 'old-key',
+    }, {
+      OPENAI_API_KEY: 'new-key',
+    })).toEqual({
+      JAIT_BACKEND_INSTANCES: instances,
+      OPENAI_BASE_URL: 'http://legacy-openai.test/v1',
+      OLLAMA_URL: 'http://legacy-ollama.test',
+      OPENAI_API_KEY: 'new-key',
+    })
   })
 })
 

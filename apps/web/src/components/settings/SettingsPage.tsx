@@ -57,11 +57,8 @@ interface ApiFieldGroup {
 }
 
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
-  { label: 'OpenAI / Jait', fields: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
-  { label: 'Ollama', fields: ['OLLAMA_URL', 'OLLAMA_MODEL'] },
+  { label: 'OpenAI services', fields: ['OPENAI_API_KEY', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
   { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
-  { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
-  { label: 'OmniRoute', fields: ['OMNIROUTE_BASE_URL', 'OMNIROUTE_API_KEY', 'OMNIROUTE_MODEL'] },
   { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
   { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
   { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
@@ -70,6 +67,19 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
 ]
 
 const API_KEY_FIELDS = API_FIELD_GROUPS.flatMap((g) => g.fields) as unknown as readonly string[]
+
+export function mergeApiSettingsDraft(
+  apiKeys: Record<string, string>,
+  draft: Record<string, string>,
+): Record<string, string> {
+  const next = { ...apiKeys }
+  for (const field of API_KEY_FIELDS) {
+    const value = draft[field]
+    if (value === undefined) delete next[field]
+    else next[field] = value
+  }
+  return next
+}
 
 type FieldName = string
 
@@ -808,7 +818,7 @@ export function SettingsPage({
     setError(null)
     setStatus(null)
     try {
-      await onSaveApiKeys(draft)
+      await onSaveApiKeys(mergeApiSettingsDraft(apiKeys, draft))
       setStatus('API keys saved.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save API keys')
@@ -990,9 +1000,9 @@ export function SettingsPage({
   const tabHasMatch = (tab: SettingsTab): boolean => {
     switch (tab) {
       case 'general':
-        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showJaitBackendSection || showSpeechSection
+        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showSpeechSection
       case 'api':
-        return filteredApiFields.length > 0 || showProviderAccountsSection
+        return filteredApiFields.length > 0 || showJaitBackendSection || showProviderAccountsSection
       case 'tools':
         return showToolsSection
       case 'extensions':
@@ -1634,6 +1644,77 @@ const providerAccountsCard = (
             </Card>
           )}
 
+
+
+
+          {showSpeechSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Spracheingabe (Speech-to-Text)')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Wähle aus, wie gesprochene Sprache in Text umgewandelt wird, bevor sie als Nachricht gesendet wird.
+                </p>
+              </div>
+              <div className="max-w-sm">
+                <Label htmlFor="stt-provider" className="mb-1.5 block">STT-Anbieter</Label>
+                <Select
+                  value={sttProvider}
+                  onValueChange={(value) => { void onSttProviderChange(value as SttProvider) }}
+                >
+                  <SelectTrigger id="stt-provider">
+                    <SelectValue placeholder="STT-Anbieter wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="whisper">Faster Whisper (lokal)</SelectItem>
+                    <SelectItem value="gpt">GPT (OpenAI)</SelectItem>
+                    <SelectItem value="elevenlabs">ElevenLabs Scribe</SelectItem>
+                    <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {sttProvider === 'whisper' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Uses a local Faster Whisper server for free, offline transcription.
+                    Start the server with <code className="rounded bg-muted px-1 py-0.5 text-2xs">python whisper-server/server.py</code> from the gateway package.
+                    Optionally set <code className="rounded bg-muted px-1 py-0.5 text-2xs">WHISPER_URL</code> in API keys below (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">http://localhost:8178</code>).
+                  </p>
+                </div>
+              )}
+              {sttProvider === 'wyoming' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Configure your Home Assistant Wyoming/Whisper STT integration.
+                    Set these values in the API keys section below: <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_URL</code>, <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_TOKEN</code>, and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_STT_ENTITY</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">stt.faster_whisper</code>).
+                  </p>
+                </div>
+              )}
+              {sttProvider === 'gpt' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Uses OpenAI audio transcription. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_TRANSCRIBE_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">gpt-4o-mini-transcribe</code>).
+                  </p>
+                </div>
+              )}
+              {sttProvider === 'elevenlabs' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Uses ElevenLabs Speech to Text. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_STT_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">scribe_v2</code>) and <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_LANGUAGE_CODE</code>.
+                  </p>
+                </div>
+              )}
+              <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                <p className="text-xs text-muted-foreground">
+                  Recognition hint: set <code className="rounded bg-muted px-1 py-0.5 text-2xs">STT_PROMPT</code> in the API keys below to bias transcription toward proper nouns. This fixes mishearings like "Jade" for "Jait". Applies to the voice assistant and GPT/Whisper transcription. Defaults to a built-in Jait hint.
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showSpeechSection && emptyState}
+        </TabsContent>
+
+        <TabsContent value="api" className="space-y-6 pb-20">
           {showJaitBackendSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -1798,76 +1879,6 @@ const providerAccountsCard = (
               </div>
             </Card>
           )}
-
-
-          {showSpeechSection && (
-            <Card className="space-y-4 p-5">
-              <div>
-                <h2 className="text-base font-medium">{highlight('Spracheingabe (Speech-to-Text)')}</h2>
-                <p className="text-sm text-muted-foreground">
-                  Wähle aus, wie gesprochene Sprache in Text umgewandelt wird, bevor sie als Nachricht gesendet wird.
-                </p>
-              </div>
-              <div className="max-w-sm">
-                <Label htmlFor="stt-provider" className="mb-1.5 block">STT-Anbieter</Label>
-                <Select
-                  value={sttProvider}
-                  onValueChange={(value) => { void onSttProviderChange(value as SttProvider) }}
-                >
-                  <SelectTrigger id="stt-provider">
-                    <SelectValue placeholder="STT-Anbieter wählen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="whisper">Faster Whisper (lokal)</SelectItem>
-                    <SelectItem value="gpt">GPT (OpenAI)</SelectItem>
-                    <SelectItem value="elevenlabs">ElevenLabs Scribe</SelectItem>
-                    <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {sttProvider === 'whisper' && (
-                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
-                  <p className="text-xs text-muted-foreground">
-                    Uses a local Faster Whisper server for free, offline transcription.
-                    Start the server with <code className="rounded bg-muted px-1 py-0.5 text-2xs">python whisper-server/server.py</code> from the gateway package.
-                    Optionally set <code className="rounded bg-muted px-1 py-0.5 text-2xs">WHISPER_URL</code> in API keys below (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">http://localhost:8178</code>).
-                  </p>
-                </div>
-              )}
-              {sttProvider === 'wyoming' && (
-                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
-                  <p className="text-xs text-muted-foreground">
-                    Configure your Home Assistant Wyoming/Whisper STT integration.
-                    Set these values in the API keys section below: <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_URL</code>, <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_TOKEN</code>, and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_STT_ENTITY</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">stt.faster_whisper</code>).
-                  </p>
-                </div>
-              )}
-              {sttProvider === 'gpt' && (
-                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
-                  <p className="text-xs text-muted-foreground">
-                    Uses OpenAI audio transcription. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_TRANSCRIBE_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">gpt-4o-mini-transcribe</code>).
-                  </p>
-                </div>
-              )}
-              {sttProvider === 'elevenlabs' && (
-                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
-                  <p className="text-xs text-muted-foreground">
-                    Uses ElevenLabs Speech to Text. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_STT_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">scribe_v2</code>) and <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_LANGUAGE_CODE</code>.
-                  </p>
-                </div>
-              )}
-              <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
-                <p className="text-xs text-muted-foreground">
-                  Recognition hint: set <code className="rounded bg-muted px-1 py-0.5 text-2xs">STT_PROMPT</code> in the API keys below to bias transcription toward proper nouns. This fixes mishearings like "Jade" for "Jait". Applies to the voice assistant and GPT/Whisper transcription. Defaults to a built-in Jait hint.
-                </p>
-              </div>
-            </Card>
-          )}
-
-          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
-        </TabsContent>
-
-        <TabsContent value="api" className="space-y-6 pb-20">
       {filteredApiFields.length > 0 ? (<>
         <p className="text-sm text-muted-foreground">
           Values stored here are user-specific and override environment defaults for your account.
@@ -1987,7 +1998,7 @@ const providerAccountsCard = (
         </div>
       </>) : null}
       {showProviderAccountsSection && providerAccountsCard}
-      {filteredApiFields.length === 0 && !showProviderAccountsSection && emptyState}
+      {filteredApiFields.length === 0 && !showJaitBackendSection && !showProviderAccountsSection && emptyState}
         </TabsContent>
 
         <TabsContent value="tools" className="space-y-6">
