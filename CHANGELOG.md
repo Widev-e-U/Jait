@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.763](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.763) — 2026-08-24
+- fix(web): preserve terminal rendering in command cards — 05de8dba
+
 ## [v0.1.762](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.762) — 2026-08-24
 - fix(web): bound tool terminal cards to command output — b2602445
 
