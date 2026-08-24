@@ -231,7 +231,6 @@ export function AppHeader(props: AppHeaderProps) {
               availableWidth={navAvailableWidth}
               navRef={navRef}
               className="flex-1"
-              style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
             />
           )}
 

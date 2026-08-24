@@ -44,6 +44,7 @@ function NavButton({ item }: { item: ProgressiveNavItem }) {
       className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs whitespace-nowrap"
       onClick={item.onSelect}
       aria-label={item.label}
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
       <span>{item.shortLabel ?? item.label}</span>
@@ -134,7 +135,7 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
         <div className="shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu">
+              <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="Open navigation menu" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                 <Ellipsis className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
