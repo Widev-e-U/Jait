@@ -18,7 +18,7 @@ import { ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from '@/components/chat/use-stick-to-bottom'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
-import { TerminalView, findToolTerminal, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
+import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
 
 /**
  * Comfortable breathing room kept between the collapsed card's header and the
@@ -2563,6 +2563,15 @@ function getStructuredTerminalOutputOffset(call: ToolCallInfo): number | null {
     : null
 }
 
+function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null {
+  const data = call.result?.data
+  if (!data || typeof data !== 'object') return null
+  const outputEndOffset = (data as Record<string, unknown>).outputEndOffset
+  return typeof outputEndOffset === 'number' && Number.isFinite(outputEndOffset) && outputEndOffset >= 0
+    ? Math.trunc(outputEndOffset)
+    : null
+}
+
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
   const displayTool = getJaitMcpToolName(normalizedTool) ?? normalizedTool
@@ -3416,11 +3425,29 @@ function ToolCallCardInner({
   const terminalId = toolTerminal?.id ?? structuredTerminalId
   const canOpenTerminal = terminalId !== null
   const terminalCommand = getCommandFromToolArgs(normalizedArgs)
-  const terminalExecution = getToolTerminalExecution(toolTerminal)
-  const terminalOutputOffset = getStructuredTerminalOutputOffset(call)
-    ?? (terminalExecution?.command === terminalCommand ? terminalExecution.outputOffset : null)
+  const resultOutputOffset = getStructuredTerminalOutputOffset(call)
+  const activeTerminalExecution = getToolTerminalExecution(toolTerminal)
+  const completedTerminalExecution = findToolTerminalExecution(toolTerminal, {
+    actionId: call.callId,
+    command: terminalCommand,
+    outputOffset: resultOutputOffset,
+  })
+  const matchingActiveTerminalExecution = activeTerminalExecution
+    && (activeTerminalExecution.actionId === call.callId || activeTerminalExecution.command === terminalCommand)
+    ? activeTerminalExecution
+    : null
+  const terminalExecution = completedTerminalExecution ?? matchingActiveTerminalExecution
+  const terminalOutputOffset = resultOutputOffset ?? terminalExecution?.outputOffset ?? null
+  const terminalOutputEndOffset = getStructuredTerminalOutputEndOffset(call)
+    ?? completedTerminalExecution?.outputEndOffset
+    ?? null
+  const terminalDisplayOutput = completedTerminalExecution?.output ?? displayOutput
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)
+  const showLiveTerminal = toolTerminal !== null
+    && terminalOutputOffset !== null
+    && terminalOutputEndOffset === null
+    && (call.status === 'running' || call.status === 'pending' || backgroundWaiting)
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
     setOpen(nextOpen)
@@ -3655,7 +3682,7 @@ function ToolCallCardInner({
   const bodyContent = bodyKind === 'pending' ? (
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
   ) : bodyKind === 'terminal' ? (
-    toolTerminal && terminalOutputOffset !== null ? (
+    showLiveTerminal && toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
         <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-2xs text-zinc-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -3667,6 +3694,7 @@ function ToolCallCardInner({
           token={authToken}
           readOnly
           outputOffset={terminalOutputOffset}
+          outputEndOffset={terminalOutputEndOffset}
           className="h-64 bg-zinc-950"
         />
       </div>
@@ -3676,15 +3704,11 @@ function ToolCallCardInner({
       'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
       call.result && !call.result.ok && 'text-red-200'
     )}>
-      {!displayOutput && call.status !== 'running' && (
-        <span className="text-zinc-400"><span className="text-emerald-400">$ </span>{summary}</span>
-      )}
-      {displayOutput}
-      {call.status === 'running' && !displayOutput && (
-        <span className="text-zinc-400">{summary ? `Executing ${summary}...` : 'Running...'}</span>
-      )}
-      {call.status === 'running' && (
-        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
+      <span className="text-zinc-400"><span className="text-emerald-400">$ </span>{terminalCommand || summary}</span>
+      {terminalDisplayOutput && <>{'\n'}{terminalDisplayOutput}</>}
+      {(call.status === 'running' || call.status === 'pending') && !terminalDisplayOutput && (
+        <><span className="text-zinc-400">{'\n'}Running...</span>
+        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" /></>
       )}
     </pre>
     )

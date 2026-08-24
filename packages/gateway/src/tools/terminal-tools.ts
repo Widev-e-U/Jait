@@ -65,15 +65,25 @@ export interface ManagedTerminalExecution {
   command: string;
   actionId: string;
   startedAt: string;
+  completedAt: string | null;
   outputOffset: number;
+  outputEndOffset: number | null;
+  output: string | null;
   isBackground: boolean;
   watched: boolean | null;
 }
 
+const MAX_TERMINAL_EXECUTION_HISTORY = 50;
+const MAX_TERMINAL_HISTORY_ENTRIES = 100;
 const managedTerminalExecutions = new Map<string, ManagedTerminalExecution>();
+const managedTerminalExecutionHistory = new Map<string, ManagedTerminalExecution[]>();
 
 export function getManagedTerminalExecution(terminalId: string): ManagedTerminalExecution | null {
   return managedTerminalExecutions.get(terminalId) ?? null;
+}
+
+export function getManagedTerminalExecutions(terminalId: string): ManagedTerminalExecution[] {
+  return managedTerminalExecutionHistory.get(terminalId) ?? [];
 }
 
 function setManagedTerminalExecution(
@@ -88,7 +98,10 @@ function setManagedTerminalExecution(
     command,
     actionId: context.actionId,
     startedAt: new Date().toISOString(),
+    completedAt: null,
     outputOffset,
+    outputEndOffset: null,
+    output: null,
     isBackground,
     watched,
   });
@@ -98,6 +111,37 @@ function clearManagedTerminalExecution(terminalId: string, actionId: string): vo
   if (managedTerminalExecutions.get(terminalId)?.actionId === actionId) {
     managedTerminalExecutions.delete(terminalId);
   }
+}
+
+function completeManagedTerminalExecution(
+  terminalId: string,
+  actionId: string,
+  outputEndOffset: number,
+  output: string,
+): ManagedTerminalExecution | null {
+  const active = managedTerminalExecutions.get(terminalId);
+  if (!active || active.actionId !== actionId) return null;
+
+  const completed: ManagedTerminalExecution = {
+    ...active,
+    completedAt: new Date().toISOString(),
+    outputEndOffset,
+    output,
+    watched: active.isBackground ? false : active.watched,
+  };
+  managedTerminalExecutions.delete(terminalId);
+  if (!active.isBackground) return completed;
+
+  const history = [...(managedTerminalExecutionHistory.get(terminalId) ?? []), completed]
+    .slice(-MAX_TERMINAL_EXECUTION_HISTORY);
+  managedTerminalExecutionHistory.delete(terminalId);
+  managedTerminalExecutionHistory.set(terminalId, history);
+  while (managedTerminalExecutionHistory.size > MAX_TERMINAL_HISTORY_ENTRIES) {
+    const oldestTerminalId = managedTerminalExecutionHistory.keys().next().value;
+    if (typeof oldestTerminalId !== "string") break;
+    managedTerminalExecutionHistory.delete(oldestTerminalId);
+  }
+  return completed;
 }
 
 function getTerminalOutputOffset(surface: ManagedTerminalSurface): number {
@@ -762,6 +806,14 @@ export function createTerminalRunTool(
             surface,
             completionToken,
             shell: String(surface.snapshot().metadata?.shell ?? ""),
+            onComplete: ({ output }) => {
+              completeManagedTerminalExecution(
+                terminalId,
+                context.actionId,
+                getTerminalOutputOffset(surface),
+                output,
+              );
+            },
             onStop: () => clearManagedTerminalExecution(terminalId, context.actionId),
           });
           setManagedTerminalExecution(terminalId, context, command, outputOffset, true, watched);
@@ -810,6 +862,7 @@ export function createTerminalRunTool(
         // 3. Execute the command (sentinel-based)
         setManagedTerminalExecution(terminalId, context, command, outputOffset, false, null);
         let result: Awaited<ReturnType<typeof executeInTerminal>>;
+        let outputEndOffset: number | null = null;
         try {
           const execPromise = executeInTerminal(
             surface,
@@ -834,6 +887,13 @@ export function createTerminalRunTool(
           result = context.signal
             ? await raceAbort(execPromise, context.signal)
             : await execPromise;
+          outputEndOffset = getTerminalOutputOffset(surface);
+          completeManagedTerminalExecution(
+            terminalId,
+            context.actionId,
+            outputEndOffset,
+            result.output,
+          );
         } finally {
           clearManagedTerminalExecution(terminalId, context.actionId);
         }
@@ -891,6 +951,7 @@ export function createTerminalRunTool(
             timedOut: result.timedOut,
             terminalId,
             outputOffset,
+            outputEndOffset,
             needsInteraction,
           },
         };

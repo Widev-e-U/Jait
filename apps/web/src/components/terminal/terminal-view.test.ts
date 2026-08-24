@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildTerminalSubscribeMessage,
   findToolTerminal,
+  findToolTerminalExecution,
   getTerminalContextMenuPosition,
   getToolTerminalExecution,
   handleTerminalContextMenuAction,
@@ -23,6 +24,15 @@ describe('buildTerminalSubscribeMessage', () => {
       type: 'terminal.subscribe',
       terminalId: 'term-1',
       outputOffset: 12,
+    })
+  })
+
+  it('includes a completed command end offset', () => {
+    expect(buildTerminalSubscribeMessage('term-1', 12, 18)).toEqual({
+      type: 'terminal.subscribe',
+      terminalId: 'term-1',
+      outputOffset: 12,
+      outputEndOffset: 18,
     })
   })
 
@@ -424,6 +434,43 @@ describe('tool terminal resolution', () => {
       sessionId: 'session-1',
       command: 'bun test',
     })).toBeNull()
+  })
+
+  it('finds a completed execution by action id after the terminal is reused', () => {
+    const terminal = makeTerminal('term-history', 'session-1')
+    terminal.metadata.toolExecutions = [
+      {
+        command: 'bun test',
+        actionId: 'action-old',
+        startedAt: '2026-08-24T18:00:00.000Z',
+        completedAt: '2026-08-24T18:00:01.000Z',
+        outputOffset: 4,
+        outputEndOffset: 7,
+        output: '3 tests passed',
+        isBackground: true,
+        watched: false,
+      },
+      {
+        command: 'bun run build',
+        actionId: 'action-new',
+        startedAt: '2026-08-24T18:01:00.000Z',
+        completedAt: '2026-08-24T18:01:01.000Z',
+        outputOffset: 8,
+        outputEndOffset: 12,
+        output: 'built',
+        isBackground: false,
+        watched: null,
+      },
+    ]
+
+    expect(findToolTerminalExecution(terminal, {
+      actionId: 'action-old',
+      command: 'bun test',
+      outputOffset: 4,
+    })).toMatchObject({
+      outputEndOffset: 7,
+      output: '3 tests passed',
+    })
   })
 
   it('recognizes watched background execution metadata', () => {

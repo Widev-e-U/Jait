@@ -4,6 +4,7 @@ export interface TerminalOutputPayload {
   data?: string
   streamId?: string
   seq?: number
+  outputOffset?: number
   replay?: boolean
 }
 
@@ -11,6 +12,7 @@ export function shouldAcceptTerminalOutput(
   lastSeqByStream: Map<string, number>,
   terminalId: string,
   payload: TerminalOutputPayload | undefined,
+  outputEndOffset?: number | null,
 ): payload is TerminalOutputPayload & { data?: string } {
   if (!payload || payload.type !== 'terminal.output' || payload.terminalId !== terminalId) {
     return false
@@ -18,6 +20,14 @@ export function shouldAcceptTerminalOutput(
 
   if (!payload.streamId || typeof payload.seq !== 'number') {
     return true
+  }
+
+  if (
+    typeof outputEndOffset === 'number'
+    && typeof payload.outputOffset === 'number'
+    && payload.outputOffset > outputEndOffset
+  ) {
+    return false
   }
 
   const lastSeq = lastSeqByStream.get(payload.streamId) ?? -1

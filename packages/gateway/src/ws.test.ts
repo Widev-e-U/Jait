@@ -623,12 +623,13 @@ describe("WsControlPlane", () => {
       expect(replay.payload.seq).toBe(0);
       expect(replay.payload.replay).toBe(true);
 
-      plane.broadcastTerminalOutput("term-sync", "live output line");
+      plane.broadcastTerminalOutput("term-sync", "live output line", 7);
 
       const streamed = await subscribed.collector.next();
       expect(streamed.payload.data).toContain("live output line");
       expect(streamed.payload.streamId).toBe("terminal:term-sync");
       expect(streamed.payload.seq).toBe(1);
+      expect(streamed.payload.outputOffset).toBe(7);
 
       const noStream = await observer.collector.maybeNext(500);
       expect(noStream).toBeNull();
@@ -639,9 +640,11 @@ describe("WsControlPlane", () => {
 
     it("replays only terminal output produced after the requested command offset", async () => {
       const token = await createToken("user-terminal-command-slice");
-      plane.onTerminalReplay = ((terminalId: string, outputOffset?: number) => {
+      plane.onTerminalReplay = ((terminalId: string, outputOffset?: number, outputEndOffset?: number) => {
         if (terminalId !== "term-command-slice") return null;
-        return outputOffset === 2 ? "current command output" : "older command output\ncurrent command output";
+        return outputOffset === 2 && outputEndOffset === 4
+          ? "current command output"
+          : "older command output\ncurrent command output\nlater command output";
       }) as typeof plane.onTerminalReplay;
 
       const subscribed = openWs(port, { token });
@@ -655,11 +658,13 @@ describe("WsControlPlane", () => {
         type: "terminal.subscribe",
         terminalId: "term-command-slice",
         outputOffset: 2,
+        outputEndOffset: 4,
       }));
       await subscribed.collector.next();
       const replay = await subscribed.collector.next();
 
       expect(replay.payload.data).toBe("current command output");
+      expect(replay.payload.outputOffset).toBe(4);
       subscribed.ws.close();
     });
 

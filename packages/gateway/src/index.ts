@@ -323,8 +323,9 @@ async function main() {
       payload: { surface: surface.snapshot() },
     });
     if (surface.type === "terminal" && "write" in surface) {
-      (surface as import("./surfaces/terminal.js").TerminalSurface).onOutput = (data) =>
-        ws.broadcastTerminalOutput(id, data);
+      const terminal = surface as import("./surfaces/terminal.js").TerminalSurface;
+      terminal.onOutput = (data) =>
+        ws.broadcastTerminalOutput(id, data, terminal.getOutputOffset());
     }
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       const snap = surface.snapshot();
@@ -1148,14 +1149,14 @@ async function main() {
       console.error(`Terminal resize error (${terminalId}):`, err);
     }
   };
-  ws.onTerminalReplay = (terminalId, outputOffset) => {
+  ws.onTerminalReplay = (terminalId, outputOffset, outputEndOffset) => {
     try {
       const surface = surfaceRegistry.getSurface(terminalId);
       if (surface && surface.type === "terminal" && "getRecentOutput" in surface) {
         const terminal = surface as import("./surfaces/terminal.js").TerminalSurface;
         terminal.touch();
         if (outputOffset !== undefined && "getRecentOutputSince" in terminal) {
-          return terminal.getRecentOutputSince(outputOffset);
+          return terminal.getRecentOutputSince(outputOffset, outputEndOffset);
         }
         return terminal.getRecentOutput();
       }

@@ -50,6 +50,8 @@ export interface TrackBackgroundCommandOptions {
    * (servers/watchers) leaking listeners forever. Default 6 hours.
    */
   maxWatchMs?: number;
+  /** Called when the command completion marker is observed. */
+  onComplete?: (result: { exitCode: number | null; output: string }) => void;
   /** Called once when the watcher completes, expires, or is cancelled. */
   onStop?: () => void;
 }
@@ -272,6 +274,11 @@ class BackgroundCommandMonitor {
       if (finished) return;
       finished = true;
       const output = extractCompletionOutput(raw, options.command, options.shell);
+      try {
+        options.onComplete?.({ exitCode, output });
+      } catch {
+        // Completion bookkeeping must not prevent watcher cleanup or notification.
+      }
       cleanup();
 
       this.invokeHandler({

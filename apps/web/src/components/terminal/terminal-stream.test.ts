@@ -60,6 +60,27 @@ describe('shouldAcceptTerminalOutput', () => {
     ).toBe(false)
   })
 
+  it('rejects output beyond a completed command boundary', () => {
+    const lastSeqByStream = new Map<string, number>()
+    const acceptWithBoundary = shouldAcceptTerminalOutput as unknown as (
+      lastSeqByStream: Map<string, number>,
+      terminalId: string,
+      payload: Parameters<typeof shouldAcceptTerminalOutput>[2],
+      outputEndOffset: number,
+    ) => boolean
+
+    expect(
+      acceptWithBoundary(lastSeqByStream, 'term-1', {
+        type: 'terminal.output',
+        terminalId: 'term-1',
+        streamId: 'terminal:term-1',
+        seq: 1,
+        outputOffset: 3,
+        data: 'later command output',
+      }, 2),
+    ).toBe(false)
+  })
+
   it('rejects replay arriving after newer live output', () => {
     const lastSeqByStream = new Map<string, number>()
 

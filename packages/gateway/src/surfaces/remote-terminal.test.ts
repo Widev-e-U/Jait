@@ -70,8 +70,10 @@ describe("RemoteTerminalSurface", () => {
     surface.ingestOutput("older command output\r\n");
     const outputOffset = surface.getOutputOffset();
     surface.ingestOutput("current command output\r\n");
+    const outputEndOffset = surface.getOutputOffset();
+    surface.ingestOutput("later command output\r\n");
 
-    expect(surface.getRecentOutputSince(outputOffset)).toBe("current command output\r\n");
+    expect(surface.getRecentOutputSince(outputOffset, outputEndOffset)).toBe("current command output\r\n");
   });
 
   it("forwards input, resize, output replay, and stop through the remote node", async () => {

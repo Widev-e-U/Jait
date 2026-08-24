@@ -29,13 +29,15 @@ export interface ToolTerminalExecutionMetadata {
   command: string
   actionId: string
   startedAt: string
+  completedAt: string | null
   outputOffset: number | null
+  outputEndOffset: number | null
+  output: string | null
   isBackground: boolean
   watched: boolean | null
 }
 
-export function getToolTerminalExecution(terminal: TerminalInfo | null | undefined): ToolTerminalExecutionMetadata | null {
-  const value = terminal?.metadata?.toolExecution
+function parseToolTerminalExecution(value: unknown): ToolTerminalExecutionMetadata | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const record = value as Record<string, unknown>
   if (typeof record.command !== 'string' || typeof record.actionId !== 'string') return null
@@ -43,12 +45,44 @@ export function getToolTerminalExecution(terminal: TerminalInfo | null | undefin
     command: record.command,
     actionId: record.actionId,
     startedAt: typeof record.startedAt === 'string' ? record.startedAt : '',
+    completedAt: typeof record.completedAt === 'string' ? record.completedAt : null,
     outputOffset: typeof record.outputOffset === 'number' && Number.isFinite(record.outputOffset)
       ? Math.max(0, Math.trunc(record.outputOffset))
       : null,
+    outputEndOffset: typeof record.outputEndOffset === 'number' && Number.isFinite(record.outputEndOffset)
+      ? Math.max(0, Math.trunc(record.outputEndOffset))
+      : null,
+    output: typeof record.output === 'string' ? record.output : null,
     isBackground: record.isBackground === true,
     watched: typeof record.watched === 'boolean' ? record.watched : null,
   }
+}
+
+export function getToolTerminalExecution(terminal: TerminalInfo | null | undefined): ToolTerminalExecutionMetadata | null {
+  return parseToolTerminalExecution(terminal?.metadata?.toolExecution)
+}
+
+export function getToolTerminalExecutions(terminal: TerminalInfo | null | undefined): ToolTerminalExecutionMetadata[] {
+  const values = terminal?.metadata?.toolExecutions
+  if (!Array.isArray(values)) return []
+  return values
+    .map(parseToolTerminalExecution)
+    .filter((execution): execution is ToolTerminalExecutionMetadata => execution !== null)
+}
+
+export function findToolTerminalExecution(
+  terminal: TerminalInfo | null | undefined,
+  options: { actionId?: string | null; command?: string | null; outputOffset?: number | null },
+): ToolTerminalExecutionMetadata | null {
+  const executions = getToolTerminalExecutions(terminal)
+  const byAction = options.actionId
+    ? executions.find((execution) => execution.actionId === options.actionId)
+    : null
+  if (byAction) return byAction
+  return executions.find((execution) => (
+    execution.command === options.command
+    && execution.outputOffset === options.outputOffset
+  )) ?? null
 }
 
 export function isTerminalBackgroundWaiting(terminal: TerminalInfo | null | undefined): boolean {
@@ -81,12 +115,19 @@ export function findToolTerminal(
     ?? null
 }
 
-export function buildTerminalSubscribeMessage(terminalId: string, outputOffset?: number | null) {
+export function buildTerminalSubscribeMessage(
+  terminalId: string,
+  outputOffset?: number | null,
+  outputEndOffset?: number | null,
+) {
   return {
     type: 'terminal.subscribe',
     terminalId,
     ...(typeof outputOffset === 'number' && Number.isFinite(outputOffset) && outputOffset >= 0
       ? { outputOffset: Math.trunc(outputOffset) }
+      : {}),
+    ...(typeof outputEndOffset === 'number' && Number.isFinite(outputEndOffset) && outputEndOffset >= 0
+      ? { outputEndOffset: Math.trunc(outputEndOffset) }
       : {}),
   }
 }
@@ -368,6 +409,7 @@ interface TerminalViewProps {
   projectRoot?: string | null
   readOnly?: boolean
   outputOffset?: number | null
+  outputEndOffset?: number | null
   onReferenceSelection?: (terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
@@ -375,7 +417,7 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -506,14 +548,14 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
       ws.onopen = () => {
         reconnectDelay = 1000 // reset on successful connect
-        ws!.send(JSON.stringify(buildTerminalSubscribeMessage(terminalId, outputOffset)))
+        ws!.send(JSON.stringify(buildTerminalSubscribeMessage(terminalId, outputOffset, outputEndOffset)))
         flushPendingInput()
       }
 
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data as string) as { type?: string; payload?: TerminalOutputPayload }
-          if (shouldAcceptTerminalOutput(lastSeqByStream, terminalId, msg.payload)) {
+          if (shouldAcceptTerminalOutput(lastSeqByStream, terminalId, msg.payload, outputEndOffset)) {
             term.write(msg.payload.data ?? '')
           }
         } catch {
@@ -641,7 +683,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, readOnly, outputOffset, onReferenceSelection])
+  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current

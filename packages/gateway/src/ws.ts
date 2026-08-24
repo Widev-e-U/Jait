@@ -623,12 +623,17 @@ export class WsControlPlane {
           });
           return;
         }
-        const subscription = msg as { terminalId?: string; outputOffset?: number };
+        const subscription = msg as { terminalId?: string; outputOffset?: number; outputEndOffset?: number };
         const termId = subscription.terminalId;
         const outputOffset = typeof subscription.outputOffset === "number"
           && Number.isFinite(subscription.outputOffset)
           && subscription.outputOffset >= 0
           ? Math.trunc(subscription.outputOffset)
+          : undefined;
+        const outputEndOffset = typeof subscription.outputEndOffset === "number"
+          && Number.isFinite(subscription.outputEndOffset)
+          && subscription.outputEndOffset >= (outputOffset ?? 0)
+          ? Math.trunc(subscription.outputEndOffset)
           : undefined;
         if (termId) {
           client.terminalSubscriptions.add(termId);
@@ -640,7 +645,7 @@ export class WsControlPlane {
           });
           // Replay buffered output so the client sees the shell banner/prompt
           if (this.onTerminalReplay) {
-            const buffered = this.onTerminalReplay(termId, outputOffset);
+            const buffered = this.onTerminalReplay(termId, outputOffset, outputEndOffset);
             if (buffered) {
               const replay = this.currentTerminalStreamEvent(termId);
               this.send(client.ws, {
@@ -653,6 +658,7 @@ export class WsControlPlane {
                   data: buffered,
                   streamId: replay.streamId,
                   seq: replay.seq,
+                  outputOffset: outputEndOffset,
                   replay: true,
                 },
               });
@@ -1158,7 +1164,7 @@ export class WsControlPlane {
   }
 
   /** Send terminal output data to all clients subscribed to this terminal */
-  broadcastTerminalOutput(terminalId: string, data: string) {
+  broadcastTerminalOutput(terminalId: string, data: string, outputOffset?: number) {
     const stream = this.nextTerminalStreamEvent(terminalId);
     for (const client of this.clients.values()) {
       if (client.terminalSubscriptions.has(terminalId) && client.ws.readyState === 1) {
@@ -1166,7 +1172,7 @@ export class WsControlPlane {
           type: "surface.connected", // reuse event type
           sessionId: client.sessionId ?? "",
           timestamp: new Date().toISOString(),
-          payload: { type: "terminal.output", terminalId, data, streamId: stream.streamId, seq: stream.seq },
+          payload: { type: "terminal.output", terminalId, data, streamId: stream.streamId, seq: stream.seq, outputOffset },
         });
       }
     }
@@ -1177,7 +1183,7 @@ export class WsControlPlane {
   /** Callback for terminal resize from WS clients */
   onTerminalResize?: (terminalId: string, cols: number, rows: number) => void;
   /** Callback to replay buffered output when a client subscribes to a terminal */
-  onTerminalReplay?: (terminalId: string, outputOffset?: number) => string | null;
+  onTerminalReplay?: (terminalId: string, outputOffset?: number, outputEndOffset?: number) => string | null;
   /** Callback for consent approval from WS clients */
   onConsentApprove?: (requestId: string) => void;
   /** Callback for consent rejection from WS clients */

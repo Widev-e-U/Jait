@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTerminalRunTool,
   getManagedTerminalExecution,
+  getManagedTerminalExecutions,
   detectInteractivePrompt,
   rewriteProjectPathForSandboxCommand,
 } from "./tools/terminal-tools.js";
@@ -236,6 +237,56 @@ describe("terminal.run tool status reporting", () => {
     });
     backgroundCommandMonitor.clearForTests();
     expect(getManagedTerminalExecution("term-existing")).toBeNull();
+  });
+
+  it("persists the completed output range for a watched background command", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const writes: string[] = [];
+    let outputOffset = 4;
+    let listener: ((data: string) => void) | null = null;
+    const surface = {
+      id: "term-background-range",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      getOutputOffset() { return outputOffset; },
+      addOutputListener(nextListener: (data: string) => void) {
+        listener = nextListener;
+      },
+      removeOutputListener() {
+        listener = null;
+      },
+      write(data: string) {
+        writes.push(data);
+      },
+      snapshot() {
+        return { metadata: { shell: "/bin/bash" } };
+      },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const tool = createTerminalRunTool(registry);
+
+    await tool.execute(
+      { command: "printf hi", terminalId: "term-background-range", isBackground: true },
+      makeContext(),
+    );
+    const completionToken = writes[0]?.match(/__JAIT_BACKGROUND_DONE_[0-9a-f-]+__/)?.[0];
+    expect(completionToken).toBeTruthy();
+
+    outputOffset = 5;
+    listener?.(`printf hi\r\nhi\r\n${completionToken}:0\r\n`);
+
+    expect(getManagedTerminalExecution("term-background-range")).toBeNull();
+    expect(getManagedTerminalExecutions("term-background-range").at(-1)).toMatchObject({
+      command: "printf hi",
+      actionId: "a-test",
+      outputOffset: 4,
+      outputEndOffset: 5,
+      output: "hi",
+      isBackground: true,
+      watched: false,
+    });
+    backgroundCommandMonitor.clearForTests();
   });
 
   it("reattaches a requested remote terminal after gateway surface state is lost", async () => {
