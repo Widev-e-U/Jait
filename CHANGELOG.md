@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.762](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.762) — 2026-08-24
+- fix(web): bound tool terminal cards to command output — b2602445
+
 ## [v0.1.761](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.761) — 2026-08-24
 - fix(web): scope tool terminal output to each command — 5c88b49c
 - fix(gateway): route MCP terminal calls through the remote node executor — 42e0a521
