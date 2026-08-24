@@ -23,6 +23,7 @@ let getLatestSubAgentActivity: typeof import('./tool-call-card')['getLatestSubAg
 let getNextSubAgentVisibleCount: typeof import('./tool-call-card')['getNextSubAgentVisibleCount']
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
+let shouldShowToolTerminalSlice: typeof import('./tool-call-card')['shouldShowToolTerminalSlice']
 let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
 let humanizeStructuredKey: typeof import('./tool-call-card')['humanizeStructuredKey']
 let StructuredDataView: typeof import('./tool-call-card')['StructuredDataView']
@@ -60,6 +61,7 @@ beforeAll(async () => {
     getNextSubAgentVisibleCount,
     getToolInvocationLabels,
     shouldRenderToolCall,
+    shouldShowToolTerminalSlice,
     getToolSearchResultItems,
     humanizeStructuredKey,
     StructuredDataView,
@@ -67,6 +69,17 @@ beforeAll(async () => {
     ToolCallCard,
   } = await import('./tool-call-card'))
 }, 30_000)
+
+describe('shouldShowToolTerminalSlice', () => {
+  it('keeps a completed bounded command in the actual terminal renderer', () => {
+    expect(shouldShowToolTerminalSlice({
+      hasTerminal: true,
+      outputOffset: 12,
+      outputEndOffset: 18,
+      activeOrWaiting: false,
+    })).toBe(true)
+  })
+})
 
 describe('formatElapsedDuration', () => {
   it('formats positive durations', () => {

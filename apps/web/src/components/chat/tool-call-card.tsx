@@ -2572,6 +2572,17 @@ function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null
     : null
 }
 
+export function shouldShowToolTerminalSlice(options: {
+  hasTerminal: boolean
+  outputOffset: number | null
+  outputEndOffset: number | null
+  activeOrWaiting: boolean
+}): boolean {
+  return options.hasTerminal
+    && options.outputOffset !== null
+    && (options.outputEndOffset !== null || options.activeOrWaiting)
+}
+
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
   const displayTool = getJaitMcpToolName(normalizedTool) ?? normalizedTool
@@ -3444,10 +3455,12 @@ function ToolCallCardInner({
   const terminalDisplayOutput = completedTerminalExecution?.output ?? displayOutput
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)
-  const showLiveTerminal = toolTerminal !== null
-    && terminalOutputOffset !== null
-    && terminalOutputEndOffset === null
-    && (call.status === 'running' || call.status === 'pending' || backgroundWaiting)
+  const showTerminalSlice = shouldShowToolTerminalSlice({
+    hasTerminal: toolTerminal !== null,
+    outputOffset: terminalOutputOffset,
+    outputEndOffset: terminalOutputEndOffset,
+    activeOrWaiting: call.status === 'running' || call.status === 'pending' || backgroundWaiting,
+  })
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
     setOpen(nextOpen)
@@ -3682,7 +3695,7 @@ function ToolCallCardInner({
   const bodyContent = bodyKind === 'pending' ? (
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
   ) : bodyKind === 'terminal' ? (
-    showLiveTerminal && toolTerminal && terminalOutputOffset !== null ? (
+    showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
         <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-2xs text-zinc-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -3704,11 +3717,12 @@ function ToolCallCardInner({
       'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
       call.result && !call.result.ok && 'text-red-200'
     )}>
-      <span className="text-zinc-400"><span className="text-emerald-400">$ </span>{terminalCommand || summary}</span>
-      {terminalDisplayOutput && <>{'\n'}{terminalDisplayOutput}</>}
+      {terminalDisplayOutput}
       {(call.status === 'running' || call.status === 'pending') && !terminalDisplayOutput && (
-        <><span className="text-zinc-400">{'\n'}Running...</span>
-        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" /></>
+        <span className="text-zinc-400">{summary ? `Executing ${summary}...` : 'Running...'}</span>
+      )}
+      {(call.status === 'running' || call.status === 'pending') && (
+        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
     )
