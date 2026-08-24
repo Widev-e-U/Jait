@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { mergeSnapshotMessagesWithOptimisticUsers, type OptimisticUserMessageLike } from './optimistic-chat-messages'
+import {
+  createOptimisticAssistantPlaceholder,
+  mergeSnapshotMessagesWithOptimisticUsers,
+  type OptimisticUserMessageLike,
+} from './optimistic-chat-messages'
 
 function user(
   id: string,
@@ -15,6 +19,18 @@ function user(
 }
 
 describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
+  it('keeps the initial SSE reply target when session creation races an empty snapshot', () => {
+    const current = [
+      user('local-user-1', 'first message', { optimistic: true }),
+      createOptimisticAssistantPlaceholder('local-assistant-1'),
+    ]
+
+    expect(mergeSnapshotMessagesWithOptimisticUsers([], current).map((message) => message.id)).toEqual([
+      'local-user-1',
+      'local-assistant-1',
+    ])
+  })
+
   it('preserves optimistic user messages missing from the latest snapshot', () => {
     const snapshot = [
       user('server-1', 'older message'),

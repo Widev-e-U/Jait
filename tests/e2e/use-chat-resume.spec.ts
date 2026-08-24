@@ -47,6 +47,22 @@ test.describe('useChat stream resume lifecycle', () => {
     expect(secondDelay).toBeLessThan(800)
   })
 
+  test('reattaches an initial direct stream after session creation without reloading', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetTimeout = window.setTimeout.bind(window)
+      window.setTimeout = ((handler, timeout = 0, ...args) => (
+        originalSetTimeout(handler, timeout === 40_000 ? 100 : timeout, ...args)
+      )) as typeof window.setTimeout
+    })
+
+    await page.goto('/use-chat-resume-repro.html?stall-initial-direct=1')
+
+    await expect(page.getByTestId('direct-fetch-count')).toHaveText('1')
+    await expect(page.getByTestId('stream-fetch-count')).toHaveText('1', { timeout: 5_000 })
+    await expect(page.getByTestId('assistant-content')).toHaveText('latest content recovered without reload')
+    await expect(page.getByTestId('loading')).toHaveText('false')
+  })
+
   test('reconnects when an established streaming response stops receiving heartbeats', async ({ page }) => {
     test.setTimeout(60_000)
     await page.goto('/use-chat-resume-repro.html?stall-after-snapshot=1')

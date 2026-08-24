@@ -9,6 +9,10 @@ export interface OptimisticUserMessageLike {
   optimistic?: boolean
 }
 
+export function createOptimisticAssistantPlaceholder(id: string): OptimisticUserMessageLike {
+  return { id, role: 'assistant', content: '', optimistic: true }
+}
+
 function getUserRenderSignature(message: OptimisticUserMessageLike): string | null {
   if (message.role !== 'user') return null
   const hasDisplaySegments = Array.isArray(message.displaySegments) && message.displaySegments.length > 0

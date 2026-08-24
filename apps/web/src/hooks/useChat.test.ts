@@ -495,6 +495,16 @@ describe('direct-stream stall recovery', () => {
     expect(armBlock).toContain('controller.abort()')
   })
 
+  it('uses the live session and latest resume callback after initial-session creation', () => {
+    const src = source()
+    const finishStart = src.indexOf('const finishDirectStream = useCallback(')
+    const finishBlock = src.slice(finishStart, src.indexOf('\n\n  // When sessionId changes', finishStart))
+
+    expect(finishBlock).toContain('requestSessionId !== prevSessionIdRef.current')
+    expect(finishBlock).toContain('resumeSessionStreamRef.current?.()')
+    expect(finishBlock).not.toContain('requestSessionId !== sessionId')
+  })
+
   it('leaves headroom over the gateway keepalive so long tool runs never trip it', () => {
     const src = source()
     const match = src.match(/const DIRECT_STREAM_IDLE_TIMEOUT_MS = ([\d_]+)/)

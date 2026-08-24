@@ -10,7 +10,7 @@ import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
 import { normalizeTodoStateValue } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
-import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
+import { createOptimisticAssistantPlaceholder, mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import {
   deleteCachedChatHistory,
   getChatCacheScope,
@@ -684,6 +684,10 @@ export function useChat(
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const pendingResumeAfterDirectStreamRef = useRef(false)
+  const resumeSessionStreamRef = useRef<((options?: {
+    afterDirectStream?: boolean
+    forceRestart?: boolean
+  }) => void) | null>(null)
   // Backoff timer for auto-reconnecting the resume SSE stream after a
   // transient drop (network blip, proxy idle timeout) — the main cause of
   // chat "freezing" until the user manually reloads or switches sessions.
@@ -763,6 +767,10 @@ export function useChat(
     setRefreshTrigger(n => n + 1)
   }, [sessionId])
 
+  useLayoutEffect(() => {
+    resumeSessionStreamRef.current = resumeSessionStream
+  }, [resumeSessionStream])
+
   /**
    * Schedule the next resume-stream generation after a transport failure.
    * Attempts survive failed handshakes and reset only after a fresh snapshot,
@@ -809,12 +817,16 @@ export function useChat(
   const finishDirectStream = useCallback((requestSessionId: string | null, controller: AbortController) => {
     if (abortControllerRef.current === controller) abortControllerRef.current = null
     if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
-    if (!pendingResumeAfterDirectStreamRef.current || !requestSessionId || requestSessionId !== sessionId) return
+    if (
+      !pendingResumeAfterDirectStreamRef.current
+      || !requestSessionId
+      || requestSessionId !== prevSessionIdRef.current
+    ) return
     pendingResumeAfterDirectStreamRef.current = false
     window.setTimeout(() => {
-      if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
+      if (prevSessionIdRef.current === requestSessionId) resumeSessionStreamRef.current?.()
     }, 0)
-  }, [resumeSessionStream, sessionId])
+  }, [])
 
   // When sessionId changes, load history / resume active stream via SSE
   useLayoutEffect(() => {
@@ -1653,7 +1665,7 @@ export function useChat(
 
     setState(prev => ({
       ...prev,
-      messages: [...prev.messages, userMessage, { id: assistantId, role: 'assistant', content: '' }],
+      messages: [...prev.messages, userMessage, createOptimisticAssistantPlaceholder(assistantId)],
       isLoading: true,
       error: null,
       hitMaxRounds: false,
