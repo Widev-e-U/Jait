@@ -103,6 +103,27 @@ describe("BackgroundCommandMonitor", () => {
     expect(backgroundCommandMonitor.activeCount).toBe(0);
   });
 
+  it("calls onStop exactly once when a watcher finishes", async () => {
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    const surface = new FakeSurface();
+    const onStop = vi.fn();
+    const completionToken = "__JAIT_BACKGROUND_DONE_019f74ed-1111-7222-a333-abcdefabcdef__";
+    backgroundCommandMonitor.track({
+      sessionId: "s",
+      terminalId: "t",
+      command: "printf hi",
+      surface,
+      completionToken,
+      onStop,
+    });
+
+    surface.emit(completionToken + ":0\r\n");
+    await flush();
+    backgroundCommandMonitor.stopForSession("s");
+
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
   it("does not fire for a never-ending process (no done marker)", async () => {
     const handler = vi.fn();
     backgroundCommandMonitor.setCompletionHandler(handler);

@@ -50,6 +50,8 @@ export interface TrackBackgroundCommandOptions {
    * (servers/watchers) leaking listeners forever. Default 6 hours.
    */
   maxWatchMs?: number;
+  /** Called once when the watcher completes, expires, or is cancelled. */
+  onStop?: () => void;
 }
 
 // OSC 633;D;{exitCode} — command finished (exit code may be empty/negative).
@@ -250,8 +252,11 @@ class BackgroundCommandMonitor {
     let raw = "";
     let finished = false;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
 
     const cleanup = () => {
+      if (stopped) return;
+      stopped = true;
       if (timer) clearTimeout(timer);
       if (graceTimer) clearTimeout(graceTimer);
       try {
@@ -260,6 +265,7 @@ class BackgroundCommandMonitor {
         /* surface already gone */
       }
       this.active.delete(entry);
+      options.onStop?.();
     };
 
     const finish = (exitCode: number | null) => {

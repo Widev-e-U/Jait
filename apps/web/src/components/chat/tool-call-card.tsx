@@ -18,6 +18,7 @@ import { ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from '@/components/chat/use-stick-to-bottom'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
+import { TerminalView, findToolTerminal, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
 
 /**
  * Comfortable breathing room kept between the collapsed card's header and the
@@ -2483,6 +2484,58 @@ function ImageView({ src, alt, caption }: { src: string | null | undefined; alt:
   )
 }
 
+function useToolTerminalSurface(options: {
+  enabled: boolean
+  terminalId: string | null
+  command: string
+  keepPolling: boolean
+}): { terminal: TerminalInfo | null; loaded: boolean } {
+  const { sessionId, authToken } = useContext(SubAgentAuthContext)
+  const [state, setState] = useState<{ terminal: TerminalInfo | null; loaded: boolean }>({
+    terminal: null,
+    loaded: false,
+  })
+
+  useEffect(() => {
+    if (!options.enabled) {
+      setState({ terminal: null, loaded: false })
+      return
+    }
+
+    let cancelled = false
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    const refresh = async () => {
+      try {
+        const headers: Record<string, string> = {}
+        if (authToken) headers.Authorization = 'Bearer ' + authToken
+        const response = await fetch(getApiUrl() + '/api/terminals', { headers })
+        if (!response.ok || cancelled) return
+        const payload = await response.json() as { terminals?: TerminalInfo[] }
+        const terminal = findToolTerminal(payload.terminals ?? [], {
+          terminalId: options.terminalId,
+          sessionId,
+          command: options.command,
+        })
+        if (cancelled) return
+        setState({ terminal, loaded: true })
+        if (options.keepPolling && (!terminal || isTerminalBackgroundWaiting(terminal))) {
+          refreshTimer = setTimeout(refresh, 750)
+        }
+      } catch {
+        if (!cancelled && options.keepPolling) refreshTimer = setTimeout(refresh, 1000)
+      }
+    }
+
+    void refresh()
+    return () => {
+      cancelled = true
+      if (refreshTimer) clearTimeout(refreshTimer)
+    }
+  }, [authToken, options.command, options.enabled, options.keepPolling, options.terminalId, sessionId])
+
+  return state
+}
+
 function getStructuredTerminalId(call: ToolCallInfo): string | null {
   const argTerminalId = typeof call.args.terminalId === 'string' ? call.args.terminalId : null
   if (argTerminalId) return argTerminalId
@@ -3293,11 +3346,13 @@ function ToolCallCardInner({
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)
   const imageDataUri = getToolImageDataUri(displayTool, normalizedArgs, resultData)
-  const isTerminal = displayTool.startsWith('terminal.') || displayTool === 'jait.terminal' || displayTool === 'execute'
+  const isPersistentTerminal = displayTool.startsWith('terminal.') || displayTool === 'jait.terminal' || displayTool === 'execute'
+  const isTerminal = isPersistentTerminal
     || displayTool.startsWith('ssh.') || displayTool === 'run.ssh' || displayTool === 'elevated.run'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
-  const canOpenTerminal = isTerminalCreationCall(call)
-  const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
+  const structuredTerminalId = isTerminalCreationCall(call) ? getStructuredTerminalId(call) : null
+  const isBackgroundCall = normalizedArgs.isBackground === true || resultData?.isBackground === true
+  const backgroundWatchedResult = resultData?.watched === true
   const runningHint = getRunningHint(displayTool, normalizedArgs)
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
   const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
@@ -3341,6 +3396,18 @@ function ToolCallCardInner({
     ? getTodoToolListItems(normalizedArgs, resultData)
     : []
   const effectiveOpen = hasInlineSecretPrompt ? true : open
+  const { authToken } = useContext(SubAgentAuthContext)
+  const terminalSurfaceState = useToolTerminalSurface({
+    enabled: isPersistentTerminal && (effectiveOpen || isBackgroundCall || call.status === 'running' || call.status === 'pending'),
+    terminalId: structuredTerminalId,
+    command: getCommandFromToolArgs(normalizedArgs),
+    keepPolling: call.status === 'running' || call.status === 'pending' || backgroundWatchedResult,
+  })
+  const toolTerminal = terminalSurfaceState.terminal
+  const terminalId = toolTerminal?.id ?? structuredTerminalId
+  const canOpenTerminal = terminalId !== null
+  const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
+    || (backgroundWatchedResult && !terminalSurfaceState.loaded)
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
     setOpen(nextOpen)
@@ -3406,7 +3473,9 @@ function ToolCallCardInner({
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current
-    if (
+    if (backgroundWaiting) {
+      setOpen(true)
+    } else if (
       !inlineBody
       && bodyKind !== 'threadList'
       && (prevStatus === 'running' || prevStatus === 'pending')
@@ -3419,7 +3488,7 @@ function ToolCallCardInner({
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
+  }, [backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
 
   useEffect(() => {
     if (
@@ -3547,7 +3616,17 @@ function ToolCallCardInner({
       {editDiffCounts && (editDiffCounts.insertions > 0 || editDiffCounts.deletions > 0) && (
         <EditDiffCountBadge counts={editDiffCounts} />
       )}
-      {terminalOutcomeBadge && (
+      {isBackgroundCall && (
+        <span className={cn(
+          'rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shrink-0',
+          backgroundWaiting
+            ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
+            : 'border-border/60 bg-muted/40 text-muted-foreground',
+        )}>
+          {backgroundWaiting ? 'background · waiting' : 'background'}
+        </span>
+      )}
+      {terminalOutcomeBadge && !backgroundWaiting && (
         <span
           className={cn(
             'rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shrink-0',
@@ -3563,6 +3642,21 @@ function ToolCallCardInner({
   const bodyContent = bodyKind === 'pending' ? (
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
   ) : bodyKind === 'terminal' ? (
+    toolTerminal ? (
+      <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
+        <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-2xs text-zinc-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span>Read-only terminal</span>
+          {backgroundWaiting && <span className="ml-auto text-amber-400">Background · waiting</span>}
+        </div>
+        <TerminalView
+          terminalId={toolTerminal.id}
+          token={authToken}
+          readOnly
+          className="h-64 bg-zinc-950"
+        />
+      </div>
+    ) : (
     <pre ref={terminalScrollRef} className={cn(
       'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre',
       'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
@@ -3579,6 +3673,7 @@ function ToolCallCardInner({
         <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
+    )
   ) : bodyKind === 'browserSnapshot' && snapshotText ? (
     <BrowserSnapshotView snapshot={snapshotText} />
   ) : bodyKind === 'browserScreenshot' && screenshotPath ? (

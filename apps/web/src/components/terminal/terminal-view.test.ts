@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  findToolTerminal,
   getTerminalContextMenuPosition,
+  getToolTerminalExecution,
   handleTerminalContextMenuAction,
+  isTerminalBackgroundWaiting,
   isTerminalPasteShortcut,
   pasteClipboardEventTextIntoTerminal,
   pasteClipboardTextIntoTerminal,
@@ -340,5 +343,84 @@ describe('terminalBelongsToProject', () => {
 
   it('rejects terminals without a projectRoot', () => {
     expect(terminalBelongsToProject(baseTerminal({ projectRoot: null as unknown as string }), '/any', 'gateway')).toBe(false)
+  })
+})
+
+
+describe('tool terminal resolution', () => {
+  const makeTerminal = (
+    id: string,
+    sessionId: string,
+    execution?: { command: string; startedAt: string; isBackground?: boolean; watched?: boolean },
+  ): TerminalInfo => ({
+    id,
+    type: 'terminal',
+    state: 'running',
+    sessionId,
+    projectRoot: '/project',
+    metadata: execution ? {
+      toolExecution: {
+        command: execution.command,
+        actionId: 'action-' + id,
+        startedAt: execution.startedAt,
+        isBackground: execution.isBackground === true,
+        watched: execution.watched ?? null,
+      },
+    } : {},
+  })
+
+  it('prefers an explicit terminal id', () => {
+    const explicit = makeTerminal('term-explicit', 'session-1')
+    const managed = makeTerminal('term-managed', 'session-1', {
+      command: 'bun test',
+      startedAt: '2026-08-24T18:00:00.000Z',
+    })
+
+    expect(findToolTerminal([managed, explicit], {
+      terminalId: explicit.id,
+      sessionId: 'session-1',
+      command: 'bun test',
+    })).toBe(explicit)
+  })
+
+  it('matches a running managed terminal by session and exact command', () => {
+    const other = makeTerminal('term-other', 'session-1', {
+      command: 'bun run build',
+      startedAt: '2026-08-24T18:01:00.000Z',
+    })
+    const expected = makeTerminal('term-test', 'session-1', {
+      command: 'bun test',
+      startedAt: '2026-08-24T18:00:00.000Z',
+    })
+
+    expect(findToolTerminal([other, expected], {
+      sessionId: 'session-1',
+      command: 'bun test',
+    })).toBe(expected)
+  })
+
+  it('does not attach a tool card to an ordinary user terminal', () => {
+    expect(findToolTerminal([
+      makeTerminal('term-user', 'session-1'),
+    ], {
+      sessionId: 'session-1',
+      command: 'bun test',
+    })).toBeNull()
+  })
+
+  it('recognizes watched background execution metadata', () => {
+    const terminal = makeTerminal('term-background', 'session-1', {
+      command: 'bun test',
+      startedAt: '2026-08-24T18:00:00.000Z',
+      isBackground: true,
+      watched: true,
+    })
+
+    expect(getToolTerminalExecution(terminal)).toMatchObject({
+      command: 'bun test',
+      isBackground: true,
+      watched: true,
+    })
+    expect(isTerminalBackgroundWaiting(terminal)).toBe(true)
   })
 })

@@ -25,6 +25,58 @@ export interface TerminalInfo {
   metadata: Record<string, unknown>
 }
 
+export interface ToolTerminalExecutionMetadata {
+  command: string
+  actionId: string
+  startedAt: string
+  isBackground: boolean
+  watched: boolean | null
+}
+
+export function getToolTerminalExecution(terminal: TerminalInfo | null | undefined): ToolTerminalExecutionMetadata | null {
+  const value = terminal?.metadata?.toolExecution
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (typeof record.command !== 'string' || typeof record.actionId !== 'string') return null
+  return {
+    command: record.command,
+    actionId: record.actionId,
+    startedAt: typeof record.startedAt === 'string' ? record.startedAt : '',
+    isBackground: record.isBackground === true,
+    watched: typeof record.watched === 'boolean' ? record.watched : null,
+  }
+}
+
+export function isTerminalBackgroundWaiting(terminal: TerminalInfo | null | undefined): boolean {
+  const execution = getToolTerminalExecution(terminal)
+  return execution?.isBackground === true && execution.watched === true
+}
+
+export function findToolTerminal(
+  terminals: TerminalInfo[],
+  options: { terminalId?: string | null; sessionId?: string | null; command?: string | null },
+): TerminalInfo | null {
+  if (options.terminalId) {
+    const exact = terminals.find((terminal) => terminal.id === options.terminalId)
+    if (exact) return exact
+  }
+  if (!options.sessionId) return null
+
+  const sessionTerminals = terminals
+    .filter((terminal) => terminal.sessionId === options.sessionId)
+    .sort((left, right) => {
+      const leftStarted = Date.parse(getToolTerminalExecution(left)?.startedAt ?? '') || 0
+      const rightStarted = Date.parse(getToolTerminalExecution(right)?.startedAt ?? '') || 0
+      return rightStarted - leftStarted
+    })
+  const matchingCommand = options.command
+    ? sessionTerminals.find((terminal) => getToolTerminalExecution(terminal)?.command === options.command)
+    : null
+  return matchingCommand
+    ?? sessionTerminals.find((terminal) => getToolTerminalExecution(terminal) !== null)
+    ?? null
+}
+
 function authHeaders(token?: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
@@ -255,6 +307,15 @@ export function useTerminals(token?: string | null) {
     void refresh()
   }, [refresh])
 
+  const hasWaitingBackgroundTerminal = terminals.some(isTerminalBackgroundWaiting)
+  useEffect(() => {
+    if (!hasWaitingBackgroundTerminal) return
+    const timer = window.setInterval(() => {
+      void refresh()
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [hasWaitingBackgroundTerminal, refresh])
+
   return { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh }
 }
 
@@ -291,6 +352,7 @@ interface TerminalViewProps {
   className?: string
   token?: string | null
   projectRoot?: string | null
+  readOnly?: boolean
   onReferenceSelection?: (terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
@@ -298,7 +360,7 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -318,7 +380,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     if (!containerRef.current) return
 
     const term = new Terminal({
-      cursorBlink: true,
+      cursorBlink: !readOnly,
+      disableStdin: readOnly,
       fontSize: 13,
       fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace",
       theme: getTerminalTheme(),
@@ -329,7 +392,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     const linksAddon = new WebLinksAddon()
 
     term.loadAddon(fitAddon)
-    term.loadAddon(linksAddon)
+    if (!readOnly) term.loadAddon(linksAddon)
     term.open(containerRef.current)
 
     const pendingInput: string[] = []
@@ -341,6 +404,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       }
     }
     const sendTerminalInput = (data: string) => {
+      if (readOnly) return
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
         return
@@ -360,7 +424,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       }, 30)
     }
 
-    term.attachCustomKeyEventHandler((event) => {
+    if (!readOnly) term.attachCustomKeyEventHandler((event) => {
       if (!isTerminalPasteShortcut(event)) return true
       pasteShortcutAt = Date.now()
       schedulePasteFallback()
@@ -383,12 +447,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     // Initial fit + focus so the terminal can receive keyboard input
     requestAnimationFrame(() => {
       fitAddon.fit()
-      term.focus()
+      if (!readOnly) term.focus()
     })
     // Retry focus after layout settles (some browsers need a longer delay)
     const focusRetryId = setTimeout(() => {
       fitAddon.fit()
-      term.focus()
+      if (!readOnly) term.focus()
     }, 150)
 
     termRef.current = term
@@ -479,6 +543,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
     // Forward resize events
     term.onResize(({ cols, rows }) => {
+      if (readOnly) return
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.resize', terminalId, cols, rows }))
       }
@@ -539,7 +604,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     rootEl.addEventListener('mouseup', handleMouseUp)
     rootEl.addEventListener('keyup', handleKeyUp)
     rootEl.addEventListener('contextmenu', handleContextMenu, { capture: true })
-    rootEl.addEventListener('paste', handlePaste, { capture: true })
+    if (!readOnly) rootEl.addEventListener('paste', handlePaste, { capture: true })
 
     return () => {
       disposed = true
@@ -554,14 +619,14 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
       rootEl.removeEventListener('contextmenu', handleContextMenu, { capture: true })
-      rootEl.removeEventListener('paste', handlePaste, { capture: true })
+      if (!readOnly) rootEl.removeEventListener('paste', handlePaste, { capture: true })
       closeSocket()
       term.dispose()
       termRef.current = null
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, onReferenceSelection])
+  }, [terminalId, token, projectRoot, readOnly, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current
@@ -607,7 +672,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
           setContextMenu(null)
         }
         // Only focus terminal if user clicked directly on the terminal area
-        if (e.target === e.currentTarget || containerRef.current?.contains(e.target as Node)) {
+        if (!readOnly && (e.target === e.currentTarget || containerRef.current?.contains(e.target as Node))) {
           requestAnimationFrame(() => termRef.current?.focus())
         }
       }}
@@ -628,14 +693,14 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
             <Copy className="h-3.5 w-3.5" />
             Copy
           </button>
-          <button
+          {!readOnly && <button
             type="button"
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground"
             onClick={handlePaste}
           >
             <ClipboardPaste className="h-3.5 w-3.5" />
             Paste
-          </button>
+          </button>}
         </div>
       )}
     </div>
@@ -714,6 +779,11 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
         >
           <span className={`w-1.5 h-1.5 rounded-full ${t.state === 'running' ? 'bg-green-500' : 'bg-zinc-500'}`} />
           <span className="truncate max-w-[100px]">{t.id.replace(/^term-/, '').slice(0, 8)}</span>
+          {isTerminalBackgroundWaiting(t) && (
+            <span className="rounded bg-amber-500/15 px-1 text-2xs font-medium text-amber-500" title="Background command is being watched">
+              waiting
+            </span>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation()
