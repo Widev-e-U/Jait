@@ -110,6 +110,33 @@ describe("fetchOpenAIModels", () => {
     expect(fetchMock2).toHaveBeenCalledTimes(1);
     expect(result.map((m) => m.id)).toEqual(["gpt-4o-mini"]);
   });
+
+  it("keeps provider-specific model ids from compatible endpoints", async () => {
+    mockFetchOnce({ data: [{ id: "qwen3-coder" }, { id: "glm-5" }] });
+    const models = await fetchOpenAIModels("k", "https://compatible.example.com/v1");
+    expect(models.map((model) => model.id)).toEqual(["glm-5", "qwen3-coder"]);
+  });
+
+  it("fetches different compatible endpoints concurrently without sharing in-flight work", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      const id = url.includes("first") ? "first-model" : "second-model";
+      return new Response(JSON.stringify({ data: [{ id }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const [first, second] = await Promise.all([
+      fetchOpenAIModels("first-key", "https://first.example.com/v1"),
+      fetchOpenAIModels("second-key", "https://second.example.com/v1"),
+    ]);
+
+    expect(first.map((model) => model.id)).toEqual(["first-model"]);
+    expect(second.map((model) => model.id)).toEqual(["second-model"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("fetchOpenRouterModels", () => {

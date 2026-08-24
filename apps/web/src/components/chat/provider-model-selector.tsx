@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import { decodeJaitModelId } from '@jait/shared'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useAuth, type JaitBackend, type ReasoningEffort } from '@/hooks/useAuth'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
@@ -557,8 +558,9 @@ export function ProviderModelSelector({
   const handleModelSelect = (modelId: string) => {
     // Auto-switch jaitBackend when picking a model from a different backend group
     const selectedModel = models.find((m) => m.id === modelId)
-    if (provider === 'jait' && selectedModel?.group) {
-      const targetBackend = GROUP_TO_BACKEND[selectedModel.group]
+    if (provider === 'jait' && selectedModel) {
+      const targetBackend = decodeJaitModelId(modelId)?.backend
+        ?? (selectedModel.group ? GROUP_TO_BACKEND[selectedModel.group] : undefined)
       if (targetBackend && targetBackend !== currentBackend) {
         updateSettings({ jait_backend: targetBackend }).then(() => {
           setCurrentBackend(targetBackend)

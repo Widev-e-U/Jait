@@ -1,3 +1,4 @@
+import { decodeJaitModelId, parseJaitBackendInstances } from "@jait/shared";
 import { inferContextWindow, type AppConfig } from "../config.js";
 import type { LLMConfig } from "../tools/agent-loop.js";
 import type { JaitBackend } from "./users.js";
@@ -137,32 +138,48 @@ const ACP_ONLY_MODEL_ALIASES = new Set(["default", "fable", "sonnet", "opus", "h
 
 export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJaitLlmConfig {
   const apiKeys = options.apiKeys ?? {};
-  const configuredBaseUrl = apiKeys["OPENAI_BASE_URL"]?.trim() || options.config.openaiBaseUrl;
-  const backend = options.jaitBackend ?? "openai";
-  const requestedModel = options.requestedModel?.trim()
-    || apiKeys["OPENAI_MODEL"]?.trim()
-    || options.config.openaiModel;
+  const routedModel = options.requestedModel
+    ? decodeJaitModelId(options.requestedModel.trim())
+    : null;
+  const instances = parseJaitBackendInstances(apiKeys["JAIT_BACKEND_INSTANCES"]);
+  const routedInstance = routedModel
+    ? instances.find((instance) => (
+        instance.id === routedModel.instanceId
+        && instance.type === routedModel.backend
+      ))
+    : undefined;
 
-  if (ACP_ONLY_MODEL_ALIASES.has(requestedModel.toLowerCase())) {
+  if (routedModel && !routedInstance) {
     throw new JaitConfigError(
-      `Model "${requestedModel}" is a Claude Code CLI alias and only resolves inside the Claude Code app — it can't be used for sub-agent/swarm delegation, which calls models over HTTP. Pick a concrete API model (not a CLI provider) for swarm work, or run this task without swarm mode.`,
+      `Jait backend instance "${routedModel.instanceId}" is no longer configured. Pick a model from an available backend instance.`,
     );
   }
 
-  // ── Ollama backend ───────────────────────────────────────────────
+  const backend = routedModel?.backend ?? options.jaitBackend ?? "openai";
+  const concreteRequestedModel = routedModel?.model
+    || routedInstance?.model
+    || options.requestedModel?.trim()
+    || apiKeys["OPENAI_MODEL"]?.trim()
+    || options.config.openaiModel;
+
+  if (ACP_ONLY_MODEL_ALIASES.has(concreteRequestedModel.toLowerCase())) {
+    throw new JaitConfigError(
+      `Model "${concreteRequestedModel}" is a Claude Code CLI alias and only resolves inside the Claude Code app — it can't be used for sub-agent/swarm delegation, which calls models over HTTP. Pick a concrete API model (not a CLI provider) for swarm work, or run this task without swarm mode.`,
+    );
+  }
+
   if (backend === "ollama") {
-    const ollamaUrl = apiKeys["OLLAMA_URL"]?.trim()
+    const ollamaUrl = routedInstance?.baseUrl
+      || apiKeys["OLLAMA_URL"]?.trim()
       || options.config.ollamaUrl
       || "http://localhost:11434";
-    // Only use the explicit request model (from the UI model picker), not OpenAI defaults
-    const ollamaModel = options.requestedModel?.trim()
+    const ollamaModel = routedModel?.model
+      || routedInstance?.model
+      || options.requestedModel?.trim()
       || apiKeys["OLLAMA_MODEL"]?.trim()
       || options.config.ollamaModel
       || "llama3";
-    // Ollama context length is the server-loaded num_ctx, not the model's
-    // trained max. Jait sets it explicitly via the native endpoint, so prune
-    // against the same number. Per-user OLLAMA_NUM_CTX overrides the default.
-    const ollamaNumCtx = parseInt(
+    const ollamaNumCtx = routedInstance?.numCtx || parseInt(
       apiKeys["OLLAMA_NUM_CTX"]?.trim()
         || apiKeys["OLLAMA_CONTEXT_LENGTH"]?.trim()
         || "",
@@ -170,7 +187,7 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
     ) || options.config.ollamaContextWindow;
     return {
       backend: "ollama",
-      openaiApiKey: "ollama", // Ollama's OpenAI-compat endpoint ignores the key but requires a non-empty value
+      openaiApiKey: routedInstance?.apiKey || "ollama",
       openaiBaseUrl: `${ollamaUrl.replace(/\/+$/, "")}/v1`,
       openaiModel: ollamaModel,
       contextWindow: ollamaNumCtx,
@@ -178,26 +195,20 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
     };
   }
 
-  // ── OmniRoute backend ────────────────────────────────────────────
-  // Must resolve before the OpenRouter heuristic below: OmniRoute model ids
-  // almost always contain a slash ("openai/gpt-4o", "auto/coding"), which the
-  // `requestedModel.includes("/")` check would otherwise read as "this is an
-  // OpenRouter model" and silently redirect the request to openrouter.ai.
   if (backend === "omniroute") {
-    const omnirouteBaseUrl = apiKeys["OMNIROUTE_BASE_URL"]?.trim()
+    const omnirouteBaseUrl = routedInstance?.baseUrl
+      || apiKeys["OMNIROUTE_BASE_URL"]?.trim()
       || options.config.omnirouteBaseUrl
       || "http://localhost:20128/v1";
-    // Only the explicit request model applies — OPENAI_MODEL defaults name
-    // models that OmniRoute's catalogue may not carry. "auto" lets the router
-    // pick, which is its whole point and always resolves.
-    const omnirouteModel = options.requestedModel?.trim()
+    const omnirouteModel = routedModel?.model
+      || routedInstance?.model
+      || options.requestedModel?.trim()
       || apiKeys["OMNIROUTE_MODEL"]?.trim()
       || "auto";
     return {
       backend: "omniroute",
-      // A key is optional (keyless free-tier providers are pre-wired), but an
-      // empty bearer breaks some upstreams — send a placeholder like Ollama does.
-      openaiApiKey: apiKeys["OMNIROUTE_API_KEY"]?.trim()
+      openaiApiKey: routedInstance?.apiKey
+        || apiKeys["OMNIROUTE_API_KEY"]?.trim()
         || options.config.omnirouteApiKey
         || "omniroute",
       openaiBaseUrl: omnirouteBaseUrl.replace(/\/+$/, ""),
@@ -206,26 +217,41 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
     };
   }
 
-  const isOpenRouterModel = requestedModel.includes("/");
+  const configuredBaseUrl = routedInstance?.baseUrl
+    || apiKeys["OPENAI_BASE_URL"]?.trim()
+    || options.config.openaiBaseUrl;
+  const requestedModel = routedModel?.model
+    || routedInstance?.model
+    || options.requestedModel?.trim()
+    || apiKeys["OPENAI_MODEL"]?.trim()
+    || options.config.openaiModel;
+  const openRouterKey = routedInstance?.apiKey || apiKeys["OPENROUTER_API_KEY"]?.trim();
   const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
-  const openRouterKey = apiKeys["OPENROUTER_API_KEY"]?.trim();
-  const useOpenRouter = backend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
+  const useOpenRouter = backend === "openrouter"
+    || (!routedInstance && requestedModel.includes("/"))
+    || isOpenRouterBaseUrl;
   const effectiveModel = useOpenRouter ? normalizeOpenRouterModelId(requestedModel) : requestedModel;
 
-  if (backend === "openrouter" && !openRouterKey && !isOpenRouterBaseUrl) {
+  if (backend === "openrouter" && !openRouterKey) {
     throw new JaitConfigError(
-      "OPENROUTER_API_KEY is required when the Jait backend provider is set to OpenRouter",
+      routedInstance
+        ? "An API key is required for the selected OpenRouter backend instance"
+        : "OPENROUTER_API_KEY is required when the Jait backend provider is set to OpenRouter",
     );
   }
 
   return {
     backend,
-    openaiApiKey: useOpenRouter && openRouterKey
-      ? openRouterKey
-      : (apiKeys["OPENAI_API_KEY"]?.trim() || options.config.openaiApiKey),
-    openaiBaseUrl: useOpenRouter && openRouterKey
-      ? "https://openrouter.ai/api/v1"
-      : configuredBaseUrl,
+    openaiApiKey: backend === "openai" && routedInstance?.apiKey
+      ? routedInstance.apiKey
+      : useOpenRouter && openRouterKey
+        ? openRouterKey
+        : (apiKeys["OPENAI_API_KEY"]?.trim() || options.config.openaiApiKey),
+    openaiBaseUrl: routedInstance
+      ? configuredBaseUrl.replace(/\/+$/, "")
+      : useOpenRouter && openRouterKey
+        ? "https://openrouter.ai/api/v1"
+        : configuredBaseUrl,
     openaiModel: effectiveModel,
     contextWindow: inferContextWindow(effectiveModel),
   };

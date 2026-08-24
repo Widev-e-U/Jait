@@ -6,3 +6,4 @@ export * from "./provider-auth.js";
 export * from "./project-ui.js";
 export * from "./project-tree.js";
 export * from "./code-graph.js";
+export * from "./jait-backends.js";

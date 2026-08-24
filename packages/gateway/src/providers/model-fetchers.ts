@@ -71,26 +71,26 @@ const OPENAI_NON_CHAT_SUBSTRINGS = [
 // ── Caches ───────────────────────────────────────────────────────
 
 let openRouterCache: { models: ProviderModelInfo[]; fetchedAt: number } | null = null;
-let openaiCache: { models: ProviderModelInfo[]; fetchedAt: number; baseUrl: string } | null = null;
-let ollamaCache: { models: ProviderModelInfo[]; fetchedAt: number; url: string } | null = null;
-let omnirouteCache: { models: ProviderModelInfo[]; fetchedAt: number; baseUrl: string } | null = null;
+const openaiCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
+const ollamaCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
+const omnirouteCaches = new Map<string, { models: ProviderModelInfo[]; fetchedAt: number }>();
 
 // In-flight guards so a stale-while-revalidate refresh never stampedes.
 let openRouterInflight: Promise<ProviderModelInfo[]> | null = null;
-let openaiInflight: Promise<ProviderModelInfo[]> | null = null;
-let ollamaInflight: Promise<ProviderModelInfo[]> | null = null;
-let omnirouteInflight: Promise<ProviderModelInfo[]> | null = null;
+const openaiInflight = new Map<string, Promise<ProviderModelInfo[]>>();
+const ollamaInflight = new Map<string, Promise<ProviderModelInfo[]>>();
+const omnirouteInflight = new Map<string, Promise<ProviderModelInfo[]>>();
 
 /** Clear all cached model lists. Intended for tests. */
 export function resetModelFetcherCaches(): void {
   openRouterCache = null;
-  openaiCache = null;
-  ollamaCache = null;
-  omnirouteCache = null;
+  openaiCaches.clear();
+  ollamaCaches.clear();
+  omnirouteCaches.clear();
   openRouterInflight = null;
-  openaiInflight = null;
-  ollamaInflight = null;
-  omnirouteInflight = null;
+  openaiInflight.clear();
+  ollamaInflight.clear();
+  omnirouteInflight.clear();
 }
 
 // ── Filters (pure, exported for testing) ─────────────────────────
@@ -178,21 +178,27 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
 /** Fetch the OpenAI (or OpenAI-compatible) catalogue. Returns [] on any non-OK response. */
 export async function fetchOpenAIModels(apiKey: string, baseUrl: string): Promise<ProviderModelInfo[]> {
   const url = baseUrl.replace(/\/+$/, "");
-  if (openaiCache && openaiCache.baseUrl === url) {
-    if (Date.now() - openaiCache.fetchedAt >= REMOTE_CACHE_TTL && !openaiInflight) {
-      openaiInflight = doFetchOpenAIModels(apiKey, url).finally(() => { openaiInflight = null; });
-      openaiInflight.catch(() => {});
+  const cacheKey = `${url}\n${apiKey}`;
+  const cached = openaiCaches.get(cacheKey);
+  if (cached) {
+    if (Date.now() - cached.fetchedAt >= REMOTE_CACHE_TTL && !openaiInflight.has(cacheKey)) {
+      const refresh = doFetchOpenAIModels(apiKey, url, cacheKey)
+        .finally(() => { openaiInflight.delete(cacheKey); });
+      openaiInflight.set(cacheKey, refresh);
+      refresh.catch(() => {});
     }
-    return openaiCache.models;
+    return cached.models;
   }
-  // Cold cache, or the base URL changed (different catalogue) — fetch fresh.
-  if (!openaiInflight) {
-    openaiInflight = doFetchOpenAIModels(apiKey, url).finally(() => { openaiInflight = null; });
+  let request = openaiInflight.get(cacheKey);
+  if (!request) {
+    request = doFetchOpenAIModels(apiKey, url, cacheKey)
+      .finally(() => { openaiInflight.delete(cacheKey); });
+    openaiInflight.set(cacheKey, request);
   }
-  return openaiInflight;
+  return request;
 }
 
-async function doFetchOpenAIModels(apiKey: string, url: string): Promise<ProviderModelInfo[]> {
+async function doFetchOpenAIModels(apiKey: string, url: string, cacheKey: string): Promise<ProviderModelInfo[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -200,10 +206,11 @@ async function doFetchOpenAIModels(apiKey: string, url: string): Promise<Provide
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
-    if (!res.ok) return openaiCache?.baseUrl === url ? openaiCache.models : [];
+    if (!res.ok) return openaiCaches.get(cacheKey)?.models ?? [];
     const data = (await res.json()) as { data?: Array<{ id: string; owned_by?: string }> };
+    const officialOpenAI = url.toLowerCase().includes("api.openai.com");
     const models: ProviderModelInfo[] = (data.data ?? [])
-      .filter((m) => isChatCapableOpenAIModelId(m.id))
+      .filter((m) => !officialOpenAI || isChatCapableOpenAIModelId(m.id))
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((m) => ({
         id: m.id,
@@ -211,10 +218,11 @@ async function doFetchOpenAIModels(apiKey: string, url: string): Promise<Provide
         description: m.owned_by ? `by ${m.owned_by}` : undefined,
         reasoningEffortSupported: supportsReasoningEffort(m.id),
       }));
-    openaiCache = { models, fetchedAt: Date.now(), baseUrl: url };
+    openaiCaches.set(cacheKey, { models, fetchedAt: Date.now() });
     return models;
   } catch (err) {
-    if (openaiCache?.baseUrl === url) return openaiCache.models;
+    const cached = openaiCaches.get(cacheKey);
+    if (cached) return cached.models;
     throw err;
   } finally {
     clearTimeout(timeout);
@@ -238,20 +246,31 @@ export async function fetchOmniRouteModels(
   baseUrl: string,
 ): Promise<ProviderModelInfo[]> {
   const url = baseUrl.replace(/\/+$/, "");
-  if (omnirouteCache && omnirouteCache.baseUrl === url) {
-    if (Date.now() - omnirouteCache.fetchedAt >= REMOTE_CACHE_TTL && !omnirouteInflight) {
-      omnirouteInflight = doFetchOmniRouteModels(apiKey, url).finally(() => { omnirouteInflight = null; });
-      omnirouteInflight.catch(() => {});
+  const cacheKey = `${url}\n${apiKey}`;
+  const cached = omnirouteCaches.get(cacheKey);
+  if (cached) {
+    if (Date.now() - cached.fetchedAt >= REMOTE_CACHE_TTL && !omnirouteInflight.has(cacheKey)) {
+      const refresh = doFetchOmniRouteModels(apiKey, url, cacheKey)
+        .finally(() => { omnirouteInflight.delete(cacheKey); });
+      omnirouteInflight.set(cacheKey, refresh);
+      refresh.catch(() => {});
     }
-    return omnirouteCache.models;
+    return cached.models;
   }
-  if (!omnirouteInflight) {
-    omnirouteInflight = doFetchOmniRouteModels(apiKey, url).finally(() => { omnirouteInflight = null; });
+  let request = omnirouteInflight.get(cacheKey);
+  if (!request) {
+    request = doFetchOmniRouteModels(apiKey, url, cacheKey)
+      .finally(() => { omnirouteInflight.delete(cacheKey); });
+    omnirouteInflight.set(cacheKey, request);
   }
-  return omnirouteInflight;
+  return request;
 }
 
-async function doFetchOmniRouteModels(apiKey: string, url: string): Promise<ProviderModelInfo[]> {
+async function doFetchOmniRouteModels(
+  apiKey: string,
+  url: string,
+  cacheKey: string,
+): Promise<ProviderModelInfo[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -259,7 +278,7 @@ async function doFetchOmniRouteModels(apiKey: string, url: string): Promise<Prov
       headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       signal: controller.signal,
     });
-    if (!res.ok) return omnirouteCache?.baseUrl === url ? omnirouteCache.models : [];
+    if (!res.ok) return omnirouteCaches.get(cacheKey)?.models ?? [];
     const data = (await res.json()) as { data?: Array<{ id: string; owned_by?: string }> };
     const aliasIds = new Set(OMNIROUTE_ROUTING_ALIASES.map((m) => m.id));
     const catalogue: ProviderModelInfo[] = (data.data ?? [])
@@ -273,12 +292,12 @@ async function doFetchOmniRouteModels(apiKey: string, url: string): Promise<Prov
         reasoningEffortSupported: supportsReasoningEffort(m.id),
       }));
     const models = [...OMNIROUTE_ROUTING_ALIASES, ...catalogue];
-    omnirouteCache = { models, fetchedAt: Date.now(), baseUrl: url };
+    omnirouteCaches.set(cacheKey, { models, fetchedAt: Date.now() });
     return models;
   } catch {
     // The router is local and often simply not running — a normal state, not an
     // error worth failing the whole model list over.
-    return omnirouteCache?.baseUrl === url ? omnirouteCache.models : [];
+    return omnirouteCaches.get(cacheKey)?.models ?? [];
   } finally {
     clearTimeout(timeout);
   }
@@ -287,17 +306,21 @@ async function doFetchOmniRouteModels(apiKey: string, url: string): Promise<Prov
 /** Fetch the Ollama tags catalogue. Returns [] on any non-OK response. */
 export async function fetchOllamaModels(baseUrl: string): Promise<ProviderModelInfo[]> {
   const url = baseUrl.replace(/\/+$/, "");
-  if (ollamaCache && ollamaCache.url === url) {
-    if (Date.now() - ollamaCache.fetchedAt >= OLLAMA_CACHE_TTL && !ollamaInflight) {
-      ollamaInflight = doFetchOllamaModels(url).finally(() => { ollamaInflight = null; });
-      ollamaInflight.catch(() => {});
+  const cached = ollamaCaches.get(url);
+  if (cached) {
+    if (Date.now() - cached.fetchedAt >= OLLAMA_CACHE_TTL && !ollamaInflight.has(url)) {
+      const refresh = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
+      ollamaInflight.set(url, refresh);
+      refresh.catch(() => {});
     }
-    return ollamaCache.models;
+    return cached.models;
   }
-  if (!ollamaInflight) {
-    ollamaInflight = doFetchOllamaModels(url).finally(() => { ollamaInflight = null; });
+  let request = ollamaInflight.get(url);
+  if (!request) {
+    request = doFetchOllamaModels(url).finally(() => { ollamaInflight.delete(url); });
+    ollamaInflight.set(url, request);
   }
-  return ollamaInflight;
+  return request;
 }
 
 async function doFetchOllamaModels(url: string): Promise<ProviderModelInfo[]> {
@@ -305,7 +328,7 @@ async function doFetchOllamaModels(url: string): Promise<ProviderModelInfo[]> {
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(`${url}/api/tags`, { signal: controller.signal });
-    if (!res.ok) return ollamaCache?.url === url ? ollamaCache.models : [];
+    if (!res.ok) return ollamaCaches.get(url)?.models ?? [];
     const data = (await res.json()) as {
       models?: Array<{
         name: string;
@@ -318,10 +341,11 @@ async function doFetchOllamaModels(url: string): Promise<ProviderModelInfo[]> {
       name: m.name,
       description: [m.details?.family, m.details?.parameter_size].filter(Boolean).join(" · ") || undefined,
     }));
-    ollamaCache = { models, fetchedAt: Date.now(), url };
+    ollamaCaches.set(url, { models, fetchedAt: Date.now() });
     return models;
   } catch (err) {
-    if (ollamaCache?.url === url) return ollamaCache.models;
+    const cached = ollamaCaches.get(url);
+    if (cached) return cached.models;
     throw err;
   } finally {
     clearTimeout(timeout);

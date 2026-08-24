@@ -1,3 +1,4 @@
+import { encodeJaitModelId, serializeJaitBackendInstances } from "@jait/shared";
 import { describe, expect, it } from "vitest";
 import { JaitConfigError, normalizeOpenRouterModelId, resolveJaitLlmConfig } from "./jait-llm.js";
 
@@ -124,5 +125,71 @@ describe("resolveJaitLlmConfig", () => {
         resolveJaitLlmConfig({ config, requestedModel: alias, jaitBackend: "openai" }),
       ).toThrow(JaitConfigError);
     }
+  });
+
+  it("routes an encoded model to its exact Ollama instance", () => {
+    const apiKeys = {
+      JAIT_BACKEND_INSTANCES: serializeJaitBackendInstances([
+        {
+          id: "desktop",
+          type: "ollama",
+          name: "Desktop",
+          baseUrl: "http://desktop:11434",
+          numCtx: 65536,
+        },
+        {
+          id: "server",
+          type: "ollama",
+          name: "Server",
+          baseUrl: "http://server:11434",
+          numCtx: 131072,
+        },
+      ]),
+    };
+    const llm = resolveJaitLlmConfig({
+      config,
+      apiKeys,
+      requestedModel: encodeJaitModelId("ollama", "server", "qwen3:32b"),
+      jaitBackend: "openai",
+    });
+
+    expect(llm.backend).toBe("ollama");
+    expect(llm.openaiBaseUrl).toBe("http://server:11434/v1");
+    expect(llm.openaiModel).toBe("qwen3:32b");
+    expect(llm.numCtx).toBe(131072);
+  });
+
+  it("routes an encoded model to a named OpenAI-compatible instance", () => {
+    const apiKeys = {
+      JAIT_BACKEND_INSTANCES: serializeJaitBackendInstances([
+        {
+          id: "glm",
+          type: "openai",
+          name: "GLM",
+          baseUrl: "https://api.example.com/v1/",
+          apiKey: "instance-key",
+        },
+      ]),
+    };
+    const llm = resolveJaitLlmConfig({
+      config,
+      apiKeys,
+      requestedModel: encodeJaitModelId("openai", "glm", "glm-5"),
+      jaitBackend: "ollama",
+    });
+
+    expect(llm.backend).toBe("openai");
+    expect(llm.openaiBaseUrl).toBe("https://api.example.com/v1");
+    expect(llm.openaiApiKey).toBe("instance-key");
+    expect(llm.openaiModel).toBe("glm-5");
+  });
+
+  it("fails clearly when a selected backend instance was removed", () => {
+    expect(() => resolveJaitLlmConfig({
+      config,
+      apiKeys: { JAIT_BACKEND_INSTANCES: "[]" },
+      requestedModel: encodeJaitModelId("ollama", "gone", "qwen3"),
+      jaitBackend: "ollama",
+    })).toThrow(/no longer configured/i);
   });
 });

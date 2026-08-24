@@ -34,6 +34,12 @@ import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
 import { agentsApi, type ProviderAccount, type ProviderAccountType, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
 import { copyTextToClipboard } from '@/lib/clipboard'
+import {
+  JAIT_BACKEND_DEFAULT_URLS,
+  parseJaitBackendInstances,
+  serializeJaitBackendInstances,
+  type JaitBackendInstanceConfig,
+} from '@jait/shared'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -66,6 +72,93 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
 const API_KEY_FIELDS = API_FIELD_GROUPS.flatMap((g) => g.fields) as unknown as readonly string[]
 
 type FieldName = string
+
+type BackendInstanceDraft = Omit<JaitBackendInstanceConfig, 'apiKey' | 'model' | 'numCtx'> & {
+  apiKey: string
+  model: string
+  numCtx: string
+}
+
+const BACKEND_OPTIONS: Array<{
+  type: JaitBackend
+  label: string
+  description: string
+}> = [
+  { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.' },
+  { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.' },
+  { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.' },
+  { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.' },
+]
+
+function legacyBackendDraft(
+  type: JaitBackend,
+  apiKeys: Record<string, string>,
+): BackendInstanceDraft {
+  if (type === 'openrouter') {
+    return {
+      id: 'legacy-openrouter',
+      type,
+      name: 'OpenRouter',
+      baseUrl: JAIT_BACKEND_DEFAULT_URLS.openrouter,
+      apiKey: apiKeys.OPENROUTER_API_KEY ?? '',
+      model: '',
+      numCtx: '',
+    }
+  }
+  if (type === 'ollama') {
+    return {
+      id: 'legacy-ollama',
+      type,
+      name: 'Local Ollama',
+      baseUrl: apiKeys.OLLAMA_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.ollama,
+      apiKey: '',
+      model: apiKeys.OLLAMA_MODEL ?? '',
+      numCtx: apiKeys.OLLAMA_NUM_CTX ?? '',
+    }
+  }
+  if (type === 'omniroute') {
+    return {
+      id: 'legacy-omniroute',
+      type,
+      name: 'Local OmniRoute',
+      baseUrl: apiKeys.OMNIROUTE_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.omniroute,
+      apiKey: apiKeys.OMNIROUTE_API_KEY ?? '',
+      model: apiKeys.OMNIROUTE_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  return {
+    id: 'legacy-openai',
+    type,
+    name: 'OpenAI',
+    baseUrl: apiKeys.OPENAI_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.openai,
+    apiKey: apiKeys.OPENAI_API_KEY ?? '',
+    model: apiKeys.OPENAI_MODEL ?? '',
+    numCtx: '',
+  }
+}
+
+export function getBackendInstanceDrafts(
+  apiKeys: Record<string, string>,
+  selectedBackend: JaitBackend,
+): BackendInstanceDraft[] {
+  const configured = parseJaitBackendInstances(apiKeys.JAIT_BACKEND_INSTANCES)
+  if (configured.length > 0) {
+    return configured.map((instance) => ({
+      ...instance,
+      apiKey: instance.apiKey ?? '',
+      model: instance.model ?? '',
+      numCtx: instance.numCtx ? String(instance.numCtx) : '',
+    }))
+  }
+
+  const legacyTypes = new Set<JaitBackend>([selectedBackend])
+  if (apiKeys.OPENAI_API_KEY || apiKeys.OPENAI_BASE_URL) legacyTypes.add('openai')
+  if (apiKeys.OPENROUTER_API_KEY) legacyTypes.add('openrouter')
+  if (apiKeys.OLLAMA_URL || apiKeys.OLLAMA_MODEL) legacyTypes.add('ollama')
+  if (apiKeys.OMNIROUTE_BASE_URL || apiKeys.OMNIROUTE_API_KEY) legacyTypes.add('omniroute')
+  return [...legacyTypes].map((type) => legacyBackendDraft(type, apiKeys))
+}
 
 /** Map field prefix → lobe icon component */
 const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -205,8 +298,10 @@ export function SettingsPage({
   const [saving, setSaving] = useState(false)
   const [maxRoundsDraft, setMaxRoundsDraft] = useState<string>(apiKeys['JAIT_MAX_ROUNDS'] ?? '')
   const [savingMaxRounds, setSavingMaxRounds] = useState(false)
-  const [numCtxDraft, setNumCtxDraft] = useState<string>(apiKeys['OLLAMA_NUM_CTX'] ?? '')
-  const [savingNumCtx, setSavingNumCtx] = useState(false)
+  const [backendInstancesDraft, setBackendInstancesDraft] = useState<BackendInstanceDraft[]>(
+    () => getBackendInstanceDrafts(apiKeys, jaitBackend),
+  )
+  const [savingBackendInstances, setSavingBackendInstances] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearingProjects, setClearingProjects] = useState(false)
   const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
@@ -333,8 +428,8 @@ export function SettingsPage({
   useEffect(() => {
     setDraft(apiKeys)
     setMaxRoundsDraft(apiKeys['JAIT_MAX_ROUNDS'] ?? '')
-    setNumCtxDraft(apiKeys['OLLAMA_NUM_CTX'] ?? '')
-  }, [apiKeys])
+    setBackendInstancesDraft(getBackendInstanceDrafts(apiKeys, jaitBackend))
+  }, [apiKeys, jaitBackend])
 
   const maxRoundsDirty = (maxRoundsDraft.trim()) !== (apiKeys['JAIT_MAX_ROUNDS'] ?? '')
   const handleSaveMaxRounds = async () => {
@@ -350,18 +445,68 @@ export function SettingsPage({
     }
   }
 
-  const numCtxDirty = (numCtxDraft.trim()) !== (apiKeys['OLLAMA_NUM_CTX'] ?? '')
-  const handleSaveNumCtx = async () => {
-    setSavingNumCtx(true)
+  const savedBackendInstances = getBackendInstanceDrafts(apiKeys, jaitBackend)
+  const backendInstancesDirty = JSON.stringify(backendInstancesDraft) !== JSON.stringify(savedBackendInstances)
+  const backendInstancesValid = backendInstancesDraft.length > 0 && backendInstancesDraft.every((instance) => (
+    instance.name.trim()
+    && instance.baseUrl.trim()
+    && (!instance.numCtx.trim() || Number(instance.numCtx) >= 2048)
+  ))
+  const handleSaveBackendInstances = async () => {
+    setSavingBackendInstances(true)
     try {
-      const next = { ...apiKeys }
-      const trimmed = numCtxDraft.trim()
-      if (trimmed) next['OLLAMA_NUM_CTX'] = trimmed
-      else delete next['OLLAMA_NUM_CTX']
-      await onSaveApiKeys(next)
+      const instances: JaitBackendInstanceConfig[] = backendInstancesDraft.map((instance) => ({
+        id: instance.id,
+        type: instance.type,
+        name: instance.name.trim(),
+        baseUrl: instance.baseUrl.trim(),
+        ...(instance.apiKey.trim() ? { apiKey: instance.apiKey.trim() } : {}),
+        ...(instance.model.trim() ? { model: instance.model.trim() } : {}),
+        ...(instance.type === 'ollama' && instance.numCtx.trim()
+          ? { numCtx: Number(instance.numCtx) }
+          : {}),
+      }))
+      await onSaveApiKeys({
+        ...apiKeys,
+        JAIT_BACKEND_INSTANCES: serializeJaitBackendInstances(instances),
+      })
     } finally {
-      setSavingNumCtx(false)
+      setSavingBackendInstances(false)
     }
+  }
+  const handleAddBackendInstance = () => {
+    const id = globalThis.crypto?.randomUUID?.() ?? `backend-${Date.now()}`
+    const option = BACKEND_OPTIONS.find((candidate) => candidate.type === jaitBackend) ?? BACKEND_OPTIONS[0]
+    setBackendInstancesDraft((instances) => [
+      ...instances,
+      {
+        id,
+        type: option.type,
+        name: `${option.label} ${instances.filter((instance) => instance.type === option.type).length + 1}`,
+        baseUrl: JAIT_BACKEND_DEFAULT_URLS[option.type],
+        apiKey: '',
+        model: '',
+        numCtx: '',
+      },
+    ])
+  }
+  const updateBackendInstance = (id: string, patch: Partial<BackendInstanceDraft>) => {
+    setBackendInstancesDraft((instances) => instances.map((instance) => {
+      if (instance.id !== id) return instance
+      if (patch.type && patch.type !== instance.type) {
+        const option = BACKEND_OPTIONS.find((candidate) => candidate.type === patch.type)
+        return {
+          ...instance,
+          ...patch,
+          name: option?.label ?? instance.name,
+          baseUrl: JAIT_BACKEND_DEFAULT_URLS[patch.type],
+          apiKey: '',
+          model: '',
+          numCtx: '',
+        }
+      }
+      return { ...instance, ...patch }
+    }))
   }
 
   const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? ''))
@@ -797,7 +942,7 @@ export function SettingsPage({
     'project archive archived clear delete projects remove',
   )
   const showJaitBackendSection = matchesSearch(
-    'jait backend provider openai openrouter model api llm max rounds agent tool calls loop iterations',
+    'jait backend provider openai openrouter ollama instances model api llm context max rounds agent tool calls loop iterations',
     jaitBackend,
   )
   const showProviderAccountsSection = matchesSearch(
@@ -1494,11 +1639,19 @@ const providerAccountsCard = (
               <div>
                 <h2 className="text-base font-medium">{highlight('Jait LLM Backend')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Choose which API backend the Jait provider uses for model inference.
+                  Configure named inference backends. The model picker combines their catalogues and routes each request to the instance that supplied the model.
                 </p>
               </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {BACKEND_OPTIONS.map((option) => (
+                  <div key={option.type} className="rounded-md border p-3">
+                    <p className="text-sm font-medium">{option.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
+                  </div>
+                ))}
+              </div>
               <div className="max-w-sm">
-                <Label htmlFor="jait-backend" className="mb-1.5 block">Backend provider</Label>
+                <Label htmlFor="jait-backend" className="mb-1.5 block">Fallback backend type</Label>
                 <Select
                   value={jaitBackend}
                   onValueChange={(value) => { void onJaitBackendChange(value as JaitBackend) }}
@@ -1507,28 +1660,114 @@ const providerAccountsCard = (
                     <SelectValue placeholder="Select backend" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">OpenAI (direct)</SelectItem>
-                    <SelectItem value="openrouter">OpenRouter</SelectItem>
-                    <SelectItem value="ollama">Ollama (local)</SelectItem>
-                    <SelectItem value="omniroute">OmniRoute (local router)</SelectItem>
+                    {BACKEND_OPTIONS.map((option) => (
+                      <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  {jaitBackend === 'openrouter'
-                    ? 'Models will be fetched from OpenRouter. Set your OPENROUTER_API_KEY in the API tab.'
-                    : jaitBackend === 'ollama'
-                      ? 'Models will be fetched from your local Ollama instance. Set OLLAMA_URL in the API tab if not running on localhost:11434.'
-                      : jaitBackend === 'omniroute'
-                        ? 'Models come from the OmniRoute router running on your machine (default http://localhost:20128/v1). The API key is optional. Pick the "auto" model to let OmniRoute route each request itself.'
-                        : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
+                  Used for legacy or manually entered model IDs. Models picked from a named instance always route to that exact instance.
                 </p>
-                {jaitBackend === 'omniroute' && (
-                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-500">
-                    OmniRoute forwards requests to up to ~290 third-party providers, some of whose free tiers allow
-                    training on submitted data. Chats include your repository contents — pick your providers in the
-                    OmniRoute dashboard accordingly.
+              </div>
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <Label>Backend instances</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Add any backend type more than once. Each instance contributes its models and keeps its own URL, key, and defaults.
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleAddBackendInstance}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Add {BACKEND_OPTIONS.find((option) => option.type === jaitBackend)?.label}
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {backendInstancesDraft.map((instance) => (
+                    <div key={instance.id} className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                          <Select
+                            value={instance.type}
+                            onValueChange={(value) => updateBackendInstance(instance.id, { type: value as JaitBackend })}
+                          >
+                            <SelectTrigger aria-label="Backend type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BACKEND_OPTIONS.map((option) => (
+                                <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            aria-label="Backend instance name"
+                            placeholder="Instance name"
+                            value={instance.name}
+                            onChange={(event) => updateBackendInstance(instance.id, { name: event.target.value })}
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove ${instance.name}`}
+                          disabled={backendInstancesDraft.length === 1}
+                          onClick={() => setBackendInstancesDraft((instances) => instances.filter((item) => item.id !== instance.id))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 lg:grid-cols-2">
+                        <Input
+                          aria-label="Backend base URL"
+                          placeholder={JAIT_BACKEND_DEFAULT_URLS[instance.type]}
+                          value={instance.baseUrl}
+                          onChange={(event) => updateBackendInstance(instance.id, { baseUrl: event.target.value })}
+                        />
+                        <Input
+                          aria-label="Backend API key"
+                          type="password"
+                          autoComplete="off"
+                          placeholder={instance.type === 'ollama' ? 'API key (optional)' : 'API key'}
+                          value={instance.apiKey}
+                          onChange={(event) => updateBackendInstance(instance.id, { apiKey: event.target.value })}
+                        />
+                        <Input
+                          aria-label="Default model"
+                          placeholder="Default model (optional)"
+                          value={instance.model}
+                          onChange={(event) => updateBackendInstance(instance.id, { model: event.target.value })}
+                        />
+                        {instance.type === 'ollama' && (
+                          <Input
+                            aria-label="Ollama context window"
+                            type="number"
+                            min={2048}
+                            step={1024}
+                            inputMode="numeric"
+                            placeholder="num_ctx (default 32768)"
+                            value={instance.numCtx}
+                            onChange={(event) => updateBackendInstance(instance.id, { numCtx: event.target.value })}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {backendInstancesDraft.some((instance) => instance.type === 'omniroute') && (
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+                    OmniRoute can forward repository content to third-party providers. Review the providers enabled in each router.
                   </p>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => { void handleSaveBackendInstances() }}
+                  disabled={savingBackendInstances || !backendInstancesDirty || !backendInstancesValid}
+                >
+                  {savingBackendInstances ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save backend instances'}
+                </Button>
               </div>
               <div className="max-w-sm">
                 <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Agent checkpoint interval</Label>
@@ -1541,7 +1780,7 @@ const providerAccountsCard = (
                     inputMode="numeric"
                     placeholder="64"
                     value={maxRoundsDraft}
-                    onChange={(e) => setMaxRoundsDraft(e.target.value)}
+                    onChange={(event) => setMaxRoundsDraft(event.target.value)}
                     className="w-28"
                   />
                   <Button
@@ -1557,35 +1796,6 @@ const providerAccountsCard = (
                   How often a long-running agent compacts context and reassesses its remaining work. It continues automatically after each checkpoint (default 64). Leave blank to use the gateway default. Max 200.
                 </p>
               </div>
-              {jaitBackend === 'ollama' && (
-                <div className="max-w-sm">
-                  <Label htmlFor="ollama-num-ctx" className="mb-1.5 block">Ollama context window (num_ctx)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="ollama-num-ctx"
-                      type="number"
-                      min={2048}
-                      step={1024}
-                      inputMode="numeric"
-                      placeholder="32768"
-                      value={numCtxDraft}
-                      onChange={(e) => setNumCtxDraft(e.target.value)}
-                      className="w-32"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { void handleSaveNumCtx() }}
-                      disabled={savingNumCtx || !numCtxDirty}
-                    >
-                      {savingNumCtx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-                    </Button>
-                  </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    Token context Jait requests from ollama. The OpenAI-compatible endpoint ignores this, so Jait now calls ollama natively to set it. Higher = more usable context but more VRAM. Set it to what your GPU can load (e.g. 65536 or 131072). Leave blank for the gateway default (32768).
-                  </p>
-                </div>
-              )}
             </Card>
           )}
 
