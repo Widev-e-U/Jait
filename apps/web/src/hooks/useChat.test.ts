@@ -2,18 +2,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
-  applyResumeSnapshotSeq,
   buildReasoningEffortRequestField,
   formatChatHttpError,
-  getResumeReconnectDelay,
   getVisibleChangedFiles,
-  isRetryableResumeResponseStatus,
-  isResumeStreamRunCurrent,
+  isTurnEndEvent,
+  isTurnStartEvent,
+  parseQueuedChatResponse,
   shouldFlushStreamTextImmediately,
-  shouldProcessResumeStreamEvent,
-  shouldOpenResumeStream,
-  shouldOwnDirectChatStream,
-  shouldProcessDirectStreamEvent,
   segmentsWithError,
   shouldForceMessageLifecycleRefresh,
   shouldResumeChatSession,
@@ -46,27 +41,6 @@ describe('buildReasoningEffortRequestField', () => {
     expect(buildReasoningEffortRequestField('high')).toEqual({ reasoningEffort: 'high' })
     expect(buildReasoningEffortRequestField(null)).toEqual({ reasoningEffort: null })
     expect(buildReasoningEffortRequestField(undefined)).toEqual({})
-  })
-})
-
-describe('resume stream recovery policy', () => {
-  it('uses jittered exponential backoff capped at 30 seconds', () => {
-    expect(getResumeReconnectDelay(1, () => 0)).toBe(250)
-    expect(getResumeReconnectDelay(1, () => 1)).toBe(500)
-    expect(getResumeReconnectDelay(2, () => 0)).toBe(500)
-    expect(getResumeReconnectDelay(2, () => 1)).toBe(1_000)
-    expect(getResumeReconnectDelay(20, () => 0)).toBe(15_000)
-    expect(getResumeReconnectDelay(20, () => 1)).toBe(30_000)
-  })
-
-  it('retries temporary HTTP failures but not terminal client responses', () => {
-    expect(isRetryableResumeResponseStatus(408)).toBe(true)
-    expect(isRetryableResumeResponseStatus(425)).toBe(true)
-    expect(isRetryableResumeResponseStatus(429)).toBe(true)
-    expect(isRetryableResumeResponseStatus(503)).toBe(true)
-    expect(isRetryableResumeResponseStatus(400)).toBe(false)
-    expect(isRetryableResumeResponseStatus(401)).toBe(false)
-    expect(isRetryableResumeResponseStatus(404)).toBe(false)
   })
 })
 
@@ -163,174 +137,10 @@ describe('shouldFlushStreamTextImmediately', () => {
   })
 })
 
-describe('shouldProcessResumeStreamEvent', () => {
-  it('drops duplicate or older sequenced resume events for the same session', () => {
-    const seen = new Map<string, number>()
-
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 10 })).toBe(true)
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 10 })).toBe(false)
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 9 })).toBe(false)
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 11 })).toBe(true)
-  })
-
-  it('tracks sessions independently and allows unsequenced direct events', () => {
-    const seen = new Map<string, number>([['session-1', 5]])
-
-    expect(shouldProcessResumeStreamEvent(seen, 'session-2', { seq: 1 })).toBe(true)
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', {})).toBe(true)
-  })
-})
-
-describe('applyResumeSnapshotSeq', () => {
-  it('resets a stale high baseline so a newer turn\'s lower-seq events are accepted', () => {
-    // The gateway resets its per-session seq counter to 0 when a new turn
-    // (e.g. a hidden background-command notification) starts. The client had
-    // last seen seq 42 from the previous turn.
-    const seen = new Map<string, number>([['session-1', 42]])
-
-    applyResumeSnapshotSeq(seen, 'session-1', 0)
-
-    // The new turn's live events must now pass the dedup gate.
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 1 })).toBe(true)
-    expect(shouldProcessResumeStreamEvent(seen, 'session-1', { seq: 2 })).toBe(true)
-  })
-
-  it('ignores a non-numeric snapshot seq', () => {
-    const seen = new Map<string, number>([['session-1', 7]])
-
-    applyResumeSnapshotSeq(seen, 'session-1', undefined)
-
-    expect(seen.get('session-1')).toBe(7)
-  })
-})
-
-describe('shouldOpenResumeStream', () => {
-  it('does not open a duplicate resume stream for the active session', () => {
-    expect(shouldOpenResumeStream({
-      sessionId: 'session-1',
-      activeResumeSessionId: 'session-1',
-      hasActiveResumeStream: true,
-      directStreamSessionId: null,
-      hasActiveDirectStream: false,
-    })).toBe(false)
-  })
-
-  it('restarts a stale resume stream when a mobile browser wakes', () => {
-    expect(shouldOpenResumeStream({
-      sessionId: 'session-1',
-      activeResumeSessionId: 'session-1',
-      hasActiveResumeStream: true,
-      directStreamSessionId: null,
-      hasActiveDirectStream: false,
-      forceRestart: true,
-    })).toBe(true)
-  })
-
-  it('does not open a resume stream while the direct chat stream owns the session', () => {
-    expect(shouldOpenResumeStream({
-      sessionId: 'session-1',
-      activeResumeSessionId: null,
-      hasActiveResumeStream: false,
-      directStreamSessionId: 'session-1',
-      hasActiveDirectStream: true,
-      forceRestart: true,
-    })).toBe(false)
-  })
-
-  it('blocks the session-switch path from attaching a second consumer mid-run', () => {
-    // Re-entering a chat while this tab's own POST stream is still running. That
-    // stream is only aborted by stop/restart, never by a session switch, so
-    // opening a resume stream here means two consumers append tokens into the
-    // same turn — duplicated/interleaved text on screen that isn't in the
-    // gateway's persisted copy, so it vanishes on the next load.
-    expect(shouldOpenResumeStream({
-      sessionId: 'session-1',
-      activeResumeSessionId: null,
-      hasActiveResumeStream: false,
-      directStreamSessionId: 'session-1',
-      hasActiveDirectStream: true,
-    })).toBe(false)
-  })
-
-  it('allows a resume stream when there is no active owner for the session', () => {
-    expect(shouldOpenResumeStream({
-      sessionId: 'session-1',
-      activeResumeSessionId: 'session-2',
-      hasActiveResumeStream: true,
-      directStreamSessionId: null,
-      hasActiveDirectStream: false,
-    })).toBe(true)
-  })
-})
-
 describe('shouldForceMessageLifecycleRefresh', () => {
   it('forces reconciliation for both stream start and completion signals', () => {
     expect(shouldForceMessageLifecycleRefresh('started')).toBe(true)
     expect(shouldForceMessageLifecycleRefresh('complete')).toBe(true)
-  })
-})
-
-describe('isResumeStreamRunCurrent', () => {
-  it('invalidates buffered resume events as soon as the stream is aborted', () => {
-    expect(isResumeStreamRunCurrent({
-      cancelled: false,
-      aborted: true,
-      currentRunId: 7,
-      runId: 7,
-    })).toBe(false)
-  })
-})
-
-describe('shouldOwnDirectChatStream', () => {
-  it('does not let a concurrent submit for the same session take over the active stream', () => {
-    expect(shouldOwnDirectChatStream({
-      sessionId: 'session-1',
-      directStreamSessionId: 'session-1',
-      hasActiveDirectStream: true,
-    })).toBe(false)
-  })
-
-  it('allows ownership when no direct stream is active for that session', () => {
-    expect(shouldOwnDirectChatStream({
-      sessionId: 'session-1',
-      directStreamSessionId: 'session-2',
-      hasActiveDirectStream: true,
-    })).toBe(true)
-    expect(shouldOwnDirectChatStream({
-      sessionId: 'session-1',
-      directStreamSessionId: null,
-      hasActiveDirectStream: false,
-    })).toBe(true)
-  })
-})
-
-describe('shouldProcessDirectStreamEvent', () => {
-  it('guards the production direct-stream loop before event dispatch', () => {
-    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
-    const directStreamStart = source.indexOf('const response = await fetch(`${API_URL}/api/chat`')
-    const directStreamEnd = source.indexOf("data.type === 'done'", directStreamStart)
-    const directStreamBlock = source.slice(directStreamStart, directStreamEnd)
-
-    expect(directStreamBlock).toContain(
-      'if (!shouldProcessDirectStreamEvent(data.type, !isStale())) continue',
-    )
-  })
-
-  it('keeps session-scoped events inside the chat that owns the stream', () => {
-    expect(shouldProcessDirectStreamEvent('todo_list', true)).toBe(true)
-    expect(shouldProcessDirectStreamEvent('plan_complete', true)).toBe(true)
-
-    expect(shouldProcessDirectStreamEvent('todo_list', false)).toBe(false)
-    expect(shouldProcessDirectStreamEvent('plan_complete', false)).toBe(false)
-    expect(shouldProcessDirectStreamEvent('context_usage', false)).toBe(false)
-    expect(shouldProcessDirectStreamEvent('session_info', false)).toBe(false)
-    expect(shouldProcessDirectStreamEvent('file_changed', false)).toBe(false)
-  })
-
-  it('still lets stale streams finish their own lifecycle', () => {
-    expect(shouldProcessDirectStreamEvent('done', false)).toBe(true)
-    expect(shouldProcessDirectStreamEvent('queued', false)).toBe(true)
-    expect(shouldProcessDirectStreamEvent('error', false)).toBe(true)
   })
 })
 
@@ -381,135 +191,139 @@ describe('segmentsWithError', () => {
 })
 
 describe('turn-ending error handling', () => {
+  const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
   it('appends the gateway error to the in-flight turn instead of spawning a second bubble', () => {
-    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
-    const sseErrorStart = source.indexOf("} else if (data.type === 'error') {")
-    const sseErrorEnd = source.indexOf('} catch (parseErr)', sseErrorStart)
-    const sseErrorBlock = source.slice(sseErrorStart, sseErrorEnd)
+    const src = source()
+    const errorStart = src.indexOf("} else if (data.type === 'error') {")
+    const errorBlock = src.slice(errorStart, src.indexOf('interface SnapshotResponse', errorStart))
 
     // The existing turn is kept and marked with the failure at the end.
-    expect(sseErrorBlock).toContain('segmentsWithError(finalSnapshot, errorMsg)')
-    expect(sseErrorBlock).toContain('const hasTurn = !!assistantId && prev.messages.some(m => m.id === assistantId)')
+    expect(errorBlock).toContain('segmentsWithError(finalSnapshot, errorMsg)')
+    expect(errorBlock).toContain('const hasTurn = !!finishedId && prev.messages.some(m => m.id === finishedId)')
     // No separate error bubble is appended when a turn exists.
-    expect(sseErrorBlock).toContain('prev.messages.map')
+    expect(errorBlock).toContain('prev.messages.map')
   })
 
-  it('direct-stream catch keeps the partial turn and marks where it stopped', () => {
-    const source = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
-    // The direct-stream catch is the *last* place the stream is finished — the
-    // SSE handler above also calls stream.finish(), so anchor on the last one.
-    const catchStart = source.lastIndexOf('const finalSnapshot = stream.finish()')
-    // Anchor the end on the catch's own exit rather than a fixed length, so
-    // adding branches inside the catch can't silently slide the assertion out
-    // of the window and make this pass/fail for the wrong reason.
-    const catchBlock = source.slice(catchStart, source.indexOf("return 'retry'", catchStart))
+  it('renders a send that never became a turn, since no error event is coming', () => {
+    const src = source()
+    // A POST that failed before the gateway accepted it produces nothing on the
+    // subscription, so `sendMessage` itself owns the failure. If it stopped
+    // rendering it, the turn would fail silently.
+    const catchStart = src.indexOf('    } catch (error) {', src.indexOf('const sendMessage = useCallback(async ('))
+    const catchBlock = src.slice(catchStart, src.indexOf("return 'retry'", catchStart))
 
-    expect(catchBlock).toContain('segmentsWithError(finalSnapshot, errorMessage)')
-    expect(catchBlock).toContain('m.id === assistantId')
+    expect(catchBlock).toContain('const owned = releasePlaceholder()')
+    expect(catchBlock).toContain("segments: [{ type: 'error' as const, content: errorMessage }]")
   })
 })
 
-describe('direct-stream stall recovery', () => {
+describe('single-consumer send path', () => {
   const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
 
-  const directStreamBlock = () => {
+  const sendBlock = () => {
     const src = source()
-    const start = src.indexOf('const response = await fetch(`${API_URL}/api/chat`')
-    const end = src.indexOf("} catch (error) {", start)
-    return src.slice(start, end)
+    const start = src.indexOf('const sendMessage = useCallback(async (')
+    return src.slice(start, src.indexOf('}, [authToken, onLoginRequired, resumeSessionStream, sessionId])', start))
   }
 
   // ── The bug this guards against ──
-  // A black-holed socket (no FIN/RST) makes `reader.read()` park forever, so the
-  // direct stream never settles and `abortControllerRef` is never cleared. These
-  // three assertions show that state has no exit transition: every recovery
-  // entry point is refused while a direct stream is nominally active.
-  it('proves a live direct stream blocks every resume path, including forceRestart', () => {
-    const base = {
-      sessionId: 'session-1',
-      activeResumeSessionId: null,
-      hasActiveResumeStream: false,
-      directStreamSessionId: 'session-1',
-      hasActiveDirectStream: true,
-    }
-
-    // visibilitychange / online / pageshow all call through with forceRestart.
-    expect(shouldOpenResumeStream({ ...base, forceRestart: true })).toBe(false)
-    // A session switch away and back.
-    expect(shouldOpenResumeStream(base)).toBe(false)
-    // Re-entering the same chat with a resume stream also already open.
-    expect(shouldOpenResumeStream({
-      ...base,
-      activeResumeSessionId: 'session-1',
-      hasActiveResumeStream: true,
-      forceRestart: true,
-    })).toBe(false)
+  // Reading the POST response *and* the session subscription meant two
+  // consumers appending into the same turn: duplicated/interleaved tokens on
+  // screen that aren't in the gateway's persisted copy, so they vanish on the
+  // next load. All the ownership/handoff bookkeeping existed to arbitrate that.
+  it('never reads the chat POST body as a second event source', () => {
+    const block = sendBlock()
+    expect(block).not.toContain('response.body?.getReader()')
+    expect(block).not.toContain('new TextDecoder()')
+    // The socket is released instead, which the gateway treats as a client
+    // disconnect while it keeps producing and persisting the turn.
+    expect(block).toContain('void response.body?.cancel()')
   })
 
-  // This gate is deliberate — two consumers appending into one turn duplicates
-  // text that isn't in the gateway's persisted copy. So the fix must make the
-  // dead direct stream *settle*, not race a second consumer past the gate.
-  it('bounds the direct read loop so a dead socket cannot park it forever', () => {
-    const block = directStreamBlock()
-    expect(block).toContain('armDirectIdleTimer()')
-    // Rearmed inside the loop, so a live-but-slow turn never trips it.
-    const loopStart = block.indexOf('while (true) {')
-    expect(block.slice(loopStart)).toContain('armDirectIdleTimer()')
+  it('hands the optimistic bubble to the consumer instead of streaming into it', () => {
+    const block = sendBlock()
+    expect(block).toContain('pendingAssistantPlaceholderRef.current = { sessionId: requestSessionId, messageId: assistantId }')
   })
 
-  it('clears the watchdog on every exit path so no timer outlives its send', () => {
+  it('still reads the 202 queued reply, which never becomes a turn', () => {
+    const block = sendBlock()
+    // A queued message produces no events at all, so the two-line 202 body is
+    // the only place its server-assigned id exists.
+    expect(block).toContain('parseQueuedChatResponse(await response.text())')
+    expect(block).toContain("return 'queued'")
+  })
+})
+
+describe('durable subscription lifecycle', () => {
+  const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
+  it('subscribes from the exact log position the snapshot was taken at', () => {
     const src = source()
-    const sendStart = src.indexOf('const sendMessage = useCallback(')
-    // sendMessage has several `return 'sent'` exits, so close on its dependency
-    // array instead of the first one.
-    const sendBlock = src.slice(sendStart, src.indexOf('}, [authToken, clearUnfinishedTodoList', sendStart))
-    // Declared per-send (a local, not a ref or a map keyed by session).
-    expect(sendBlock).toContain('let directIdleTimer: ReturnType<typeof setTimeout> | null = null')
-    // Normal completion + catch entry.
-    expect(sendBlock.match(/clearDirectIdleTimer\(\)/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
-    // Rearming clears first, so timers are replaced rather than stacked.
-    expect(sendBlock).toContain('const armDirectIdleTimer = () => {\n      clearDirectIdleTimer()')
+    // Any other resume position leaves a gap (subscribing later) or replays
+    // events the snapshot already contains (subscribing earlier).
+    expect(src).toContain("subscribe(typeof data.seq === 'number' ? String(data.seq) : null)")
   })
 
-  it('treats a watchdog abort as a reconnect, not a user cancel', () => {
+  it('resets the per-turn accumulator at the turn boundary, not per connection', () => {
     const src = source()
-    const catchStart = src.lastIndexOf('const finalSnapshot = stream.finish()')
-    const catchBlock = src.slice(catchStart, catchStart + 2000)
-    // The stalled branch must come before the cancel handling that marks running
-    // tool calls as "Cancelled" and drops the placeholder.
-    const stalledIdx = catchBlock.indexOf('if (directStreamStalled) {')
-    const cancelIdx = catchBlock.indexOf("message: 'Cancelled'")
-    expect(stalledIdx).toBeGreaterThan(-1)
-    expect(stalledIdx).toBeLessThan(cancelIdx)
-    // It hands off rather than tearing down the turn.
-    expect(catchBlock.slice(stalledIdx, cancelIdx)).toContain('finishOwnedDirectStream()')
+    // The subscription outlives turns now. Without an explicit reset the next
+    // turn's tokens would append to the previous turn's segment list.
+    const beginTurn = src.slice(src.indexOf('const beginTurn = () => {'), src.indexOf('/** Resolve which bubble'))
+    expect(beginTurn).toContain('stream = createMessageStream()')
+    expect(beginTurn).toContain('assistantId = null')
+    // Pending text belongs to the outgoing turn, so it must drain first.
+    expect(beginTurn.indexOf('textPacer.flushNow()')).toBeLessThan(beginTurn.indexOf('stream = createMessageStream()'))
   })
 
-  it('arms the handoff so finishDirectStream actually opens the resume stream', () => {
+  it('only adopts a snapshot assistant bubble while that turn is still running', () => {
     const src = source()
-    const armStart = src.indexOf('const armDirectIdleTimer = () => {')
-    const armBlock = src.slice(armStart, src.indexOf('}, DIRECT_STREAM_IDLE_TIMEOUT_MS)', armStart))
-    // finishDirectStream early-returns unless this flag is set, so without it the
-    // watchdog would clear the ref but never re-attach.
-    expect(armBlock).toContain('pendingResumeAfterDirectStreamRef.current = true')
-    expect(armBlock).toContain('controller.abort()')
+    // Adopting a *finished* answer would stream the next turn into it.
+    expect(src).toContain("if (snapshotStreaming && lastMsg?.role === 'assistant') {")
   })
 
-  it('uses the live session and latest resume callback after initial-session creation', () => {
+  it('keeps the subscription open when the user stops a turn', () => {
     const src = source()
-    const finishStart = src.indexOf('const finishDirectStream = useCallback(')
-    const finishBlock = src.slice(finishStart, src.indexOf('\n\n  // When sessionId changes', finishStart))
+    const cancelBlock = src.slice(src.indexOf('const cancelRequest = useCallback(() => {'), src.indexOf('const clearMessages = useCallback('))
+    // Closing it would blind the client to the gateway's own terminal `done`.
+    expect(cancelBlock).not.toContain('subscriptionRef.current')
+    expect(cancelBlock).toContain('/cancel')
+  })
+})
 
-    expect(finishBlock).toContain('requestSessionId !== prevSessionIdRef.current')
-    expect(finishBlock).toContain('resumeSessionStreamRef.current?.()')
-    expect(finishBlock).not.toContain('requestSessionId !== sessionId')
+describe('turn boundary event classification', () => {
+  it('treats the gateway request event as the turn start marker', () => {
+    expect(isTurnStartEvent('request')).toBe(true)
+    expect(isTurnStartEvent('token')).toBe(false)
+    expect(isTurnStartEvent(undefined)).toBe(false)
   })
 
-  it('leaves headroom over the gateway keepalive so long tool runs never trip it', () => {
-    const src = source()
-    const match = src.match(/const DIRECT_STREAM_IDLE_TIMEOUT_MS = ([\d_]+)/)
-    const timeout = Number(match![1].replace(/_/g, ''))
-    // Gateway writes ": keepalive" every 15s for the whole turn.
-    expect(timeout).toBeGreaterThanOrEqual(15_000 * 2)
+  it('treats both terminal outcomes as the turn end', () => {
+    expect(isTurnEndEvent('done')).toBe(true)
+    expect(isTurnEndEvent('error')).toBe(true)
+    expect(isTurnEndEvent('tool_result')).toBe(false)
+  })
+})
+
+describe('parseQueuedChatResponse', () => {
+  it('pulls the server-assigned queue entry out of the 202 body', () => {
+    const body = [
+      `data: ${JSON.stringify({ type: 'queued', message: { id: 'q-1', content: 'later' } })}`,
+      '',
+      `data: ${JSON.stringify({ type: 'done', session_id: 's1' })}`,
+      '',
+    ].join('\n')
+
+    expect(parseQueuedChatResponse(body)).toMatchObject({
+      type: 'queued',
+      message: { id: 'q-1' },
+    })
+  })
+
+  it('returns null when the body carries no queued event', () => {
+    expect(parseQueuedChatResponse(`data: ${JSON.stringify({ type: 'done' })}\n\n`)).toBeNull()
+    expect(parseQueuedChatResponse('')).toBeNull()
+    // A truncated line must not throw — the WS broadcast is authoritative anyway.
+    expect(parseQueuedChatResponse('data: {"type":"que')).toBeNull()
   })
 })

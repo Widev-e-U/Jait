@@ -3367,7 +3367,9 @@ export function registerChatRoutes(
           // Provider is offline or not installed — fall back to Jait
           const reason = cliProvider.info.unavailableReason ?? "CLI not found";
           console.log(`[chat/cli] Provider ${requestProvider} unavailable (${reason}), falling back to jait`);
-          safeWrite(`data: ${JSON.stringify({ type: "provider_fallback", from: requestProvider, to: "jait", reason })}\n\n`);
+          const fallbackEvent = { type: "provider_fallback", from: requestProvider, to: "jait", reason } as unknown as StreamEvent;
+          safeWrite(`data: ${JSON.stringify(fallbackEvent)}\n\n`);
+          emitToSubscribers(sessionId, fallbackEvent);
         } else {
 
         console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.projectPath="${sessionRecord?.projectPath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
@@ -3488,13 +3490,15 @@ export function registerChatRoutes(
         }
 
         // Tell the frontend about the execution context (node, project)
-        safeWrite(`data: ${JSON.stringify({
+        const sessionInfoEvent = {
           type: "session_info",
           provider: requestProvider,
           projectPath: cliWsRoot,
           isRemote,
           ...(remoteNodeInfo ? { remoteNode: remoteNodeInfo } : {}),
-        })}\n\n`);
+        } as unknown as StreamEvent;
+        safeWrite(`data: ${JSON.stringify(sessionInfoEvent)}\n\n`);
+        emitToSubscribers(sessionId, sessionInfoEvent);
 
         // Collect full content from CLI provider events
         const contentChunks: string[] = [];
@@ -3633,7 +3637,9 @@ export function registerChatRoutes(
                 tc.message = (tc.message || "") + event.content;
               }
               accumulateToolOutput(sessionId, event.callId ?? "", event.content);
-              safeWrite(`data: ${JSON.stringify({ type: "tool_output", call_id: event.callId, content: event.content })}\n\n`);
+              const toolOutputEvent = { type: "tool_output", call_id: event.callId, content: event.content } as unknown as StreamEvent;
+              safeWrite(`data: ${JSON.stringify(toolOutputEvent)}\n\n`);
+              emitToSubscribers(sessionId, toolOutputEvent);
               break;
             }
             case "tool.result": {
@@ -3674,7 +3680,9 @@ export function registerChatRoutes(
               const mutationPath = getExternalFileMutationPath(tc?.tool ?? event.tool, tc?.args ?? {});
               if (event.ok && mutationPath) {
                   const editName = mutationPath.split(/[/\\]/).pop() ?? mutationPath;
-                  safeWrite(`data: ${JSON.stringify({ type: "file_changed", path: mutationPath, name: editName })}\n\n`);
+                  const fileChangedEvent = { type: "file_changed", path: mutationPath, name: editName } as unknown as StreamEvent;
+                  safeWrite(`data: ${JSON.stringify(fileChangedEvent)}\n\n`);
+                  emitToSubscribers(sessionId, fileChangedEvent);
                   // Broadcast to other session clients
                   if (ws) {
                     ws.broadcast(sessionId, {
@@ -4689,9 +4697,15 @@ export function registerChatRoutes(
           const visible = buildVisibleHistoryMessages(sessionId, history, { includePendingAssistantToolCalls: streaming });
           return windowMessages(visible, limit, normalizedBefore);
         })();
+    // `seq` is the durable per-session event-log position (log_id), NOT the
+    // per-turn `seq` counter (which resets each turn). The client subscribes to
+    // GET .../events from this position so it never misses an event that lands
+    // between the snapshot fetch and the subscription opening.
+    seedSessionEventCounter(sessionId);
     return {
       sessionId,
       streaming,
+      seq: sessionEventCounter.get(sessionId) ?? 0,
       total: windowed.total,
       hasMore: windowed.hasMore,
       limit,
@@ -4917,6 +4931,96 @@ export function registerChatRoutes(
     // Clean up subscription if client disconnects before stream finishes
     request.raw.on("close", () => {
       closeStream();
+    });
+  });
+
+  // ══ GET /api/sessions/:sessionId/events — durable live subscription ══
+  // The single long-lived chat event stream. Unlike /stream it never self-ends:
+  // it opens on mount, stays subscribed across turns, and only closes when the
+  // client disconnects. Every event carries `id: <log_id>` (the durable
+  // per-session event-log position), so a reconnecting client sends
+  // `Last-Event-ID` and the server replays anything it missed from the
+  // persisted log — reconnect becomes invisible and the client's reconcile
+  // round-trip disappears. Liveness is signalled with real `data:` turn-state
+  // heartbeats rather than `: keepalive` comments, so the client has actual
+  // signal instead of guessing.
+  app.get("/api/sessions/:sessionId/events", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    const reqOrigin = request.headers.origin ?? "*";
+    writeSseHead(reply, {
+      "Access-Control-Allow-Origin": String(reqOrigin),
+      "Access-Control-Allow-Credentials": "true",
+    });
+
+    // Resume from the client's Last-Event-ID (the durable log_id). Native
+    // EventSource sends this header automatically on reconnect; a plain fetch
+    // client can pass it explicitly. Absent, we start from the current log
+    // position so no already-snapshotted event is replayed.
+    const rawLastEventId = request.headers["last-event-id"];
+    const resumeFrom = typeof rawLastEventId === "string" && /^\d+$/.test(rawLastEventId)
+      ? Number.parseInt(rawLastEventId, 10)
+      : (sessionEventCounter.get(sessionId) ?? 0);
+
+    let closed = false;
+    let unsubscribe = () => {};
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    const closeStream = () => {
+      if (closed) return;
+      closed = true;
+      if (heartbeat) clearInterval(heartbeat);
+      unsubscribe();
+      try { reply.raw.end(); } catch { /* already closed */ }
+    };
+    reply.raw.on("close", () => closeStream());
+    request.raw.on("close", () => closeStream());
+
+    // Replay the persisted log from the resume position. The replay-read +
+    // subscribe-registration block below is synchronous, so no event can be
+    // logged between the two: every event already in the log with log_id >
+    // resumeFrom was replayed, and every event emitted from here on has
+    // log_id > lastReplayedLogId and is forwarded exactly once.
+    const history = loadSessionEvents(sessionId);
+    let lastReplayedLogId = resumeFrom;
+    for (const ev of history) {
+      if (ev.log_id <= resumeFrom) continue;
+      lastReplayedLogId = ev.log_id;
+      let payloadObj: unknown;
+      try { payloadObj = JSON.parse(ev.payload); } catch { payloadObj = {}; }
+      writeSseChunk(reply, `id: ${ev.log_id}\ndata: ${JSON.stringify(payloadObj)}\n\n`);
+    }
+
+    // Real turn-state heartbeat: a `data:` event the client can use as a
+    // liveness signal (rather than a `: keepalive` comment it must guess
+    // about). Emitted during idle periods (long tool runs / slow LLM
+    // responses) so browsers and proxies don't drop the socket with
+    // "fetch failed". No `id:` field, so it never advances Last-Event-ID.
+    heartbeat = setInterval(() => {
+      if (closed) return;
+      try {
+        writeSseChunk(reply, `data: ${JSON.stringify({ type: "heartbeat", streaming: activeStreams.has(sessionId) })}\n\n`);
+      } catch { closeStream(); }
+    }, 15_000);
+
+    unsubscribe = subscribe(sessionId, 0, (event) => {
+      if (closed) return;
+      // Only forward events not already covered by the replay above. The log
+      // counter is advanced synchronously at emit time, so a delivered event's
+      // counter value is its true log id.
+      const logId = sessionEventCounter.get(sessionId) ?? lastReplayedLogId;
+      if (logId <= lastReplayedLogId) return;
+      try {
+        writeSseChunk(reply, `id: ${logId}\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch {
+        closeStream();
+      }
     });
   });
 

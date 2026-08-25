@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { X, Trash2, Copy, Check, ChevronDown, ChevronRight, Search, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,26 @@ interface TrajectoryPanelProps {
 }
 
 const STEP_ROW_HEIGHT = 24
+
+/** Slack, in px, for treating a scroll position as "at the bottom". */
+const BOTTOM_THRESHOLD_PX = 24
+
+/**
+ * Whether the timeline should still follow new content after a scroll event.
+ *
+ * Content streaming in grows `scrollHeight` and fires `scroll` a frame before
+ * the pin catches up, so the view legitimately reads as "not at the bottom"
+ * while nobody has touched it. Only a scroll the user is actually driving may
+ * detach; reaching the bottom always re-attaches.
+ */
+export function nextStickToBottom(params: {
+  distanceFromBottom: number
+  stuck: boolean
+  userScrolling: boolean
+}): boolean {
+  if (params.distanceFromBottom < BOTTOM_THRESHOLD_PX) return true
+  return params.userScrolling ? false : params.stuck
+}
 
 type Role = 'user' | 'assistant' | 'context' | 'tool' | 'done' | 'error'
 
@@ -365,14 +385,23 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  const pinToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [])
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    const atBottom = distanceFromBottom < 24
-    stickToBottomRef.current = atBottom
-    setShowScrollToBottom(!atBottom)
+    const stuck = nextStickToBottom({
+      distanceFromBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
+      stuck: stickToBottomRef.current,
+      userScrolling: userScrollingRef.current,
+    })
+    stickToBottomRef.current = stuck
+    setShowScrollToBottom(!stuck)
   }, [])
 
   // Detach when the user scrolls up (wheel/touch); re-engage only once they
@@ -391,43 +420,57 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
       markUserScroll()
       if (e.deltaY < 0 && stickToBottomRef.current) {
         stickToBottomRef.current = false
+        setShowScrollToBottom(true)
       }
     }
     el.addEventListener('wheel', handleWheel, { passive: true })
+    el.addEventListener('touchmove', markUserScroll, { passive: true })
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       el.removeEventListener('wheel', handleWheel)
+      el.removeEventListener('touchmove', markUserScroll)
       el.removeEventListener('scroll', handleScroll)
       clearTimeout(userScrollTimerRef.current)
     }
   }, [handleScroll])
 
-  // Open at the newest step, matching the chat's stick-to-bottom behaviour.
-  useEffect(() => {
+  /**
+   * Pin to the newest step before paint, and keep it pinned as content lands.
+   *
+   * A ResizeObserver rather than an effect keyed on the step count: the panel
+   * opens on an empty timeline and fills in from the gateway's replay, and
+   * most of what arrives during a live turn is text streamed into the step
+   * that is *already* last (assistant output, tool stream). Both grow the
+   * content's height without appending a step, so a count-keyed effect never
+   * fired for them and the view stopped following mid-turn.
+   */
+  useLayoutEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [])
+    const content = contentRef.current
+    if (!el || !content) return
+    if (stickToBottomRef.current) pinToBottom()
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) pinToBottom()
+    })
+    observer.observe(content)
+    // Resizing the viewport itself (window, details pane) moves the bottom too.
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [pinToBottom])
+
+  // Another session opens at its own newest step instead of inheriting
+  // wherever the previous one happened to be left scrolled to.
+  useLayoutEffect(() => {
+    stickToBottomRef.current = true
+    setShowScrollToBottom(false)
+    pinToBottom()
+  }, [sessionId, pinToBottom])
 
   const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current
-    if (el) {
-      stickToBottomRef.current = true
-      setShowScrollToBottom(false)
-      el.scrollTop = el.scrollHeight
-    }
-  }, [])
-
-  // Follow newly appended steps while stuck to the bottom (mirrors the chat's
-  // streaming auto-scroll).
-  const prevStepCountRef = useRef(0)
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    if (filtered.length > prevStepCountRef.current && stickToBottomRef.current && !userScrollingRef.current) {
-      el.scrollTop = el.scrollHeight
-    }
-    prevStepCountRef.current = filtered.length
-  }, [filtered.length])
+    stickToBottomRef.current = true
+    setShowScrollToBottom(false)
+    pinToBottom()
+  }, [pinToBottom])
 
   const handleCopy = () => {
     const text = steps
@@ -490,6 +533,9 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
       <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
         {/* Step list (plain flow so the native scrollbar matches the content) */}
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden" aria-label="Trajectory timeline">
+          {/* Wrapper exists so the ResizeObserver above measures the content's
+              height rather than the fixed viewport's. */}
+          <div ref={contentRef}>
           {filtered.map(step => {
             const isExpanded = expanded.has(step.index)
             const isSelected = selected === step.index
@@ -527,6 +573,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
               </div>
             )
           })}
+          </div>
         </div>
 
         {/* Scroll-to-bottom indicator (same as the SSE debug panel / chat) */}

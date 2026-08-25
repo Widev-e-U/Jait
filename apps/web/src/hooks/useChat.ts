@@ -27,6 +27,10 @@ import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamSn
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
+import {
+  openSessionEventSubscription,
+  type SessionEventSubscription,
+} from '@/lib/session-event-subscription'
 import { providerTypeFromId, type ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -41,20 +45,14 @@ const STREAM_SNAPSHOT_LIMIT = INITIAL_CHAT_HISTORY_MESSAGE_LIMIT
 // Older history remains available in larger batches when the user scrolls up.
 const LAZY_LOAD_BATCH_SIZE = 60
 const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
-const RESUME_SNAPSHOT_TIMEOUT_MS = 3_000
-const RESUME_STREAM_IDLE_TIMEOUT_MS = 40_000
 /**
- * Idle bound for the direct POST /api/chat stream, mirroring the resume stream's
- * watchdog. The gateway writes a `: keepalive` comment every 15s for the whole
- * turn, so any *live* socket rearms this timer well inside the window and long
- * tool runs never trip it. Only a socket that has stopped delivering bytes
- * entirely reaches 40s. See armDirectIdleTimer in sendMessage for why the
- * unbounded read was a liveness bug rather than just a slow path.
+ * How many consecutive failed reconnects before the banner appears. The gateway
+ * replays every event after `Last-Event-ID`, so a short drop loses nothing and
+ * repairs itself within one retry — surfacing it immediately was pure noise.
  */
-const DIRECT_STREAM_IDLE_TIMEOUT_MS = 40_000
-const RESUME_RECONNECT_BASE_DELAY_MS = 500
-const RESUME_RECONNECT_MAX_DELAY_MS = 30_000
-const RESUME_RECONNECT_MAX_ATTEMPTS = 20
+const RECONNECT_ATTEMPTS_BEFORE_BANNER = 3
+/** Bounded retries for the one-shot snapshot fetch that seeds the subscription. */
+const SNAPSHOT_RETRY_DELAYS_MS = [400, 1_200, 3_000]
 
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
@@ -86,18 +84,6 @@ function isTransientConnectionError(error: unknown): boolean {
   )
 }
 
-export function isRetryableResumeResponseStatus(status: number): boolean {
-  return status === 408 || status === 425 || status === 429 || status >= 500
-}
-
-export function getResumeReconnectDelay(attempt: number, random = Math.random): number {
-  const cap = Math.min(
-    RESUME_RECONNECT_MAX_DELAY_MS,
-    RESUME_RECONNECT_BASE_DELAY_MS * Math.pow(2, Math.max(0, attempt - 1)),
-  )
-  return cap / 2 + random() * (cap / 2)
-}
-
 export function shouldResumeChatSession(params: {
   sessionId: string | null
   isLoading: boolean
@@ -125,90 +111,52 @@ export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
 
 const STREAMING_FLUSH_DEADLINE_MS = 300
 
-export function shouldProcessResumeStreamEvent(
-  lastSeqBySession: Map<string, number>,
-  sessionId: string,
-  event: { seq?: unknown },
-): boolean {
-  if (typeof event.seq !== 'number' || !Number.isFinite(event.seq)) return true
-  const lastSeq = lastSeqBySession.get(sessionId) ?? 0
-  if (event.seq <= lastSeq) return false
-  lastSeqBySession.set(sessionId, event.seq)
-  return true
-}
-
-/**
- * Reset a session's last-seen resume seq baseline from a fresh snapshot.
- *
- * The gateway keeps the per-session `seq` counter monotonic across turns (never
- * reset to 0, never deleted at turn end), and gates a fresh connection by
- * minSeqExclusive = snapshot.seq, so events after this snapshot are always
- * strictly greater than this baseline. This overwrite is therefore a harmless
- * safety net rather than a correctness requirement: with a monotonic counter the
- * snapshot seq is always >= the current baseline, which is exactly what
- * `shouldProcessResumeStreamEvent` (raise-only dedup) needs.
- */
-export function applyResumeSnapshotSeq(
-  lastSeqBySession: Map<string, number>,
-  sessionId: string,
-  seq: unknown,
-): void {
-  if (typeof seq === 'number' && Number.isFinite(seq)) {
-    lastSeqBySession.set(sessionId, seq)
-  }
-}
-
-export function shouldOpenResumeStream(params: {
-  sessionId: string | null
-  activeResumeSessionId: string | null
-  hasActiveResumeStream: boolean
-  directStreamSessionId: string | null
-  hasActiveDirectStream: boolean
-  forceRestart?: boolean
-}): boolean {
-  if (!params.sessionId) return false
-  if (params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId) return false
-  if (
-    !params.forceRestart
-    && params.hasActiveResumeStream
-    && params.activeResumeSessionId === params.sessionId
-  ) return false
-  return true
-}
-
 export function shouldForceMessageLifecycleRefresh(event: 'started' | 'complete'): boolean {
   return event === 'started' || event === 'complete'
 }
 
-export function shouldProcessDirectStreamEvent(
-  eventType: unknown,
-  isCurrentSession: boolean,
-): boolean {
-  if (isCurrentSession) return true
-
-  // A direct POST stream deliberately survives chat switches. Once its chat is
-  // no longer current, only terminal events may run so the request can clean up
-  // its own controller and placeholders. All other events are session-scoped UI
-  // mutations and must not enter the newly selected chat's state bucket.
-  return eventType === 'done' || eventType === 'queued' || eventType === 'error'
+/**
+ * The gateway emits a synthetic `request` event as the first event of every
+ * turn — local send, queued drain, or a hidden background-command notification.
+ * Because the `/events` subscription now outlives individual turns, this is what
+ * tells the consumer to start a fresh assistant message instead of appending to
+ * the previous turn's segment list.
+ */
+export function isTurnStartEvent(eventType: unknown): boolean {
+  return eventType === 'request'
 }
 
-export function shouldOwnDirectChatStream(params: {
-  sessionId: string | null
-  directStreamSessionId: string | null
-  hasActiveDirectStream: boolean
-}): boolean {
-  if (!params.sessionId) return true
-  return !(params.hasActiveDirectStream && params.directStreamSessionId === params.sessionId)
+/**
+ * A turn's last event. After one of these the consumer drops its per-turn
+ * accumulator so the next `request` starts clean.
+ */
+export function isTurnEndEvent(eventType: unknown): boolean {
+  return eventType === 'done' || eventType === 'error'
 }
 
-export function isResumeStreamRunCurrent(params: {
-  cancelled: boolean
-  aborted: boolean
-  currentRunId: number
-  runId: number
-}): boolean {
-  return !params.cancelled && !params.aborted && params.currentRunId === params.runId
+/**
+ * Extract the server-assigned queue entry from the 202 response to POST
+ * /api/chat.
+ *
+ * This is the one and only place the client still parses an SSE body. The
+ * gateway answers a send that arrives mid-turn with 202 and a two-event body
+ * (`queued` then `done`) and then closes — the message never becomes a turn, so
+ * it produces nothing on the `/events` stream to read it from instead. The body
+ * is two lines and already complete, so it is read with `response.text()`
+ * rather than a reader loop.
+ */
+export function parseQueuedChatResponse(body: string): Record<string, unknown> | null {
+  for (const line of body.split('\n')) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      const data = JSON.parse(line.slice(6)) as Record<string, unknown>
+      if (data.type === 'queued') return data
+    } catch {
+      // Partial or non-JSON line — the caller falls back to the WS broadcast,
+      // which is the authoritative source for queue state anyway.
+    }
+  }
+  return null
 }
 
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
@@ -645,55 +593,42 @@ export function useChat(
     setTodoList((items) => items.some((item) => item.status !== 'completed') ? [] : items)
   }, [])
 
-  const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
-  const streamAbortRef = useRef<AbortController | null>(null)
-  const streamResumeSessionRef = useRef<string | null>(null)
-  const directStreamSessionRef = useRef<string | null>(null)
-  const resumeStreamRunIdRef = useRef(0)
-  const lastResumeSeqBySessionRef = useRef(new Map<string, number>())
+  const subscriptionRunIdRef = useRef(0)
   const requestVersionRef = useRef(0)
   /**
-   * The message-stream writer for whichever turn is currently streaming (direct
-   * POST /api/chat response or a resumed SSE subscribe stream), so a mid-turn
-   * steer can be spliced into that turn's own ordered segment list instead of
-   * always being appended after the whole conversation. `isCurrent` reuses each
-   * stream's own staleness check so a steer that arrives after the turn already
-   * finished falls back to the old standalone-message behavior.
+   * The message-stream writer for the turn that is currently streaming, so a
+   * mid-turn steer can be spliced into that turn's own ordered segment list
+   * instead of always being appended after the whole conversation. The writer is
+   * fetched through a getter because the subscription outlives individual turns
+   * and swaps in a fresh accumulator at each turn boundary. `isCurrent` is the
+   * subscription's own staleness check, so a steer that arrives after the turn
+   * finished falls back to the standalone-message behavior.
    */
   const activeStreamRef = useRef<{
     getAssistantId: () => string | null
-    writer: MessageStreamWriter
+    getWriter: () => MessageStreamWriter
     flush: () => void
     isCurrent: () => boolean
   } | null>(null)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
-  /**
-   * Which session's data `state.messages` currently holds. Set whenever a
-   * snapshot (live resume or the one-shot fetch below) is actually applied.
-   * Needed because the "already have a live direct stream for this session"
-   * short-circuit below must not assume the displayed messages are still
-   * this session's — the user may have switched to a different chat and
-   * back while that background stream kept running.
-   */
-  const loadedMessagesSessionRef = useRef<string | null>(null)
   const messageQueueSessionRef = useRef<string | null>(null)
+  /**
+   * The optimistic assistant bubble `sendMessage` rendered for a turn that has
+   * been POSTed but whose first event has not arrived yet. The event consumer
+   * adopts it as the turn's target instead of appending a second bubble beside
+   * it. Session-scoped: a placeholder left behind in chat A must never be
+   * adopted by chat B's subscription.
+   */
+  const pendingAssistantPlaceholderRef = useRef<{ sessionId: string; messageId: string } | null>(null)
   const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
   if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const pendingResumeAfterDirectStreamRef = useRef(false)
-  const resumeSessionStreamRef = useRef<((options?: {
-    afterDirectStream?: boolean
-    forceRestart?: boolean
-  }) => void) | null>(null)
-  // Backoff timer for auto-reconnecting the resume SSE stream after a
-  // transient drop (network blip, proxy idle timeout) — the main cause of
-  // chat "freezing" until the user manually reloads or switches sessions.
-  const resumeReconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const resumeReconnectAttemptsRef = useRef(0)
-  const resumeReconnectSessionRef = useRef<string | null>(null)
+  const resumeSessionStreamRef = useRef<(() => void) | null>(null)
+  /** Lets wake/online handlers drop a parked socket and replay immediately. */
+  const subscriptionRef = useRef<SessionEventSubscription | null>(null)
   const documentWasHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false)
   const browserWasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false)
 
@@ -730,105 +665,35 @@ export function useChat(
     return () => window.clearTimeout(timer)
   }, [cacheScope, sessionId, sessionLastActiveAt, state.hasMore, state.isLoading, state.isLoadingHistory, state.messages, state.totalMessages])
 
-  const resumeSessionStream = useCallback((options?: { afterDirectStream?: boolean; forceRestart?: boolean }) => {
-    if (
-      options?.afterDirectStream
-      && sessionId
-      && abortControllerRef.current
-      && directStreamSessionRef.current === sessionId
-    ) {
-      pendingResumeAfterDirectStreamRef.current = true
-      return
-    }
-    if (!shouldOpenResumeStream({
-      sessionId,
-      activeResumeSessionId: streamResumeSessionRef.current,
-      hasActiveResumeStream: !!streamAbortRef.current,
-      directStreamSessionId: directStreamSessionRef.current,
-      hasActiveDirectStream: !!abortControllerRef.current,
-      forceRestart: options?.forceRestart,
-    })) return
-    if (
-      options?.forceRestart
-      && streamAbortRef.current
-      && streamResumeSessionRef.current === sessionId
-    ) {
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
-      streamResumeSessionRef.current = null
-    }
-    pendingResumeAfterDirectStreamRef.current = false
+  /**
+   * Re-seed the session from the server: fresh snapshot, then resubscribe.
+   *
+   * The durable subscription already self-heals transport drops on its own (it
+   * replays from `Last-Event-ID`), so this is only for the case live events
+   * cannot describe — the server's history changed underneath us, e.g. a
+   * restart-from that rewrote the transcript, or a cross-client refresh signal.
+   */
+  const resumeSessionStream = useCallback(() => {
     preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
-    if (resumeReconnectTimerRef.current !== null) {
-      clearTimeout(resumeReconnectTimerRef.current)
-      resumeReconnectTimerRef.current = null
-    }
     setRefreshTrigger(n => n + 1)
-  }, [sessionId])
+  }, [])
 
   useLayoutEffect(() => {
     resumeSessionStreamRef.current = resumeSessionStream
   }, [resumeSessionStream])
 
-  /**
-   * Schedule the next resume-stream generation after a transport failure.
-   * Attempts survive failed handshakes and reset only after a fresh snapshot,
-   * so a sustained outage gets jittered exponential backoff while a healthy
-   * generation starts from the base delay after a later disconnect. The new
-   * snapshot repairs any live-event gap from authoritative session history.
-   * Reconnecting is a no-op after navigation, while a direct stream owns the
-   * session, or when a replacement resume stream is already active.
-   */
-  const scheduleResumeReconnect = useCallback(() => {
-    // If the user navigated away from this session, don't reconnect.
-    if (prevSessionIdRef.current !== sessionId) return
-    // Don't double-schedule.
-    if (resumeReconnectTimerRef.current !== null) return
-    // A direct chat stream is owned by the sending client; its done/finish
-    // path already triggers a resume. Avoid racing it.
-    if (abortControllerRef.current && directStreamSessionRef.current === sessionId) return
-    if (resumeReconnectSessionRef.current !== sessionId) {
-      resumeReconnectSessionRef.current = sessionId
-      resumeReconnectAttemptsRef.current = 0
-    }
-    const attempt = resumeReconnectAttemptsRef.current + 1
-    if (attempt > RESUME_RECONNECT_MAX_ATTEMPTS) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        isLoadingHistory: false,
-        error: 'Connection lost. Reconnect attempts exhausted.',
-      }))
-      return
-    }
-    resumeReconnectAttemptsRef.current = attempt
-    const delay = getResumeReconnectDelay(attempt)
-    resumeReconnectTimerRef.current = setTimeout(() => {
-      resumeReconnectTimerRef.current = null
-      // Re-check currency inside the timer — session may have changed.
-      if (prevSessionIdRef.current !== sessionId) return
-      // Avoid clobbering an active resume stream that re-opened in the meantime.
-      if (streamAbortRef.current && streamResumeSessionRef.current === sessionId) return
-      resumeSessionStream()
-    }, delay)
-  }, [resumeSessionStream, sessionId])
-
-  const finishDirectStream = useCallback((requestSessionId: string | null, controller: AbortController) => {
-    if (abortControllerRef.current === controller) abortControllerRef.current = null
-    if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
-    if (
-      !pendingResumeAfterDirectStreamRef.current
-      || !requestSessionId
-      || requestSessionId !== prevSessionIdRef.current
-    ) return
-    pendingResumeAfterDirectStreamRef.current = false
-    window.setTimeout(() => {
-      if (prevSessionIdRef.current === requestSessionId) resumeSessionStreamRef.current?.()
-    }, 0)
-  }, [])
-
-  // When sessionId changes, load history / resume active stream via SSE
+  // ══ The session's single live connection ═══════════════════════════════
+  // One JSON snapshot, then one `/events` subscription that stays open across
+  // turns until the session changes. The snapshot reports the event-log position
+  // it was taken at and the subscription resumes from exactly that position, so
+  // no event can fall in the gap between them, and a dropped socket replays
+  // rather than forcing a reconcile round-trip.
+  //
+  // Everything the UI renders arrives here — including this tab's own sends,
+  // which POST and then discard their response body instead of reading a second
+  // copy of the same events off it. That is what removes the whole
+  // two-consumers-on-one-turn problem the direct stream used to create.
   useLayoutEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
     startupCacheWriterRef.current?.flush()
@@ -838,12 +703,8 @@ export function useChat(
     prevSessionIdRef.current = sessionId
     cacheWriteReadySessionRef.current = null
 
-    // Abort any previous stream-resume connection
-    if (streamAbortRef.current) {
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
-      streamResumeSessionRef.current = null
-    }
+    subscriptionRef.current?.close()
+    subscriptionRef.current = null
 
     if (!sessionId) {
       setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null, hasMore: false, totalMessages: 0 })
@@ -854,7 +715,6 @@ export function useChat(
       messageQueueSessionRef.current = null
       setContextUsage(null)
       setSessionInfo(null)
-      loadedMessagesSessionRef.current = null
       return
     }
 
@@ -870,110 +730,13 @@ export function useChat(
     }
 
     let cancelled = false
+    const runId = ++subscriptionRunIdRef.current
+    const isCurrent = () => !cancelled && subscriptionRunIdRef.current === runId
+
     const startupCache = selectImmediateChatHistory(
       readCachedStartupChat(cacheScope, sessionId),
       sessionLastActiveAt,
     )
-    // Never attach a second live consumer to a session this tab is already
-    // streaming directly. The direct POST stream is only aborted by stop /
-    // restart — not by a session switch — so re-entering a chat mid-run used to
-    // open a resume stream alongside it. Both consumers then append token
-    // chunks into the same turn, which renders as duplicated/interleaved text
-    // that exists only on screen: the gateway persists its own clean copy, so
-    // the garbage disappears from history on the next load.
-    //
-    // The direct stream keeps rendering; `finishDirectStream` hands off to a
-    // resume stream once it ends.
-    if (!shouldOpenResumeStream({
-      sessionId,
-      activeResumeSessionId: streamResumeSessionRef.current,
-      hasActiveResumeStream: !!streamAbortRef.current,
-      directStreamSessionId: directStreamSessionRef.current,
-      hasActiveDirectStream: !!abortControllerRef.current,
-    })) {
-      pendingResumeAfterDirectStreamRef.current = true
-      // This tab already owns a live direct stream for sessionId, so it must
-      // not open a second SSE consumer (see comment above — duplicated
-      // token chunks). That shortcut only leaves the right chat on screen if
-      // state.messages is still this session's own — true if the user never
-      // navigated away, false if they switched to another chat and back
-      // while this one kept streaming in the background. In the latter case
-      // state.messages holds the *other* session's history, and skipping
-      // straight to `return` would leave it there, displayed under the newly
-      // selected session. Fetch one snapshot (no subscription — the direct
-      // stream already owns live delivery) to correct it.
-      if (loadedMessagesSessionRef.current !== sessionId) {
-        void (async () => {
-          try {
-            const res = await fetch(
-              `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
-              { headers: authHeaders(authToken) },
-            )
-            if (prevSessionIdRef.current !== sessionId || !res.ok) {
-              if (prevSessionIdRef.current === sessionId) {
-                setState(prev => ({ ...prev, isLoadingHistory: false }))
-              }
-              return
-            }
-            const reader = res.body?.getReader()
-            if (!reader) {
-              setState(prev => ({ ...prev, isLoadingHistory: false }))
-              return
-            }
-            const decoder = new TextDecoder()
-            let buffer = ''
-            let applied = false
-            while (!applied) {
-              const { done, value } = await reader.read()
-              if (done) break
-              if (prevSessionIdRef.current !== sessionId) { reader.cancel(); return }
-              buffer += decoder.decode(value, { stream: true })
-              const lines = buffer.split('\n')
-              buffer = lines.pop() || ''
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue
-                let data: Record<string, unknown>
-                try {
-                  data = JSON.parse(line.slice(6)) as Record<string, unknown>
-                } catch {
-                  continue
-                }
-                if (data.type !== 'snapshot') continue
-                applied = true
-                const rawMsgs = data.messages as RawSnapshotMessage[]
-                const msgs = mapSnapshotMessages(rawMsgs, data.streaming as boolean)
-                const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
-                if (prevSessionIdRef.current === sessionId) {
-                  setState(prev => ({
-                    ...prev,
-                    messages: msgs,
-                    isLoadingHistory: false,
-                    error: null,
-                    hasMore: msgs.length < totalMessages,
-                    totalMessages,
-                  }))
-                  loadedMessagesSessionRef.current = sessionId
-                }
-                break
-              }
-            }
-            reader.cancel()
-            if (!applied && prevSessionIdRef.current === sessionId) {
-              setState(prev => ({ ...prev, isLoadingHistory: false }))
-            }
-          } catch {
-            // Best-effort — the ongoing direct stream keeps the chat usable
-            // even if this correction fetch fails.
-            if (prevSessionIdRef.current === sessionId) {
-              setState(prev => ({ ...prev, isLoadingHistory: false }))
-            }
-          }
-        })()
-      } else {
-        setState(prev => ({ ...prev, isLoadingHistory: false, error: null }))
-      }
-      return
-    }
 
     // Show a skeleton (never cached messages) until the fresh server snapshot
     // is received, evaluated and merged. Rendering cached messages immediately
@@ -982,7 +745,7 @@ export function useChat(
       ...prev,
       messages: preserveExistingMessages ? prev.messages : [],
       isLoading: startupCache?.streaming === true,
-      isLoadingHistory: preserveExistingMessages ? false : true,
+      isLoadingHistory: !preserveExistingMessages,
       error: null,
       hasMore: startupCache?.hasMore ?? false,
       totalMessages: startupCache?.totalMessages ?? 0,
@@ -990,30 +753,381 @@ export function useChat(
     if (!preserveExistingMessages) setChangedFiles([])
     setContextUsage(null)
 
-    // Connect to the stream-resume SSE endpoint.
-    // It returns a snapshot of current messages, then live tokens if still streaming.
-    const streamController = new AbortController()
-    streamAbortRef.current = streamController
-    streamResumeSessionRef.current = sessionId
-    const resumeRunId = ++resumeStreamRunIdRef.current
-    const isCurrentResumeGeneration = () => (
-      !cancelled && resumeStreamRunIdRef.current === resumeRunId
-    )
-    const isCurrentResumeRun = () => isResumeStreamRunCurrent({
-      cancelled,
-      aborted: streamController.signal.aborted,
-      currentRunId: resumeStreamRunIdRef.current,
-      runId: resumeRunId,
+    // ── Per-turn render state ──
+    // The subscription outlives individual turns, so unlike the old
+    // one-connection-per-turn design these are reset explicitly at each turn
+    // boundary (the gateway's synthetic `request` event) instead of implicitly
+    // by a connection being torn down and reopened.
+    let stream = createMessageStream()
+    let assistantId: string | null = null
+    let pendingContextFlow: LlmContextFlow | undefined
+    let pendingUpdates: Partial<ChatMessage> | null = null
+
+    const flushUpdates = () => {
+      if (!isCurrent() || !pendingUpdates || !assistantId) return
+      const updates = pendingUpdates
+      const targetId = assistantId
+      pendingUpdates = null
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(m => (m.id === targetId ? { ...m, ...updates } : m)),
+      }))
+    }
+
+    // Coalesce only React commits. Transport events keep flowing synchronously
+    // and the latest snapshot is rendered on the next paint.
+    const scheduler = createStreamRenderScheduler({
+      onFlush: flushUpdates,
+      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
     })
-    let serverSnapshotReceived = false
+
+    const batchUpdate = (updates: Partial<ChatMessage>, immediate = false) => {
+      pendingUpdates = { ...pendingUpdates, ...updates }
+      if (immediate) flushSync(scheduler.flushNow)
+      else scheduler.schedule()
+    }
+
+    const applyStreamSnapshot = (immediate = false) => {
+      const updates = snapshotToChatMessageUpdates(stream.snapshot())
+      if (pendingContextFlow !== undefined) updates.contextFlow = pendingContextFlow
+      batchUpdate(updates, immediate)
+    }
+
+    const textPacer = createStreamTextPacer({
+      onText: (chunk) => stream.pushText(chunk),
+      onThinking: (chunk) => stream.pushThinking(chunk),
+      onCommit: () => applyStreamSnapshot(true),
+      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
+    })
+
+    activeStreamRef.current = {
+      getAssistantId: () => assistantId,
+      getWriter: () => stream,
+      flush: () => applyStreamSnapshot(true),
+      isCurrent,
+    }
+
+    /** Claim the optimistic bubble `sendMessage` rendered for this session, if any. */
+    const consumePendingPlaceholder = (): string | null => {
+      const pending = pendingAssistantPlaceholderRef.current
+      if (!pending || pending.sessionId !== sessionId) return null
+      pendingAssistantPlaceholderRef.current = null
+      return pending.messageId
+    }
+
+    // A turn can start producing content before this client has an assistant
+    // message to stream into: a subscription that attached mid-run before the
+    // first token, or a queued/remote turn this tab never sent. Without a
+    // target every token would be dropped and the answer would only appear on
+    // the next reload.
+    const ensureStreamingAssistant = (): string | null => {
+      if (assistantId) return assistantId
+      if (!isCurrent()) return null
+      const adopted = consumePendingPlaceholder()
+      if (adopted) {
+        assistantId = adopted
+        return assistantId
+      }
+      const id = createOptimisticMessageId('assistant')
+      assistantId = id
+      setState(prev => ({
+        ...prev,
+        messages: [...prev.messages, { id, role: 'assistant', content: '' }],
+      }))
+      return id
+    }
+
+    /** Turn boundary: drop the previous turn's accumulator and start clean. */
+    const beginTurn = () => {
+      // Drain into the *outgoing* stream/message before swapping them out.
+      textPacer.flushNow()
+      scheduler.flushNow()
+      stream = createMessageStream()
+      assistantId = null
+      pendingContextFlow = undefined
+      pendingUpdates = null
+      setState(prev => ({ ...prev, isLoading: true, error: null, hitMaxRounds: false }))
+      setTodoList([])
+    }
+
+    /** Resolve which bubble a turn-ending event belongs to, and release it. */
+    const endTurn = (): string | null => {
+      const finished = assistantId ?? consumePendingPlaceholder()
+      assistantId = null
+      return finished
+    }
+
+    const trackChangedFile = (filePath: string, fileName: string) => {
+      setChangedFiles(prev => {
+        if (prev.some(f => f.path === filePath)) return prev
+        return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+      })
+    }
+
+    const handleEvent = (data: Record<string, unknown>) => {
+      if (!isCurrent()) return
+      // Liveness-only frame. It carries no `id:`, so it never advances the
+      // resume position and nothing here depends on it.
+      if (data.type === 'heartbeat') return
+      pushSSEDebugEvent(String(data.type ?? 'unknown'), JSON.stringify(data))
+
+      if (isTurnStartEvent(data.type)) {
+        beginTurn()
+      } else if (data.type === 'token') {
+        if (!ensureStreamingAssistant()) return
+        textPacer.enqueueText(data.content as string)
+      } else if (data.type === 'thinking') {
+        if (!ensureStreamingAssistant()) return
+        textPacer.enqueueThinking(data.content as string)
+      } else if (data.type === 'mode_notice') {
+        if (!ensureStreamingAssistant()) return
+        textPacer.enqueueText(`\n\n*${data.message as string}*`)
+      } else if (data.type === 'tool_call_delta') {
+        // Flush pending text synchronously instead of awaiting the text pacer's
+        // idle. In swarm mode the coordinator's first content is a tool call
+        // (not text), so awaiting would block event delivery behind the (long)
+        // paced mode-notice text and delay tool / sub-agent / approval
+        // rendering. flushNow drains text now and keeps ordering (text before
+        // tool) without blocking.
+        textPacer.flushNow()
+        if (!ensureStreamingAssistant()) return
+        scheduler.flushNow()
+        stream.pushToolCallDelta(
+          data.call_id as string,
+          (data.name_delta as string) || '',
+          (data.args_delta as string) || '',
+          data.parent_call_id as string | undefined,
+        )
+        applyStreamSnapshot()
+      } else if (data.type === 'tool_start') {
+        textPacer.flushNow()
+        if (!ensureStreamingAssistant()) return
+        scheduler.flushNow()
+        stream.pushToolStart(
+          data.call_id as string,
+          data.tool as string,
+          (data.args as Record<string, unknown>) ?? {},
+          data.parent_call_id as string | undefined,
+        )
+        applyStreamSnapshot()
+      } else if (data.type === 'approval_required') {
+        textPacer.flushNow()
+        if (!ensureStreamingAssistant()) return
+        scheduler.flushNow()
+        stream.pushApprovalRequired(
+          data.request_id as string,
+          (data.call_id as string) || `approval-${data.request_id as string}`,
+          (data.tool as string) || 'approval',
+          (data.args as Record<string, unknown>) ?? {},
+        )
+        applyStreamSnapshot()
+      } else if (data.type === 'tool_output') {
+        textPacer.flushNow()
+        if (!ensureStreamingAssistant()) return
+        stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
+        applyStreamSnapshot()
+      } else if (data.type === 'tool_result') {
+        textPacer.flushNow()
+        if (!ensureStreamingAssistant()) return
+        scheduler.flushNow()
+        stream.pushToolResult(
+          data.call_id as string,
+          data.ok as boolean,
+          data.message as string,
+          data.data as unknown,
+          data.parent_call_id as string | undefined,
+        )
+        applyStreamSnapshot()
+
+        // Auto-track file edits in changedFiles
+        if (data.ok) {
+          const tc = stream.snapshot().toolCalls.find(t => t.callId === (data.call_id as string))
+          if (tc) {
+            const toolName = tc.tool.replace('_', '.')
+            if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
+              const resultData = data.data && typeof data.data === 'object'
+                ? data.data as Record<string, unknown>
+                : undefined
+              const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
+              if (filePath) trackChangedFile(filePath, filePath.split('/').pop() ?? filePath)
+            }
+          }
+        }
+      } else if (data.type === 'content_rollback') {
+        // The gateway discarded a degenerate generation after streaming
+        // (runaway repetition / replayed-reasoning loop); drop the
+        // already-rendered text past the rollback point.
+        textPacer.flushNow()
+        stream.rollbackText((data.contentLength as number) ?? 0)
+        applyStreamSnapshot(true)
+      } else if (data.type === 'plan_complete') {
+        setPendingPlan({
+          plan_id: data.plan_id as string,
+          summary: data.summary as string,
+          actions: Array.isArray(data.actions) ? data.actions as PlanAction[] : [],
+        })
+      } else if (data.type === 'todo_list') {
+        setTodoList(normalizeTodoStateValue(data.items))
+      } else if (data.type === 'context_usage') {
+        setContextUsage(data as unknown as ContextUsage)
+      } else if (data.type === 'context_flow') {
+        if (!ensureStreamingAssistant()) return
+        pendingContextFlow = parseContextFlowEvent(data)
+        applyStreamSnapshot()
+      } else if (data.type === 'provider_fallback') {
+        // Provider was unavailable, gateway fell back to jait
+        setSessionInfo({ provider: 'jait', projectPath: '', isRemote: false })
+      } else if (data.type === 'session_info') {
+        setSessionInfo({
+          provider: data.provider as string,
+          projectPath: data.projectPath as string,
+          isRemote: data.isRemote as boolean,
+          remoteNode: data.remoteNode as SessionInfo['remoteNode'],
+        })
+      } else if (data.type === 'file_changed') {
+        setFileChangeCount((count) => count + 1)
+        trackChangedFile(data.path as string, data.name as string)
+      } else if (data.type === 'done') {
+        textPacer.flushNow()
+        scheduler.flushNow()
+        const finalSnapshot = stream.finish()
+        const finishedId = endTurn()
+        const producedNothing =
+          finalSnapshot.content.length === 0 &&
+          finalSnapshot.thinking.length === 0 &&
+          finalSnapshot.toolCalls.length === 0
+        setState(prev => {
+          // Only signal completion if this was an active chat response, not the
+          // tail of a history-only replay.
+          if (prev.isLoading) {
+            setCompletionCount(c => c + 1)
+            clearUnfinishedTodoList()
+          }
+          return {
+            ...prev,
+            isLoading: false,
+            promptCount: (data.prompt_count as number) ?? prev.promptCount,
+            remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
+            hitMaxRounds: shouldShowContinueAfterDone(data),
+            messages: !finishedId
+              ? prev.messages
+              // A turn that ended without producing anything (cancelled before
+              // the first token, an empty provider reply) must not leave the
+              // optimistic bubble behind as a permanent blank message.
+              : producedNothing
+                ? prev.messages.filter(m => m.id !== finishedId)
+                : prev.messages.map(m =>
+                    m.id === finishedId ? { ...m, ...snapshotToChatMessageUpdates(finalSnapshot) } : m
+                  ),
+          }
+        })
+      } else if (data.type === 'error') {
+        const errorMsg = data.message as string
+        textPacer.flushNow()
+        scheduler.flushNow()
+        const finalSnapshot = stream.finish()
+        const finishedId = endTurn()
+        setState(prev => {
+          // Append the failure to the turn it belongs to. Adding a second,
+          // separate error bubble left the partial answer above it looking
+          // complete, and did not match the single persisted message the
+          // gateway writes for this turn.
+          const hasTurn = !!finishedId && prev.messages.some(m => m.id === finishedId)
+          return {
+            ...prev,
+            isLoading: false,
+            // Shown inline in red at the end of the turn — raising the composer
+            // banner too would say the same thing twice.
+            error: hasTurn ? null : errorMsg,
+            messages: hasTurn
+              ? prev.messages.map(m =>
+                  m.id === finishedId
+                    ? {
+                        ...m,
+                        ...snapshotToChatMessageUpdates(finalSnapshot),
+                        content: finalSnapshot.content || errorMsg,
+                        segments: segmentsWithError(finalSnapshot, errorMsg),
+                      }
+                    : m
+                )
+              : [
+                  ...prev.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    role: 'assistant' as const,
+                    content: errorMsg,
+                    segments: [{ type: 'error' as const, content: errorMsg }],
+                  },
+                ],
+          }
+        })
+      }
+    }
+
+    interface SnapshotResponse {
+      messages?: RawSnapshotMessage[]
+      streaming?: boolean
+      seq?: number
+      total?: number
+      hasMore?: boolean
+    }
+
+    let snapshotApplied = false
+
+    const applySnapshot = (data: SnapshotResponse) => {
+      textPacer.flushNow()
+      scheduler.flushNow()
+      pendingUpdates = null
+      snapshotApplied = true
+      cacheWriteReadySessionRef.current = sessionId
+      const snapshotStreaming = data.streaming === true
+      const msgs = mapSnapshotMessages(data.messages ?? [], snapshotStreaming)
+
+      // Re-seed the per-turn accumulator from the snapshot so live events append
+      // to the same ordered segments / toolCalls instead of opening a second
+      // bubble beside the partial answer the snapshot already rendered. Only
+      // adopt while a turn is actually running: adopting a *finished* answer
+      // would make the next turn's tokens stream into the previous one.
+      stream = createMessageStream()
+      assistantId = null
+      pendingContextFlow = undefined
+      const lastMsg = msgs[msgs.length - 1]
+      if (snapshotStreaming && lastMsg?.role === 'assistant') {
+        assistantId = lastMsg.id
+        stream.hydrate({
+          content: lastMsg.content,
+          thinking: lastMsg.thinking ?? undefined,
+          segments: lastMsg.segments,
+          toolCalls: lastMsg.toolCalls,
+        })
+      }
+
+      setState(prev => {
+        const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
+        const reconciledMessages = reconcileChatHistory(prev.messages, msgs, totalMessages)
+        const nextMessages = reuseUnchangedMessages(
+          mergeSnapshotMessagesWithOptimisticUsers(reconciledMessages, prev.messages),
+          prev.messages,
+        )
+        return {
+          ...prev,
+          messages: nextMessages,
+          isLoadingHistory: false,
+          isLoading: snapshotStreaming,
+          error: null,
+          hasMore: reconciledMessages.length < totalMessages,
+          totalMessages,
+        }
+      })
+    }
 
     // Offline/snapshot-failure fallback: only surfaces cached history when the
     // server snapshot could not be fetched, so it never preempts fresh data and
     // never causes the cached-then-updated flash.
     const applyCachedFallback = async () => {
-      if (!isCurrentResumeGeneration() || serverSnapshotReceived) return
+      if (!isCurrent() || snapshotApplied) return
       const stored = await readCachedChatHistory(cacheScope, sessionId)
-      if (!isCurrentResumeGeneration() || serverSnapshotReceived) return
+      if (!isCurrent() || snapshotApplied) return
       const cached = selectImmediateChatHistory(stored, sessionLastActiveAt)
       if (!cached || cached.messages.length === 0) return
       setState(prev => ({
@@ -1023,523 +1137,114 @@ export function useChat(
         hasMore: cached.hasMore,
         totalMessages: cached.totalMessages,
       }))
-      loadedMessagesSessionRef.current = sessionId
     }
 
-    ;(async () => {
-      let cancelPendingSubscribeFlush: (() => void) | null = null
-      let textPacer: ReturnType<typeof createStreamTextPacer> | null = null
-      let streamTimeout: ReturnType<typeof setTimeout> | null = null
-      let timedOutPhase: 'snapshot' | 'idle' | null = null
-
-      const clearStreamTimeout = () => {
-        if (streamTimeout === null) return
-        clearTimeout(streamTimeout)
-        streamTimeout = null
-      }
-
-      const armStreamTimeout = (phase: 'snapshot' | 'idle', timeoutMs: number) => {
-        clearStreamTimeout()
-        streamTimeout = setTimeout(() => {
-          if (!isCurrentResumeRun()) return
-          timedOutPhase = phase
-          streamController.abort()
-        }, timeoutMs)
-      }
-
-      try {
-        armStreamTimeout('snapshot', RESUME_SNAPSHOT_TIMEOUT_MS)
-        await Promise.resolve()
-        if (!isCurrentResumeRun()) return
-        const res = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
-          {
-            signal: streamController.signal,
-            headers: authHeaders(authToken),
-          },
-        )
-        if (res.status === 401) {
-          onLoginRequired?.()
-          setState(prev => ({ ...prev, isLoadingHistory: false }))
-          return
-        }
-        if (res.status === 404) {
-          serverSnapshotReceived = true
-          void deleteCachedChatHistory(cacheScope, sessionId)
-          if (isCurrentResumeRun()) {
-            setState(prev => ({
-              ...prev,
-              messages: [],
-              isLoadingHistory: false,
-              hasMore: false,
-              totalMessages: 0,
-            }))
-            loadedMessagesSessionRef.current = sessionId
+    const subscribe = (fromSeq: string | null) => {
+      if (!isCurrent()) return
+      subscriptionRef.current = openSessionEventSubscription({
+        url: `${API_URL}/api/sessions/${sessionId}/events`,
+        headers: authHeaders(authToken),
+        lastEventId: fromSeq,
+        onEvent: handleEvent,
+        onOpen: () => {
+          if (!isCurrent()) return
+          setState(prev => (prev.error === TRANSIENT_CONNECTION_MESSAGE ? { ...prev, error: null } : prev))
+        },
+        onReconnect: (attempt) => {
+          // A drop that repairs itself within a retry or two loses nothing —
+          // the replay fills the gap — so only a sustained outage is worth
+          // telling the user about.
+          if (!isCurrent() || attempt < RECONNECT_ATTEMPTS_BEFORE_BANNER) return
+          setState(prev => ({ ...prev, isLoadingHistory: false, error: TRANSIENT_CONNECTION_MESSAGE }))
+        },
+        onFatal: (reason) => {
+          if (!isCurrent()) return
+          if (reason === 'unauthorized') {
+            onLoginRequired?.()
+            return
           }
-          return
-        }
-        if (!res.ok || !isCurrentResumeRun()) {
-          if (isCurrentResumeRun()) {
-            const retryable = isRetryableResumeResponseStatus(res.status)
-            setState(prev => ({
-              ...prev,
-              isLoadingHistory: false,
-              error: retryable ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
-            }))
-            void applyCachedFallback()
-            if (retryable) scheduleResumeReconnect()
+          if (reason === 'not-found') {
+            void deleteCachedChatHistory(cacheScope, sessionId)
+            setState(prev => ({ ...prev, messages: [], isLoading: false, isLoadingHistory: false, hasMore: false, totalMessages: 0 }))
+            return
           }
-          return
-        }
-        const reader = res.body?.getReader()
-        if (!reader) {
           setState(prev => ({
             ...prev,
+            isLoading: false,
             isLoadingHistory: false,
-            error: TRANSIENT_CONNECTION_MESSAGE,
+            error: 'Connection lost. Reconnect attempts exhausted.',
           }))
+        },
+      })
+    }
+
+    void (async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        if (!isCurrent()) return
+        try {
+          const res = await fetch(
+            `${API_URL}/api/sessions/${sessionId}/messages?limit=${STREAM_SNAPSHOT_LIMIT}`,
+            { headers: authHeaders(authToken), credentials: 'include' },
+          )
+          if (!isCurrent()) return
+          if (res.status === 401) {
+            onLoginRequired?.()
+            setState(prev => ({ ...prev, isLoadingHistory: false }))
+            return
+          }
+          if (res.status === 404) {
+            void deleteCachedChatHistory(cacheScope, sessionId)
+            setState(prev => ({ ...prev, messages: [], isLoadingHistory: false, hasMore: false, totalMessages: 0 }))
+            return
+          }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = await res.json() as SnapshotResponse
+          if (!isCurrent()) return
+          applySnapshot(data)
+          // Subscribe from the exact log position the snapshot was taken at, so
+          // an event that lands between the two is replayed rather than lost.
+          subscribe(typeof data.seq === 'number' ? String(data.seq) : null)
+          return
+        } catch (error) {
+          if (!isCurrent()) return
           void applyCachedFallback()
-          scheduleResumeReconnect()
-          return
-        }
-
-        const decoder = new TextDecoder()
-        let lineBuffer = ''
-        let assistantId: string | null = null
-        let receivedTerminalEvent = false
-        let wasStreaming = false
-
-        // Coalesce only React commits. Transport events keep flowing
-        // synchronously and the latest snapshot is rendered on the next paint.
-        let pendingSubscribeUpdates: Partial<ChatMessage> | null = null
-
-        const flushSubscribeUpdates = () => {
-          if (!isCurrentResumeRun() || !pendingSubscribeUpdates || !assistantId) return
-          const updates = pendingSubscribeUpdates
-          const targetId = assistantId
-          pendingSubscribeUpdates = null
-          setState(prev => ({
-            ...prev,
-            messages: prev.messages.map(m =>
-              m.id === targetId ? { ...m, ...updates } : m
-            ),
-          }))
-        }
-
-        const subscribeScheduler = createStreamRenderScheduler({
-          onFlush: flushSubscribeUpdates,
-          deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
-        })
-        cancelPendingSubscribeFlush = subscribeScheduler.cancel
-
-        const batchSubscribeUpdate = (updates: Partial<ChatMessage>, immediate = false) => {
-          pendingSubscribeUpdates = {
-            ...pendingSubscribeUpdates,
-            ...updates,
-          }
-          if (immediate) flushSync(subscribeScheduler.flushNow)
-          else subscribeScheduler.schedule()
-        }
-
-        // Imperative stream writer: all live answer components (text, thinking,
-        // tool calls/outputs/results) accumulate into one ordered segment list.
-        // The resume consumer just pushes events and applies snapshots to the
-        // current assistant message on each rAF flush.
-        const stream = createMessageStream()
-        let pendingResumeContextFlow: LlmContextFlow | undefined
-
-        textPacer = createStreamTextPacer({
-          onText: (chunk) => stream.pushText(chunk),
-          onThinking: (chunk) => stream.pushThinking(chunk),
-          onCommit: () => applyStreamSnapshot(true),
-          deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
-        })
-
-        const applyStreamSnapshot = (immediate = false) => {
-          const snapshot = stream.snapshot()
-          const updates = snapshotToChatMessageUpdates(snapshot)
-          if (pendingResumeContextFlow !== undefined) updates.contextFlow = pendingResumeContextFlow
-          batchSubscribeUpdate(updates, immediate)
-        }
-
-        activeStreamRef.current = {
-          getAssistantId: () => assistantId,
-          writer: stream,
-          flush: () => applyStreamSnapshot(true),
-          isCurrent: isCurrentResumeRun,
-        }
-
-        // When a client (re)opens the resume stream during a run that hasn't
-        // produced any content/thinking/tools yet, the snapshot has no synthetic
-        // assistant message, so `assistantId` is null. Without this guard, every
-        // subsequent live token/thinking/tool event would be dropped, and the
-        // final answer only appears after a manual reload. Synthesize an empty
-        // assistant message on the first live streaming event so tokens have a
-        // target to stream into.
-        const ensureStreamingAssistant = (): string | null => {
-          if (assistantId) return assistantId
-          if (!isCurrentResumeRun()) return null
-          const id = createOptimisticMessageId('assistant')
-          assistantId = id
-          setState(prev => ({
-            ...prev,
-            messages: [...prev.messages, { id, role: 'assistant', content: '' }],
-          }))
-          return id
-        }
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          if (!isCurrentResumeRun()) { reader.cancel(); break }
-
-          lineBuffer += decoder.decode(value, { stream: true })
-          const lines = lineBuffer.split('\n')
-          lineBuffer = lines.pop() || ''
-
-          for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            const line = lines[lineIndex]
-            if (!line.startsWith('data: ')) continue
-            try {
-              const data = JSON.parse(line.slice(6)) as Record<string, unknown>
-              // A parsed turn event proves real server progress (as opposed to a
-              // `: ping` keepalive comment). Re-arm the idle watchdog here so a
-              // turn that's stalled but still keepalive-heartbeating is reclaimed
-              // instead of freezing until a manual reload.
-              if (serverSnapshotReceived && wasStreaming) {
-                armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
-              }
-              if (!isCurrentResumeRun()) break
-              if (data.type !== 'snapshot' && !shouldProcessResumeStreamEvent(lastResumeSeqBySessionRef.current, sessionId, data)) {
-                continue
-              }
-              pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
-
-              if (data.type === 'snapshot') {
-                serverSnapshotReceived = true
-                resumeReconnectSessionRef.current = sessionId
-                resumeReconnectAttemptsRef.current = 0
-                cacheWriteReadySessionRef.current = sessionId
-                textPacer.flushNow()
-                const rawMsgs = data.messages as RawSnapshotMessage[]
-                const snapshotStreaming = data.streaming as boolean
-                if (snapshotStreaming) armStreamTimeout('idle', RESUME_STREAM_IDLE_TIMEOUT_MS)
-                else clearStreamTimeout()
-                applyResumeSnapshotSeq(lastResumeSeqBySessionRef.current, sessionId, data.seq)
-                let msgs: ChatMessage[] = mapSnapshotMessages(rawMsgs, snapshotStreaming)
-                // Track whether the server reported an active stream for this
-                // snapshot. This MUST be set independent of whether the snapshot
-                // included a synthetic assistant message: when a client (re)opens
-                // mid-run before the agent has produced any content/thinking/tools,
-                // the accumulator is empty and the snapshot's last message is the
-                // user turn — but the stream is still live. Without setting
-                // wasStreaming here, a silent SSE drop would never trigger the
-                // auto-reconnect, so the chat freezes until a manual reload.
-                wasStreaming = wasStreaming || snapshotStreaming
-                // state.messages now genuinely reflects sessionId — see the
-                // shouldOpenResumeStream early-return branch below, which relies
-                // on this to know whether it can skip re-fetching.
-                loadedMessagesSessionRef.current = sessionId
-                // Track the last assistant message for token updates
-                const lastMsg = msgs[msgs.length - 1]
-                if (lastMsg?.role === 'assistant') {
-                  assistantId = lastMsg.id
-                  // Hydrate the imperative stream writer from the snapshot so live
-                  // events append to the same ordered segments / toolCalls.
-                  stream.hydrate({
-                    content: lastMsg.content,
-                    thinking: lastMsg.thinking ?? undefined,
-                    segments: lastMsg.segments,
-                    toolCalls: lastMsg.toolCalls,
-                  })
-                }
-                setState(prev => {
-                  const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
-                  const reconciledMessages = reconcileChatHistory(prev.messages, msgs, totalMessages)
-                  const nextMessages = reuseUnchangedMessages(
-                    mergeSnapshotMessagesWithOptimisticUsers(reconciledMessages, prev.messages),
-                    prev.messages,
-                  )
-                  return {
-                    ...prev,
-                    messages: nextMessages,
-                    isLoadingHistory: false,
-                    isLoading: snapshotStreaming,
-                    error: null,
-                    hasMore: reconciledMessages.length < totalMessages,
-                    totalMessages,
-                  }
-                })
-              } else if (data.type === 'token') {
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                textPacer.enqueueText(data.content as string)
-              } else if (data.type === 'thinking') {
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                textPacer.enqueueThinking(data.content as string)
-              } else if (data.type === 'tool_call_delta') {
-                // Flush pending text synchronously instead of awaiting the text
-                // pacer's idle. Awaiting waitUntilIdle here blocks the entire SSE
-                // reader loop behind the (long) paced text and delays tool /
-                // sub-agent / approval rendering. flushNow drains text now and
-                // keeps ordering (text before tool) without blocking the loop.
-                textPacer.flushNow()
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                subscribeScheduler.flushNow()
-                stream.pushToolCallDelta(
-                  data.call_id as string,
-                  (data.name_delta as string) || '',
-                  (data.args_delta as string) || '',
-                  data.parent_call_id as string | undefined,
-                )
-                applyStreamSnapshot()
-              } else if (data.type === 'tool_start') {
-                textPacer.flushNow()
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                subscribeScheduler.flushNow()
-                stream.pushToolStart(
-                  data.call_id as string,
-                  data.tool as string,
-                  (data.args as Record<string, unknown>) ?? {},
-                  data.parent_call_id as string | undefined,
-                )
-                applyStreamSnapshot()
-              } else if (data.type === 'approval_required') {
-                textPacer.flushNow()
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                subscribeScheduler.flushNow()
-                stream.pushApprovalRequired(
-                  data.request_id as string,
-                  (data.call_id as string) || `approval-${data.request_id as string}`,
-                  (data.tool as string) || 'approval',
-                  (data.args as Record<string, unknown>) ?? {},
-                )
-                applyStreamSnapshot()
-              } else if (data.type === 'tool_output') {
-                textPacer.flushNow()
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
-                applyStreamSnapshot()
-              } else if (data.type === 'tool_result') {
-                textPacer.flushNow()
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                subscribeScheduler.flushNow()
-                stream.pushToolResult(
-                  data.call_id as string,
-                  data.ok as boolean,
-                  data.message as string,
-                  data.data as unknown,
-                  data.parent_call_id as string | undefined,
-                )
-                applyStreamSnapshot()
-
-                // Auto-track file edits in changedFiles (stream-resume path)
-                if (data.ok) {
-                  const snapshot = stream.snapshot()
-                  const tc = snapshot.toolCalls.find(t => t.callId === (data.call_id as string))
-                  if (tc) {
-                    const toolName = tc.tool.replace('_', '.')
-                    if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
-                      const resultData = data.data && typeof data.data === 'object'
-                        ? data.data as Record<string, unknown>
-                        : undefined
-                      const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
-                      if (filePath) {
-                        const fileName = filePath.split('/').pop() ?? filePath
-                        setChangedFiles(prev => {
-                          if (prev.some(f => f.path === filePath)) return prev
-                          return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-                        })
-                      }
-                    }
-                  }
-                }
-              } else if (data.type === 'todo_list') {
-                // AI updated the task list
-                setTodoList(normalizeTodoStateValue(data.items))
-              } else if (data.type === 'context_usage') {
-                setContextUsage(data as unknown as ContextUsage)
-              } else if (data.type === 'context_flow') {
-                if (!ensureStreamingAssistant()) { /* run no longer current */ }
-                pendingResumeContextFlow = parseContextFlowEvent(data as Record<string, unknown>)
-                applyStreamSnapshot()
-              } else if (data.type === 'provider_fallback') {
-                // Provider was unavailable, gateway fell back to jait
-                setSessionInfo({
-                  provider: 'jait',
-                  projectPath: '',
-                  isRemote: false,
-                })
-              } else if (data.type === 'session_info') {
-                // Execution context info from the gateway
-                setSessionInfo({
-                  provider: data.provider as string,
-                  projectPath: data.projectPath as string,
-                  isRemote: data.isRemote as boolean,
-                  remoteNode: data.remoteNode as SessionInfo['remoteNode'],
-                })
-              } else if (data.type === 'file_changed') {
-                setFileChangeCount((count) => count + 1)
-                // AI reported a file change
-                const filePath = data.path as string
-                const fileName = data.name as string
-                setChangedFiles(prev => {
-                  const existing = prev.find(f => f.path === filePath)
-                  if (existing) return prev // don't reset state if already tracked
-                  return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-                })
-              } else if (data.type === 'done') {
-                receivedTerminalEvent = true
-                clearStreamTimeout()
-                await textPacer.waitUntilIdle()
-                // Flush any batched token updates before marking completion
-                subscribeScheduler.flushNow()
-                const finalSnapshot = stream.finish()
-                setState(prev => {
-                  // Only signal completion if this was an active chat response,
-                  // not just the end of a history-only stream.
-                  if (prev.isLoading) {
-                    setCompletionCount(c => c + 1)
-                    clearUnfinishedTodoList()
-                  }
-                  return {
-                    ...prev,
-                    isLoading: false,
-                    promptCount: (data.prompt_count as number) ?? prev.promptCount,
-                    remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
-                    hitMaxRounds: shouldShowContinueAfterDone(data),
-                    messages: assistantId
-                      ? prev.messages.map(m =>
-                          m.id === assistantId
-                            ? { ...m, ...snapshotToChatMessageUpdates(finalSnapshot) }
-                            : m
-                        )
-                      : prev.messages,
-                  }
-                })
-              } else if (data.type === 'error') {
-                receivedTerminalEvent = true
-                clearStreamTimeout()
-                const errorMsg = data.message as string
-                await textPacer.waitUntilIdle()
-                subscribeScheduler.flushNow()
-                const finalSnapshot = stream.finish()
-                setState(prev => {
-                  // Append the failure to the turn it belongs to. Adding a
-                  // second, separate error bubble left the partial answer above
-                  // it looking complete, and did not match the single persisted
-                  // message the gateway writes for this turn.
-                  const hasTurn = !!assistantId && prev.messages.some(m => m.id === assistantId)
-                  return {
-                    ...prev,
-                    isLoading: false,
-                    // Shown inline in red at the end of the turn — raising the
-                    // composer banner too would say the same thing twice.
-                    error: hasTurn ? null : errorMsg,
-                    messages: hasTurn
-                      ? prev.messages.map(m =>
-                          m.id === assistantId
-                            ? {
-                                ...m,
-                                ...snapshotToChatMessageUpdates(finalSnapshot),
-                                content: finalSnapshot.content || errorMsg,
-                                segments: segmentsWithError(finalSnapshot, errorMsg),
-                              }
-                            : m
-                        )
-                      : [
-                          ...prev.messages,
-                          {
-                            id: crypto.randomUUID(),
-                            role: 'assistant' as const,
-                            content: errorMsg,
-                            segments: [{ type: 'error' as const, content: errorMsg }],
-                          },
-                        ],
-                  }
-                })
-              }
-            } catch (parseErr) {
-              if (!(parseErr instanceof SyntaxError)) throw parseErr
-              // incomplete JSON chunk — wait for next line
-            }
-          }
-        }
-        // Flush any remaining batched updates when stream ends
-        await textPacer.waitUntilIdle()
-        subscribeScheduler.flushNow()
-        // A generation that closes before its snapshot never established.
-        // One that closes after a streaming snapshot but before a terminal event
-        // lost live delivery. Both cases reconnect and repair from a fresh,
-        // authoritative snapshot.
-        if (
-          !cancelled
-          && !receivedTerminalEvent
-          && isCurrentResumeRun()
-          && (!serverSnapshotReceived || wasStreaming)
-        ) {
-          setState(prev => ({
-            ...prev,
-            isLoadingHistory: false,
-            error: TRANSIENT_CONNECTION_MESSAGE,
-          }))
-          if (!serverSnapshotReceived) void applyCachedFallback()
-          scheduleResumeReconnect()
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          if (timedOutPhase !== null && !cancelled) {
+          const delay = SNAPSHOT_RETRY_DELAYS_MS[attempt]
+          if (delay === undefined) {
             setState(prev => ({
               ...prev,
               isLoadingHistory: false,
-              error: TRANSIENT_CONNECTION_MESSAGE,
+              error: isTransientConnectionError(error) ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
             }))
-            if (timedOutPhase === 'snapshot') void applyCachedFallback()
-            scheduleResumeReconnect()
+            // Subscribe anyway. Live events still render, and the
+            // subscription's own retry ladder keeps working the connection —
+            // without a snapshot position it just starts from "now".
+            subscribe(null)
+            return
           }
-          return
+          setState(prev => ({ ...prev, isLoadingHistory: false }))
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
-        if (!cancelled) {
-          const transient = isTransientConnectionError(err)
-          setState(prev => ({
-            ...prev,
-            isLoadingHistory: false,
-            error: transient ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
-          }))
-          // Auto-reconnect after a transient drop so the chat keeps streaming
-          // without the user having to reload or switch sessions.
-          if (transient) scheduleResumeReconnect()
-          else void applyCachedFallback()
-        }
-      } finally {
-        clearStreamTimeout()
-        textPacer?.cancel()
-        cancelPendingSubscribeFlush?.()
-        if (streamAbortRef.current === streamController) streamAbortRef.current = null
-        if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
       }
     })()
 
     return () => {
       cancelled = true
-      streamController.abort()
-      if (streamAbortRef.current === streamController) streamAbortRef.current = null
-      if (streamResumeSessionRef.current === sessionId) streamResumeSessionRef.current = null
-      // Cancel any pending auto-reconnect so it can't fire into a stale session.
-      if (resumeReconnectTimerRef.current !== null) {
-        clearTimeout(resumeReconnectTimerRef.current)
-        resumeReconnectTimerRef.current = null
-      }
+      subscriptionRef.current?.close()
+      subscriptionRef.current = null
+      textPacer.cancel()
+      scheduler.cancel()
+      if (activeStreamRef.current?.isCurrent === isCurrent) activeStreamRef.current = null
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, scheduleResumeReconnect, sessionId, sessionLastActiveAt, refreshTrigger])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, sessionLastActiveAt, refreshTrigger])
 
   /** Force-reload messages from the server (used by cross-client WS refresh). */
   const refreshMessages = useCallback((options?: { force?: boolean }) => {
     // Skip if no active session or already loading / streaming, unless a
-    // remote turn has started and we need to attach after local stream cleanup.
+    // remote turn has started and the caller needs a hard re-read of history.
     if (!sessionId || (state.isLoading && !options?.force)) return
-    resumeSessionStream(options?.force ? { afterDirectStream: true } : undefined)
+    resumeSessionStream()
   }, [resumeSessionStream, sessionId, state.isLoading])
 
   const loadingOlderRef = useRef(false)
@@ -1641,6 +1346,23 @@ export function useChat(
     }
   }, [authToken, sessionId, state.hasMore, state.messages.length, state.totalMessages])
 
+  /**
+   * Send a prompt and let the session's `/events` subscription render it.
+   *
+   * The gateway still answers POST /api/chat with the turn's SSE stream, but
+   * this client no longer reads it: every one of those events is also emitted
+   * to the session's durable subscription, which is already open. Reading both
+   * meant two consumers appending into the same turn (duplicated tokens on
+   * screen), and the "which consumer owns this session" bookkeeping —
+   * ownership flags, handoff refs and a 40s stall watchdog to unstick a
+   * black-holed socket — existed only to arbitrate between them.
+   *
+   * So the body is discarded. The gateway treats the client close as
+   * `clientDisconnected` and keeps producing and persisting the turn (unlike
+   * /cancel, which actually aborts it), and the subscription renders it. The
+   * one response that still has to be read is the 202 queued reply, which is
+   * two lines long and describes a message that never becomes a turn.
+   */
   const sendMessage = useCallback(async (
     content: string,
     options: SendMessageOptions = {}
@@ -1697,114 +1419,32 @@ export function useChat(
       prevSessionIdRef.current = requestSessionId
     }
 
-    const controller = new AbortController()
-    const ownsDirectStream = shouldOwnDirectChatStream({
-      sessionId: requestSessionId,
-      directStreamSessionId: directStreamSessionRef.current,
-      hasActiveDirectStream: !!abortControllerRef.current,
-    })
-    if (ownsDirectStream) {
-      abortControllerRef.current = controller
-      directStreamSessionRef.current = requestSessionId
-      if (streamAbortRef.current) {
-        streamAbortRef.current.abort()
-        streamAbortRef.current = null
-      }
-    }
-    const requestVersion = ownsDirectStream ? ++requestVersionRef.current : requestVersionRef.current
-    const finishOwnedDirectStream = () => {
-      if (ownsDirectStream) finishDirectStream(requestSessionId, controller)
+    // Hand the placeholder to the event consumer so the turn's first token
+    // streams into this bubble instead of appending a second one next to it.
+    pendingAssistantPlaceholderRef.current = { sessionId: requestSessionId, messageId: assistantId }
+
+    /**
+     * Drop the optimistic pair when the send never became a turn. Anything the
+     * consumer has already adopted is left alone — that bubble now belongs to a
+     * live turn and the subscription owns its lifecycle.
+     */
+    const releasePlaceholder = (): boolean => {
+      const pending = pendingAssistantPlaceholderRef.current
+      if (!pending || pending.messageId !== assistantId) return false
+      pendingAssistantPlaceholderRef.current = null
+      return true
     }
 
-    // ── Direct-stream stall watchdog ──
-    // A backgrounded phone, a Wi-Fi→LTE handoff, a sleeping Electron window or a
-    // proxy evicting an idle socket can black-hole this connection without a
-    // FIN or RST. `reader.read()` then never settles — no `done`, no throw — so
-    // the loop below parks forever. The turn keeps running and persisting on the
-    // gateway, but this client shows a spinner indefinitely, and because
-    // `abortControllerRef` stays set, shouldOpenResumeStream refuses every
-    // recovery path (visibilitychange / online / pageshow / session switch).
-    // finishDirectStream is the only thing that clears that ref and it only runs
-    // once the reader settles, so the state had no exit transition but a reload.
-    //
-    // Cost is one timer handle for the duration of one send: rearmed in place
-    // (never stacked) and cleared on all three exit paths, so nothing is
-    // retained per event, per turn or per session.
-    let directIdleTimer: ReturnType<typeof setTimeout> | null = null
-    let directStreamStalled = false
-    const clearDirectIdleTimer = () => {
-      if (directIdleTimer === null) return
-      clearTimeout(directIdleTimer)
-      directIdleTimer = null
-    }
-    const armDirectIdleTimer = () => {
-      clearDirectIdleTimer()
-      directIdleTimer = setTimeout(() => {
-        directIdleTimer = null
-        if (isStale()) return
-        directStreamStalled = true
-        // Aborting only drops *this* client's socket. The gateway's POST handler
-        // treats a client close as `clientDisconnected` and keeps the turn
-        // running (unlike stopGeneration, which also POSTs /cancel), so the
-        // answer is still being produced and persisted while we re-attach.
-        if (ownsDirectStream) pendingResumeAfterDirectStreamRef.current = true
-        controller.abort()
-      }, DIRECT_STREAM_IDLE_TIMEOUT_MS)
-    }
-
-    // Guard: only update state if we are still on the same session/version.
-    // Concurrent submits that are expected to queue do not take ownership of the
-    // direct stream, so they cannot stale the in-flight answer.
-    const isStale = () =>
-      prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
-    // Imperative stream writer: every component of the assistant answer (text,
-    // thinking, tool calls/outputs/results) flows through one ordered
-    // MessageSegment accumulator. React only sees the snapshot when we flush.
-    const stream = createMessageStream()
-    let pendingContextFlow: LlmContextFlow | undefined
-
-    const textPacer = createStreamTextPacer({
-      onText: (chunk) => stream.pushText(chunk),
-      onThinking: (chunk) => stream.pushThinking(chunk),
-      onCommit: () => updateMessage({ immediate: true }),
-      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
-    })
-
-    const commitBufferedUpdates = () => {
-      if (isStale()) return
-      const snapshot = stream.snapshot()
-      const updates = snapshotToChatMessageUpdates(snapshot)
-      if (pendingContextFlow !== undefined) updates.contextFlow = pendingContextFlow
+    const dropOptimisticPair = () => {
+      const owned = releasePlaceholder()
       setState(prev => ({
         ...prev,
-        messages: prev.messages.map(m =>
-          m.id === assistantId ? { ...m, ...updates } : m
+        messages: prev.messages.filter(m =>
+          m.id !== userMessage.id && !(owned && m.id === assistantId)
         ),
       }))
     }
 
-    const streamScheduler = createStreamRenderScheduler({
-      onFlush: commitBufferedUpdates,
-      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
-    })
-    const flushBufferImmediately = streamScheduler.flushNow
-
-    const updateMessage = (options?: { immediate?: boolean }) => {
-      if (isStale()) return
-      if (options?.immediate) {
-        flushSync(flushBufferImmediately)
-        return
-      }
-      streamScheduler.schedule()
-    }
-
-    stream.markDirty(streamScheduler.schedule)
-    activeStreamRef.current = {
-      getAssistantId: () => assistantId,
-      writer: stream,
-      flush: () => updateMessage({ immediate: true }),
-      isCurrent: () => !isStale(),
-    }
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1823,37 +1463,35 @@ export function useChat(
       }
       // The gateway emits its own `request` event at turn start (with prompt +
       // provider metadata), so the trajectory/debug log gets a single source.
-      // The full request body is still sent below.
 
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify(requestBody),
-        signal: controller.signal,
       })
 
       if (response.status === 401) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({})) as { detail?: string }
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
-          if (!isStale()) {
-            setState(prev => ({
-              ...prev,
-              isLoading: ownsDirectStream ? false : prev.isLoading,
-              error: data.detail,
-              messages: prev.messages.filter(m =>
-                options.queued
-                  ? m.id !== assistantId && m.id !== userMessage.id
-                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-              ),
-            }))
-            if (data.detail === 'login_required') notifyLoginRequired?.()
-          }
-          finishOwnedDirectStream()
+          const detail = data.detail
+          const owned = releasePlaceholder()
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: detail,
+            messages: prev.messages.filter(m =>
+              options.queued
+                ? m.id !== assistantId && m.id !== userMessage.id
+                : !(owned && m.id === assistantId)
+            ),
+          }))
+          if (data.detail === 'login_required') notifyLoginRequired?.()
           return 'retry'
         }
       }
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 202) {
         throw new Error(formatChatHttpError(response.status, {
           provider: options.provider,
           attachments: outboundAttachments,
@@ -1861,389 +1499,88 @@ export function useChat(
         }))
       }
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let lineBuffer = ''
-      let completed = false
-
-      armDirectIdleTimer()
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        // Do NOT re-arm on raw bytes here. The gateway emits a 15s keepalive
-        // comment on an otherwise idle socket, so re-arming on any byte would
-        // mask a server-side stall where the answer has stopped streaming but
-        // the keepalive keeps the connection alive — leaving the UI frozen until
-        // a manual reload. We re-arm only when a real turn `data:` event is
-        // received below (see armDirectIdleTimer), so a turn that stops producing
-        // events (while keepalive bytes keep flowing) trips the watchdog and is
-        // auto-recovered by the resume/reconcile path instead.
-
-        lineBuffer += decoder.decode(value, { stream: true })
-        const lines = lineBuffer.split('\n')
-        lineBuffer = lines.pop() || ''
-
-        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-          const line = lines[lineIndex]
-          if (!line.startsWith('data: ')) continue
-          try {
-            const data = JSON.parse(line.slice(6))
-            // A parsed turn event proves real turn progress (as opposed to the
-            // keepalive comment), so re-arm the idle watchdog. This includes the
-            // initial `request`/`queued` events and the terminal `done`/`error`.
-            armDirectIdleTimer()
-            pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
-            if (!shouldProcessDirectStreamEvent(data.type, !isStale())) continue
-
-            if (data.type === 'thinking') {
-              textPacer.enqueueThinking(data.content as string)
-            } else if (data.type === 'token') {
-              textPacer.enqueueText(data.content as string)
-            } else if (data.type === 'tool_call_delta') {
-              // Flush pending text synchronously instead of awaiting the text
-              // pacer's idle. In swarm mode the coordinator's first content is a
-              // tool call (not text), so awaiting waitUntilIdle here blocks the
-              // entire SSE reader loop behind the (long) mode-notice text and
-              // delays tool/sub-agent rendering. flushNow drains text now and
-              // keeps ordering (text before tool) without blocking the loop.
-              textPacer.flushNow()
-              stream.pushToolCallDelta(
-                data.call_id as string,
-                (data.name_delta as string) || '',
-                (data.args_delta as string) || '',
-                data.parent_call_id as string | undefined,
-              )
-              updateMessage({ immediate: true })
-            } else if (data.type === 'tool_start') {
-              textPacer.flushNow()
-              stream.pushToolStart(
-                data.call_id as string,
-                data.tool as string,
-                (data.args as Record<string, unknown>) ?? {},
-                data.parent_call_id as string | undefined,
-              )
-              updateMessage({ immediate: true })
-            } else if (data.type === 'approval_required') {
-              textPacer.flushNow()
-              stream.pushApprovalRequired(
-                data.request_id as string,
-                (data.call_id as string) || `approval-${data.request_id as string}`,
-                (data.tool as string) || 'approval',
-                (data.args as Record<string, unknown>) ?? {},
-              )
-              updateMessage({ immediate: true })
-            } else if (data.type === 'tool_output') {
-              textPacer.flushNow()
-              stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
-              updateMessage()
-            } else if (data.type === 'tool_result') {
-              textPacer.flushNow()
-              stream.pushToolResult(
-                data.call_id as string,
-                data.ok as boolean,
-                data.message as string,
-                data.data as unknown,
-                data.parent_call_id as string | undefined,
-              )
-              updateMessage({ immediate: true })
-
-              // Auto-track file edits in changedFiles
-              if (data.ok) {
-                const snapshot = stream.snapshot()
-                const tc = snapshot.toolCalls.find(tc => tc.callId === (data.call_id as string))
-                const toolName = tc?.tool.replace('_', '.')
-                if (tc && (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit')) {
-                  const resultData = data.data && typeof data.data === 'object'
-                    ? data.data as Record<string, unknown>
-                    : undefined
-                  const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
-                  if (filePath && !isStale()) {
-                    const fileName = filePath.split('/').pop() ?? filePath
-                    setChangedFiles(prev => {
-                      if (prev.some(f => f.path === filePath)) return prev
-                      return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-                    })
-                  }
-                }
-              }
-            } else if (data.type === 'plan_complete') {
-              // Plan mode completed — store the plan for review
-              const plan: PlanData = {
-                plan_id: data.plan_id as string,
-                summary: data.summary as string,
-                actions: Array.isArray(data.actions) ? data.actions as PlanAction[] : [],
-              }
-              setPendingPlan(plan)
-            } else if (data.type === 'mode_notice') {
-              // Mode notice — append as assistant content
-              textPacer.enqueueText(`\n\n*${data.message as string}*`)
-            } else if (data.type === 'content_rollback') {
-              // The gateway discarded a degenerate generation after streaming
-              // (runaway repetition / replayed-reasoning loop); drop the
-              // already-rendered text past the rollback point.
-              textPacer.flushNow()
-              stream.rollbackText((data.contentLength as number) ?? 0)
-              updateMessage({ immediate: true })
-            } else if (data.type === 'todo_list') {
-              // AI updated the task list
-              setTodoList(normalizeTodoStateValue(data.items))
-            } else if (data.type === 'context_usage') {
-              setContextUsage(data as unknown as ContextUsage)
-            } else if (data.type === 'context_flow') {
-              pendingContextFlow = parseContextFlowEvent(data as Record<string, unknown>)
-              updateMessage({ immediate: true })
-            } else if (data.type === 'provider_fallback') {
-              // Provider was unavailable, gateway fell back to jait
-              setSessionInfo({
-                provider: 'jait',
-                projectPath: '',
-                isRemote: false,
-              })
-            } else if (data.type === 'session_info') {
-              setSessionInfo({
-                provider: data.provider as string,
-                projectPath: data.projectPath as string,
-                isRemote: data.isRemote as boolean,
-                remoteNode: data.remoteNode as SessionInfo['remoteNode'],
-              })
-            } else if (data.type === 'file_changed') {
-              setFileChangeCount((count) => count + 1)
-              // AI reported a file change
-              const filePath = data.path as string
-              const fileName = data.name as string
-              if (!isStale()) {
-                setChangedFiles(prev => {
-                  const existing = prev.find(f => f.path === filePath)
-                  if (existing) return prev
-                  return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-                })
-              }
-            } else if (data.type === 'queued') {
-              await textPacer.waitUntilIdle()
-              flushBufferImmediately()
-              const queued = data.message as Partial<QueuedChatMessage> | undefined
-              if (!isStale()) {
-                setState(prev => ({
-                  ...prev,
-                  isLoading: ownsDirectStream ? false : prev.isLoading,
-                  messages: prev.messages.filter(m => m.id !== assistantId && m.id !== userMessage.id),
-                }))
-                // Only mirror the server-assigned queue entry into local state
-                // for user-initiated sends. When this send itself originated
-                // from the queue (options.queued), the server is already the
-                // authoritative owner of the persisted queue and will broadcast
-                // the canonical `queued_messages` state via WS. Re-adding here
-                // with a freshly generated server id raced the server-side
-                // drain and caused every queued message to multiply.
-                if (!options.queued && queued?.id && typeof queued.content === 'string') {
-                  setMessageQueue(prev => prev.some(item => item.id === queued.id)
-                    ? prev
-                    : [...prev, {
-                        ...queued,
-                        id: queued.id,
-                        content: queued.content,
-                        displayContent: queued.displayContent ?? queued.content,
-                        queuedAt: typeof queued.queuedAt === 'number' ? queued.queuedAt : Date.now(),
-                      } as QueuedChatMessage])
-                }
-              }
-              finishOwnedDirectStream()
-              return 'queued'
-            } else if (data.type === 'done') {
-              completed = true
-              await textPacer.waitUntilIdle()
-              flushBufferImmediately()
-              const snapshot = stream.snapshot()
-              if (!isStale()) {
-                const isEmptyAssistant =
-                  snapshot.content.length === 0 &&
-                  snapshot.thinking.length === 0 &&
-                  snapshot.toolCalls.length === 0
-                setState(prev => ({
-                  ...prev,
-                  promptCount: data.prompt_count,
-                  remainingPrompts: data.remaining_prompts,
-                  isLoading: ownsDirectStream ? false : prev.isLoading,
-                  hitMaxRounds: shouldShowContinueAfterDone(data),
-                  messages: isEmptyAssistant
-                    ? prev.messages.filter(m => m.id !== assistantId)
-                    : prev.messages.map(m =>
-                        m.id === assistantId
-                          ? { ...m, ...snapshotToChatMessageUpdates(snapshot) }
-                          : m
-                      ),
-                }))
-                clearUnfinishedTodoList()
-              } else {
-                // Stream is stale (session/provider changed), but still clean up
-                // the empty assistant placeholder so it doesn't linger.
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.filter(m =>
-                    !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-                  ),
-                }))
-              }
-              finishOwnedDirectStream()
-              setCompletionCount((prev) => prev + 1)
-              return 'sent'
-            } else if (data.type === 'error') {
-              throw new Error(data.message)
-            }
-          } catch (parseErr) {
-            if (!(parseErr instanceof SyntaxError)) throw parseErr
-            // incomplete JSON chunk — wait for next line
-          }
+      // ── Queued (202) ──
+      // The session was already streaming, so the gateway persisted this
+      // message on the queue and closed without starting a turn. Nothing will
+      // arrive on `/events` for it, so this is the one response body still
+      // worth reading — and it is already complete, so `.text()` suffices.
+      if (response.status === 202) {
+        const queued = parseQueuedChatResponse(await response.text())?.message as Partial<QueuedChatMessage> | undefined
+        dropOptimisticPair()
+        setState(prev => ({ ...prev, isLoading: false }))
+        // Only mirror the server-assigned queue entry into local state for
+        // user-initiated sends. When this send itself originated from the queue
+        // (options.queued), the server is the authoritative owner of the
+        // persisted queue and broadcasts the canonical `queued_messages` state
+        // over WS. Re-adding here with a freshly generated server id raced the
+        // server-side drain and caused every queued message to multiply.
+        if (!options.queued && queued?.id && typeof queued.content === 'string') {
+          setMessageQueue(prev => prev.some(item => item.id === queued.id)
+            ? prev
+            : [...prev, {
+                ...queued,
+                id: queued.id,
+                content: queued.content,
+                displayContent: queued.displayContent ?? queued.content,
+                queuedAt: typeof queued.queuedAt === 'number' ? queued.queuedAt : Date.now(),
+              } as QueuedChatMessage])
         }
+        return 'queued'
       }
-      clearDirectIdleTimer()
-      await textPacer.waitUntilIdle()
-      flushBufferImmediately()
-      if (!completed && !isStale()) {
-        const snapshot = stream.snapshot()
-        const isEmptyAssistant =
-          snapshot.content.length === 0 &&
-          snapshot.thinking.length === 0 &&
-          snapshot.toolCalls.length === 0
-        setState(prev => ({
-          ...prev,
-          isLoading: ownsDirectStream ? false : prev.isLoading,
-          messages: isEmptyAssistant
-            ? prev.messages.filter(m => m.id !== assistantId)
-            : prev.messages.map(m =>
-                m.id === assistantId
-                  ? { ...m, ...snapshotToChatMessageUpdates(snapshot) }
-                  : m
-              ),
-        }))
-        setCompletionCount((prev) => prev + 1)
-        clearUnfinishedTodoList()
-      } else if (!completed && isStale()) {
-        // Stream ended without done event and session/provider changed —
-        // clean up empty assistant placeholder to prevent ghost messages.
-        setState(prev => ({
-          ...prev,
-          messages: prev.messages.filter(m =>
-            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-          ),
-        }))
-      }
+
+      // The turn is running. Release the socket — every event it would have
+      // carried is already on this session's subscription, and the gateway
+      // keeps producing the turn after a client close.
+      void response.body?.cancel().catch(() => {})
+      return 'sent'
     } catch (error) {
-      clearDirectIdleTimer()
-      textPacer.flushNow()
-      streamScheduler.cancel()
-      const finalSnapshot = stream.finish()
-      flushBufferImmediately()
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (directStreamStalled) {
-          // Watchdog abort, not a user cancel. The turn is still streaming on the
-          // gateway, so keep the partial answer and `isLoading` exactly as they
-          // are — no "Cancelled" tool markers, no placeholder cleanup. Clearing
-          // the controller ref here is what unblocks shouldOpenResumeStream, and
-          // finishDirectStream then opens the resume stream, whose snapshot
-          // reconciles whatever streamed while we were disconnected.
-          finishOwnedDirectStream()
-          return 'aborted'
-        }
-        finishOwnedDirectStream()
-        if (!isStale()) {
-          setState(prev => ({
-            ...prev,
-            isLoading: ownsDirectStream ? false : prev.isLoading,
-            messages: prev.messages
-              .filter(m =>
+      const transientConnectionError = isTransientConnectionError(error)
+      const errorMessage = transientConnectionError
+        ? TRANSIENT_CONNECTION_MESSAGE
+        : error instanceof Error ? error.message : 'An error occurred'
+      // A POST that never reached the gateway produced no turn, so no `error`
+      // event is coming over the subscription to render this failure — the
+      // send itself has to. If the consumer already adopted the placeholder the
+      // turn *did* start, and its own terminal event owns the outcome.
+      const owned = releasePlaceholder()
+      setState(prev => {
+        if (!owned) return { ...prev, isLoading: false, error: errorMessage }
+        // A transient failure keeps no partial turn worth marking up, and a
+        // queued-drain send owns neither bubble.
+        const dropPair = transientConnectionError || options.queued === true
+        return {
+          ...prev,
+          isLoading: false,
+          // Rendered inline in red at the end of the turn, so the composer
+          // banner would say the same thing twice.
+          error: dropPair ? errorMessage : null,
+          messages: dropPair
+            ? prev.messages.filter(m =>
                 options.queued
                   ? m.id !== assistantId && m.id !== userMessage.id
-                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+                  : m.id !== assistantId
               )
-              .map(m => {
-                if (!m.toolCalls?.some(tc => tc.status === 'running')) return m
-                return {
-                  ...m,
-                  toolCalls: m.toolCalls!.map(tc =>
-                    tc.status === 'running'
-                      ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
-                      : tc
-                  ),
-                }
-              }),
-          }))
-        } else {
-          // Stale abort — still clean up empty assistant placeholder
-          setState(prev => ({
-            ...prev,
-            messages: prev.messages.filter(m =>
-              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-            ),
-          }))
+            : prev.messages.map(m =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: errorMessage,
+                      segments: [{ type: 'error' as const, content: errorMessage }],
+                    }
+                  : m
+              ),
         }
-        return 'aborted'
-      }
-      finishOwnedDirectStream()
-      if (!isStale()) {
-        const transientConnectionError = isTransientConnectionError(error)
-        const errorMessage = transientConnectionError
-          ? TRANSIENT_CONNECTION_MESSAGE
-          : error instanceof Error ? error.message : 'An error occurred'
-        setState(prev => {
-          // When the error is rendered inline as a chat message we must not also
-          // surface it via the `error` banner above the composer (avoids dupes).
-          // The failure is appended to the turn whether or not anything
-          // streamed first, so the banner is redundant for any turn we still
-          // have a message for.
-          const renderedInline =
-            !transientConnectionError &&
-            !options.queued &&
-            prev.messages.some(m => m.id === assistantId)
-          return {
-            ...prev,
-            isLoading: ownsDirectStream ? false : prev.isLoading,
-            error: renderedInline ? null : errorMessage,
-            messages: transientConnectionError || options.queued
-              ? prev.messages.filter(m =>
-                  options.queued
-                    ? m.id !== assistantId && m.id !== userMessage.id
-                    : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-                )
-              // Keep the partial turn and mark where it stopped. Gating this on
-              // an empty message meant a rate limit that arrived mid-answer left
-              // no red marker at all — only a banner above the composer, which
-              // then disappeared on reload once the persisted error segment
-              // rendered inline instead.
-              : prev.messages.map(m =>
-                  m.id === assistantId
-                    ? {
-                        ...m,
-                        ...snapshotToChatMessageUpdates(finalSnapshot),
-                        content: finalSnapshot.content || errorMessage,
-                        segments: segmentsWithError(finalSnapshot, errorMessage),
-                      }
-                    : m
-                ),
-          }
-        })
-        if (transientConnectionError && requestSessionId) {
-          window.setTimeout(() => {
-            if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
-          }, 250)
-        }
-      } else {
-        // Stale error — clean up empty assistant placeholder
-        setState(prev => ({
-          ...prev,
-          messages: prev.messages.filter(m =>
-            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-          ),
-        }))
+      })
+      if (transientConnectionError && requestSessionId) {
+        // The turn may well have started before the socket failed. Re-read
+        // history so a turn that is running server-side reappears.
+        window.setTimeout(() => {
+          if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
+        }, 250)
       }
       return 'retry'
     }
-    textPacer.cancel()
-    finishOwnedDirectStream()
-    return 'sent'
-  }, [authToken, clearUnfinishedTodoList, finishDirectStream, onLoginRequired, resumeSessionStream, sessionId])
+  }, [authToken, onLoginRequired, resumeSessionStream, sessionId])
 
   // --- Message queue (queueing & steering) ---
   const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {
@@ -2270,7 +1607,7 @@ export function useChat(
   const recordSteeredMessage = useCallback((content: string, displayContent?: string) => {
     const active = activeStreamRef.current
     if (active?.isCurrent() && active.getAssistantId()) {
-      active.writer.pushSteering(content, displayContent)
+      active.getWriter().pushSteering(content, displayContent)
       active.flush()
       return
     }
@@ -2328,8 +1665,23 @@ export function useChat(
     setMessageQueue(items)
   }, [])
 
+  // ── Wake / reconnect nudges ──
+  // A socket parked by a sleeping tab, a Wi-Fi→LTE handoff or a bfcache restore
+  // usually produces no error at all — it just stops delivering bytes, which is
+  // exactly the state the old 40s stall watchdog existed to detect. Dropping it
+  // and reconnecting replays everything after `Last-Event-ID`, so it is cheap
+  // and always safe: at worst the replay is empty. Only when no subscription
+  // exists at all (a fatal error retired it) is the heavier
+  // snapshot-and-resubscribe needed.
   useEffect(() => {
-    const resumeActiveStreamIfNeeded = () => {
+    if (typeof window === 'undefined') return
+
+    const reattach = () => {
+      const subscription = subscriptionRef.current
+      if (subscription) {
+        subscription.reconnectNow()
+        return
+      }
       if (!shouldResumeChatSession({
         sessionId,
         isLoading: state.isLoading,
@@ -2338,7 +1690,7 @@ export function useChat(
         error: state.error,
         forceRefresh: true,
       })) return
-      resumeSessionStream({ forceRestart: true })
+      resumeSessionStream()
     }
 
     const handleVisibilityChange = () => {
@@ -2348,30 +1700,10 @@ export function useChat(
       }
       if (!documentWasHiddenRef.current) return
       documentWasHiddenRef.current = false
-      resumeActiveStreamIfNeeded()
+      reattach()
     }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [state.error, state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId, state.messages.length])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const resumeActiveStreamIfNeeded = (forceRestart = false) => {
-      if (!shouldResumeChatSession({
-        sessionId,
-        isLoading: state.isLoading,
-        isLoadingHistory: state.isLoadingHistory,
-        messageCount: state.messages.length,
-        error: state.error,
-        forceRefresh: forceRestart,
-      })) return
-      resumeSessionStream(forceRestart ? { forceRestart: true } : undefined)
-    }
-
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) resumeActiveStreamIfNeeded(true)
+      if (event.persisted) reattach()
     }
     const handleOffline = () => {
       browserWasOfflineRef.current = true
@@ -2379,13 +1711,15 @@ export function useChat(
     const handleOnline = () => {
       const wasOffline = browserWasOfflineRef.current
       browserWasOfflineRef.current = false
-      if (wasOffline) resumeActiveStreamIfNeeded(true)
+      if (wasOffline) reattach()
     }
 
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('pageshow', handlePageShow)
     window.addEventListener('offline', handleOffline)
     window.addEventListener('online', handleOnline)
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
@@ -2499,7 +1833,12 @@ export function useChat(
 
   const cancelRequest = useCallback(() => {
     requestVersionRef.current += 1
-    // 1. Tell the gateway to abort the Ollama stream
+    // Tell the gateway to abort the turn. This is now the *only* thing a stop
+    // does to the transport: the session subscription stays open, so the
+    // gateway's own terminal `done` still arrives and reconciles the turn.
+    // Tearing the connection down here used to be necessary to stop a second
+    // consumer from writing into the turn — there is no second consumer now,
+    // and closing it would only blind the client to the cancellation.
     const sid = prevSessionIdRef.current
     if (sid) {
       fetch(`${API_URL}/api/sessions/${sid}/cancel`, {
@@ -2507,15 +1846,8 @@ export function useChat(
         headers: authHeaders(authToken),
       }).catch(() => {})
     }
-    // 2. Abort the direct chat POST (if we're the originating tab)
-    abortControllerRef.current?.abort()
-    abortControllerRef.current = null
-    directStreamSessionRef.current = null
-    // 3. Abort the stream-resume SSE connection
-    streamAbortRef.current?.abort()
-    streamAbortRef.current = null
-    streamResumeSessionRef.current = null
-    // 4. Update UI — mark any in-flight tool calls as cancelled so spinners stop
+    // Optimistically stop the spinners — mark any in-flight tool calls as
+    // cancelled rather than waiting a round-trip for the gateway to confirm.
     setState(prev => ({
       ...prev,
       isLoading: false,
@@ -2587,15 +1919,12 @@ export function useChat(
         return false
       }
 
-      // Invalidate in-flight local stream updates from the current run,
-      // then proactively cancel server-side stream before restart.
-      // This avoids a common race where restart is sent before the backend
-      // has finished clearing active stream state.
+      // Proactively cancel the server-side turn before restarting. This avoids
+      // a common race where restart is sent before the backend has finished
+      // clearing active stream state. The subscription stays open throughout —
+      // `restart-from` rewrites history, and the fresh snapshot below (plus the
+      // `sendMessage` that follows) is what re-seeds the view.
       requestVersionRef.current += 1
-      abortControllerRef.current?.abort()
-      streamAbortRef.current?.abort()
-      streamAbortRef.current = null
-      streamResumeSessionRef.current = null
       await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers: authHeaders(effectiveToken) }).catch(() => null)
       await waitForStreamingToStop()
 
