@@ -98,6 +98,12 @@ const BACKEND_OPTIONS: Array<{
   { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.' },
   { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.' },
   { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.' },
+  { type: 'gemini', label: 'Gemini', description: 'Google Gemini through its OpenAI-compatible endpoint.' },
+  { type: 'anthropic', label: 'Anthropic', description: 'Anthropic Claude through its OpenAI-compatible endpoint.' },
+  { type: 'grok', label: 'Grok', description: 'xAI Grok models via the xAI API.' },
+  { type: 'perplexity', label: 'Perplexity', description: 'Perplexity reasoning and search models.' },
+  { type: 'moonshot', label: 'Moonshot', description: 'Moonshot AI (Kimi) via its OpenAI-compatible endpoint.' },
+  { type: 'kimi', label: 'Kimi', description: 'Kimi (Moonshot AI) via its OpenAI-compatible endpoint.' },
 ]
 
 function legacyBackendDraft(
@@ -137,6 +143,72 @@ function legacyBackendDraft(
       numCtx: '',
     }
   }
+  if (type === 'gemini') {
+    return {
+      id: 'legacy-gemini',
+      type,
+      name: 'Google Gemini',
+      baseUrl: apiKeys.GEMINI_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.gemini,
+      apiKey: apiKeys.GEMINI_API_KEY ?? '',
+      model: apiKeys.GEMINI_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'anthropic') {
+    return {
+      id: 'legacy-anthropic',
+      type,
+      name: 'Anthropic',
+      baseUrl: apiKeys.ANTHROPIC_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.anthropic,
+      apiKey: apiKeys.ANTHROPIC_API_KEY ?? '',
+      model: apiKeys.ANTHROPIC_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'grok') {
+    return {
+      id: 'legacy-grok',
+      type,
+      name: 'Grok',
+      baseUrl: apiKeys.XAI_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.grok,
+      apiKey: apiKeys.XAI_API_KEY ?? '',
+      model: apiKeys.GROK_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'perplexity') {
+    return {
+      id: 'legacy-perplexity',
+      type,
+      name: 'Perplexity',
+      baseUrl: JAIT_BACKEND_DEFAULT_URLS.perplexity,
+      apiKey: apiKeys.PERPLEXITY_API_KEY ?? '',
+      model: apiKeys.PERPLEXITY_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'moonshot') {
+    return {
+      id: 'legacy-moonshot',
+      type,
+      name: 'Moonshot',
+      baseUrl: apiKeys.MOONSHOT_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.moonshot,
+      apiKey: apiKeys.MOONSHOT_API_KEY ?? '',
+      model: apiKeys.MOONSHOT_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'kimi') {
+    return {
+      id: 'legacy-kimi',
+      type,
+      name: 'Kimi',
+      baseUrl: apiKeys.KIMI_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.kimi,
+      apiKey: apiKeys.MOONSHOT_API_KEY ?? '',
+      model: apiKeys.KIMI_MODEL ?? '',
+      numCtx: '',
+    }
+  }
   return {
     id: 'legacy-openai',
     type,
@@ -167,6 +239,12 @@ export function getBackendInstanceDrafts(
   if (apiKeys.OPENROUTER_API_KEY) legacyTypes.add('openrouter')
   if (apiKeys.OLLAMA_URL || apiKeys.OLLAMA_MODEL) legacyTypes.add('ollama')
   if (apiKeys.OMNIROUTE_BASE_URL || apiKeys.OMNIROUTE_API_KEY) legacyTypes.add('omniroute')
+  if (apiKeys.GEMINI_API_KEY || apiKeys.GEMINI_BASE_URL || apiKeys.GEMINI_MODEL) legacyTypes.add('gemini')
+  if (apiKeys.ANTHROPIC_API_KEY || apiKeys.ANTHROPIC_BASE_URL) legacyTypes.add('anthropic')
+  if (apiKeys.XAI_API_KEY || apiKeys.XAI_BASE_URL || apiKeys.GROK_MODEL) legacyTypes.add('grok')
+  if (apiKeys.PERPLEXITY_API_KEY) legacyTypes.add('perplexity')
+  if (apiKeys.MOONSHOT_API_KEY || apiKeys.MOONSHOT_BASE_URL) legacyTypes.add('moonshot')
+  if (apiKeys.KIMI_BASE_URL || apiKeys.KIMI_MODEL) legacyTypes.add('kimi')
   return [...legacyTypes].map((type) => legacyBackendDraft(type, apiKeys))
 }
 
@@ -311,7 +389,8 @@ export function SettingsPage({
   const [backendInstancesDraft, setBackendInstancesDraft] = useState<BackendInstanceDraft[]>(
     () => getBackendInstanceDrafts(apiKeys, jaitBackend),
   )
-  const [savingBackendInstances, setSavingBackendInstances] = useState(false)
+  const [backendTestingId, setBackendTestingId] = useState<string | null>(null)
+  const [backendTestResults, setBackendTestResults] = useState<Record<string, { ok: boolean; message: string }>>({})
   const [clearing, setClearing] = useState(false)
   const [clearingProjects, setClearingProjects] = useState(false)
   const [archivedProjects, setArchivedProjects] = useState<ProjectRecord[]>([])
@@ -462,26 +541,55 @@ export function SettingsPage({
     && instance.baseUrl.trim()
     && (!instance.numCtx.trim() || Number(instance.numCtx) >= 2048)
   ))
-  const handleSaveBackendInstances = async () => {
-    setSavingBackendInstances(true)
+  const handleTestBackendInstance = async (instance: BackendInstanceDraft) => {
+    setBackendTestingId(instance.id)
+    setBackendTestResults((prev) => ({ ...prev, [instance.id]: { ok: false, message: 'Testing…' } }))
     try {
-      const instances: JaitBackendInstanceConfig[] = backendInstancesDraft.map((instance) => ({
-        id: instance.id,
-        type: instance.type,
-        name: instance.name.trim(),
-        baseUrl: instance.baseUrl.trim(),
-        ...(instance.apiKey.trim() ? { apiKey: instance.apiKey.trim() } : {}),
-        ...(instance.model.trim() ? { model: instance.model.trim() } : {}),
-        ...(instance.type === 'ollama' && instance.numCtx.trim()
-          ? { numCtx: Number(instance.numCtx) }
-          : {}),
-      }))
-      await onSaveApiKeys({
-        ...apiKeys,
-        JAIT_BACKEND_INSTANCES: serializeJaitBackendInstances(instances),
+      const res = await fetch(`${API_URL}/api/providers/backend/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          backend: instance.type,
+          base_url: instance.baseUrl.trim(),
+          api_key: instance.apiKey.trim(),
+          model: instance.model.trim(),
+        }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        error?: string
+        modelCount?: number
+        latencyMs?: number
+        sampleModels?: string[]
+        authenticated?: boolean
+        modelPresent?: boolean
+      }
+      if (data.ok) {
+        const sample = data.sampleModels?.length ? ` (e.g. ${data.sampleModels.join(', ')})` : ''
+        const auth = data.authenticated ? 'with API key' : 'keyless'
+        const model = data.modelPresent !== undefined
+          ? (data.modelPresent ? ', default model found' : ', default model not found')
+          : ''
+        setBackendTestResults({
+          ...backendTestResults,
+          [instance.id]: {
+            ok: true,
+            message: `Reachable in ${data.latencyMs}ms — ${data.modelCount} models, ${auth}${sample}${model}`,
+          },
+        })
+      } else {
+        setBackendTestResults({
+          ...backendTestResults,
+          [instance.id]: { ok: false, message: data.error ?? 'Connection failed' },
+        })
+      }
+    } catch (err) {
+      setBackendTestResults({
+        ...backendTestResults,
+        [instance.id]: { ok: false, message: err instanceof Error ? err.message : 'Connection failed' },
       })
     } finally {
-      setSavingBackendInstances(false)
+      setBackendTestingId(null)
     }
   }
   const handleAddBackendInstance = () => {
@@ -519,7 +627,7 @@ export function SettingsPage({
     }))
   }
 
-  const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? ''))
+  const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? '')) || backendInstancesDirty
 
   const loadProviderAccounts = useCallback(async () => {
     if (!token) return
@@ -818,10 +926,25 @@ export function SettingsPage({
     setError(null)
     setStatus(null)
     try {
-      await onSaveApiKeys(mergeApiSettingsDraft(apiKeys, draft))
-      setStatus('API keys saved.')
+      const next = mergeApiSettingsDraft(apiKeys, draft)
+      if (backendInstancesDirty) {
+        const instances: JaitBackendInstanceConfig[] = backendInstancesDraft.map((instance) => ({
+          id: instance.id,
+          type: instance.type,
+          name: instance.name.trim(),
+          baseUrl: instance.baseUrl.trim(),
+          ...(instance.apiKey.trim() ? { apiKey: instance.apiKey.trim() } : {}),
+          ...(instance.model.trim() ? { model: instance.model.trim() } : {}),
+          ...(instance.type === 'ollama' && instance.numCtx.trim()
+            ? { numCtx: Number(instance.numCtx) }
+            : {}),
+        }))
+        next.JAIT_BACKEND_INSTANCES = serializeJaitBackendInstances(instances)
+      }
+      await onSaveApiKeys(next)
+      setStatus('Settings saved.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save API keys')
+      setError(err instanceof Error ? err.message : 'Failed to save settings')
     } finally {
       setSaving(false)
     }
@@ -1832,6 +1955,24 @@ const providerAccountsCard = (
                           />
                         )}
                       </div>
+                      <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void handleTestBackendInstance(instance) }}
+                          disabled={backendTestingId === instance.id}
+                        >
+                          {backendTestingId === instance.id
+                            ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            : <Network className="mr-1.5 h-3.5 w-3.5" />}
+                          Test connection
+                        </Button>
+                        {backendTestResults[instance.id] && (
+                          <span className={cn('text-sm', backendTestResults[instance.id].ok ? 'text-emerald-600 dark:text-emerald-500' : 'text-destructive')}>
+                            {backendTestResults[instance.id].message}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1840,15 +1981,9 @@ const providerAccountsCard = (
                     OmniRoute can forward repository content to third-party providers. Review the providers enabled in each router.
                   </p>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => { void handleSaveBackendInstances() }}
-                  disabled={savingBackendInstances || !backendInstancesDirty || !backendInstancesValid}
-                >
-                  {savingBackendInstances ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save backend instances'}
-                </Button>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Backend instances are saved together with the other API settings using the page Save button below.
+                </p>
               </div>
               <div className="max-w-sm">
                 <Label htmlFor="jait-max-rounds" className="mb-1.5 block">Agent checkpoint interval</Label>
@@ -1986,7 +2121,7 @@ const providerAccountsCard = (
         })}
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-            <Button onClick={() => { void handleSave() }} disabled={saving || !isDirty}>
+            <Button onClick={() => { void handleSave() }} disabled={saving || !isDirty || (backendInstancesDirty && !backendInstancesValid)}>
               {saving ? 'Saving...' : 'Save API settings'}
             </Button>
             <Button variant="ghost" onClick={handleDiscard} disabled={!isDirty}>
