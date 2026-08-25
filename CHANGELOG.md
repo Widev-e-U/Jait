@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.768](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.768) — 2026-08-25
+- refactor(web): replace dual chat transport with single durable SSE subscription — 7db112cf
+- fix(gateway): run background commands in their own terminal — 69e7d11c
+- fix(web): route WS through /ws proxy only for same host — 2db22698
+
 ## [v0.1.767](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.767) — 2026-08-25
 - fix(web): route dev websocket via vite proxy and drop noisy StrictMode — ce33ad22
 - feat(web): open a folder passed to the desktop app as a project — 248f274f
