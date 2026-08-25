@@ -8,7 +8,7 @@ import {
 } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
-import type { TerminalSurface } from "./surfaces/terminal.js";
+import { TerminalSurfaceFactory, type TerminalSurface } from "./surfaces/terminal.js";
 import { SecretInputService } from "./services/secret-input.js";
 import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import type { WsControlPlane } from "./ws.js";
@@ -395,6 +395,37 @@ describe("terminal.run tool status reporting", () => {
       isBackground: true,
       watched: false,
     });
+    backgroundCommandMonitor.clearForTests();
+  });
+
+  it("runs a background command in its own terminal, separate from the session default", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const registry = new SurfaceRegistry();
+    registry.register(new TerminalSurfaceFactory());
+    const tool = createTerminalRunTool(registry);
+
+    // Foreground command creates + records the session default terminal.
+    const fg1 = await tool.execute({ command: "printf fg1", timeout: 5000 }, makeContext());
+    expect(fg1.ok).toBe(true);
+    const fgTerminalId = (fg1.data as any).terminalId as string;
+    expect(fgTerminalId).toBeTruthy();
+
+    // Background command must NOT reuse the session default terminal — otherwise
+    // the next foreground command would be typed into a busy shell and Ctrl+C it.
+    const bg = await tool.execute(
+      { command: "printf bg", isBackground: true, timeout: 5000 },
+      makeContext(),
+    );
+    expect(bg.ok).toBe(true);
+    const bgTerminalId = (bg.data as any).terminalId as string;
+    expect(bgTerminalId).toBeTruthy();
+    expect(bgTerminalId).not.toBe(fgTerminalId);
+
+    // Next foreground command reuses the session default terminal.
+    const fg2 = await tool.execute({ command: "printf fg2", timeout: 5000 }, makeContext());
+    expect(fg2.ok).toBe(true);
+    expect((fg2.data as any).terminalId).toBe(fgTerminalId);
+
     backgroundCommandMonitor.clearForTests();
   });
 

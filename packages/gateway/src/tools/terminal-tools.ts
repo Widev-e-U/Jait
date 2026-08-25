@@ -357,6 +357,7 @@ async function ensureSessionTerminal(
   context: ToolContext,
   preferredId?: string,
   ws?: WsControlPlane,
+  isBackground = false,
 ): Promise<{ surface: ManagedTerminalSurface; terminalId: string; isNew: boolean; warning?: string }> {
   const terminalKey = sessionTerminalKey(context);
 
@@ -396,9 +397,13 @@ async function ensureSessionTerminal(
     }
   }
 
-  // 2. Try the session's default terminal
-  const existingId = sessionTerminalMap.get(terminalKey);
-  if (existingId) {
+  // 2. Try the session's default terminal — but never for a background
+  //    command. A background command (server/watcher) must run in its own
+  //    terminal so the agent's next foreground command isn't typed into a
+  //    busy shell (which would hang, then Ctrl+C the background process).
+  if (!isBackground) {
+    const existingId = sessionTerminalMap.get(terminalKey);
+    if (existingId) {
     try {
       const s = registry.getSurface(existingId);
       if (s && s.type === "terminal" && s.state === "running") {
@@ -407,6 +412,7 @@ async function ensureSessionTerminal(
       }
     } catch { /* gone */ }
     sessionTerminalMap.delete(terminalKey);
+    }
   }
 
   // 3. Enforce global limit — stop oldest terminal(s) if at cap
@@ -465,7 +471,12 @@ async function ensureSessionTerminal(
     })) as TerminalSurface;
   }
 
-  sessionTerminalMap.set(terminalKey, terminalId);
+  // Only a foreground command becomes the session's default terminal. A
+  // background command keeps its own terminal so it never blocks the agent's
+  // normal command terminal.
+  if (!isBackground) {
+    sessionTerminalMap.set(terminalKey, terminalId);
+  }
 
   // Wait for shell integration to signal prompt-ready (OSC 633;B)
   await surface.waitForPrompt();
@@ -835,7 +846,7 @@ export function createTerminalRunTool(
       try {
         // 1. Get or create a persistent terminal
         const { surface, terminalId, isNew, warning } =
-          await ensureSessionTerminal(registry, context, preferredId, ws);
+          await ensureSessionTerminal(registry, context, preferredId, ws, isBackground);
         const outputOffset = getTerminalOutputOffset(surface);
 
         // 2. Background mode: start the command and return immediately. Watch
