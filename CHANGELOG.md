@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.767](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.767) — 2026-08-25
+- fix(web): route dev websocket via vite proxy and drop noisy StrictMode — ce33ad22
+- feat(web): open a folder passed to the desktop app as a project — 248f274f
+- feat(web): attach live terminals to running tool cards — 6e953b5c
+- feat(gateway): broadcast terminal.execution events for live tool cards — 7247da81
+- fix(gateway): return 204 from /api/auth/refresh when no session exists — 43713c52
+
 ## [v0.1.766](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.766) — 2026-08-25
 - fix(web): anchor toggled tool cards and skip initial transcript fill scroll — e3940025
 - fix(gateway): wait for real shell prompt before writing to remote terminals — 5c39776b
