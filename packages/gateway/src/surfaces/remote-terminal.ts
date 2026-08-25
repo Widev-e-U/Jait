@@ -35,6 +35,10 @@ export class RemoteTerminalSurface implements Surface {
   private _shell: string | null;
   private readonly _reuseOnly: boolean;
   private _lastActivityAt = Date.now();
+  /** Whether the remote shell has emitted its first OSC 633;B prompt-end marker */
+  private _shellIntegrationReady = false;
+  private _shellIntegrationReadyResolve?: () => void;
+  private readonly _shellIntegrationReadyPromise: Promise<void>;
 
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
@@ -49,6 +53,19 @@ export class RemoteTerminalSurface implements Surface {
     this._rows = opts.rows ?? 30;
     this._shell = opts.shell ?? null;
     this._reuseOnly = opts.reuseOnly ?? false;
+    this._shellIntegrationReadyPromise = new Promise<void>((resolve) => {
+      this._shellIntegrationReadyResolve = resolve;
+    });
+    // A reattached terminal is already sitting at a prompt from an earlier
+    // command, so it will not emit a fresh B marker until we write to it.
+    // Waiting for one would stall every reuse for the full timeout.
+    if (this._reuseOnly) this._markShellIntegrationReady();
+  }
+
+  private _markShellIntegrationReady(): void {
+    if (this._shellIntegrationReady) return;
+    this._shellIntegrationReady = true;
+    this._shellIntegrationReadyResolve?.();
   }
 
   get state(): SurfaceState {
@@ -124,8 +141,27 @@ export class RemoteTerminalSurface implements Surface {
     }
   }
 
+  /** True once the remote shell has emitted at least one OSC 633;B prompt-end marker */
+  get shellIntegrationReady(): boolean {
+    return this._shellIntegrationReady;
+  }
+
+  /**
+   * Resolves once the remote shell is actually at a prompt (or after a timeout
+   * fallback for shells without OSC 633 integration).
+   *
+   * This used to resolve after a flat 25 ms, which meant the first command was
+   * written into a PTY whose shell had not finished starting yet — on slower
+   * remote shells (notably PowerShell loading its profile) the keystrokes were
+   * dropped and the command never ran, so the call sat there until the timeout
+   * and came back "(no output)".
+   */
   waitForPrompt(timeoutMs = 5000): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, Math.min(timeoutMs, 25)));
+    if (this._shellIntegrationReady) return Promise.resolve();
+    return Promise.race([
+      this._shellIntegrationReadyPromise,
+      new Promise<void>((r) => setTimeout(r, timeoutMs)),
+    ]);
   }
 
   addOutputListener(listener: (data: string) => void): void {
@@ -140,6 +176,9 @@ export class RemoteTerminalSurface implements Surface {
   ingestOutput(data: string): void {
     if (!data) return;
     this._lastActivityAt = Date.now();
+    if (!this._shellIntegrationReady && data.includes("\x1b]633;B")) {
+      this._markShellIntegrationReady();
+    }
     this._outputChunkCount += 1;
     this._outputBuffer.push(data);
     if (this._outputBuffer.length > 10000) {

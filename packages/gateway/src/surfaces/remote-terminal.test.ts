@@ -76,6 +76,60 @@ describe("RemoteTerminalSurface", () => {
     expect(surface.getRecentOutputSince(outputOffset, outputEndOffset)).toBe("current command output\r\n");
   });
 
+  it("waits for the remote shell's prompt marker before reporting ready", async () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+    await surface.start({ sessionId: "session-1", projectRoot: "/remote/project" });
+
+    const settled = vi.fn();
+    const prompt = surface.waitForPrompt(5000).then(settled);
+
+    // Well past the flat 25 ms this used to resolve after. A slow remote shell
+    // (PowerShell loading its profile) is still starting up here, so writing a
+    // command now would drop the keystrokes and the run would come back empty.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(surface.shellIntegrationReady).toBe(false);
+    expect(settled).not.toHaveBeenCalled();
+
+    surface.ingestOutput("\x1b]633;B\x07PS C:\\remote\\project> ");
+    await prompt;
+
+    expect(surface.shellIntegrationReady).toBe(true);
+    expect(settled).toHaveBeenCalled();
+  });
+
+  it("treats a reattached terminal as already prompt-ready", async () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+      { reuseOnly: true },
+    );
+
+    expect(surface.shellIntegrationReady).toBe(true);
+    const raced = await Promise.race([
+      surface.waitForPrompt(5000).then(() => "ready"),
+      new Promise((r) => setTimeout(() => r("stalled"), 50)),
+    ]);
+    expect(raced).toBe("ready");
+  });
+
+  it("falls back to the timeout for shells without OSC 633 integration", async () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+    await surface.start({ sessionId: "session-1", projectRoot: "/remote/project" });
+
+    surface.ingestOutput("$ ");
+    await expect(surface.waitForPrompt(30)).resolves.toBeUndefined();
+    expect(surface.shellIntegrationReady).toBe(false);
+  });
+
   it("forwards input, resize, output replay, and stop through the remote node", async () => {
     const fakeWs = new FakeWs();
     const surface = new RemoteTerminalSurface(
