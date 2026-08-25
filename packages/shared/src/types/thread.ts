@@ -18,14 +18,36 @@ export type ProviderId = string;
  * - `openrouter` — OpenRouter's hosted catalogue
  * - `ollama`     — a local Ollama server
  * - `omniroute`  — a local OmniRoute router (default http://localhost:20128/v1)
+ * - `gemini`     — Google Gemini's OpenAI-compatible endpoint
+ * - `anthropic`  — Anthropic Claude's OpenAI-compatible endpoint
+ * - `grok`       — xAI Grok's OpenAI-compatible endpoint
+ * - `perplexity` — Perplexity's OpenAI-compatible endpoint
+ * - `moonshot`   — Moonshot AI's OpenAI-compatible endpoint
+ * - `kimi`       — Kimi (Moonshot AI) via its OpenAI-compatible endpoint
  */
-export type JaitBackend = "openai" | "openrouter" | "ollama" | "omniroute";
+export type JaitBackend =
+  | "openai"
+  | "openrouter"
+  | "ollama"
+  | "omniroute"
+  | "gemini"
+  | "anthropic"
+  | "grok"
+  | "perplexity"
+  | "moonshot"
+  | "kimi";
 
 export const JAIT_BACKENDS: readonly JaitBackend[] = [
   "openai",
   "openrouter",
   "ollama",
   "omniroute",
+  "gemini",
+  "anthropic",
+  "grok",
+  "perplexity",
+  "moonshot",
+  "kimi",
 ];
 
 export function isJaitBackend(value: unknown): value is JaitBackend {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodeJaitModelId,
   encodeJaitModelId,
+  normalizeJaitBackendBaseUrl,
   parseJaitBackendInstances,
   serializeJaitBackendInstances,
 } from "./jait-backends.js";
@@ -43,6 +44,15 @@ describe("Jait backend instances", () => {
         apiKey: "secret",
       },
     ]);
+  });
+
+  it("normalizes bare host:port IPs to a scheme so they are fetchable", () => {
+    expect(normalizeJaitBackendBaseUrl("192.168.1.50:11434")).toBe("http://192.168.1.50:11434");
+    expect(normalizeJaitBackendBaseUrl("localhost:11434")).toBe("http://localhost:11434");
+    expect(normalizeJaitBackendBaseUrl("gpu:11434")).toBe("http://gpu:11434");
+    expect(normalizeJaitBackendBaseUrl("http://gpu:11434")).toBe("http://gpu:11434");
+    expect(normalizeJaitBackendBaseUrl("https://gpu:11434/")).toBe("https://gpu:11434");
+    expect(normalizeJaitBackendBaseUrl("http://gpu:11434///")).toBe("http://gpu:11434");
   });
 
   it("drops malformed and duplicate instances", () => {

@@ -17,7 +17,32 @@ export const JAIT_BACKEND_DEFAULT_URLS: Record<JaitBackend, string> = {
   openrouter: "https://openrouter.ai/api/v1",
   ollama: "http://localhost:11434",
   omniroute: "http://localhost:20128/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
+  anthropic: "https://api.anthropic.com/v1",
+  grok: "https://api.x.ai/v1",
+  perplexity: "https://api.perplexity.ai",
+  moonshot: "https://api.moonshot.ai/v1",
+  kimi: "https://api.moonshot.ai/v1",
 };
+
+/**
+ * Normalise a backend base URL so a bare host/IP (no scheme) still resolves.
+ *
+ * Users routinely paste an Ollama address as `192.168.1.50:11434` instead of
+ * `http://192.168.1.50:11434`. `fetch("host:port/api/tags")` then fails URL
+ * parsing and the instance silently ends up with an empty model list. If the
+ * value already carries a scheme (`http`, `https`, …) it is left untouched.
+ * Trailing slashes are also stripped so `new URL`/`/models` concatenation is
+ * stable.
+ */
+export function normalizeJaitBackendBaseUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  if (!trimmed) return trimmed;
+  // Has a scheme? e.g. `http://…`, `https://…`, `ws://…`, `host:11434` does not.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed;
+  // Otherwise treat as a bare host/IP and default to http.
+  return `http://${trimmed}`;
+}
 
 export function parseJaitBackendInstances(raw: string | null | undefined): JaitBackendInstanceConfig[] {
   if (!raw?.trim()) return [];
@@ -33,7 +58,7 @@ export function parseJaitBackendInstances(raw: string | null | undefined): JaitB
       const type = record.type;
       const name = typeof record.name === "string" ? record.name.trim() : "";
       const baseUrl = typeof record.baseUrl === "string"
-        ? record.baseUrl.trim().replace(/\/+$/, "")
+        ? normalizeJaitBackendBaseUrl(record.baseUrl)
         : "";
       const apiKey = typeof record.apiKey === "string" ? record.apiKey.trim() : "";
       const model = typeof record.model === "string" ? record.model.trim() : "";
@@ -63,7 +88,7 @@ export function serializeJaitBackendInstances(instances: JaitBackendInstanceConf
     id: instance.id.trim(),
     type: instance.type,
     name: instance.name.trim(),
-    baseUrl: instance.baseUrl.trim().replace(/\/+$/, ""),
+    baseUrl: normalizeJaitBackendBaseUrl(instance.baseUrl),
     ...(instance.apiKey?.trim() ? { apiKey: instance.apiKey.trim() } : {}),
     ...(instance.model?.trim() ? { model: instance.model.trim() } : {}),
     ...(instance.type === "ollama" && instance.numCtx && instance.numCtx >= 2048
