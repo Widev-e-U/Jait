@@ -48,6 +48,23 @@ export async function verifyAuthToken(
   }
 }
 
+/**
+ * Resolve the authenticated user from a request without sending any response.
+ * Unlike `requireAuth`, this never writes a reply — callers decide how to
+ * handle the "no session" case. Used by `/api/auth/refresh`, where a missing
+ * session is the normal, expected state on a fresh login page (returning 401
+ * there would surface a noisy console error in the browser).
+ */
+export async function resolveAuth(
+  request: FastifyRequest,
+  jwtSecret: string,
+): Promise<AuthUser | null> {
+  const token = extractBearerToken(request.headers.authorization)
+    ?? (request.cookies?.[AUTH_COOKIE_NAME] || null);
+  if (!token) return null;
+  return verifyAuthToken(token, jwtSecret);
+}
+
 export async function requireAuth(
   request: FastifyRequest,
   reply: FastifyReply,

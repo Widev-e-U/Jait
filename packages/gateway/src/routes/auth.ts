@@ -7,7 +7,7 @@ import { REASONING_EFFORT_VALUES } from "../services/users.js";
 // (isJaitBackend) would fail to resolve under test.
 import { isJaitBackend, type JaitBackend } from "@jait/shared";
 import type { ToolRegistry } from "../tools/registry.js";
-import { requireAuth, signAuthToken } from "../security/http-auth.js";
+import { requireAuth, resolveAuth, signAuthToken } from "../security/http-auth.js";
 
 const AUTH_COOKIE_NAME = "jait_token";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -124,12 +124,15 @@ export function registerAuthRoutes(
 
   // Refresh: validate current auth (cookie or Bearer), issue a fresh token + cookie
   app.post("/api/auth/refresh", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
+    // This endpoint is probed on every web app startup to restore a session
+    // from the HTTP-only cookie. A missing/invalid session is the *normal*
+    // state on a fresh login page, so return 204 No Content instead of 401 —
+    // returning 401 here makes the browser log a console error ("Failed to
+    // load resource: 401") every time an unauthenticated user loads the app.
+    const authUser = await resolveAuth(request, config.jwtSecret);
+    if (!authUser) return reply.status(204).send();
     const user = users.findById(authUser.id);
-    if (!user) {
-      return reply.status(401).send({ detail: "login_required" });
-    }
+    if (!user) return reply.status(204).send();
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
     setAuthCookie(reply, token);
     return reply.send({
