@@ -631,6 +631,45 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     void markSessionViewed(sessionId)
   }, [persistActiveSelectionToCache, persistSelection, markSessionViewed])
 
+  /**
+   * Opens a directory as a project: adopts the project that already owns that
+   * directory, otherwise creates one, then selects it.
+   *
+   * The gateway's POST /api/projects already get-or-creates by root path (it
+   * only refuses when `exclusiveRoot` is set), so one request settles both
+   * cases. Matching against local `projects` first would be wrong — the
+   * sidebar is paged, so a project for this folder may simply not be loaded,
+   * and "not in the list" would create a duplicate row on the same directory.
+   */
+  const openProjectForRootPath = useCallback(async (
+    rootPath: string,
+    options: { title?: string; nodeId?: string | null } = {},
+  ): Promise<ProjectRecord | null> => {
+    const normalized = rootPath.trim()
+    if (!normalized) return null
+
+    const project = await createProject({
+      rootPath: normalized,
+      title: options.title,
+      nodeId: options.nodeId,
+    })
+    if (!project) return null
+
+    // POST /api/projects answers with the project row alone — no sessions — so
+    // an adopted project would look empty here and get a redundant empty chat
+    // on every open. GET /api/projects/:id is the call that carries them.
+    const resolved = await loadProject(project.id) ?? project
+    const sessionId = getLatestProjectSessionId(resolved)
+    if (sessionId) {
+      switchSession(resolved.id, sessionId)
+    } else {
+      // A directory you just opened is meant to be chatted in, and a freshly
+      // created project has nowhere to type.
+      await createSession(resolved.id)
+    }
+    return resolved
+  }, [createProject, createSession, loadProject, switchSession])
+
   const setProjectEditorModeActive = useCallback((projectId: string, editorModeActive: boolean) => {
     setProjects((prev) => prev.map((project) => (
       project.id === projectId && project.editorModeActive !== editorModeActive
@@ -1246,6 +1285,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     searchChats,
     searchProjects,
     createProject,
+    openProjectForRootPath,
     updateProject,
     moveProject,
     fetchProjectSubtree,

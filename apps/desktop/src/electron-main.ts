@@ -44,18 +44,31 @@ const IS_DEV = !app.isPackaged;
 
 // ── "Open with Jait" — extract folder path from CLI args ──────────────
 // When launched via context menu or CLI: Jait.exe "C:\path\to\folder"
+// On Linux the desktop file uses %U, so the arg may arrive as a file:// URL.
+function resolveFolderArg(arg: string): string | undefined {
+  if (arg.startsWith("--") || arg.startsWith("-")) return undefined;
+  let candidate = arg;
+  if (arg.startsWith("file://")) {
+    try {
+      candidate = fileURLToPath(arg);
+    } catch { /* not a valid file URL */ }
+  }
+  try {
+    const resolved = path.resolve(candidate);
+    if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+      return resolved;
+    }
+  } catch { /* not a valid path */ }
+  return undefined;
+}
+
 function getOpenedFolderPath(): string | undefined {
   // In packaged app, argv[0] is the exe, argv[1] may be the path.
   // In dev, Electron adds its own args so we skip known flags.
   const args = process.argv.slice(app.isPackaged ? 1 : 2);
   for (const arg of args) {
-    if (arg.startsWith("--") || arg.startsWith("-")) continue;
-    try {
-      const resolved = path.resolve(arg);
-      if (existsSync(resolved) && statSync(resolved).isDirectory()) {
-        return resolved;
-      }
-    } catch { /* not a valid path */ }
+    const folder = resolveFolderArg(arg);
+    if (folder) return folder;
   }
   return undefined;
 }
@@ -420,16 +433,13 @@ if (!gotLock) {
     // Extract folder path from the second instance's argv
     const args = argv.slice(1);
     for (const arg of args) {
-      if (arg.startsWith("--") || arg.startsWith("-")) continue;
-      try {
-        const resolved = path.resolve(arg);
-        if (existsSync(resolved) && statSync(resolved).isDirectory()) {
-          openedFolder = resolved;
-          // Tell the renderer to open this folder as a project
-          mainWindow?.webContents.send("desktop:open-folder", resolved);
-          break;
-        }
-      } catch { /* not a valid path */ }
+      const resolved = resolveFolderArg(arg);
+      if (resolved) {
+        openedFolder = resolved;
+        // Tell the renderer to open this folder as a project
+        mainWindow?.webContents.send("desktop:open-folder", resolved);
+        break;
+      }
     }
     // Focus the existing window
     if (mainWindow) {

@@ -51,6 +51,7 @@ import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { shouldForceMessageLifecycleRefresh, useChat, type ChatMode } from '@/hooks/useChat'
 import { useSkills } from '@/hooks/useSkills'
 import { useProjects } from '@/hooks/useProjects'
+import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useProjectState } from '@/hooks/useProjectState'
@@ -523,6 +524,7 @@ function App() {
     loading: projectsLoading,
     createSession,
     createProject,
+    openProjectForRootPath,
     updateProject,
     moveProject,
     fetchProjectSubtree,
@@ -556,6 +558,11 @@ function App() {
     onLoginRequired,
   )
   fetchProjectsRef.current = fetchProjects
+
+  // "Open with Jait" on a folder: adopt the project that already owns that
+  // directory, or create one, and select it. Gated on the token because the
+  // create/select calls need it — handoffs before sign-in are queued, not lost.
+  useDesktopOpenFolder(!!token, openProjectForRootPath)
   // Pre-warm the CLI provider once the user starts typing, so the provider's
   // subprocess spawn (~3s for claude-code) overlaps with the rest of the
   // message instead of delaying the first answer. Assigned here — rather than

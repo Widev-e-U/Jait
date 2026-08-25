@@ -54,7 +54,8 @@
     "target": ["AppImage", "deb"],
     "category": "Development",
     "maintainer": "Widev e.U. <support@widev.at>",
-    "artifactName": "Jait-${version}-${arch}.${ext}"
+    "artifactName": "Jait-${version}-${arch}.${ext}",
+    "mimeTypes": ["inode/directory"]
   },
   "publish": {
     "provider": "github",

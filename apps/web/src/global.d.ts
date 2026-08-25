@@ -1,5 +1,18 @@
 interface JaitDesktop {
   gatewayUrl?: string
+  /**
+   * Folder passed on the command line — the "Open with Jait" context-menu
+   * entry. Present only when this instance was launched with one.
+   */
+  openFolder?: string
+  /** Stable device ID resolved by the main process from desktop-settings.json. */
+  deviceId?: string
+  /**
+   * "Open with Jait" fired while the app was already running: the second
+   * instance hands its folder to this one instead of launching. Optional
+   * because a packaged desktop older than this bridge will not expose it.
+   */
+  onOpenFolder?: (callback: (event: unknown, folderPath: string) => void) => () => void
   getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
   notify: (opts: { id?: string; title: string; body: string }) => Promise<void>
