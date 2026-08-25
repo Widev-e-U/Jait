@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.769](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.769) — 2026-08-25
+- feat(web): add backend options and per-instance test button — f8dc89ac
+- feat(gateway): add generic per-backend test endpoint and model routing — adf35666
+- feat(shared): extend JaitBackend type, defaults, and base-URL normalisation — 069a213b
+
 ## [v0.1.768](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.768) — 2026-08-25
 - refactor(web): replace dual chat transport with single durable SSE subscription — 7db112cf
 - fix(gateway): run background commands in their own terminal — 69e7d11c
