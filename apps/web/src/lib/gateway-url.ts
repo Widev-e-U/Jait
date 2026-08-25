@@ -145,7 +145,11 @@ function routeViaWsProxy(wsUrl: string, pageUrl: string): string {
   try {
     const ws = new URL(wsUrl)
     const page = new URL(pageUrl)
-    if (ws.port && page.port && ws.port === page.port) {
+    // Only route through the /ws proxy when the WS URL points at the same
+    // server serving the page (same host:port). A configured gateway URL on a
+    // different host (e.g. the Electron desktop bridge) connects directly and
+    // must not get the /ws path appended.
+    if (ws.host && page.host && ws.host === page.host) {
       return `${stripTrailingSlash(wsUrl)}/ws`
     }
   } catch {
