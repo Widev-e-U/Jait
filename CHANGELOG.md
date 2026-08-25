@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.766](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.766) — 2026-08-25
+- fix(web): anchor toggled tool cards and skip initial transcript fill scroll — e3940025
+- fix(gateway): wait for real shell prompt before writing to remote terminals — 5c39776b
+
 ## [v0.1.765](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.765) — 2026-08-24
 - fix: stabilize background terminals and queued messages — fdfbeb73
 
