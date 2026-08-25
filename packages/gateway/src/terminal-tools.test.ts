@@ -208,6 +208,109 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).timedOut).toBe(true);
   });
 
+  it("announces the terminal binding before the command is written to the PTY", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const events: Array<{ sessionId: string; userId?: string; payload: unknown }> = [];
+    const writes: string[] = [];
+    const surface = {
+      id: "term-bind",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      getOutputOffset() { return 7; },
+      addOutputListener() {},
+      removeOutputListener() {},
+      write(data: string) {
+        // The card cannot attach to output it has already missed, so the
+        // binding has to be out before the first byte reaches the shell.
+        expect(events).toHaveLength(1);
+        writes.push(data);
+      },
+      snapshot() {
+        return { metadata: { shell: "/bin/bash" } };
+      },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const ws = {
+      broadcastTerminalExecution(sessionId: string, userId: string | undefined, payload: unknown) {
+        events.push({ sessionId, userId, payload });
+      },
+    } as unknown as WsControlPlane;
+    const tool = createTerminalRunTool(registry, undefined, ws);
+
+    await tool.execute(
+      { command: "printf hi", terminalId: "term-bind", isBackground: true },
+      { ...makeContext(), userId: "u-test" },
+    );
+
+    expect(writes).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      sessionId: "s-test",
+      userId: "u-test",
+      payload: {
+        terminalId: "term-bind",
+        execution: {
+          command: "printf hi",
+          actionId: "a-test",
+          outputOffset: 7,
+          outputEndOffset: null,
+          completedAt: null,
+          isBackground: true,
+          watched: true,
+        },
+      },
+    });
+    // The command's full output belongs on the terminal stream, not on every
+    // binding event.
+    expect(events[0]?.payload).not.toHaveProperty("execution.output");
+    backgroundCommandMonitor.clearForTests();
+  });
+
+  it("announces the bounded output range when a background command finishes", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const events: Array<{ payload: { terminalId: string; execution: Record<string, unknown> | null } }> = [];
+    let outputOffset = 4;
+    let listener: ((data: string) => void) | null = null;
+    const writes: string[] = [];
+    const surface = {
+      id: "term-bind-done",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      getOutputOffset() { return outputOffset; },
+      addOutputListener(next: (data: string) => void) { listener = next; },
+      removeOutputListener() { listener = null; },
+      write(data: string) { writes.push(data); },
+      snapshot() {
+        return { metadata: { shell: "/bin/bash" } };
+      },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const ws = {
+      broadcastTerminalExecution(_sessionId: string, _userId: string | undefined, payload: never) {
+        events.push({ payload });
+      },
+    } as unknown as WsControlPlane;
+    const tool = createTerminalRunTool(registry, undefined, ws);
+
+    await tool.execute(
+      { command: "printf hi", terminalId: "term-bind-done", isBackground: true },
+      makeContext(),
+    );
+    const completionToken = writes[0]?.match(/__JAIT_BACKGROUND_DONE_[0-9a-f-]+__/)?.[0];
+    outputOffset = 9;
+    listener?.(`printf hi\r\nhi\r\n${completionToken}:0\r\n`);
+
+    expect(events.at(-1)?.payload.execution).toMatchObject({
+      command: "printf hi",
+      outputOffset: 4,
+      outputEndOffset: 9,
+      watched: false,
+    });
+    expect(events.at(-1)?.payload.execution?.completedAt).toBeTruthy();
+    backgroundCommandMonitor.clearForTests();
+  });
+
   it("background mode appends a completion sentinel after the requested command", async () => {
     backgroundCommandMonitor.clearForTests();
     const writes: string[] = [];
@@ -304,6 +407,7 @@ describe("terminal.run tool status reporting", () => {
         return { ok: true, pid: 1234, shell: "pwsh.exe", reused: true } as T;
       },
       sendTerminalOp() {},
+      broadcastTerminalExecution() {},
     } as unknown as WsControlPlane;
     const registry = new SurfaceRegistry();
     const tool = createTerminalRunTool(registry, undefined, ws);

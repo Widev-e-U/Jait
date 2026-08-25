@@ -69,6 +69,11 @@ export type WsEventType =
   | "surface.disconnected"
   | "surface.registry"
   | "surface.updated"
+  // A terminal tool call binding itself to the terminal it runs in. Pushed the
+  // instant the command is written to the PTY (and again when it finishes), so
+  // a running tool card can attach its live terminal without discovering the
+  // terminal by polling /api/terminals.
+  | "terminal.execution"
   | "ui.command"
   | "ui.state-sync"
   | "ui.full-state"
@@ -158,6 +163,28 @@ export interface TerminalFocusData {
   terminalId: string;
   reason?: "interactive-input-required" | string;
   message?: string;
+}
+
+/**
+ * One terminal tool call's claim on a terminal, pushed on `terminal.execution`.
+ *
+ * `outputOffset` is where the command's output starts in the terminal's output
+ * stream, so a tool card can replay exactly this command's slice; the matching
+ * `outputEndOffset` arrives with the completion event. `execution: null` means
+ * the call released the terminal without producing a retainable slice.
+ */
+export interface TerminalExecutionPayload {
+  terminalId: string;
+  execution: {
+    command: string;
+    actionId: string;
+    startedAt: string;
+    completedAt: string | null;
+    outputOffset: number;
+    outputEndOffset: number | null;
+    isBackground: boolean;
+    watched: boolean | null;
+  } | null;
 }
 
 export interface FileHighlightData {

@@ -20,6 +20,7 @@ import type { TerminalSurface } from "../surfaces/terminal.js";
 import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";
+import type { TerminalExecutionPayload } from "@jait/shared";
 import type { SecretInputService } from "../services/secret-input.js";
 import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import { isShellPromptLine } from "./shell-prompt.js";
@@ -86,6 +87,21 @@ export function getManagedTerminalExecutions(terminalId: string): ManagedTermina
   return managedTerminalExecutionHistory.get(terminalId) ?? [];
 }
 
+/**
+ * The wire form of an execution: everything a tool card needs to attach a live
+ * terminal, minus `output` — the client replays the real bytes off the terminal
+ * stream, so echoing a completed command's whole output here would only bloat
+ * the event.
+ */
+export function toTerminalExecutionPayload(
+  terminalId: string,
+  execution: ManagedTerminalExecution | null,
+): TerminalExecutionPayload {
+  if (!execution) return { terminalId, execution: null };
+  const { output: _output, ...rest } = execution;
+  return { terminalId, execution: rest };
+}
+
 function setManagedTerminalExecution(
   terminalId: string,
   context: ToolContext,
@@ -93,8 +109,9 @@ function setManagedTerminalExecution(
   outputOffset: number,
   isBackground: boolean,
   watched: boolean | null,
+  ws?: WsControlPlane,
 ): void {
-  managedTerminalExecutions.set(terminalId, {
+  const execution: ManagedTerminalExecution = {
     command,
     actionId: context.actionId,
     startedAt: new Date().toISOString(),
@@ -104,12 +121,31 @@ function setManagedTerminalExecution(
     output: null,
     isBackground,
     watched,
-  });
+  };
+  managedTerminalExecutions.set(terminalId, execution);
+  // Pushed before the command is written to the PTY so the card is already
+  // attached when the first byte of output arrives.
+  ws?.broadcastTerminalExecution(
+    context.sessionId,
+    context.userId,
+    toTerminalExecutionPayload(terminalId, execution),
+  );
 }
 
-function clearManagedTerminalExecution(terminalId: string, actionId: string): void {
-  if (managedTerminalExecutions.get(terminalId)?.actionId === actionId) {
-    managedTerminalExecutions.delete(terminalId);
+function clearManagedTerminalExecution(
+  terminalId: string,
+  actionId: string,
+  context?: ToolContext,
+  ws?: WsControlPlane,
+): void {
+  if (managedTerminalExecutions.get(terminalId)?.actionId !== actionId) return;
+  managedTerminalExecutions.delete(terminalId);
+  if (context) {
+    ws?.broadcastTerminalExecution(
+      context.sessionId,
+      context.userId,
+      toTerminalExecutionPayload(terminalId, null),
+    );
   }
 }
 
@@ -118,6 +154,8 @@ function completeManagedTerminalExecution(
   actionId: string,
   outputEndOffset: number,
   output: string,
+  context?: ToolContext,
+  ws?: WsControlPlane,
 ): ManagedTerminalExecution | null {
   const active = managedTerminalExecutions.get(terminalId);
   if (!active || active.actionId !== actionId) return null;
@@ -130,6 +168,13 @@ function completeManagedTerminalExecution(
     watched: active.isBackground ? false : active.watched,
   };
   managedTerminalExecutions.delete(terminalId);
+  if (context) {
+    ws?.broadcastTerminalExecution(
+      context.sessionId,
+      context.userId,
+      toTerminalExecutionPayload(terminalId, completed),
+    );
+  }
   if (!active.isBackground) return completed;
 
   const history = [...(managedTerminalExecutionHistory.get(terminalId) ?? []), completed]
@@ -811,11 +856,13 @@ export function createTerminalRunTool(
                 context.actionId,
                 getTerminalOutputOffset(surface),
                 output,
+                context,
+                ws,
               );
             },
-            onStop: () => clearManagedTerminalExecution(terminalId, context.actionId),
+            onStop: () => clearManagedTerminalExecution(terminalId, context.actionId, context, ws),
           });
-          setManagedTerminalExecution(terminalId, context, command, outputOffset, true, watched);
+          setManagedTerminalExecution(terminalId, context, command, outputOffset, true, watched, ws);
           // Multi-line commands must reach the shell as a *single* command.
           // Written raw, each line completes separately and the completion
           // marker for line 1 was mistaken for the whole command finishing —
@@ -859,7 +906,7 @@ export function createTerminalRunTool(
         }
 
         // 3. Execute the command (sentinel-based)
-        setManagedTerminalExecution(terminalId, context, command, outputOffset, false, null);
+        setManagedTerminalExecution(terminalId, context, command, outputOffset, false, null, ws);
         let result: Awaited<ReturnType<typeof executeInTerminal>>;
         let outputEndOffset: number | null = null;
         try {
@@ -892,9 +939,11 @@ export function createTerminalRunTool(
             context.actionId,
             outputEndOffset,
             result.output,
+            context,
+            ws,
           );
         } finally {
-          clearManagedTerminalExecution(terminalId, context.actionId);
+          clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
         }
 
         // 3. Build response
@@ -979,7 +1028,7 @@ export function createJaitTerminalTool(
     description:
       "Jait terminal MCP tool. Execute a shell command in Jait and optionally target an existing terminal by terminalId. " +
       "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
-      "Background commands appear as live terminals in the chat card, so do not create a separate terminal surface first. " +
+      "Every command runs as a live terminal inside the chat card, so do not create a separate terminal surface first. " +
       "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — Jait notifies you " +
       "automatically when they finish, so prefer this over your own shell's background mode, which Jait cannot watch.",
   };

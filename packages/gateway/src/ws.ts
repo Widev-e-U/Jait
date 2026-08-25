@@ -11,6 +11,7 @@ import type {
   NodeHelloPayload,
   NodeRegistrySnapshot,
   NodeState,
+  TerminalExecutionPayload,
 } from "@jait/shared";
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
@@ -1160,6 +1161,33 @@ export class WsControlPlane {
       if (client.sessionId === sessionId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
+    }
+  }
+
+  /**
+   * Announce that a terminal tool call has claimed (or released) a terminal.
+   *
+   * The running tool card needs the terminal id and output offset *while* the
+   * command runs, not after it returns — that is the only way it can attach a
+   * live terminal instead of a dead text box. The owning session's clients get
+   * it, plus the owner's other clients so a card rendered against a sub-agent
+   * session (which the socket is not subscribed to) still attaches.
+   */
+  broadcastTerminalExecution(
+    sessionId: string,
+    userId: string | undefined,
+    payload: TerminalExecutionPayload,
+  ) {
+    const event: WsEvent = {
+      type: "terminal.execution",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload,
+    };
+    for (const client of this.clients.values()) {
+      if (client.ws.readyState !== 1) continue;
+      if (client.sessionId !== sessionId && !(userId && client.userId === userId)) continue;
+      this.send(client.ws, event);
     }
   }
 

@@ -25,6 +25,7 @@ export type {
   SessionStreamingData,
   SessionStreamingSnapshotData,
   TerminalFocusData,
+  TerminalExecutionPayload,
   FileHighlightData,
   DevPreviewOpenData,
   ScreenShareOpenData,
