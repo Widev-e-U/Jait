@@ -6,6 +6,7 @@
  * so callers using different base URLs do not collide.
  */
 
+import { normalizeJaitBackendBaseUrl } from "@jait/shared";
 import type { ProviderModelInfo } from "./contracts.js";
 
 // ── Constants ────────────────────────────────────────────────────
@@ -177,7 +178,7 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
 
 /** Fetch the OpenAI (or OpenAI-compatible) catalogue. Returns [] on any non-OK response. */
 export async function fetchOpenAIModels(apiKey: string, baseUrl: string): Promise<ProviderModelInfo[]> {
-  const url = baseUrl.replace(/\/+$/, "");
+  const url = normalizeJaitBackendBaseUrl(baseUrl);
   const cacheKey = `${url}\n${apiKey}`;
   const cached = openaiCaches.get(cacheKey);
   if (cached) {
@@ -245,7 +246,7 @@ export async function fetchOmniRouteModels(
   apiKey: string,
   baseUrl: string,
 ): Promise<ProviderModelInfo[]> {
-  const url = baseUrl.replace(/\/+$/, "");
+  const url = normalizeJaitBackendBaseUrl(baseUrl);
   const cacheKey = `${url}\n${apiKey}`;
   const cached = omnirouteCaches.get(cacheKey);
   if (cached) {
@@ -305,7 +306,7 @@ async function doFetchOmniRouteModels(
 
 /** Fetch the Ollama tags catalogue. Returns [] on any non-OK response. */
 export async function fetchOllamaModels(baseUrl: string): Promise<ProviderModelInfo[]> {
-  const url = baseUrl.replace(/\/+$/, "");
+  const url = normalizeJaitBackendBaseUrl(baseUrl);
   const cached = ollamaCaches.get(url);
   if (cached) {
     if (Date.now() - cached.fetchedAt >= OLLAMA_CACHE_TTL && !ollamaInflight.has(url)) {

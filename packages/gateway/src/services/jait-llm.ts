@@ -1,4 +1,4 @@
-import { decodeJaitModelId, parseJaitBackendInstances } from "@jait/shared";
+import { decodeJaitModelId, JAIT_BACKEND_DEFAULT_URLS, parseJaitBackendInstances } from "@jait/shared";
 import { inferContextWindow, type AppConfig } from "../config.js";
 import type { LLMConfig } from "../tools/agent-loop.js";
 import type { JaitBackend } from "./users.js";
@@ -214,6 +214,37 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
       openaiBaseUrl: omnirouteBaseUrl.replace(/\/+$/, ""),
       openaiModel: omnirouteModel,
       contextWindow: inferContextWindow(omnirouteModel),
+    };
+  }
+
+  // API-key driven OpenAI-compatible backends (Gemini, Claude, Grok, etc.).
+  // These resolve their own base URL and API key like the generic OpenAI path,
+  // so named instances and legacy env-var config both work.
+  const API_ROUTES: Partial<Record<JaitBackend, { apiKeyEnv: string; baseUrlEnv: string; defaultUrl: string }>> = {
+    gemini: { apiKeyEnv: "GEMINI_API_KEY", baseUrlEnv: "GEMINI_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.gemini },
+    anthropic: { apiKeyEnv: "ANTHROPIC_API_KEY", baseUrlEnv: "ANTHROPIC_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.anthropic },
+    grok: { apiKeyEnv: "XAI_API_KEY", baseUrlEnv: "XAI_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.grok },
+    perplexity: { apiKeyEnv: "PERPLEXITY_API_KEY", baseUrlEnv: "PERPLEXITY_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.perplexity },
+    moonshot: { apiKeyEnv: "MOONSHOT_API_KEY", baseUrlEnv: "MOONSHOT_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.moonshot },
+    kimi: { apiKeyEnv: "MOONSHOT_API_KEY", baseUrlEnv: "KIMI_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.kimi },
+  };
+  if (backend !== "openai" && backend !== "openrouter" && API_ROUTES[backend]) {
+    const route = API_ROUTES[backend]!;
+    const apiBaseUrl = routedInstance?.baseUrl
+      || apiKeys[route.baseUrlEnv]?.trim()
+      || route.defaultUrl;
+    const apiModel = routedModel?.model
+      || routedInstance?.model
+      || options.requestedModel?.trim()
+      || apiKeys["OPENAI_MODEL"]?.trim()
+      || options.config.openaiModel;
+    const apiKey = routedInstance?.apiKey || apiKeys[route.apiKeyEnv]?.trim() || "";
+    return {
+      backend,
+      openaiApiKey: apiKey,
+      openaiBaseUrl: apiBaseUrl.replace(/\/+$/, ""),
+      openaiModel: apiModel,
+      contextWindow: inferContextWindow(apiModel),
     };
   }
 

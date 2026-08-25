@@ -21,7 +21,17 @@ import {
   fetchOmniRouteModels,
 } from "../providers/model-fetchers.js";
 
-export type JaitModelGroup = "OpenAI" | "OpenRouter" | "Ollama" | "OmniRoute";
+export type JaitModelGroup =
+  | "OpenAI"
+  | "OpenRouter"
+  | "Ollama"
+  | "OmniRoute"
+  | "Gemini"
+  | "Anthropic"
+  | "Grok"
+  | "Perplexity"
+  | "Moonshot"
+  | "Kimi";
 
 export interface ListJaitModelsOptions {
   config: AppConfig;
@@ -34,7 +44,24 @@ const BACKEND_LABELS: Record<JaitBackend, JaitModelGroup> = {
   openrouter: "OpenRouter",
   ollama: "Ollama",
   omniroute: "OmniRoute",
+  gemini: "Gemini",
+  anthropic: "Anthropic",
+  grok: "Grok",
+  perplexity: "Perplexity",
+  moonshot: "Moonshot",
+  kimi: "Kimi",
 };
+
+/** Backends that expose an OpenAI-compatible /models endpoint with a Bearer key. */
+const OPENAI_COMPATIBLE_BACKENDS: ReadonlySet<JaitBackend> = new Set([
+  "openai",
+  "gemini",
+  "anthropic",
+  "grok",
+  "perplexity",
+  "moonshot",
+  "kimi",
+]);
 
 function configuredModelFallback(
   instance: JaitBackendInstanceConfig,
@@ -56,7 +83,7 @@ async function fetchConfiguredInstanceModels(
 ): Promise<ProviderModelInfo[]> {
   let models: ProviderModelInfo[] = [];
   try {
-    if (instance.type === "openai") {
+    if (instance.type === "openai" || OPENAI_COMPATIBLE_BACKENDS.has(instance.type)) {
       models = await fetchOpenAIModels(instance.apiKey ?? "", instance.baseUrl);
     } else if (instance.type === "openrouter") {
       models = await fetchOpenRouterModels(instance.apiKey ?? "");

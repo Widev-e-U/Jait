@@ -26,6 +26,7 @@ import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
 import { resetModelFetcherCaches } from "../providers/model-fetchers.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
+import { isJaitBackend, JAIT_BACKEND_DEFAULT_URLS, normalizeJaitBackendBaseUrl } from "@jait/shared";
 
 // ── Route registration ───────────────────────────────────────────
 
@@ -363,9 +364,11 @@ export function registerProviderRoutes(
     const settings = deps.userService?.getSettings(authUser.id);
     const apiKeys = settings?.apiKeys ?? {};
 
-    const rawBaseUrl = typeof body.base_url === "string" && body.base_url.trim()
-      ? body.base_url.trim()
-      : (apiKeys["OMNIROUTE_BASE_URL"]?.trim() || config.omnirouteBaseUrl);
+    const rawBaseUrl = normalizeJaitBackendBaseUrl(
+      typeof body.base_url === "string" && body.base_url.trim()
+        ? body.base_url.trim()
+        : (apiKeys["OMNIROUTE_BASE_URL"]?.trim() || config.omnirouteBaseUrl),
+    );
     const apiKey = typeof body.api_key === "string" && body.api_key.trim()
       ? body.api_key.trim()
       : (apiKeys["OMNIROUTE_API_KEY"]?.trim() || config.omnirouteApiKey);
@@ -421,6 +424,91 @@ export function registerProviderRoutes(
         error: aborted
           ? `No response within ${OMNIROUTE_PROBE_TIMEOUT_MS / 1000}s. Is the router running and reachable from the gateway?`
           : `Could not reach the router — start it, or correct the base URL.${detail ? ` (${detail})` : ""}`,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
+  /**
+   * Probe any Jait backend (OpenAI, OpenRouter, Ollama, Gemini, Anthropic,
+   * Grok, Perplexity, Moonshot, Kimi, ...) by hitting its OpenAI-compatible
+   * `/models` endpoint. This is the generic counterpart to the OmniRoute
+   * probe above and backs the per-instance "Test connection" buttons.
+   */
+  app.post("/api/providers/backend/test", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const body = (request.body as Record<string, unknown> | undefined) ?? {};
+
+    const backend = typeof body.backend === "string" ? body.backend.trim() : "";
+    if (!isJaitBackend(backend)) {
+      return reply.status(400).send({ ok: false, error: `Unknown backend type: ${backend || "(empty)"}` });
+    }
+    const rawBaseUrl = normalizeJaitBackendBaseUrl(
+      typeof body.base_url === "string" && body.base_url.trim()
+        ? body.base_url.trim()
+        : JAIT_BACKEND_DEFAULT_URLS[backend],
+    );
+    const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
+    const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : "";
+
+    const isOllama = backend === "ollama";
+    let modelsUrl: string;
+    try {
+      // Ollama exposes its catalogue at /api/tags, not the OpenAI /models path.
+      modelsUrl = `${new URL(rawBaseUrl).toString().replace(/\/+$/, "")}${isOllama ? "/api/tags" : "/models"}`;
+    } catch {
+      return reply.status(400).send({ ok: false, error: `Not a valid URL: ${rawBaseUrl}` });
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OMNIROUTE_PROBE_TIMEOUT_MS);
+    const startedAt = Date.now();
+    try {
+      const res = await fetch(modelsUrl, {
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        signal: controller.signal,
+      });
+      const latencyMs = Date.now() - startedAt;
+      if (!res.ok) {
+        return {
+          ok: false,
+          backend,
+          baseUrl: rawBaseUrl,
+          latencyMs,
+          error: res.status === 401 || res.status === 403
+            ? "The endpoint answered with an auth error — the API key was rejected or missing."
+            : `The endpoint answered HTTP ${res.status}.`,
+        };
+      }
+      const data = (await res.json()) as { data?: Array<{ id?: string }>; models?: Array<{ name?: string }> };
+      const ids = isOllama
+        ? (data.models ?? []).map((m) => m.name).filter((id): id is string => Boolean(id))
+        : (data.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id));
+      return {
+        ok: true,
+        backend,
+        baseUrl: rawBaseUrl,
+        latencyMs,
+        modelCount: ids.length,
+        sampleModels: ids.slice(0, 3),
+        authenticated: Boolean(apiKey),
+        ...(model ? { modelPresent: ids.includes(model) } : {}),
+      };
+    } catch (error) {
+      const err = error as { name?: string; message?: string; cause?: { code?: string } };
+      const aborted = err?.name === "AbortError" || err?.name === "TimeoutError";
+      const detail = err?.cause?.code ?? err?.message?.replace(/[.?!]+$/, "");
+      return {
+        ok: false,
+        backend,
+        baseUrl: rawBaseUrl,
+        latencyMs: Date.now() - startedAt,
+        error: aborted
+          ? `No response within ${OMNIROUTE_PROBE_TIMEOUT_MS / 1000}s. Is the service running and reachable from the gateway?`
+          : `Could not reach the service.${detail ? ` (${detail})` : ""}`,
       };
     } finally {
       clearTimeout(timeout);
