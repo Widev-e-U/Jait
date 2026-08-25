@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildTerminalSubscribeMessage,
+  clampTerminalRows,
+  countTerminalContentRows,
   findToolTerminal,
   findToolTerminalExecution,
   getTerminalContextMenuPosition,
@@ -487,5 +489,42 @@ describe('tool terminal resolution', () => {
       watched: true,
     })
     expect(isTerminalBackgroundWaiting(terminal)).toBe(true)
+  })
+})
+
+describe('terminal content sizing', () => {
+  function makeBuffer(lines: string[]) {
+    return {
+      length: lines.length,
+      getLine(y: number) {
+        const line = lines[y]
+        return line === undefined ? undefined : { translateToString: () => line }
+      },
+    }
+  }
+
+  it('counts only up to the last row with content', () => {
+    // xterm pads the buffer out to the viewport height; those blank rows must
+    // not make a one-line command render as a tall box.
+    expect(countTerminalContentRows(makeBuffer(['$ pwd', '/home/jakob', '', '', '']))).toBe(2)
+  })
+
+  it('counts blank rows that sit between output', () => {
+    expect(countTerminalContentRows(makeBuffer(['a', '', 'b', '']))).toBe(3)
+  })
+
+  it('reports no rows for an empty buffer', () => {
+    expect(countTerminalContentRows(makeBuffer(['', '   ', '']))).toBe(0)
+    expect(countTerminalContentRows(makeBuffer([]))).toBe(0)
+  })
+
+  it('clamps into the allowed row range', () => {
+    expect(clampTerminalRows(0, 1, 12)).toBe(1)
+    expect(clampTerminalRows(5, 1, 12)).toBe(5)
+    expect(clampTerminalRows(400, 1, 12)).toBe(12)
+  })
+
+  it('keeps the minimum when it exceeds the maximum', () => {
+    expect(clampTerminalRows(1, 6, 3)).toBe(6)
   })
 })

@@ -415,6 +415,31 @@ export function useAvailableShells(token?: string | null) {
   return shells
 }
 
+/** Fallback row height when the renderer has not measured a row yet. */
+const TERMINAL_FALLBACK_ROW_HEIGHT = 17
+
+interface TerminalBufferLike {
+  readonly length: number
+  getLine(y: number): { translateToString(trimRight?: boolean): string } | undefined
+}
+
+/**
+ * Rows of actual content in a buffer, ignoring the blank rows xterm keeps to
+ * fill its viewport. Used to size a terminal to what it is showing rather than
+ * to a fixed box — a one-line command should render as one line.
+ */
+export function countTerminalContentRows(buffer: TerminalBufferLike): number {
+  for (let y = buffer.length - 1; y >= 0; y--) {
+    if (buffer.getLine(y)?.translateToString(true).trim()) return y + 1
+  }
+  return 0
+}
+
+export function clampTerminalRows(contentRows: number, minRows: number, maxRows: number): number {
+  const upper = Math.max(minRows, maxRows)
+  return Math.min(Math.max(contentRows, minRows), upper)
+}
+
 interface TerminalViewProps {
   terminalId: string
   className?: string
@@ -423,6 +448,12 @@ interface TerminalViewProps {
   readOnly?: boolean
   outputOffset?: number | null
   outputEndOffset?: number | null
+  /**
+   * Grow the terminal with its content between these row counts instead of
+   * filling the container. Both must be set to take effect.
+   */
+  minRows?: number
+  maxRows?: number
   onReferenceSelection?: (terminalId: string, selection: string, projectRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
@@ -430,7 +461,7 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, minRows, maxRows, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -439,6 +470,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const rightClickSelectionRef = useRef<string>('')
   const resolvedTheme = useResolvedTheme()
   const [contextMenu, setContextMenu] = useState<{ left: number; top: number; hasSelection: boolean } | null>(null)
+  const [contentHeight, setContentHeight] = useState<number | null>(null)
+  const autoHeight = minRows != null && maxRows != null
 
   useImperativeHandle(ref, () => ({
     focus() {
@@ -514,15 +547,41 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       onReferenceSelection?.(terminalId, selection, projectRoot, range?.start.y, range?.end.y)
     }
 
+    // Size the box to the output rather than the other way round. The row
+    // count is derived from the buffer's *content*, not from `term.rows`, so
+    // growing the container (which grows `term.rows`, which appends blank
+    // rows) cannot feed back into another growth step.
+    let measureFrame: number | null = null
+    const measureContentHeight = () => {
+      measureFrame = null
+      if (minRows == null || maxRows == null) return
+      const rowsEl = term.element?.querySelector('.xterm-rows')
+      const measuredRowHeight = rowsEl && term.rows > 0
+        ? rowsEl.getBoundingClientRect().height / term.rows
+        : 0
+      const rowHeight = measuredRowHeight > 0 ? measuredRowHeight : TERMINAL_FALLBACK_ROW_HEIGHT
+      const rows = clampTerminalRows(countTerminalContentRows(term.buffer.active), minRows, maxRows)
+      setContentHeight(Math.ceil(rows * rowHeight))
+    }
+    const scheduleContentMeasure = () => {
+      if (minRows == null || maxRows == null || measureFrame !== null) return
+      measureFrame = requestAnimationFrame(measureContentHeight)
+    }
+    const writeParsedListener = minRows != null && maxRows != null
+      ? term.onWriteParsed(scheduleContentMeasure)
+      : null
+
     // Initial fit + focus so the terminal can receive keyboard input
     requestAnimationFrame(() => {
       fitAddon.fit()
       if (!readOnly) term.focus()
+      scheduleContentMeasure()
     })
     // Retry focus after layout settles (some browsers need a longer delay)
     const focusRetryId = setTimeout(() => {
       fitAddon.fit()
       if (!readOnly) term.focus()
+      scheduleContentMeasure()
     }, 150)
 
     termRef.current = term
@@ -679,6 +738,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     return () => {
       disposed = true
       clearTimeout(focusRetryId)
+      if (measureFrame !== null) cancelAnimationFrame(measureFrame)
+      writeParsedListener?.dispose()
       if (pasteFallbackTimer) clearTimeout(pasteFallbackTimer)
       clearReconnectTimer()
       if (typeof document !== 'undefined') {
@@ -696,7 +757,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, onReferenceSelection])
+  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, minRows, maxRows, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current
@@ -734,6 +795,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   return (
     <div
       className={`relative w-full overflow-hidden ${className ?? ''}`}
+      style={autoHeight
+        ? { height: contentHeight ?? (minRows ?? 1) * TERMINAL_FALLBACK_ROW_HEIGHT }
+        : undefined}
       tabIndex={-1}
       onMouseDown={(e) => {
         // Close context menu on any click outside it

@@ -13,8 +13,10 @@ import {
   FsChangesPayload,
   SessionStreamingData,
   SessionStreamingSnapshotData,
+  TerminalExecutionPayload,
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
+import { applyTerminalExecutionEvent } from '@/lib/tool-terminal-live'
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getWsUrl } from '@/lib/gateway-url'
@@ -319,6 +321,15 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'session.streaming-snapshot') {
         const payload = msg.payload as SessionStreamingSnapshotData
         onSessionStreamingSnapshotRef.current?.(payload.sessionIds)
+      } else if (msg.type === 'terminal.execution') {
+        // A terminal tool call claimed (or released) a terminal. Recorded
+        // globally rather than routed through a listener: the running tool card
+        // reads it straight out of the store to attach its live terminal, and it
+        // may belong to a sub-agent session this socket is not subscribed to.
+        applyTerminalExecutionEvent(
+          typeof msg.sessionId === 'string' ? msg.sessionId : '',
+          msg.payload as TerminalExecutionPayload,
+        )
       } else if (msg.type === 'fs.changes') {
         // Native filesystem change events from the project watcher
         const payload = msg.payload as FsChangesPayload

@@ -1,4 +1,4 @@
-import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from 'react'
+import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type UIEvent } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -20,6 +20,7 @@ import { useToolCardToggleAnchor } from '@/components/chat/tool-card-anchor'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
+import { findLiveToolTerminal, getLiveToolTerminals, subscribeLiveToolTerminals, type LiveToolTerminalExecution } from '@/lib/tool-terminal-live'
 
 /**
  * Session + auth context used to lazy-load persisted sub-agent bodies. Provided
@@ -2427,6 +2428,36 @@ function ImageView({ src, alt, caption }: { src: string | null | undefined; alt:
   )
 }
 
+/**
+ * The embedded terminal grows with its output between these bounds, so `pwd`
+ * renders as one line and a test run scrolls inside ten.
+ */
+const TOOL_TERMINAL_MIN_ROWS = 1
+const TOOL_TERMINAL_MAX_ROWS = 12
+
+/**
+ * Shapes a pushed binding like an `/api/terminals` row so everything
+ * downstream — `getToolTerminalExecution`, the slice bounds, `TerminalView` —
+ * reads it the same way whether it arrived by push or by fetch.
+ */
+function liveExecutionAsTerminalInfo(entry: LiveToolTerminalExecution): TerminalInfo {
+  const { terminalId, sessionId, ...execution } = entry
+  const toolExecution = { ...execution, output: null }
+  return {
+    id: terminalId,
+    type: 'terminal',
+    state: 'active',
+    sessionId,
+    projectRoot: null,
+    // A finished execution also goes in the history list, which is where a
+    // background card looks up the end offset that bounds its output slice.
+    metadata: {
+      toolExecution,
+      toolExecutions: execution.completedAt ? [toolExecution] : [],
+    },
+  }
+}
+
 function useToolTerminalSurface(options: {
   enabled: boolean
   terminalId: string | null
@@ -2438,6 +2469,26 @@ function useToolTerminalSurface(options: {
     terminal: null,
     loaded: false,
   })
+
+  // The gateway pushes the binding as the command starts, so a running card
+  // attaches on the same tick instead of waiting out a poll. The fetch below
+  // still runs — it is what resolves terminals for calls that finished before
+  // this client connected (history reload) or on a session this socket is not
+  // subscribed to.
+  const liveEntries = useSyncExternalStore(
+    subscribeLiveToolTerminals,
+    getLiveToolTerminals,
+    getLiveToolTerminals,
+  )
+  const liveTerminal = useMemo(() => {
+    if (!options.enabled) return null
+    const entry = findLiveToolTerminal(liveEntries, {
+      terminalId: options.terminalId,
+      sessionId,
+      command: options.command,
+    })
+    return entry ? liveExecutionAsTerminalInfo(entry) : null
+  }, [liveEntries, options.command, options.enabled, options.terminalId, sessionId])
 
   useEffect(() => {
     if (!options.enabled) {
@@ -2476,6 +2527,7 @@ function useToolTerminalSurface(options: {
     }
   }, [authToken, options.command, options.enabled, options.keepPolling, options.terminalId, sessionId])
 
+  if (liveTerminal) return { terminal: liveTerminal, loaded: true }
   return state
 }
 
@@ -3652,7 +3704,9 @@ function ToolCallCardInner({
           readOnly
           outputOffset={terminalOutputOffset}
           outputEndOffset={terminalOutputEndOffset}
-          className="h-64 bg-zinc-950"
+          minRows={TOOL_TERMINAL_MIN_ROWS}
+          maxRows={TOOL_TERMINAL_MAX_ROWS}
+          className="bg-zinc-950"
         />
       </div>
     ) : (

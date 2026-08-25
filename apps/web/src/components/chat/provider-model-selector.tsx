@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from 'react'
 import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import Cursor from '@lobehub/icons/es/Cursor'
@@ -129,6 +130,25 @@ export const PROVIDER_SELECTOR_POPOVER_STYLE: CSSProperties = {
   maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
 }
 
+// Backend groups surfaced by the Jait provider. The group label is the display
+// name of the backend instance (e.g. "Büro · Ollama"); the backend key is the
+// canonical JaitBackend used to filter and to auto-switch jait_backend.
+const GROUP_TO_BACKEND: Record<string, JaitBackend> = {
+  OpenAI: 'openai',
+  OpenRouter: 'openrouter',
+  Ollama: 'ollama',
+  OmniRoute: 'omniroute',
+}
+
+// The group label is the backend instance the model belongs to — for named
+// instances it is "<instance name> · <backend>" (e.g. "Büro · Ollama"), for
+// legacy single-backend setups just the backend name ("Ollama"). Filtering by
+// this label (instead of the bare backend key) keeps every instance visible as
+// its own chip, so "Ollama Büro" no longer collapses into a generic "Ollama".
+function modelGroupLabel(model: ModelDef): string {
+  return model.group || 'Other'
+}
+
 function summariseReason(reason: string): string {
   const lower = reason.toLowerCase()
   if (lower.includes('not installed') || lower.includes('not found')) return 'not installed'
@@ -217,6 +237,7 @@ export function ProviderModelSelector({
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
+  const [backendFilter, setBackendFilter] = useState<string | null>(null)
   const [authBusyProvider, setAuthBusyProvider] = useState<ProviderId | null>(null)
   const [loginDialog, setLoginDialog] = useState<{
     providerId: ProviderId
@@ -354,6 +375,7 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!open) return
     setSearch('')
+    setBackendFilter(null)
     if (!isMobile) {
       requestAnimationFrame(() => inputRef.current?.focus())
     }
@@ -400,6 +422,7 @@ export function ProviderModelSelector({
     if (!providerScopeResolved) return
     setModels([])
     setModelError(null)
+    setBackendFilter(null)
     setRecentIds(loadRecentModels())
 
     let cancelled = false
@@ -479,6 +502,7 @@ export function ProviderModelSelector({
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
   const currentModel = model ? models.find((entry) => entry.id === model) : null
+  const currentGroupLabel = currentModel ? modelGroupLabel(currentModel) : null
   const displayModelLabel = loadingModels
       ? 'Loading'
       : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
@@ -503,14 +527,86 @@ export function ProviderModelSelector({
     return recentIds
       .filter((id) => modelMap.has(id))
       .map((id) => modelMap.get(id)!)
+      .filter((entry) => !backendFilter || modelGroupLabel(entry) === backendFilter)
       .slice(0, MAX_RECENTS)
-  }, [models, recentIds, searchLower])
+  }, [models, recentIds, searchLower, backendFilter])
 
   const nonRecentFiltered = useMemo(() => {
     if (searchLower) return filteredModels
     const recentSet = new Set(recentModels.map((entry) => entry.id))
     return filteredModels.filter((entry) => !recentSet.has(entry.id))
   }, [filteredModels, recentModels, searchLower])
+
+  // Backend filter chips. One chip per backend instance (group label), so named
+  // instances like "Büro · Ollama" stay individually visible and filterable
+  // instead of collapsing into a generic "Ollama". Shown whenever there is at
+  // least one backend so the current backend is always discoverable.
+  const backendOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const entry of nonRecentFiltered) {
+      const key = modelGroupLabel(entry)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => ({ key, label: key, count }))
+  }, [nonRecentFiltered])
+
+  const backendFilteredModels = useMemo(() => {
+    if (!backendFilter) return nonRecentFiltered
+    return nonRecentFiltered.filter((entry) => modelGroupLabel(entry) === backendFilter)
+  }, [nonRecentFiltered, backendFilter])
+
+  // Flatten the (possibly grouped) model list into virtualizable rows. Header
+  // rows carry the backend group label so you always know which backend you're
+  // scrolled into; model rows are the selectable entries.
+  const modelRows = useMemo(() => {
+    const rows: ({ type: 'header'; label: string } | { type: 'model'; model: ModelDef })[] = []
+    const hasGroups = backendFilteredModels.some((m) => m.group)
+    if (!hasGroups) {
+      for (const entry of backendFilteredModels) rows.push({ type: 'model', model: entry })
+      return rows
+    }
+    const groups: { label: string; items: ModelDef[] }[] = []
+    const seen = new Set<string>()
+    for (const m of backendFilteredModels) {
+      const g = m.group || 'Other'
+      if (!seen.has(g)) {
+        seen.add(g)
+        groups.push({ label: g, items: [] })
+      }
+      groups.find((gr) => gr.label === g)!.items.push(m)
+    }
+    for (const g of groups) {
+      rows.push({ type: 'header', label: g.label })
+      for (const entry of g.items) rows.push({ type: 'model', model: entry })
+    }
+    return rows
+  }, [backendFilteredModels])
+
+  const modelListRef = useRef<HTMLDivElement | null>(null)
+  const modelVirtualizer = useVirtualizer({
+    count: modelRows.length,
+    getScrollElement: () => modelListRef.current,
+    estimateSize: (index) => (modelRows[index]?.type === 'header' ? 30 : 44),
+    overscan: 12,
+    enabled: open,
+  })
+
+  // Re-measure once the popover is laid out so the virtualizer knows the real
+  // scrollport height (it is 0 while closed), and scroll the currently selected
+  // model into view so you always know where you are when the list opens.
+  useEffect(() => {
+    if (!open) return
+    const raf = requestAnimationFrame(() => {
+      modelVirtualizer.measure()
+      if (model) {
+        const index = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model)
+        if (index >= 0) modelVirtualizer.scrollToIndex(index, { align: 'center' })
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [open, modelVirtualizer, model, modelRows])
 
   const modelErrorMessage = useMemo(() => {
     if (!modelError) return null
@@ -546,13 +642,6 @@ export function ProviderModelSelector({
       const nativeEffort = next === null || isNativeReasoningEffort(next) ? next : null
       updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
     }
-  }
-
-  const GROUP_TO_BACKEND: Record<string, JaitBackend> = {
-    OpenAI: 'openai',
-    OpenRouter: 'openrouter',
-    Ollama: 'ollama',
-    OmniRoute: 'omniroute',
   }
 
   const handleModelSelect = (modelId: string) => {
@@ -755,7 +844,47 @@ export function ProviderModelSelector({
           />
         </div>
       </div>
-      <div role="listbox" aria-labelledby="model-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
+      {currentGroupLabel && (
+        <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </span>
+          <span className="truncate text-2xs font-medium text-foreground">
+            Current: {currentGroupLabel}
+          </span>
+        </div>
+      )}
+      {backendOptions.length > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setBackendFilter(null)}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium transition-colors',
+              !backendFilter ? 'border-primary/40 bg-accent/50 text-foreground' : 'border-border text-muted-foreground hover:bg-muted',
+            )}
+          >
+            All
+            <span className="opacity-60">{nonRecentFiltered.length}</span>
+          </button>
+          {backendOptions.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setBackendFilter(backendFilter === opt.key ? null : opt.key)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium transition-colors',
+                backendFilter === opt.key ? 'border-primary/40 bg-accent/50 text-foreground' : 'border-border text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {opt.label}
+              <span className="opacity-60">{opt.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div ref={modelListRef} role="listbox" aria-labelledby="model-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
         {recentModels.length > 0 && (
           <>
             <div className="flex items-center gap-1.5 px-2 py-1.5">
@@ -785,36 +914,41 @@ export function ProviderModelSelector({
             <span>{modelErrorMessage}</span>
           </div>
         )}
-        {!loadingModels && !modelErrorMessage && (() => {
-          const hasGroups = nonRecentFiltered.some((m) => m.group)
-          if (!hasGroups) {
-            return nonRecentFiltered.map((entry) => (
-              <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-            ))
-          }
-          // Render models grouped by backend
-          const groups: { label: string; items: ModelDef[] }[] = []
-          const seen = new Set<string>()
-          for (const m of nonRecentFiltered) {
-            const g = m.group || 'Other'
-            if (!seen.has(g)) {
-              seen.add(g)
-              groups.push({ label: g, items: [] })
-            }
-            groups.find((gr) => gr.label === g)!.items.push(m)
-          }
-          return groups.map((g) => (
-            <div key={g.label}>
-              <div className="sticky top-0 z-10 bg-popover px-2 py-1.5">
-                <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{g.label}</span>
-              </div>
-              {g.items.map((entry) => (
-                <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-              ))}
-            </div>
-          ))
-        })()}
-        {!loadingModels && !modelErrorMessage && filteredModels.length === 0 && (
+        {!loadingModels && !modelErrorMessage && modelRows.length > 0 && (
+          <div className="relative" style={{ height: modelVirtualizer.getTotalSize() }}>
+            {modelVirtualizer.getVirtualItems().map((virtualRow) => {
+              const row = modelRows[virtualRow.index]
+              if (row.type === 'header') {
+                const isCurrentGroup = currentGroupLabel !== null && row.label === currentGroupLabel
+                return (
+                  <div
+                    key={`header-${virtualRow.key}`}
+                    data-index={virtualRow.index}
+                    ref={modelVirtualizer.measureElement}
+                    className={cn('flex items-center gap-1.5 px-2 py-1.5', isCurrentGroup && 'bg-accent/40')}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    {isCurrentGroup && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}
+                    <span className={cn('text-2xs font-medium uppercase tracking-wider', isCurrentGroup ? 'text-foreground' : 'text-muted-foreground')}>
+                      {row.label}
+                    </span>
+                  </div>
+                )
+              }
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={modelVirtualizer.measureElement}
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <ModelItem model={row.model} selected={model === row.model.id} onSelect={handleModelSelect} />
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {!loadingModels && !modelErrorMessage && modelRows.length === 0 && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {search ? `No models matching "${search}"` : 'No models available'}
           </div>

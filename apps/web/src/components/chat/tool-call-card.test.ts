@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredValue']
 let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['shouldInitiallyCollapseToolCallGroup']
@@ -31,6 +31,7 @@ let humanizeStructuredKey: typeof import('./tool-call-card')['humanizeStructured
 let StructuredDataView: typeof import('./tool-call-card')['StructuredDataView']
 let ToolSearchResultsView: typeof import('./tool-call-card')['ToolSearchResultsView']
 let ToolCallCard: typeof import('./tool-call-card')['ToolCallCard']
+let SubAgentAuthProvider: typeof import('./tool-call-card')['SubAgentAuthProvider']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -71,6 +72,7 @@ beforeAll(async () => {
     StructuredDataView,
     ToolSearchResultsView,
     ToolCallCard,
+    SubAgentAuthProvider,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -1055,5 +1057,70 @@ describe('summarizeCollapsedToolCalls', () => {
       { callId: '1', tool: 'browser.click', args: { selector: 'button' }, status: 'success', startedAt: 1, completedAt: 2 },
       { callId: '2', tool: 'browser.type', args: { selector: 'input', text: 'hello' }, status: 'success', startedAt: 3, completedAt: 4 },
     ])).toBe('2 browser tool calls')
+  })
+})
+
+describe('running terminal cards attach to the pushed binding', () => {
+  const runningCall = {
+    callId: 'call-live',
+    tool: 'jait.terminal',
+    args: { command: 'bun run test' },
+    status: 'running' as const,
+    startedAt: 1,
+  }
+
+  function renderInSession(sessionId: string) {
+    return renderToStaticMarkup(createElement(
+      SubAgentAuthProvider,
+      { sessionId },
+      createElement(ToolCallCard, { call: runningCall }),
+    ))
+  }
+
+  beforeEach(async () => {
+    const { resetLiveToolTerminals } = await import('@/lib/tool-terminal-live')
+    resetLiveToolTerminals()
+  })
+
+  it('renders a real terminal as soon as the gateway announces the binding', async () => {
+    const { applyTerminalExecutionEvent } = await import('@/lib/tool-terminal-live')
+    applyTerminalExecutionEvent('s-live', {
+      terminalId: 'term-live',
+      execution: {
+        command: 'bun run test',
+        actionId: 'a-live',
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+        outputOffset: 12,
+        outputEndOffset: null,
+        isBackground: false,
+        watched: null,
+      },
+    })
+
+    expect(renderInSession('s-live')).toContain('relative w-full overflow-hidden')
+  })
+
+  it('falls back to streamed text when no binding has arrived', () => {
+    expect(renderInSession('s-live')).not.toContain('relative w-full overflow-hidden')
+  })
+
+  it('ignores a binding announced for a different session', async () => {
+    const { applyTerminalExecutionEvent } = await import('@/lib/tool-terminal-live')
+    applyTerminalExecutionEvent('s-other', {
+      terminalId: 'term-other',
+      execution: {
+        command: 'bun run test',
+        actionId: 'a-other',
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+        outputOffset: 12,
+        outputEndOffset: null,
+        isBackground: false,
+        watched: null,
+      },
+    })
+
+    expect(renderInSession('s-live')).not.toContain('relative w-full overflow-hidden')
   })
 })
