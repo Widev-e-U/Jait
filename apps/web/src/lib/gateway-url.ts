@@ -134,28 +134,55 @@ export function getApiUrl(): string {
 }
 
 /**
+ * In Vite dev the WS path `/ws` is proxied to the gateway (see vite.config.ts),
+ * while the page origin's root path is not. So when the resolved WS URL points
+ * at the same server serving the page (same port), route through the `/ws`
+ * proxy instead of connecting to the root path directly. This keeps the
+ * control-plane WebSocket in line with how the voice assistant already routes.
+ */
+function routeViaWsProxy(wsUrl: string, pageUrl: string): string {
+  if (!import.meta.env.DEV) return wsUrl
+  try {
+    const ws = new URL(wsUrl)
+    const page = new URL(pageUrl)
+    if (ws.port && page.port && ws.port === page.port) {
+      return `${stripTrailingSlash(wsUrl)}/ws`
+    }
+  } catch {
+    // fall through
+  }
+  return wsUrl
+}
+
+/**
  * WebSocket gateway URL.
- * WebSocket connects directly to the gateway (not through Vite proxy)
- * because the gateway WS is on the root path.
+ * In dev the WebSocket goes through the Vite `/ws` proxy so it reaches the
+ * gateway on the same origin (no cross-origin cookie issues). Outside dev
+ * (Electron / production served by the gateway) it connects to the gateway
+ * root path directly.
  */
 export function getWsUrl(): string {
   const env = import.meta.env.VITE_WS_URL as string | undefined
   if (import.meta.env.DEV && env) return stripTrailingSlash(env)
 
   const stored = getStoredGatewayUrl()
-  if (stored) return stripTrailingSlash(httpToWs(stored))
-
-  // Electron desktop bridge
   const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
-  if (desktop) return stripTrailingSlash(httpToWs(desktop))
+  const apiEnv = import.meta.env.VITE_API_URL as string | undefined
 
-  if (env) return stripTrailingSlash(env)
+  let ws: string
+  if (env) ws = env
+  else if (stored) ws = httpToWs(stored)
+  else if (desktop) ws = httpToWs(desktop)
+  else if (apiEnv) ws = httpToWs(normalizeDirectGatewayBase(apiEnv))
+  else ws = httpToWs(getDirectGatewayUrl())
 
-  const env2 = import.meta.env.VITE_API_URL as string | undefined
-  if (env2) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(env2)))
+  ws = stripTrailingSlash(ws)
 
-  // Use direct gateway URL (not proxied) for WebSocket
-  return stripTrailingSlash(httpToWs(getDirectGatewayUrl()))
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    ws = routeViaWsProxy(ws, window.location.origin)
+  }
+
+  return ws
 }
 
 // ── State helpers ────────────────────────────────────────────────────

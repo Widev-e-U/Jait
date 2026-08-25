@@ -35,17 +35,25 @@ function ThemeAwareToaster() {
   return <Toaster position="top-right" theme={theme} closeButton gap={8} visibleToasts={4} offset={isElectronWin32 ? 44 : undefined} />
 }
 
+// Note: this app intentionally does NOT wrap the tree in <React.StrictMode>.
+// StrictMode double-invokes effects on every mount (mount -> cleanup -> mount),
+// and the cleanup calls ws.close() on still-CONNECTING WebSockets (the chat
+// automation socket, secret-input, user-question, node-permissions, consent,
+// etc.). That churns the connection once per mount and logs a noisy
+// "WebSocket is closed before the connection is established" warning for every
+// socket right as the app transitions login -> main view. All these effects
+// already implement correct cleanup and stable deps, so the double-invoke
+// provides no additional safety here. Re-enable StrictMode (wrap this render
+// tree) if you want dev-only strict warnings back; production is unaffected.
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <AuthProvider>
-        <ConfirmDialogProvider>
-          <HotkeysProvider>
-            <App />
-            <ThemeAwareToaster />
-          </HotkeysProvider>
-        </ConfirmDialogProvider>
-      </AuthProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
+  <ErrorBoundary>
+    <AuthProvider>
+      <ConfirmDialogProvider>
+        <HotkeysProvider>
+          <App />
+          <ThemeAwareToaster />
+        </HotkeysProvider>
+      </ConfirmDialogProvider>
+    </AuthProvider>
+  </ErrorBoundary>,
 )
