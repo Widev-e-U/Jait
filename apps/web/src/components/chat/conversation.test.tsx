@@ -9,6 +9,7 @@ import {
   findConversationItemIndex,
   findPreviousMessageIndex,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
+  isInitialTranscriptFill,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
   positionConversationAtBottom,
@@ -73,6 +74,27 @@ describe('Conversation', () => {
         // Only assistant content above the viewport: nothing to jump up to.
         expect(findPreviousMessageIndex(turns, 500, (index) => index === 3)).toBeNull()
       })
+    })
+  })
+
+  describe('isInitialTranscriptFill', () => {
+    it('treats the first batch of loaded history as an opening, not a new turn', () => {
+      // Mounted empty while history loaded, then filled — opening the chat must
+      // land at the bottom rather than smooth-scrolling the whole transcript.
+      expect(isInitialTranscriptFill(true, 12)).toBe(true)
+    })
+
+    it('still top-aligns the prompt that starts a brand-new chat', () => {
+      expect(isInitialTranscriptFill(true, 1)).toBe(false)
+    })
+
+    it('top-aligns every turn sent after the transcript is on screen', () => {
+      expect(isInitialTranscriptFill(false, 12)).toBe(false)
+      expect(isInitialTranscriptFill(false, 1)).toBe(false)
+    })
+
+    it('has nothing to skip for an empty transcript', () => {
+      expect(isInitialTranscriptFill(true, 0)).toBe(false)
     })
   })
 

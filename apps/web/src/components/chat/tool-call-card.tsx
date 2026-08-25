@@ -16,67 +16,10 @@ import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { AssistantBody } from '@/components/chat/assistant-body'
 import { ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from '@/components/chat/use-stick-to-bottom'
+import { useToolCardToggleAnchor } from '@/components/chat/tool-card-anchor'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
-
-/**
- * Comfortable breathing room kept between the collapsed card's header and the
- * chat viewport edges after a collapse. Mirrors Copilot's behavior of nudging
- * the surrounding content so the toggle stays in view.
- */
-const COLLAPSE_SCROLL_MARGIN = 12
-
-/**
- * Walk up from the header to the nearest scrollable ancestor. The chat list is
- * virtualized (TanStack Virtual) with `position: absolute; transform: translateY`
- * items inside an `overflow-y-auto` container, so we can't rely on
- * `scrollIntoView`'s internal container detection — we resolve the real
- * scrollable element ourselves.
- */
-function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
-  let node: HTMLElement | null = el.parentElement
-  while (node) {
-    const overflowY = getComputedStyle(node).overflowY
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
-      return node
-    }
-    node = node.parentElement
-  }
-  return null
-}
-
-/**
- * Bring a collapsed tool card's header back into view by nudging the chat
- * content, matching Copilot's "content always moves in screen" behavior.
- *
- * Unlike `scrollIntoView({ block: 'nearest' })` — which only scrolls when the
- * element is fully out of view — this scrolls whenever the header sits too
- * close to either edge of the viewport:
- *   - header near/above the top edge  -> scroll content down (header moves down)
- *   - header near/below the bottom edge -> scroll content up (header moves up)
- */
-function scrollCollapsedCardIntoView(header: HTMLElement) {
-  const container = findScrollableAncestor(header)
-  if (!container) return
-  const headerRect = header.getBoundingClientRect()
-  const containerRect = container.getBoundingClientRect()
-  const viewportTop = 0
-  const viewportBottom = containerRect.height
-  const headerTop = headerRect.top - containerRect.top
-  const headerBottom = headerRect.bottom - containerRect.top
-  let target: number | null = null
-  if (headerTop < viewportTop + COLLAPSE_SCROLL_MARGIN) {
-    // Too close to (or above) the top edge — scroll content down.
-    target = container.scrollTop + headerTop - (viewportTop + COLLAPSE_SCROLL_MARGIN)
-  } else if (headerBottom > viewportBottom - COLLAPSE_SCROLL_MARGIN) {
-    // Too close to (or below) the bottom edge — scroll content up.
-    target = container.scrollTop + headerBottom - (viewportBottom - COLLAPSE_SCROLL_MARGIN)
-  }
-  if (target !== null) {
-    container.scrollTo({ top: target, behavior: 'smooth' })
-  }
-}
 
 /**
  * Session + auth context used to lazy-load persisted sub-agent bodies. Provided
@@ -3371,8 +3314,10 @@ function ToolCallCardInner({
   const [now, setNow] = useState(() => Date.now())
   const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
   const prevStatusRef = useRef(call.status)
-  const headerRef = useRef<HTMLDivElement>(null)
-  const collapseScrollFrameRef = useRef<number | null>(null)
+  // Keeps the card itself put while its body opens or closes: the top edge is
+  // pinned in the upper half of the viewport (content below moves down), the
+  // bottom edge in the lower half (content above moves up).
+  const { cardRef, anchorToggle } = useToolCardToggleAnchor<HTMLDivElement>()
   const normalizedTool = normalizeTool(call.tool)
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
@@ -3492,25 +3437,10 @@ function ToolCallCardInner({
   })
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
+    // Measure before the state flip, while the card still has its old height.
+    anchorToggle()
     setOpen(nextOpen)
-    // Collapsing makes the card dramatically shorter. The surrounding content
-    // (text + sibling cards) gets pulled up and can land out of view, leaving
-    // the collapsed header dangling off-screen. Bring it back into view so the
-    // user still sees it, with a quick smooth scroll instead of a jarring jump.
-    if (!nextOpen && headerRef.current) {
-      if (collapseScrollFrameRef.current !== null) cancelAnimationFrame(collapseScrollFrameRef.current)
-      collapseScrollFrameRef.current = requestAnimationFrame(() => {
-        collapseScrollFrameRef.current = null
-        // Wait one more frame so the virtualizer has re-measured the collapsed
-        // card before computing the scroll target. The header itself stays put
-        // (the card shrinks from the bottom), but the extra frame keeps the
-        // measurement stable.
-        requestAnimationFrame(() => {
-          if (headerRef.current) scrollCollapsedCardIntoView(headerRef.current)
-        })
-      })
-    }
-  }, [hasInlineSecretPrompt])
+  }, [anchorToggle, hasInlineSecretPrompt])
 
   const StatusIcon = isApprovalPending
     ? Clock
@@ -3611,16 +3541,6 @@ function ToolCallCardInner({
     const id = window.setInterval(() => setNow(Date.now()), 250)
     return () => window.clearInterval(id)
   }, [call.status])
-
-  // Cancel any pending collapse-scroll frame if the card unmounts mid-collapse.
-  useEffect(() => {
-    return () => {
-      if (collapseScrollFrameRef.current !== null) {
-        cancelAnimationFrame(collapseScrollFrameRef.current)
-        collapseScrollFrameRef.current = null
-      }
-    }
-  }, [])
 
   const invocationLabels = getToolInvocationLabels(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const isActive = call.status === 'running' || call.status === 'pending'
@@ -3820,7 +3740,7 @@ function ToolCallCardInner({
   ) : null
 
   return (
-    <Collapsible open={hasExpandableContent ? effectiveOpen : false} onOpenChange={handleOpenChange}>
+    <Collapsible ref={cardRef} open={hasExpandableContent ? effectiveOpen : false} onOpenChange={handleOpenChange}>
       <div className="relative pl-8">
         {!hideTopConnector && (
           <span
@@ -3852,7 +3772,6 @@ function ToolCallCardInner({
 
         <div className="group pb-1">
           <div
-            ref={headerRef}
             className={cn(
               'flex min-h-8 items-center gap-2 rounded-md px-2 py-1 transition-colors',
               stateClasses.row,
@@ -4367,10 +4286,13 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
   const isActive = !!isStreaming || calls.some(c => c.status === 'running' || c.status === 'pending')
   const hasInlineSecretPrompt = hasInlineSecretPromptForCalls(calls, renderInlineSecretPrompt)
   const effectiveOpen = hasInlineSecretPrompt ? true : open
+  const { cardRef, anchorToggle } = useToolCardToggleAnchor<HTMLDivElement>()
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (hasInlineSecretPrompt && !nextOpen) return
+    // Measure before the state flip, while the card still has its old height.
+    anchorToggle()
     setOpen(nextOpen)
-  }, [hasInlineSecretPrompt])
+  }, [anchorToggle, hasInlineSecretPrompt])
   const successCount = calls.filter(c => c.status === 'success').length
   const errorCount = calls.filter(c => c.status === 'error').length
   const startedAt = calls.length > 0 ? Math.min(...calls.map(c => c.startedAt)) : Date.now()
@@ -4415,7 +4337,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
   if (calls.length === 0) return null
 
   return (
-    <Collapsible open={effectiveOpen} onOpenChange={handleOpenChange}>
+    <Collapsible ref={cardRef} open={effectiveOpen} onOpenChange={handleOpenChange}>
       <div className="my-2">
         <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
           <ChevronRight className={cn(

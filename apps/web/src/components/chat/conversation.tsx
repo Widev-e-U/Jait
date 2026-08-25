@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
+import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
 import { cn } from '@/lib/utils'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 
@@ -95,6 +96,23 @@ export function positionConversationAtBottom(
   element: Pick<HTMLElement, 'scrollHeight' | 'scrollTop'>,
 ): void {
   element.scrollTop = element.scrollHeight
+}
+
+/**
+ * Whether a newly-seen scroll target is just the transcript being filled in,
+ * rather than a turn the user has actually sent.
+ *
+ * Opening a chat mounts an empty Conversation while history loads, then fills
+ * it in one commit — at which point the newest prompt in that history looks
+ * exactly like a brand-new turn. Treating it as one top-aligns it with a smooth
+ * scroll, i.e. runs the whole transcript past the user on every chat open.
+ *
+ * A chat opened by *sending* its first message also arrives at an empty
+ * transcript, and there the top-align is the point — hence the item count:
+ * a single message is a new turn, a loaded conversation is not.
+ */
+export function isInitialTranscriptFill(awaitingInitialTranscript: boolean, itemCount: number): boolean {
+  return awaitingInitialTranscript && itemCount > 1
 }
 
 export function computeNewTurnTailPadding({
@@ -385,6 +403,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       ? null
       : scrollToMessageId ?? null,
   )
+  // Mounted before the transcript existed, so the first batch of messages is a
+  // history load rather than a turn the user just sent. A chat opened by
+  // sending its first message lands here too, which is why the check that
+  // consumes this also requires more than one message.
+  const awaitingInitialTranscriptRef = useRef(childItems.length === 0)
   const pendingTopAlignIdRef = useRef<string | null>(null)
   const heldNewTurnSpaceRef = useRef(false)
   const userScrollingRef = useRef(false)
@@ -400,6 +423,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // as new streamed content and yank the view down to the bottom.
   const suppressAutoScrollRef = useRef(false)
   const suppressAutoScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Timestamp until which a tool card the user just toggled owns the scroll
+  // position (see the toggle listener below).
+  const toolCardAnchorUntilRef = useRef(0)
 
   // ── Scroll anchoring ──
   // The list is virtualized, so any height change — older messages prepended,
@@ -912,6 +938,36 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     })
   }, [captureScrollAnchor])
 
+  // A tool card the user expands or collapses re-anchors the transcript on its
+  // own edge — top edge in the upper half of the viewport so the content below
+  // moves down, bottom edge in the lower half so the content above moves up
+  // (see tool-card-anchor). Two things here would fight that: following the end
+  // of the stream, and the anchor restore below re-pinning the first visible
+  // message every frame the card animates. So treat a toggle as the same intent
+  // as scrolling by hand, and hand the scroll position to the card until its
+  // animation has settled. If the card's anchoring leaves the view at the very
+  // bottom anyway, the scroll it writes re-attaches through updateBottomState.
+  useEffect(() => {
+    const el = scrollElement
+    if (!el) return
+    let settleTimer: ReturnType<typeof setTimeout> | undefined
+    const handleToolCardToggle = () => {
+      toolCardAnchorUntilRef.current = Date.now() + TOOL_CARD_ANCHOR_SETTLE_MS
+      detachFromBottom()
+      // Re-evaluate once the card has settled. A toggle that ends up flush with
+      // the bottom edge anyway (expanding the last card of a live turn) should
+      // go back to following the stream, and nothing else would notice: the
+      // detach above is silent when the anchoring writes no scroll at all.
+      clearTimeout(settleTimer)
+      settleTimer = setTimeout(updateBottomState, TOOL_CARD_ANCHOR_SETTLE_MS)
+    }
+    el.addEventListener(TOOL_CARD_TOGGLE_EVENT, handleToolCardToggle)
+    return () => {
+      clearTimeout(settleTimer)
+      el.removeEventListener(TOOL_CARD_TOGGLE_EVENT, handleToolCardToggle)
+    }
+  }, [detachFromBottom, scrollElement, updateBottomState])
+
   const jumpToPreviousMessage = useCallback(() => {
     const target = findPreviousUserMessage()
     if (target == null) return
@@ -930,6 +986,12 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     if (target == null || target === prevScrollTargetRef.current) return
     prevScrollTargetRef.current = target
 
+    // A chat that just finished loading opens at the bottom (the
+    // initial-position effect below) instead of animating there.
+    const initialFill = isInitialTranscriptFill(awaitingInitialTranscriptRef.current, childItems.length)
+    awaitingInitialTranscriptRef.current = false
+    if (initialFill) return
+
     const el = scrollRef.current
     if (!el) return
 
@@ -940,7 +1002,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     heldNewTurnSpaceRef.current = false
     pendingTopAlignIdRef.current = target
     setTopAnchoredMessageId(target)
-  }, [scrollToMessageId])
+  }, [scrollToMessageId, childItems.length])
 
   useLayoutEffect(() => {
     const target = topAnchoredMessageId
@@ -1050,6 +1112,13 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     const observer = new ResizeObserver(() => {
       if (newTurnTailPadding > 0) return
+      // The height change is a tool card the user just toggled, and that card
+      // is already pinning its own edge frame by frame. Anything written here
+      // would be undone on its next frame and read as judder.
+      if (Date.now() < toolCardAnchorUntilRef.current) {
+        updateBottomState()
+        return
+      }
       if (!stickToBottomRef.current || suppressAutoScrollRef.current) {
         // Detached: the total size just changed under us. A streaming nested
         // sub-agent card grows an item continuously, and every growth above
