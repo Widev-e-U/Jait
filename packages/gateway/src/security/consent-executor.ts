@@ -154,8 +154,11 @@ export class ConsentAwareExecutor {
     const needsConsent = requiresConsent(permission, trustLevel, this.sessionApprovals) || !!irreversibleReason;
     const approveAllEnabled = this.consentManager.isApproveAllEnabledForSession(context.sessionId);
     const isScheduler = context.requestedBy === "scheduler";
+    // Full-access mode never prompts for approval — the LLM has full access to
+    // every tool, including irreversible commands.
+    const isFullAccess = context.runtimeMode === "full-access";
 
-    if (!needsConsent || (!irreversibleReason && (approveAllEnabled || isScheduler))) {
+    if (isFullAccess || !needsConsent || (!irreversibleReason && (approveAllEnabled || isScheduler))) {
       const result = await this.runTool(toolName, input, context);
 
       // Record successful approval for trust progression

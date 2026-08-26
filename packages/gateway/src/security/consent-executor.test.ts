@@ -170,6 +170,72 @@ describe("ConsentAwareExecutor command policy", () => {
   });
 });
 
+describe("ConsentAwareExecutor full-access mode", () => {
+  it("auto-executes without prompting for approval when runtimeMode is full-access", async () => {
+    const toolRegistry = new ToolRegistry();
+    const registryExecute = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "ran",
+    }));
+    toolRegistry.register(createMockTool("gateway.redeploy", registryExecute));
+
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions: getProfile("coding"),
+      sessionApprovals: new Set<string>(),
+      profileName: "coding",
+    });
+
+    const fullAccessContext: ToolContext = {
+      ...context,
+      runtimeMode: "full-access",
+    };
+
+    const result = await executor.execute("gateway.redeploy", { version: "1.2.3" }, fullAccessContext);
+
+    expect(result.ok).toBe(true);
+    expect(registryExecute).toHaveBeenCalledOnce();
+    expect(consentManager.pendingCount).toBe(0);
+  });
+
+  it("auto-executes irreversible commands in full-access mode without prompting", async () => {
+    const toolRegistry = new ToolRegistry();
+    const registryExecute = vi.fn(async (): Promise<ToolResult> => ({
+      ok: true,
+      message: "ran",
+    }));
+    toolRegistry.register(createMockTool("terminal.run", registryExecute));
+
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine: new TrustEngine(),
+      permissions: getProfile("coding"),
+      sessionApprovals: new Set<string>(),
+      profileName: "coding",
+    });
+
+    const fullAccessContext: ToolContext = {
+      ...context,
+      runtimeMode: "full-access",
+    };
+
+    const result = await executor.execute(
+      "terminal.run",
+      { command: "git stash" },
+      fullAccessContext,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(registryExecute).toHaveBeenCalledOnce();
+    expect(consentManager.pendingCount).toBe(0);
+  });
+});
+
 describe("ConsentAwareExecutor delegate routing", () => {
   it("routes actual execution through the delegate instead of the tool registry", async () => {
     const toolRegistry = new ToolRegistry();
