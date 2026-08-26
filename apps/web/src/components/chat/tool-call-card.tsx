@@ -3711,7 +3711,7 @@ function ToolCallCardInner({
       </div>
     ) : (
     <pre ref={terminalScrollRef} className={cn(
-      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-72 overflow-y-auto whitespace-pre',
+      'text-xs font-mono leading-5 rounded-md px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words',
       'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
       call.result && !call.result.ok && 'text-red-200'
     )}>
