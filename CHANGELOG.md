@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.771](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.771) — 2026-08-26
+- fix(web): wrap long terminal output lines instead of clipping them — 2e1bd5e9
+- test(gateway): make malformed-base-URL probe test genuinely invalid — 468bb4bb
+
 ## [v0.1.770](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.770) — 2026-08-26
 - feat(web): route dropped folders/files into chat input — aff06fe8
 
