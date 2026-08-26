@@ -26,6 +26,48 @@ function resetKeysChanged(prev: readonly unknown[] | undefined, next: readonly u
   return prev.some((value, index) => !Object.is(value, next[index]))
 }
 
+/**
+ * React #185 "Maximum update depth exceeded" is, on this app, most often the
+ * symptom of a tab still running a stale pre-deploy bundle: the old JS keeps
+ * looping when it receives live events shaped by the newer server. The version
+ * watchdog reloads on a new build, but it only polls every ~60s (and on focus),
+ * so a crash can land mid-stream before the next poll. When we catch exactly
+ * this error class we reload once automatically so the fresh bundle is used
+ * instead of stranding the user on the fatal screen.
+ *
+ * The one-shot flag lives in sessionStorage so it survives the reload: if a
+ * *genuine* in-code loop survives the reload, we stop auto-reloading and show
+ * the manual fallback (with its Reload button) instead of bouncing the page
+ * forever. A new tab gets a fresh attempt.
+ */
+const STALE_LOOP_RELOAD_KEY = 'jait:loop-error-auto-reloaded'
+
+function isRenderLoopError(error: Error): boolean {
+  const message = error.message ?? ''
+  return (
+    message.includes('react.dev/errors/185')
+    || message.includes('#185')
+    || message.includes('Maximum update depth exceeded')
+  )
+}
+
+function hasAutoReloadedLoop(): boolean {
+  try {
+    return window.sessionStorage?.getItem(STALE_LOOP_RELOAD_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markLoopAutoReloaded(): void {
+  try {
+    window.sessionStorage?.setItem(STALE_LOOP_RELOAD_KEY, '1')
+  } catch {
+    // sessionStorage unavailable (private mode / file://) — fall through; the
+    // user still has the manual Reload button.
+  }
+}
+
 export class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -39,6 +81,15 @@ export class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo })
     console.error(`[ErrorBoundary:${this.props.name ?? 'root'}]`, error, errorInfo.componentStack)
+
+    // React #185 "Maximum update depth exceeded" mid-stream is the classic
+    // stale-bundle failure (see isRenderLoopError above). Reload once so the
+    // fresh build is used instead of leaving the user on this fatal screen.
+    if (isRenderLoopError(error) && !hasAutoReloadedLoop()) {
+      markLoopAutoReloaded()
+      console.info('[ErrorBoundary] Render-loop error caught — reloading to pick up the latest build.')
+      window.setTimeout(() => window.location.reload(), 0)
+    }
   }
 
   componentDidUpdate(prevProps: ErrorBoundaryProps) {
