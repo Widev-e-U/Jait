@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.775](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.775) — 2026-08-26
+- fix(web): refresh finished chat snapshot on tab return — 8e72cdd6
+
 ## [v0.1.774](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.774) — 2026-08-26
 - fix(web): smooth expand for streaming thinking blocks — 5728b49e
 - fix(web): auto-reload once on stale-bundle render-loop crash — 80d3e698
