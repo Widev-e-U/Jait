@@ -1703,6 +1703,16 @@ export function useChat(
 
     const reattach = () => {
       const subscription = subscriptionRef.current
+      // A finished chat left frozen mid-frame (backgrounded tab got throttled
+      // and stopped delivering bytes) needs the authoritative server snapshot,
+      // not the cheap replay path: a completed turn emits no new events, so
+      // `reconnectNow()` has nothing to redeliver and the stale transcript
+      // stays pinned on screen. Force a fresh snapshot so returning always
+      // lands on the final state.
+      if (!state.isLoading && !state.isLoadingHistory) {
+        resumeSessionStream()
+        return
+      }
       if (subscription) {
         subscription.reconnectNow()
         return
