@@ -429,6 +429,42 @@ describe("terminal.run tool status reporting", () => {
     backgroundCommandMonitor.clearForTests();
   });
 
+  it("does not write a second command into an explicitly requested watched terminal", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const listeners = new Set<(data: string) => void>();
+    const writes: string[] = [];
+    const surface = {
+      id: "term-watched",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      getOutputOffset() { return writes.length; },
+      addOutputListener(listener: (data: string) => void) { listeners.add(listener); },
+      removeOutputListener(listener: (data: string) => void) { listeners.delete(listener); },
+      write(data: string) { writes.push(data); },
+      snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const tool = createTerminalRunTool(registry);
+
+    const background = await tool.execute(
+      { command: "sleep 30", terminalId: "term-watched", isBackground: true },
+      makeContext(),
+    );
+    expect(background.ok).toBe(true);
+    expect(backgroundCommandMonitor.hasWatcherForTerminal("term-watched")).toBe(true);
+
+    const foreground = await tool.execute(
+      { command: "printf probe", terminalId: "term-watched", timeout: 5 },
+      makeContext(),
+    );
+
+    expect(foreground.ok).toBe(false);
+    expect(foreground.message).toContain("still running a watched background command");
+    expect(writes).toHaveLength(1);
+    backgroundCommandMonitor.clearForTests();
+  });
+
   it("reattaches a requested remote terminal after gateway surface state is lost", async () => {
     backgroundCommandMonitor.clearForTests();
     const proxyCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown> }> = [];

@@ -362,6 +362,13 @@ async function ensureSessionTerminal(
   const terminalKey = sessionTerminalKey(context);
 
   if (preferredId) {
+    if (backgroundCommandMonitor.hasWatcherForTerminal(preferredId)) {
+      throw new Error(
+        `Requested terminal ${preferredId} is still running a watched background command. ` +
+          "Wait for its automatic completion notification instead of sending another command to that terminal.",
+      );
+    }
+
     const existingSurface = registry.getSurface(preferredId);
     if (existingSurface?.type === "terminal" && existingSurface.state === "running") {
       (existingSurface as ManagedTerminalSurface).touch();
@@ -791,7 +798,7 @@ export function createTerminalRunTool(
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
         timeout: { type: "number", description: "Execution timeout in ms (default 30000). Use 0 for no timeout." },
-        isBackground: { type: "boolean", description: "If true, start the command and return immediately without blocking. Use for long-running commands you don't need to watch inline — servers, watchers, and long test/build runs. You'll be notified automatically when the command finishes, so end your turn and wait instead of polling." },
+        isBackground: { type: "boolean", description: "If true, start the command and return immediately. Use only for indefinite processes such as servers, watchers, and daemons. For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — keep this false and use timeout: 0 when it may run longer than 30 seconds so the tool waits for final output." },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
@@ -1040,8 +1047,9 @@ export function createJaitTerminalTool(
       "Jait terminal MCP tool. Execute a shell command in Jait and optionally target an existing terminal by terminalId. " +
       "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
       "Every command runs as a live terminal inside the chat card, so do not create a separate terminal surface first. " +
-      "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — Jait notifies you " +
-      "automatically when they finish, so prefer this over your own shell's background mode, which Jait cannot watch.",
+      "For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — wait for completion; " +
+      "use timeout: 0 when it may run longer than 30 seconds. Set isBackground: true only for indefinite processes such as servers, " +
+      "watchers, and daemons; Jait notifies you when they finish, so never poll or send another command to their terminal.",
   };
 }
 

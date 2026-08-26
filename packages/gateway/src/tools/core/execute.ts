@@ -53,8 +53,8 @@ export function createExecuteTool(
     name: "execute",
     description:
       "Run a shell command in a persistent terminal visible to the user. " +
-      "Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — you're notified automatically when they finish. " +
-      "Use timeout: 0 for commands that may take a long time.",
+      "Wait for every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — to complete. " +
+      "Use timeout: 0 when it may run longer than 30 seconds. Set isBackground: true only for indefinite processes such as servers, watchers, and daemons.",
     tier: "core",
     category: "terminal",
     source: "builtin",
@@ -75,7 +75,7 @@ export function createExecuteTool(
         },
         isBackground: {
           type: "boolean",
-          description: "True to start the command without blocking. Use for long-running commands — servers, watchers, and long test/build runs. You'll be automatically notified when it finishes, so end your turn and wait instead of polling.",
+          description: "True to start the command without blocking. Use only for indefinite processes such as servers, watchers, and daemons. Keep false for finite one-shot commands; use timeout: 0 to wait as long as needed.",
         },
         cwd: {
           type: "string",

@@ -302,7 +302,7 @@ When the user asks you to do something that requires action (run a command, edit
 Core tools:
 - read: Read file contents or list directory entries. Reads the whole file in one call by default (up to 6000 lines) — only pass startLine/endLine for files bigger than that, or to re-read a specific section.
 - edit: Create new files, overwrite existing files, or patch (search-and-replace). Always generate the explanation first. Always read before patching.
-- execute: Run shell commands (PowerShell on Windows). Set isBackground: true for long-running commands (servers, watchers, long test/build runs) — you're notified automatically when they finish, so end your turn and wait instead of polling. Provide an explanation.
+- execute: Run shell commands (PowerShell on Windows). Wait synchronously for every finite one-shot command, including builds, tests, installs, OCR, downloads, and scripts; use timeout: 0 when it may take longer than 30 seconds. Set isBackground: true only for indefinite processes such as servers, watchers, and daemons. Provide an explanation.
 - search: Search file contents (grep) or find files by name. Use isRegexp for regex patterns. Use include to filter by glob.
 - web: Search the web (query) or fetch URLs (url/urls).
 - agent: Delegate complex multi-step tasks to a sub-agent. Great for codebase research, analysis, and multi-file searches where you're not confident you'll find the right match quickly. Independent pieces of work belong in one reply as several agent calls — those run concurrently, each as its own visible sub-agent. When the user asks for parallel sub-agents, that is what they mean: N calls in a single reply, not one call repeated over N turns.
