@@ -581,7 +581,7 @@ function App() {
       token,
       sessionId: activeSessionId ?? '',
       provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      runtimeMode: chatProviderRuntimeMode,
       model: cliModel,
       reasoningEffort: chatReasoningEffort,
     })
@@ -3559,7 +3559,7 @@ function App() {
       displayContent,
       mode: outboundMode,
       provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      runtimeMode: chatProviderRuntimeMode,
       responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
       reasoningEffort: chatReasoningEffort,
@@ -3612,7 +3612,7 @@ function App() {
         displayContent: prepared?.displayContent || promptText,
         mode: outboundMode,
         provider: chatProvider,
-        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+        runtimeMode: chatProviderRuntimeMode,
         responseStyle: chatResponseStyle,
         model: cliModel ?? undefined,
         reasoningEffort: chatReasoningEffort,
@@ -3631,7 +3631,7 @@ function App() {
       sessionIdPromise,
       mode: outboundMode,
       provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      runtimeMode: chatProviderRuntimeMode,
       responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
       reasoningEffort: chatReasoningEffort,
@@ -3669,7 +3669,7 @@ function App() {
         displaySegments: nextDisplaySegments,
         attachments: prepared?.attachments,
         providerId: threadProvider,
-        runtimeMode: threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
+        runtimeMode: threadProviderRuntimeMode,
         model: threadCliModel ?? undefined,
         reasoningEffort: threadReasoningEffort,
         queuedAt: Date.now(),
@@ -3684,7 +3684,7 @@ function App() {
       promptWithUploads,
       {
         providerId: threadProvider,
-        runtimeMode: threadProvider !== 'jait' ? threadProviderRuntimeMode : undefined,
+        runtimeMode: threadProviderRuntimeMode,
         model: threadCliModel ?? undefined,
         reasoningEffort: threadReasoningEffort,
       },
@@ -3792,7 +3792,7 @@ function App() {
       ...options,
       mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
       provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      runtimeMode: chatProviderRuntimeMode,
       model: cliModel ?? undefined,
       reasoningEffort: chatReasoningEffort,
     })
@@ -3979,7 +3979,7 @@ function App() {
       displaySegments: nextDisplaySegments,
       attachments: prepared?.attachments,
       providerId: managerProvider,
-      runtimeMode: managerProvider !== 'jait' ? managerProviderRuntimeMode : undefined,
+      runtimeMode: managerProviderRuntimeMode,
       model: managerCliModel ?? undefined,
       reasoningEffort: managerReasoningEffort,
       queuedAt: Date.now(),
@@ -4082,11 +4082,11 @@ function App() {
       setShowArchitecture(true)
       sendMessage(
         'Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) },
+        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProviderRuntimeMode, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProviderRuntimeMode, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -4109,7 +4109,7 @@ function App() {
       sessionId: activeSessionId,
       mode: outboundMode,
       provider: chatProvider,
-      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      runtimeMode: chatProviderRuntimeMode,
       model: cliModel ?? undefined,
       reasoningEffort: chatReasoningEffort,
       displayContent: prepared.displayContent,

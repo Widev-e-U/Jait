@@ -357,7 +357,10 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
           <span className="flex-1 min-w-0 text-xs font-semibold truncate text-foreground">{request.toolName}</span>
           <TimeRemaining expiresAt={request.expiresAt} />
         </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground line-clamp-2">{request.summary}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{request.summary}</p>
+        <div className="mt-2">
+          <PreviewBlock preview={request.preview} toolName={request.toolName} />
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
           <RiskBadge risk={request.risk} />
           <ConsentLevelBadge level={request.policy.consentLevel} />

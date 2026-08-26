@@ -1476,7 +1476,7 @@ export function useChat(
         sessionId: requestSessionId,
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
         ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),
-        ...(options.provider && options.provider !== 'jait' && options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
+        ...(options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
         ...(options.responseStyle && options.responseStyle !== 'normal' ? { responseStyle: options.responseStyle } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...buildReasoningEffortRequestField(options.reasoningEffort),

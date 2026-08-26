@@ -37,11 +37,11 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
 
   const supportedModes = useMemo<RuntimeMode[]>(() => {
     const modes = providers.find((entry) => entry.id === provider)?.modes
-    if (!modes || modes.length === 0) return provider === 'jait' ? [] : ['full-access', 'supervised']
+    if (!modes || modes.length === 0) return ['full-access', 'supervised']
     return modes as RuntimeMode[]
   }, [provider, providers])
 
-  if (provider === 'jait' || supportedModes.length <= 1) return null
+  if (supportedModes.length <= 1) return null
 
   const activeMode = supportedModes.includes(value) ? value : supportedModes[0]
   const activeDef = MODE_LABELS[activeMode]
