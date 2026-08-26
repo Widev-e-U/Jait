@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.772](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.772) — 2026-08-26
+- fix(web): drop queued row when that message actually starts running — ba8f8c98
+- fix(web): keep current transcript stable when starting a new chat — 5a144df8
+
 ## [v0.1.771](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.771) — 2026-08-26
 - fix(web): wrap long terminal output lines instead of clipping them — 2e1bd5e9
 - test(gateway): make malformed-base-URL probe test genuinely invalid — 468bb4bb
