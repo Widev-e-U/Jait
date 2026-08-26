@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.776](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.776) — 2026-08-26
+- fix(gateway): wait synchronously for finite one-shot commands — c9e102c5
+- fix(web): enable runtime-mode selector for jait chat input — dc95ae82
+- feat(gateway): full-access runtime mode bypasses consent prompts — 15d7ba19
+
 ## [v0.1.775](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.775) — 2026-08-26
 - fix(web): refresh finished chat snapshot on tab return — 8e72cdd6
 
