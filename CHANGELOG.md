@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.773](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.773) — 2026-08-26
+- feat(web): redesign trajectory inspector with native Jait styling — af89896e
+- fix(web): keep tool-card scroll anchoring through delayed content growth — 8d2559ba
+
 ## [v0.1.772](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.772) — 2026-08-26
 - fix(web): drop queued row when that message actually starts running — ba8f8c98
 - fix(web): keep current transcript stable when starting a new chat — 5a144df8
