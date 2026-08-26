@@ -19,4 +19,14 @@ describe('first-message startup', () => {
       sendMessage.indexOf('await options.sessionIdPromise'),
     )
   })
+
+  it('keeps the current transcript stable until the new chat exists', () => {
+    const source = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+    const start = source.indexOf('const handleStartNewChat = useCallback(')
+    const end = source.indexOf('const handleStartNewChatInTab', start)
+    const handleStartNewChat = source.slice(start, end)
+
+    expect(handleStartNewChat).toContain('void createSession()')
+    expect(handleStartNewChat).not.toContain('clearMessages()')
+  })
 })

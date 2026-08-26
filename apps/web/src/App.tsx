@@ -4208,11 +4208,11 @@ function App() {
   }, [activeProjectId, activeSessionId, buildChatSessionUrl, createSession, switchSession])
 
   const handleStartNewChat = useCallback(() => {
-    clearMessages()
-    // Assign the new chat to the active project when in one, instead of
-    // always creating a personal chat.
+    // Keep the current transcript mounted until the session exists. Clearing it
+    // first makes the workspace jump old transcript -> empty landing -> loading
+    // transcript -> empty landing while the create request is in flight.
     void createSession()
-  }, [clearMessages, createSession])
+  }, [createSession])
 
   const handleStartNewChatInTab = useCallback(() => {
     void openNewChatSurface('tab')
