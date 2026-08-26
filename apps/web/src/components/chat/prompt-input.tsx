@@ -1711,8 +1711,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         pushUndoRef.current(true)
       }
     } else if (e.dataTransfer.files?.length) {
-      // Web browser: read files as binary attachments
-      void addFilesAsAttachments(e.dataTransfer.files)
+      // Web browser: read files as binary attachments. Directories dragged from
+      // the OS have no filesystem path here, so they can't be referenced. They
+      // surface as empty pseudo-files (size 0, no type) that would otherwise
+      // become broken blank attachments — filter them out and upload real files.
+      const uploadable = Array.from(e.dataTransfer.files).filter((f) => !(f.size === 0 && f.type === ''))
+      if (uploadable.length) {
+        void addFilesAsAttachments(uploadable)
+      }
     }
   }, [onChange, handleRemoveChip, addFilesAsAttachments])
 

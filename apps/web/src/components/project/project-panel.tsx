@@ -1190,7 +1190,7 @@ const TreeNodeRow = memo(function TreeNodeRow({
           onDragStart={(e) => {
             const payload = JSON.stringify({ path: node.path, name: node.name, kind: 'dir' })
             e.dataTransfer.setData('text/jait-tree-node', payload)
-            e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name }))
+            e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name, kind: 'dir' }))
             e.dataTransfer.effectAllowed = 'copyMove'
           }}
         >
@@ -1268,7 +1268,7 @@ const TreeNodeRow = memo(function TreeNodeRow({
       onPointerDown={(e) => onMobilePointerStart?.(node, e)}
       draggable={!isMobile}
       onDragStart={(e) => {
-        e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name }))
+        e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name, kind: 'file' }))
         e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'file' }))
         e.dataTransfer.effectAllowed = 'copyMove'
       }}
