@@ -42,12 +42,15 @@ export const TOOL_CARD_ANCHOR_SETTLE_MS = 500
 /** Sub-pixel jitter isn't worth a scroll write — it would itself look like flicker. */
 const ANCHOR_EPSILON_PX = 0.5
 
-/**
- * Consecutive frames the anchored edge has to already be in place before the
- * settle stops. One isn't enough: the virtualizer re-measures the row a frame
- * after the card itself resized, which moves the edge again.
- */
-const ANCHOR_STABLE_FRAMES = 2
+export function shouldContinueToolCardAnchorSettle({
+  now,
+  deadline,
+}: {
+  now: number
+  deadline: number
+}): boolean {
+  return now < deadline
+}
 
 export interface ToolCardBox {
   /** The card's top edge, relative to the top edge of the scroll viewport. */
@@ -196,22 +199,13 @@ export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(
     }
 
     const deadline = Date.now() + TOOL_CARD_ANCHOR_SETTLE_MS
-    let stableFrames = 0
 
     const step = () => {
       frameRef.current = null
       const delta = toolCardAnchorScrollDelta({ edge, before, after: measureToolCardBox(card, container) })
-      if (delta === 0) {
-        stableFrames += 1
-      } else {
-        const from = container.scrollTop
-        container.scrollTop = from + delta
-        // Already clamped against an end of the scroll range: no number of
-        // further frames can close the gap, so stop instead of spinning.
-        stableFrames = container.scrollTop === from ? ANCHOR_STABLE_FRAMES : 0
-      }
+      if (delta !== 0) container.scrollTop += delta
 
-      if (stableFrames < ANCHOR_STABLE_FRAMES && Date.now() < deadline) {
+      if (shouldContinueToolCardAnchorSettle({ now: Date.now(), deadline })) {
         frameRef.current = requestAnimationFrame(step)
         return
       }

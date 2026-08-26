@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   pickToolCardAnchorEdge,
+  shouldContinueToolCardAnchorSettle,
   toolCardAnchorScrollDelta,
   toolCardVisibilityNudge,
   TOOL_CARD_ANCHOR_MARGIN_PX,
@@ -103,6 +104,22 @@ describe('toolCardAnchorScrollDelta', () => {
       before: { top: 120, bottom: 160 },
       after: { top: 120.3, bottom: 460 },
     })).toBe(0)
+  })
+})
+
+describe('tool-card anchor settling', () => {
+  it('keeps watching through delayed content growth inside the settle window', () => {
+    expect(shouldContinueToolCardAnchorSettle({
+      now: 32,
+      deadline: 500,
+    })).toBe(true)
+  })
+
+  it('stops once the ownership window expires', () => {
+    expect(shouldContinueToolCardAnchorSettle({
+      now: 500,
+      deadline: 500,
+    })).toBe(false)
   })
 })
 
