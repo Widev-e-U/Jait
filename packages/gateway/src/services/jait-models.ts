@@ -31,7 +31,8 @@ export type JaitModelGroup =
   | "Grok"
   | "Perplexity"
   | "Moonshot"
-  | "Kimi";
+  | "Kimi"
+  | "vLLM";
 
 export interface ListJaitModelsOptions {
   config: AppConfig;
@@ -50,6 +51,7 @@ const BACKEND_LABELS: Record<JaitBackend, JaitModelGroup> = {
   perplexity: "Perplexity",
   moonshot: "Moonshot",
   kimi: "Kimi",
+  vllm: "vLLM",
 };
 
 /** Backends that expose an OpenAI-compatible /models endpoint with a Bearer key. */
@@ -61,6 +63,7 @@ const OPENAI_COMPATIBLE_BACKENDS: ReadonlySet<JaitBackend> = new Set([
   "perplexity",
   "moonshot",
   "kimi",
+  "vllm",
 ]);
 
 function configuredModelFallback(
