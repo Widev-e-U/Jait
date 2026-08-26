@@ -24,6 +24,7 @@ export type ProviderId = string;
  * - `perplexity` — Perplexity's OpenAI-compatible endpoint
  * - `moonshot`   — Moonshot AI's OpenAI-compatible endpoint
  * - `kimi`       — Kimi (Moonshot AI) via its OpenAI-compatible endpoint
+ * - `vllm`       — a local or remote vLLM server (OpenAI-compatible /v1 endpoint)
  */
 export type JaitBackend =
   | "openai"
@@ -35,7 +36,8 @@ export type JaitBackend =
   | "grok"
   | "perplexity"
   | "moonshot"
-  | "kimi";
+  | "kimi"
+  | "vllm";
 
 export const JAIT_BACKENDS: readonly JaitBackend[] = [
   "openai",
@@ -48,6 +50,7 @@ export const JAIT_BACKENDS: readonly JaitBackend[] = [
   "perplexity",
   "moonshot",
   "kimi",
+  "vllm",
 ];
 
 export function isJaitBackend(value: unknown): value is JaitBackend {

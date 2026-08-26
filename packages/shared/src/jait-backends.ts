@@ -23,6 +23,7 @@ export const JAIT_BACKEND_DEFAULT_URLS: Record<JaitBackend, string> = {
   perplexity: "https://api.perplexity.ai",
   moonshot: "https://api.moonshot.ai/v1",
   kimi: "https://api.moonshot.ai/v1",
+  vllm: "http://localhost:8000/v1",
 };
 
 /**
