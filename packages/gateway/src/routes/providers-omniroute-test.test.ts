@@ -113,7 +113,7 @@ describe('POST /api/providers/omniroute/test', () => {
       method: 'POST',
       url: '/api/providers/omniroute/test',
       headers,
-      payload: { base_url: 'not-a-url' },
+      payload: { base_url: 'not a url' },
     })
 
     expect(res.statusCode).toBe(400)
