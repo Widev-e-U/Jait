@@ -159,6 +159,18 @@ export function parseQueuedChatResponse(body: string): Record<string, unknown> |
   return null
 }
 
+export function reconcileQueuedMessagesAtTurnStart(
+  queue: QueuedChatMessage[],
+  startedContent: unknown,
+): QueuedChatMessage[] {
+  if (typeof startedContent !== 'string') return queue
+  const normalizedContent = startedContent.trim()
+  if (!normalizedContent) return queue
+
+  const nextQueue = queue.filter((item) => item.content.trim() !== normalizedContent)
+  return nextQueue.length === queue.length ? queue : nextQueue
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -613,6 +625,7 @@ export function useChat(
   } | null>(null)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
   const messageQueueSessionRef = useRef<string | null>(null)
+  const startedTurnContentRef = useRef<string | null>(null)
   /**
    * The optimistic assistant bubble `sendMessage` rendered for a turn that has
    * been POSTed but whose first event has not arrived yet. The event consumer
@@ -713,6 +726,7 @@ export function useChat(
       setChangedFiles([])
       setMessageQueue([])
       messageQueueSessionRef.current = null
+      startedTurnContentRef.current = null
       setContextUsage(null)
       setSessionInfo(null)
       return
@@ -872,6 +886,14 @@ export function useChat(
       pushSSEDebugEvent(String(data.type ?? 'unknown'), JSON.stringify(data))
 
       if (isTurnStartEvent(data.type)) {
+        // Queue state is broadcast over WebSocket while turn events arrive over
+        // SSE, so the started turn can render before the queue-removal packet.
+        // Reconcile from the request marker too: a running message must never
+        // remain visible as queued, regardless of cross-transport ordering.
+        startedTurnContentRef.current = typeof data.content === 'string'
+          ? data.content.trim() || null
+          : null
+        setMessageQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content))
         beginTurn()
       } else if (data.type === 'token') {
         if (!ensureStreamingAssistant()) return
@@ -1662,7 +1684,10 @@ export function useChat(
   }, [])
 
   const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {
-    setMessageQueue(items)
+    const startedContent = startedTurnContentRef.current
+    const nextItems = reconcileQueuedMessagesAtTurnStart(items, startedContent)
+    setMessageQueue(nextItems)
+    if (items.length === 0) startedTurnContentRef.current = null
   }, [])
 
   // ── Wake / reconnect nudges ──

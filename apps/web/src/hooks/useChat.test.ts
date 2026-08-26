@@ -8,6 +8,7 @@ import {
   isTurnEndEvent,
   isTurnStartEvent,
   parseQueuedChatResponse,
+  reconcileQueuedMessagesAtTurnStart,
   shouldFlushStreamTextImmediately,
   segmentsWithError,
   shouldForceMessageLifecycleRefresh,
@@ -302,6 +303,26 @@ describe('turn boundary event classification', () => {
     expect(isTurnEndEvent('done')).toBe(true)
     expect(isTurnEndEvent('error')).toBe(true)
     expect(isTurnEndEvent('tool_result')).toBe(false)
+  })
+})
+
+describe('reconcileQueuedMessagesAtTurnStart', () => {
+  it('removes a queued row once that same message has started running', () => {
+    const queue = [
+      { id: 'q-1', content: 'send this next', queuedAt: 1 },
+      { id: 'q-2', content: 'leave this queued', queuedAt: 2 },
+    ]
+
+    expect(reconcileQueuedMessagesAtTurnStart(queue, 'send this next')).toEqual([
+      { id: 'q-2', content: 'leave this queued', queuedAt: 2 },
+    ])
+  })
+
+  it('leaves the queue alone for unrelated and hidden turn starts', () => {
+    const queue = [{ id: 'q-1', content: 'later', queuedAt: 1 }]
+
+    expect(reconcileQueuedMessagesAtTurnStart(queue, 'different')).toBe(queue)
+    expect(reconcileQueuedMessagesAtTurnStart(queue, undefined)).toBe(queue)
   })
 })
 
