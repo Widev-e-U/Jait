@@ -50,6 +50,8 @@ import Moonshot from '@lobehub/icons/es/Moonshot'
 import Kimi from '@lobehub/icons/es/Kimi'
 import Grok from '@lobehub/icons/es/Grok'
 import Ollama from '@lobehub/icons/es/Ollama'
+import Anthropic from '@lobehub/icons/es/Anthropic'
+import Vllm from '@lobehub/icons/es/Vllm'
 
 interface ApiFieldGroup {
   label: string
@@ -58,10 +60,10 @@ interface ApiFieldGroup {
 
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'OpenAI services', fields: ['OPENAI_API_KEY', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
-  { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
-  { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
-  { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
-  { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
+  { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY'] },
+  { label: 'xAI / Grok', fields: ['XAI_API_KEY'] },
+  { label: 'Google Gemini', fields: ['GEMINI_API_KEY'] },
+  { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
   { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE', 'STT_PROMPT'] },
 ]
@@ -93,17 +95,19 @@ const BACKEND_OPTIONS: Array<{
   type: JaitBackend
   label: string
   description: string
+  icon: React.ComponentType<{ size?: number; className?: string }>
 }> = [
-  { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.' },
-  { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.' },
-  { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.' },
-  { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.' },
-  { type: 'gemini', label: 'Gemini', description: 'Google Gemini through its OpenAI-compatible endpoint.' },
-  { type: 'anthropic', label: 'Anthropic', description: 'Anthropic Claude through its OpenAI-compatible endpoint.' },
-  { type: 'grok', label: 'Grok', description: 'xAI Grok models via the xAI API.' },
-  { type: 'perplexity', label: 'Perplexity', description: 'Perplexity reasoning and search models.' },
-  { type: 'moonshot', label: 'Moonshot', description: 'Moonshot AI (Kimi) via its OpenAI-compatible endpoint.' },
-  { type: 'kimi', label: 'Kimi', description: 'Kimi (Moonshot AI) via its OpenAI-compatible endpoint.' },
+  { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.', icon: OpenAI },
+  { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.', icon: OpenRouter },
+  { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.', icon: Ollama },
+  { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.', icon: Network },
+  { type: 'gemini', label: 'Gemini', description: 'Google Gemini through its OpenAI-compatible endpoint.', icon: Gemini },
+  { type: 'anthropic', label: 'Anthropic', description: 'Anthropic Claude through its OpenAI-compatible endpoint.', icon: Anthropic },
+  { type: 'grok', label: 'Grok', description: 'xAI Grok models via the xAI API.', icon: Grok },
+  { type: 'perplexity', label: 'Perplexity', description: 'Perplexity reasoning and search models.', icon: Perplexity },
+  { type: 'moonshot', label: 'Moonshot', description: 'Moonshot AI (Kimi) via its OpenAI-compatible endpoint.', icon: Moonshot },
+  { type: 'kimi', label: 'Kimi', description: 'Kimi (Moonshot AI) via its OpenAI-compatible endpoint.', icon: Kimi },
+  { type: 'vllm', label: 'vLLM', description: 'A local or remote vLLM server with an OpenAI-compatible endpoint.', icon: Vllm },
 ]
 
 function legacyBackendDraft(
@@ -206,6 +210,17 @@ function legacyBackendDraft(
       baseUrl: apiKeys.KIMI_BASE_URL?.trim() || JAIT_BACKEND_DEFAULT_URLS.kimi,
       apiKey: apiKeys.MOONSHOT_API_KEY ?? '',
       model: apiKeys.KIMI_MODEL ?? '',
+      numCtx: '',
+    }
+  }
+  if (type === 'vllm') {
+    return {
+      id: 'legacy-vllm',
+      type,
+      name: 'Local vLLM',
+      baseUrl: JAIT_BACKEND_DEFAULT_URLS.vllm,
+      apiKey: '',
+      model: '',
       numCtx: '',
     }
   }
@@ -1841,18 +1856,10 @@ const providerAccountsCard = (
           {showJaitBackendSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">{highlight('Jait LLM Backend')}</h2>
+                <h2 className="text-base font-medium">{highlight('Jait\'s own harness LLM')}</h2>
                 <p className="text-sm text-muted-foreground">
                   Configure named inference backends. The model picker combines their catalogues and routes each request to the instance that supplied the model.
                 </p>
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {BACKEND_OPTIONS.map((option) => (
-                  <div key={option.type} className="rounded-md border p-3">
-                    <p className="text-sm font-medium">{option.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
-                  </div>
-                ))}
               </div>
               <div className="max-w-sm">
                 <Label htmlFor="jait-backend" className="mb-1.5 block">Fallback backend type</Label>
@@ -1865,7 +1872,12 @@ const providerAccountsCard = (
                   </SelectTrigger>
                   <SelectContent>
                     {BACKEND_OPTIONS.map((option) => (
-                      <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
+                      <SelectItem key={option.type} value={option.type}>
+                        <span className="flex items-center gap-2">
+                          <option.icon size={16} className="shrink-0" />
+                          <span>{option.label}</span>
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1900,7 +1912,12 @@ const providerAccountsCard = (
                             </SelectTrigger>
                             <SelectContent>
                               {BACKEND_OPTIONS.map((option) => (
-                                <SelectItem key={option.type} value={option.type}>{option.label}</SelectItem>
+                                <SelectItem key={option.type} value={option.type}>
+                                  <span className="flex items-center gap-2">
+                                    <option.icon size={16} className="shrink-0" />
+                                    <span>{option.label}</span>
+                                  </span>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
