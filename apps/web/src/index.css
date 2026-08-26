@@ -427,3 +427,18 @@ html.is-dragging-row-resize {
     opacity: 0;
   }
 }
+
+/*
+ * Same smooth grow/shrink for a streaming "thinking" block. Newly created
+ * blocks expand from 0 instead of snapping in at full height, so they don't
+ * jolt the transcript near the composer or shove queued messages around.
+ */
+.reasoning-collapsible {
+  overflow: hidden;
+}
+.reasoning-collapsible[data-state='open'] {
+  animation: jait-collapse-down 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
+}
+.reasoning-collapsible[data-state='closed'] {
+  animation: jait-collapse-up 140ms cubic-bezier(0.32, 0.72, 0.4, 1);
+}
