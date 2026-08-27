@@ -1330,7 +1330,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           type="button"
           aria-label="Jump to previous user message"
           title={previousMessagePreview}
-          className="absolute left-1/2 top-24 z-20 flex max-w-[calc(100%-6rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-primary/20 bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/80 sm:top-4"
+          className="absolute left-1/2 top-14 z-20 flex max-w-[calc(100%-6rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-primary/20 bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/80 sm:top-4"
           onClick={jumpToPreviousMessage}
         >
           <ArrowUp className="h-3.5 w-3.5 shrink-0 text-primary" />
