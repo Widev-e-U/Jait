@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildReasoningEffortRequestField,
   formatChatHttpError,
+  getChatWakeRecoveryAction,
   getVisibleChangedFiles,
   isTurnEndEvent,
   isTurnStartEvent,
@@ -100,6 +101,28 @@ describe('shouldResumeChatSession', () => {
       messageCount: 2,
       forceRefresh: true,
     })).toBe(true)
+  })
+})
+
+describe('getChatWakeRecoveryAction', () => {
+  it('reloads the authoritative snapshot when returning to an active stream', () => {
+    expect(getChatWakeRecoveryAction({
+      sessionId: 'session-1',
+      isLoading: true,
+      isLoadingHistory: false,
+      messageCount: 3,
+      hasSubscription: true,
+    })).toBe('snapshot')
+  })
+
+  it('does not restart while the initial authoritative snapshot is already loading', () => {
+    expect(getChatWakeRecoveryAction({
+      sessionId: 'session-1',
+      isLoading: true,
+      isLoadingHistory: true,
+      messageCount: 0,
+      hasSubscription: false,
+    })).toBe('none')
   })
 })
 

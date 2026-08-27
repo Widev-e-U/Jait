@@ -99,6 +99,24 @@ export function shouldResumeChatSession(params: {
     || params.error === TRANSIENT_CONNECTION_MESSAGE
 }
 
+export type ChatWakeRecoveryAction = 'snapshot' | 'none'
+
+export function getChatWakeRecoveryAction(params: {
+  sessionId: string | null
+  isLoading: boolean
+  isLoadingHistory: boolean
+  messageCount: number
+  error?: string | null
+  hasSubscription: boolean
+}): ChatWakeRecoveryAction {
+  if (!shouldResumeChatSession({ ...params, forceRefresh: true })) return 'none'
+  // Replaying from Last-Event-ID cannot repair a frame the backgrounded client
+  // already consumed but never committed to React. A snapshot is authoritative
+  // for both active and completed turns, then the new subscription resumes from
+  // that snapshot's exact sequence without losing later events.
+  return 'snapshot'
+}
+
 export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; has_timed_out_tools?: unknown }): boolean {
   return event.hit_max_rounds === true || event.has_timed_out_tools === true
 }
@@ -1692,40 +1710,25 @@ export function useChat(
 
   // ── Wake / reconnect nudges ──
   // A socket parked by a sleeping tab, a Wi-Fi→LTE handoff or a bfcache restore
-  // usually produces no error at all — it just stops delivering bytes, which is
-  // exactly the state the old 40s stall watchdog existed to detect. Dropping it
-  // and reconnecting replays everything after `Last-Event-ID`, so it is cheap
-  // and always safe: at worst the replay is empty. Only when no subscription
-  // exists at all (a fatal error retired it) is the heavier
-  // snapshot-and-resubscribe needed.
+  // usually produces no error at all. Always rebuild from an authoritative
+  // snapshot on wake: a replay-only reconnect cannot repair events whose IDs
+  // advanced while their throttled React updates never reached the screen. The
+  // fresh subscription resumes from the snapshot sequence, closing the gap
+  // without flashing away the transcript already visible to the user.
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const reattach = () => {
       const subscription = subscriptionRef.current
-      // A finished chat left frozen mid-frame (backgrounded tab got throttled
-      // and stopped delivering bytes) needs the authoritative server snapshot,
-      // not the cheap replay path: a completed turn emits no new events, so
-      // `reconnectNow()` has nothing to redeliver and the stale transcript
-      // stays pinned on screen. Force a fresh snapshot so returning always
-      // lands on the final state.
-      if (!state.isLoading && !state.isLoadingHistory) {
-        resumeSessionStream()
-        return
-      }
-      if (subscription) {
-        subscription.reconnectNow()
-        return
-      }
-      if (!shouldResumeChatSession({
+      const recoveryAction = getChatWakeRecoveryAction({
         sessionId,
         isLoading: state.isLoading,
         isLoadingHistory: state.isLoadingHistory,
         messageCount: state.messages.length,
         error: state.error,
-        forceRefresh: true,
-      })) return
-      resumeSessionStream()
+        hasSubscription: subscription != null,
+      })
+      if (recoveryAction === 'snapshot') resumeSessionStream()
     }
 
     const handleVisibilityChange = () => {
