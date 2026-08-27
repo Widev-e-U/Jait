@@ -442,3 +442,33 @@ html.is-dragging-row-resize {
 .reasoning-collapsible[data-state='closed'] {
   animation: jait-collapse-up 140ms cubic-bezier(0.32, 0.72, 0.4, 1);
 }
+
+/*
+ * Reveal every newly mounted streaming message part by growing its layout
+ * height, so transcript measurement follows the visual expansion instead of
+ * receiving one large jump near the composer.
+ */
+.chat-message-part-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: jait-message-part-reveal 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
+}
+
+.chat-message-part-reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes jait-message-part-reveal {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { AlertTriangle, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
@@ -183,18 +183,28 @@ export function AssistantBody({
         if (node === null) return null
 
         // Cap only the assistant side so steered bubbles can sit flush right.
-        if (capNonSteeringWidth && seg.type !== 'steering') {
-          return (
-            <div key={`cap-${i}`} className="max-w-[85%]">{node}</div>
-          )
+        const content = capNonSteeringWidth && seg.type !== 'steering'
+          ? <div className="max-w-[85%]">{node}</div>
+          : node
+
+        // Thinking and tool groups own their reveal because their collapsible
+        // content must animate as a single measured unit.
+        if (seg.type === 'thinking' || seg.type === 'toolGroup') {
+          return <Fragment key={`part-${i}`}>{content}</Fragment>
         }
 
-        return node
+        return (
+          <div key={`part-${i}`} className="chat-message-part-reveal">
+            <div className="chat-message-part-reveal-inner">{content}</div>
+          </div>
+        )
       })}
 
       {isStreaming && !hasStreamingText && !hasText && (
-        <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
-          <ThinkingDots />
+        <div className="chat-message-part-reveal">
+          <div className="chat-message-part-reveal-inner flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
+            <ThinkingDots />
+          </div>
         </div>
       )}
     </div>

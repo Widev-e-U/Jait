@@ -338,6 +338,23 @@ describe('sub-agent activity', () => {
   })
 })
 
+describe('streaming message-part reveal', () => {
+  it('height-reveals a newly mounted tool card instead of snapping it under the composer', () => {
+    const markup = renderToStaticMarkup(createElement(ToolCallCard, {
+      call: {
+        callId: 'tool-reveal',
+        tool: 'file.read',
+        args: { path: 'apps/web/src/App.tsx' },
+        status: 'running',
+        startedAt: 1,
+      },
+    }))
+
+    expect(markup).toContain('chat-message-part-reveal')
+    expect(markup).toContain('chat-message-part-reveal-inner')
+  })
+})
+
 describe('approval-pending tool card UI', () => {
   function approvalPendingCall(overrides: Partial<Parameters<typeof ToolCallCard>[0]['call']> = {}) {
     return {

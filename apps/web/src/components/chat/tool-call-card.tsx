@@ -3794,8 +3794,13 @@ function ToolCallCardInner({
   ) : null
 
   return (
-    <Collapsible ref={cardRef} open={hasExpandableContent ? effectiveOpen : false} onOpenChange={handleOpenChange}>
-      <div className="relative pl-8">
+    <Collapsible
+      ref={cardRef}
+      className="chat-message-part-reveal"
+      open={hasExpandableContent ? effectiveOpen : false}
+      onOpenChange={handleOpenChange}
+    >
+      <div className="chat-message-part-reveal-inner relative pl-8">
         {!hideTopConnector && (
           <span
             className={cn('absolute left-[12.5px] top-0 h-6 w-px', stateClasses.connector)}
@@ -4391,8 +4396,13 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
   if (calls.length === 0) return null
 
   return (
-    <Collapsible ref={cardRef} open={effectiveOpen} onOpenChange={handleOpenChange}>
-      <div className="my-2">
+    <Collapsible
+      ref={cardRef}
+      className="chat-message-part-reveal"
+      open={effectiveOpen}
+      onOpenChange={handleOpenChange}
+    >
+      <div className="chat-message-part-reveal-inner my-2">
         <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
           <ChevronRight className={cn(
             'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
