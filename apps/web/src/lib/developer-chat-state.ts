@@ -23,6 +23,21 @@ export interface DeveloperChatUiState {
   showTodoList: boolean
 }
 
+export function shouldShowDeveloperChatHistoryLoading(input: {
+  isLoadingHistory: boolean
+  sessionCreatedAt?: string | null
+  sessionLastActiveAt?: string | null
+}): boolean {
+  if (!input.isLoadingHistory) return false
+
+  const pristineSession = Boolean(
+    input.sessionCreatedAt
+    && input.sessionLastActiveAt
+    && input.sessionCreatedAt === input.sessionLastActiveAt,
+  )
+  return !pristineSession
+}
+
 export function getDeveloperChatUiState(input: DeveloperChatUiStateInput): DeveloperChatUiState {
   return {
     disableSendTargetSelector: input.isLoadingHistory,

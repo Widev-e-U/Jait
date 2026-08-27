@@ -119,7 +119,11 @@ import {
 import { isResponseStyle } from '@/lib/response-style'
 import { getSessionSelectionSyncKey, normalizeSessionReasoningEffort, type SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getNonEmptyMessage } from '@/lib/values'
-import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
+import {
+  getDeveloperChatSubmitLoading,
+  getDeveloperChatUiState,
+  shouldShowDeveloperChatHistoryLoading,
+} from '@/lib/developer-chat-state'
 import {
   buildMemoryFeedbackReminder,
   getMemoryFeedbackSuccessMessage,
@@ -4315,6 +4319,11 @@ function App() {
 
   const limitReached = error === 'limit_reached'
   const requiresAuthGate = !authLoading && !isAuthenticated
+  const showDeveloperChatHistoryLoading = shouldShowDeveloperChatHistoryLoading({
+    isLoadingHistory,
+    sessionCreatedAt: activeSessionRecord?.createdAt,
+    sessionLastActiveAt: activeSessionRecord?.lastActiveAt,
+  })
   const developerChatSubmitLoading = getDeveloperChatSubmitLoading({
     viewMode,
     currentView,
@@ -4322,17 +4331,17 @@ function App() {
     authLoading,
     projectsLoading,
     activeSessionId,
-    isLoadingHistory,
+    isLoadingHistory: showDeveloperChatHistoryLoading,
     loadingChatMode,
     loadingProviderRuntimeMode,
     loadingCliModels,
     loadingChatView,
   })
   const developerChatHydrating = developerChatSubmitLoading && messages.length === 0
-  const hasMessages = messages.length > 0 || isLoadingHistory
+  const hasMessages = messages.length > 0 || showDeveloperChatHistoryLoading
   const developerChatUiState = getDeveloperChatUiState({
     developerChatHydrating,
-    isLoadingHistory,
+    isLoadingHistory: showDeveloperChatHistoryLoading,
     todoCount: todoList.length,
   })
   const mobileActiveProjectTarget = useMemo(
@@ -4901,7 +4910,7 @@ function App() {
                 inputVersion={inputVersion}
                 inlinePrompts={inlinePrompts}
                 isLoading={isLoading}
-                isLoadingHistory={isLoadingHistory}
+                isLoadingHistory={showDeveloperChatHistoryLoading}
                 isMobile={isMobile}
                 loadOlderMessages={loadOlderMessages}
                 limitReached={limitReached}
