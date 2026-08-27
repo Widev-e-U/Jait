@@ -1,6 +1,6 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2 } from 'lucide-react'
+import { ArrowUp, Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
@@ -158,6 +158,27 @@ export function findPreviousMessageIndex(
     return first.start <= scrollOffset ? first.index : null
   }
   return previous
+}
+
+export function getPreviousMessagePreview(messageContents: string[] | undefined, index: number | null): string {
+  if (index == null) return 'Previous message'
+  const content = messageContents?.[index]
+  if (!content) return 'Previous message'
+  return content.replace(/\s+/g, ' ').trim() || 'Previous message'
+}
+
+export function shouldShowPreviousMessagePreview(input: {
+  scrollTop: number
+  previousMessageIndex: number | null
+  isAtBottom: boolean
+  stickToBottom: boolean
+}): boolean {
+  return (
+    !input.isAtBottom
+    && !input.stickToBottom
+    && input.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
+    && input.previousMessageIndex != null
+  )
 }
 
 /** Sub-pixel jitter isn't worth a scroll write — it would itself look like flicker. */
@@ -385,6 +406,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   minimapRolesRef.current = minimapRoles
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [canJumpUp, setCanJumpUp] = useState(false)
+  const [previousUserMessageIndex, setPreviousUserMessageIndex] = useState<number | null>(null)
+  const [previousMessagePreviewSuppressed, setPreviousMessagePreviewSuppressed] = useState(false)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
   const [conversationViewportHeight, setConversationViewportHeight] = useState(0)
@@ -614,6 +637,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
     const markUserScroll = () => {
       userScrollingRef.current = true
+      setPreviousMessagePreviewSuppressed(false)
       clearTimeout(userScrollTimerRef.current)
       userScrollTimerRef.current = setTimeout(() => {
         userScrollingRef.current = false
@@ -811,7 +835,17 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     prevScrollTopRef.current = el.scrollTop
 
     setIsAtBottom(nextIsAtBottom)
-    setCanJumpUp(el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX && findPreviousUserMessage() != null)
+    const previousMessageIndex = el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
+      ? findPreviousUserMessage()
+      : null
+    const showPreviousMessagePreview = shouldShowPreviousMessagePreview({
+      scrollTop: el.scrollTop,
+      previousMessageIndex,
+      isAtBottom: nextIsAtBottom,
+      stickToBottom: stickToBottomRef.current,
+    })
+    setCanJumpUp(showPreviousMessagePreview)
+    setPreviousUserMessageIndex(showPreviousMessagePreview ? previousMessageIndex : null)
 
     // Keep the anchor current while detached, so a height change from streamed
     // content can put the view back exactly where the user left it. Not needed
@@ -969,13 +1003,19 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   }, [detachFromBottom, scrollElement, updateBottomState])
 
   const jumpToPreviousMessage = useCallback(() => {
-    const target = findPreviousUserMessage()
+    const target = previousUserMessageIndex ?? findPreviousUserMessage()
     if (target == null) return
+    setPreviousMessagePreviewSuppressed(true)
     virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'smooth' })
     // A programmatic jump is the same intent as scrolling by hand: stop
     // following the stream, and anchor wherever it lands.
     detachFromBottom()
-  }, [detachFromBottom, findPreviousUserMessage])
+  }, [detachFromBottom, findPreviousUserMessage, previousUserMessageIndex])
+
+  const handleMinimapScrub = useCallback(() => {
+    setPreviousMessagePreviewSuppressed(false)
+    detachFromBottom()
+  }, [detachFromBottom])
 
   // When a new user message lands, reserve one viewport below its top edge.
   // This lets the prompt jump to the top immediately, then the reserve shrinks
@@ -1166,6 +1206,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // Park the floating controls just left of the minimap rail rather than on top
   // of it — a click meant for a button would otherwise scrub the transcript.
   const floatingControlInset = (showMinimap ? MINIMAP_RAIL_WIDTH_PX : 0) + FLOATING_CONTROL_GAP_PX
+  const previousMessagePreview = getPreviousMessagePreview(messageContents, previousUserMessageIndex)
 
   return (
     <AIConversation className={cn('relative flex flex-1 overflow-hidden', className)}>
@@ -1238,16 +1279,17 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <ConversationPositioningSkeleton label={loading ? loadingLabel : 'Preparing conversation'} />
       )}
 
-      {initialScrollReady && !loading && canJumpUp && (
-        <ConversationScrollButton
-          direction="up"
-          userTone
+      {initialScrollReady && !loading && canJumpUp && !previousMessagePreviewSuppressed && (
+        <button
+          type="button"
           aria-label="Jump to previous user message"
-          title="Jump to previous user message"
-          className="left-auto bottom-auto translate-x-0 top-24 sm:top-4"
-          style={{ right: floatingControlInset }}
+          title={previousMessagePreview}
+          className="absolute left-1/2 top-24 z-20 flex max-w-[calc(100%-6rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-primary/20 bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/80 sm:top-4"
           onClick={jumpToPreviousMessage}
-        />
+        >
+          <ArrowUp className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="truncate">{previousMessagePreview}</span>
+        </button>
       )}
 
       {initialScrollReady && !loading && !isAtBottom && (
@@ -1274,7 +1316,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
           messageInputs={messageEstimateInputs ?? []}
           textWidth={containerWidth}
-          onScrub={detachFromBottom}
+          onScrub={handleMinimapScrub}
         />
       )}
     </AIConversation>

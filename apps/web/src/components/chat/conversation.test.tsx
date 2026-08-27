@@ -8,6 +8,7 @@ import {
   computeNewTurnTailPadding,
   findConversationItemIndex,
   findPreviousMessageIndex,
+  getPreviousMessagePreview,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
   isInitialTranscriptFill,
   LOAD_MORE_SCROLL_THRESHOLD_PX,
@@ -15,6 +16,7 @@ import {
   positionConversationAtBottom,
   scrollAnchorDelta,
   shouldLoadOlderMessages,
+  shouldShowPreviousMessagePreview,
   unwrapConversationChildKey,
 } from './conversation'
 
@@ -74,6 +76,37 @@ describe('Conversation', () => {
         // Only assistant content above the viewport: nothing to jump up to.
         expect(findPreviousMessageIndex(turns, 500, (index) => index === 3)).toBeNull()
       })
+    })
+  })
+
+  describe('previous message preview visibility', () => {
+    it('stays hidden while the chat is at the bottom and auto-following', () => {
+      expect(shouldShowPreviousMessagePreview({
+        scrollTop: 4_000,
+        previousMessageIndex: 2,
+        isAtBottom: true,
+        stickToBottom: true,
+      })).toBe(false)
+    })
+
+    it('appears after the user scrolls upward away from auto-follow', () => {
+      expect(shouldShowPreviousMessagePreview({
+        scrollTop: 2_000,
+        previousMessageIndex: 2,
+        isAtBottom: false,
+        stickToBottom: false,
+      })).toBe(true)
+    })
+  })
+
+  describe('getPreviousMessagePreview', () => {
+    it('flattens multiline prompts into a single preview row', () => {
+      expect(getPreviousMessagePreview(['First line\n\nSecond line'], 0)).toBe('First line Second line')
+    })
+
+    it('uses a readable fallback for text-less turns', () => {
+      expect(getPreviousMessagePreview([''], 0)).toBe('Previous message')
+      expect(getPreviousMessagePreview(undefined, null)).toBe('Previous message')
     })
   })
 
