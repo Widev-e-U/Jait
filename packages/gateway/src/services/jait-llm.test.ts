@@ -1,6 +1,29 @@
 import { encodeJaitModelId, serializeJaitBackendInstances } from "@jait/shared";
-import { describe, expect, it } from "vitest";
-import { JaitConfigError, normalizeOpenRouterModelId, resolveJaitLlmConfig } from "./jait-llm.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  JaitConfigError,
+  callJaitLlmCompletion,
+  normalizeOpenRouterModelId,
+  resolveJaitLlmConfig,
+} from "./jait-llm.js";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
+
+function ollamaLlm() {
+  return resolveJaitLlmConfig({ config, jaitBackend: "ollama" });
+}
+
+function completionsResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 const config = {
   port: 0,
@@ -191,5 +214,91 @@ describe("resolveJaitLlmConfig", () => {
       requestedModel: encodeJaitModelId("ollama", "gone", "qwen3"),
       jaitBackend: "ollama",
     })).toThrow(/no longer configured/i);
+  });
+});
+
+describe("callJaitLlmCompletion", () => {
+  it("returns trimmed content for a plain response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionsResponse({
+        choices: [{ finish_reason: "stop", message: { content: "  hello world  " } }],
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      callJaitLlmCompletion(ollamaLlm(), [{ role: "user", content: "hi" }], { maxTokens: 512 }),
+    ).resolves.toBe("hello world");
+  });
+
+  it("flattens array-style content parts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionsResponse({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: [{ type: "text", text: "part one " }, { type: "text", text: "part two" }] },
+          },
+        ],
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      callJaitLlmCompletion(ollamaLlm(), [{ role: "user", content: "hi" }], { maxTokens: 512 }),
+    ).resolves.toBe("part one part two");
+  });
+
+  it("throws instead of silently returning empty when a reasoning model exhausts max_tokens", async () => {
+    // Regression: reasoning models (GLM thinking, DeepSeek-R1, Qwen thinking)
+    // put their thought in `message.reasoning` / `reasoning_content` and leave
+    // `content` empty with finish_reason "length" when the budget runs out
+    // mid-thought. This used to surface as "" and made e.g. chat title
+    // generation silently fall back to the user's first message.
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionsResponse({
+        choices: [
+          {
+            finish_reason: "length",
+            message: { content: "", reasoning: "the user wants me to name this chat..." },
+          },
+        ],
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      callJaitLlmCompletion(ollamaLlm(), [{ role: "user", content: "hi" }], { maxTokens: 24 }),
+    ).rejects.toThrow(/spent its whole token budget reasoning|max_tokens/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when only reasoning_content is present with no answer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionsResponse({
+        choices: [
+          {
+            finish_reason: "length",
+            message: { content: "", reasoning_content: "thinking..." },
+          },
+        ],
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      callJaitLlmCompletion(ollamaLlm(), [{ role: "user", content: "hi" }], { maxTokens: 24 }),
+    ).rejects.toThrow(/reasoning|no answer/i);
+  });
+
+  it("throws with the finish reason when there is neither content nor reasoning", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      completionsResponse({ choices: [{ finish_reason: "error", message: { content: "" } }] }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      callJaitLlmCompletion(ollamaLlm(), [{ role: "user", content: "hi" }], { maxTokens: 24 }),
+    ).rejects.toThrow(/no content \(finish_reason: error/);
   });
 });

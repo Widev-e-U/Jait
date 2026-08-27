@@ -20,7 +20,7 @@ import { getProjectMoveTargets } from '@/components/project/project-move-targets
 import type { ProjectRecord, ProjectSearchResults, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
-import { buildProjectDragPayload, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
+import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
@@ -948,8 +948,12 @@ export function SessionSelector({
                                   e.preventDefault()
                                   return
                                 }
-                                e.dataTransfer.effectAllowed = 'move'
+                                e.dataTransfer.effectAllowed = 'copyMove'
                                 e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                                e.dataTransfer.setData(
+                                  JAIT_CHAT_REF_MIME,
+                                  JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
+                                )
                                 dragSessionRef.current = { sessionId: session.id, sourceProjectId: project.id }
                               }}
                               onDragEnd={() => {
@@ -1065,8 +1069,12 @@ export function SessionSelector({
                           e.preventDefault()
                           return
                         }
-                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.effectAllowed = 'copyMove'
                         e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                        e.dataTransfer.setData(
+                          JAIT_CHAT_REF_MIME,
+                          JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
+                        )
                         dragSessionRef.current = { sessionId: session.id, sourceProjectId: null }
                       }}
                       onDragEnd={() => {

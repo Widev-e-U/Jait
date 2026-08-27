@@ -76,6 +76,24 @@ describe("RemoteTerminalSurface", () => {
     expect(surface.getRecentOutputSince(outputOffset, outputEndOffset)).toBe("current command output\r\n");
   });
 
+  it("keeps the active shell prompt before a sliced command", () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+
+    surface.ingestOutput("older command output\r\n");
+    surface.ingestOutput("jakob@movable-base:~/jait$ ");
+    const outputOffset = surface.getOutputOffset();
+    surface.ingestOutput("command\r\n");
+    const outputEndOffset = surface.getOutputOffset();
+
+    expect(surface.getRecentOutputSince(outputOffset, outputEndOffset)).toBe(
+      "jakob@movable-base:~/jait$ command\r\n",
+    );
+  });
+
   it("waits for the remote shell's prompt marker before reporting ready", async () => {
     const surface = new RemoteTerminalSurface(
       "term-remote",

@@ -1194,7 +1194,10 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
               },
               { role: "user", content: `Generate a git commit message for these changes:\n\n\`\`\`diff\n${diffText}\n\`\`\`` },
             ],
-            { maxTokens: 256, temperature: 0.3 },
+            // Headroom for reasoning models (GLM thinking etc.): they spend
+            // part of max_tokens thinking before emitting the commit message;
+            // 256 used to cut them off mid-thought -> empty response.
+            { maxTokens: 1024, temperature: 0.3 },
           );
         } catch (err) {
           return reply.status(502).send({ error: err instanceof Error ? err.message : "LLM request failed" });

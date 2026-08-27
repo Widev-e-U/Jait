@@ -212,10 +212,23 @@ export function formatConnectionError(
   error: unknown,
   llm: { backend?: string; openaiBaseUrl: string },
 ): string | null {
-  const err = error as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  const err = error as {
+    name?: string;
+    message?: string;
+    cause?: { code?: string; name?: string; message?: string };
+  };
   const code = err?.cause?.code;
+  // Our own AbortSignal.timeout() surfaces as TimeoutError/AbortError, but
+  // undici's dispatcher enforces its own deadlines (default 300s to first
+  // response byte / between body chunks) and reports them as `TypeError:
+  // fetch failed` with a HeadersTimeoutError/BodyTimeoutError cause — the
+  // outer error `name` never says "timeout", so the cause must be inspected.
   const isTimeout = err?.name === "TimeoutError"
-    || (err?.name === "AbortError" && !err?.message?.includes("user"));
+    || (err?.name === "AbortError" && !err?.message?.includes("user"))
+    || err?.cause?.name === "HeadersTimeoutError"
+    || err?.cause?.name === "BodyTimeoutError"
+    || code === "UND_ERR_HEADERS_TIMEOUT"
+    || code === "UND_ERR_BODY_TIMEOUT";
   const isConnectionRefused = code === "ECONNREFUSED" || code === "ECONNRESET" || code === "EHOSTUNREACH";
   const isDnsFailure = code === "ENOTFOUND" || code === "EAI_AGAIN";
   if (!isTimeout && !isConnectionRefused && !isDnsFailure) return null;
@@ -232,6 +245,39 @@ export function formatConnectionError(
   if (isTimeout) return `No response from ${where} in time. ${hint}`;
   if (isDnsFailure) return `Could not resolve the host for ${where}. ${hint}`;
   return `Could not connect to ${where}. ${hint}`;
+}
+
+/**
+ * Whether a raw `fetch` failure is a transient transport error worth retrying
+ * the same LLM round: undici dispatcher deadlines (a backend that accepted the
+ * connection but then hung) and reset/hung-up sockets. Deliberately excludes
+ * ECONNREFUSED/ENOTFOUND — a dead backend stays dead, and DNS/refusal failures
+ * must surface immediately instead of silently looping.
+ */
+export function isTransientTransportError(error: unknown): boolean {
+  const err = error as { name?: string; cause?: { code?: string; name?: string } } | null;
+  const code = err?.cause?.code;
+  return err?.cause?.name === "HeadersTimeoutError"
+    || err?.cause?.name === "BodyTimeoutError"
+    || code === "UND_ERR_HEADERS_TIMEOUT"
+    || code === "UND_ERR_BODY_TIMEOUT"
+    || code === "UND_ERR_SOCKET"
+    || code === "UND_ERR_CONNECT_TIMEOUT"
+    || code === "ECONNRESET"
+    || code === "EPIPE"
+    || code === "ETIMEDOUT";
+}
+
+/** Compact reason string for transport-retry logs, e.g. "headers timeout". */
+function describeTransportError(error: unknown): string {
+  const err = error as { name?: string; message?: string; cause?: { code?: string; name?: string } } | null;
+  const code = err?.cause?.code;
+  const causeName = err?.cause?.name;
+  if (causeName === "HeadersTimeoutError" || code === "UND_ERR_HEADERS_TIMEOUT") return "headers timeout (backend hung)";
+  if (causeName === "BodyTimeoutError" || code === "UND_ERR_BODY_TIMEOUT") return "body timeout (stream stalled)";
+  if (code === "UND_ERR_SOCKET" || code === "ECONNRESET" || code === "EPIPE") return `connection dropped (${code ?? "undici socket error"})`;
+  if (code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT") return "timed out";
+  return err?.message || "unknown transport failure";
 }
 
 /** Detect whether an LLM error response indicates context-window overflow. */
@@ -731,7 +777,24 @@ function markRepetition(
 /** Stateful, throttled {@link findDegenerateRepetition} for use while streaming. */
 function createRepetitionGuard(): (text: string) => DegenerateRepetition | null {
   let scannedLength = 0;
+  let observedLength = 0;
   return (text) => {
+    const previousLength = observedLength;
+    observedLength = text.length;
+
+    // Repeated prose usually forms complete lines. Check every newly crossed
+    // line boundary so a short exact run cannot start and end entirely between
+    // the throttled full-text scans below.
+    let lineBreakIndex = text.indexOf("\n", previousLength);
+    while (lineBreakIndex >= 0) {
+      const candidateEnd = lineBreakIndex + 1;
+      if (candidateEnd >= MIN_REPETITION_SCAN_CHARS) {
+        const repetition = findDegenerateRepetition(text.slice(0, candidateEnd));
+        if (repetition) return repetition;
+      }
+      lineBreakIndex = text.indexOf("\n", candidateEnd);
+    }
+
     if (text.length - scannedLength < REPETITION_CHECK_INTERVAL_CHARS) return null;
     scannedLength = text.length;
     return findDegenerateRepetition(text);
@@ -1575,6 +1638,15 @@ function capToolResultData(data: unknown): unknown {
 const MAX_PLAIN_TEXT_RETRIES = 2;
 /** Max times we re-prompt when a provider ends a round without text or tool calls. */
 const MAX_EMPTY_RESPONSE_RETRIES = 2;
+/**
+ * Max times a transient LLM transport failure (undici dispatcher timeout,
+ * reset socket) is retried within a round without consuming the round budget.
+ * A hung request already costs ~5 minutes (undici's default headers timeout),
+ * so keep this small: worst case ≈ 3 × 5 min + short backoffs.
+ */
+const MAX_TRANSPORT_RETRIES = 2;
+/** Base backoff between transport retries; scales linearly with the attempt. */
+const TRANSPORT_RETRY_BASE_DELAY_MS = 2_000;
 /** Max times a malformed repeating generation is discarded and resampled. */
 const MAX_REPETITION_RECOVERIES = 3;
 /**
@@ -2610,6 +2682,11 @@ export async function runAgentLoop(
   const readCoverageByTarget = new Map<string, ReadCoverageState>();
   /** Whether we've already attempted overflow recovery (compact + retry) in this loop run. */
   let overflowRecoveryAttempted = false;
+  /**
+   * Consecutive transient transport failures (undici timeouts, reset sockets)
+   * retried without consuming a round — see the catch around the LLM fetch.
+   */
+  let transportRetries = 0;
   /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
   let swarmHasDelegated = false;
   /** Swarm mode: direct read/search-style tool calls made before any delegation. */
@@ -2625,7 +2702,9 @@ export async function runAgentLoop(
   /** Completed todo count at the end of the previous round, to detect plan movement. */
   let completedTodoCount = getSessionTodos(sessionId).filter((todo) => todo.status === "completed").length;
   /** When set, the next round is sent without tools so the model has to answer. */
-  let forceFinalAnswer = false;
+  // Explicit annotation: the assignment `forceFinalAnswer = answerOnlyRound || forceFinalAnswer`
+  // below otherwise makes TypeScript chase an inference cycle (TS7022).
+  let forceFinalAnswer: boolean = false;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -2764,7 +2843,9 @@ export async function runAgentLoop(
     // A round sent without any tools cannot produce another tool call, so the
     // model answers from what it has and the turn ends. This is the only hard
     // stop for a turn that would otherwise investigate forever.
-    const answerOnlyRound = forceFinalAnswer;
+    // Explicit annotation: this flag is re-assigned from `answerOnlyRound` at the
+    // end of the round, which otherwise creates a circular inference (TS7022).
+    const answerOnlyRound: boolean = forceFinalAnswer;
     forceFinalAnswer = false;
     const roundToolSchemas = answerOnlyRound
       ? []
@@ -2952,6 +3033,29 @@ export async function runAgentLoop(
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
+      }
+      // A transient transport failure (backend hung past undici's dispatcher
+      // deadline, socket reset mid-handshake) is worth a bounded retry: a
+      // healthy turn that dies at round 27 of 60 to a one-off blip should not
+      // end as a bare error that the user has to manually continue. Re-run the
+      // same round with the unchanged conversation; loop-top state consumed by
+      // the failed attempt (tool quarantine, answer-only mode) is restored so
+      // the retry behaves like the original round. Refused/DNS failures are
+      // not retried — a dead backend stays dead.
+      if (isTransientTransportError(fetchErr) && transportRetries < MAX_TRANSPORT_RETRIES) {
+        transportRetries++;
+        const waitMs = TRANSPORT_RETRY_BASE_DELAY_MS * transportRetries;
+        log.warn(
+          `LLM transport failure on round ${round} (${describeTransportError(fetchErr)}) — `
+            + `retrying in ${waitMs}ms (attempt ${transportRetries}/${MAX_TRANSPORT_RETRIES})`,
+        );
+        onEvent?.({ type: "steering", message: `Model connection dropped — retrying (attempt ${transportRetries}/${MAX_TRANSPORT_RETRIES})…` });
+        await sleepUntilAborted(waitMs, abort.signal);
+        // Restore per-attempt state the failed round already consumed.
+        forceFinalAnswer = answerOnlyRound || forceFinalAnswer;
+        quarantinedToolNames = roundQuarantinedToolNames;
+        round--;
+        continue;
       }
       // An unreachable backend is a configuration problem, not a crash — report
       // it the same way an HTTP error is reported instead of throwing a raw

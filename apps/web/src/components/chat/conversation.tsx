@@ -217,6 +217,37 @@ export function scrollAnchorDelta(currentTop: number, anchoredOffset: number): n
   return Math.abs(delta) < ANCHOR_EPSILON_PX ? 0 : delta
 }
 
+export interface ConversationVirtualItemPosition {
+  key: string | number | bigint
+  start: number
+}
+
+export interface PendingPrependBaseline {
+  firstKey: string
+  firstStart: number
+}
+
+/**
+ * Resolve how far the pre-request first item moved when older items arrived.
+ *
+ * A live item may append while the history request is in flight. The stable
+ * first-item key distinguishes that unrelated count growth from a real prepend,
+ * and its new start excludes every item added below the viewport.
+ */
+export function resolvePrependScrollAdjustment({
+  baseline,
+  nextItems,
+}: {
+  baseline: PendingPrependBaseline
+  nextItems: readonly ConversationVirtualItemPosition[]
+}): number | null {
+  const previousFirstIndex = nextItems.findIndex(
+    (item) => String(item.key) === baseline.firstKey,
+  )
+  if (previousFirstIndex <= 0) return null
+  return Math.max(nextItems[previousFirstIndex]!.start - baseline.firstStart, 0)
+}
+
 /**
  * Undo React's `Children.toArray` key mangling.
  *
@@ -389,6 +420,11 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // resolved document offset back into a real `scrollTop`.
   const [sizerOffset, setSizerOffset] = useState(0)
   const childItems = useMemo(() => Children.toArray(children), [children])
+  const firstChildKey = useMemo(() => {
+    const firstChild = childItems[0]
+    if (typeof firstChild !== 'object' || firstChild === null || !('key' in firstChild)) return null
+    return firstChild.key == null ? null : String(firstChild.key)
+  }, [childItems])
   const hasContent = childItems.length > 0
   // Per-child role for the minimap, index-aligned with childItems. Anything
   // without an explicit 'user' role (e.g. the streaming queue) reads as agent.
@@ -465,11 +501,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // Set when a lazy-load was triggered, so the next render that grows the list
   // knows to restore rather than letting the browser keep raw scrollTop.
   const pendingPrependAnchorRef = useRef(false)
-  // Virtualized total height right before a prepend, so the restore step can
-  // compensate scrollTop by exactly how much content was added above the
-  // fold — see the comment on the restore effect for why this replaced the
-  // DOM-lookup approach.
-  const prevTotalSizeRef = useRef(0)
+  // Virtualizer state right before a prepend, used to identify the actual
+  // history response independently from live items appended during its fetch.
+  const pendingPrependBaselineRef = useRef<PendingPrependBaseline | null>(null)
 
   const captureScrollAnchor = useCallback(() => {
     const el = scrollRef.current
@@ -744,6 +778,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     clearTimeout(rearmTimerRef.current)
     rearmTimerRef.current = setTimeout(() => {
       pendingPrependAnchorRef.current = false
+      pendingPrependBaselineRef.current = null
       loadMoreTriggeredRef.current = false
     }, LOAD_MORE_REARM_TIMEOUT_MS)
     // Anchor before requesting. onLoadMore is async (it fetches), so the
@@ -753,10 +788,18 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     // of a now much longer list, re-arming this trigger and cascading
     // straight to the beginning of the conversation.
     captureScrollAnchor()
-    prevTotalSizeRef.current = virtualizerRef.current.getTotalSize()
+    const currentVirtualizer = virtualizerRef.current
+    currentVirtualizer.getTotalSize()
+    const firstItem = currentVirtualizer.measurementsCache[0]
+    pendingPrependBaselineRef.current = firstItem
+      ? {
+          firstKey: String(firstItem.key),
+          firstStart: firstItem.start,
+        }
+      : null
     pendingPrependAnchorRef.current = true
     onLoadMore()
-  }, [captureScrollAnchor, hasMore, onLoadMore])
+  }, [captureScrollAnchor, childItems.length, hasMore, onLoadMore])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -781,33 +824,36 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   //
   // This deliberately does not use restoreScrollAnchor()'s DOM-key lookup.
   // Right after a prepend, the virtualizer's render window is still computed
-  // from the pre-prepend scrollTop, which now maps to indices near the start
-  // of the (longer) list — i.e. the just-loaded oldest batch, not wherever
-  // the anchored item ended up. A key lookup for the anchor then finds
-  // nothing, compensation silently no-ops, and the user is left staring at
-  // the top of the new batch (which reads as "jumped to the start of the
-  // chat"). Total-size delta doesn't depend on any item being rendered, so
-  // it always applies.
+  // from the pre-prepend scrollTop, so the item the user was reading may not be
+  // rendered yet. The measurement cache still contains the pre-request first
+  // item by stable key. Its shifted start is exactly the height inserted above
+  // the old transcript, independent of anything concurrently appended below.
   useLayoutEffect(() => {
     if (!pendingPrependAnchorRef.current) return
-    if (childItems.length === prevChildCount.current) return
+    const baseline = pendingPrependBaselineRef.current
+    if (!baseline) return
+    const currentVirtualizer = virtualizerRef.current
+    currentVirtualizer.getTotalSize()
+    const adjustment = resolvePrependScrollAdjustment({
+      baseline,
+      nextItems: currentVirtualizer.measurementsCache,
+    })
+    if (adjustment == null) return
     pendingPrependAnchorRef.current = false
+    pendingPrependBaselineRef.current = null
     clearTimeout(rearmTimerRef.current)
     const el = scrollRef.current
-    if (el) {
-      const delta = virtualizerRef.current.getTotalSize() - prevTotalSizeRef.current
-      if (delta !== 0) {
-        restoringAnchorRef.current = true
-        el.scrollTop += delta
-        requestAnimationFrame(() => {
-          restoringAnchorRef.current = false
-        })
-      }
+    if (el && adjustment !== 0) {
+      restoringAnchorRef.current = true
+      el.scrollTop += adjustment
+      requestAnimationFrame(() => {
+        restoringAnchorRef.current = false
+      })
     }
     // Re-arm only after the view has been put back, so being near the top
     // during the load can't queue another page.
     loadMoreTriggeredRef.current = false
-  }, [childItems.length])
+  }, [childItems.length, firstChildKey])
 
   useEffect(() => {
     // Re-arm when the server reports a different pagination state.
@@ -1235,7 +1281,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
               <div className="flex justify-center py-3">
                 <button
                   type="button"
-                  onClick={onLoadMore}
+                  onClick={requestOlderMessages}
                   className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/50"
                 >
                   <Loader2 className="h-3 w-3 text-primary animate-spin" style={{ animationPlayState: loadMoreTriggeredRef.current ? 'running' : 'paused' }} />

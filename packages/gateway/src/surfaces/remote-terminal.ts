@@ -6,6 +6,7 @@ import type {
   SurfaceState,
   SurfaceStopInput,
 } from "./contracts.js";
+import { getTerminalOutputSlice } from "./terminal-output.js";
 
 export interface RemoteTerminalSurfaceOptions {
   shell?: string;
@@ -222,14 +223,13 @@ export class RemoteTerminalSurface implements Surface {
   }
 
   getRecentOutputSince(outputOffset: number, outputEndOffset?: number, lines = 100): string {
-    const normalizedOffset = Number.isFinite(outputOffset) ? Math.max(0, Math.trunc(outputOffset)) : 0;
-    const normalizedEndOffset = typeof outputEndOffset === "number" && Number.isFinite(outputEndOffset)
-      ? Math.max(normalizedOffset, Math.trunc(outputEndOffset))
-      : this._outputChunkCount;
-    const retainedStart = Math.max(0, this._outputChunkCount - this._outputBuffer.length);
-    const offsetIndex = Math.max(0, Math.min(this._outputBuffer.length, normalizedOffset - retainedStart));
-    const endIndex = Math.max(offsetIndex, Math.min(this._outputBuffer.length, normalizedEndOffset - retainedStart));
-    return this._outputBuffer.slice(Math.max(offsetIndex, endIndex - lines), endIndex).join("");
+    return getTerminalOutputSlice(
+      this._outputBuffer,
+      this._outputChunkCount,
+      outputOffset,
+      outputEndOffset,
+      lines,
+    );
   }
 
   getRecentOutput(lines = 100): string {

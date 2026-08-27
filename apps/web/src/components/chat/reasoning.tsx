@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Brain, ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { useToolCardToggleAnchor } from '@/components/chat/tool-card-anchor'
 import { cn } from '@/lib/utils'
 import { AssistantMarkdown, type OnOpenPath } from '@/components/chat/assistant-markdown'
 
@@ -46,6 +47,18 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
     }
   }, [content, isStreaming])
 
+  // While the model streams, the block opens itself and is revealed with a
+  // layout-neutral fade. Expanding it by hand afterwards plays a height
+  // animation, so anchor the expand like a tool card: pin the block's edge
+  // frame by frame instead of letting the transcript follow the bottom and
+  // shove the block's header off screen (or let content spill below the
+  // composer at the end of the transcript).
+  const { cardRef, anchorToggle } = useToolCardToggleAnchor<HTMLDivElement>()
+  const handleOpenChange = (next: boolean) => {
+    if (next && !isStreaming) anchorToggle()
+    setOpen(next)
+  }
+
   if (!content) return null
 
   const label = isStreaming
@@ -55,7 +68,7 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
       : 'Thought process'
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible ref={cardRef} open={open} onOpenChange={handleOpenChange}>
       <CollapsibleTrigger className={cn(
         'flex items-center gap-1.5 text-sm transition-colors py-1 rounded-md px-2 -ml-2',
         isStreaming
@@ -66,7 +79,9 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
         <span>{label}</span>
         <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} />
       </CollapsibleTrigger>
-      <CollapsibleContent className="reasoning-collapsible">
+      <CollapsibleContent
+        className={cn('reasoning-collapsible', isStreaming && 'reasoning-collapsible-streaming')}
+      >
         <div
           ref={scrollRef}
           className={cn(

@@ -14,6 +14,7 @@ import {
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
   positionConversationAtBottom,
+  resolvePrependScrollAdjustment,
   scrollAnchorDelta,
   shouldLoadOlderMessages,
   shouldShowPreviousMessagePreview,
@@ -298,6 +299,50 @@ describe('scroll anchoring', () => {
     // Rounding jitter every animation frame would itself read as flicker.
     expect(scrollAnchorDelta(-120.2, -120)).toBe(0)
     expect(scrollAnchorDelta(-120, -120)).toBe(0)
+  })
+
+  describe('history prepend compensation', () => {
+    const baseline = {
+      firstKey: 'm1',
+      firstStart: 0,
+    }
+
+    it('ignores a live item appended while the history request is pending', () => {
+      expect(resolvePrependScrollAdjustment({
+        baseline,
+        nextItems: [
+          { key: 'm1', start: 0 },
+          { key: 'm2', start: 200 },
+          { key: 'm3', start: 400 },
+          { key: 'live', start: 600 },
+        ],
+      })).toBeNull()
+    })
+
+    it('compensates only items prepended above when a live append lands too', () => {
+      expect(resolvePrependScrollAdjustment({
+        baseline,
+        nextItems: [
+          { key: 'old-1', start: 0 },
+          { key: 'old-2', start: 100 },
+          { key: 'm1', start: 250 },
+          { key: 'm2', start: 450 },
+          { key: 'm3', start: 650 },
+          { key: 'live', start: 850 },
+        ],
+      })).toBe(250)
+    })
+
+    it('detects a prepend even when another item disappears in the same commit', () => {
+      expect(resolvePrependScrollAdjustment({
+        baseline,
+        nextItems: [
+          { key: 'old-1', start: 0 },
+          { key: 'm1', start: 140 },
+          { key: 'm2', start: 340 },
+        ],
+      })).toBe(140)
+    })
   })
 })
 

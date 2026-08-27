@@ -511,6 +511,32 @@ describe("stream repetition guard", () => {
     expect(parsed.thinkingText).not.toContain("NEVER-REACHED");
   });
 
+  it("catches a line loop whose periodic tail falls between throttled scans", async () => {
+    const repeatedLine = "Let me now move on to a new translation\n\n";
+    const variantLine = "I should now move on to a new translation\n\n";
+    const preamble = "Useful evidence collected before the model drifted. ".padEnd(200, "x");
+    const malformed = preamble
+      + repeatedLine.repeat(15)
+      + variantLine.repeat(2)
+      + repeatedLine
+      + variantLine.repeat(2)
+      + repeatedLine
+      + "Let me now move on to a";
+    const chunks = [
+      ...Array.from(
+        malformed,
+        (content) => `${JSON.stringify({ message: { content } })}\n`,
+      ),
+      `${JSON.stringify({ done: true, done_reason: "stop" })}\n`,
+    ];
+
+    const parsed = await parseOllamaStream(streamReader(chunks));
+
+    expect(parsed.repetition?.source).toBe("content");
+    expect(parsed.finishReason).toBe("repetition");
+    expect(parsed.contentText.length).toBeLessThan(malformed.length);
+  });
+
   it("leaves a normal ollama stream alone", async () => {
     const parsed = await parseOllamaStream(streamReader([
       `${JSON.stringify({ message: { content: "All done." } })}\n`,

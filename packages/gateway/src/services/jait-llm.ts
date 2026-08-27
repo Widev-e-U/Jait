@@ -49,17 +49,45 @@ export async function callJaitLlmCompletion(
     throw new Error(msg ?? `LLM request failed (${res.status})`);
   }
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+    choices?: Array<{
+      finish_reason?: string;
+      message?: {
+        content?: string | Array<{ type?: string; text?: string }>;
+        reasoning?: string;
+        reasoning_content?: string;
+      };
+    }>;
   };
-  const content = data.choices?.[0]?.message?.content;
-  if (typeof content === "string") return content.trim();
+  const choice = data.choices?.[0];
+  const message = choice?.message;
+  const content = message?.content;
+  if (typeof content === "string" && content.trim()) return content.trim();
   if (Array.isArray(content)) {
-    return content
+    const joined = content
       .map((part) => (part?.type === "text" ? part.text ?? "" : ""))
       .join("")
       .trim();
+    if (joined) return joined;
   }
-  throw new Error("LLM returned no content");
+
+  // Reasoning models (GLM thinking, DeepSeek-R1, Qwen thinking, ...) burn
+  // `max_tokens` on their internal thinking phase before emitting the visible
+  // answer; the thought itself lands in `message.reasoning` (Ollama) or
+  // `message.reasoning_content` while `content` stays empty with
+  // finish_reason "length" when the budget runs out mid-thought. Returning ""
+  // here made callers silently degrade (chats got named after the user's
+  // first message instead of an LLM-generated title). Fail loudly instead.
+  const reasoning = message?.reasoning ?? message?.reasoning_content;
+  if (typeof reasoning === "string" && reasoning.trim()) {
+    throw new Error(
+      choice?.finish_reason === "length"
+        ? `LLM spent its whole token budget reasoning and returned no answer (finish_reason=length, model: ${llm.openaiModel}) — increase max_tokens`
+        : `LLM returned only reasoning and no answer content (model: ${llm.openaiModel})`,
+    );
+  }
+  throw new Error(
+    `LLM returned no content (finish_reason: ${choice?.finish_reason ?? "unknown"}, model: ${llm.openaiModel})`,
+  );
 }
 
 export class JaitConfigError extends Error {

@@ -12,6 +12,7 @@ import {
   serializeUserMessageSegmentsForClipboard,
   serializeUserMessageSegmentsToMarkdown,
   userMessageTextFromSegments,
+  userReferencedChatsFromSegments,
   userReferencedFilesFromSegments,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
@@ -96,6 +97,34 @@ describe('user message segment serialization', () => {
     ])).toEqual([
       { type: 'attachment', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
     ])
+  })
+
+  it('round-trips chat references through clipboard and markdown', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'chat', sessionId: 'sess-abc', name: 'Gateway refactor' },
+      { type: 'text', text: ' summarize this chat' },
+    ]
+
+    const payload = serializeUserMessageSegmentsForClipboard(segments)
+    expect(payload).not.toBeNull()
+    expect(parseUserMessageClipboardPayload(payload!)).toEqual(segments)
+
+    const markdown = serializeUserMessageSegmentsToMarkdown(segments)
+    expect(markdown).toContain('[chat:sess-abc]')
+    expect(parseUserMessageMarkdown(markdown)).toEqual([
+      { type: 'chat', sessionId: 'sess-abc', name: 'sess-abc' },
+      { type: 'text', text: ' summarize this chat' },
+    ])
+  })
+
+  it('extracts chat references for the send pipeline', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'text', text: 'continue from ' },
+      { type: 'chat', sessionId: 'sess-abc', name: 'Gateway refactor' },
+    ]
+
+    const chats = userReferencedChatsFromSegments(segments)
+    expect(chats).toEqual([{ sessionId: 'sess-abc', name: 'Gateway refactor' }])
   })
 })
 

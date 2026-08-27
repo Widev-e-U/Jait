@@ -439,36 +439,46 @@ html.is-dragging-row-resize {
 .reasoning-collapsible[data-state='open'] {
   animation: jait-collapse-down 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
 }
+/*
+ * A thinking block that opens itself while the model streams mounts with
+ * `data-state='open'` and would otherwise play the height animation un-
+ * anchored: the virtual sizer is one frame behind and the bottom chaser
+ * cannot keep up with a growing layout height, so the block's tail renders
+ * below the composer until the animation ends. While streaming, reveal with
+ * the same layout-neutral fade as message parts; user-initiated expands
+ * after the fact keep the height animation and are edge-anchored.
+ */
+.reasoning-collapsible-streaming[data-state='open'] {
+  animation: jait-reveal-fade 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
+}
 .reasoning-collapsible[data-state='closed'] {
   animation: jait-collapse-up 140ms cubic-bezier(0.32, 0.72, 0.4, 1);
 }
 
 /*
- * Reveal every newly mounted streaming message part by growing its layout
- * height, so transcript measurement follows the visual expansion instead of
- * receiving one large jump near the composer.
+ * Reveal every newly mounted streaming message part with an opacity-only
+ * fade. The old reveal animated `grid-template-rows` (a layout height): the
+ * virtual sizer commits its total height one frame behind the DOM, and the
+ * bottom chaser reads `scrollHeight` from rAF, so a growing height kept the
+ * newest line a few pixels below the composer for the animation's duration —
+ * the "glitching below the chat input" flicker. Mounting at full height is a
+ * single ResizeObserver step that the chaser pins in the same frame; the fade
+ * is compositor-only and cannot move anything.
  */
 .chat-message-part-reveal {
-  display: grid;
-  grid-template-rows: 1fr;
-  animation: jait-message-part-reveal 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
+  animation: jait-reveal-fade 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
 }
 
 .chat-message-part-reveal-inner {
   min-height: 0;
-  overflow: hidden;
 }
 
-@keyframes jait-message-part-reveal {
+@keyframes jait-reveal-fade {
   from {
-    grid-template-rows: 0fr;
     opacity: 0;
-    transform: translateY(4px);
   }
 
   to {
-    grid-template-rows: 1fr;
     opacity: 1;
-    transform: translateY(0);
   }
 }

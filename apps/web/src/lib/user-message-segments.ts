@@ -23,6 +23,12 @@ export interface UserSkillReference {
   name: string
 }
 
+/** A reference to another chat session, dragged/copied into the composer. */
+export interface UserChatReference {
+  sessionId: string
+  name: string
+}
+
 export interface UserLineRange {
   startLine: number
   endLine: number
@@ -47,6 +53,7 @@ export type UserMessageSegment =
   | ({ type: 'file' } & UserReferencedFile)
   | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
+  | ({ type: 'chat' } & UserChatReference)
   | ({ type: 'skill' } & UserSkillReference)
   | ({ type: 'image' } & UserImageAttachment)
   | ({ type: 'attachment' } & UserFileAttachment)
@@ -98,6 +105,16 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
         ...(segment.projectRoot ? { projectRoot: segment.projectRoot } : {}),
         ...(normalizeLineRange(segment.lineRange) ? { lineRange: normalizeLineRange(segment.lineRange)! } : {}),
         ...(segment.selectedText ? { selectedText: segment.selectedText } : {}),
+      })
+      continue
+    }
+
+    if (segment.type === 'chat') {
+      if (!segment.sessionId.trim()) continue
+      normalized.push({
+        type: 'chat',
+        sessionId: segment.sessionId,
+        name: segment.name || segment.sessionId,
       })
       continue
     }
@@ -189,6 +206,19 @@ export function userReferencedTerminalsFromSegments(segments: UserMessageSegment
   return terminals
 }
 
+export function userReferencedChatsFromSegments(segments: UserMessageSegment[] | null | undefined): UserChatReference[] {
+  const chats: UserChatReference[] = []
+  const seen = new Set<string>()
+
+  for (const segment of normalizeUserMessageSegments(segments)) {
+    if (segment.type !== 'chat' || seen.has(segment.sessionId)) continue
+    seen.add(segment.sessionId)
+    chats.push({ sessionId: segment.sessionId, name: segment.name })
+  }
+
+  return chats
+}
+
 export function buildFallbackUserMessageSegments(
   text: string,
   files?: UserReferencedFile[] | null,
@@ -251,6 +281,7 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
     if (segment.type === 'file') return `@${segment.path}${formatLineRangeSuffix(segment.lineRange)}`
     if (segment.type === 'project') return `[project:${segment.path}]`
     if (segment.type === 'terminal') return `[terminal:${segment.terminalId}${formatLineRangeSuffix(segment.lineRange)}]`
+    if (segment.type === 'chat') return `[chat:${segment.sessionId}]`
     if (segment.type === 'skill') return `/${segment.id} `
     if (segment.type === 'attachment') return `[attachment:${segment.name}]`
     return `[image:${segment.name}]`
@@ -258,10 +289,10 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
 }
 
 export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[] {
-  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[project:') && !markdown.includes('/')) return []
+  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[project:') && !markdown.includes('[chat:') && !markdown.includes('/')) return []
 
   const segments: UserMessageSegment[] = []
-  const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[project:([^\]]+)\])/g
+  const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[project:([^\]]+)\]|\[chat:([A-Za-z0-9._:-]+)\])/g
   let lastIndex = 0
 
   for (const match of markdown.matchAll(pattern)) {
@@ -274,6 +305,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     const terminalId = match[4]?.trim()
     const terminalLineRange = parseLineRangeSuffix(match[5])
     const projectPath = match[6]?.trim()
+    const chatSessionId = match[7]?.trim()
     const pathStart = index + prefix.length
     if (pathStart > lastIndex) {
       segments.push({ type: 'text', text: markdown.slice(lastIndex, pathStart) })
@@ -287,6 +319,9 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     } else if (projectPath) {
       segments.push({ type: 'project', path: projectPath, name: projectPath.split(/[\\/]/).pop() || projectPath })
       lastIndex = index + full.length
+    } else if (chatSessionId) {
+      segments.push({ type: 'chat', sessionId: chatSessionId, name: chatSessionId })
+      lastIndex = index + full.length
     } else {
       segments.push({ type: 'text', text: full })
       lastIndex = index + full.length
@@ -298,7 +333,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
   }
 
   const normalized = normalizeUserMessageSegments(segments)
-  return normalized.some((segment) => segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal') ? normalized : []
+  return normalized.some((segment) => segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'chat') ? normalized : []
 }
 
 export function serializeUserMessageSegmentsForClipboard(segments: UserMessageSegment[] | null | undefined): string | null {
@@ -356,6 +391,14 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         ...(typeof record.projectRoot === 'string' ? { projectRoot: record.projectRoot } : {}),
         ...(parseLineRangeRecord(record) ? { lineRange: parseLineRangeRecord(record)! } : {}),
         ...(typeof record.selectedText === 'string' ? { selectedText: record.selectedText } : {}),
+      })
+      continue
+    }
+    if (record.type === 'chat' && typeof record.sessionId === 'string') {
+      parsed.push({
+        type: 'chat',
+        sessionId: record.sessionId,
+        name: typeof record.name === 'string' ? record.name : record.sessionId,
       })
       continue
     }

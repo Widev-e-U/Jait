@@ -2668,6 +2668,106 @@ function extractStreamingWebTarget(streamingArgs: string | undefined): string | 
   return null
 }
 
+/** Extract partially-streamed edit-like args (path + content/search/replace) */
+interface StreamingEditFields {
+  path: string | null
+  content: string | null
+  search: string | null
+  replace: string | null
+}
+
+function extractStreamingEditFields(streamingArgs: string | undefined): StreamingEditFields {
+  if (!streamingArgs) return { path: null, content: null, search: null, replace: null }
+  return {
+    path: extractStreamingStringField(streamingArgs, 'path'),
+    content: extractStreamingStringField(streamingArgs, 'content'),
+    search: extractStreamingStringField(streamingArgs, 'search'),
+    replace: extractStreamingStringField(streamingArgs, 'replace'),
+  }
+}
+
+const MAX_STREAMING_DIFF_LINES = 40
+
+/**
+ * Live line-based diff preview rendered while an edit-like tool call's args
+ * are still streaming in. Lines grow in real time as the model writes them,
+ * mirroring how thinking text streams — once the call starts running, the
+ * real Monaco-backed EditDiffView takes over.
+ */
+function StreamingEditDiffPreview({
+  fields,
+  scrollRef,
+}: {
+  fields: StreamingEditFields
+  scrollRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const isNewFile = !fields.search
+  const addedSource = fields.content ?? fields.replace
+
+  const lines: { kind: 'add' | 'del'; text: string }[] = []
+  if (fields.search != null && !isNewFile) {
+    for (const line of fields.search.split('\n')) {
+      if (line === '') continue
+      lines.push({ kind: 'del', text: line })
+    }
+  }
+  if (addedSource != null) {
+    for (const line of addedSource.split('\n')) {
+      lines.push({ kind: 'add', text: line })
+    }
+  }
+
+  const visible = lines.slice(-MAX_STREAMING_DIFF_LINES)
+  const hidden = lines.length - visible.length
+
+  return (
+    <div className="overflow-hidden rounded-md border bg-background">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b">
+        <FileIcon filename={(fields.path ?? '').split('/').pop() ?? ''} className="h-3.5 w-3.5 shrink-0" />
+        <code className="min-w-0 truncate text-xs font-mono text-muted-foreground">
+          {fields.path ?? '...'}
+        </code>
+      </div>
+      <div ref={scrollRef as React.RefObject<HTMLDivElement>} className="max-h-72 overflow-y-auto px-1 py-1">
+        {visible.length === 0 ? (
+          <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-blue-400" />
+            <span>{isNewFile ? 'Writing new file...' : 'Streaming changes...'}</span>
+          </div>
+        ) : (
+          <>
+            {hidden > 0 && (
+              <div className="px-2 py-0.5 text-[11px] text-muted-foreground/70">
+                ... {hidden} earlier line{hidden === 1 ? '' : 's'}
+              </div>
+            )}
+            {visible.map((line, i) => {
+              const isLast = i === visible.length - 1
+              const tint = line.kind === 'add'
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                : 'bg-red-500/10 text-red-600 dark:text-red-400'
+              return (
+                <div
+                  key={i}
+                  className={cn('flex px-1 font-mono text-xs leading-5 whitespace-pre-wrap break-all', tint)}
+                >
+                  <span className="w-3 shrink-0 select-none opacity-60">{line.kind === 'add' ? '+' : '-'}</span>
+                  <span className="min-w-0 flex-1">
+                    {line.text || ' '}
+                    {isLast && (
+                      <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-blue-400 align-text-bottom" />
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /** Header label shown while the tool call is being streamed (pending state) */
 function PendingToolLabel({
   tool,
@@ -2697,6 +2797,20 @@ function PendingToolLabel({
         <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
       </span>
     )
+  }
+
+  // Edit-like tools: show the file path as it streams in (args not parsed yet)
+  if (meta && isEditLikeTool(displayTool) && !filePath) {
+    const streamingPath = extractStreamingEditFields(streamingArgs).path
+    if (streamingPath) {
+      return (
+        <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-blue-400">
+          <span>{getFileSummaryActionLabel(displayTool, true)}:</span>
+          <code className="min-w-0 truncate text-xs font-mono text-foreground">{streamingPath}</code>
+          <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+        </span>
+      )
+    }
   }
 
   if (meta && isTerminalTool && command) {
@@ -2741,12 +2855,13 @@ function PendingToolLabel({
 }
 
 /** Body content shown while the tool call is being streamed (pending state) */
-function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; streamingArgs?: string; scrollRef: React.RefObject<HTMLPreElement | null> }) {
+function PendingToolBody({ tool, streamingArgs, scrollRef, bodyScrollRef }: { tool: string; streamingArgs?: string; scrollRef: React.RefObject<HTMLPreElement | null>; bodyScrollRef?: React.RefObject<HTMLDivElement | null> }) {
   const normalized = normalizeTool(tool)
   const isTerminalTool = normalized.startsWith('terminal.')
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
   const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
   const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
+  const isEditTool = isEditLikeTool(normalized)
 
   // Terminal with partial command — show the command being built (no raw JSON)
   if (isTerminalTool && command) {
@@ -2775,6 +2890,14 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
         </div>
       </div>
     )
+  }
+
+  // Edit-like tools: stream the diff live while args are being written
+  if (isEditTool && streamingArgs) {
+    const fields = extractStreamingEditFields(streamingArgs)
+    if (fields.path || fields.content || fields.search || fields.replace) {
+      return <StreamingEditDiffPreview fields={fields} scrollRef={bodyScrollRef ?? { current: null }} />
+    }
   }
 
   if (normalized === 'memory.save') {
@@ -3431,6 +3554,7 @@ function ToolCallCardInner({
   const showFileSummary = !!filePath && (isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read')
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
+  const editBodyScrollRef = useAutoScroll<HTMLDivElement>(call.streamingArgs)
   const bodyKind = getToolCallBodyKind({
     tool: displayTool,
     args: normalizedArgs,
@@ -3694,7 +3818,7 @@ function ToolCallCardInner({
   )
 
   const bodyContent = bodyKind === 'pending' ? (
-    <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
+    <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} bodyScrollRef={editBodyScrollRef} />
   ) : bodyKind === 'terminal' ? (
     showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">

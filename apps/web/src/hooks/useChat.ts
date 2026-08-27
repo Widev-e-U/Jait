@@ -937,6 +937,9 @@ export function useChat(
           (data.name_delta as string) || '',
           (data.args_delta as string) || '',
           data.parent_call_id as string | undefined,
+          // Cumulative provider slot index (see agent-loop.ts): lets the stream
+          // re-key a provisional `pending-N` id once the real id arrives.
+          typeof data.index === 'number' ? data.index : undefined,
         )
         applyStreamSnapshot()
       } else if (data.type === 'tool_start') {

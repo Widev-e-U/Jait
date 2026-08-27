@@ -17,7 +17,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { cn } from '@/lib/utils'
 import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
-import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
+import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME, JAIT_CHAT_REF_MIME } from '@/lib/jait-dnd'
 import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
 import {
   JAIT_REF_MIME,
@@ -31,6 +31,7 @@ import {
   type UserTerminalReference,
   type UserProjectReference,
   type UserSkillReference,
+  type UserChatReference,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
@@ -61,6 +62,7 @@ type PromptChipReference =
   | ReferencedFile
   | ({ type: 'project' } & UserProjectReference)
   | ({ type: 'terminal' } & UserTerminalReference)
+  | ({ type: 'chat' } & UserChatReference)
   | ({ type: 'skill' } & UserSkillReference)
 
 interface PromptInputProps {
@@ -153,6 +155,7 @@ function getChipRefKey(ref: PromptChipReference): string {
     const selectionKey = ref.selectedText ? `:${hashString(ref.selectedText)}` : ''
     return `terminal:${ref.terminalId}${rangeKey}${selectionKey}`
   }
+  if ('type' in ref && ref.type === 'chat') return `chat:${ref.sessionId}`
   if ('type' in ref && ref.type === 'skill') return `skill:${ref.id}`
   return `file:${ref.path}${rangeKey}`
 }
@@ -189,6 +192,10 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
       chip.setAttribute('data-line-end', String(file.lineRange.endLine))
     }
     if (file.selectedText) chip.setAttribute('data-selected-text', file.selectedText)
+  } else if ('type' in file && file.type === 'chat') {
+    chip.setAttribute('data-segment-type', 'chat')
+    chip.setAttribute('data-chat-id', file.sessionId)
+    chip.setAttribute('data-chip-name', file.name)
   } else if ('type' in file && file.type === 'skill') {
     chip.setAttribute('data-segment-type', 'skill')
     chip.setAttribute('data-skill-id', file.id)
@@ -213,6 +220,8 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
     icon.innerHTML = `<img src="${ICON_CDN}${DEFAULT_FOLDER}" alt="" class="h-3.5 w-3.5" draggable="false" />`
   } else if ('type' in file && file.type === 'terminal') {
     icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>'
+  } else if ('type' in file && file.type === 'chat') {
+    icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></svg>'
   } else if ('type' in file && file.type === 'skill') {
     icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>'
   } else {
@@ -363,6 +372,16 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
           ...(projectRoot ? { projectRoot } : {}),
           ...readChipLineRange(node),
           ...(node.getAttribute('data-selected-text') ? { selectedText: node.getAttribute('data-selected-text')! } : {}),
+        })
+        return
+      }
+      if (segmentType === 'chat') {
+        const sessionId = node.getAttribute('data-chat-id')
+        if (!sessionId) return
+        segments.push({
+          type: 'chat',
+          sessionId,
+          name: node.getAttribute('data-chip-name') || sessionId,
         })
         return
       }
@@ -1545,6 +1564,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           })
           return
         }
+        if (segmentType === 'chat') {
+          const sessionId = node.getAttribute('data-chat-id')!
+          segments.push({ type: 'chat', sessionId, name: node.getAttribute('data-chip-name') || sessionId })
+          return
+        }
         const path = node.getAttribute('data-file-path')!
         const kind = node.getAttribute('data-kind')
         segments.push({
@@ -1564,7 +1588,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     for (const child of tempDiv.childNodes) visit(child)
 
-    if (segments.some(s => s.type === 'file' || s.type === 'project' || s.type === 'terminal')) {
+    if (segments.some(s => s.type === 'file' || s.type === 'project' || s.type === 'terminal' || s.type === 'chat')) {
       e.preventDefault()
       e.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(segments))
       const structured = serializeUserMessageSegmentsForClipboard(segments)
@@ -1684,6 +1708,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       try {
         const terminal = JSON.parse(jaitTerminal) as UserTerminalReference
         appendChip({ type: 'terminal', ...terminal })
+      } catch { /* invalid JSON */ }
+      return
+    }
+
+    const jaitChat = e.dataTransfer.getData(JAIT_CHAT_REF_MIME)
+    if (jaitChat) {
+      try {
+        const chat = JSON.parse(jaitChat) as UserChatReference
+        appendChip({ type: 'chat', ...chat })
       } catch { /* invalid JSON */ }
       return
     }

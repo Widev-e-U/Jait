@@ -124,7 +124,10 @@ async function callLlm(options: GenerateThreadTitleOptions): Promise<string> {
     // Reuse the shared completion helper so the model/base-url/key resolution
     // is identical to chat and git commit-message generation (GLM via
     // BigModel, OpenRouter aliases, Ollama, etc. all handled consistently).
-    return callJaitLlmCompletion(llm, promptMessages, { maxTokens: 24, temperature: 0.2 });
+    // max_tokens must leave headroom for reasoning models: GLM / DeepSeek-R1 /
+    // Qwen-thinking spend part of the budget on internal thinking before the
+    // title — with the old budget of 24 they produced an empty answer.
+    return callJaitLlmCompletion(llm, promptMessages, { maxTokens: 512, temperature: 0.2 });
   }
 
   if (apiKeys["OPENAI_API_KEY"]?.trim() || options.config.llmProvider === "openai") {
@@ -140,7 +143,8 @@ async function callLlm(options: GenerateThreadTitleOptions): Promise<string> {
       body: JSON.stringify({
         model: apiKeys["OPENAI_MODEL"]?.trim() || options.model || options.config.openaiModel,
         temperature: 0.2,
-        max_tokens: 24,
+        // Same reasoning-model headroom as the Jait-backend path above.
+        max_tokens: 512,
         messages: promptMessages,
       }),
     });

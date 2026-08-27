@@ -576,7 +576,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
       || Array.isArray(firstObject(input.args.todoList)?.items)
     )
   ) return 'todoList'
-  if (input.status === 'success' && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'
+  if ((input.status === 'success' || input.status === 'running') && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'
   if (input.displayOutput) return 'output'
   if (input.status === 'running') return 'runningHint'
   return 'none'

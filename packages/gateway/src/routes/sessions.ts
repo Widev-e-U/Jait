@@ -216,9 +216,20 @@ export function registerSessionRoutes(
         model: typeof body["model"] === "string" ? body["model"] : undefined,
         jaitBackend: settings?.jaitBackend,
       });
-    } catch {
+    } catch (err) {
       generated = false;
       title = normalizeGeneratedThreadTitle(prompt, "New Chat");
+      // Never swallow this silently: a failing LLM title call means every new
+      // chat degrades to a truncated first-message name. Log it so the cause
+      // is visible in gateway logs.
+      request.log.warn(
+        {
+          err: err instanceof Error ? err.message : String(err),
+          sessionId: id,
+          model: typeof body["model"] === "string" ? body["model"] : undefined,
+        },
+        "Session title generation failed — falling back to prompt-derived title",
+      );
     }
 
     const latest = sessionService.getById(id, authUser.id);

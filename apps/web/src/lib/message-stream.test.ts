@@ -337,3 +337,87 @@ describe('snapshotToChatMessageUpdates', () => {
     expect(updates.thinking).toBeUndefined()
   })
 })
+
+describe('provisional pending-N tool call ids', () => {
+  it('re-keys a pending placeholder when the real id arrives on a later fragment', () => {
+    const stream = createMessageStream()
+    // Provider streams fragments without an id: gateway emits provisional
+    // `pending-0` (slot 0), then the real id shows up on a later fragment.
+    stream.pushToolCallDelta('pending-0', 'file', '', undefined, 0)
+    stream.pushToolCallDelta('pending-0', '_read', '{"path":', undefined, 0)
+    stream.pushToolCallDelta('call_abc', '', '"p.ts"}', undefined, 0)
+    stream.pushToolStart('call_abc', 'file_read', { path: 'p.ts' })
+    stream.pushToolResult('call_abc', true, 'ok')
+
+    const snap = stream.snapshot()
+    expect(snap.toolCalls).toHaveLength(1)
+    expect(snap.toolCalls[0]).toMatchObject({
+      callId: 'call_abc',
+      tool: 'file_read',
+      status: 'success',
+      result: { ok: true, message: 'ok' },
+    })
+    // The tool group keeps a single entry under the real id (no orphan).
+    expect(snap.segments).toEqual([{ type: 'toolGroup', callIds: ['call_abc'] }])
+  })
+
+  it('re-keys parallel calls by provider slot index', () => {
+    const stream = createMessageStream()
+    stream.pushToolCallDelta('pending-0', 'read', '', undefined, 0)
+    stream.pushToolCallDelta('pending-1', 'write', '', undefined, 1)
+    // Real ids arrive in reverse slot order to prove index-based matching.
+    stream.pushToolCallDelta('call_2', '', '{"b":1}', undefined, 1)
+    stream.pushToolCallDelta('call_1', '', '{"a":1}', undefined, 0)
+    stream.pushToolStart('call_1', 'read', { a: 1 })
+    stream.pushToolStart('call_2', 'write', { b: 1 })
+
+    const snap = stream.snapshot()
+    expect(snap.toolCalls.map(tc => tc.callId)).toEqual(['call_1', 'call_2'])
+    expect(snap.toolCalls.map(tc => tc.tool)).toEqual(['read', 'write'])
+    expect(snap.segments).toEqual([
+      { type: 'toolGroup', callIds: ['call_1', 'call_2'] },
+    ])
+  })
+
+  it('tool_start adopts a sole pending placeholder even without slot indices', () => {
+    const stream = createMessageStream()
+    stream.pushToolCallDelta('pending-0', 'file_re', '{"path":"x"}')
+    stream.pushToolStart('call_xyz', 'file_read', { path: 'x' })
+
+    const snap = stream.snapshot()
+    expect(snap.toolCalls).toHaveLength(1)
+    expect(snap.toolCalls[0].callId).toBe('call_xyz')
+    expect(snap.segments).toEqual([{ type: 'toolGroup', callIds: ['call_xyz'] }])
+  })
+
+  it('tool_start adopts by accumulated-name match among several placeholders', () => {
+    const stream = createMessageStream()
+    stream.pushToolCallDelta('pending-0', 'search', '{"q":1}')
+    stream.pushToolCallDelta('pending-1', 'read', '{"p":2}')
+    stream.pushToolStart('call_r', 'read', { p: 2 })
+
+    const snap = stream.snapshot()
+    expect(snap.toolCalls).toHaveLength(2)
+    expect(snap.toolCalls.find(tc => tc.callId === 'call_r')?.tool).toBe('read')
+    expect(snap.toolCalls.find(tc => tc.callId === 'pending-0')?.tool).toBe('search')
+    expect(snap.segments).toEqual([
+      { type: 'toolGroup', callIds: ['pending-0', 'call_r'] },
+    ])
+  })
+
+  it('keeps interleaved text ordering after a re-key', () => {
+    const stream = createMessageStream()
+    stream.pushText('Let me check. ')
+    stream.pushToolCallDelta('pending-0', 'read', '')
+    stream.pushToolCallDelta('call_q', '', '{"path":"a.ts"}', undefined, 0)
+    stream.pushText('Done.')
+    stream.pushToolStart('call_q', 'read', { path: 'a.ts' })
+
+    const snap = stream.snapshot()
+    expect(snap.segments).toEqual([
+      { type: 'text', content: 'Let me check. ' },
+      { type: 'toolGroup', callIds: ['call_q'] },
+      { type: 'text', content: 'Done.' },
+    ])
+  })
+})
