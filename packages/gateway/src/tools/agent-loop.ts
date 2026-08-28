@@ -1134,6 +1134,8 @@ export async function parseOpenAIStream(
   // garbage identifier ("searchweb_fetchfile_read") with unparseable arguments.
   // Tool-call ids are unique per call, so prefer them and fall back to index.
   const slotByToolCallId = new Map<string, number>();
+  const provisionalCallIds = new Map<number, string>();
+  let provisionalCallSeq = 0;
   let lastToolCallSlot = 0;
 
   const processLine = (line: string) => {
@@ -1187,11 +1189,21 @@ export async function parseOpenAIStream(
             // Continuation of a call we've already seen.
             idx = slotByToolCallId.get(tc.id)!;
           } else if (tc.id) {
-            // First fragment of a new call. Honour the provider's index when it
-            // gave one and it isn't already taken; otherwise append a new slot.
-            idx = typeof tc.index === "number" && !toolCallMap.has(tc.index)
-              ? tc.index
-              : toolCallMap.size;
+            // First fragment carrying an id. If this index is already streaming
+            // a call without one, the provider has just revealed the id for
+            // that SAME call on a later fragment — adopt the existing slot so
+            // its streamed name/arguments keep accumulating in one entry
+            // instead of being split across two tool calls.
+            const indexedFragment = typeof tc.index === "number" ? toolCallMap.get(tc.index) : undefined;
+            if (indexedFragment && !indexedFragment.id) {
+              idx = tc.index;
+            } else if (typeof tc.index === "number" && !toolCallMap.has(tc.index)) {
+              // Honour the provider's index when it gave one and it isn't
+              // already taken; otherwise append a new slot.
+              idx = tc.index;
+            } else {
+              idx = toolCallMap.size;
+            }
             slotByToolCallId.set(tc.id, idx);
           } else {
             // Fragment with no id — belongs to the indexed call, or to whichever
@@ -1206,13 +1218,19 @@ export async function parseOpenAIStream(
               type: "function",
               function: { name: tc.function?.name ?? "", arguments: "" },
             });
+            if (!tc.id) {
+              const provisional = `pending-${provisionalCallSeq++}`;
+              provisionalCallIds.set(idx, provisional);
+            } else {
+              provisionalCallIds.delete(idx);
+            }
           }
           const existing = toolCallMap.get(idx)!;
           if (tc.id) existing.id = tc.id;
           if (!isNew && tc.function?.name) existing.function.name += tc.function.name;
           if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
 
-          const callId = existing.id || `pending-${idx}`;
+          const callId = existing.id || provisionalCallIds.get(idx) || `pending-${idx}`;
           onEvent?.({
             type: "tool_call_delta",
             call_id: callId,
@@ -1287,7 +1305,16 @@ export async function parseOpenAIStream(
 
   const toolCalls = [...toolCallMap.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([, tc]) => tc);
+    .map(([slotIndex, tc]) => ({
+      ...tc,
+      // Providers that never reveal tool-call ids (Ollama, llama.cpp, some
+      // vLLM paths) leave `id` empty here. Execute with a stable synthetic id
+      // matching what the deltas above already used, so the client's streamed
+      // toolcard and the execution events (tool_start/tool_output/tool_result)
+      // merge into one entry — and parallel calls keep distinct ids instead of
+      // all collapsing onto call_id "".
+      id: tc.id || provisionalCallIds.get(slotIndex) || `pending-${slotIndex}`,
+    }));
 
   return { contentText, thinkingText, toolCalls, finishReason, usage, interrupted, repetition };
 }
@@ -3324,18 +3351,22 @@ export async function runAgentLoop(
       emptyResponseRetries = 0;
       lastEmptyThinking = "";
 
-      const originalToolCallCount = toolCalls.length;
       const uniqueToolCalls: OpenAIToolCall[] = [];
+      const duplicateToolCalls: OpenAIToolCall[] = [];
       const signaturesInRound = new Set<string>();
       for (const toolCall of toolCalls) {
         const signature = toolCallSignature(toolCall);
-        if (signaturesInRound.has(signature)) continue;
+        if (signaturesInRound.has(signature)) {
+          duplicateToolCalls.push(toolCall);
+          continue;
+        }
         signaturesInRound.add(signature);
         uniqueToolCalls.push(toolCall);
       }
-      const duplicateToolCallCount = originalToolCallCount - uniqueToolCalls.length;
-      const excessToolCallCount = Math.max(0, uniqueToolCalls.length - MAX_TOOL_CALLS_PER_ROUND);
+      const excessToolCalls = uniqueToolCalls.slice(MAX_TOOL_CALLS_PER_ROUND);
       toolCalls = uniqueToolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
+      const duplicateToolCallCount = duplicateToolCalls.length;
+      const excessToolCallCount = excessToolCalls.length;
       if (duplicateToolCallCount > 0 || excessToolCallCount > 0) {
         const collapsedKinds = [
           duplicateToolCallCount > 0 ? `${duplicateToolCallCount} duplicate` : "",
@@ -3348,6 +3379,27 @@ export async function runAgentLoop(
           type: "steering",
           message: `Collapsed ${collapsedKinds} tool calls from one model response`,
         });
+        // The dropped calls already streamed tool_call deltas, so the client
+        // holds pending streaming toolcards for them. Resolve those entries
+        // with an explicit skipped result — otherwise they linger as orphaned
+        // JSON-only cards that never receive a terminal. Distinct ids are
+        // guaranteed (empty provider ids were backfilled to pending-N), so
+        // each result lands on its own card instead of overwriting another.
+        for (const dropped of [...duplicateToolCalls, ...excessToolCalls]) {
+          const tool = fromOpenAIName(dropped.function.name);
+          const duplicate = duplicateToolCalls.includes(dropped);
+          const message = duplicate
+            ? "Skipped: this call is a byte-identical duplicate of an earlier call in the same round — the original ran instead."
+            : `Skipped: this round already queued the maximum of ${MAX_TOOL_CALLS_PER_ROUND} tool calls.`;
+          onEvent?.({
+            type: "tool_result",
+            call_id: dropped.id,
+            tool,
+            ok: false,
+            message,
+            data: { skipped: true, reason: duplicate ? "duplicate_in_round" : "excess_per_round" },
+          });
+        }
       }
 
       if (finishReason && finishReason !== "tool_calls") {
