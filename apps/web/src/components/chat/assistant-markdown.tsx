@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useEffect, useMemo, useState, memo, useDeferredValue } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
@@ -24,7 +24,10 @@ import { resolveChatImageUrl } from '@/lib/chat-image-url'
 
 export type OnOpenPath = (path: string, line?: number, column?: number) => Promise<void> | void
 
-const CODE_HIGHLIGHT_CACHE_LIMIT = 120
+// Long agent chats routinely contain hundreds of code blocks. Evicting at 120
+// made every scroll back into older messages re-run full shiki tokenization
+// (heavy per-block work), which is a large part of why long chats lagged.
+const CODE_HIGHLIGHT_CACHE_LIMIT = 600
 const STREAMING_HIGHLIGHT_DELAY_MS = 150
 const codeHighlightCache = new Map<string, string | null>()
 const CODE_HTML_MATCHER = /<pre[^>]*><code>([\s\S]*)<\/code><\/pre>/
@@ -330,10 +333,17 @@ function StaticMarkdown({
     () => buildMarkdownComponents(onOpenPath, isStreaming),
     [isStreaming, onOpenPath],
   )
+  // A streaming assistant message re-parses its entire markdown on every token
+  // flush, and that cost grows with message length — in long chats it starts
+  // competing with scroll/input. `useDeferredValue` lets each flush paint with
+  // the previous parsed tree immediately, then re-parses at lower priority.
+  // The deferred value always converges to the latest content, so the final
+  // render is exact; during streaming it just stops blocking the main thread.
+  const deferredContent = useDeferredValue(content)
   return (
     <div className={proseClassName(compact)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {deferredContent}
       </ReactMarkdown>
     </div>
   )

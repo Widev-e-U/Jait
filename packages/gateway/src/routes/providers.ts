@@ -450,6 +450,7 @@ export function registerProviderRoutes(
       typeof body.base_url === "string" && body.base_url.trim()
         ? body.base_url.trim()
         : JAIT_BACKEND_DEFAULT_URLS[backend],
+      backend,
     );
     const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
     const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : "";
@@ -480,7 +481,9 @@ export function registerProviderRoutes(
           latencyMs,
           error: res.status === 401 || res.status === 403
             ? "The endpoint answered with an auth error — the API key was rejected or missing."
-            : `The endpoint answered HTTP ${res.status}.`,
+            : res.status === 404
+              ? `The endpoint answered HTTP 404 for ${modelsUrl} — no model catalogue there. Self-hosted OpenAI-compatible servers (vLLM, llama.cpp, LM Studio) usually serve it under /v1.`
+              : `The endpoint answered HTTP ${res.status}.`,
         };
       }
       const data = (await res.json()) as { data?: Array<{ id?: string }>; models?: Array<{ name?: string }> };

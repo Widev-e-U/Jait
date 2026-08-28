@@ -4994,6 +4994,14 @@ export function registerChatRoutes(
       lastReplayedLogId = ev.log_id;
       let payloadObj: unknown;
       try { payloadObj = JSON.parse(ev.payload); } catch { payloadObj = {}; }
+      // Tag replayed events so clients can tell historical replay apart from
+      // live delivery (same convention as the /trajectory stream). A replayed
+      // `request`/`done` pair is the tail of an already-finished turn: applying
+      // its turn-end side effects (completion signals, todo-list clearing)
+      // would erase state the client just restored for this chat.
+      if (payloadObj && typeof payloadObj === "object" && !Array.isArray(payloadObj)) {
+        (payloadObj as Record<string, unknown>).replay = true;
+      }
       writeSseChunk(reply, `id: ${ev.log_id}\ndata: ${JSON.stringify(payloadObj)}\n\n`);
     }
 

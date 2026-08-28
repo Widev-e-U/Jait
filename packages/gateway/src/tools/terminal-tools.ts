@@ -546,7 +546,13 @@ function executeInTerminal(
     let settled = false;
     let promptRequestInFlight = false;
     let promptAnswered = false;
+    // VS Code parity: when the remote shell has OSC 633 integration (a B
+    // prompt-end marker was observed), completion is detected via D+B exactly
+    // like local terminals — no sentinel command is appended, so no odd
+    // sentinel line lands in the terminal scrollback. The sentinel is only a
+    // fallback for remote shells without integration.
     const remoteCompletionToken = surface instanceof RemoteTerminalSurface
+      && !surface.shellIntegrationReady
       ? `__JAIT_REMOTE_DONE_${uuidv7()}__`
       : null;
 
@@ -860,7 +866,13 @@ export function createTerminalRunTool(
         //    the terminal for completion (OSC 633) so the agent can be
         //    automatically re-triggered when the command finishes.
         if (isBackground) {
-          const completionToken = `__JAIT_BACKGROUND_DONE_${uuidv7()}__`;
+          // Same rule as foreground execution: only inject the sentinel when
+          // the shell has no OSC 633 integration (its B marker has never been
+          // seen). With integration the monitor settles on 633;D directly —
+          // no sentinel line echoed into the terminal scrollback.
+          const completionToken = surface.shellIntegrationReady
+            ? undefined
+            : `__JAIT_BACKGROUND_DONE_${uuidv7()}__`;
           const watched = backgroundCommandMonitor.track({
             sessionId: context.sessionId,
             terminalId,
@@ -895,10 +907,9 @@ export function createTerminalRunTool(
           const commandLine = scriptFile
             ? `. '${scriptFile.replace(/'/g, "''")}'`
             : command;
-          const terminalInput = [
-            commandLine,
-            buildTerminalExitMarkerCommand(shell, completionToken),
-          ].join("\n");
+          const terminalInput = completionToken
+            ? [commandLine, buildTerminalExitMarkerCommand(shell, completionToken)].join("\n")
+            : commandLine;
           if (surface instanceof RemoteTerminalSurface) {
             surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
           } else {

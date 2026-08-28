@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { __chatTestUtils } from "./chat.js";
 
@@ -89,5 +90,29 @@ describe("reconnect snapshot while a sub-agent is running", () => {
     expect(toolCalls[0]!["status"]).toBe("error");
     expect(toolCalls[1]!["status"]).toBe("success");
     expect(toolCalls[1]!["message"]).toBe("read 40 lines");
+  });
+});
+
+describe("/events replay tagging", () => {
+  const source = () =>
+    readFileSync(new URL("./chat.ts", import.meta.url), "utf8");
+
+  // ── The bug this guards against ──
+  // Switching back to a chat replays the persisted event log tail. The replayed
+  // tail of a finished turn is a `request`/`done` pair; without a replay marker
+  // the client treated the `done` as a live turn end and ran its turn-end side
+  // effects — wiping the todo list the snapshot had just restored.
+  it("tags replayed payloads with replay:true so clients skip turn-end side effects", () => {
+    const src = source();
+    const start = src.indexOf("const history = loadSessionEvents(sessionId);");
+    const end = src.indexOf("// Real turn-state heartbeat", start);
+    const replayBlock = src.slice(start, end);
+
+    expect(replayBlock).toContain("(payloadObj as Record<string, unknown>).replay = true;");
+    // The tag must land before the event is written out.
+    expect(replayBlock.indexOf(".replay = true;")).toBeGreaterThan(-1);
+    expect(replayBlock.indexOf(".replay = true;")).toBeLessThan(
+      replayBlock.indexOf("writeSseChunk(reply, `id: ${ev.log_id}"),
+    );
   });
 });

@@ -901,6 +901,10 @@ export function useChat(
       // Liveness-only frame. It carries no `id:`, so it never advances the
       // resume position and nothing here depends on it.
       if (data.type === 'heartbeat') return
+      // The gateway tags events it replayed from the durable log (switching
+      // back to this chat, or reconnecting after a drop). Those are the tail of
+      // an already-finished turn: turn-end side effects must not run for them.
+      const isReplay = data.replay === true
       pushSSEDebugEvent(String(data.type ?? 'unknown'), JSON.stringify(data))
 
       if (isTurnStartEvent(data.type)) {
@@ -1041,8 +1045,10 @@ export function useChat(
           finalSnapshot.toolCalls.length === 0
         setState(prev => {
           // Only signal completion if this was an active chat response, not the
-          // tail of a history-only replay.
-          if (prev.isLoading) {
+          // tail of a history-only replay. The same guard protects the todo
+          // list: a replayed `request` sets isLoading, and wiping here would
+          // erase the todos the gateway just restored for this chat.
+          if (prev.isLoading && !isReplay) {
             setCompletionCount(c => c + 1)
             clearUnfinishedTodoList()
           }

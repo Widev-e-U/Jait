@@ -44,7 +44,6 @@ import {
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
 import OpenRouter from '@lobehub/icons/es/OpenRouter'
-import XAI from '@lobehub/icons/es/XAI'
 import Gemini from '@lobehub/icons/es/Gemini'
 import Moonshot from '@lobehub/icons/es/Moonshot'
 import Kimi from '@lobehub/icons/es/Kimi'
@@ -58,12 +57,10 @@ interface ApiFieldGroup {
   fields: readonly string[]
 }
 
+// Chat providers (Perplexity, xAI/Grok, Google Gemini, Moonshot/Kimi, …) are
+// configured as Jait backend instances above — no standalone API-key group here.
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'OpenAI services', fields: ['OPENAI_API_KEY', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
-  { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY'] },
-  { label: 'xAI / Grok', fields: ['XAI_API_KEY'] },
-  { label: 'Google Gemini', fields: ['GEMINI_API_KEY'] },
-  { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
   { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE', 'STT_PROMPT'] },
 ]
@@ -85,29 +82,35 @@ export function mergeApiSettingsDraft(
 
 type FieldName = string
 
-type BackendInstanceDraft = Omit<JaitBackendInstanceConfig, 'apiKey' | 'model' | 'numCtx'> & {
+type BackendInstanceDraft = Omit<JaitBackendInstanceConfig, 'apiKey' | 'model' | 'numCtx' | 'type'> & {
+  type: JaitBackend | ''
   apiKey: string
   model: string
   numCtx: string
 }
 
+type BackendIcon = React.ComponentType<{ size?: number; className?: string }>
+// lobehub/lucide icon components don't structurally match ComponentType, but
+// they all render fine with just size/className — normalize them via cast.
+const asIcon = (icon: React.ElementType): BackendIcon => icon as BackendIcon
+
 const BACKEND_OPTIONS: Array<{
   type: JaitBackend
   label: string
   description: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: BackendIcon
 }> = [
-  { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.', icon: OpenAI },
-  { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.', icon: OpenRouter },
-  { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.', icon: Ollama },
-  { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.', icon: Network },
-  { type: 'gemini', label: 'Gemini', description: 'Google Gemini through its OpenAI-compatible endpoint.', icon: Gemini },
-  { type: 'anthropic', label: 'Anthropic', description: 'Anthropic Claude through its OpenAI-compatible endpoint.', icon: Anthropic },
-  { type: 'grok', label: 'Grok', description: 'xAI Grok models via the xAI API.', icon: Grok },
-  { type: 'perplexity', label: 'Perplexity', description: 'Perplexity reasoning and search models.', icon: Perplexity },
-  { type: 'moonshot', label: 'Moonshot', description: 'Moonshot AI (Kimi) via its OpenAI-compatible endpoint.', icon: Moonshot },
-  { type: 'kimi', label: 'Kimi', description: 'Kimi (Moonshot AI) via its OpenAI-compatible endpoint.', icon: Kimi },
-  { type: 'vllm', label: 'vLLM', description: 'A local or remote vLLM server with an OpenAI-compatible endpoint.', icon: Vllm },
+  { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.', icon: asIcon(OpenAI) },
+  { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.', icon: asIcon(OpenRouter) },
+  { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.', icon: asIcon(Ollama) },
+  { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.', icon: asIcon(Network) },
+  { type: 'gemini', label: 'Gemini', description: 'Google Gemini through its OpenAI-compatible endpoint.', icon: asIcon(Gemini) },
+  { type: 'anthropic', label: 'Anthropic', description: 'Anthropic Claude through its OpenAI-compatible endpoint.', icon: asIcon(Anthropic) },
+  { type: 'grok', label: 'Grok', description: 'xAI Grok models via the xAI API.', icon: asIcon(Grok) },
+  { type: 'perplexity', label: 'Perplexity', description: 'Perplexity reasoning and search models.', icon: asIcon(Perplexity) },
+  { type: 'moonshot', label: 'Moonshot', description: 'Moonshot AI (Kimi) via its OpenAI-compatible endpoint.', icon: asIcon(Moonshot) },
+  { type: 'kimi', label: 'Kimi', description: 'Kimi (Moonshot AI) via its OpenAI-compatible endpoint.', icon: asIcon(Kimi) },
+  { type: 'vllm', label: 'vLLM', description: 'A local or remote vLLM server with an OpenAI-compatible endpoint.', icon: asIcon(Vllm) },
 ]
 
 function legacyBackendDraft(
@@ -265,16 +268,8 @@ export function getBackendInstanceDrafts(
 
 /** Map field prefix → lobe icon component */
 const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  OPENAI: OpenAI,
-  PERPLEXITY: Perplexity,
-  OPENROUTER: OpenRouter,
-  XAI: XAI,
-  GEMINI: Gemini,
+  OPENAI: asIcon(OpenAI),
   ELEVENLABS: Key as React.ComponentType<{ size?: number; className?: string }>,
-  MOONSHOT: Moonshot,
-  KIMI: Kimi,
-  GROK: Grok,
-  OLLAMA: Ollama,
   HA: Home as React.ComponentType<{ size?: number; className?: string }>,
 }
 
@@ -552,7 +547,8 @@ export function SettingsPage({
   const savedBackendInstances = getBackendInstanceDrafts(apiKeys, jaitBackend)
   const backendInstancesDirty = JSON.stringify(backendInstancesDraft) !== JSON.stringify(savedBackendInstances)
   const backendInstancesValid = backendInstancesDraft.length > 0 && backendInstancesDraft.every((instance) => (
-    instance.name.trim()
+    instance.type
+    && instance.name.trim()
     && instance.baseUrl.trim()
     && (!instance.numCtx.trim() || Number(instance.numCtx) >= 2048)
   ))
@@ -609,14 +605,13 @@ export function SettingsPage({
   }
   const handleAddBackendInstance = () => {
     const id = globalThis.crypto?.randomUUID?.() ?? `backend-${Date.now()}`
-    const option = BACKEND_OPTIONS.find((candidate) => candidate.type === jaitBackend) ?? BACKEND_OPTIONS[0]
     setBackendInstancesDraft((instances) => [
       ...instances,
       {
         id,
-        type: option.type,
-        name: `${option.label} ${instances.filter((instance) => instance.type === option.type).length + 1}`,
-        baseUrl: JAIT_BACKEND_DEFAULT_URLS[option.type],
+        type: '',
+        name: '',
+        baseUrl: '',
         apiKey: '',
         model: '',
         numCtx: '',
@@ -943,7 +938,9 @@ export function SettingsPage({
     try {
       const next = mergeApiSettingsDraft(apiKeys, draft)
       if (backendInstancesDirty) {
-        const instances: JaitBackendInstanceConfig[] = backendInstancesDraft.map((instance) => ({
+        const instances: JaitBackendInstanceConfig[] = backendInstancesDraft
+          .filter((instance): instance is BackendInstanceDraft & { type: JaitBackend } => instance.type !== '')
+          .map((instance) => ({
           id: instance.id,
           type: instance.type,
           name: instance.name.trim(),
@@ -1895,7 +1892,7 @@ const providerAccountsCard = (
                   </div>
                   <Button variant="outline" size="sm" onClick={handleAddBackendInstance}>
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
-                    Add {BACKEND_OPTIONS.find((option) => option.type === jaitBackend)?.label}
+                    Add
                   </Button>
                 </div>
                 <div className="space-y-3">
@@ -1908,7 +1905,7 @@ const providerAccountsCard = (
                             onValueChange={(value) => updateBackendInstance(instance.id, { type: value as JaitBackend })}
                           >
                             <SelectTrigger aria-label="Backend type">
-                              <SelectValue />
+                              <SelectValue placeholder="Select backend type" />
                             </SelectTrigger>
                             <SelectContent>
                               {BACKEND_OPTIONS.map((option) => (
@@ -1941,7 +1938,7 @@ const providerAccountsCard = (
                       <div className="grid gap-2 lg:grid-cols-2">
                         <Input
                           aria-label="Backend base URL"
-                          placeholder={JAIT_BACKEND_DEFAULT_URLS[instance.type]}
+                          placeholder={instance.type ? JAIT_BACKEND_DEFAULT_URLS[instance.type] : 'https://your-backend.example.com/v1'}
                           value={instance.baseUrl}
                           onChange={(event) => updateBackendInstance(instance.id, { baseUrl: event.target.value })}
                         />
@@ -1977,7 +1974,7 @@ const providerAccountsCard = (
                           variant="outline"
                           size="sm"
                           onClick={() => { void handleTestBackendInstance(instance) }}
-                          disabled={backendTestingId === instance.id}
+                          disabled={backendTestingId === instance.id || !instance.type || !instance.baseUrl.trim()}
                         >
                           {backendTestingId === instance.id
                             ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

@@ -242,6 +242,35 @@ describe('turn-ending error handling', () => {
   })
 })
 
+describe('replayed turn-end events must not wipe the todo list', () => {
+  const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
+  // ── The bug this guards against ──
+  // Switching back to a chat replays the persisted event log tail. A replayed
+  // `request` set isLoading, so the replayed `done` that followed looked like a
+  // live turn end and ran `clearUnfinishedTodoList()` — erasing the todo list
+  // the snapshot had just restored. The done branch must skip its turn-end
+  // side effects whenever the gateway marked the event as a replay.
+  it('guards completion signal and todo wipe with the replay flag', () => {
+    const src = source()
+    const doneStart = src.indexOf("} else if (data.type === 'done') {")
+    const doneBlock = src.slice(doneStart, src.indexOf("} else if (data.type === 'error') {", doneStart))
+
+    expect(doneBlock).toContain('if (prev.isLoading && !isReplay) {')
+    expect(doneBlock).toContain('clearUnfinishedTodoList()')
+    // The wipe may only run inside the guarded block: it must appear after the
+    // guard opens and before the guard's setState return closes.
+    const guardAt = doneBlock.indexOf('if (prev.isLoading && !isReplay) {')
+    const wipeAt = doneBlock.indexOf('clearUnfinishedTodoList()')
+    expect(wipeAt).toBeGreaterThan(guardAt)
+  })
+
+  it('derives isReplay from the gateway tag, defaulting live events to false', () => {
+    const src = source()
+    expect(src).toContain('const isReplay = data.replay === true')
+  })
+})
+
 describe('single-consumer send path', () => {
   const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
 

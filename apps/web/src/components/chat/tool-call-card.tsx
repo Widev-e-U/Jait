@@ -612,19 +612,121 @@ export function getTodoToolListItems(
             ? resultTodoRecord.items
             : []
 
-  return rawItems.flatMap((entry, index) => {
+  const items: TodoToolListItem[] = []
+  rawItems.forEach((entry, index) => {
     const record = toRecord(entry)
-    if (!record) return []
-    const title = getThreadListString(record.title)
-      ?? getThreadListString(record.step)
-      ?? getThreadListString(record.task)
-    if (!title) return []
-    return [{
-      id: typeof record.id === 'number' ? record.id : index + 1,
-      title,
-      status: getTodoToolStatus(record.status),
-    }]
+    if (!record) return
+    const item = todoItemFromRecord(record, index)
+    if (item) items.push(item)
   })
+  return items
+}
+
+function todoItemFromRecord(record: Record<string, unknown>, index: number): TodoToolListItem | null {
+  const title = getThreadListString(record.title)
+    ?? getThreadListString(record.step)
+    ?? getThreadListString(record.task)
+  if (!title) return null
+  return {
+    id: typeof record.id === 'number' ? record.id : index + 1,
+    title,
+    status: getTodoToolStatus(record.status),
+  }
+}
+
+export interface StreamingTodoItems {
+  items: TodoToolListItem[]
+  /** True once the streamed args contain (or have started) a `todoList` key. */
+  hasTodoList: boolean
+}
+
+/**
+ * Tolerantly extracts todo items from a partially-streamed `todo` tool-call
+ * args JSON string. While the model is still writing the arguments the JSON is
+ * incomplete (truncated mid-object / mid-string); this scanner recovers every
+ * complete item plus the in-flight trailing item so the card can render the
+ * task list live, item by item, instead of a wall of raw JSON.
+ */
+export function extractStreamingTodoItems(streamingArgs: string | undefined): StreamingTodoItems {
+  const items: TodoToolListItem[] = []
+  const raw = typeof streamingArgs === 'string' ? streamingArgs : ''
+  const hasTodoList = raw.includes('todoList')
+  if (!hasTodoList) return { items, hasTodoList }
+
+  // Scan top-level objects inside the `todoList` array, ignoring braces inside
+  // strings, so a title like `"}"` cannot derail the extraction.
+  const keyIndex = raw.indexOf('todoList')
+  const arrayStart = raw.indexOf('[', keyIndex + 'todoList'.length)
+  if (arrayStart === -1) return { items, hasTodoList }
+  let depth = 0
+  let objectStart = -1
+  let inString = false
+  let escaped = false
+  for (let i = arrayStart + 1; i < raw.length; i += 1) {
+    const ch = raw[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+    } else if (ch === '{') {
+      if (depth === 0) objectStart = i
+      depth += 1
+    } else if (ch === '}') {
+      if (depth === 0) break
+      depth -= 1
+      if (depth === 0 && objectStart >= 0) {
+        const item = todoItemFromRawObject(raw.slice(objectStart, i + 1), items.length)
+        if (item) items.push(item)
+        objectStart = -1
+      }
+    } else if (depth === 0 && ch === ']') {
+      break
+    }
+  }
+  if (depth > 0 && objectStart >= 0) {
+    // The last item is still streaming in — recover whatever fields landed.
+    const partial = partialTodoItemFromRawObject(raw.slice(objectStart), items.length)
+    if (partial) items.push(partial)
+  }
+  return { items, hasTodoList }
+}
+
+function todoItemFromRawObject(raw: string, index: number): TodoToolListItem | null {
+  try {
+    return todoItemFromRecord(JSON.parse(raw) as Record<string, unknown>, index)
+  } catch {
+    return partialTodoItemFromRawObject(raw, index)
+  }
+}
+
+/**
+ * Recovers a half-streamed todo item (`{"id":2,"status":"completed","title":"Veri`).
+ * A partially typed title is shown as-is so the row appears to build up live.
+ */
+function partialTodoItemFromRawObject(raw: string, index: number): TodoToolListItem | null {
+  const titleMatch = raw.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)/)
+  if (!titleMatch) return null
+  const title = unescapeJsonStringFragment(titleMatch[1])
+  if (!getThreadListString(title)) return null
+  const statusMatch = raw.match(/"status"\s*:\s*"((?:[^"\\]|\\.)*)/)
+  const idMatch = raw.match(/"id"\s*:\s*(\d+)/)
+  return {
+    id: idMatch ? Number(idMatch[1]) : index + 1,
+    title,
+    status: statusMatch ? getTodoToolStatus(statusMatch[1]) : 'not-started',
+  }
+}
+
+function unescapeJsonStringFragment(value: string): string {
+  return value
+    .replace(/\\(["\\/])/g, '$1')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '  ')
+    .replace(/\\\\/g, '\\')
 }
 
 function threadItemFromRecord(record: Record<string, unknown>, fallbackStatus: ThreadListStatus): ThreadListItem {
@@ -2900,6 +3002,15 @@ function PendingToolBody({ tool, streamingArgs, scrollRef, bodyScrollRef }: { to
     }
   }
 
+  // Todo: stream the task card live, item by item, in the same look as the
+  // completed card instead of a wall of raw JSON.
+  if (normalized === 'todo') {
+    const { items, hasTodoList } = extractStreamingTodoItems(streamingArgs)
+    if (hasTodoList && items.length > 0) {
+      return <TodoToolListView items={items} streaming />
+    }
+  }
+
   if (normalized === 'memory.save') {
     const scope = extractStreamingStringField(streamingArgs, 'scope') ?? 'memory'
     const content = extractStreamingStringField(streamingArgs, 'content')
@@ -3424,9 +3535,11 @@ function ThreadListView({ items, resultMessage }: { items: ThreadListItem[]; res
 function TodoToolListView({
   items,
   errorMessage,
+  streaming = false,
 }: {
   items: TodoToolListItem[]
   errorMessage?: string
+  streaming?: boolean
 }) {
   const completedCount = items.filter((item) => item.status === 'completed').length
   const progress = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0
@@ -3434,7 +3547,7 @@ function TodoToolListView({
   return (
     <div className="overflow-hidden rounded-md border border-orange-500/20 bg-orange-500/[0.025] text-xs">
       <div className="flex items-center gap-3 border-b border-orange-500/15 px-3 py-2">
-        <span className="font-medium text-foreground">Tasks</span>
+        <span className="font-medium text-foreground">{streaming ? 'Tasks · building…' : 'Tasks'}</span>
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
           <div
             className={cn(
@@ -3447,7 +3560,7 @@ function TodoToolListView({
         <span className="tabular-nums text-muted-foreground">{completedCount}/{items.length}</span>
       </div>
       <div className="divide-y divide-border/35">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <div key={item.id} className="flex items-start gap-2 px-3 py-2">
             {item.status === 'completed' ? (
               <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-500" />
@@ -3461,6 +3574,9 @@ function TodoToolListView({
               item.status === 'completed' && 'text-muted-foreground line-through',
             )}>
               {item.title}
+              {streaming && index === items.length - 1 ? (
+                <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse rounded-[1px] bg-orange-500/70 align-middle" />
+              ) : null}
             </span>
           </div>
         ))}

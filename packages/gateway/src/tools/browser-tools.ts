@@ -1,3 +1,4 @@
+import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
@@ -610,7 +611,11 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
       if (context?.signal?.aborted) return { ok: false, message: "Cancelled" };
       const requestedProvider = input.provider ?? "auto";
       const getApiKey = (name: string) =>
-        normalizeApiKey(context.apiKeys?.[name]) ?? normalizeApiKey(process.env[name]);
+        normalizeApiKey(context.apiKeys?.[name])
+        ?? normalizeApiKey(process.env[name])
+        // Fall back to API keys configured on Jait backend instances, so the
+        // backend settings section fully replaces the per-provider key fields.
+        ?? backendInstanceApiKey(context.apiKeys, name);
       const provider = resolveWebSearchProvider(requestedProvider, getApiKey);
       const limit = Math.max(1, Math.min(input.limit ?? 5, 10));
       const openaiOptions = {
@@ -712,6 +717,34 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
 function normalizeApiKey(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Settings keys that also exist as per-instance API keys on Jait backend
+ * instances (Settings → Jait backends). Web search reads these keys; when the
+ * standalone setting is absent, fall back to the matching backend instance's
+ * key so configuring e.g. a Moonshot backend is enough for Kimi web search.
+ */
+const WEB_SEARCH_INSTANCE_KEY_FALLBACKS: Record<string, readonly JaitBackend[]> = {
+  PERPLEXITY_API_KEY: ["perplexity"],
+  OPENROUTER_API_KEY: ["openrouter"],
+  XAI_API_KEY: ["grok"],
+  GEMINI_API_KEY: ["gemini"],
+  MOONSHOT_API_KEY: ["moonshot", "kimi"],
+};
+
+function backendInstanceApiKey(
+  apiKeys: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  const types = WEB_SEARCH_INSTANCE_KEY_FALLBACKS[name];
+  if (!types || !apiKeys) return undefined;
+  const instances = parseJaitBackendInstances(apiKeys["JAIT_BACKEND_INSTANCES"]);
+  for (const type of types) {
+    const match = instances.find((instance) => instance.type === type && instance.apiKey);
+    if (match?.apiKey) return match.apiKey;
+  }
+  return undefined;
 }
 
 function resolveWebSearchProvider(

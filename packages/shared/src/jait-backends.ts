@@ -35,14 +35,31 @@ export const JAIT_BACKEND_DEFAULT_URLS: Record<JaitBackend, string> = {
  * value already carries a scheme (`http`, `https`, …) it is left untouched.
  * Trailing slashes are also stripped so `new URL`/`/models` concatenation is
  * stable.
+ *
+ * vLLM serves its OpenAI-compatible API under `/v1` (`/v1/models`,
+ * `/v1/chat/completions`). Users paste a bare `http://host:8000` and then
+ * every probe 404s against the root. When the backend type is `vllm` and the
+ * URL has no path beyond the root, `/v1` is appended — mirroring the `/v1`
+ * suffix the Ollama chat resolver already applies.
  */
-export function normalizeJaitBackendBaseUrl(raw: string): string {
+export function normalizeJaitBackendBaseUrl(raw: string, backend?: JaitBackend): string {
   const trimmed = raw.trim().replace(/\/+$/, "");
   if (!trimmed) return trimmed;
+  let url = trimmed;
   // Has a scheme? e.g. `http://…`, `https://…`, `ws://…`, `host:11434` does not.
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed;
-  // Otherwise treat as a bare host/IP and default to http.
-  return `http://${trimmed}`;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) {
+    // Otherwise treat as a bare host/IP and default to http.
+    url = `http://${url}`;
+  }
+  if (backend === "vllm") {
+    try {
+      const parsed = new URL(url);
+      if (!parsed.pathname || parsed.pathname === "/") return `${url.replace(/\/+$/, "")}/v1`;
+    } catch {
+      // Leave malformed URLs untouched; the caller surfaces a parse error.
+    }
+  }
+  return url;
 }
 
 export function parseJaitBackendInstances(raw: string | null | undefined): JaitBackendInstanceConfig[] {
@@ -59,7 +76,7 @@ export function parseJaitBackendInstances(raw: string | null | undefined): JaitB
       const type = record.type;
       const name = typeof record.name === "string" ? record.name.trim() : "";
       const baseUrl = typeof record.baseUrl === "string"
-        ? normalizeJaitBackendBaseUrl(record.baseUrl)
+        ? normalizeJaitBackendBaseUrl(record.baseUrl, isJaitBackend(type) ? type : undefined)
         : "";
       const apiKey = typeof record.apiKey === "string" ? record.apiKey.trim() : "";
       const model = typeof record.model === "string" ? record.model.trim() : "";
@@ -89,7 +106,7 @@ export function serializeJaitBackendInstances(instances: JaitBackendInstanceConf
     id: instance.id.trim(),
     type: instance.type,
     name: instance.name.trim(),
-    baseUrl: normalizeJaitBackendBaseUrl(instance.baseUrl),
+    baseUrl: normalizeJaitBackendBaseUrl(instance.baseUrl, instance.type),
     ...(instance.apiKey?.trim() ? { apiKey: instance.apiKey.trim() } : {}),
     ...(instance.model?.trim() ? { model: instance.model.trim() } : {}),
     ...(instance.type === "ollama" && instance.numCtx && instance.numCtx >= 2048
