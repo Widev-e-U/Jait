@@ -460,13 +460,16 @@ jobs:
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.shared_changed == 'true'
         working-directory: packages/shared
         run: |
-          npm publish --access public 2>&1 | tee /tmp/npm-out.log
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
-            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
               echo "⏭ Already published — skipping"
             else
-              cat /tmp/npm-out.log; exit $status
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
             fi
           fi
         env:
@@ -483,13 +486,16 @@ jobs:
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
         working-directory: packages/screen-share
         run: |
-          npm publish --access public 2>&1 | tee /tmp/npm-out.log
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
-            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
               echo "⏭ Already published — skipping"
             else
-              cat /tmp/npm-out.log; exit $status
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
             fi
           fi
         env:
@@ -517,13 +523,16 @@ jobs:
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         working-directory: packages/gateway
         run: |
-          npm publish --access public 2>&1 | tee /tmp/npm-out.log
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
-            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
               echo "⏭ Already published — skipping"
             else
-              cat /tmp/npm-out.log; exit $status
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
             fi
           fi
         env:
