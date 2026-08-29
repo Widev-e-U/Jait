@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import com.google.android.gms.wearable.ChannelClient;
 import com.google.android.gms.wearable.MessageEvent;
 import com.google.android.gms.wearable.Wearable;
@@ -112,6 +113,7 @@ public class WearQuestionListenerService extends WearableListenerService {
         return request;
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
     private void showQuestion(String rawRequest) {
         try {
             JSONObject request = new JSONObject(rawRequest);
@@ -129,6 +131,11 @@ public class WearQuestionListenerService extends WearableListenerService {
                 this, notificationId(requestId), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+        // Android 13+ drops notifications until POST_NOTIFICATIONS is granted at runtime; the
+        // dashboard requests on first launch. Skip silently (request is persisted) instead of
+        // throwing a SecurityException inside the listener service.
+        if (!notificationManager.areNotificationsEnabled()) return;
 
             String body = "Open to answer this question.";
             JSONArray questions = request.optJSONArray("questions");
@@ -148,8 +155,7 @@ public class WearQuestionListenerService extends WearableListenerService {
                 .setFullScreenIntent(pendingIntent, true)
                 .setAutoCancel(true)
                 .setLocalOnly(true);
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
-                .notify(notificationId(requestId), notification.build());
+            notificationManager.notify(notificationId(requestId), notification.build());
         } catch (JSONException ignored) {
         }
     }

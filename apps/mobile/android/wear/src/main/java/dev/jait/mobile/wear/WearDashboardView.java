@@ -5,546 +5,823 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 
-final class WearDashboardView {
-    interface Listener {
+/**
+ * Every screen of the watch app, rendered imperatively with plain widgets in a shadcn-style
+ * token language (see {@link WearTheme}):
+ *
+ * <ul>
+ *   <li>{@link #buildHome} — metrics dashboard: connection banner, metric chips, running chats,
+ *       recent chats, and needs-reply cards.</li>
+ *   <li>{@link #buildChats} — chat index with All/Running/Idle filter chips.</li>
+ *   <li>{@link #buildChat} — a chat transcript rendered as real message bubbles.</li>
+ *   <li>{@link #buildRequests} — the agent inbox (questions that need a reply).</li>
+ * </ul>
+ */
+public final class WearDashboardView {
+    private static final int MAX_CHATS_PER_PAGE = 5;
+    private static final int MAX_MESSAGES_PER_PAGE = 3;
+    private static final int MAX_REQUESTS_PER_PAGE = 2;
+
+    /** Chat-list filter, process-wide so it survives activity re-renders. */
+    private static String sFilter = "all";
+
+    private final Context context;
+    private Listener listener;
+
+    /** Callbacks fired by the screens; implemented by {@link WearQuestionActivity}. */
+    public interface Listener {
         void onHome();
+
         void onChats();
+
         void onRequests();
+
         void onRefresh();
+
         void onOpenChat(WearSnapshotStore.Chat chat);
+
         void onOpenRequest(WearRequestStore.Entry entry);
-        void onPage(int page);
+
+        void onPage(int nextPage);
+
         void onToggleTheme();
     }
 
-    private final Context context;
-    private final WearTheme theme;
-
-    WearDashboardView(Context context) {
+    public WearDashboardView(Context context) {
         this.context = context;
-        this.theme = WearTheme.load(context);
+        this.listener = null;
     }
 
-    WearTheme theme() {
-        return theme;
-    }
+    // ------------------------------------------------------------------ home dashboard
 
-    View buildHome(
+    public View buildHome(
         WearSnapshotStore.Snapshot snapshot,
-        List<WearRequestStore.Entry> requests,
+        List<WearRequestStore.Entry> entries,
         Listener listener
     ) {
-        int pending = 0;
-        for (WearRequestStore.Entry entry : requests) {
-            if (entry.isPending()) pending++;
-        }
+        this.listener = listener;
 
-        LinearLayout root = screen(40, 30, 40, 10);
-        root.addView(brandHeader(listener), fixedHeight(28, 0, 0, 0, 4));
+        LinearLayout body = root();
+        body.addView(header(null, null, true));
 
-        LinearLayout metrics = new LinearLayout(context);
-        metrics.setOrientation(LinearLayout.HORIZONTAL);
-        metrics.addView(
-            metric(String.valueOf(snapshot.activeThreads), "ACTIVE", snapshot.activeThreads > 0 ? theme.green() : theme.muted()),
-            weightedHeight(1f, 40, 0, 0, 3, 0)
-        );
-        metrics.addView(
-            metric(String.valueOf(pending), "NEEDS REPLY", pending > 0 ? theme.blue() : theme.muted()),
-            weightedHeight(1f, 40, 3, 0, 0, 0)
-        );
-        root.addView(metrics, fixedHeight(40, 0, 0, 0, 4));
+        addConnectionBanner(body, snapshot);
+        addMetricChips(body, snapshot, pendingCount(entries));
 
-        String chatsDetail = snapshot.totalThreads == 0
-            ? "Recent conversations"
-            : snapshot.totalThreads + " chats · " + snapshot.updatedToday + " today";
-        root.addView(
-            actionRow("Chats", chatsDetail, theme.blue(), listener::onChats),
-            fixedHeight(40, 0, 0, 0, 4)
-        );
-
-        String requestsDetail = requests.isEmpty()
-            ? "No agent requests yet"
-            : requests.size() + " recent · " + pending + " pending";
-        root.addView(
-            actionRow("Requests", requestsDetail, pending > 0 ? theme.blue() : theme.secondary(), listener::onRequests),
-            fixedHeight(40, 0, 0, 0, 4)
-        );
-
-        String syncText;
-        int syncColor;
-        if (snapshot.connected) {
-            String age = WearPromptView.ageLabel(snapshot.syncedAt, System.currentTimeMillis());
-            syncText = age.equals("now") ? "Synced now" : "Synced " + age + " ago";
-            syncColor = theme.muted();
-        } else {
-            syncText = snapshot.error.isEmpty() ? "Tap refresh to sync" : snapshot.error;
-            syncColor = theme.red();
-        }
-        TextView sync = text(syncText, 9, syncColor, false);
-        sync.setGravity(Gravity.CENTER);
-        sync.setSingleLine(true);
-        root.addView(sync, fixedHeight(13, 0, 0, 0, 0));
-        return root;
-    }
-
-    View buildChats(WearSnapshotStore.Snapshot snapshot, int page, Listener listener) {
-        LinearLayout root = screen(30, 24, 30, 12);
-        int pageCount = WearPagination.pageCount(snapshot.chats.size());
-        int safePage = WearPagination.clampPage(page, pageCount);
-        root.addView(
-            pageHeader("Chats", snapshot.activeThreads + " active", listener),
-            fixedHeight(30, 0, 0, 0, 5)
-        );
+        List<WearSnapshotStore.Chat> running = byStatus(snapshot.chats, "running");
+        List<WearSnapshotStore.Chat> recent = sortedByUpdated(snapshot.chats);
 
         if (snapshot.chats.isEmpty()) {
-            root.addView(
-                emptyCard(
-                    snapshot.connected ? "No chats yet" : "Phone not synced",
-                    snapshot.connected ? "Start a conversation in Jait." : snapshot.error
-                ),
-                fixedHeight(110, 0, 0, 0, 5)
-            );
+            body.addView(emptyCard("No chats synced yet.\nOpen Jait on your phone."));
         } else {
-            int start = safePage * WearPagination.PAGE_SIZE;
-            for (int slot = 0; slot < WearPagination.PAGE_SIZE; slot++) {
-                int index = start + slot;
-                if (index < snapshot.chats.size()) {
-                    WearSnapshotStore.Chat chat = snapshot.chats.get(index);
-                    root.addView(
-                        chatCard(chat, () -> listener.onOpenChat(chat)),
-                        fixedHeight(53, 0, 0, 0, slot == 0 ? 4 : 0)
-                    );
-                } else {
-                    root.addView(new View(context), fixedHeight(53, 0, 0, 0, slot == 0 ? 4 : 0));
+            List<WearRequestStore.Entry> pending = pendingOnly(entries);
+            if (!pending.isEmpty()) {
+                body.addView(sectionTitle("Needs reply", pending.size()));
+                for (int index = 0; index < pending.size() && index < 2; index++) {
+                    body.addView(requestCard(pending.get(index)));
+                }
+                if (pending.size() > 2) {
+                    body.addView(navRow("All agent requests", v -> listener.onRequests()));
                 }
             }
-            root.addView(new View(context), fixedHeight(5, 0, 0, 0, 0));
-        }
-
-        root.addView(pager(safePage, pageCount, listener), fixedHeight(30, 0, 0, 0, 0));
-        return root;
-    }
-
-    View buildChat(WearSnapshotStore.Chat chat, int page, Listener listener) {
-        LinearLayout root = screen(28, 18, 28, 10);
-        int pageCount = WearPagination.pageCount(chat.messages.size());
-        int safePage = WearPagination.clampPage(page, pageCount);
-        root.addView(
-            pageHeader(chat.title, statusLabel(chat.status), listener),
-            fixedHeight(32, 0, 0, 0, 4)
-        );
-
-        TextView provider = text(
-            chat.providerId + " · " + chat.messages.size() + " messages",
-            9,
-            theme.muted(),
-            false
-        );
-        provider.setGravity(Gravity.CENTER);
-        provider.setSingleLine(true);
-        root.addView(provider, fixedHeight(16, 0, 0, 0, 4));
-
-        if (chat.messages.isEmpty()) {
-            root.addView(
-                emptyCard("No messages captured", "This chat has no readable message activity yet."),
-                fixedHeight(108, 0, 0, 0, 5)
-            );
-        } else {
-            int start = safePage * WearPagination.PAGE_SIZE;
-            for (int slot = 0; slot < WearPagination.PAGE_SIZE; slot++) {
-                int index = start + slot;
-                if (index < chat.messages.size()) {
-                    root.addView(
-                        messageCard(chat.messages.get(index)),
-                        fixedHeight(52, 0, 0, 0, slot == 0 ? 4 : 0)
-                    );
-                } else {
-                    root.addView(new View(context), fixedHeight(52, 0, 0, 0, slot == 0 ? 4 : 0));
+            if (!running.isEmpty()) {
+                body.addView(sectionTitle("Running now", running.size()));
+                for (int index = 0; index < running.size() && index < 2; index++) {
+                    body.addView(chatCard(running.get(index)));
                 }
             }
-            root.addView(new View(context), fixedHeight(5, 0, 0, 0, 0));
+            body.addView(sectionTitle("Recent chats", snapshot.chats.size()));
+            for (int index = 0; index < recent.size() && index < 3; index++) {
+                body.addView(chatCard(recent.get(index)));
+            }
+            body.addView(navRow("All chats", v -> listener.onChats()));
+            body.addView(navRow("Agent inbox", v -> listener.onRequests()));
         }
 
-        root.addView(pager(safePage, pageCount, listener), fixedHeight(30, 0, 0, 0, 0));
-        return root;
+        body.addView(footer(snapshot));
+        return wrap(body);
     }
 
-    View buildRequests(List<WearRequestStore.Entry> entries, int page, Listener listener) {
-        LinearLayout root = screen(30, 24, 30, 12);
-        int pending = 0;
-        for (WearRequestStore.Entry entry : entries) {
-            if (entry.isPending()) pending++;
+    // ------------------------------------------------------------------ chat index
+
+    public View buildChats(WearSnapshotStore.Snapshot snapshot, int page, Listener listener) {
+        this.listener = listener;
+
+        LinearLayout body = root();
+        body.addView(header("Chats", v -> listener.onHome(), false));
+        body.addView(filterBar(snapshot.chats));
+
+        List<WearSnapshotStore.Chat> chats = matches(sortedByUpdated(snapshot.chats));
+        int pageCount = Math.max(1, (chats.size() + MAX_CHATS_PER_PAGE - 1) / MAX_CHATS_PER_PAGE);
+        int safePage = clamp(page, 0, pageCount - 1);
+
+        if (chats.isEmpty()) {
+            body.addView(emptyCard("all".equals(sFilter) ? "No chats synced yet." : "No " + sFilter + " chats."));
+        } else {
+            int start = safePage * MAX_CHATS_PER_PAGE;
+            for (int index = start; index < chats.size() && index < start + MAX_CHATS_PER_PAGE; index++) {
+                body.addView(chatCard(chats.get(index)));
+            }
         }
-        int pageCount = WearPagination.pageCount(entries.size());
-        int safePage = WearPagination.clampPage(page, pageCount);
-        root.addView(
-            pageHeader("Requests", pending + " pending", listener),
-            fixedHeight(30, 0, 0, 0, 5)
-        );
+        body.addView(pageNav(safePage, pageCount, "chats"));
+        return wrap(body);
+    }
+
+    // ------------------------------------------------------------------ chat transcript
+
+    public View buildChat(WearSnapshotStore.Chat chat, int page, Listener listener) {
+        this.listener = listener;
+
+        LinearLayout body = root();
+        body.addView(header(chat.title, v -> listener.onChats(), false));
+        body.addView(chatStatusRow(chat));
+
+        int total = chat.messages.size();
+        int pageCount = Math.max(1, (total + MAX_MESSAGES_PER_PAGE - 1) / MAX_MESSAGES_PER_PAGE);
+        // page counts back from the newest message: 0 = latest page.
+        int safePage = clamp(page, 0, pageCount - 1);
+        int end = total - safePage * MAX_MESSAGES_PER_PAGE;
+        int start = Math.max(0, end - MAX_MESSAGES_PER_PAGE);
+
+        for (int index = start; index < end; index++) {
+            body.addView(messageBubble(chat.messages.get(index)));
+        }
+
+        if (safePage == 0 && "running".equals(chat.status)) {
+            body.addView(typingPill());
+        }
+        body.addView(newerOlderNav(safePage, pageCount, total));
+        return wrap(body);
+    }
+
+    // ------------------------------------------------------------------ agent inbox
+
+    public View buildRequests(final List<WearRequestStore.Entry> entries, int page, Listener listener) {
+        this.listener = listener;
+
+        LinearLayout body = root();
+        body.addView(header("Agent inbox", v -> listener.onHome(), false));
+
+        int pageCount = Math.max(1, (entries.size() + MAX_REQUESTS_PER_PAGE - 1) / MAX_REQUESTS_PER_PAGE);
+        int safePage = clamp(page, 0, pageCount - 1);
+        int start = safePage * MAX_REQUESTS_PER_PAGE;
 
         if (entries.isEmpty()) {
-            root.addView(
-                emptyCard("All clear", "Agent questions will appear here."),
-                fixedHeight(110, 0, 0, 0, 5)
-            );
-        } else {
-            int start = safePage * WearPagination.PAGE_SIZE;
-            for (int slot = 0; slot < WearPagination.PAGE_SIZE; slot++) {
-                int index = start + slot;
-                if (index < entries.size()) {
-                    WearRequestStore.Entry entry = entries.get(index);
-                    root.addView(
-                        requestCard(entry, () -> listener.onOpenRequest(entry)),
-                        fixedHeight(53, 0, 0, 0, slot == 0 ? 4 : 0)
-                    );
-                } else {
-                    root.addView(new View(context), fixedHeight(53, 0, 0, 0, slot == 0 ? 4 : 0));
-                }
-            }
-            root.addView(new View(context), fixedHeight(5, 0, 0, 0, 0));
+            body.addView(emptyCard("No agent requests yet."));
         }
-
-        root.addView(pager(safePage, pageCount, listener), fixedHeight(30, 0, 0, 0, 0));
-        return root;
+        for (int index = start; index < entries.size() && index < start + MAX_REQUESTS_PER_PAGE; index++) {
+            body.addView(requestCard(entries.get(index)));
+        }
+        body.addView(pageNav(safePage, pageCount, "requests"));
+        return wrap(body);
     }
 
-    private View brandHeader(Listener listener) {
-        LinearLayout header = new LinearLayout(context);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+    // ------------------------------------------------------------------ home widgets
 
-        FrameLayout logo = new FrameLayout(context);
-        logo.setBackground(rounded(theme.logoBackground(), 8, Color.TRANSPARENT));
-        ImageView logoMark = new ImageView(context);
-        logoMark.setImageResource(R.drawable.ic_jait_mark_dark);
-        logoMark.setPadding(dp(5), dp(5), dp(5), dp(5));
-        logo.addView(logoMark, new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER));
-        header.addView(logo, new LinearLayout.LayoutParams(dp(28), dp(28)));
-
-        LinearLayout brandText = new LinearLayout(context);
-        brandText.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("Jait", 14, theme.primary(), true);
-        title.setSingleLine(true);
-        brandText.addView(title);
-        TextView subtitle = text("WATCH", 8, theme.blue(), true);
-        subtitle.setLetterSpacing(0.15f);
-        brandText.addView(subtitle);
-        header.addView(brandText, weightedWrap(1f, 8, 0, 0, 0));
-
-        TextView refresh = text("↻", 18, theme.secondary(), false);
-        refresh.setGravity(Gravity.CENTER);
-        refresh.setBackground(rounded(theme.surface(), 12, theme.border()));
-        refresh.setClickable(true);
-        refresh.setFocusable(true);
-        refresh.setOnClickListener(view -> listener.onRefresh());
-        header.addView(refresh, new LinearLayout.LayoutParams(dp(28), dp(28)));
-
-        TextView themeToggle = text(theme.isDark() ? "☾" : "☀", 15, theme.secondary(), false);
-        themeToggle.setGravity(Gravity.CENTER);
-        themeToggle.setBackground(rounded(theme.surface(), 12, theme.border()));
-        themeToggle.setClickable(true);
-        themeToggle.setFocusable(true);
-        themeToggle.setOnClickListener(view -> listener.onToggleTheme());
-        header.addView(themeToggle, new LinearLayout.LayoutParams(dp(28), dp(28)));
-        return header;
+    private void addConnectionBanner(LinearLayout parent, WearSnapshotStore.Snapshot snapshot) {
+        if (snapshot.connected && (snapshot.error == null || snapshot.error.isEmpty())) return;
+        LinearLayout banner = card(12, 10);
+        if (!snapshot.connected) {
+            banner.setBackground(rounded(12, WearTheme.card(context), WearTheme.destructive(context), dp(1)));
+        }
+        banner.addView(dot(!snapshot.connected ? WearTheme.destructive(context) : WearTheme.warning(context)));
+        banner.addView(spacer(dp(8)));
+        TextView message = text(
+            !snapshot.connected ? "Not connected — open Jait on your phone" : snapshot.error,
+            10,
+            WearTheme.foreground(context)
+        );
+        message.setMaxLines(2);
+        banner.addView(message, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        parent.addView(banner);
     }
 
-    private View pageHeader(String titleValue, String subtitleValue, Listener listener) {
-        LinearLayout header = new LinearLayout(context);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+    private void addMetricChips(LinearLayout parent, WearSnapshotStore.Snapshot snapshot, int pendingCount) {
+        int running = Math.max(snapshot.activeThreads, byStatus(snapshot.chats, "running").size());
 
-        TextView back = text("‹", 22, theme.primary(), false);
-        back.setGravity(Gravity.CENTER);
-        back.setBackground(rounded(theme.surface(), 12, theme.border()));
-        back.setClickable(true);
-        back.setFocusable(true);
-        back.setOnClickListener(view -> listener.onHome());
-        header.addView(back, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(metricChip(running, "running", running > 0), chipParams(6));
+        row.addView(metricChip(snapshot.chats.size(), "chats", false), chipParams(0));
+        parent.addView(row);
 
-        LinearLayout heading = new LinearLayout(context);
-        heading.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text(titleValue, 13, theme.primary(), true);
-        title.setSingleLine(true);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        heading.addView(title);
-        TextView subtitle = text(subtitleValue, 8, theme.muted(), false);
-        subtitle.setSingleLine(true);
-        heading.addView(subtitle);
-        header.addView(heading, weightedWrap(1f, 8, 0, 0, 0));
-        return header;
+        LinearLayout row2 = new LinearLayout(context);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.addView(metricChip(pendingCount, "need reply", pendingCount > 0), chipParams(6));
+        row2.addView(metricChip(snapshot.updatedToday, "updated today", false), chipParams(0));
+        parent.addView(row2);
     }
 
-    private View metric(String value, String label, int accentColor) {
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER);
-        card.setBackground(rounded(theme.surface(), 13, theme.border()));
+    private LinearLayout.LayoutParams chipParams(int rightMarginDp) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(28), 1f);
+        params.setMargins(0, dp(7), dp(rightMarginDp), 0);
+        return params;
+    }
 
-        TextView number = text(value, 17, accentColor, true);
-        number.setGravity(Gravity.CENTER);
-        card.addView(number);
-        TextView caption = text(label, 8, theme.muted(), true);
-        caption.setGravity(Gravity.CENTER);
-        caption.setLetterSpacing(0.08f);
-        card.addView(caption);
+    private View metricChip(int value, String label, boolean emphasize) {
+        TextView chip = new TextView(context);
+        chip.setGravity(Gravity.CENTER);
+        chip.setTextSize(10);
+        chip.setTypeface(Typeface.DEFAULT_BOLD);
+        chip.setTextColor(emphasize ? WearTheme.logoForeground(context) : WearTheme.foreground(context));
+        chip.setText(value + "  " + label);
+        chip.setBackground(rounded(
+            9,
+            emphasize ? tint(WearTheme.logoForeground(context), 30) : WearTheme.card(context),
+            emphasize ? WearTheme.logoForeground(context) : WearTheme.border(context),
+            dp(1)
+        ));
+        return chip;
+    }
+
+    private View sectionTitle(String title, int count) {
+        TextView titleView = bold(
+            title.toUpperCase(Locale.US) + (count > 0 ? "  ·  " + count : ""),
+            8,
+            WearTheme.mutedForeground(context)
+        );
+        titleView.setPadding(dp(2), dp(12), 0, dp(3));
+        return titleView;
+    }
+
+    private View navRow(String label, View.OnClickListener onClick) {
+        LinearLayout card = card(14, 13);
+        card.setOnClickListener(onClick);
+        card.addView(bold(label, 11, WearTheme.foreground(context)), 0);
+        View spacer = new View(context);
+        card.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+        TextView arrow = pill("›", WearTheme.background(context), WearTheme.mutedForeground(context));
+        card.addView(arrow);
         return card;
     }
 
-    private View actionRow(String titleValue, String subtitleValue, int accentColor, Runnable action) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), 0, dp(10), 0);
-        row.setBackground(rounded(theme.surfaceActive(), 13, theme.borderActive()));
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(view -> action.run());
+    private View footer(WearSnapshotStore.Snapshot snapshot) {
+        TextView footer = text("synced " + ageAgo(snapshot.syncedAt) + " — tap ↻ to refresh", 8, WearTheme.mutedForeground(context));
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(16), 0, 0);
+        footer.setOnClickListener(v -> listener.onRefresh());
+        return footer;
+    }
 
-        LinearLayout labels = new LinearLayout(context);
-        labels.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text(titleValue, 12, theme.primary(), true);
-        labels.addView(title);
-        TextView subtitle = text(subtitleValue, 8, theme.muted(), false);
-        subtitle.setSingleLine(true);
-        subtitle.setEllipsize(TextUtils.TruncateAt.END);
-        labels.addView(subtitle);
-        row.addView(labels, weightedWrap(1f, 0, 0, 0, 0));
+    // ------------------------------------------------------------------ list widgets
 
-        TextView arrow = text("›", 20, accentColor, false);
-        arrow.setGravity(Gravity.CENTER);
-        row.addView(arrow, new LinearLayout.LayoutParams(dp(20), dp(30)));
+    private View chatCard(final WearSnapshotStore.Chat chat) {
+        LinearLayout card = card(14, 12);
+        card.setOnClickListener(v -> listener.onOpenChat(chat));
+
+        card.addView(dot(statusColor(chat.status)));
+        card.addView(spacer(dp(8)));
+
+        LinearLayout textColumn = new LinearLayout(context);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        TextView title = bold(chat.title, 11, WearTheme.foreground(context));
+        title.setMaxLines(1);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        textColumn.addView(title);
+
+        if (!chat.messages.isEmpty()) {
+            WearSnapshotStore.Message last = chat.messages.get(chat.messages.size() - 1);
+            TextView preview = text(last.content, 9, WearTheme.mutedForeground(context));
+            preview.setMaxLines(1);
+            preview.setEllipsize(TextUtils.TruncateAt.END);
+            textColumn.addView(preview);
+        }
+        card.addView(textColumn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+       card.addView(text(rightAge(chat.updatedAt), 8, WearTheme.mutedForeground(context)));
+        return card;
+    }
+
+    private View requestCard(final WearRequestStore.Entry entry) {
+        LinearLayout card = card(14, 12);
+        if (entry.isPending()) {
+            card.setOnClickListener(v -> listener.onOpenRequest(entry));
+        }
+        card.addView(dot(entry.isPending() ? WearTheme.warning(context) : WearTheme.mutedForeground(context)));
+        card.addView(spacer(dp(8)));
+
+        LinearLayout textColumn = new LinearLayout(context);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        TextView title = bold(entry.title, 11, entry.isPending() ? WearTheme.foreground(context) : WearTheme.mutedForeground(context));
+        title.setMaxLines(1);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        textColumn.addView(title);
+        TextView question = text(entry.question, 9, WearTheme.mutedForeground(context));
+        question.setMaxLines(2);
+        question.setEllipsize(TextUtils.TruncateAt.END);
+        textColumn.addView(question);
+        card.addView(textColumn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return card;
+    }
+
+    private View emptyCard(String message) {
+        LinearLayout card = card(14, 14);
+        TextView text = text(message, 10, WearTheme.mutedForeground(context));
+        text.setGravity(Gravity.CENTER);
+        card.addView(text, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        return card;
+    }
+
+    // ------------------------------------------------------------------ chat transcript widgets
+
+    private View chatStatusRow(WearSnapshotStore.Chat chat) {
+        LinearLayout row = row();
+        row.setPadding(dp(2), 0, 0, dp(6));
+        row.addView(dot(statusColor(chat.status)));
+        row.addView(spacer(dp(6)));
+        String label = chat.status;
+        if (chat.providerId != null && !chat.providerId.isEmpty()) label += " · " + chat.providerId;
+        String age = rightAge(chat.updatedAt);
+        if (!age.isEmpty()) label += " · " + age;
+        row.addView(text(label, 9, WearTheme.mutedForeground(context)));
         return row;
     }
 
-    private View chatCard(WearSnapshotStore.Chat chat, Runnable action) {
-        LinearLayout card = baseListCard();
-        card.setOnClickListener(view -> action.run());
+    /** One message as a chat bubble: user right-tinted, assistant left-neutral. */
+    private View messageBubble(WearSnapshotStore.Message message) {
+        boolean fromUser = "user".equalsIgnoreCase(message.role);
 
-        LinearLayout top = new LinearLayout(context);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = text(chat.title, 11, theme.primary(), true);
-        title.setSingleLine(true);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        top.addView(title, weightedWrap(1f, 0, 0, 0, 0));
-        TextView status = text(statusLabel(chat.status), 8, statusColor(chat.status), true);
-        top.addView(status);
-        card.addView(top);
+        LinearLayout outer = new LinearLayout(context);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams outerParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        outerParams.setMargins(0, dp(6), 0, 0);
+        outer.setLayoutParams(outerParams);
 
-        String preview = chat.messages.isEmpty()
-            ? chat.providerId
-            : chat.messages.get(chat.messages.size() - 1).content;
-        TextView detail = text(preview, 9, theme.secondary(), false);
-        detail.setSingleLine(true);
-        detail.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(detail, matchWrap(0, 4, 0, 0));
-        return card;
+        LinearLayout bubble = new LinearLayout(context);
+        bubble.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable shape = rounded(14, fromUser ? WearTheme.userBubble(context) : WearTheme.card(context), WearTheme.border(context), dp(1));
+        // one tight corner marks the sender side, like shadcn chat bubbles
+        shape.setCornerRadii(cornerRadii(12, 12, fromUser ? 3 : 12, fromUser ? 12 : 3));
+        bubble.setBackground(shape);
+        bubble.setPadding(dp(9), dp(7), dp(9), dp(7));
+
+        TextView who = bold(fromUser ? "You" : "Jait", 8, WearTheme.mutedForeground(context));
+        bubble.addView(who);
+        TextView content = text(message.content, 11, WearTheme.foreground(context));
+        content.setMaxWidth(dp(118));
+        content.setMaxLines(10);
+        content.setEllipsize(TextUtils.TruncateAt.END);
+        bubble.addView(content);
+
+        LinearLayout holder = new LinearLayout(context);
+        holder.setOrientation(LinearLayout.HORIZONTAL);
+        holder.setGravity(fromUser ? Gravity.END : Gravity.START);
+        holder.addView(bubble, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        outer.addView(holder);
+
+        TextView stamp = text(shortTime(message.createdAt), 8, WearTheme.mutedForeground(context));
+        stamp.setGravity(fromUser ? Gravity.END : Gravity.START);
+        stamp.setPadding(dp(2), dp(2), dp(2), 0);
+        outer.addView(stamp, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        return outer;
     }
 
-    private View requestCard(WearRequestStore.Entry entry, Runnable action) {
-        LinearLayout card = baseListCard();
-        if (entry.isPending()) {
-            card.setOnClickListener(view -> action.run());
+    private View typingPill() {
+        LinearLayout pill = card(12, 12);
+        pill.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout dotHolder = new LinearLayout(context);
+        View dot = new View(context);
+        dot.setBackground(circle(WearTheme.success(context), dp(4)));
+        dotHolder.addView(dot, new LinearLayout.LayoutParams(dp(8), dp(8)));
+        pill.addView(dotHolder);
+        pill.addView(spacer(dp(7)));
+        pill.addView(text("agent is running…", 9, WearTheme.mutedForeground(context)));
+        return pill;
+    }
+
+    // ------------------------------------------------------------------ filter + navigation
+
+    private View filterBar(List<WearSnapshotStore.Chat> allChats) {
+        LinearLayout row = row();
+        row.addView(filterChip("All", "all", allChats.size()));
+        row.addView(filterChip("Run", "running", byStatus(allChats, "running").size()));
+        row.addView(filterChip("Idle", "idle", byStatus(allChats, "idle").size()));
+        return row;
+    }
+
+    private View filterChip(String label, String value, int count) {
+        boolean active = sFilter.equals(value);
+        TextView chip = pill(
+            label + (count > 0 ? " " + count : ""),
+            active ? WearTheme.surfaceActive(context) : WearTheme.card(context),
+            active ? WearTheme.foreground(context) : WearTheme.mutedForeground(context)
+        );
+        if (active) {
+            chip.setBackground(rounded(10, WearTheme.surfaceActive(context), WearTheme.primary(context), dp(1)));
+        }
+        chip.setOnClickListener(v -> {
+            sFilter = value;
+            this.listener.onChats();
+        });
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(dp(3), 0, dp(3), 0);
+        chip.setLayoutParams(params);
+        return chip;
+    }
+
+    private View pageNav(int page, int pageCount, String noun) {
+        if (pageCount <= 1) return spacer(dp(4));
+        LinearLayout nav = row();
+        nav.setGravity(Gravity.CENTER);
+        nav.setPadding(0, dp(10), 0, dp(2));
+
+        TextView prev = pill("‹", WearTheme.card(context), WearTheme.foreground(context));
+        prev.setOnClickListener(v -> listener.onPage(Math.max(0, page - 1)));
+        TextView counter = text((page + 1) + "/" + pageCount + " " + noun, 9, WearTheme.mutedForeground(context));
+        LinearLayout.LayoutParams counterParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        counterParams.setMargins(dp(8), 0, dp(8), 0);
+        TextView next = pill("›", WearTheme.card(context), WearTheme.foreground(context));
+        next.setOnClickListener(v -> listener.onPage(Math.min(pageCount - 1, page + 1)));
+
+        LinearLayout.LayoutParams pillParams = new LinearLayout.LayoutParams(dp(26), dp(26));
+        nav.addView(prev, pillParams);
+        nav.addView(counter, counterParams);
+        nav.addView(next, pillParams);
+        return nav;
+    }
+
+    /** Transcript pager: counts back from the newest message (0 = newest). */
+    private View newerOlderNav(int page, int pageCount, int total) {
+        LinearLayout nav = new LinearLayout(context);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER);
+        nav.setPadding(0, dp(10), 0, 0);
+
+        TextView older = pill("older ‹", WearTheme.card(context), WearTheme.foreground(context));
+        olderButton(older, page, pageCount);
+        TextView newer = pill("› newer", WearTheme.card(context), WearTheme.foreground(context));
+        newerButton(newer, page);
+        TextView counter = text(
+            Math.min(total, total - page * MAX_MESSAGES_PER_PAGE) + " of " + total + " shown",
+            8,
+            WearTheme.mutedForeground(context)
+        );
+        LinearLayout.LayoutParams counterParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        counterParams.setMargins(dp(8), 0, dp(8), 0);
+
+        nav.addView(older, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        nav.addView(counter, counterParams);
+        nav.addView(newer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        return nav;
+    }
+
+    private void olderButton(TextView button, int page, int pageCount) {
+        if (page + 1 < pageCount) {
+            button.setOnClickListener(v -> listener.onPage(page + 1));
         } else {
-            card.setClickable(false);
-            card.setAlpha(0.75f);
+            button.setOnClickListener(null);
+            button.setTextColor(WearTheme.mutedForeground(context));
+        }
+    }
+
+    private void newerButton(TextView button, int page) {
+        if (page > 0) {
+            button.setOnClickListener(v -> listener.onPage(page - 1));
+        } else {
+            button.setOnClickListener(null);
+            button.setTextColor(WearTheme.mutedForeground(context));
+        }
+    }
+
+    // ------------------------------------------------------------------ header
+
+    /** Shared header: optional back chip, title (or brand), theme switch, optional refresh. */
+    private View header(String title, View.OnClickListener back, boolean withRefresh) {
+        LinearLayout row = row();
+
+        if (back != null) {
+            TextView backChip = pill("‹", WearTheme.card(context), WearTheme.foreground(context));
+            backChip.setBackground(rounded(9, WearTheme.card(context), WearTheme.border(context), dp(1)));
+            backChip.setOnClickListener(back);
+            row.addView(backChip, new LinearLayout.LayoutParams(dp(26), dp(26)));
+            row.addView(spacer(dp(7)));
         }
 
-        LinearLayout top = new LinearLayout(context);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = text(entry.title, 11, theme.primary(), true);
-        title.setSingleLine(true);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        top.addView(title, weightedWrap(1f, 0, 0, 0, 0));
-        String state = entry.isPending()
-            ? "REPLY"
-            : WearRequestStore.STATE_ANSWERED.equals(entry.state) ? "DONE" : "CLOSED";
-        TextView status = text(state, 8, entry.isPending() ? theme.blue() : theme.muted(), true);
-        top.addView(status);
-        card.addView(top);
+        if (title == null) {
+            LinearLayout brand = new LinearLayout(context);
+            brand.setOrientation(LinearLayout.HORIZONTAL);
+            brand.setGravity(Gravity.CENTER_VERTICAL);
+            TextView logo = new TextView(context);
+            logo.setText("J");
+            logo.setTextColor(WearTheme.logoForeground(context));
+            logo.setTypeface(Typeface.DEFAULT_BOLD);
+            logo.setTextSize(10);
+            logo.setGravity(Gravity.CENTER);
+            logo.setBackground(rounded(8, WearTheme.logoBackground(context), WearTheme.logoForeground(context), dp(1)));
+            brand.addView(logo, new LinearLayout.LayoutParams(dp(22), dp(22)));
+            brand.addView(spacer(dp(6)));
+            brand.addView(bold("Jait", 13, WearTheme.foreground(context)));
+            row.addView(brand, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        } else {
+            TextView titleView = bold(title, 12, WearTheme.foreground(context));
+            titleView.setMaxLines(1);
+            titleView.setEllipsize(TextUtils.TruncateAt.END);
+            row.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        }
 
-        TextView detail = text(entry.question, 9, theme.secondary(), false);
-        detail.setSingleLine(true);
-        detail.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(detail, matchWrap(0, 4, 0, 0));
-        return card;
+        row.addView(spacer(dp(6)));
+        LinearLayout.LayoutParams switchParams = new LinearLayout.LayoutParams(dp(34), dp(20));
+        row.addView(themeSwitch(), switchParams);
+
+        if (withRefresh) {
+            row.addView(spacer(dp(6)));
+            TextView refresh = pill("↻", WearTheme.card(context), WearTheme.foreground(context));
+            refresh.setBackground(rounded(9, WearTheme.card(context), WearTheme.border(context), dp(1)));
+            refresh.setOnClickListener(v -> listener.onRefresh());
+            row.addView(refresh, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        }
+        return row;
     }
 
-    private View messageCard(WearSnapshotStore.Message message) {
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(10), dp(7), dp(10), dp(7));
-        boolean fromUser = "user".equals(message.role);
-        card.setBackground(rounded(
-            fromUser ? theme.userBubble() : theme.surface(),
-            12,
-            fromUser ? theme.userBubbleBorder() : theme.border()
+    /** shadcn Switch-style dark/light toggle; ON = dark. */
+    private View themeSwitch() {
+        final boolean dark = WearTheme.isDark(context);
+
+        LinearLayout track = new LinearLayout(context);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        track.setGravity(Gravity.CENTER_VERTICAL);
+        track.setPadding(dp(2), 0, dp(2), 0);
+        track.setBackground(rounded(
+            11,
+            dark ? WearTheme.surfaceActive(context) : WearTheme.mutedForeground(context),
+            WearTheme.border(context),
+            dp(1)
         ));
 
-        TextView role = text(fromUser ? "YOU" : "JAIT", 8, fromUser ? theme.blue() : theme.green(), true);
-        role.setLetterSpacing(0.08f);
-        card.addView(role);
-        TextView content = text(message.content, 9, theme.primary(), false);
-        content.setMaxLines(2);
-        content.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(content, matchWrap(0, 3, 0, 0));
-        return card;
+        View thumb = new View(context);
+        thumb.setBackground(circle(WearTheme.primaryForeground(context), 8));
+
+        LinearLayout thumbHolder = new LinearLayout(context);
+        thumbHolder.setOrientation(LinearLayout.HORIZONTAL);
+        thumbHolder.setGravity(dark ? Gravity.END : Gravity.START);
+        thumbHolder.addView(thumb, new LinearLayout.LayoutParams(dp(16), dp(16)));
+
+        track.addView(thumbHolder, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f
+        ));
+        track.setOnClickListener(v -> this.listener.onToggleTheme());
+        track.setContentDescription(dark ? "Switch to light mode" : "Switch to dark mode");
+        return track;
     }
 
-    private LinearLayout baseListCard() {
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(dp(11), dp(7), dp(11), dp(7));
-        card.setBackground(rounded(theme.surface(), 12, theme.border()));
-        card.setClickable(true);
-        card.setFocusable(true);
-        return card;
+    // ------------------------------------------------------------------ layout primitives
+
+    private LinearLayout root() {
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(10), dp(8), dp(10), dp(16));
+        return layout;
     }
 
-    private View emptyCard(String titleValue, String detailValue) {
-        LinearLayout card = new LinearLayout(context);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER);
-        card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(rounded(theme.surface(), 14, theme.border()));
-
-        TextView title = text(titleValue, 12, theme.primary(), true);
-        title.setGravity(Gravity.CENTER);
-        card.addView(title);
-        TextView detail = text(detailValue == null ? "" : detailValue, 9, theme.muted(), false);
-        detail.setGravity(Gravity.CENTER);
-        detail.setMaxLines(2);
-        detail.setEllipsize(TextUtils.TruncateAt.END);
-        card.addView(detail, matchWrap(0, 5, 0, 0));
-        return card;
+    private ScrollView wrap(LinearLayout body) {
+        body.setBackgroundColor(WearTheme.background(context));
+        ScrollView scroll = new ScrollView(context);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.addView(body, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        return scroll;
     }
 
-    private View pager(int page, int pageCount, Listener listener) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView previous = pagerButton("‹", page > 0);
-        if (page > 0) previous.setOnClickListener(view -> listener.onPage(page - 1));
-        row.addView(previous, new LinearLayout.LayoutParams(dp(42), dp(30)));
-
-        TextView indicator = text((page + 1) + " / " + pageCount, 9, theme.muted(), true);
-        indicator.setGravity(Gravity.CENTER);
-        row.addView(indicator, weightedWrap(1f, 0, 0, 0, 0));
-
-        TextView next = pagerButton("›", page + 1 < pageCount);
-        if (page + 1 < pageCount) next.setOnClickListener(view -> listener.onPage(page + 1));
-        row.addView(next, new LinearLayout.LayoutParams(dp(42), dp(30)));
-        return row;
+    private LinearLayout row() {
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.HORIZONTAL);
+        layout.setGravity(Gravity.CENTER_VERTICAL);
+        return layout;
     }
 
-    private TextView pagerButton(String label, boolean enabled) {
-        TextView button = text(label, 20, enabled ? theme.primary() : theme.disabled(), false);
-        button.setGravity(Gravity.CENTER);
-        button.setBackground(rounded(theme.surface(), 13, theme.border()));
-        button.setClickable(enabled);
-        button.setFocusable(enabled);
-        return button;
+    private LinearLayout card(int radiusDp, int paddingDp) {
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.HORIZONTAL);
+        layout.setGravity(Gravity.CENTER_VERTICAL);
+        layout.setBackground(rounded(radiusDp, WearTheme.card(context), WearTheme.border(context), dp(1)));
+        layout.setPadding(dp(paddingDp), dp(paddingDp), dp(paddingDp), dp(paddingDp));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, dp(6), 0, 0);
+        layout.setLayoutParams(params);
+        return layout;
     }
 
-    private LinearLayout screen(int left, int top, int right, int bottom) {
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(theme.background());
-        root.setPadding(dp(left), dp(top), dp(right), dp(bottom));
-        return root;
+    private View dot(int color) {
+        View dot = new View(context);
+        dot.setBackground(circle(color, 6));
+        dot.setLayoutParams(new LinearLayout.LayoutParams(dp(6), dp(6)));
+        return dot;
     }
 
-    private String statusLabel(String status) {
-        if ("running".equals(status)) return "RUNNING";
-        if ("completed".equals(status)) return "DONE";
-        if ("error".equals(status)) return "ERROR";
-        if ("interrupted".equals(status)) return "STOPPED";
-        return "IDLE";
+    private View spacer(int size) {
+        View spacer = new View(context);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(size, 1));
+        return spacer;
     }
 
-    private int statusColor(String status) {
-        if ("running".equals(status)) return theme.green();
-        if ("error".equals(status)) return theme.red();
-        if ("completed".equals(status)) return theme.blue();
-        return theme.muted();
-    }
+    // ------------------------------------------------------------------ drawable + text helpers
 
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView view = new TextView(context);
-        view.setText(value);
-        view.setTextSize(size);
-        view.setTextColor(color);
-        if (bold) view.setTypeface(Typeface.DEFAULT_BOLD);
-        return view;
-    }
-
-    private GradientDrawable rounded(int color, int radiusDp, int strokeColor) {
+    private GradientDrawable rounded(float radiusDp, int fillColor, int strokeColor, int strokePx) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
+        drawable.setShape(GradientDrawable.RECTANGLE);
         drawable.setCornerRadius(dp(radiusDp));
-        if (strokeColor != Color.TRANSPARENT) drawable.setStroke(dp(1), strokeColor);
+        drawable.setColor(fillColor);
+        if (strokePx > 0) drawable.setStroke(strokePx, strokeColor);
         return drawable;
     }
 
-    private LinearLayout.LayoutParams fixedHeight(
-        int height, int marginStart, int marginTop, int marginEnd, int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(height)
-        );
-        params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
-        return params;
+    /** Filled circle sized to the view; `sizeDp` is the intended diameter in dp. */
+    private GradientDrawable circle(int fillColor, float sizeDp) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setColor(fillColor);
+        return drawable;
     }
 
-    private LinearLayout.LayoutParams weightedHeight(
-        float weight,
-        int height,
-        int marginStart,
-        int marginTop,
-        int marginEnd,
-        int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(height));
-        params.weight = weight;
-        params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
-        return params;
+    private float[] cornerRadii(float tl, float tr, float br, float bl) {
+        float tlPx = dp(tl);
+        float trPx = dp(tr);
+        float brPx = dp(br);
+        float blPx = dp(bl);
+        return new float[]{tlPx, tlPx, trPx, trPx, brPx, brPx, blPx, blPx};
     }
 
-    private LinearLayout.LayoutParams weightedWrap(
-        float weight, int marginStart, int marginTop, int marginEnd, int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-            0,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        params.weight = weight;
-        params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
-        return params;
+    private int tint(int base, int alpha255) {
+        return Color.argb(alpha255, Color.red(base), Color.green(base), Color.blue(base));
     }
 
-    private LinearLayout.LayoutParams matchWrap(
-        int marginStart, int marginTop, int marginEnd, int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        params.setMargins(dp(marginStart), dp(marginTop), dp(marginEnd), dp(marginBottom));
-        return params;
+    private TextView pill(String label, int fillColor, int textColor) {
+        TextView pill = new TextView(context);
+        pill.setText(label);
+        pill.setTextColor(textColor);
+        pill.setTextSize(9);
+        pill.setTypeface(Typeface.DEFAULT_BOLD);
+        pill.setGravity(Gravity.CENTER);
+        pill.setBackground(rounded(10, fillColor, 0, 0));
+        pill.setPadding(dp(9), dp(5), dp(9), dp(5));
+        return pill;
     }
 
-    private int dp(int value) {
-        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    private TextView text(String label, float sizeSp, int color) {
+        TextView view = new TextView(context);
+        view.setText(label);
+        view.setTextColor(color);
+        view.setTextSize(sizeSp);
+        return view;
+    }
+
+    private TextView bold(String label, float sizeSp, int color) {
+        TextView view = text(label, sizeSp, color);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        return view;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private int dp(float value) {
+        return Math.max(1, Math.round(TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, value, context.getResources().getDisplayMetrics()
+        )));
+    }
+
+    // ------------------------------------------------------------------ data helpers
+
+    private int statusColor(String status) {
+        String normalized = status == null ? "" : status.toLowerCase(Locale.US);
+        switch (normalized) {
+            case "running":
+            case "active":
+                return WearTheme.success(context);
+            case "pending":
+            case "waiting":
+            case "needs_input":
+                return WearTheme.warning(context);
+            case "error":
+            case "failed":
+                return WearTheme.destructive(context);
+            default:
+                return WearTheme.mutedForeground(context);
+        }
+    }
+
+    private List<WearSnapshotStore.Chat> byStatus(List<WearSnapshotStore.Chat> chats, String status) {
+        List<WearSnapshotStore.Chat> result = new ArrayList<>();
+        for (WearSnapshotStore.Chat chat : chats) {
+            if (status.equalsIgnoreCase(chat.status)) result.add(chat);
+        }
+        return result;
+    }
+
+    private List<WearSnapshotStore.Chat> matches(List<WearSnapshotStore.Chat> chats) {
+        if ("all".equals(sFilter)) return chats;
+        List<WearSnapshotStore.Chat> result = new ArrayList<>();
+        for (WearSnapshotStore.Chat chat : chats) {
+            if (sFilter.equalsIgnoreCase(chat.status)) result.add(chat);
+        }
+        return result;
+    }
+
+    private List<WearSnapshotStore.Chat> sortedByUpdated(List<WearSnapshotStore.Chat> chats) {
+        List<WearSnapshotStore.Chat> copy = new ArrayList<>(chats);
+        copy.sort((left, right) -> parseDate(right.updatedAt).compareTo(parseDate(left.updatedAt)));
+        return copy;
+    }
+
+    private List<WearRequestStore.Entry> pendingOnly(List<WearRequestStore.Entry> entries) {
+        List<WearRequestStore.Entry> pending = new ArrayList<>();
+        for (WearRequestStore.Entry entry : entries) {
+            if (entry.isPending()) pending.add(entry);
+        }
+        return pending;
+    }
+
+    private int pendingCount(List<WearRequestStore.Entry> entries) {
+        return pendingOnly(entries).size();
+    }
+
+    private Date parseDate(String raw) {
+        Long parsed = parseTimestamp(raw);
+        return new Date(parsed == null ? 0L : parsed);
+    }
+
+    /** Best-effort ISO-8601 parser; returns epoch millis or null. */
+    private static Long parseTimestamp(String raw) {
+        if (raw == null || raw.isEmpty()) return null;
+        String[] patterns = {
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX",
+            "yyyy-MM-dd HH:mm:ss"
+        };
+        for (String pattern : patterns) {
+            try {
+                SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
+                format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                return format.parse(raw).getTime();
+            } catch (ParseException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String rightAge(String iso) {
+        Long epoch = parseTimestamp(iso);
+        if (epoch == null) return "";
+        return relativeSince(epoch);
+    }
+
+    private String ageAgo(long millis) {
+        if (millis <= 0) return "never";
+        return relativeSince(millis);
+    }
+
+    private String relativeSince(long epochMillis) {
+        long delta = System.currentTimeMillis() - epochMillis;
+        if (delta < 0) delta = 0;
+        long minutes = delta / 60000L;
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return minutes + "m ago";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "h ago";
+        return (hours / 24) + "d ago";
+    }
+
+    private String shortTime(String iso) {
+        Long epoch = parseTimestamp(iso);
+        if (epoch == null) return "";
+        return new SimpleDateFormat("HH:mm", Locale.US).format(new Date(epoch));
     }
 }

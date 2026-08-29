@@ -651,9 +651,10 @@ function MessageInner({
                 aria-label="Message actions"
                 className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
               >
-                {/* Pinned to the tap-area corner so the icon box stays inside
-                    the bubble's p-4 padding even for long single-line texts. */}
-                <MoreVertical className="absolute bottom-0 right-0 h-4 w-4" />
+                {/* Pinned to the tap-area's right edge, nudged 2px up so the
+                    glyph keeps a little breathing room from the bubble's
+                    bottom edge while staying inside the p-4 padding. */}
+                <MoreVertical className="absolute bottom-0.5 right-0 h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">

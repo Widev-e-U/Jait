@@ -2324,6 +2324,11 @@ export const __chatTestUtils = {
   emitToSubscribers,
   nextStreamSeq,
   emitTurnDone,
+  // Durable event log counter (used by the /events replay-position test): a
+  // subscribe without Last-Event-ID must start from the counter's seeded
+  // position, never from 0.
+  sessionEventCounter,
+  seedSessionEventCounter,
 };
 
 export interface ChatRouteDeps {
@@ -5112,6 +5117,18 @@ export function registerChatRoutes(
     // EventSource sends this header automatically on reconnect; a plain fetch
     // client can pass it explicitly. Absent, we start from the current log
     // position so no already-snapshotted event is replayed.
+    //
+    // The counter is an in-memory map that only reflects the durable log once
+    // it has been seeded — until then `.get(sessionId)` is undefined and the
+    // `?? 0` fallback below meant "start from log position 0". The seeding
+    // normally happens in the /messages snapshot route, but a client that
+    // opens /events before any snapshot (cold-start race right after Chrome
+    // restores tabs and the gateway just restarted, or the snapshot-failure
+    // fallback path) hit the unseeded default and replayed the entire
+    // session's event log — potentially tens of thousands of frames — which
+    // froze the tab. Seed explicitly so the no-header case is genuinely
+    // "start from the current log position".
+    seedSessionEventCounter(sessionId);
     const rawLastEventId = request.headers["last-event-id"];
     const resumeFrom = typeof rawLastEventId === "string" && /^\d+$/.test(rawLastEventId)
       ? Number.parseInt(rawLastEventId, 10)

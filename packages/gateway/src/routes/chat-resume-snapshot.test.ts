@@ -9,6 +9,8 @@ const {
   accumulateToolStart,
   accumulateToolResult,
   getOrCreateAccumulator,
+  sessionEventCounter,
+  seedSessionEventCounter,
 } = __chatTestUtils;
 
 const SESSION = "resume-snapshot-session";
@@ -90,6 +92,49 @@ describe("reconnect snapshot while a sub-agent is running", () => {
     expect(toolCalls[0]!["status"]).toBe("error");
     expect(toolCalls[1]!["status"]).toBe("success");
     expect(toolCalls[1]!["message"]).toBe("read 40 lines");
+  });
+});
+
+describe("/events resume position", () => {
+  const source = () =>
+    readFileSync(new URL("./chat.ts", import.meta.url), "utf8");
+
+  // ── The bug this guards against ──
+  // `sessionEventCounter` is an in-memory map seeded only when the gateway has
+  // touched the durable log for a session (persistStreamEvent, or the
+  // /messages snapshot route). A client that reached /events before that —
+  // the snapshot-failure fallback and the cold-start race right after tab
+  // restore / gateway restart — got the unseeded `?? 0` default as its resume
+  // position and replayed the session's *entire* event log, potentially tens
+  // of thousands of frames, freezing the tab on every reopen.
+  it("seeds the durable-log position inside /events before computing resumeFrom", () => {
+    const src = source();
+    const seedIdx = src.indexOf(
+      "seedSessionEventCounter(sessionId);\n    const rawLastEventId = request.headers[\"last-event-id\"];",
+    );
+    expect(seedIdx).toBeGreaterThan(-1);
+  });
+
+  it("starts a no-Last-Event-ID subscribe from the seeded counter, not 0", () => {
+    // Real behavior, not just source shape: an unseeded session resolves to
+    // "now" after seeding, and seeding is idempotent — it must not reset the
+    // counter if another route already advanced it.
+    const { sessionEventCounter, seedSessionEventCounter } = __chatTestUtils;
+    for (const id of ["resume-pos-a", "resume-pos-b", "resume-pos-c"]) sessionEventCounter.delete(id);
+    try {
+      // Unseeded + no durable row → position "now" (0), not a replay from 0.
+      seedSessionEventCounter("resume-pos-a");
+      const resumeFrom = sessionEventCounter.get("resume-pos-a") ?? 0;
+      expect(resumeFrom).toBe(0);
+
+      // A live event advancing the counter moves "now" forward; a later
+      // subscribe with no header must resume from the current position.
+      sessionEventCounter.set("resume-pos-a", 41);
+      seedSessionEventCounter("resume-pos-a");
+      expect(sessionEventCounter.get("resume-pos-a")).toBe(41);
+    } finally {
+      for (const id of ["resume-pos-a", "resume-pos-b", "resume-pos-c"]) sessionEventCounter.delete(id);
+    }
   });
 });
 

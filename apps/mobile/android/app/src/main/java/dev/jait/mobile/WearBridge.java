@@ -64,11 +64,30 @@ final class WearBridge {
      */
     static void relayAttention(Context context, JSONObject item) {
         sendToAll(context, ATTENTION_PATH, item.toString());
+        // Follow the alert with a fresh snapshot so watch metrics/chats are up to date the
+        // moment the user raised their wrist — no manual refresh needed.
+        PhoneWearListenerService.pushSnapshot(context);
     }
 
     static void relayDismiss(Context context, String requestId) {
         if (requestId == null || requestId.isEmpty()) return;
         sendToAll(context, DISMISS_PATH, requestId);
+    }
+
+    /** Sends a snapshot to every reachable watch (direct or cloud route). */
+    static void relaySnapshotToAll(Context context, JSONObject snapshot) {
+        if (snapshot == null) return;
+        Context appContext = context.getApplicationContext();
+        new Thread(() -> {
+            try {
+                byte[] data = snapshot.toString().getBytes(StandardCharsets.UTF_8);
+                MessageClient messageClient = Wearable.getMessageClient(appContext);
+                for (Node node : reachableNodes(appContext)) {
+                    Tasks.await(messageClient.sendMessage(node.getId(), SNAPSHOT_PATH, data), 5, TimeUnit.SECONDS);
+                }
+            } catch (Exception ignored) {
+            }
+        }, "jait-wear-snapshot-all").start();
     }
 
     static void relaySnapshot(Context context, String nodeId, JSONObject snapshot) {

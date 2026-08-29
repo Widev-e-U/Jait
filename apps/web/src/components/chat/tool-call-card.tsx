@@ -3602,6 +3602,13 @@ function ToolCallCardInner({
 }: ToolCallCardProps) {
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
+  // Cards created mid-stream (pending/running) mount open underneath the
+  // streaming bottom-chaser, which pins scroll in the same frame a layout
+  // change commits. Animating their height in that window is what made rows
+  // flicker below the composer. A mount-time marker (fixed for the card's
+  // life, so no animation can restart mid-toggle) routes those cards through
+  // the layout-neutral streaming variant in index.css instead.
+  const [streamingMounted] = useState(call.status === 'pending' || call.status === 'running')
   const [now, setNow] = useState(() => Date.now())
   const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
   const prevStatusRef = useRef(call.status)
@@ -3786,13 +3793,18 @@ function ToolCallCardInner({
       && call.status !== 'running'
       && call.status !== 'pending'
     ) {
+      // The card is collapsing itself when the tool finishes, not responding
+      // to a click — without anchoring, the height collapse pulls rows under
+      // the composer while the transcript is still streaming. Measure and pin
+      // the anchored edge before flipping state, exactly like a manual toggle.
+      anchorToggle()
       setOpen(false)
     }
     if (call.status === 'pending' || call.status === 'running' || inlineBody || hasInlineSecretPrompt) {
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
+  }, [anchorToggle, backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
 
   useEffect(() => {
     if (
@@ -4135,7 +4147,9 @@ function ToolCallCardInner({
       </div>
 
       {hasExpandableContent && (
-        <CollapsibleContent className="tool-call-collapsible">
+        <CollapsibleContent
+          className={cn('tool-call-collapsible', streamingMounted && 'tool-call-collapsible-streaming')}
+        >
           <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
             {bodyContent}
           </div>
@@ -4621,10 +4635,13 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
       return
     }
     if (prevActiveRef.current && !isActive && calls.length > 0) {
+      // Same as the single-card completion effect: the wrapper is collapsing
+      // itself mid-stream, so pin the anchored edge across the height change.
+      anchorToggle()
       setOpen(false)
     }
     prevActiveRef.current = isActive
-  }, [hasInlineSecretPrompt, isActive, calls.length])
+  }, [anchorToggle, hasInlineSecretPrompt, isActive, calls.length])
 
   // Tick the elapsed timer while active
   useEffect(() => {

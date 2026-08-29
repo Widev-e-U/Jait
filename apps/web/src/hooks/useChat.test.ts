@@ -269,6 +269,24 @@ describe('replayed turn-end events must not wipe the todo list', () => {
     const src = source()
     expect(src).toContain('const isReplay = data.replay === true')
   })
+
+  // ── The bug this guards against ──
+  // The SSE debug ring stringified every incoming frame. A reconnect replaying
+  // thousands of persisted frames would JSON.stringify each one (CPU + memory
+  // spike) and flood the ring, evicting exactly the live frames it exists to
+  // capture. Replayed frames are already in the gateway's durable log.
+  it('skips the SSE debug ring for replayed frames', () => {
+    const src = source()
+    const ringCallAt = src.indexOf('pushSSEDebugEvent(')
+    const guardAt = src.lastIndexOf('if (!isReplay) {', ringCallAt)
+    expect(ringCallAt).toBeGreaterThan(-1)
+    expect(guardAt).toBeGreaterThan(-1)
+    const guardEnd = src.indexOf('}', guardAt)
+    // The stringify must be inside the !isReplay guard, which sits after the
+    // replay flag is computed.
+    expect(src.slice(guardAt, guardEnd)).toContain('pushSSEDebugEvent(')
+    expect(src.indexOf('const isReplay = ', ringCallAt === -1 ? 0 : Math.max(0, guardAt - 2000))).toBeLessThan(guardAt)
+  })
 })
 
 describe('single-consumer send path', () => {

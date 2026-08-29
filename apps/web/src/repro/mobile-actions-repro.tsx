@@ -18,9 +18,9 @@ function UserBubble({ text }: { text: string }) {
           aria-label="Message actions"
           className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
         >
-          {/* Match message.tsx: icon pinned to the corner of the 24px tap
-              area so it stays inside the bubble's 16px padding. */}
-          <MoreVertical className="absolute bottom-0 right-0 h-4 w-4" />
+          {/* Match message.tsx: icon pinned to the right edge of the 24px tap
+              area, nudged 2px up for breathing room from the bubble bottom. */}
+          <MoreVertical className="absolute bottom-0.5 right-0 h-4 w-4" />
         </button>
       </div>
     </div>

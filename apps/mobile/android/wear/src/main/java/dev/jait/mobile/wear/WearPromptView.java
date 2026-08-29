@@ -45,7 +45,7 @@ final class WearPromptView {
 
     private final Context context;
     private final Listener listener;
-    private final WearTheme theme;
+    private final Palette theme;
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
     private final Map<String, EditText> freeTextInputs = new LinkedHashMap<>();
     private final List<String> questionIds = new ArrayList<>();
@@ -53,7 +53,60 @@ final class WearPromptView {
     WearPromptView(Context context, Listener listener) {
         this.context = context;
         this.listener = listener;
-        this.theme = WearTheme.load(context);
+        this.theme = new Palette(context);
+    }
+
+    /**
+     * Instance-style facade over the static {@link WearTheme} shadcn tokens, so view code can read
+     * like a stylesheet. `primary` here is foreground text; the brand blue lives on `blue()`.
+     */
+    private static final class Palette {
+        private final Context context;
+
+        Palette(Context context) {
+            this.context = context;
+        }
+
+        int background() {
+            return WearTheme.background(context);
+        }
+
+        int primary() {
+            return WearTheme.foreground(context);
+        }
+
+        int muted() {
+            return WearTheme.mutedForeground(context);
+        }
+
+        int secondary() {
+            return WearTheme.mutedForeground(context);
+        }
+
+        int surface() {
+            return WearTheme.card(context);
+        }
+
+        int border() {
+            return WearTheme.border(context);
+        }
+
+        /** Focused accent: primary-tinted fill/hairline (web `chip-active`). */
+        int borderActive() {
+            return WearTheme.surfaceActive(context);
+        }
+
+        int blue() {
+            return WearTheme.primary(context);
+        }
+
+        int onPrimary() {
+            return WearTheme.primaryForeground(context);
+        }
+
+        int green() {
+            return WearTheme.success(context);
+        }
     }
 
     View buildHome(List<WearRequestStore.Entry> entries, OpenListener openListener) {

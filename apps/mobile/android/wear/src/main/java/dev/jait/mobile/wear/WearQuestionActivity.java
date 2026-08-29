@@ -1,15 +1,19 @@
 package dev.jait.mobile.wear;
 
 import android.app.NotificationManager;
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.google.android.gms.tasks.Tasks;
 import com.google.android.gms.wearable.MessageClient;
@@ -101,6 +105,7 @@ public class WearQuestionActivity extends AppCompatActivity {
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         );
+        ensureNotificationPermission();
         registerCompanionReceiver();
         renderRequest(getIntent());
     }
@@ -108,7 +113,13 @@ public class WearQuestionActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        ensureNotificationPermission();
         enableFullscreen();
+        if (screen == Screen.QUESTION) return;
+        // Wrist raised again: re-render current screen (picks up theme/snapshot changes) and
+        // ask the phone for a fresh snapshot so metrics and chats are current.
+        refreshCurrentScreen();
+        requestSnapshot();
     }
 
     @Override
@@ -298,6 +309,23 @@ public class WearQuestionActivity extends AppCompatActivity {
         else if (screen == Screen.CHATS) renderChats(page);
         else if (screen == Screen.CHAT) renderChat(page);
         else if (screen == Screen.REQUESTS) renderRequests(page);
+    }
+
+    /**
+     * Watches on Android 13+ silently drop every notification until POST_NOTIFICATIONS is
+     * granted at runtime, so ask once on the first launch of the dashboard.
+     */
+    private void ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+            1
+        );
     }
 
     private void enableFullscreen() {

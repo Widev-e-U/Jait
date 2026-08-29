@@ -429,6 +429,24 @@ html.is-dragging-row-resize {
 }
 
 /*
+ * A tool card that is created while the call is live (pending/running) mounts
+ * with `data-state='open'` mid-stream and would otherwise play the height
+ * animation un-anchored: the virtual sizer is one frame behind and the bottom
+ * chaser reads `scrollHeight` from rAF, so the newest rows kept rendering a
+ * few pixels below the composer until the animation ended. Reveal with the
+ * same layout-neutral fade as message parts; its collapse on completion is
+ * also a single-commit removal so nothing animates against the chaser. Cards
+ * mounted on finished history keep the height animations — those are
+ * user-toggled and edge-anchored.
+ */
+.tool-call-collapsible-streaming[data-state='open'] {
+  animation: jait-reveal-fade 160ms cubic-bezier(0.25, 0.8, 0.3, 1);
+}
+.tool-call-collapsible-streaming[data-state='closed'] {
+  animation: none;
+}
+
+/*
  * Same smooth grow/shrink for a streaming "thinking" block. Newly created
  * blocks expand from 0 instead of snapping in at full height, so they don't
  * jolt the transcript near the composer or shove queued messages around.

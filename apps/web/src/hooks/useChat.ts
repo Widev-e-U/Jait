@@ -905,7 +905,14 @@ export function useChat(
       // back to this chat, or reconnecting after a drop). Those are the tail of
       // an already-finished turn: turn-end side effects must not run for them.
       const isReplay = data.replay === true
-      pushSSEDebugEvent(String(data.type ?? 'unknown'), JSON.stringify(data))
+      // Replayed frames are recorded in the gateway's durable log, not a live
+      // delivery problem; debugging lives in the gateway logs. Stringifying
+      // every replayed payload (a reconnect after a gateway restart can replay
+      // thousands of frames) would spike CPU and memory, and the flood would
+      // evict exactly the live frames the ring exists to capture.
+      if (!isReplay) {
+        pushSSEDebugEvent(String(data.type ?? 'unknown'), JSON.stringify(data))
+      }
 
       if (isTurnStartEvent(data.type)) {
         // Queue state is broadcast over WebSocket while turn events arrive over

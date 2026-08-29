@@ -1,6 +1,7 @@
 package dev.jait.mobile;
 
 import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import com.google.android.gms.wearable.MessageEvent;
@@ -35,7 +36,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         if (SNAPSHOT_REQUEST_PATH.equals(event.getPath())) {
             String sourceNodeId = event.getSourceNodeId();
             new Thread(
-                () -> WearBridge.relaySnapshot(this, sourceNodeId, fetchSnapshot()),
+                () -> WearBridge.relaySnapshot(this, sourceNodeId, fetchSnapshot(this)),
                 "jait-watch-snapshot-fetch"
             ).start();
             return;
@@ -63,10 +64,23 @@ public class PhoneWearListenerService extends WearableListenerService {
         }
     }
 
-    private JSONObject fetchSnapshot() {
+    /**
+     * Proactively pushes a fresh snapshot to every reachable watch — called whenever the phone
+     * relays an attention item so watch metrics match the alert the user just saw.
+     */
+    static void pushSnapshot(Context context) {
+        Context appContext = context.getApplicationContext();
+        new Thread(
+            () -> WearBridge.relaySnapshotToAll(appContext, fetchSnapshot(appContext)),
+            "jait-watch-snapshot-push"
+        ).start();
+    }
+
+    private static JSONObject fetchSnapshot(Context context) {
         JSONObject snapshot = new JSONObject();
         try {
-            SharedPreferences preferences = getSharedPreferences("jait-push", MODE_PRIVATE);
+            SharedPreferences preferences =
+                context.getSharedPreferences("jait-push", Context.MODE_PRIVATE);
             String gatewayUrl = preferences.getString("gatewayUrl", "");
             String authToken = preferences.getString("authToken", "");
             if (gatewayUrl == null || gatewayUrl.isEmpty() || authToken == null || authToken.isEmpty()) {
@@ -118,7 +132,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         }
     }
 
-    private JSONArray fetchMessages(String baseUrl, String authToken, String threadId) {
+    private static JSONArray fetchMessages(String baseUrl, String authToken, String threadId) {
         JSONArray messages = new JSONArray();
         if (threadId.isEmpty()) return messages;
         try {
@@ -148,7 +162,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         return messages;
     }
 
-    private JSONObject getJson(String url, String authToken) throws Exception {
+    private static JSONObject getJson(String url, String authToken) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setRequestMethod("GET");
         connection.setRequestProperty("Authorization", "Bearer " + authToken);
@@ -175,7 +189,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         return new JSONObject(body.toString());
     }
 
-    private JSONObject errorSnapshot(String message) {
+    private static JSONObject errorSnapshot(String message) {
         JSONObject snapshot = new JSONObject();
         try {
             snapshot.put("connected", false);
@@ -190,7 +204,7 @@ public class PhoneWearListenerService extends WearableListenerService {
         return snapshot;
     }
 
-    private String utcDay(long timestamp) {
+    private static String utcDay(long timestamp) {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format.format(new Date(timestamp));
