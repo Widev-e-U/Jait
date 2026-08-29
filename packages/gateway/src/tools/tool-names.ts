@@ -27,6 +27,12 @@ export const ToolName = {
   OsTool: "os.tool",
   OsToolAlt: "os_tool",
 
+  // ── User-visible computer control ──
+  ComputerTargets: "computer.targets",
+  ComputerSession: "computer.session",
+  ComputerObserve: "computer.observe",
+  ComputerAct: "computer.act",
+
   // ── Surfaces ──
   SurfacesList: "surfaces.list",
   SurfacesStart: "surfaces.start",

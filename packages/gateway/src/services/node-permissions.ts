@@ -8,6 +8,7 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "terminal",
   "filesystem",
   "screen",
+  "input",
   "voice",
   "browser",
   "camera",

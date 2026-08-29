@@ -59,6 +59,7 @@ export const ASK_MODE_TOOLS = new Set([
   "surfaces.list",
   "cron.list",
   "screen.capture",
+  "computer.targets",
   "tools.list",
   "tools.search",
   // Jait with read-only actions
@@ -93,6 +94,8 @@ export const MUTATING_TOOLS = new Set([
   "voice.speak",
   "screen.share",
   "screen.record",
+  "computer.session",
+  "computer.act",
   "browser.click",
   "browser.type",
   "browser.select",

@@ -27,6 +27,7 @@ import type {
   NodeCapability,
   NodePlatform,
   NodeRole,
+  NodeSurfaceType,
   NodeWithPermissions,
 } from "@jait/shared";
 import type { NodeCapabilities } from "@jait/shared";
@@ -81,6 +82,22 @@ interface ConnectedClient {
  */
 function isAgentProviderOp(op: string): boolean {
   return op === "start-session" || op === "send-turn" || op === "stop-session";
+}
+
+export function nodeCapabilityForTool(
+  tool: string,
+  args: Record<string, unknown> = {},
+): NodeCapability | undefined {
+  if (tool === "computer.session") return args.action === "stop" ? undefined : "input";
+  if (tool === "computer.act") return "input";
+  if (tool === "computer.observe") return "screen";
+  if (/^(terminal|shell|command)\./.test(tool)) return "terminal";
+  if (/^(file|fs|read|write|search)\./.test(tool)) return "filesystem";
+  if (/^(browser|web)\./.test(tool)) return "browser";
+  if (tool.startsWith("screen")) return "screen";
+  if (tool.startsWith("voice")) return "voice";
+  if (tool.startsWith("camera")) return "camera";
+  return undefined;
 }
 
 export function resolveSessionScopedClientTarget(
@@ -829,18 +846,29 @@ export class WsControlPlane {
             registeredAt: new Date().toISOString(),
           };
           this.fsNodes.set(node.id, node);
+          // `node.hello` arrives immediately before `fs.register-node` from the
+          // same client and already assigned the authoritative role ("desktop"
+          // in Electron, "mobile" on phones). Keep it — hard-coding "remote"
+          // here downgraded desktop nodes and hid them from computer-control
+          // targeting (computer_tools only selects role === "desktop").
+          const existingNode = this.nodeStates.getNode(node.id);
           this.nodeStates.upsertNode({
             id: node.id,
             name: node.name,
             platform: node.platform,
-            role: "remote",
+            role: existingNode?.role ?? "remote",
             clientId: client.id,
             capabilities: {
               providers: node.providers ?? [],
-              surfaces: ["filesystem"],
+              // Union rather than replace: fs registration grants only
+              // "filesystem", so preserve "terminal"/"computer" surfaces that
+              // node.hello already declared.
+              surfaces: Array.from(
+                new Set<NodeSurfaceType>([...(existingNode?.capabilities.surfaces ?? []), "filesystem"]),
+              ),
             },
           });
-          console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"}`);
+          console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"} — role: ${existingNode?.role ?? "remote"}`);
           this.onFsNodeRegistered?.(node);
           // Notify all clients so frontends can refresh provider/device lists
           this.broadcastAll({
@@ -1507,14 +1535,8 @@ export class WsControlPlane {
   }
 
   /** Map a remote agent tool name onto the node capability it exercises. */
-  private capabilityForTool(tool: string): NodeCapability | undefined {
-    if (/^(terminal|shell|command)\./.test(tool)) return "terminal";
-    if (/^(file|fs|read|write|search)\./.test(tool)) return "filesystem";
-    if (/^(browser|web)\./.test(tool)) return "browser";
-    if (/^screen/.test(tool)) return "screen";
-    if (/^voice/.test(tool)) return "voice";
-    if (/^camera/.test(tool)) return "camera";
-    return undefined;
+  private capabilityForTool(tool: string, args: Record<string, unknown>): NodeCapability | undefined {
+    return nodeCapabilityForTool(tool, args);
   }
 
   /** Check if a node ID refers to a remote (non-gateway) node */
@@ -1634,7 +1656,7 @@ export class WsControlPlane {
     const node = this.fsNodes.get(nodeId);
     if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local execution for gateway node"));
-    const cap = this.capabilityForTool(tool);
+    const cap = this.capabilityForTool(tool, args);
     if (cap) {
       const denied = this.permissionDeniedError(nodeId, cap);
       if (denied) return Promise.reject(denied);

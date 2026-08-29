@@ -233,6 +233,14 @@ export class ConsentAwareExecutor {
         return `Install package: ${inp?.package ?? "(unknown)"}`;
       case "os.query":
         return `Query OS: ${inp?.type ?? "(unknown)"}`;
+      case "computer.session":
+        return inp?.action === "start"
+          ? `Start visible computer control on ${inp?.nodeId ?? "the selected desktop"}`
+          : `${String(inp?.action ?? "Manage")} computer control`;
+      case "computer.act":
+        return `Computer input: ${String(inp?.action ?? "action")}`;
+      case "computer.observe":
+        return "Capture the controlled computer screen";
       case "surfaces.start":
         return `Start surface: ${inp?.type ?? "(unknown)"}`;
       case "surfaces.stop":

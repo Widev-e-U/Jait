@@ -8,16 +8,19 @@ import '@/index.css'
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="relative max-w-[85%]">
-      <div className="min-w-0 rounded-lg bg-muted pl-4 pt-3 pr-6 pb-6 break-words [overflow-wrap:anywhere]">
+      {/* Mirror message.tsx user bubble: p-4 padding + long-word wrapping. */}
+      <div className="min-w-0 rounded-lg bg-muted p-4 break-words [overflow-wrap:anywhere]">
         {text}
       </div>
       <div className={cn('absolute z-10', getMobileMessageActionsPositionClassName(true, false))}>
         <button
           type="button"
           aria-label="Message actions"
-          className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
+          className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
         >
-          <MoreVertical className="h-4 w-4" />
+          {/* Match message.tsx: icon pinned to the corner of the 24px tap
+              area so it stays inside the bubble's 16px padding. */}
+          <MoreVertical className="absolute bottom-0 right-0 h-4 w-4" />
         </button>
       </div>
     </div>

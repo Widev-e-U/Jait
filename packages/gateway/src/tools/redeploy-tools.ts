@@ -33,6 +33,13 @@ interface RedeployDeps {
   port: number;
   /** Graceful shutdown callback — will be called when cutover succeeds */
   shutdown: () => Promise<void>;
+  /**
+   * Invoked synchronously right before the switchover kills this process, so
+   * the gateway can mark sessions with live turns (durable system notice) —
+   * the user then sees why their answer was cut short instead of a silently
+   * truncated bubble after reconnect.
+   */
+  notifyRestarting?: (info: { oldVersion: string; newVersion: string }) => void;
 }
 
 export function createRedeployTool(deps: RedeployDeps): ToolDefinition<RedeployInput> {
@@ -183,10 +190,14 @@ async function npmRedeploy(
 export async function systemdSwitchover(
   oldVersion: string,
   newVersion: string,
-  _deps: RedeployDeps,
+  deps: RedeployDeps,
   log: (msg: string) => void,
 ): Promise<ToolResult> {
   const unit = systemdUnit();
+
+  // Last chance to let users know their in-flight answer is about to be
+  // cut: mark active sessions while the DB connection still works.
+  deps.notifyRestarting?.({ oldVersion, newVersion });
 
   // Guard against restarting a unit whose file has since disappeared
   // (uninstalled, hand-edited away, etc). Without this check we'd exit
@@ -291,6 +302,10 @@ export async function bareProcessSwitchover(
   }
 
   log(`✓ New gateway process launched (PID ${fresh.pid}). Shutting down current process...\n`);
+
+  // Last chance to let users know their in-flight answer is about to be
+  // cut: mark active sessions while the DB connection still works.
+  deps.notifyRestarting?.({ oldVersion, newVersion });
 
   // Give the response time to be sent before shutdown
   setTimeout(() => {

@@ -1,6 +1,6 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
+  "configVersion": 1,
   "workspaces": {
     "": {
       "name": "jait",
@@ -14,12 +14,13 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.94",
+      "version": "0.1.782",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
         "@jait/ui-shared": "workspace:*",
         "electron-updater": "^6.8.9",
+        "koffi": "^2.11.0",
         "node-pty": "^1.1.0",
       },
       "devDependencies": {
@@ -31,7 +32,7 @@
     },
     "apps/mobile": {
       "name": "@jait/mobile",
-      "version": "0.1.23",
+      "version": "0.1.24",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.1",
@@ -62,7 +63,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.351",
+      "version": "0.1.375",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.1",
@@ -132,7 +133,7 @@
     },
     "packages/api-client": {
       "name": "@jait/api-client",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -142,7 +143,7 @@
     },
     "packages/cli": {
       "name": "@jait/cli",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "bin": {
         "jait": "dist/index.js",
       },
@@ -156,7 +157,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.749",
+      "version": "0.1.782",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -195,7 +196,7 @@
     },
     "packages/screen-share": {
       "name": "@jait/screen-share",
-      "version": "0.1.24",
+      "version": "0.1.25",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -206,7 +207,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.76",
+      "version": "0.1.80",
       "dependencies": {
         "zod": "^3.25.76",
       },
@@ -216,12 +217,15 @@
     },
     "packages/ui-shared": {
       "name": "@jait/ui-shared",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "devDependencies": {
         "typescript": "^5.9.3",
       },
     },
   },
+  "trustedDependencies": [
+    "koffi",
+  ],
   "packages": {
     "7zip-bin": ["7zip-bin@5.2.0", "", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
 
@@ -2616,6 +2620,8 @@
     "kind-of": ["kind-of@6.0.3", "", {}, "sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw=="],
 
     "kleur": ["kleur@4.1.5", "", {}, "sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ=="],
+
+    "koffi": ["koffi@2.16.3", "", {}, "sha512-E9y1AsgYGlaxMhcZzHr8y96QF2U5XzA12GGVAfbWqIubTwPNMXQarfBzePNXHe0xtIEtNd6ifAv3GAKYGUeBAQ=="],
 
     "langium": ["langium@4.2.1", "", { "dependencies": { "chevrotain": "~11.1.1", "chevrotain-allstar": "~0.3.1", "vscode-languageserver": "~9.0.1", "vscode-languageserver-textdocument": "~1.0.11", "vscode-uri": "~3.1.0" } }, "sha512-zu9QWmjpzJcomzdJQAHgDVhLGq5bLosVak1KVa40NzQHXfqr4eAHupvnPOVXEoLkg6Ocefvf/93d//SB7du4YQ=="],
 

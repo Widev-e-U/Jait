@@ -37,10 +37,9 @@ function clientSurface(): 'desktop' | 'mobile' | 'web' {
   return 'web'
 }
 
-// Tools this desktop node can execute remotely. MUST stay in sync with
-// REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts —
-// the gateway only proxies tools in that allow-list, and every entry there
-// must be implemented by apps/desktop/src/electron-main.ts (desktop:tool-op).
+// Tools this desktop node can execute remotely. Project-scoped tools stay in
+// sync with REMOTE_EXECUTABLE_TOOLS; computer.* tools are addressed directly
+// to an explicitly selected node by the gateway computer-control tools.
 const DESKTOP_NODE_TOOLS = [
   'terminal.run',
   'jait.terminal',
@@ -56,6 +55,9 @@ const DESKTOP_NODE_TOOLS = [
   'search',
   'file.search',
   'os.query',
+  'computer.session',
+  'computer.observe',
+  'computer.act',
 ]
 
 // ── Device / platform helpers ───────────────────────────────────────
@@ -744,7 +746,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 protocolVersion: NODE_PROTOCOL_VERSION,
                 capabilities: {
                   providers,
-                  surfaces: ['filesystem', 'terminal'],
+                  surfaces: ['filesystem', 'terminal', 'computer'],
                   tools: DESKTOP_NODE_TOOLS,
                   screenShare: true,
                   voice: false,

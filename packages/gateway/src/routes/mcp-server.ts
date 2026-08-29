@@ -63,6 +63,39 @@ interface McpToolContextOverrides {
   runtimeMode?: string;
 }
 
+type McpToolContent =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
+  if (typeof result.data === "string") return [{ type: "text", text: result.data }];
+
+  if (isRecord(result.data) && isRecord(result.data.screenshot)) {
+    const screenshot = result.data.screenshot;
+    const pngBase64 = screenshot.pngBase64;
+    if (typeof pngBase64 === "string" && pngBase64.length > 0) {
+      const { pngBase64: _pngBase64, ...screenshotMetadata } = screenshot;
+      const sanitizedData = { ...result.data, screenshot: screenshotMetadata };
+      return [
+        {
+          type: "text",
+          text: result.message + (Object.keys(sanitizedData).length > 0 ? `\n${JSON.stringify(sanitizedData)}` : ""),
+        },
+        { type: "image", data: pngBase64, mimeType: "image/png" },
+      ];
+    }
+  }
+
+  return [{
+    type: "text",
+    text: result.message + (result.data ? `\n${JSON.stringify(result.data)}` : ""),
+  }];
+}
+
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
   "2024-11-05",
   "2025-03-26",
@@ -668,14 +701,7 @@ export async function handleMcpRequest(
           jsonrpc: "2.0",
           id: request.id ?? null,
           result: {
-            content: [
-              {
-                type: "text",
-                text: typeof result.data === "string"
-                  ? result.data
-                  : result.message + (result.data ? `\n${JSON.stringify(result.data)}` : ""),
-              },
-            ],
+            content: mcpContentForToolResult(result),
             isError: !result.ok,
           },
         };

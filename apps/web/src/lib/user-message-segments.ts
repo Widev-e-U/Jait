@@ -237,7 +237,7 @@ export function buildEditedUserMessageSegments(
 ): UserMessageSegment[] {
   const next = buildFallbackUserMessageSegments(text, userReferencedFilesFromSegments(previousSegments))
   for (const segment of normalizeUserMessageSegments(previousSegments)) {
-    if (segment.type === 'image' || segment.type === 'attachment') next.push(segment)
+    if (segment.type === 'image' || segment.type === 'attachment' || segment.type === 'chat') next.push(segment)
   }
   return next
 }

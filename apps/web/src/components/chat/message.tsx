@@ -649,9 +649,11 @@ function MessageInner({
               <button
                 type="button"
                 aria-label="Message actions"
-                className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
+                className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
               >
-                <MoreVertical className="h-4 w-4" />
+                {/* Pinned to the tap-area corner so the icon box stays inside
+                    the bubble's p-4 padding even for long single-line texts. */}
+                <MoreVertical className="absolute bottom-0 right-0 h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">
@@ -987,6 +989,15 @@ function MessageInner({
                                   >
                                     <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">/{segment.name}</span>
+                                  </span>
+                                ) : segment.type === 'chat' ? (
+                                  <span
+                                    key={`chat-${segment.sessionId}-${index}`}
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
+                                    title={`Chat: ${segment.sessionId}`}
+                                  >
+                                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
                                 ) : null,
                               )

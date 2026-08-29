@@ -474,7 +474,7 @@ function appendSegmentNode(
     parent.appendChild(document.createTextNode(segment.text))
     return
   }
-  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'skill') {
+  if (segment.type === 'file' || segment.type === 'project' || segment.type === 'terminal' || segment.type === 'skill' || segment.type === 'chat') {
     parent.appendChild(createChipNode(segment, onRemove))
     return
   }

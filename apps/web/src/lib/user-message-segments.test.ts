@@ -126,6 +126,35 @@ describe('user message segment serialization', () => {
     const chats = userReferencedChatsFromSegments(segments)
     expect(chats).toEqual([{ sessionId: 'sess-abc', name: 'Gateway refactor' }])
   })
+
+  it('recovers chat references from plain pasted text when the structured clipboard payload is missing', () => {
+    // Regression: copying the composer fell back to plain text on surfaces that
+    // drop custom clipboard types, so `[chat:id]` arrived as raw text and the
+    // paste handler re-created it as a loose text segment.
+    const parsed = parseUserMessageMarkdown('look at [chat:sess-abc] please')
+
+    expect(parsed).toEqual([
+      { type: 'text', text: 'look at ' },
+      { type: 'chat', sessionId: 'sess-abc', name: 'sess-abc' },
+      { type: 'text', text: ' please' },
+    ])
+  })
+
+  it('keeps chat references in place when the user edits a sent message', () => {
+    const previous: UserMessageSegment[] = [
+      { type: 'chat', sessionId: 'sess-abc', name: 'Gateway refactor' },
+      { type: 'text', text: 'orig with follow-up question' },
+      { type: 'file', path: '/tmp/gateway.ts', name: 'gateway.ts' },
+    ]
+
+    // Only files survive the legacy fallback path; image/attachment/chat are
+    // re-appended so the edit keeps referencing the linked conversation.
+    expect(buildEditedUserMessageSegments('rewritten question', previous)).toEqual([
+      { type: 'text', text: 'rewritten question' },
+      { type: 'file', path: '/tmp/gateway.ts', name: 'gateway.ts' },
+      { type: 'chat', sessionId: 'sess-abc', name: 'Gateway refactor' },
+    ])
+  })
 })
 
 describe('kind preservation', () => {

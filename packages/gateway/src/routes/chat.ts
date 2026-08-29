@@ -2208,11 +2208,107 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
   }
 }
 
+/**
+ * Crash-safe assistant checkpoint: insert-once, update-many. The agent loop
+ * checkpoints the turn's accumulated output at every round boundary; if the
+ * process dies mid-turn (gateway restart mid-deploy, OOM, kill), the answer
+ * streamed so far is already on disk instead of lost entirely. The final
+ * persist reuses the same id so a surviving turn never duplicates the row.
+ * Returns the row id to pass back on the next checkpoint/persist.
+ */
+function upsertAssistantCheckpoint(
+  db: JaitDB,
+  sessionId: string,
+  existingId: string | undefined,
+  content: string,
+  toolCalls?: string,
+  segments?: string,
+  contextFlow?: string,
+  thinking?: string,
+): string {
+  try {
+    if (existingId) {
+      db.update(messagesTable)
+        .set({
+          content,
+          toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
+          ...(segments ? { segments } : { segments: null }),
+          ...(contextFlow ? { contextFlow } : {}),
+          ...(thinking ? { thinking } : {}),
+        })
+        .where(eq(messagesTable.id, existingId))
+        .run();
+      // Idempotent: sub_agent_history rows are keyed by subAgentId, so re-
+      // binding newly completed sub-agent payloads to the same message is safe.
+      if (toolCalls) persistSubAgentHistories(db, sessionId, existingId, toolCalls);
+      if (contextFlow) writeMessageContextMetadata(db, existingId, contextFlow);
+      return existingId;
+    }
+    const messageId = randomUUID();
+    persistSubAgentHistories(db, sessionId, messageId, toolCalls);
+    db.insert(messagesTable)
+      .values({
+        id: messageId,
+        sessionId,
+        role: "assistant",
+        content,
+        toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
+        segments: segments ?? null,
+        contextFlow: contextFlow ?? null,
+        thinking: thinking ?? null,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+    if (contextFlow) writeMessageContextMetadata(db, messageId, contextFlow);
+    return messageId;
+  } catch (err) {
+    _appRef?.log.error(err, "Failed to upsert assistant checkpoint");
+    return existingId ?? "";
+  }
+}
+
+/**
+ * Gateway restarting while turns are live: persist a durable system notice
+ * into every session with an active stream so users see *why* their answer
+ * stops mid-sentence. The `gateway.redeploy` switchover force-exits this
+ * process ~1s after returning, killing in-flight turns; without this marker
+ * the reload just shows a silently truncated assistant bubble. Called just
+ * before the restart is scheduled, while the DB connection still works.
+ */
+export function notifySessionsOfGatewayRestart(
+  db: JaitDB,
+  info: { oldVersion?: string; newVersion?: string } = {},
+): number {
+  const affected = new Set<string>([...activeStreams, ...activeCliTurns]);
+  if (affected.size === 0) return 0;
+  const versions =
+    info.oldVersion && info.newVersion ? ` (${info.oldVersion} → ${info.newVersion})` : "";
+  for (const sessionId of affected) {
+    try {
+      db.insert(messagesTable)
+        .values({
+          id: randomUUID(),
+          sessionId,
+          role: "system",
+          content:
+            `Gateway restarted by a self-update${versions} while this chat was being answered. ` +
+            `The answer above was checkpointed at the last completed step and may be partial.`,
+          createdAt: new Date().toISOString(),
+        })
+        .run();
+    } catch (err) {
+      _appRef?.log.error(err, "Failed to persist gateway-restart notice");
+    }
+  }
+  return affected.size;
+}
+
 // ── Route registration ───────────────────────────────────────────────
 
 /** Internals exposed for unit tests (reconnect-snapshot shape). */
 export const __chatTestUtils = {
   activeStreams,
+  activeCliTurns,
   sessionHistory,
   sessionStreamingState,
   buildVisibleHistoryMessages,
@@ -3175,6 +3271,39 @@ export function registerChatRoutes(
     // order on reload because the rows share createdAt down to the millisecond).
     let loopPersisted = false;
     let assistantTurnPersisted = false;
+    // Crash-safe checkpoint row id for this turn's assistant message. Set by
+    // the loop's onAssistantCheckpoint callback (one upsert per tool round) and
+    // reused by every later assistant persist so a completed turn keeps a
+    // single row instead of accumulating checkpoint duplicates. If the gateway
+    // restarts mid-turn — e.g. an agent restarting its own gateway during a
+    // deploy — everything streamed up to the last round boundary is already
+    // durable and renders after reload instead of vanishing.
+    let assistantCheckpointId: string | undefined;
+    /**
+     * Assistant persists for the current turn route through the checkpoint
+     * upsert: first call inserts the chase row, later calls (mid-turn
+     * narration persists, final onPersist, error-path fallback) update the
+     * same row in place.
+     */
+    function persistAssistantMessage(
+      content: string,
+      toolCalls?: string,
+      segments?: string,
+      thinking?: string,
+    ): void {
+      if (!db) return;
+      const id = upsertAssistantCheckpoint(
+        db,
+        sessionId,
+        assistantCheckpointId,
+        content,
+        toolCalls,
+        segments,
+        contextFlowJson,
+        thinking,
+      );
+      if (id) assistantCheckpointId = id;
+    }
     /**
      * Message from a turn-ending `error` event, if the loop reported one.
      *
@@ -4038,13 +4167,10 @@ export function registerChatRoutes(
             thinking: cliThinking || undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
-          persistMessage(
-            sessionId,
-            "assistant",
+          persistAssistantMessage(
             persistedContent,
             persistedToolCalls ? JSON.stringify(persistedToolCalls) : undefined,
             JSON.stringify(persistedSegments),
-            contextFlowJson,
             cliThinking || undefined,
           );
           assistantTurnPersisted = true;
@@ -4057,7 +4183,7 @@ export function registerChatRoutes(
             thinking: cliThinking || undefined,
             contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
           });
-          persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson, cliThinking || undefined);
+          persistAssistantMessage(fullContent, cliTcJson, cliSegJson, cliThinking || undefined);
           assistantTurnPersisted = true;
         }
 
@@ -4199,11 +4325,39 @@ export function registerChatRoutes(
                   ...(memoryFlow ? { memory: memoryFlow } : {}),
                 });
               },
+              // Crash-safe checkpoint: called at every round boundary with the
+              // accumulated assistant output so a mid-turn gateway restart
+              // (self-restarts during deploys included) survives on disk.
+              onAssistantCheckpoint: (sid, content, tc, seg) => {
+                if (sid !== sessionId) return;
+                try {
+                  const acc = sessionStreamingState.get(sid);
+                  const persistedToolCalls = acc?.toolCalls.length ? JSON.stringify(acc.toolCalls) : tc;
+                  const persistedSegments = acc?.segments.length ? JSON.stringify(acc.segments) : seg;
+                  // Merge tool calls + UI toolCalls into the content snapshot.
+                  const accToolCalls = (acc?.toolCalls ?? []).map((call) => ({ ...call }));
+                  const merged = content || (acc?.content ?? "");
+                  persistAssistantMessage(merged, persistedToolCalls, persistedSegments, acc?.thinking || undefined);
+                  if (acc) {
+                    acc.content = merged;
+                    if (accToolCalls.length > 0) acc.toolCalls = accToolCalls;
+                  }
+                } catch (err) {
+                  app.log.warn(err, "assistant checkpoint upsert failed (non-fatal)");
+                }
+              },
               onPersist: (sid, role, content, tc, seg, thinking) => {
                 const acc = sid === sessionId ? sessionStreamingState.get(sid) : undefined;
                 const persistedToolCalls = acc?.toolCalls.length ? JSON.stringify(acc.toolCalls) : tc;
                 const persistedSegments = acc?.segments.length ? JSON.stringify(acc.segments) : seg;
-                persistMessage(sid, role, content, persistedToolCalls, persistedSegments, contextFlowJson, thinking);
+                if (sid === sessionId && role === "assistant") {
+                  // Replace the plain insert with an upsert of the checkpoint
+                  // row so the final message and the mid-turn checkpoints
+                  // collapse into a single DB row.
+                  persistAssistantMessage(content, persistedToolCalls, persistedSegments, thinking);
+                } else {
+                  persistMessage(sid, role, content, persistedToolCalls, persistedSegments, contextFlowJson, thinking);
+                }
                 if (sid === sessionId && role === "assistant") {
                   const lastAssistant = [...history].reverse().find((message) => message.role === "assistant");
                   if (lastAssistant && acc) {
@@ -4292,13 +4446,10 @@ export function registerChatRoutes(
           const tcJson = streamedToolCalls.length > 0
             ? JSON.stringify(streamedToolCalls)
             : undefined;
-          persistMessage(
-            sessionId,
-            "assistant",
+          persistAssistantMessage(
             streamedContent,
             tcJson,
             streamedSegmentsJson,
-            contextFlowJson,
             streamedThinking,
           );
           history.push({
@@ -4313,13 +4464,10 @@ export function registerChatRoutes(
         } else {
           const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
           const errorSegments = [{ type: "error", content: errMsg2 }];
-          persistMessage(
-            sessionId,
-            "assistant",
+          persistAssistantMessage(
             errMsg2,
             undefined,
             JSON.stringify(errorSegments),
-            contextFlowJson,
           );
           history.push({
             role: "assistant",
@@ -4371,7 +4519,7 @@ export function registerChatRoutes(
       const fallbackThinking = acc?.thinking || undefined;
       if (fallbackContent || fallbackThinking || fallbackToolCalls.length > 0 || fallbackSegmentsJson) {
         const tcJson = fallbackToolCalls.length > 0 ? JSON.stringify(fallbackToolCalls) : undefined;
-        persistMessage(sessionId, "assistant", fallbackContent, tcJson, fallbackSegmentsJson, contextFlowJson, fallbackThinking);
+        persistAssistantMessage(fallbackContent, tcJson, fallbackSegmentsJson, fallbackThinking);
         assistantTurnPersisted = true;
       }
     }

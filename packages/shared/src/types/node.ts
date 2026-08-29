@@ -15,7 +15,7 @@ export type NodeRole =
   | "browser"
   | "remote";
 
-export type NodeSurfaceType = "terminal" | "filesystem" | "browser";
+export type NodeSurfaceType = "terminal" | "filesystem" | "browser" | "computer";
 
 export interface NodeCapabilities {
   providers: string[];
@@ -65,6 +65,7 @@ export type NodeCapability =
   | "terminal"
   | "filesystem"
   | "screen"
+  | "input"
   | "voice"
   | "browser"
   | "camera"
@@ -75,6 +76,7 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "terminal",
   "filesystem",
   "screen",
+  "input",
   "voice",
   "browser",
   "camera",

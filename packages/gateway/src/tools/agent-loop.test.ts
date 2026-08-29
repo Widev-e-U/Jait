@@ -11,6 +11,7 @@ import {
   retryToolCall,
   ToolCallPriority,
   ToolCallQueue,
+  MIN_REPETITION_SPAN_CHARS,
   type AgentLoopEvent,
   type AgentMessage,
   type ExecutedToolCall,
@@ -474,6 +475,53 @@ describe("findDegenerateRepetition", () => {
     expect(trimmed.startsWith("Preamble.\n" + LOOP_UNIT.repeat(2))).toBe(true);
     expect(trimmed).toContain("38 further identical repetitions removed");
     expect(trimmed.length).toBeLessThan(LOOP_UNIT.length * 5);
+  });
+
+  it("catches a whitespace-churning loop with no stable period", () => {
+    // Observed in chat 01a04cbe: same short sentence re-emitted with drifting
+    // tab/space runs. Space runs grow monotonically, so no exact period can
+    // match and only the near-verbatim (pooled) detector can catch it.
+    const sentence = "what went wrong here then";
+    let churned = "the assistant starts answering normally. ";
+    for (let i = 0; i < 40; i++) {
+      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3))) + (i % 3 === 0 ? "\n" : "\t");
+    }
+    expect(churned.length).toBeGreaterThan(MIN_REPETITION_SPAN_CHARS);
+
+    const repetition = __testUtils.findDegenerateRepetition(churned);
+    expect(repetition).not.toBeNull();
+    expect(repetition!.approximate).toBe(true);
+    expect(repetition!.copies).toBe(40);
+  });
+
+  it("leaves whitespace-heavy but distinct content alone", () => {
+    const honest = [
+      "- Checked anthropic selector: pinned via JAIT_PROVIDER in config.",
+      "- Inspected gateway logs: no 5xx bursts, stream throttling only.",
+      "- Traced session 01a04cbe: provider loop repeated after restart.",
+      "- Compared normalized payloads: identical up to whitespace drift.",
+      "- Verified round budget: three recovery resamples were available.",
+      "- Reviewed strategy prompt: instructs a different tool structure.",
+      "- Measured window density: seed occurrences stayed under floor.",
+      "- Confirmed tail bounds: final phrase sat near the raw end only.",
+      "- Recomputed pooled span: cohort gaps exceeded cohesion bound.",
+      "- Re-read moderation skip: unrelated to the repetition mistake.",
+    ].join("\n");
+    expect(honest.length).toBeGreaterThan(MIN_REPETITION_SPAN_CHARS);
+    expect(__testUtils.findDegenerateRepetition(honest)).toBeNull();
+  });
+
+  it("cut-trims a near-verbatim loop instead of echoing a unit", () => {
+    const sentence = "let me check the output now";
+    let churned = "Preamble kept for context.\n";
+    for (let i = 0; i < 40; i++) {
+      churned += sentence.replace(/ /g, " ".repeat(2 + Math.floor(i / 3)));
+    }
+
+    const trimmed = __testUtils.trimDegenerateRepetition(churned);
+    expect(trimmed.startsWith("Preamble kept for context.\n")).toBe(true);
+    expect(trimmed).toContain("near-identical repetitions removed");
+    expect(trimmed.length).toBeLessThan(churned.length);
   });
 });
 

@@ -16,6 +16,7 @@ import { extractDeviceAuthDetails, hasCompleteDeviceAuthDetails } from "@jait/sh
 import { detectDesktopProviders, isSupportedDesktopProviderId, type DesktopProviderStatus, type DesktopRemoteProviderId } from "./provider-detection.js";
 import { resolveRemoteCodexCompatibilityArgs, resolveRemoteCodexModelDiscoveryArgs, resolveRemoteCodexThreadConfig } from "./remote-codex-config.js";
 import { normalizeBrowserUrl } from "./browser-navigation.js";
+import { createComputerControlController } from "./computer-control-main.js";
 const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
@@ -97,6 +98,15 @@ let openedFolder = getOpenedFolderPath();
 const startHidden = process.argv.includes("--hidden");
 
 let mainWindow: BrowserWindow | null = null;
+// Remembered computer-control approval ("Don't ask again for 8 hours"):
+// deadline lives in desktop-settings.json under computerControl.trustedUntil.
+const computerControl = createComputerControlController(
+  () => mainWindow,
+  {
+    isTrusted: () => Date.now() < getSetting<number>("computerControl.trustedUntil", 0),
+    trustFor: (ms) => setSetting("computerControl.trustedUntil", Date.now() + ms),
+  },
+);
 let splashWindow: BrowserWindow | null = null;
 let splashShownAt = 0;
 let tray: Tray | null = null;
@@ -694,6 +704,16 @@ function createTray(): void {
         { label: "Start Sharing", click: () => mainWindow?.webContents.send("screen-share:start") },
         { label: "Stop Sharing", click: () => mainWindow?.webContents.send("screen-share:stop") },
       ],
+    },
+    { type: "separator" },
+    {
+      label: "Revoke remembered computer-control approval",
+      click: () => {
+        if (getSetting<number>("computerControl.trustedUntil", 0) > Date.now()) {
+          setSetting("computerControl.trustedUntil", 0);
+        }
+        computerControl.stop();
+      },
     },
     { type: "separator" },
     { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
@@ -3290,9 +3310,9 @@ ipcMain.handle("desktop:terminal-op", async (_event, op: string, params: Record<
 });
 
 // ── Remote tool execution handler ─────────────────────────────────────
-// Executes Jait tool calls on behalf of the gateway when the project
-// lives on this desktop node. Supports terminal.run (via child_process),
-// file.read/write/patch/list/stat, os.query, and search tools.
+// Executes Jait tool calls on behalf of the gateway. Project-scoped terminal,
+// file, search, and OS queries are routed here when this node owns the project;
+// computer.* calls target this desktop explicitly through a control session.
 ipcMain.handle("desktop:tool-op", async (
   _event,
   tool: string,
@@ -3565,6 +3585,11 @@ ipcMain.handle("desktop:tool-op", async (
       }
     }
 
+    case "computer.session":
+    case "computer.observe":
+    case "computer.act":
+      return computerControl.handle(tool, args);
+
     // ── Image view (read a binary file as base64) ────────────────
     case "image.view": {
       const filePath = resolve(String(args.path ?? ""));
@@ -3713,6 +3738,7 @@ app.on("child-process-gone", (_event, details) => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  computerControl.stop();
   for (const sessionId of [...remoteProviderSessions.keys()]) {
     stopRemoteProviderSession(sessionId);
   }

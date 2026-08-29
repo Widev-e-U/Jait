@@ -53,6 +53,15 @@ export type {
 export { NODE_PROTOCOL_VERSION, NODE_CAPABILITIES } from "./node.js";
 
 export type {
+  ComputerMouseButton,
+  ComputerScrollDirection,
+  ComputerAction,
+  ComputerScreenshot,
+  ComputerControlSession,
+  ComputerTarget,
+} from "./computer.js";
+
+export type {
   NetworkHost,
   NetworkScanResult,
   SshTestResult,

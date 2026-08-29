@@ -18,6 +18,7 @@ export {
 } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export { createOsControlToolset } from "./os-control-tools.js";
+export { createComputerTools } from "./computer-tools.js";
 export {
   createSurfacesListTool,
   createSurfacesStartTool,
@@ -167,6 +168,7 @@ import {
 } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import { createOsControlToolset } from "./os-control-tools.js";
+import { createComputerTools } from "./computer-tools.js";
 import { createOsControlResolver } from "../os-control/resolver.js";
 import { SandboxManager } from "../security/sandbox-manager.js";
 import {
@@ -304,6 +306,12 @@ export interface ToolRegistryDeps {
   mobilePush?: import("../services/mobile-push.js").MobilePushService;
   /** Graceful shutdown callback — needed by the redeploy tool */
   shutdown?: () => Promise<void>;
+  /**
+   * Fired by the redeploy tool right before it kills this process for a
+   * self-update restart. Lets the gateway persist a durable system notice
+   * into sessions with live turns so users know their answer was truncated.
+   */
+  notifyGatewayRestart?: (info: { oldVersion: string; newVersion: string }) => void;
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
   codeGraphService?: CodeGraphService;
@@ -363,6 +371,9 @@ export function createToolRegistry(
   // OS tools
   tools.register(createOsQueryTool());
   tools.register(createOsInstallTool());
+  if (deps.ws) {
+    for (const tool of createComputerTools(deps.ws)) tools.register(tool);
+  }
 
   // Surface self-control tools
   tools.register(createSurfacesListTool(surfaceRegistry));
@@ -438,6 +449,7 @@ export function createToolRegistry(
       createRedeployTool({
         port: deps.config.port,
         shutdown: deps.shutdown,
+        notifyRestarting: deps.notifyGatewayRestart,
       }),
     );
   }

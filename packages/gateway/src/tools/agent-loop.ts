@@ -361,6 +361,14 @@ export interface AgentLoopOptions {
   onContext?: (round: LlmContextFlowRound) => void;
   /** Persistence callback — called when a final assistant message should be saved */
   onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, thinking?: string) => void;
+  /**
+   * Crash-safe checkpoint — called at round boundaries with everything the
+   * assistant has streamed so far, so a gateway restart mid-turn (e.g. the
+   * agent restarting its own gateway as part of a deploy) loses at most the
+   * current round instead of the entire answer. Appliers should upsert a
+   * single chase row per turn and reuse the id for the final persist.
+   */
+  onAssistantCheckpoint?: (sessionId: string, content: string, toolCalls?: string, segments?: string) => void;
 }
 
 export interface AgentLoopResult {
@@ -693,7 +701,7 @@ const MIN_REPETITION_SCAN_CHARS = 600;
 /** Minimum verbatim back-to-back copies of a unit before it counts as a loop. */
 const MIN_REPETITION_COPIES = 8;
 /** …and those copies must also span at least this many characters in total. */
-const MIN_REPETITION_SPAN_CHARS = 600;
+export const MIN_REPETITION_SPAN_CHARS = 600;
 /** Only the trailing window is inspected, so the scan cost stays bounded. */
 const REPETITION_SCAN_WINDOW_CHARS = 16_000;
 /** Tail slice used to locate the previous occurrence of the repeating unit. */
@@ -702,26 +710,34 @@ const REPETITION_PROBE_CHARS = 48;
 const REPETITION_CHECK_INTERVAL_CHARS = 256;
 
 interface DegenerateRepetition {
-  /** The repeating unit. */
+  /** One repeating unit (a full copy for verbatim loops; a bounded tail slice for near-verbatim ones). */
   unit: string;
-  /** How many consecutive verbatim copies of it end the text. */
+  /** How many consecutive copies of it end the text. */
   copies: number;
   /** Index in the text where the repeated run starts. */
   startIndex: number;
+  /** True when the copies are only near-identical (near-verbatim detector hit). */
+  approximate?: boolean;
 }
 
 /**
- * Detect that `text` ends in a runaway verbatim repetition.
+ * Detect that `text` ends in a runaway repetition.
  *
- * The period is found by locating the previous occurrence of the final
- * {@link REPETITION_PROBE_CHARS} characters, then verifying the tail really is
- * periodic at that distance. Requiring both a copy count *and* a total span
- * keeps ordinary repetition (a bulleted list, a repeated table cell, "ha ha
- * ha") under the threshold while still catching loops that run for thousands
- * of tokens.
+ * Two detectors run in sequence. The verbatim one locates the previous
+ * occurrence of the final {@link REPETITION_PROBE_CHARS} characters and
+ * verifies the tail is periodic at that exact distance; the near-verbatim one
+ * catches loops whose copies churn whitespace and filler variants, where no
+ * fixed period matches anything. Both require a copy floor *and* a total span
+ * so ordinary repetition (a bulleted list, a repeated table cell, "ha ha ha")
+ * stays under the threshold while multi-thousand-token loops are caught.
  */
 function findDegenerateRepetition(text: string): DegenerateRepetition | null {
   if (text.length < MIN_REPETITION_SCAN_CHARS) return null;
+  return findVerbatimRepetition(text) ?? findNearVerbatimRepetition(text);
+}
+
+/** Exact-period detector: the repeating unit must recur verbatim, in step. */
+function findVerbatimRepetition(text: string): DegenerateRepetition | null {
   const window = text.length > REPETITION_SCAN_WINDOW_CHARS
     ? text.slice(-REPETITION_SCAN_WINDOW_CHARS)
     : text;
@@ -753,17 +769,219 @@ function findDegenerateRepetition(text: string): DegenerateRepetition | null {
   return { unit, copies: (text.length - startIndex) / period, startIndex };
 }
 
+/** Minimum pooled length of the phrase a near-verbatim loop must cycle. */
+const MIN_NEAR_REPETITION_SEED_CHARS = 40;
+/** Smallest median stride worth re-collecting occurrences for. */
+const MIN_NEAR_REPETITION_STRIDE_CHARS = 4;
+/** Cohort copy floor for the near-verbatim detector. */
+const MIN_NEAR_REPETITION_COPIES = 8;
+/** Max pooled chars consecutive seed occurrences may drift apart during the run. */
+const NEAR_REPETITION_COHESION_CHARS = 240;
+/** Max raw chars allowed between the final seed occurrence and the text tail. */
+const NEAR_REPETITION_TAIL_CHARS = 400;
+
+/** Collapse every whitespace run to a single space. */
+function poolWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ");
+}
+
 /**
- * Collapse a runaway repetition to two copies. Used for the history entry so a
- * later round (or a resumed session) doesn't re-read the wall of text and
- * pattern-match its way straight back into the same loop.
+ * Maps pooled index `i` to the raw index where the character (or whitespace
+ * run) backing it starts. One extra slot covers `pooled.length` itself.
+ */
+function buildNormalizeMap(raw: string, pooled: string): Int32Array {
+  const map = new Int32Array(pooled.length + 1);
+  let r = 0;
+  let i = 0;
+  while (i < pooled.length) {
+    map[i] = r;
+    if (r >= raw.length) {
+      i++;
+      continue;
+    }
+    if (pooled[i] === " ") {
+      const code = raw.charCodeAt(r);
+      if (isWhitespaceCode(code)) {
+        // A pooled space stands for one whitespace run; it maps to the run's
+        // first raw character, then the whole run is consumed.
+        while (r < raw.length && isWhitespaceCode(raw.charCodeAt(r))) r++;
+        i++;
+        continue;
+      }
+    }
+    // Non-space pooled char: consume exactly one raw code point (surrogate
+    // pairs stay intact because `\s` never matches a lone surrogate).
+    const code = raw.charCodeAt(r);
+    r += code >= 0xd800 && code < 0xdc00 && r + 1 < raw.length ? 2 : 1;
+    i++;
+  }
+  map[pooled.length] = raw.length;
+  return map;
+}
+
+function isWhitespaceCode(code: number): boolean {
+  return code === 0x20
+    || (code >= 0x09 && code <= 0x0d)
+    || code === 0xa0
+    || code === 0x1680
+    || (code >= 0x2000 && code <= 0x200a)
+    || code === 0x2028
+    || code === 0x2029
+    || code === 0x202f
+    || code === 0x205f
+    || code === 0x3000
+    || code === 0xfeff;
+}
+
+/**
+ * Near-verbatim detector for loops whose copies churn whitespace and small
+ * filler variants. Observed in chat 01a04cbe-e352-7d32-9702-a74d7c41d694
+ * (2026-08-29): `What went wrong?` / `Let me check` fragments cycled with
+ * drifting tabs, `\v` noise and reworded tails — no stable exact period, so
+ * the verbatim probe never matched while the loop streamed for megabytes.
+ *
+ * Strategy: pool whitespace (each run collapses to one space) in the trailing
+ * scan window, fingerprint the final 40 pooled characters, and require that
+ * phrase to keep re-occurring as one dense ongoing run leading up to the
+ * current tail. The cohort stops at the first occurrence gap beyond the
+ * cohesion bound — the density analogue of `MIN_REPETITION_COPIES`.
+ */
+function findNearVerbatimRepetition(text: string): DegenerateRepetition | null {
+  // The raw window is padded so the pooled window keeps the full trailing
+  // fingerprint even when the tail is whitespace-heavy.
+  const PADDING = MIN_NEAR_REPETITION_SEED_CHARS + 4;
+  const window = text.length > REPETITION_SCAN_WINDOW_CHARS + PADDING
+    ? text.slice(-(REPETITION_SCAN_WINDOW_CHARS + PADDING))
+    : text;
+
+  const pooled = poolWhitespace(window);
+  if (pooled.length < MIN_NEAR_REPETITION_SEED_CHARS) return null;
+  const seed = pooled.slice(-MIN_NEAR_REPETITION_SEED_CHARS);
+
+  // All occurrences of the seed in O(n) — the segments scanned between finds
+  // are disjoint.
+  const positions: number[] = [];
+  for (let i = pooled.indexOf(seed); i >= 0; i = pooled.indexOf(seed, i + 1)) {
+    positions.push(i);
+  }
+  if (positions.length < 2) return null;
+
+  // Extend the cohort backwards from the final occurrence while consecutive
+  // occurrences stay within the cohesion bound. Both markers are reassigned
+  // when the stride re-seed replaces the occurrence list below.
+  let last = positions.length - 1;
+  let first = last;
+  while (first > 0) {
+    const prev = positions[first - 1];
+    const curr = positions[first];
+    if (prev === undefined || curr === undefined) break; // unreachable
+    if (curr - prev > NEAR_REPETITION_COHESION_CHARS) break;
+    first--;
+  }
+
+  // Reassigned if the stride re-seed below replaces the occurrence cohort.
+  let firstPos = positions[first];
+  let lastPos = positions[last];
+  if (firstPos === undefined || lastPos === undefined) return null;
+
+  // The seed can span a copy boundary (e.g. 40 chars trailing over a 26-char
+  // period), so seed matches are phase-shifted and their count is off by one.
+  // The median gap between consecutive matches measures the true stride; when
+  // it is meaningful, re-collect occurrences using exactly one stride as the
+  // seed — those occurrences start at copy boundaries, so their count is the
+  // copy count.
+  const gaps: number[] = [];
+  for (let i = first + 1; i <= last; i++) {
+    const prev = positions[i - 1];
+    const curr = positions[i];
+    if (prev === undefined || curr === undefined) break; // unreachable
+    gaps.push(curr - prev);
+  }
+  gaps.sort((a, b) => a - b);
+  const medianGap = gaps[Math.floor(gaps.length / 2)];
+  if (medianGap !== undefined && medianGap >= MIN_NEAR_REPETITION_STRIDE_CHARS) {
+    const unitSeed = pooled.slice(-medianGap);
+    const unitPositions: number[] = [];
+    for (let i = pooled.indexOf(unitSeed); i >= 0; i = pooled.indexOf(unitSeed, i + 1)) {
+      unitPositions.push(i);
+    }
+    if (unitPositions.length > positions.length) {
+      positions.length = 0;
+      positions.push(...unitPositions);
+      const unitLast = positions.length - 1;
+      let unitFirst = unitLast;
+      while (unitFirst > 0) {
+        const prev = positions[unitFirst - 1];
+        const curr = positions[unitFirst];
+        if (prev === undefined || curr === undefined) break; // unreachable
+        if (curr - prev > NEAR_REPETITION_COHESION_CHARS) break;
+        unitFirst--;
+      }
+      first = unitFirst;
+      last = unitLast;
+      const nextFirstPos = positions[first];
+      const nextLastPos = positions[last];
+      if (nextFirstPos === undefined || nextLastPos === undefined) return null;
+      firstPos = nextFirstPos;
+      lastPos = nextLastPos;
+    }
+  }
+  const copies = positions.length - first;
+  const requiredCopies = Math.max(
+    MIN_NEAR_REPETITION_COPIES,
+    Math.ceil(MIN_REPETITION_SPAN_CHARS / seed.length),
+  );
+  if (copies < requiredCopies) return null;
+
+  // Back-translate pooled positions to raw indices. The final seed occurrence
+  // (the pooled tail itself) must sit near the raw end; otherwise whitespace
+  // pooling inflated sparse legitimate content rather than a live loop.
+  const charMap = buildNormalizeMap(window, pooled);
+  const lastRawStart = charMap[lastPos];
+  if (lastRawStart === undefined) return null;
+  if (text.length - lastRawStart > NEAR_REPETITION_TAIL_CHARS) return null;
+
+  // The net raw span must meet the same floor the verbatim detector enforces.
+  const firstRaw = charMap[firstPos];
+  if (firstRaw === undefined) return null;
+  if (text.length - firstRaw < MIN_REPETITION_SPAN_CHARS) return null;
+
+  // Anchor the trim one period before the cohort's first copy (keeping a
+  // readable example of the pattern), but never before the final occurrence —
+  // otherwise the collapsed history would swallow its own preamble.
+  const nextPos = first < last ? positions[first + 1] : undefined;
+  const nextRaw = nextPos === undefined ? undefined : charMap[nextPos];
+  const rawPeriod = nextRaw === undefined
+    ? seed.length + 1
+    : nextRaw - firstRaw;
+  const startIndex = Math.max(firstRaw - rawPeriod, lastRawStart);
+
+  return {
+    unit: text.slice(startIndex, Math.min(text.length, startIndex + NEAR_REPETITION_TAIL_CHARS)),
+    copies,
+    startIndex,
+    approximate: true,
+  };
+}
+
+/**
+ * Collapse a runaway repetition for history storage so a later round (or a
+ * resumed session) doesn't re-read the wall of text and pattern-match its way
+ * straight back into the same loop.
  */
 function trimDegenerateRepetition(text: string): string {
   const repetition = findDegenerateRepetition(text);
   if (!repetition) return text;
+  if (!repetition.approximate) {
+    return text.slice(0, repetition.startIndex)
+      + repetition.unit.repeat(2)
+      + `\n[… ${repetition.copies - 2} further identical repetitions removed …]`;
+  }
+  // Near-verbatim: there is no stable unit worth echoing — keep one example
+  // copy as context, cut the run, and note how much was removed.
+  const removed = Math.max(0, repetition.copies - 1);
   return text.slice(0, repetition.startIndex)
-    + repetition.unit.repeat(2)
-    + `\n[… ${repetition.copies - 2} further identical repetitions removed …]`;
+    + `\n[… ${removed} more near-identical repetitions removed …]`;
 }
 
 /** Tag a guard hit with the stream it came from, or drop it when there was none. */
@@ -2603,6 +2821,7 @@ export async function runAgentLoop(
     onEvent,
     onContext,
     onPersist,
+    onAssistantCheckpoint,
     log = console,
   } = options;
 
@@ -2761,6 +2980,18 @@ export async function runAgentLoop(
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
       return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, persisted };
+    }
+
+    // ── Crash-safe assistant checkpoint ──
+    // Nothing about this turn is durable until the final onPersist fires. If
+    // the process dies mid-round (gateway restart, OOM, SIGTERM from a deploy),
+    // the answer would vanish because persistence is deferred to the end. From
+    // round 1 onward, checkpoint the accumulated output once per round so
+    // reloads render everything streamed so far.
+    if (round > 0 && !persisted && (fullContent || segments.length > 0 || executedToolCalls.length > 0)) {
+      const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+      const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+      onAssistantCheckpoint?.(sessionId, fullContent, tcJson, segJson);
     }
 
     // ── Invisible continuous-run checkpoint ──
@@ -3163,7 +3394,7 @@ export async function runAgentLoop(
 
       log.warn(
         `Runaway repetition in ${repetitionStop.source} for session ${sessionId}: `
-          + `${repetitionStop.copies} identical copies of a ${repetitionStop.unit.length}-char block — discarding generation`,
+          + `${repetitionStop.copies}${repetitionStop.approximate ? " near-identical" : " identical"} copies of a repeating block — discarding generation`,
       );
 
       const canRecover =
@@ -3186,7 +3417,7 @@ export async function runAgentLoop(
         const recoveryPrompt: AgentMessage = {
           role: "system",
           content:
-            `Your previous generation fell into verbatim repetition in its ${repeated} and was discarded. ` +
+            `Your previous generation fell into a repetition loop in its ${repeated} and was discarded. ` +
             `Do not repeat, recap, or extend that pattern. Continue from the useful evidence already in the conversation, ` +
             `change strategy if needed, and complete the user's request with a concise answer or a different structured tool call.`,
         };

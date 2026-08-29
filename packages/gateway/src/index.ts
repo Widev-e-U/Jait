@@ -14,6 +14,7 @@ import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, Remo
 import { mergeSavedProjectLayout, resolveProjectPanelOpen, type SurfaceRegistrySnapshot } from "@jait/shared";
 import { shouldSyncProjectSurfaceUi } from "./surfaces/project-ui-sync.js";
 import { createToolRegistry } from "./tools/index.js";
+import { notifySessionsOfGatewayRestart } from "./routes/chat.js";
 import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
@@ -730,6 +731,11 @@ async function main() {
     notifications,
     config,
     shutdown: shutdownRef,
+    notifyGatewayRestart: (info) =>
+      notifySessionsOfGatewayRestart(db, {
+        oldVersion: info.oldVersion,
+        newVersion: info.newVersion,
+      }),
     previewService,
     architectureDiagramService,
     codeGraphService,
