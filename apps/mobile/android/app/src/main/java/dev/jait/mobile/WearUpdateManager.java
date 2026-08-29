@@ -34,7 +34,10 @@ final class WearUpdateManager {
     static final String UPDATE_CAPABILITY = "jait_watch_apk_receiver";
 
     private static final String LEGACY_UPDATE_PATH = "/jait/update";
-    private static final String WATCH_PACKAGE = "dev.jait.mobile.wear";
+    // Must equal the wear module's applicationId. It shares the phone's package ID on
+    // purpose: the Wearable data layer only routes messages and channels between devices
+    // running the same package name.
+    private static final String WATCH_PACKAGE = "dev.jait.mobile";
     private static final String UPDATE_DIRECTORY = "wear-updates";
     private static final String APK_FILE_NAME = "jait-wear-update.apk";
     private static final long MAX_APK_BYTES = 100L * 1024L * 1024L;
@@ -292,12 +295,20 @@ final class WearUpdateManager {
 
     private static void validateApk(Context context, File apkFile) throws Exception {
         PackageManager packageManager = context.getPackageManager();
-        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-            ? PackageManager.GET_SIGNING_CERTIFICATES
-            : PackageManager.GET_SIGNATURES;
+        // Request both signature mechanisms: some API levels only populate signingInfo,
+        // others only signatures, and archive parsing is the least reliable path.
+        int flags = PackageManager.GET_SIGNING_CERTIFICATES | PackageManager.GET_SIGNATURES;
         PackageInfo archiveInfo = packageManager.getPackageArchiveInfo(apkFile.getAbsolutePath(), flags);
-        if (archiveInfo == null || !WATCH_PACKAGE.equals(archiveInfo.packageName)) {
-            throw new SecurityException("Downloaded APK is not the Jait Wear OS app");
+        if (archiveInfo == null) {
+            throw new SecurityException(
+                "Downloaded watch update could not be read as an APK — the download may have been truncated"
+            );
+        }
+        if (!WATCH_PACKAGE.equals(archiveInfo.packageName)) {
+            throw new SecurityException(
+                "Downloaded APK is not the Jait Wear OS app (expected "
+                    + WATCH_PACKAGE + ", got " + archiveInfo.packageName + ")"
+            );
         }
         PackageInfo phoneInfo = packageManager.getPackageInfo(context.getPackageName(), flags);
         if (!signaturesMatch(signatures(phoneInfo), signatures(archiveInfo))) {
