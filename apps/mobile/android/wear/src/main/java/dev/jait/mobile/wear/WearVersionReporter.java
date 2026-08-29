@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
  * the phone whenever it reconnects — no polling from the watch is needed.
  */
 final class WearVersionReporter {
-    /** Data item path the watch publishes its version under. Phone reads {@code wear://*/<PATH>}. */
+    /** Data item path the watch publishes its version under (phone reads it via DataClient). */
     static final String VERSION_PATH = "/jait/watch/version";
     /** Message the phone sends when it wants a fresh publish (e.g. Settings refresh). */
     static final String VERSION_REQUEST_PATH = "/jait/watch/version/request";
