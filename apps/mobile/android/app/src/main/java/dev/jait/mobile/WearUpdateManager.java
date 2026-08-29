@@ -23,7 +23,9 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -161,28 +163,58 @@ final class WearUpdateManager {
     }
 
     private static Status queryStatusSync(Context context) throws Exception {
+        Map<String, Node> discovered = new LinkedHashMap<>();
         List<Node> connectedNodes = Tasks.await(
             Wearable.getNodeClient(context).getConnectedNodes(),
             10,
             TimeUnit.SECONDS
         );
-        CapabilityInfo capability = Tasks.await(
-            Wearable.getCapabilityClient(context).getCapability(
-                UPDATE_CAPABILITY,
-                CapabilityClient.FILTER_REACHABLE
-            ),
-            10,
-            TimeUnit.SECONDS
-        );
-        Set<String> directNodeIds = new HashSet<>();
-        if (capability != null) {
-            for (Node node : capability.getNodes()) {
-                directNodeIds.add(node.getId());
+        for (Node node : connectedNodes) {
+            discovered.put(node.getId(), node);
+        }
+
+        // {getConnectedNodes()} misses the watch when BLE is asleep and the watch is only on
+        // Wi-Fi/cellular, so union in every node advertising the update capability. FILTER_ALL
+        // also matches cloud-reachable watches; a node the watch just lost contact with still
+        // becomes reachable once it wakes up.
+        try {
+            CapabilityInfo allNodes = Tasks.await(
+                Wearable.getCapabilityClient(context).getCapability(
+                    UPDATE_CAPABILITY,
+                    CapabilityClient.FILTER_ALL
+                ),
+                10,
+                TimeUnit.SECONDS
+            );
+            if (allNodes != null) {
+                for (Node node : allNodes.getNodes()) {
+                    discovered.put(node.getId(), node);
+                }
             }
+        } catch (Exception ignored) {
+        }
+
+        Set<String> directNodeIds = new HashSet<>();
+        try {
+            // Direct APK transfer needs a reachable transport, so keep FILTER_REACHABLE here.
+            CapabilityInfo reachable = Tasks.await(
+                Wearable.getCapabilityClient(context).getCapability(
+                    UPDATE_CAPABILITY,
+                    CapabilityClient.FILTER_REACHABLE
+                ),
+                10,
+                TimeUnit.SECONDS
+            );
+            if (reachable != null) {
+                for (Node node : reachable.getNodes()) {
+                    directNodeIds.add(node.getId());
+                }
+            }
+        } catch (Exception ignored) {
         }
 
         List<WatchStatus> watches = new ArrayList<>();
-        for (Node node : connectedNodes) {
+        for (Node node : discovered.values()) {
             watches.add(new WatchStatus(
                 node.getId(),
                 node.getDisplayName(),

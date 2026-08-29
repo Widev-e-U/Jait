@@ -1,0 +1,6 @@
+<resources>
+    <string-array name="android_wear_capabilities">
+        <!-- Queried by the watch (WearNodes.CAPABILITY) to discover the companion phone. -->
+        <item>jait_companion</item>
+    </string-array>
+</resources>

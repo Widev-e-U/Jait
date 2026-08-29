@@ -1,5 +1,8 @@
 <resources>
     <string-array name="android_wear_capabilities">
+        <!-- Lets the phone push an APK over ChannelClient (WearUpdateManager). -->
         <item>jait_watch_apk_receiver</item>
+        <!-- Lets the phone discover this app even when BLE is down (WearBridge). -->
+        <item>jait_companion</item>
     </string-array>
 </resources>

@@ -87,7 +87,7 @@ final class WearPromptView {
         brand.addView(heading, weightedLayoutWrap(1f, 10, 0, 0, 0));
 
         if (pendingCount > 0) {
-            TextView badge = text(String.valueOf(pendingCount), 10, theme.primary(), true);
+            TextView badge = text(String.valueOf(pendingCount), 10, theme.onPrimary(), true);
             badge.setGravity(Gravity.CENTER);
             badge.setBackground(rounded(theme.blue(), 10, Color.TRANSPARENT));
             brand.addView(badge, new LinearLayout.LayoutParams(dp(24), dp(24)));
@@ -223,7 +223,7 @@ final class WearPromptView {
         cancel.setOnClickListener(view -> dispatch(true));
         actions.addView(cancel, weightedLayout(1f, 0, 0, 4, 0));
 
-        Button submit = button("Send", theme.blue(), theme.primary());
+        Button submit = button("Send", theme.blue(), theme.onPrimary());
         submit.setOnClickListener(view -> dispatch(false));
         actions.addView(submit, weightedLayout(1f, 4, 0, 0, 0));
 

@@ -5,9 +5,11 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 
 /**
- * Centralized dark/light palette for the watch UI. The user can toggle the theme from the home
- * header; the choice is persisted locally so it survives app restarts. All watch views should read
- * colors from here instead of hard-coding values.
+ * Centralized dark/light palette for the watch UI. Values mirror the Jait web/desktop shadcn theme
+ * (apps/web/src/index.css: hsl(--dark-hue=220 --dark-sat=12% ...) tokens) so the watch looks like
+ * the rest of the product. The user can toggle the theme from the home header; the choice is
+ * persisted locally so it survives app restarts. All watch views should read colors from here
+ * instead of hard-coding values.
  */
 final class WearTheme {
     static final String MODE_DARK = "dark";
@@ -47,60 +49,86 @@ final class WearTheme {
         current.toggled().save(context);
     }
 
+    // --background hsl(210 18% 94%) / 220 12% 5%
     int background() {
-        return dark ? Color.rgb(13, 15, 18) : Color.rgb(244, 246, 250);
+        return dark ? Color.rgb(11, 12, 14) : Color.rgb(237, 240, 242);
     }
 
+    // --card hsl(210 18% 96%) / 220 12% 10%
     int surface() {
-        return dark ? Color.rgb(24, 26, 31) : Color.rgb(255, 255, 255);
+        return dark ? Color.rgb(22, 24, 29) : Color.rgb(243, 245, 247);
     }
 
+    // --accent hsl(210 14% 88%) / 220 12% 18%
     int surfaceActive() {
-        return dark ? Color.rgb(22, 31, 45) : Color.rgb(224, 232, 244);
+        return dark ? Color.rgb(40, 44, 51) : Color.rgb(220, 224, 229);
     }
 
+    // --border hsl(210 12% 80%) / 220 12% 24%
     int border() {
-        return dark ? Color.rgb(52, 57, 66) : Color.rgb(205, 211, 222);
+        return dark ? Color.rgb(54, 59, 69) : Color.rgb(198, 204, 210);
     }
 
+    // --secondary (secondary button background) hsl(210 14% 88%) / 220 12% 15%
     int borderActive() {
-        return dark ? Color.rgb(43, 61, 86) : Color.rgb(168, 190, 220);
+        return dark ? Color.rgb(34, 37, 43) : Color.rgb(220, 224, 229);
     }
 
+    // --foreground hsl(0 0% 3.9%) / 210 20% 96% (body/titles)
     int primary() {
-        return dark ? Color.rgb(242, 244, 247) : Color.rgb(24, 28, 36);
+        return dark ? Color.rgb(243, 245, 247) : Color.rgb(10, 10, 10);
     }
 
+    // secondary text: previews, between foreground and muted-foreground (foreground @70%)
     int secondary() {
-        return dark ? Color.rgb(174, 180, 189) : Color.rgb(88, 96, 110);
+        return dark ? Color.rgb(173, 175, 177) : Color.rgb(78, 79, 80);
     }
 
+    // --muted-foreground hsl(0 0% 45.1%) / 215 12% 52%
     int muted() {
-        return dark ? Color.rgb(104, 111, 121) : Color.rgb(120, 128, 142);
+        return dark ? Color.rgb(118, 130, 147) : Color.rgb(115, 115, 115);
     }
 
     int disabled() {
-        return dark ? Color.rgb(65, 70, 78) : Color.rgb(196, 202, 212);
+        return dark ? Color.rgb(100, 103, 108) : Color.rgb(163, 163, 163);
     }
 
+    // --primary hsl(217 91% 60%)
     int blue() {
-        return dark ? Color.rgb(96, 165, 250) : Color.rgb(37, 99, 235);
+        return Color.rgb(60, 131, 246);
+    }
+
+    // --primary-foreground (text/keys on top of blue)
+    int onPrimary() {
+        return Color.WHITE;
     }
 
     int green() {
         return dark ? Color.rgb(74, 222, 128) : Color.rgb(22, 163, 74);
     }
 
+    // --destructive, brightened in dark mode so 9sp text stays readable on the watch
     int red() {
-        return dark ? Color.rgb(248, 113, 113) : Color.rgb(220, 38, 38);
+        return dark ? Color.rgb(248, 113, 113) : Color.rgb(239, 68, 68);
     }
 
+    // --primary @10-12% composited over --background (matches the web chat user bubble tint)
     int userBubble() {
-        return dark ? Color.rgb(24, 42, 66) : Color.rgb(214, 228, 250);
+        return dark ? Color.rgb(17, 26, 42) : Color.rgb(219, 229, 242);
     }
 
+    // --primary @~40% over the bubble
     int userBubbleBorder() {
-        return dark ? Color.rgb(48, 85, 132) : Color.rgb(147, 178, 224);
+        return dark ? Color.rgb(31, 60, 107) : Color.rgb(157, 191, 244);
+    }
+
+    // banner/background chips: --secondary hsl(210 14% 88%) / 220 12% 15%
+    int bannerBg() {
+        return borderActive();
+    }
+
+    int bannerBorder() {
+        return dark ? Color.rgb(46, 50, 58) : Color.rgb(205, 210, 216);
     }
 
     int logoBackground() {

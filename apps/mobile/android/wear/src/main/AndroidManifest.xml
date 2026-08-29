@@ -21,6 +21,11 @@
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
 
+        <!-- Lets the phone resolve this watch via CapabilityClient, including over the cloud. -->
+        <meta-data
+            android:name="com.google.android.gms.wearable.CAPABILITY"
+            android:value="jait_companion" />
+
         <uses-library
             android:name="com.google.android.wearable"
             android:required="false" />

@@ -217,13 +217,11 @@ public class WearQuestionActivity extends AppCompatActivity {
     private void requestSnapshot() {
         new Thread(() -> {
             try {
-                List<Node> nodes = Tasks.await(
-                    Wearable.getNodeClient(this).getConnectedNodes(), 5, TimeUnit.SECONDS
-                );
+                byte[] data = new byte[0];
                 MessageClient messageClient = Wearable.getMessageClient(this);
-                for (Node node : nodes) {
+                for (Node node : WearNodes.reachable(this)) {
                     Tasks.await(
-                        messageClient.sendMessage(node.getId(), SNAPSHOT_REQUEST_PATH, new byte[0]),
+                        messageClient.sendMessage(node.getId(), SNAPSHOT_REQUEST_PATH, data),
                         5,
                         TimeUnit.SECONDS
                     );
@@ -241,11 +239,8 @@ public class WearQuestionActivity extends AppCompatActivity {
                 payload.put("cancelled", cancelled);
                 if (!cancelled && result != null) payload.put("result", result);
                 byte[] data = payload.toString().getBytes(StandardCharsets.UTF_8);
-                List<Node> nodes = Tasks.await(
-                    Wearable.getNodeClient(this).getConnectedNodes(), 5, TimeUnit.SECONDS
-                );
                 MessageClient messageClient = Wearable.getMessageClient(this);
-                for (Node node : nodes) {
+                for (Node node : WearNodes.reachable(this)) {
                     Tasks.await(messageClient.sendMessage(node.getId(), ANSWER_PATH, data), 5, TimeUnit.SECONDS);
                 }
             } catch (Exception ignored) {

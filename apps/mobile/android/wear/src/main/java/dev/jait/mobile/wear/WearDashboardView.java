@@ -81,7 +81,8 @@ final class WearDashboardView {
         String syncText;
         int syncColor;
         if (snapshot.connected) {
-            syncText = "Synced " + WearPromptView.ageLabel(snapshot.syncedAt, System.currentTimeMillis()) + " ago";
+            String age = WearPromptView.ageLabel(snapshot.syncedAt, System.currentTimeMillis());
+            syncText = age.equals("now") ? "Synced now" : "Synced " + age + " ago";
             syncColor = theme.muted();
         } else {
             syncText = snapshot.error.isEmpty() ? "Tap refresh to sync" : snapshot.error;

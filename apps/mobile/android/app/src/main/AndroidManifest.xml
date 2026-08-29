@@ -11,6 +11,11 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/AppTheme">
 
+        <!-- Lets the watch resolve the phone via CapabilityClient even when BLE is down. -->
+        <meta-data
+            android:name="com.google.android.gms.wearable.CAPABILITY"
+            android:value="jait_companion" />
+
         <activity
             android:name=".AgentPromptActivity"
             android:excludeFromRecents="true"
