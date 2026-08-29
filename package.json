@@ -46,6 +46,7 @@
     "vitest": "^3.2.7"
   },
   "trustedDependencies": [
-    "koffi"
+    "koffi",
+    "node-pty"
   ]
 }

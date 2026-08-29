@@ -377,7 +377,7 @@ jobs:
           printf "%s" "$FIREBASE_ANDROID_CONFIG_BASE64" | base64 --decode > apps/mobile/android/app/google-services.json
       - name: Capacitor sync
         working-directory: apps/mobile
-        run: npx cap sync android
+        run: bunx cap sync android
       - name: Set Android SDK path
         run: echo "sdk.dir=$ANDROID_HOME" > apps/mobile/android/local.properties
       - name: Prepare Android release signing
