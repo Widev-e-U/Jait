@@ -81,6 +81,10 @@ public class AppUpdaterPlugin extends Plugin {
                     item.put("name", watch.name);
                     item.put("nearby", watch.nearby);
                     item.put("directTransferSupported", watch.directTransferSupported);
+                    if (watch.version != null) item.put("version", watch.version);
+                    if (watch.versionCode != WearUpdateManager.WatchStatus.VERSION_UNKNOWN) {
+                        item.put("versionCode", watch.versionCode);
+                    }
                     watches.add(item);
                 }
                 result.put("connected", !status.watches.isEmpty());

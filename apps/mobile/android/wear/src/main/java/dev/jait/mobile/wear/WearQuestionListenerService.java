@@ -34,6 +34,14 @@ public class WearQuestionListenerService extends WearableListenerService {
     private static final String UPDATE_CHANNEL_PATH = "/jait/update/apk";
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        // Publish our version whenever the service binds — including when the phone (re)connects
+        // to the wear device — so Settings always has fresh data to read.
+        WearVersionReporter.publish(this);
+    }
+
+    @Override
     public void onChannelOpened(ChannelClient.Channel channel) {
         if (!UPDATE_CHANNEL_PATH.equals(channel.getPath())) return;
         File apkFile = WearUpdater.prepareApkFile(this);
@@ -76,6 +84,8 @@ public class WearQuestionListenerService extends WearableListenerService {
             Intent refreshIntent = new Intent(ACTION_SNAPSHOT_UPDATED);
             refreshIntent.setPackage(getPackageName());
             sendBroadcast(refreshIntent);
+        } else if (WearVersionReporter.VERSION_REQUEST_PATH.equals(event.getPath())) {
+            WearVersionReporter.publish(this);
         }
     }
 

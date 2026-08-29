@@ -107,6 +107,9 @@ public class WearQuestionActivity extends AppCompatActivity {
         );
         ensureNotificationPermission();
         registerCompanionReceiver();
+        // Make sure the phone can always see which version is installed here, even before any
+        // question/snapshot traffic has ever been exchanged.
+        WearVersionReporter.publish(this);
         renderRequest(getIntent());
     }
 

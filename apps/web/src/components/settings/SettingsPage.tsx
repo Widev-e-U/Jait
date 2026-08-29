@@ -323,6 +323,9 @@ interface WearStatus {
     name: string
     nearby: boolean
     directTransferSupported: boolean
+    /** Installed watch app version, when the watch has reported it. */
+    version?: string
+    versionCode?: number
   }>
 }
 
@@ -1552,7 +1555,7 @@ const providerAccountsCard = (
                 ) : wearStatus?.connected ? (
                   wearWatches.map((watch) => (
                     <Badge key={watch.id} variant={watch.nearby ? 'success' : 'outline'}>
-                      {watch.name}
+                      {watch.name}{watch.version ? ` · v${watch.version}` : ''}
                     </Badge>
                   ))
                 ) : (
@@ -1564,6 +1567,20 @@ const providerAccountsCard = (
                   {wearStatus.directTransferSupported
                     ? 'Direct phone-to-watch APK transfer is ready.'
                     : 'This watch uses the one-time legacy updater; future updates transfer directly from the phone.'}
+                </p>
+              )}
+              {wearStatus?.connected
+                && wearWatches.some((watch) => watch.version)
+                && updateInfo?.latestVersion && (
+                <p className="text-sm text-muted-foreground">
+                  {(() => {
+                    const reported = wearWatches.filter((watch) => watch.version)
+                    const outdated = reported.filter((watch) => watch.version !== updateInfo.latestVersion)
+                    if (outdated.length === 0) {
+                      return `Watch app ${reported[0].version} is up to date.`
+                    }
+                    return `Watch app v${outdated[0].version} is installed; v${updateInfo.latestVersion} is available.`
+                  })()}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-3">

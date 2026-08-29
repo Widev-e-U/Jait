@@ -4,11 +4,16 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
+import android.net.Uri;
 import android.os.Build;
 import com.google.android.gms.tasks.Tasks;
 import com.google.android.gms.wearable.CapabilityClient;
 import com.google.android.gms.wearable.CapabilityInfo;
 import com.google.android.gms.wearable.ChannelClient;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataItemBuffer;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.MessageClient;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.Wearable;
@@ -33,6 +38,12 @@ final class WearUpdateManager {
     static final String UPDATE_CHANNEL_PATH = "/jait/update/apk";
     static final String UPDATE_CAPABILITY = "jait_watch_apk_receiver";
 
+    // Keep in sync with wear/src/main/java/dev/jait/mobile/wear/WearVersionReporter.java: the
+    // watch publishes its version as a data item and republishes when pinged with the request
+    // message. Both apps share the package name, so the data layer routes between them.
+    static final String WATCH_VERSION_PATH = "/jait/watch/version";
+    private static final String WATCH_VERSION_REQUEST_PATH = "/jait/watch/version/request";
+
     private static final String LEGACY_UPDATE_PATH = "/jait/update";
     // Must equal the wear module's applicationId. It shares the phone's package ID on
     // purpose: the Wearable data layer only routes messages and channels between devices
@@ -53,16 +64,31 @@ final class WearUpdateManager {
     }
 
     static final class WatchStatus {
+        static final long VERSION_UNKNOWN = -1L;
+
         final String id;
         final String name;
         final boolean nearby;
         final boolean directTransferSupported;
+        /** Installed watch app version name, or null when the watch has not reported one yet. */
+        final String version;
+        /** Installed watch app build number (longVersionCode), or {@link #VERSION_UNKNOWN}. */
+        final long versionCode;
 
-        WatchStatus(String id, String name, boolean nearby, boolean directTransferSupported) {
+        WatchStatus(
+            String id,
+            String name,
+            boolean nearby,
+            boolean directTransferSupported,
+            String version,
+            long versionCode
+        ) {
             this.id = id;
             this.name = name;
             this.nearby = nearby;
             this.directTransferSupported = directTransferSupported;
+            this.version = version;
+            this.versionCode = versionCode;
         }
     }
 
@@ -216,16 +242,82 @@ final class WearUpdateManager {
         } catch (Exception ignored) {
         }
 
+        pingWatchVersions(context, discovered.values(), directNodeIds);
+        Map<String, ReportedVersion> reportedVersions = readWatchVersions(context);
+
         List<WatchStatus> watches = new ArrayList<>();
         for (Node node : discovered.values()) {
+            ReportedVersion reported = reportedVersions.get(node.getId());
             watches.add(new WatchStatus(
                 node.getId(),
                 node.getDisplayName(),
                 node.isNearby(),
-                directNodeIds.contains(node.getId())
+                directNodeIds.contains(node.getId()),
+                reported == null ? null : reported.version,
+                reported == null ? WatchStatus.VERSION_UNKNOWN : reported.versionCode
             ));
         }
         return new Status(watches, !directNodeIds.isEmpty());
+    }
+
+    private static final class ReportedVersion {
+        final String version;
+        final long versionCode;
+
+        ReportedVersion(String version, long versionCode) {
+            this.version = version;
+            this.versionCode = versionCode;
+        }
+    }
+
+    /**
+     * Asks reachable watches to republish their version data item. Watches that only answer over
+     * the cloud route pick up the data item next time they sync, so a refresh may not report new
+     * versions immediately for those.
+     */
+    private static void pingWatchVersions(Context context, Iterable<Node> nodes, Set<String> reachableIds) {
+        MessageClient messageClient = Wearable.getMessageClient(context);
+        for (Node node : nodes) {
+            if (!reachableIds.contains(node.getId())) continue;
+            try {
+                Tasks.await(
+                    messageClient.sendMessage(node.getId(), WATCH_VERSION_REQUEST_PATH, new byte[0]),
+                    4,
+                    TimeUnit.SECONDS
+                );
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** Reads the latest {@value #WATCH_VERSION_PATH} data item per watch from the local cache. */
+    private static Map<String, ReportedVersion> readWatchVersions(Context context) {
+        Map<String, ReportedVersion> versions = new LinkedHashMap<>();
+        DataItemBuffer buffer = null;
+        try {
+            buffer = Tasks.await(
+                Wearable.getDataClient(context).getDataItems(
+                    new Uri.Builder().scheme("wear").path(WATCH_VERSION_PATH).build()
+                ),
+                10,
+                TimeUnit.SECONDS
+            );
+            if (buffer == null) return versions;
+            for (DataItem item : buffer) {
+                String host = item.getUri() == null ? null : item.getUri().getHost();
+                if (host == null || host.isEmpty()) continue;
+                DataMap map = DataMapItem.fromDataItem(item).getDataMap();
+                String version = map.getString("version");
+                long versionCode = map.getLong("versionCode", WatchStatus.VERSION_UNKNOWN);
+                if (version == null && versionCode == WatchStatus.VERSION_UNKNOWN) continue;
+                versions.put(host, new ReportedVersion(version, versionCode));
+            }
+            return versions;
+        } catch (Exception ignored) {
+            return versions;
+        } finally {
+            if (buffer != null) buffer.release();
+        }
     }
 
     private static File downloadApk(Context context, URL initialUrl) throws Exception {
