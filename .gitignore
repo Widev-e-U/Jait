@@ -54,6 +54,10 @@ logs/
 /contextflow.txt
 /ollama flow.txt
 
+# Local agent state (Jait runtime db / todo state)
+/jait.db
+/todo.json
+
 # Testing
 .coverage
 htmlcov/
