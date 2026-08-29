@@ -242,6 +242,14 @@ export class TerminalSurface implements Surface {
   private _pty: PTYInstance | null = null;
   private _outputBuffer: string[] = [];
   private _outputChunkCount = 0;
+  /**
+   * Chunk boundary (inclusive) of the last seen OSC 633;D "command finished"
+   * marker. Serves as the lower boundary for a command's terminal-output
+   * slice: everything past it (the next prompt redraw, bundled into the same
+   * PTY read by shell integration) must not appear in a toolcard.
+   * 0 = no completion marker seen yet.
+   */
+  private _commandDoneEndOffset = 0;
   private _cols: number;
   private _rows: number;
   private readonly shell: string;
@@ -350,6 +358,16 @@ export class TerminalSurface implements Surface {
         this._lastActivityAt = Date.now();
         this._outputChunkCount += 1;
         this._outputBuffer.push(data);
+        // Fix lower toolcard boundary: pin the chunk count at the OSC 633;D
+        // ("command finished") marker. Shells bundle this marker into the
+        // SAME PTY read as the next prompt redraw, so naively stopping at the
+        // eventual settle-time chunk count lets the *next* prompt leak under
+        // the command's output. Callers use this boundary as
+        // `outputEndOffset`, and getTerminalOutputSlice trims the final
+        // chunk at the marker.
+        if (data.includes("\x1b]633;D")) {
+          this._commandDoneEndOffset = this._outputChunkCount;
+        }
         if (this._outputBuffer.length > 10000) {
           this._outputBuffer = this._outputBuffer.slice(-5000);
         }
@@ -460,13 +478,22 @@ export class TerminalSurface implements Surface {
     return this._outputChunkCount;
   }
 
+  /** Chunk boundary pinned at the last OSC 633;D "command finished" marker (0 = none seen yet). */
+  getCommandDoneEndOffset(): number {
+    return this._commandDoneEndOffset;
+  }
+
   getRecentOutputSince(outputOffset: number, outputEndOffset?: number, lines = 100): string {
+    // An explicit end offset always denotes a bounded *command* slice: trim
+    // at the last OSC 633;D marker so the next prompt redraw bundled into
+    // the marker's PTY read never reaches the toolcard.
     return getTerminalOutputSlice(
       this._outputBuffer,
       this._outputChunkCount,
       outputOffset,
       outputEndOffset,
       lines,
+      outputEndOffset !== undefined,
     );
   }
 

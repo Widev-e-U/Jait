@@ -196,6 +196,36 @@ function getTerminalOutputOffset(surface: ManagedTerminalSurface): number {
   return 0;
 }
 
+/**
+ * End boundary for a just-finished command's terminal-output slice: the
+ * chunk after the last OSC 633;D "command finished" marker. Shells with
+ * integration markers frequently deliver that marker TOGETHER with the next
+ * prompt redraw in the same PTY read — using the live chunk count as the end
+ * offset then leaks the next prompt into the toolcard. Returning `null` means
+ * no D marker was seen (shells without integration / non-PTY output), and the
+ * caller keeps the settle-based boundary.
+ *
+ * `startOffset` is the chunk count captured BEFORE the command ran. A pinned
+ * marker at or before that point belongs to a PREVIOUS command (e.g. a timed
+ * out command whose own D marker never arrived) and must not be used — using
+ * it would clip the current command's output to an empty or stale slice.
+ */
+export function getTerminalCommandDoneEndOffset(
+  surface: ManagedTerminalSurface,
+  startOffset: number,
+): number | null {
+  if (
+    "getCommandDoneEndOffset" in surface
+    && typeof surface.getCommandDoneEndOffset === "function"
+  ) {
+    const doneEnd = surface.getCommandDoneEndOffset();
+    if (doneEnd > startOffset && doneEnd <= getTerminalOutputOffset(surface)) {
+      return doneEnd;
+    }
+  }
+  return null;
+}
+
 function sessionTerminalKey(context: ToolContext): string {
   const nodeId = context.executionNodeId && context.executionNodeId !== "gateway"
     ? context.executionNodeId
@@ -884,7 +914,8 @@ export function createTerminalRunTool(
               completeManagedTerminalExecution(
                 terminalId,
                 context.actionId,
-                getTerminalOutputOffset(surface),
+                getTerminalCommandDoneEndOffset(surface, outputOffset)
+                  ?? getTerminalOutputOffset(surface),
                 output,
                 context,
                 ws,
@@ -962,7 +993,8 @@ export function createTerminalRunTool(
           result = context.signal
             ? await raceAbort(execPromise, context.signal)
             : await execPromise;
-          outputEndOffset = getTerminalOutputOffset(surface);
+          outputEndOffset = getTerminalCommandDoneEndOffset(surface, outputOffset)
+            ?? getTerminalOutputOffset(surface);
           completeManagedTerminalExecution(
             terminalId,
             context.actionId,

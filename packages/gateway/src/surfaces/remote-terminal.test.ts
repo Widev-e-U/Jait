@@ -94,6 +94,29 @@ describe("RemoteTerminalSurface", () => {
     );
   });
 
+  it("trims the next prompt redraw bundled with the 633;D marker out of a finished command", () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+
+    surface.ingestOutput("older command output\r\n");
+    const outputOffset = surface.getOutputOffset();
+    surface.ingestOutput("command output line one\r\nline two\r\n");
+    // Shells with OSC 633 integration deliver the "command finished" marker
+    // together with the next prompt redraw in the same PTY read:
+    surface.ingestOutput(
+      "\x1b]633;D;0\x07\x1b]633;A\x07\x1b]633;B\x07jakob@movable-base:~/jait$ \x1b]633;C\x07",
+    );
+    const outputEndOffset = surface.getOutputOffset();
+
+    expect(surface.getCommandDoneEndOffset()).toBe(outputEndOffset);
+    const slice = surface.getRecentOutputSince(outputOffset, outputEndOffset);
+    expect(slice).toBe("command output line one\r\nline two\r\n");
+    expect(slice).not.toContain("jakob@movable-base");
+  });
+
   it("waits for the remote shell's prompt marker before reporting ready", async () => {
     const surface = new RemoteTerminalSurface(
       "term-remote",
