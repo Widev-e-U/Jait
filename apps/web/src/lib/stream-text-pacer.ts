@@ -8,6 +8,10 @@ export interface StreamTextPacerOptions {
   clearDeadline?: (handle: ReturnType<typeof setTimeout>) => void
   deadlineMs?: number
   maxChunkChars?: number
+  /** Target number of animation frames to fully drain the queued backlog. */
+  catchUpFrames?: number
+  /** Hard cap on chunks dispatched within a single frame/budget drain. */
+  maxChunksPerFrame?: number
 }
 
 export interface StreamTextPacer {
@@ -68,6 +72,15 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
     ?? ((handle) => clearTimeout(handle))
   const deadlineMs = options.deadlineMs ?? 300
   const maxChunkChars = options.maxChunkChars ?? 24
+  // Hidden tabs stop firing rAF, so `token` events keep enqueueing while the
+  // queue never drains. Returning to the tab must not replay that backlog one
+  // 24-char chunk (and one synchronous React render) per frame — that is
+  // minutes of catch-up for a turn that streamed for a minute. Instead each
+  // drain dispatches a backlog-proportional budget sized to fully catch up
+  // within `catchUpFrames` frames (~0.75s at 60fps), capped so a single
+  // frame's work stays bounded no matter how deeply the queue backed up.
+  const catchUpFrames = Math.max(1, options.catchUpFrames ?? 45)
+  const maxChunksPerFrame = Math.max(1, options.maxChunksPerFrame ?? 400)
 
   const queue: QueuedChunk[] = []
   const idleResolvers = new Set<() => void>()
@@ -92,44 +105,57 @@ export function createStreamTextPacer(options: StreamTextPacerOptions): StreamTe
     }
   }
 
-  const drainOne = () => {
+  const nextBudget = (): number =>
+    Math.min(maxChunksPerFrame, Math.max(1, Math.ceil(queue.length / catchUpFrames)))
+
+  const dispatch = (budget: number): number => {
+    let dispatched = 0
+    while (queue.length > 0 && dispatched < budget) {
+      const next = queue.shift()!
+      if (next.kind === 'text') options.onText(next.content)
+      else options.onThinking(next.content)
+      dispatched += 1
+    }
+    // The consumer's state is cumulative — every callback appends into the same
+    // pending snapshot — so committing once after the whole budget renders
+    // exactly the same content as committing per chunk, minus `budget - 1`
+    // synchronous renders jammed into a single frame.
+    if (dispatched > 0) {
+      hasCommitted = true
+      options.onCommit()
+    }
+    return dispatched
+  }
+
+  const drain = () => {
     cancelScheduled()
-    const next = queue.shift()
-    if (!next) {
+    if (dispatch(nextBudget()) === 0 && queue.length === 0) {
       resolveIdle()
       return
     }
-    if (next.kind === 'text') options.onText(next.content)
-    else options.onThinking(next.content)
-    hasCommitted = true
-    options.onCommit()
     if (queue.length > 0) schedule()
     else resolveIdle()
   }
 
   const schedule = () => {
     if (queue.length === 0 || frameHandle !== null || deadlineHandle !== null) return
-    deadlineHandle = setDeadline(drainOne, deadlineMs)
-    frameHandle = requestFrame(() => drainOne())
+    deadlineHandle = setDeadline(drain, deadlineMs)
+    frameHandle = requestFrame(() => drain())
   }
 
   const enqueue = (kind: QueuedChunk['kind'], text: string) => {
     for (const chunk of splitStreamText(text, maxChunkChars)) {
       queue.push({ kind, content: chunk })
     }
-    if (!hasCommitted) drainOne()
+    // Begin typing with the first chunk synchronously so the bubble does not
+    // wait a frame; afterwards everything rides the frame/throttle drain.
+    if (!hasCommitted) drain()
     else schedule()
   }
 
   const flushNow = () => {
     cancelScheduled()
-    while (queue.length > 0) {
-      const next = queue.shift()!
-      if (next.kind === 'text') options.onText(next.content)
-      else options.onThinking(next.content)
-      hasCommitted = true
-      options.onCommit()
-    }
+    dispatch(queue.length)
     resolveIdle()
   }
 

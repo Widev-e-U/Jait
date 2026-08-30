@@ -113,6 +113,20 @@ export interface SessionEventSubscriptionOptions {
   reconnectDelay?: (attempt: number) => number
   /** Injected for tests; defaults to `setTimeout`. */
   scheduleRetry?: (fn: () => void, delayMs: number) => void
+  /** Injected for tests; defaults to `Date.now`. Used for activity timestamps. */
+  now?: () => number
+}
+
+export type SessionEventSubscriptionState = 'connecting' | 'open' | 'retrying' | 'closed'
+
+export interface SessionEventSubscriptionHealth {
+  state: SessionEventSubscriptionState
+  /** Consecutive failed reconnect attempts since the last successful open. */
+  attempts: number
+  /** Timestamp of the last bytes received on any connection (incl. keepalives). */
+  lastActivityAt: number
+  /** Timestamp of the last successful connection open; 0 before the first one. */
+  lastOpenAt: number
 }
 
 export interface SessionEventSubscription {
@@ -121,6 +135,8 @@ export interface SessionEventSubscription {
   getLastEventId: () => string | null
   /** Drop the current socket and reconnect immediately (wake from sleep / back online). */
   reconnectNow: () => void
+  /** Current transport state + freshness, so callers can skip needless recovery. */
+  getHealth: () => SessionEventSubscriptionHealth
 }
 
 /**
@@ -140,16 +156,21 @@ export function openSessionEventSubscription(
     fetchImpl = fetch,
     reconnectDelay = getSubscriptionReconnectDelay,
     scheduleRetry = (fn, delayMs) => { setTimeout(fn, delayMs) },
+    now = () => Date.now(),
   } = options
 
   let lastEventId = options.lastEventId ?? null
   let closed = false
   let attempts = 0
   let controller: AbortController | null = null
+  let state: SessionEventSubscriptionState = 'connecting'
+  let lastActivityAt = now()
+  let lastOpenAt = 0
 
   const fail = (reason: Parameters<NonNullable<typeof onFatal>>[0], error?: unknown) => {
     closed = true
     controller = null
+    state = 'closed'
     onFatal?.(reason, error)
   }
 
@@ -160,6 +181,7 @@ export function openSessionEventSubscription(
       fail('exhausted')
       return
     }
+    state = 'retrying'
     const delay = reconnectDelay(attempts)
     onReconnect?.(attempts, delay)
     scheduleRetry(() => { if (!closed) void connect() }, delay)
@@ -198,6 +220,9 @@ export function openSessionEventSubscription(
       // A live connection resets the backoff ladder, so a later drop starts
       // from the base delay rather than inheriting a long stale backoff.
       attempts = 0
+      state = 'open'
+      lastOpenAt = now()
+      lastActivityAt = lastOpenAt
       onOpen?.()
 
       const decoder = new TextDecoder()
@@ -222,6 +247,9 @@ export function openSessionEventSubscription(
           void reader.cancel()
           return
         }
+        // Every byte counts as liveness, including keepalive/heartbeat frames —
+        // a parked-but-healthy hidden tab sees these every ~15s.
+        lastActivityAt = now()
         feed(decoder.decode(value, { stream: true }))
       }
       // `/events` never ends on its own, so a clean end-of-body is a dropped
@@ -240,7 +268,9 @@ export function openSessionEventSubscription(
 
   return {
     close: () => {
+      if (closed) return
       closed = true
+      state = 'closed'
       controller?.abort()
       controller = null
     },
@@ -248,10 +278,13 @@ export function openSessionEventSubscription(
     reconnectNow: () => {
       if (closed) return
       attempts = 0
+      state = 'connecting'
+      lastActivityAt = now()
       const previous = controller
       controller = null
       previous?.abort()
       void connect()
     },
+    getHealth: () => ({ state, attempts, lastActivityAt, lastOpenAt }),
   }
 }

@@ -1832,12 +1832,12 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
       ? Number.parseInt(exitCodeRaw, 10)
       : null
   if (typeof exitCode === 'number') {
-    const isOk = exitCode === 0
+    // Success (exit 0) needs no pill — the green check circle already says it.
+    // Failures get a red exit badge rendered next to the circle-cross icon.
+    if (exitCode === 0) return null
     return {
       label: `exit ${exitCode}`,
-      className: isOk
-        ? 'border-green-500/40 bg-green-500/10 text-green-500'
-        : 'border-red-500/40 bg-red-500/10 text-red-500',
+      className: 'border-red-500/40 bg-red-500/10 text-red-500',
     }
   }
 
@@ -1845,13 +1845,10 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
   const exitMatch = msg.match(/exit code\s+(-?\d+)/i)
   if (exitMatch) {
     const code = Number.parseInt(exitMatch[1] ?? '', 10)
-    if (Number.isFinite(code)) {
-      const isOk = code === 0
+    if (Number.isFinite(code) && code !== 0) {
       return {
         label: `exit ${code}`,
-        className: isOk
-          ? 'border-green-500/40 bg-green-500/10 text-green-500'
-          : 'border-red-500/40 bg-red-500/10 text-red-500',
+        className: 'border-red-500/40 bg-red-500/10 text-red-500',
       }
     }
   }
@@ -3865,6 +3862,16 @@ function ToolCallCardInner({
           ? 'animate-pulse'
           : (call.status === 'running' || call.status === 'pending') && 'animate-spin'
       )} />
+      {terminalOutcomeBadge && !backgroundWaiting && (
+        <span
+          className={cn(
+            'rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shrink-0',
+            terminalOutcomeBadge.className,
+          )}
+        >
+          {terminalOutcomeBadge.label}
+        </span>
+      )}
       <span className="flex-1 text-[13px] font-medium text-muted-foreground truncate">
         {isApprovalPending ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2 text-amber-400">
@@ -3938,16 +3945,6 @@ function ToolCallCardInner({
             : 'border-border/60 bg-muted/40 text-muted-foreground',
         )}>
           {backgroundWaiting ? 'background · waiting' : 'background'}
-        </span>
-      )}
-      {terminalOutcomeBadge && !backgroundWaiting && (
-        <span
-          className={cn(
-            'rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shrink-0',
-            terminalOutcomeBadge.className,
-          )}
-        >
-          {terminalOutcomeBadge.label}
         </span>
       )}
     </>

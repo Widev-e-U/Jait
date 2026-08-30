@@ -10,7 +10,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { detectTouchDevice } from '@/lib/device-layout'
 import { subscribeSoftKeyboardOpen } from './soft-keyboard'
 import { TerminalSoftKeyBar } from './terminal-soft-key-bar'
-import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, ClipboardPaste } from 'lucide-react'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -481,6 +481,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const [keyboardOpen, setKeyboardOpen] = useState(false)
   const [keyBarCollapsed, setKeyBarCollapsed] = useState(false)
   const showSoftKeyBar = !readOnly && touchDevice && !autoHeight && keyboardOpen && !keyBarCollapsed
+  // Embedded (readOnly) console scroll rail: 'top' | 'bottom' | 'middle';
+  // null = pinned to the latest output. Touch-only affordance for the
+  // auto-sized partial console rendered inside tool cards, where the xterm
+  // viewport otherwise has no reliable mobile scroll control.
+  const [embeddedScrollPos, setEmbeddedScrollPos] = useState<'top' | 'bottom' | 'middle' | null>(null)
+  const showEmbedScrollRail = readOnly && touchDevice && embeddedScrollPos !== null
 
   // Track soft-keyboard visibility (visualViewport heuristics on mobile).
   useEffect(() => {
@@ -517,6 +523,73 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     term.loadAddon(fitAddon)
     if (!readOnly) term.loadAddon(linksAddon)
     term.open(containerRef.current)
+
+    // --- Embedded console scroll control (mobile) -----------------------
+    // The auto-sized partial console in tool cards renders xterm's viewport
+    // which has no native touch scrolling; give it swipe-to-scroll plus a
+    // small scroll rail driven by the buffer's viewport position.
+    const updateEmbedScrollRail = () => {
+      if (!readOnly) return
+      const buf = term.buffer.active
+      const bottomIndex = buf.length - term.rows
+      if (bottomIndex <= 0) {
+        setEmbeddedScrollPos('bottom')
+        return
+      }
+      const ydisp = buf.viewportY
+      if (ydisp <= 0) setEmbeddedScrollPos('top')
+      else if (ydisp >= bottomIndex) setEmbeddedScrollPos('bottom')
+      else setEmbeddedScrollPos('middle')
+    }
+    const embedScrollDisposal = term.onScroll(updateEmbedScrollRail)
+
+    const swipe = { active: false, axis: 'none' as 'none' | 'x' | 'y', startX: 0, startY: 0, lastY: 0, accY: 0 }
+    const rowHeight = () => {
+      const el = containerRef.current?.querySelector('.xterm-rows') as HTMLElement | null
+      const measured = el?.firstElementChild instanceof HTMLElement ? el.firstElementChild.getBoundingClientRect().height : 0
+      return measured > 0 ? measured : 17
+    }
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { swipe.active = false; return }
+      swipe.active = true
+      swipe.axis = 'none'
+      swipe.startX = e.touches[0].clientX
+      swipe.startY = e.touches[0].clientY
+      swipe.lastY = e.touches[0].clientY
+      swipe.accY = 0
+    }
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!swipe.active) return
+      const touch = e.touches[0]
+      const dx = touch.clientX - swipe.startX
+      const dy = touch.clientY - swipe.startY
+      if (swipe.axis === 'none') {
+        // Horizontal movement stays with xterm (text selection); only claim
+        // unambiguous vertical drags for viewport scrolling.
+        if (Math.abs(dx) > Math.abs(dy) + 4) { swipe.axis = 'x'; return }
+        if (Math.abs(dy) < 6) return
+        swipe.axis = 'y'
+      }
+      if (swipe.axis !== 'y') return
+      e.preventDefault()
+      swipe.accY += touch.clientY - swipe.lastY
+      swipe.lastY = touch.clientY
+      const height = rowHeight()
+      const rows = Math.trunc(swipe.accY / height)
+      if (rows !== 0) {
+        // Dragging up (negative delta) scrolls towards newer output.
+        term.scrollLines(rows)
+        swipe.accY -= rows * height
+        updateEmbedScrollRail()
+      }
+    }
+    const handleTouchEnd = () => { swipe.active = false }
+    const embedTouchEl = touchDevice && readOnly ? containerRef.current : null
+    if (embedTouchEl) {
+      embedTouchEl.addEventListener('touchstart', handleTouchStart, { passive: true })
+      embedTouchEl.addEventListener('touchmove', handleTouchMove, { passive: false })
+      embedTouchEl.addEventListener('touchend', handleTouchEnd, { passive: true })
+    }
 
     const pendingInput: string[] = []
     const flushPendingInput = () => {
@@ -583,6 +656,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       const rowHeight = measuredRowHeight > 0 ? measuredRowHeight : TERMINAL_FALLBACK_ROW_HEIGHT
       const rows = clampTerminalRows(countTerminalContentRows(term.buffer.active), minRows, maxRows)
       setContentHeight(Math.ceil(rows * rowHeight))
+      updateEmbedScrollRail()
     }
     const scheduleContentMeasure = () => {
       if (minRows == null || maxRows == null || measureFrame !== null) return
@@ -767,6 +841,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
       resizeObserver.disconnect()
+      if (embedTouchEl) {
+        embedTouchEl.removeEventListener('touchstart', handleTouchStart)
+        embedTouchEl.removeEventListener('touchmove', handleTouchMove)
+        embedTouchEl.removeEventListener('touchend', handleTouchEnd)
+      }
+      embedScrollDisposal.dispose()
       rootEl.removeEventListener('mousedown', handleRightMouseDown, { capture: true })
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
@@ -845,6 +925,47 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     >
       <div className="flex h-full w-full flex-col">
         <div ref={containerRef} className="min-h-0 w-full flex-1" style={{ minHeight: 0 }} />
+        {showEmbedScrollRail ? (
+          <div
+            className="pointer-events-none absolute bottom-1 right-1 z-10 flex flex-col gap-0.5"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <button
+              type="button"
+              className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/80 text-zinc-300 ring-1 ring-white/10 backdrop-blur active:bg-zinc-800"
+              onKeyDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onClick={() => {
+                const term = termRef.current
+                if (!term) return
+                term.scrollLines(-Math.max(6, Math.round(term.rows * 0.75)))
+              }}
+              aria-label="Scroll console up"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-md ring-1 backdrop-blur ${
+                embeddedScrollPos === 'bottom'
+                  ? 'bg-zinc-900/50 text-zinc-500 ring-white/5'
+                  : 'bg-zinc-900/80 text-zinc-300 ring-white/10 active:bg-zinc-800'
+              }`}
+              onKeyDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onClick={() => {
+                const term = termRef.current
+                if (!term) return
+                term.scrollLines(Math.max(6, Math.round(term.rows * 0.75)))
+              }}
+              aria-label={embeddedScrollPos === 'bottom' ? 'Console at latest output' : 'Scroll console down'}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
         {showSoftKeyBar && (
           <TerminalSoftKeyBar
             onData={handleSoftKeyData}

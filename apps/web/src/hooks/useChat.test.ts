@@ -105,14 +105,53 @@ describe('shouldResumeChatSession', () => {
 })
 
 describe('getChatWakeRecoveryAction', () => {
-  it('reloads the authoritative snapshot when returning to an active stream', () => {
+  const activeStreamParams = {
+    sessionId: 'session-1',
+    isLoading: true,
+    isLoadingHistory: false,
+    messageCount: 3,
+    hasSubscription: true,
+  }
+
+  it('does not rebuild when the subscription is open and hearing heartbeats', () => {
+    // Returning to the tab mid-stream with a live socket must be a no-op:
+    // the durable replay + client pacer already hold everything, and the
+    // teardown/refetch was the visible wake-up jank.
+    expect(getChatWakeRecoveryAction({
+      ...activeStreamParams,
+      transport: { state: 'open', attempts: 0, idleMs: 5_000 },
+    })).toBe('none')
+  })
+
+  it('keeps the in-place path for an idle-but-fresh completed turn too', () => {
     expect(getChatWakeRecoveryAction({
       sessionId: 'session-1',
-      isLoading: true,
+      isLoading: false,
       isLoadingHistory: false,
       messageCount: 3,
       hasSubscription: true,
+      transport: { state: 'open', attempts: 0, idleMs: 40_000 },
+    })).toBe('none')
+  })
+
+  it('rebuilds from a snapshot when the wire went stale (sleep / half-open socket)', () => {
+    expect(getChatWakeRecoveryAction({
+      ...activeStreamParams,
+      transport: { state: 'open', attempts: 0, idleMs: 60_000 },
     })).toBe('snapshot')
+  })
+
+  it('rebuilds from a snapshot while the subscription is reconnecting or dead', () => {
+    for (const state of ['connecting', 'retrying', 'closed'] as const) {
+      expect(getChatWakeRecoveryAction({
+        ...activeStreamParams,
+        transport: { state, attempts: 1, idleMs: 0 },
+      })).toBe('snapshot')
+    }
+  })
+
+  it('reloads the authoritative snapshot when returning to an active stream', () => {
+    expect(getChatWakeRecoveryAction(activeStreamParams)).toBe('snapshot')
   })
 
   it('does not restart while the initial authoritative snapshot is already loading', () => {

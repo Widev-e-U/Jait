@@ -30,6 +30,7 @@ import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
 import {
   openSessionEventSubscription,
   type SessionEventSubscription,
+  type SessionEventSubscriptionState,
 } from '@/lib/session-event-subscription'
 import { providerTypeFromId, type ResponseStyle } from '@jait/shared'
 import {
@@ -101,6 +102,22 @@ export function shouldResumeChatSession(params: {
 
 export type ChatWakeRecoveryAction = 'snapshot' | 'none'
 
+/** Wire freshness seen while the subscription is open. */
+export interface ChatTransportSnapshot {
+  state: SessionEventSubscriptionState
+  attempts: number
+  /** Time since the last bytes arrived on the wire (incl. keepalives). */
+  idleMs: number
+}
+
+/**
+ * The gateway heartbeats every 15s while a stream is open. Idle past ~3
+ * heartbeats means the machine slept, the socket half-died, or the tab was
+ * frozen enough that reads stalled — everything short of that is recoverable
+ * in place (durable replay + the client-side pacer).
+ */
+export const WAKE_TRANSPORT_STALE_MS = 45_000
+
 export function getChatWakeRecoveryAction(params: {
   sessionId: string | null
   isLoading: boolean
@@ -108,12 +125,25 @@ export function getChatWakeRecoveryAction(params: {
   messageCount: number
   error?: string | null
   hasSubscription: boolean
+  transport?: ChatTransportSnapshot | null
 }): ChatWakeRecoveryAction {
   if (!shouldResumeChatSession({ ...params, forceRefresh: true })) return 'none'
-  // Replaying from Last-Event-ID cannot repair a frame the backgrounded client
-  // already consumed but never committed to React. A snapshot is authoritative
-  // for both active and completed turns, then the new subscription resumes from
-  // that snapshot's exact sequence without losing later events.
+  const transport = params.transport
+  if (
+    transport != null &&
+    transport.state === 'open' &&
+    transport.attempts === 0 &&
+    transport.idleMs <= WAKE_TRANSPORT_STALE_MS
+  ) {
+    // The durable subscription replays any gap from Last-Event-ID and the
+    // pacer holds every uncommitted chunk, so tearing down and refetching a
+    // snapshot would drop work mid-stream rather than repair it — and the
+    // rebuild is exactly the jank users see when returning to the tab.
+    return 'none'
+  }
+  // Sleeping/half-open wires, reconnect backoff, or no subscription at all:
+  // a snapshot is authoritative, then the fresh subscription resumes from that
+  // snapshot's exact sequence without losing later events.
   return 'snapshot'
 }
 
@@ -1726,16 +1756,26 @@ export function useChat(
 
   // ── Wake / reconnect nudges ──
   // A socket parked by a sleeping tab, a Wi-Fi→LTE handoff or a bfcache restore
-  // usually produces no error at all. Always rebuild from an authoritative
-  // snapshot on wake: a replay-only reconnect cannot repair events whose IDs
-  // advanced while their throttled React updates never reached the screen. The
-  // fresh subscription resumes from the snapshot sequence, closing the gap
-  // without flashing away the transcript already visible to the user.
+  // usually produces no error at all. Recovery is now health-based: only a
+  // teardown + authoritative snapshot when the wire looks dead or stale. When
+  // the subscription is still open and hearing the gateway's ~15s heartbeat,
+  // doing nothing is correct — the durable replay covers any gap from
+  // Last-Event-ID and the pacer drains the queued backlog on the next visible
+  // frame. Rebuilding unconditionally was visible as jank + a refetch pause
+  // every time the user returned to the tab mid-stream.
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const reattach = () => {
       const subscription = subscriptionRef.current
+      const health = subscription?.getHealth()
+      const transport = health
+        ? {
+            state: health.state as SessionEventSubscriptionState,
+            attempts: health.attempts,
+            idleMs: Date.now() - health.lastActivityAt,
+          }
+        : null
       const recoveryAction = getChatWakeRecoveryAction({
         sessionId,
         isLoading: state.isLoading,
@@ -1743,6 +1783,7 @@ export function useChat(
         messageCount: state.messages.length,
         error: state.error,
         hasSubscription: subscription != null,
+        transport,
       })
       if (recoveryAction === 'snapshot') resumeSessionStream()
     }
