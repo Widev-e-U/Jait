@@ -293,6 +293,62 @@ describe("job routes", () => {
     sqlite.close();
   });
 
+  it("serves agent-created thread.control jobs as editable agent_task with prompt, provider and model", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret" };
+    registerJobRoutes(app, config, scheduler);
+
+    const headers = await authHeader(config.jwtSecret, "agent-user");
+
+    // Simulate a job created by the agent via cron.add: tool_name + input only,
+    // with no explicit prompt/provider/model columns.
+    scheduler.create({
+      userId: "agent-user",
+      name: "Duplication check",
+      cron: "0 6 * * *",
+      toolName: "thread.control",
+      input: {
+        action: "create",
+        kind: "delivery",
+        detach: true,
+        start: true,
+        title: "Duplication check",
+        prompt: "Check for duplicated memories and clean them up.",
+        providerId: "claude-code",
+        model: "claude-opus-4-6",
+      },
+    });
+
+    const listResponse = await app.inject({ method: "GET", url: "/api/jobs", headers });
+    expect(listResponse.statusCode).toBe(200);
+    const listed = (listResponse.json() as { items: Array<Record<string, unknown>> }).items
+      .find((job) => job.name === "Duplication check");
+    expect(listed).toMatchObject({
+      job_type: "agent_task",
+      prompt: "Check for duplicated memories and clean them up.",
+      provider: "claude-code",
+      model: "claude-opus-4-6",
+    });
+
+    const detailResponse = await app.inject({ method: "GET", url: `/api/jobs/${listed?.id}`, headers });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toMatchObject({
+      job_type: "agent_task",
+      prompt: "Check for duplicated memories and clean them up.",
+      provider: "claude-code",
+      model: "claude-opus-4-6",
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("matches daily jobs in their configured timezone", () => {
     const instant = new Date("2026-07-31T05:00:00.000Z");
     expect(matchesCronMinute("0 7 * * *", instant, "Europe/Berlin")).toBe(true);

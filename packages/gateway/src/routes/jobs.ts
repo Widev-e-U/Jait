@@ -63,24 +63,44 @@ function withoutThreadTitle(payload: Record<string, unknown> | undefined): Recor
   return rest;
 }
 
-function getJobMeta(input: unknown): JobMeta {
+function getJobMeta(input: unknown, toolName?: string): JobMeta {
   const record = asRecord(input);
   const meta = asRecord(record?.["__jaitJobMeta"]);
-  return {
-    jobType: meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job"
-      ? "agent_task"
-      : meta?.["jobType"] === "system_job"
-        ? "system_job"
-      : undefined,
-    description: typeof meta?.["description"] === "string" ? meta["description"] : undefined,
-    prompt: typeof meta?.["prompt"] === "string" ? meta["prompt"] : undefined,
-    provider: typeof meta?.["provider"] === "string" ? meta["provider"] : undefined,
-    model: typeof meta?.["model"] === "string" ? meta["model"] : undefined,
-  };
+  if (meta) {
+    return {
+      jobType: meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job"
+        ? "agent_task"
+        : meta?.["jobType"] === "system_job"
+          ? "system_job"
+        : undefined,
+      description: typeof meta?.["description"] === "string" ? meta["description"] : undefined,
+      prompt: typeof meta?.["prompt"] === "string" ? meta["prompt"] : undefined,
+      provider: typeof meta?.["provider"] === "string" ? meta["provider"] : undefined,
+      model: typeof meta?.["model"] === "string" ? meta["model"] : undefined,
+    };
+  }
+
+  // Jobs created through the cron MCP tools (e.g. an agent scheduling a
+  // recurring agent task via thread.control) store prompt/providerId/model
+  // directly in the input payload without a __jaitJobMeta blob. Infer the
+  // agent-task shape so the web edit dialog can show these fields.
+  const normalizedTool = typeof toolName === "string" ? normalizeToolName(toolName) : "";
+  const inferredPrompt = record && typeof record["prompt"] === "string" && record["prompt"].trim()
+    ? record["prompt"] as string
+    : undefined;
+  if (inferredPrompt && (normalizedTool === "thread.control" || normalizedTool === "agent.spawn")) {
+    return {
+      jobType: "agent_task",
+      prompt: inferredPrompt,
+      provider: typeof record?.["providerId"] === "string" ? record["providerId"] : undefined,
+      model: typeof record?.["model"] === "string" ? record["model"] : undefined,
+    };
+  }
+  return {};
 }
 
 function mapJob(job: ScheduledJobRecord): ApiScheduledJob {
-  const meta = getJobMeta(job.input);
+  const meta = getJobMeta(job.input, job.toolName);
   const jobType = meta.jobType ?? "system_job";
   const baseInput = asRecord(job.input) ?? {};
   const { __jaitJobMeta: _ignored, ...payloadInput } = baseInput;
@@ -296,7 +316,7 @@ export function registerJobRoutes(
     }
 
     const existingInput = asRecord(existing.input) ?? {};
-    const existingMeta = getJobMeta(existingInput);
+    const existingMeta = getJobMeta(existingInput, existing.toolName);
     const { __jaitJobMeta: _ignored, ...existingPayload } = existingInput;
 
     const semanticKeys = ["job_type", "tool_name", "payload", "prompt", "description", "provider", "model"] as const;

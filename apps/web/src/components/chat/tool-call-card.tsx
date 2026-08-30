@@ -3793,18 +3793,22 @@ function ToolCallCardInner({
       && call.status !== 'running'
       && call.status !== 'pending'
     ) {
-      // The card is collapsing itself when the tool finishes, not responding
-      // to a click — without anchoring, the height collapse pulls rows under
-      // the composer while the transcript is still streaming. Measure and pin
-      // the anchored edge before flipping state, exactly like a manual toggle.
-      anchorToggle()
+      // The card collapses itself when the tool finishes, without a click — so
+      // it must NOT call anchorToggle(). Announcing a toggle hands the scroll
+      // position to the card for TOOL_CARD_ANCHOR_SETTLE_MS and makes the
+      // conversation detach from the bottom (detachedRef = true), which is how
+      // a card completing mid-stream used to silently stop the follow-the-end
+      // behavior and pop up the scroll-to-bottom button with no user action.
+      // The conversation already absorbs the height change on its own: its
+      // sizer observer chases the bottom while stuck and restores the scroll
+      // anchor while detached (auto-scroll suppression windows included).
       setOpen(false)
     }
     if (call.status === 'pending' || call.status === 'running' || inlineBody || hasInlineSecretPrompt) {
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [anchorToggle, backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
+  }, [backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
 
   useEffect(() => {
     if (
@@ -4646,13 +4650,17 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
       return
     }
     if (prevActiveRef.current && !isActive && calls.length > 0) {
-      // Same as the single-card completion effect: the wrapper is collapsing
-      // itself mid-stream, so pin the anchored edge across the height change.
-      anchorToggle()
+      // Same as the single-card completion effect: the wrapper collapses itself
+      // when the agent finishes, without a click, so no anchorToggle() — its
+      // toggle event used to detach the streaming follower mid-run and surface
+      // the scroll-to-bottom button with no user action. The conversation's
+      // sizer observer absorbs the height change (chase while stuck, scroll
+      // anchor while detached), which is what actually keeps rows from being
+      // pulled under the composer.
       setOpen(false)
     }
     prevActiveRef.current = isActive
-  }, [anchorToggle, hasInlineSecretPrompt, isActive, calls.length])
+  }, [hasInlineSecretPrompt, isActive, calls.length])
 
   // Tick the elapsed timer while active
   useEffect(() => {

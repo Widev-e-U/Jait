@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -1139,5 +1142,62 @@ describe('running terminal cards attach to the pushed binding', () => {
     })
 
     expect(renderInSession('s-live')).not.toContain('relative w-full overflow-hidden')
+  })
+})
+
+describe('tool-card auto-collapse scroll contract', () => {
+  // A tool card that collapses itself when its tool finishes must not announce
+  // a user toggle: `anchorToggle()` dispatches TOOL_CARD_TOGGLE_EVENT, and the
+  // conversation reacts by detaching from the bottom and handing the scroll
+  // position to the card for a settle window. Firing that mid-stream is the
+  // reported browser bug — the follow-the-end follower silently stops and the
+  // scroll-to-bottom button pops up with no click anywhere. The conversation's
+  // sizer observer already absorbs programmatic height changes (chases the
+  // bottom while stuck, restores the scroll anchor while detached), so the
+  // auto-collapse effects must close with plain `setOpen(false)` only.
+  const source = readFileSync(
+    fileURLToPath(new URL('./tool-call-card.tsx', import.meta.url)),
+    'utf8',
+  )
+
+  // Effects' explanatory comments mention `anchorToggle()` by name, so strip
+  // comment lines before checking that no real call remains.
+  const codeLines = (slice: string): string[] =>
+    slice.split('\n').filter(line => !line.trim().startsWith('//'))
+
+  const sliceBetween = (startMarker: string, endMarker: string): string => {
+    const start = source.indexOf(startMarker)
+    expect(start, `start marker not found: ${startMarker}`).toBeGreaterThanOrEqual(0)
+    const end = source.indexOf(endMarker, start)
+    expect(end, `end marker not found: ${endMarker}`).toBeGreaterThan(start)
+    return source.slice(start, end + endMarker.length)
+  }
+
+  it('closes the finished single card without announcing a toggle', () => {
+    const effect = codeLines(sliceBetween(
+      'The card collapses itself when the tool finishes, without a click',
+      '[backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])',
+    ))
+    expect(effect.join('\n')).toContain('setOpen(false)')
+    expect(effect.join('\n')).not.toContain('anchorToggle()')
+  })
+
+  it('closes the finished agent wrapper without announcing a toggle', () => {
+    const effect = codeLines(sliceBetween(
+      'Same as the single-card completion effect: the wrapper collapses itself',
+      '[hasInlineSecretPrompt, isActive, calls.length])',
+    ))
+    expect(effect.join('\n')).toContain('setOpen(false)')
+    expect(effect.join('\n')).not.toContain('anchorToggle()')
+  })
+
+  it('reserves anchorToggle() for user-initiated open-change handlers', () => {
+    // Every remaining call site must live inside the handlers bound to
+    // Collapsible's onOpenChange, which only run on real trigger clicks.
+    const anchorToggleCalls = codeLines(source).filter(line => line.includes('anchorToggle()'))
+    expect(anchorToggleCalls).toHaveLength(2)
+    for (const line of anchorToggleCalls) {
+      expect(line.trim()).toBe('anchorToggle()')
+    }
   })
 })

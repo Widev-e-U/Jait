@@ -154,6 +154,15 @@ function measureToolCardBox(card: HTMLElement, container: HTMLElement): ToolCard
  * Put `cardRef` on the element that spans the whole card (header + body) and
  * call `anchorToggle()` from the open-change handler *before* flipping state,
  * so the pre-toggle geometry is measured while it is still on screen.
+ *
+ * Only do this for user-initiated toggles (trigger clicks). Programmatic
+ * height changes — a card auto-collapsing because its tool finished, an agent
+ * wrapper collapsing when the agent stops — must go through plain `setState`
+ * alone. Dispatching the toggle event for them makes the conversation detach
+ * from the bottom mid-stream (`detachedRef = true`), silently stopping the
+ * follow-the-end behavior and popping up the scroll-to-bottom button without
+ * any user action; the conversation's sizer observer already absorbs
+ * automatic height changes on its own.
  */
 export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>() {
   const cardRef = useRef<T | null>(null)

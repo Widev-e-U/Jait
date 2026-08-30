@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
-import { ModelIcon } from '../icons/model-icons'
+import { ProviderModelSelector } from '../chat/provider-model-selector'
 import { CRON_PRESETS, validateCron, describeCron, normalizeCronExpression } from '@/lib/cron-utils'
-import { JobsApi, type CreateJobRequest, type ScheduledJob, type JobType, type ProviderInfo } from '@/lib/jobs-api'
+import { JobsApi, type CreateJobRequest, type ScheduledJob, type JobType } from '@/lib/jobs-api'
 import { Loader2, X, AlertCircle } from 'lucide-react'
 
 interface CreateJobDialogProps {
@@ -36,7 +36,6 @@ export function CreateJobDialog({
 }: CreateJobDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [providers, setProviders] = useState<Record<string, ProviderInfo>>({})
   
   // Form state
   const [name, setName] = useState('')
@@ -55,11 +54,6 @@ export function CreateJobDialog({
   // System job specific
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
-
-  // Load providers on mount
-  useEffect(() => {
-    api.getAvailableProviders().then(setProviders).catch(console.error)
-  }, [])
 
   const applyJobToForm = (job: ScheduledJob) => {
     setName(job.name)
@@ -230,45 +224,19 @@ export function CreateJobDialog({
 
             {/* Agent Task Configuration */}
             <TabsContent value="agent_task" className="space-y-4 mt-4">
-              <div>
-                <Label htmlFor="provider">Provider</Label>
-                <Select value={provider} onValueChange={(v) => { setProvider(v); setModel('') }}>
-                  <SelectTrigger data-testid="provider-select">
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(providers).map(([key, info]) => (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center gap-2">
-                          <ModelIcon provider={key} size={20} />
-                          <span>{info.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <Label id="provider-model-label">Provider &amp; Model</Label>
+                <ProviderModelSelector
+                  provider={provider}
+                  model={model || null}
+                  onProviderChange={(next) => {
+                    if (next !== provider) setModel('')
+                    setProvider(next)
+                  }}
+                  onModelChange={(next) => setModel(next ?? '')}
+                  className="w-full"
+                />
               </div>
-
-              {provider && providers[provider] && (
-                <div>
-                  <Label htmlFor="model">Model</Label>
-                  <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger data-testid="model-select">
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {providers[provider].models.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          <div className="flex items-center gap-2">
-                            <ModelIcon provider={provider} model={m} size={20} />
-                            <span>{m}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               <div>
                 <Label htmlFor="prompt">Prompt</Label>
