@@ -32,4 +32,24 @@ describe("getTerminalOutputSlice", () => {
     expect(slice).toContain("hi\r\n");
     expect(slice).toContain("633;D");
   });
+
+  it("replays the full head of a bounded command slice past the recent-lines cap", () => {
+    // 150 one-line chunks: the toolcard's command-local replay must include the
+    // *first* lines, not just the last 100 chunks the live tail view keeps.
+    const buffer = Array.from({ length: 150 }, (_, i) => `line ${i}\r\n`);
+
+    const slice = getTerminalOutputSlice(buffer, 150, 0, 150, 100, false);
+
+    expect(slice.startsWith("line 0\r\n")).toBe(true);
+    expect(slice).toContain("line 149\r\n");
+  });
+
+  it("still caps the unbounded live tail at the recent-lines limit", () => {
+    const buffer = Array.from({ length: 150 }, (_, i) => `line ${i}\r\n`);
+
+    const slice = getTerminalOutputSlice(buffer, 150, 0, undefined, 100, false);
+
+    expect(slice.startsWith("line 50\r\n")).toBe(true);
+    expect(slice).not.toContain("line 49\r\n");
+  });
 });

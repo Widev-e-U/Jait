@@ -13,7 +13,15 @@ export function getTerminalOutputSlice(
   const retainedStart = Math.max(0, outputChunkCount - outputBuffer.length);
   const offsetIndex = Math.max(0, Math.min(outputBuffer.length, normalizedOffset - retainedStart));
   const endIndex = Math.max(offsetIndex, Math.min(outputBuffer.length, normalizedEndOffset - retainedStart));
-  const startIndex = Math.max(offsetIndex, endIndex - lines);
+
+  // A bounded slice (the client supplied a command-local end offset — e.g. the
+  // toolcard replaying one finished command) must deliver the command's *entire*
+  // output: it starts partway into the buffer, so head-truncating it to the last
+  // `lines` chunks would silently drop the top of the output. The `lines` cap
+  // only bounds the unbounded live view, which has no lower anchor and always
+  // wants the recent tail.
+  const boundedSlice = typeof outputEndOffset === "number" && Number.isFinite(outputEndOffset);
+  const startIndex = boundedSlice ? offsetIndex : Math.max(offsetIndex, endIndex - lines);
   let output = outputBuffer.slice(startIndex, endIndex).join("");
 
   // The end offset can point *into* the chunk that carries the OSC 633;D
