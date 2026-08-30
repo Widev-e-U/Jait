@@ -3852,6 +3852,12 @@ function ToolCallCardInner({
   const fileSummaryActionLabel = showFileSummary
     ? getFileSummaryActionLabel(displayTool, isActive)
     : invocationLabel
+  // Expanded terminal cards show the full command wrapped across lines instead
+  // of a single clipped line: the header truncates at a fraction of the width
+  // on phones and title tooltips don't exist on touch, so the command would
+  // otherwise be unrecoverable from the card alone. Collapsed cards stay on
+  // the compact single-line ellipsis.
+  const terminalCommandWraps = isTerminal && effectiveOpen
 
   const headerContent = (
     <>
@@ -3862,7 +3868,7 @@ function ToolCallCardInner({
           ? 'animate-pulse'
           : (call.status === 'running' || call.status === 'pending') && 'animate-spin'
       )} />
-      <span className="flex-1 truncate text-[13px] font-medium text-muted-foreground">
+      <span className={cn('flex-1 text-[13px] font-medium text-muted-foreground', !terminalCommandWraps && 'truncate')}>
         {isApprovalPending ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2 text-amber-400">
             <span className="shrink-0 rounded border border-amber-500/25 bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-500">
@@ -3882,7 +3888,12 @@ function ToolCallCardInner({
         ) : isTerminal ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
             <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
-            <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
+            <code
+              className={cn('min-w-0 text-xs font-mono', terminalCommandWraps ? 'whitespace-pre-wrap break-all' : 'truncate')}
+              title={summary}
+            >
+              {summary}
+            </code>
           </span>
         ) : showFileSummary ? (
           <span className="flex min-w-0 max-w-full items-center gap-2">

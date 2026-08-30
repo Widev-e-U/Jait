@@ -157,7 +157,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.790",
+      "version": "0.1.791",
       "bin": {
         "jait": "./bin/jait.mjs",
       },

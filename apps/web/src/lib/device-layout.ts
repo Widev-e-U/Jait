@@ -19,3 +19,16 @@ export function detectMobileViewport(target: Window = window): boolean {
   const shortestSide = Math.min(target.innerWidth, target.innerHeight)
   return coarsePointer && shortestSide <= COARSE_POINTER_MAX_VIEWPORT
 }
+
+/**
+ * Touch-first device (phone/tablet) that relies on the on-screen keyboard.
+ * Unlike detectMobileViewport this does not depend on window width, so the
+ * landscape terminal key bar still appears on wide touch screens.
+ */
+export function detectTouchDevice(target: Window = window): boolean {
+  const coarsePointer = typeof target.matchMedia === 'function'
+    ? target.matchMedia('(pointer: coarse)').matches
+    : false
+  if (coarsePointer) return true
+  return MOBILE_USER_AGENT_PATTERN.test(target.navigator?.userAgent ?? '')
+}

@@ -7,6 +7,9 @@ import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
 import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { detectTouchDevice } from '@/lib/device-layout'
+import { subscribeSoftKeyboardOpen } from './soft-keyboard'
+import { TerminalSoftKeyBar } from './terminal-soft-key-bar'
 import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
 
 const GATEWAY = getApiUrl()
@@ -472,6 +475,23 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const [contextMenu, setContextMenu] = useState<{ left: number; top: number; hasSelection: boolean } | null>(null)
   const [contentHeight, setContentHeight] = useState<number | null>(null)
   const autoHeight = minRows != null && maxRows != null
+  // Mobile soft-keyboard accessory bar (arrow keys, Ctrl/C, copy/paste, …).
+  const sendInputRef = useRef<((data: string) => void) | null>(null)
+  const [touchDevice] = useState(() => (typeof window === 'undefined' ? false : detectTouchDevice()))
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const [keyBarCollapsed, setKeyBarCollapsed] = useState(false)
+  const showSoftKeyBar = !readOnly && touchDevice && !autoHeight && keyboardOpen && !keyBarCollapsed
+
+  // Track soft-keyboard visibility (visualViewport heuristics on mobile).
+  useEffect(() => {
+    if (!touchDevice || readOnly || autoHeight) return
+    const unsubscribe = subscribeSoftKeyboardOpen((open) => {
+      setKeyboardOpen(open)
+      // Re-show the bar next time the keyboard opens after a manual collapse.
+      if (!open) setKeyBarCollapsed(false)
+    })
+    return unsubscribe
+  }, [touchDevice, readOnly, autoHeight])
 
   useImperativeHandle(ref, () => ({
     focus() {
@@ -514,6 +534,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       }
       pendingInput.push(data)
     }
+    sendInputRef.current = sendTerminalInput
     let pasteShortcutAt = 0
     let pasteEventAt = 0
     let pasteFallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -792,6 +813,17 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     term.focus()
   }, [terminalId])
 
+  const handleSoftKeyData = useCallback((data: string) => {
+    const send = sendInputRef.current
+    if (send) send(data)
+    // Keep focus (and therefore the soft keyboard) attached to the terminal.
+    requestAnimationFrame(() => termRef.current?.focus())
+  }, [])
+
+  const handleSoftKeyScroll = useCallback((rows: number) => {
+    termRef.current?.scrollLines(rows)
+  }, [])
+
   return (
     <div
       className={`relative w-full overflow-hidden ${className ?? ''}`}
@@ -811,7 +843,18 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         }
       }}
     >
-      <div ref={containerRef} className="h-full w-full" style={{ minHeight: 0 }} />
+      <div className="flex h-full w-full flex-col">
+        <div ref={containerRef} className="min-h-0 w-full flex-1" style={{ minHeight: 0 }} />
+        {showSoftKeyBar && (
+          <TerminalSoftKeyBar
+            onData={handleSoftKeyData}
+            onCopy={handleCopy}
+            onPaste={handlePaste}
+            onCollapse={() => setKeyBarCollapsed(true)}
+            scrollByRows={handleSoftKeyScroll}
+          />
+        )}
+      </div>
       {contextMenu && (
         <div
           className="fixed z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md"
