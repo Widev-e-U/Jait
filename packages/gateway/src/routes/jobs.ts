@@ -66,34 +66,45 @@ function withoutThreadTitle(payload: Record<string, unknown> | undefined): Recor
 function getJobMeta(input: unknown, toolName?: string): JobMeta {
   const record = asRecord(input);
   const meta = asRecord(record?.["__jaitJobMeta"]);
+
+  // Jobs created through the cron MCP tools (e.g. an agent scheduling a
+  // recurring agent task via thread.control/agent.spawn) store prompt/
+  // providerId/model directly in the input payload, sometimes alongside an
+  // incomplete __jaitJobMeta blob (the MCP cron.add tool stores whatever the
+  // calling agent passed). Infer the missing agent-task fields so the web
+  // edit dialog can show them.
+  const normalizedTool = typeof toolName === "string" ? normalizeToolName(toolName) : "";
+  const inferredPrompt = record && typeof record["prompt"] === "string" && record["prompt"].trim()
+    ? record["prompt"] as string
+    : undefined;
+  const inferenceEligible = normalizedTool === "thread.control" || normalizedTool === "agent.spawn";
+  const inferredProvider = inferenceEligible && typeof record?.["providerId"] === "string"
+    ? record["providerId"]
+    : undefined;
+  const inferredModel = inferenceEligible && typeof record?.["model"] === "string"
+    ? record["model"]
+    : undefined;
+
   if (meta) {
     return {
       jobType: meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job"
         ? "agent_task"
         : meta?.["jobType"] === "system_job"
           ? "system_job"
-        : undefined,
+        : (inferredPrompt && inferenceEligible ? "agent_task" : undefined),
       description: typeof meta?.["description"] === "string" ? meta["description"] : undefined,
-      prompt: typeof meta?.["prompt"] === "string" ? meta["prompt"] : undefined,
-      provider: typeof meta?.["provider"] === "string" ? meta["provider"] : undefined,
-      model: typeof meta?.["model"] === "string" ? meta["model"] : undefined,
+      prompt: typeof meta?.["prompt"] === "string" ? meta["prompt"] : inferredPrompt,
+      provider: typeof meta?.["provider"] === "string" ? meta["provider"] : inferredProvider,
+      model: typeof meta?.["model"] === "string" ? meta["model"] : inferredModel,
     };
   }
 
-  // Jobs created through the cron MCP tools (e.g. an agent scheduling a
-  // recurring agent task via thread.control) store prompt/providerId/model
-  // directly in the input payload without a __jaitJobMeta blob. Infer the
-  // agent-task shape so the web edit dialog can show these fields.
-  const normalizedTool = typeof toolName === "string" ? normalizeToolName(toolName) : "";
-  const inferredPrompt = record && typeof record["prompt"] === "string" && record["prompt"].trim()
-    ? record["prompt"] as string
-    : undefined;
-  if (inferredPrompt && (normalizedTool === "thread.control" || normalizedTool === "agent.spawn")) {
+  if (inferredPrompt && inferenceEligible) {
     return {
       jobType: "agent_task",
       prompt: inferredPrompt,
-      provider: typeof record?.["providerId"] === "string" ? record["providerId"] : undefined,
-      model: typeof record?.["model"] === "string" ? record["model"] : undefined,
+      provider: inferredProvider,
+      model: inferredModel,
     };
   }
   return {};

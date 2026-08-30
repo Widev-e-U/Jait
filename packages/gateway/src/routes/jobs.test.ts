@@ -349,6 +349,60 @@ describe("job routes", () => {
     sqlite.close();
   });
 
+  it("serves agent.spawn jobs with an incomplete __jaitJobMeta blob as editable agent_task with prompt", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret" };
+    registerJobRoutes(app, config, scheduler);
+
+    const headers = await authHeader(config.jwtSecret, "agent-user");
+
+    // Regression: cron.add (agent.spawn path) persists a __jaitJobMeta blob
+    // that carries jobType/model/timeZone but NOT the prompt, which lives at
+    // the top level of the input. The blob must not shadow the inferred
+    // prompt/provider fields, otherwise the edit modal shows no prompt.
+    scheduler.create({
+      userId: "agent-user",
+      name: "jade-code-duplication-audit",
+      cron: "0 */2 * * *",
+      toolName: "agent.spawn",
+      input: {
+        __jaitJobMeta: {
+          jobType: "agent_task",
+          model: "deepseek-v4-flash:0731-cloud",
+          timeZone: "UTC",
+        },
+        prompt: "Audit the entire project for code duplication. Work in /home/jakob/jait.",
+      },
+    });
+
+    const listResponse = await app.inject({ method: "GET", url: "/api/jobs", headers });
+    expect(listResponse.statusCode).toBe(200);
+    const listed = (listResponse.json() as { items: Array<Record<string, unknown>> }).items
+      .find((job) => job.name === "jade-code-duplication-audit");
+    expect(listed).toMatchObject({
+      job_type: "agent_task",
+      prompt: "Audit the entire project for code duplication. Work in /home/jakob/jait.",
+      model: "deepseek-v4-flash:0731-cloud",
+    });
+
+    const detailResponse = await app.inject({ method: "GET", url: `/api/jobs/${listed?.id}`, headers });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toMatchObject({
+      job_type: "agent_task",
+      prompt: "Audit the entire project for code duplication. Work in /home/jakob/jait.",
+      model: "deepseek-v4-flash:0731-cloud",
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("matches daily jobs in their configured timezone", () => {
     const instant = new Date("2026-07-31T05:00:00.000Z");
     expect(matchesCronMinute("0 7 * * *", instant, "Europe/Berlin")).toBe(true);
