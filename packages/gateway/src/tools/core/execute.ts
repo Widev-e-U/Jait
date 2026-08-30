@@ -32,8 +32,9 @@ interface ExecuteInput {
   cwd?: string;
   /** Reuse a specific terminal (omit to auto-select or create) */
   terminalId?: string;
-  /** Execution timeout in ms (default 30000). Use 0 for no timeout.
-   *  Be conservative — give enough time for the command to complete on a slow machine. */
+  /** Execution timeout in ms. Always finite: 0 / negative falls back to the
+   *  1-hour default; values above the 24-hour cap are clamped. There is no
+   *  run-without-timeout mode. */
   timeout?: number;
   /** Run inside Docker sandbox container */
   sandbox?: boolean;
@@ -54,7 +55,8 @@ export function createExecuteTool(
     description:
       "Run a shell command in a persistent terminal visible to the user. " +
       "Wait for every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — to complete. " +
-      "Use timeout: 0 when it may run longer than 30 seconds. Set isBackground: true only for indefinite processes such as servers, watchers, and daemons.",
+      "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. " +
+      "Set isBackground: true only for indefinite processes such as servers, watchers, and daemons.",
     tier: "core",
     category: "terminal",
     source: "builtin",
@@ -75,7 +77,7 @@ export function createExecuteTool(
         },
         isBackground: {
           type: "boolean",
-          description: "True to start the command without blocking. Use only for indefinite processes such as servers, watchers, and daemons. Keep false for finite one-shot commands; use timeout: 0 to wait as long as needed.",
+          description: "True to start the command without blocking. Use only for indefinite processes such as servers, watchers, and daemons. Keep false for finite one-shot commands; raising `timeout` (up to 24 hours) is the way to wait longer.",
         },
         cwd: {
           type: "string",
@@ -87,7 +89,7 @@ export function createExecuteTool(
         },
         timeout: {
           type: "number",
-          description: "Timeout in ms (default 30000). Use 0 for no timeout.",
+          description: "Timeout in ms. Always finite — 1 hour by default; 0/negative falls back to the default, and anything above 24 hours is clamped. The timeout guard cannot be disabled.",
         },
         sandbox: {
           type: "boolean",

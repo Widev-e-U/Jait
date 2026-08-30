@@ -31,6 +31,7 @@ import type { ToolResult, ToolContext } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 import { isGatewayLocalPathOutsideProject } from "./core/get-fs.js";
+import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
 
 /**
  * Tools that operate on the project's filesystem and therefore must be
@@ -73,6 +74,30 @@ const REMOTE_TERMINAL_TOOLS = new Set<string>(["execute", "terminal.run", "jait.
 
 function isBackgroundInput(input: unknown): boolean {
   return Boolean(input && typeof input === "object" && (input as { isBackground?: unknown }).isBackground === true);
+}
+
+/** Extra transport wait on top of the node-side command timeout (RPC overhead). */
+const PROXY_TERMINAL_GRACE_MS = 30_000;
+
+/** Transport wait for proxied non-terminal tools and background commands. */
+const PROXY_DEFAULT_TIMEOUT_MS = 120_000;
+
+/**
+ * Transport-level wait for a proxied tool call.
+ *
+ * Foreground terminal commands may legitimately run up to the command
+ * timeout cap; the node enforces `resolveCommandTimeoutMs` on its side, so
+ * the gateway waits for that resolved budget plus a small round-trip grace.
+ * The result is always finite — there is no "wait forever" mode here either.
+ */
+export function proxyTimeoutMs(toolName: string, input: unknown): number {
+  if (REMOTE_TERMINAL_TOOLS.has(toolName) && !isBackgroundInput(input)) {
+    const requested = input && typeof input === "object"
+      ? (input as { timeout?: unknown }).timeout
+      : undefined;
+    return resolveCommandTimeoutMs(requested) + PROXY_TERMINAL_GRACE_MS;
+  }
+  return PROXY_DEFAULT_TIMEOUT_MS;
 }
 
 /**
@@ -226,7 +251,7 @@ export function createRemoteToolExecutor(
         toolName,
         input as Record<string, unknown>,
         {
-          timeoutMs: 120_000,
+          timeoutMs: proxyTimeoutMs(toolName, input),
           sessionId: context.sessionId,
           projectRoot: context.projectRoot,
           onOutputChunk: context.onOutputChunk,

@@ -24,6 +24,7 @@ import type { TerminalExecutionPayload } from "@jait/shared";
 import type { SecretInputService } from "../services/secret-input.js";
 import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import { isShellPromptLine } from "./shell-prompt.js";
+import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
 import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -824,7 +825,8 @@ export function createTerminalRunTool(
     description:
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
       "The terminal stays alive between calls — like VS Code's integrated terminal. " +
-      "Multi-line scripts, pipes, and complex syntax all work unchanged.",
+      "Multi-line scripts, pipes, and complex syntax all work unchanged. " +
+      "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled.",
     tier: "standard",
     category: "terminal",
     source: "builtin",
@@ -833,15 +835,19 @@ export function createTerminalRunTool(
       properties: {
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
-        timeout: { type: "number", description: "Execution timeout in ms (default 30000). Use 0 for no timeout." },
-        isBackground: { type: "boolean", description: "If true, start the command and return immediately. Use only for indefinite processes such as servers, watchers, and daemons. For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — keep this false and use timeout: 0 when it may run longer than 30 seconds so the tool waits for final output." },
+        timeout: { type: "number", description: "Execution timeout in ms. Always finite: default 3600000 (1 hour), hard cap 86400000 (24 hours). 0, negative, or huge values fall back to the default or clamp to the cap — there is no run-without-timeout mode. Raise it for legitimately long one-shot commands." },
+        isBackground: { type: "boolean", description: "If true, start the command and return immediately. Use only for indefinite processes such as servers, watchers, and daemons. For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — keep this false; the default 1-hour timeout already covers long-running builds, and `timeout` can be raised if needed." },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
       required: ["command"],
     },
     async execute(input: TerminalRunInput, context: ToolContext): Promise<ToolResult> {
-      const { command, timeout = 30000, terminalId: preferredId, isBackground } = input;
+      // Timeout invariant: every command is bounded by a finite timeout.
+      // Agents may lift the 1-hour default up to a 24-hour cap, but
+      // timeout: 0 / negative / non-numeric never disable the guard.
+      const { command, terminalId: preferredId, isBackground } = input;
+      const timeout = resolveCommandTimeoutMs(input.timeout);
 
       if (input.sandbox) {
         const sandboxCommand = rewriteProjectPathForSandboxCommand(command, context.projectRoot);
@@ -1020,7 +1026,7 @@ export function createTerminalRunTool(
         const needsInteraction = Boolean(result.interactionRequired)
           || (result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected));
         const reason = result.timedOut
-          ? `timed out after ${timeout}ms`
+          ? `timed out after ${timeout}ms (timeout guards are always finite — re-run with a larger \`timeout\` up to the cap if this command is legitimately long, or use isBackground for indefinite processes)`
           : result.exitCode == null
             ? "exit status unavailable"
             : `exit code ${result.exitCode}`;
@@ -1062,6 +1068,7 @@ export function createTerminalRunTool(
             outputOffset,
             outputEndOffset,
             needsInteraction,
+            timeoutMs: timeout,
           },
         };
       } catch (err) {
@@ -1091,7 +1098,8 @@ export function createJaitTerminalTool(
       "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
       "Every command runs as a live terminal inside the chat card, so do not create a separate terminal surface first. " +
       "For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — wait for completion; " +
-      "use timeout: 0 when it may run longer than 30 seconds. Set isBackground: true only for indefinite processes such as servers, " +
+      "the default 1-hour timeout already covers long-running builds, and `timeout` can be raised (up to 24 hours) when needed. " +
+      "Set isBackground: true only for indefinite processes such as servers, " +
       "watchers, and daemons; Jait notifies you when they finish, so never poll or send another command to their terminal.",
   };
 }

@@ -5,7 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FsNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolResult } from "./contracts.js";
-import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./remote-executor.js";
+import {
+  createRemoteToolExecutor,
+  proxyTimeoutMs,
+  resolveRemoteNodeForSession,
+} from "./remote-executor.js";
+import {
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  MAX_COMMAND_TIMEOUT_MS,
+} from "../lib/command-timeout.js";
 
 const remoteNode: FsNode = {
   id: "node-linux",
@@ -51,6 +59,38 @@ function createMockWs(overrides: Partial<WsControlPlane> = {}) {
     ...overrides,
   } as unknown as WsControlPlane;
 }
+
+describe("proxyTimeoutMs", () => {
+  const GRACE_MS = 30_000;
+  const hourMs = 60 * 60 * 1000;
+
+  it("foreground terminal commands get the resolved command budget + grace", () => {
+    expect(proxyTimeoutMs("terminal.run", {})).toBe(DEFAULT_COMMAND_TIMEOUT_MS + GRACE_MS);
+    expect(proxyTimeoutMs("execute", { command: "ls" })).toBe(DEFAULT_COMMAND_TIMEOUT_MS + GRACE_MS);
+    expect(proxyTimeoutMs("jait.terminal", { timeout: hourMs })).toBe(hourMs + GRACE_MS);
+  });
+
+  it("timeout 0 cannot disable the wait — default budget applies", () => {
+    expect(proxyTimeoutMs("terminal.run", { timeout: 0 })).toBe(DEFAULT_COMMAND_TIMEOUT_MS + GRACE_MS);
+    expect(proxyTimeoutMs("terminal.run", { timeout: -1 })).toBe(DEFAULT_COMMAND_TIMEOUT_MS + GRACE_MS);
+  });
+
+  it("requests above the cap clamp to the cap + grace", () => {
+    expect(proxyTimeoutMs("terminal.run", { timeout: Number.MAX_SAFE_INTEGER })).toBe(
+      MAX_COMMAND_TIMEOUT_MS + GRACE_MS,
+    );
+  });
+
+  it("background terminal commands fall back to the short default wait", () => {
+    expect(proxyTimeoutMs("terminal.run", { isBackground: true })).toBe(120_000);
+    expect(proxyTimeoutMs("execute", { isBackground: true, timeout: hourMs })).toBe(120_000);
+  });
+
+  it("non-terminal tools always use the short default wait", () => {
+    expect(proxyTimeoutMs("fs.read", { path: "/x" })).toBe(120_000);
+    expect(proxyTimeoutMs("jait.terminal.list", { terminalId: "t" })).toBe(120_000);
+  });
+});
 
 describe("resolveRemoteNodeForSession", () => {
   let cleanupPath: string | null = null;

@@ -651,10 +651,13 @@ function MessageInner({
                 aria-label="Message actions"
                 className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
               >
-                {/* Pinned to the tap-area's right edge, nudged 2px up so the
-                    glyph keeps a little breathing room from the bubble's
-                    bottom edge while staying inside the p-4 padding. */}
-                <MoreVertical className="absolute bottom-0.5 right-0 h-4 w-4" />
+                {/* Pinned to the tap-area's right edge. The lucide
+                    ellipsis-vertical glyph is inset 7.33px (at 16px scale,
+                    viewBox 24) from its box's right edge but only 2.67px from
+                    its box's bottom (bottom dot r=1 at cy=19), so the box is
+                    lifted 4.67px (= 7.33 - 2.67) — that makes the visible gap
+                    to the bubble edge pixel-identical bottom vs right. */}
+                <MoreVertical className="absolute bottom-[4.67px] right-0 h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">

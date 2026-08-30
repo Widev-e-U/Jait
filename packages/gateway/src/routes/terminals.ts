@@ -14,6 +14,7 @@ import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
 import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { getManagedTerminalExecution, getManagedTerminalExecutions } from "../tools/terminal-tools.js";
+import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -233,7 +234,9 @@ export function registerTerminalRoutes(
     const { id } = request.params as { id: string };
     const body = (request.body as Record<string, unknown>) ?? {};
     const command = typeof body["command"] === "string" ? body["command"] : "";
-    const timeout = typeof body["timeout"] === "number" ? body["timeout"] : 30000;
+    // Timeout invariant: route executions are always bounded. Callers may lift
+    // the 1-hour default up to the 24-hour cap, but there is no unbounded mode.
+    const timeout = resolveCommandTimeoutMs(body["timeout"]);
 
     if (!command.trim()) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "command is required" });
