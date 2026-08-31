@@ -345,22 +345,28 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
 
+          # Fetch + extract deb packages into $HOME/.local (no passwordless
+          # sudo on this runner; Ubuntu 24.04 noble package set, mirroring
+          # the locally-tested tauri-cicd container toolchain).
+          userspace_fetch_debs() {
+            mkdir -p "$HOME/.local" /tmp/jait-ci-debs
+            (cd /tmp/jait-ci-debs \
+              && apt-get update -qq 2>/dev/null || true
+              apt-get download "$@" \
+              && for d in ./*.deb; do dpkg-deb -x "$d" "$HOME/.local/"; done \
+              && rm -f ./*.deb)
+          }
+
           userspace_install() {
-            # No passwordless sudo: extract the tool debs into $HOME/.local
-            # (Ubuntu 24.04 noble package set, mirrors the locally-tested
-            # tauri-cicd container toolchain).
             local marker="$HOME/.local/.jait-tauri-ci-tools"
             if [ -f "$marker" ]; then
               echo "userspace toolchain already installed at $HOME/.local"
             else
-              mkdir -p "$HOME/.local" /tmp/jait-ci-debs
-              (cd /tmp/jait-ci-debs \
-                && apt-get update -qq 2>/dev/null || true
-                apt-get download nsis nsis-common llvm-18 libllvm18 clang-18 libclang-cpp18 \
-                && for d in ./*.deb; do dpkg-deb -x "$d" "$HOME/.local/"; done \
-                && printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/../lib/llvm-18/bin/clang-18" "$@"\n' \
-                   > "$HOME/.local/usr/bin/clang" && chmod +x "$HOME/.local/usr/bin/clang" \
-                && date -Iseconds > "$marker")
+              userspace_fetch_debs nsis nsis-common llvm-18 libllvm18 clang-18 libclang-cpp18
+              printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/../lib/llvm-18/bin/clang-18" "$@"\n' \
+                > "$HOME/.local/usr/bin/clang"
+              chmod +x "$HOME/.local/usr/bin/clang"
+              date -Iseconds > "$marker"
             fi
             # makensis data dir + llvm lib rpath are not relocatable by
             # themselves; point them at the userspace prefix.
@@ -389,6 +395,59 @@ jobs:
           command -v makensis &>/dev/null || apt_install nsis
           # LLVM — tauri-winres needs llvm-rc to embed icons/resources.
           command -v llvm-rc &>/dev/null || apt_install llvm clang
+
+          # pkgconf — tauri-cli probes pkg-config for the Linux tray libraries
+          # (ayatana/libappindicator) whenever the app enables tray-icon — even
+          # for Windows NSIS cross builds — and aborts when the probe cannot
+          # run or resolve.
+          ensure_pkgconfig() {
+            if command -v pkg-config &>/dev/null || command -v pkgconf &>/dev/null; then
+              echo "pkg-config found: $(command -v pkg-config || command -v pkgconf)"
+            elif [ -x "$HOME/.local/usr/bin/pkgconf" ]; then
+              export PATH="$HOME/.local/usr/bin:$PATH"
+              echo "using userspace pkgconf: $HOME/.local/usr/bin/pkgconf"
+            else
+              echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
+              # pkgconf = conventional pkg-config shim, pkgconf-bin = binary,
+              # libpkgconf3 = runtime lib for the extracted binary.
+              userspace_fetch_debs pkgconf pkgconf-bin libpkgconf3
+              export PATH="$HOME/.local/usr/bin:$PATH"
+              echo "installed userspace pkgconf $(pkgconf --version)"
+            fi
+            # The extracted pkgconf binary links against libpkgconf.so.3 in the
+            # userspace prefix.
+            case ":$LD_LIBRARY_PATH:" in
+              *"$HOME/.local/usr/lib/x86_64-linux-gnu"*) ;;
+              *) echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV" ;;
+            esac
+            export LD_LIBRARY_PATH="$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            # The probe result only feeds Linux bundle metadata (AppImage/deb),
+            # which this NSIS-only Windows job never produces, so a stub .pc is
+            # sufficient to make tauri-cli's probe succeed. PKG_CONFIG_PATH is
+            # searched before system dirs, hence the --exists gate to avoid
+            # shadowing a genuine system install.
+            PC_DIR="$HOME/.local/usr/lib/pkgconfig"
+            export PKG_CONFIG_PATH="$PC_DIR${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+            echo "PKG_CONFIG_PATH=$PC_DIR" >> "$GITHUB_ENV"
+            if ! pkgconf --exists ayatana-appindicator3-0.1 \
+              && ! pkgconf --exists appindicator3-0.1; then
+              mkdir -p "$PC_DIR"
+              cat > "$PC_DIR/ayatana-appindicator3-0.1.pc" <<EOF
+          prefix=$HOME/.local/usr
+          libdir=\${prefix}/lib
+
+          Name: ayatana-appindicator3-0.1
+          Description: Stub module for tauri-cli tray probe (NSIS-only cross build)
+          Version: 0.5.90
+          Libs: -L\${prefix}/lib
+          EOF
+              echo "wrote appindicator stub: $PC_DIR/ayatana-appindicator3-0.1.pc"
+            fi
+            pkgconf --exists ayatana-appindicator3-0.1 \
+              || pkgconf --exists appindicator3-0.1 \
+              || { echo "::error::appindicator pkg-config probe still failing"; exit 1; }
+          }
+          ensure_pkgconfig
 
           if ! command -v cargo &>/dev/null; then
             echo "::error::cargo not found. Install rustup on the runner: curl -sSf https://sh.rustup.rs | sh"
