@@ -225,6 +225,67 @@ export interface TerminalSurfaceOptions {
   env?: Record<string, string>;
 }
 
+export interface TerminalSpawnSpec {
+  command: string;
+  args: string[];
+}
+
+const DEFAULT_TERMINAL_MEMORY_HIGH = "1536M";
+const DEFAULT_TERMINAL_MEMORY_MAX = "2G";
+const DEFAULT_TERMINAL_SWAP_MAX = "1G";
+const SYSTEMD_MEMORY_VALUE_RE = /^\d+(?:[KMGTPE])?$/i;
+
+function validSystemdMemoryValue(value: string | undefined, fallback: string): string {
+  const normalized = value?.trim();
+  return normalized && SYSTEMD_MEMORY_VALUE_RE.test(normalized) ? normalized : fallback;
+}
+
+/**
+ * Keep terminal commands out of the gateway service cgroup. A runaway build or
+ * script can otherwise make systemd/OOM kill the gateway and every live chat.
+ */
+export function resolveTerminalSpawnSpec(
+  shell: string,
+  shellArgs: string[],
+  terminalId: string,
+  options: {
+    platform?: NodeJS.Platform;
+    env?: NodeJS.ProcessEnv;
+    systemdRunAvailable?: boolean;
+  } = {},
+): TerminalSpawnSpec {
+  const currentPlatform = options.platform ?? platform();
+  const env = options.env ?? process.env;
+  const isolationEnabled = env["JAIT_TERMINAL_ISOLATION"] !== "0"
+    && (env["JAIT_TERMINAL_ISOLATION"] === "1" || Boolean(env["JAIT_UNIT"]));
+  const systemdRunAvailable = options.systemdRunAvailable ?? existsSync("/usr/bin/systemd-run");
+  if (currentPlatform !== "linux" || !isolationEnabled || !systemdRunAvailable) {
+    return { command: shell, args: shellArgs };
+  }
+
+  const safeTerminalId = terminalId.replace(/[^a-zA-Z0-9_.-]/g, "-").slice(0, 180);
+  const memoryHigh = validSystemdMemoryValue(env["JAIT_TERMINAL_MEMORY_HIGH"], DEFAULT_TERMINAL_MEMORY_HIGH);
+  const memoryMax = validSystemdMemoryValue(env["JAIT_TERMINAL_MEMORY_MAX"], DEFAULT_TERMINAL_MEMORY_MAX);
+  const swapMax = validSystemdMemoryValue(env["JAIT_TERMINAL_SWAP_MAX"], DEFAULT_TERMINAL_SWAP_MAX);
+  return {
+    command: "/usr/bin/systemd-run",
+    args: [
+      "--user",
+      "--scope",
+      "--quiet",
+      "--collect",
+      `--unit=jait-terminal-${safeTerminalId}.scope`,
+      "--property=OOMPolicy=kill",
+      `--property=MemoryHigh=${memoryHigh}`,
+      `--property=MemoryMax=${memoryMax}`,
+      `--property=MemorySwapMax=${swapMax}`,
+      "--",
+      shell,
+      ...shellArgs,
+    ],
+  };
+}
+
 export interface TerminalExecutionResult {
   output: string;
   exitCode: number | null;
@@ -336,7 +397,8 @@ export class TerminalSurface implements Surface {
 
       // Git Bash (MSYS2/Cygwin-based) does not work well with ConPTY.
       const isGitBash = /Git[/\\].*bash\.exe$/i.test(this.shell);
-      const pty = spawnPty(this.shell, shellArgs, {
+      const spawnSpec = resolveTerminalSpawnSpec(this.shell, shellArgs, this.id);
+      const pty = spawnPty(spawnSpec.command, spawnSpec.args, {
         name: "xterm-256color",
         cols: this._cols,
         rows: this._rows,

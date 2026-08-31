@@ -9,6 +9,7 @@
  */
 
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
+import { memoryLine, summarizeWithPreview } from "../list-preview.js";
 import type { SchedulerService } from "../../scheduler/service.js";
 import type { MemoryService, MemoryScope } from "../../memory/contracts.js";
 import type { ReminderService } from "../../services/reminders.js";
@@ -272,7 +273,13 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             }) ?? [];
             return {
               ok: true,
-              message: `Found ${results.length} memories and ${reminders.length} reminders`,
+              message: summarizeWithPreview(
+                `Found ${results.length} memories and ${reminders.length} reminders:`,
+                [
+                  ...results.map((memory) => memoryLine(memory.id, memory.content, memory.source.type)),
+                  ...reminders.map((reminder) => memoryLine(reminder.id, reminder.content, "reminder")),
+                ],
+              ),
               data: { memories: results, reminders },
             };
           }
@@ -288,7 +295,19 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               sessionId: input.sessionId ?? undefined,
               limit: input.limit ?? 50,
             });
-            return { ok: true, message: `Loaded ${reminders.length} reminders`, data: { reminders } };
+            return {
+              ok: true,
+              message: summarizeWithPreview(
+                `Loaded ${reminders.length} reminders:`,
+                reminders.map((reminder) => {
+                  const extra = reminder.status && reminder.status !== "active"
+                    ? reminder.status
+                    : undefined;
+                  return memoryLine(reminder.id, reminder.content, "reminder", extra);
+                }),
+              ),
+              data: { reminders },
+            };
           }
 
           case "reminder.update": {

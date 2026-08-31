@@ -1,0 +1,19 @@
+[package]
+name = "jait-desktop-glue"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+jait-desktop-core = { path = "../jait-desktop-core" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+dirs.workspace = true
+parking_lot.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+# System clipboard only when the host shell opts in (Wayland/X11 need it at runtime).
+arboard = { version = "3", optional = true }
+
+[features]
+default = []
+clipboard = ["dep:arboard"]

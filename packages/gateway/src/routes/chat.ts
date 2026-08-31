@@ -1002,6 +1002,47 @@ const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 const drainingQueuedSessions = new Set<string>();
 
+const ACTIVE_TURN_STATE_KEY = "chat.activeTurn";
+const MAX_AUTOMATIC_RECOVERY_ATTEMPTS = 3;
+const INTERRUPTED_TURN_RECOVERY_CONCURRENCY = 2;
+
+interface DurableActiveTurn {
+  turnId: string;
+  startedAt: string;
+  mode: ChatMode;
+  responseStyle: ResponseStyle;
+  provider?: ProviderId;
+  runtimeMode?: RuntimeMode;
+  model?: string;
+  reasoningEffort?: string | null;
+  recoveryAttempts?: number;
+}
+
+function parseDurableActiveTurn(value: unknown): DurableActiveTurn | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record["turnId"] !== "string" || typeof record["startedAt"] !== "string") return null;
+  return {
+    turnId: record["turnId"],
+    startedAt: record["startedAt"],
+    mode: isValidChatMode(record["mode"]) ? record["mode"] : "agent",
+    responseStyle: isResponseStyle(record["responseStyle"]) ? record["responseStyle"] : "normal",
+    ...(typeof record["provider"] === "string" ? { provider: record["provider"] as ProviderId } : {}),
+    ...(parseRuntimeMode(record["runtimeMode"]) ? { runtimeMode: parseRuntimeMode(record["runtimeMode"]) } : {}),
+    ...(typeof record["model"] === "string" && record["model"].trim() ? { model: record["model"].trim() } : {}),
+    ...(Object.prototype.hasOwnProperty.call(record, "reasoningEffort")
+      ? {
+          reasoningEffort: typeof record["reasoningEffort"] === "string" && record["reasoningEffort"].trim()
+            ? record["reasoningEffort"].trim()
+            : null,
+        }
+      : {}),
+    recoveryAttempts: typeof record["recoveryAttempts"] === "number"
+      ? Math.max(0, Math.floor(record["recoveryAttempts"]))
+      : 0,
+  };
+}
+
 // ── Consumed queued-message id tracking ───────────────────────────────
 // Tracks the ids of queued chat messages that have already been consumed —
 // either popped-and-sent by the server drain, or removed at direct-send time
@@ -1174,6 +1215,20 @@ function getOrCreateAccumulator(sessionId: string): StreamingAccumulator {
   return acc;
 }
 
+/**
+ * Per-session dirty hooks registered by the active turn handler. Accumulator
+ * mutations below are module-level (multiple provider paths share them), so
+ * they can't reach the turn's checkpoint closure directly. Registering a hook
+ * lets any token/thinking/tool mutation mark the current turn's in-memory
+ * snapshot dirty, which drives the time-based crash checkpoints (see
+ * `markStreamDirty` in the turn handler). Cleared when the turn ends.
+ */
+const streamDirtyHooks = new Map<string, () => void>();
+
+function notifyStreamDirty(sessionId: string): void {
+  streamDirtyHooks.get(sessionId)?.();
+}
+
 /** Append a text token to the streaming accumulator */
 function accumulateToken(sessionId: string, token: string): void {
   const acc = getOrCreateAccumulator(sessionId);
@@ -1184,6 +1239,7 @@ function accumulateToken(sessionId: string, token: string): void {
   } else {
     acc.segments.push({ type: "text", content: token });
   }
+  notifyStreamDirty(sessionId);
 }
 
 /**
@@ -1194,6 +1250,7 @@ function accumulateToken(sessionId: string, token: string): void {
  * group, so text truncation is driven by the character count, not the count).
  */
 function rollbackAccumulator(
+  sessionId: string,
   acc: StreamingAccumulator,
   targetContent: number,
   targetSegments: number,
@@ -1221,6 +1278,9 @@ function rollbackAccumulator(
     }
   }
   acc.segments = rebuilt;
+  // Mark dirty so a fresh checkpoint flushes the truncated state — otherwise a
+  // crash right after a rollback could persist the already-discarded text.
+  notifyStreamDirty(sessionId);
 }
 
 /** Append a thinking/reasoning token to the streaming accumulator */
@@ -1233,6 +1293,7 @@ function accumulateThinking(sessionId: string, content: string): void {
   } else {
     acc.segments.push({ type: "thinking", content });
   }
+  notifyStreamDirty(sessionId);
 }
 
 /** Record user guidance at its live position so reload snapshots retain it. */
@@ -1243,6 +1304,7 @@ function accumulateSteering(sessionId: string, content: string, displayContent?:
     content,
     ...(displayContent ? { displayContent } : {}),
   });
+  notifyStreamDirty(sessionId);
 }
 
 /**
@@ -1256,6 +1318,7 @@ function accumulateSteering(sessionId: string, content: string, displayContent?:
 function accumulateError(sessionId: string, content: string): void {
   const acc = getOrCreateAccumulator(sessionId);
   acc.segments.push({ type: "error", content });
+  notifyStreamDirty(sessionId);
 }
 
 /** Record a tool call start in the streaming accumulator */
@@ -1268,6 +1331,7 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
     existing.tool = tool;
     existing.args = args;
     if (parentCallId !== undefined) existing.parentCallId = parentCallId;
+    notifyStreamDirty(sessionId);
     return;
   }
   // Explicitly "running" until a result arrives. Without it, mapPersistedToolCallsForUI
@@ -1304,6 +1368,7 @@ function accumulateToolStart(sessionId: string, callId: string, tool: string, ar
       parent.childSegments = withToolChildSegment(parent.childSegments, callId);
     }
   }
+  notifyStreamDirty(sessionId);
 }
 
 function accumulateToolApproval(sessionId: string, requestId: string, tool: string, args: unknown): string {
@@ -1331,6 +1396,7 @@ function accumulateToolApproval(sessionId: string, requestId: string, tool: stri
   } else {
     acc.segments.push({ type: "toolGroup", callIds: [callId] });
   }
+  notifyStreamDirty(sessionId);
   return callId;
 }
 
@@ -1348,14 +1414,17 @@ function accumulateToolOutput(sessionId: string, callId: string, content: string
     tc.childSegments = channel === "thinking"
       ? withThinkingChildSegment(tc.childSegments, content)
       : withTextChildSegment(tc.childSegments, content);
+    notifyStreamDirty(sessionId);
     return;
   }
   if (channel && channel !== "thinking") {
     // Non-agent tool output on a non-thinking channel — preserve legacy behavior.
     tc.message = (tc.message || "") + content;
+    notifyStreamDirty(sessionId);
     return;
   }
   tc.message = (tc.message || "") + content;
+  notifyStreamDirty(sessionId);
 }
 
 /** Record a tool call completion */
@@ -1371,6 +1440,11 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
     // success/error. Approval-gated calls keep their own status lifecycle.
     if (tc.status === "running") tc.status = ok ? "success" : "error";
     tc.completedAt = Date.now();
+    // Tool results previously left the snapshot clean: with a checkpoint already
+    // flushed after the tool start, no further flush was scheduled until the next
+    // token, so a crash (OOM kill) right after a result checkpointed the call as
+    // still "running" and lost message/data entirely.
+    notifyStreamDirty(sessionId);
   }
 }
 
@@ -2400,6 +2474,130 @@ export function registerChatRoutes(
   _dbRef = db;
   _appRef = app;
 
+  const recoveringInterruptedTurns = new Set<string>();
+
+  const recoverInterruptedTurn = async (
+    sessionId: string,
+    marker: DurableActiveTurn,
+  ): Promise<void> => {
+    if (
+      !db
+      || !sessionStateService
+      || !sessionService
+      || !userService
+      || activeStreams.has(sessionId)
+      || recoveringInterruptedTurns.has(sessionId)
+    ) return;
+
+    recoveringInterruptedTurns.add(sessionId);
+    try {
+      const session = sessionService.getById(sessionId);
+      if (!session || session.status !== "active" || !session.userId) {
+        sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        return;
+      }
+      const user = userService.findById(session.userId);
+      if (!user) {
+        sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        return;
+      }
+
+      const attempts = marker.recoveryAttempts ?? 0;
+      const exhausted = attempts >= MAX_AUTOMATIC_RECOVERY_ATTEMPTS;
+      const interruptionMessage = exhausted
+        ? "Gateway process terminated while this chat was running. Partial progress was checkpointed, but automatic recovery stopped after repeated gateway failures. Send Continue to resume manually."
+        : "Gateway process terminated while this chat was running. Partial progress was checkpointed. Jait is automatically continuing from the saved conversation and current workspace state.";
+      try {
+        db.insert(messagesTable).values({
+          id: `gateway-interruption-${marker.turnId}`,
+          sessionId,
+          role: "assistant",
+          content: interruptionMessage,
+          segments: JSON.stringify([{ type: "error", content: interruptionMessage }]),
+          createdAt: new Date().toISOString(),
+        }).run();
+      } catch {
+        // Deterministic id makes restart recovery idempotent.
+      }
+
+      if (exhausted) {
+        sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        return;
+      }
+
+      sessionStateService.set(sessionId, {
+        [ACTIVE_TURN_STATE_KEY]: { ...marker, recoveryAttempts: attempts + 1 },
+      });
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      const continuation = buildBackgroundCommandContinuationPayload({
+        sessionId,
+        notification:
+          "The gateway process terminated during the previous assistant turn. Continue the user's unfinished task from the persisted conversation and current workspace state. Treat partial assistant output and completed tool calls as progress, verify side effects before repeating actions, and finish with a user-visible response.",
+        userId: user.id,
+        userService,
+        sessionState: sessionStateService,
+        sessionMetadata: session.metadata,
+      });
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/chat",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          ...continuation,
+          mode: marker.mode,
+          responseStyle: marker.responseStyle,
+          ...(marker.provider ? { provider: marker.provider } : {}),
+          ...(marker.runtimeMode ? { runtimeMode: marker.runtimeMode } : {}),
+          ...(marker.model ? { model: marker.model } : {}),
+          ...(Object.prototype.hasOwnProperty.call(marker, "reasoningEffort")
+            ? { reasoningEffort: marker.reasoningEffort ?? null }
+            : {}),
+          _recoveryAttempts: attempts + 1,
+        },
+      });
+      if (response.statusCode >= 400) {
+        app.log.error(
+          { sessionId, statusCode: response.statusCode, body: response.body.slice(0, 500) },
+          "Failed to automatically recover interrupted chat turn",
+        );
+      }
+    } catch (error) {
+      app.log.error({ error, sessionId }, "Interrupted chat recovery failed");
+    } finally {
+      recoveringInterruptedTurns.delete(sessionId);
+    }
+  };
+
+  const recoverInterruptedChatTurns = async (): Promise<number> => {
+    if (!sessionStateService) return 0;
+    const interrupted = sessionStateService.getByKey(ACTIVE_TURN_STATE_KEY)
+      .flatMap(({ sessionId, value }) => {
+        const marker = parseDurableActiveTurn(value);
+        return marker ? [{ sessionId, marker }] : [];
+      });
+    let nextIndex = 0;
+    const workers = Array.from(
+      { length: Math.min(INTERRUPTED_TURN_RECOVERY_CONCURRENCY, interrupted.length) },
+      async () => {
+        while (nextIndex < interrupted.length) {
+          const entry = interrupted[nextIndex++];
+          if (entry) await recoverInterruptedTurn(entry.sessionId, entry.marker);
+        }
+      },
+    );
+    await Promise.all(workers);
+    return interrupted.length;
+  };
+
+  const appWithRecovery = app as FastifyInstance & {
+    recoverInterruptedChatTurns?: () => Promise<number>;
+  };
+  if (!appWithRecovery.recoverInterruptedChatTurns) {
+    app.decorate("recoverInterruptedChatTurns", recoverInterruptedChatTurns);
+  } else {
+    appWithRecovery.recoverInterruptedChatTurns = recoverInterruptedChatTurns;
+  }
+
   const getStreamingSessionIds = (userId: string): string[] => {
     if (!sessionService) return [];
     return sessionService.list("active", userId)
@@ -3007,6 +3205,9 @@ export function registerChatRoutes(
     const systemNotice = typeof body["_systemNotice"] === "string" && (body["_systemNotice"] as string).trim()
       ? (body["_systemNotice"] as string).trim()
       : undefined;
+    const recoveryAttempts = typeof body["_recoveryAttempts"] === "number"
+      ? Math.max(0, Math.floor(body["_recoveryAttempts"] as number))
+      : 0;
 
     // Parse file attachments (images / files sent as base64 from the client)
     const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
@@ -3214,6 +3415,24 @@ export function registerChatRoutes(
     }
     const history = sessionHistory.get(sessionId)!;
 
+    // The in-memory activeStreams set disappears on process death. Persist a
+    // compact marker before recording the turn so startup can distinguish an
+    // interrupted run from a normally completed chat and resume it.
+    if (sessionStateService) {
+      const activeTurn: DurableActiveTurn = {
+        turnId: randomUUID(),
+        startedAt: new Date().toISOString(),
+        mode: chatMode,
+        responseStyle,
+        ...(requestProvider ? { provider: requestProvider } : {}),
+        ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
+        ...(requestBodyModel ? { model: requestBodyModel } : {}),
+        ...(requestReasoningEffortProvided ? { reasoningEffort: requestReasoningEffort ?? null } : {}),
+        ...(recoveryAttempts > 0 ? { recoveryAttempts } : {}),
+      };
+      sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: activeTurn });
+    }
+
     // Build user message — multimodal if attachments are present. A background
     // command notification is injected as a hidden user turn (never persisted or
     // shown as a user bubble), so every provider treats it as new work to answer.
@@ -3309,6 +3528,48 @@ export function registerChatRoutes(
       );
       if (id) assistantCheckpointId = id;
     }
+
+    // ── Crash-safe *time-based* streaming checkpoint ──
+    // Round-boundary checkpoints (the loop's onAssistantCheckpoint) leave long
+    // single rounds — a big streaming answer, one slow tool call, a sub-agent —
+    // entirely in memory for minutes at a stretch. If the gateway process dies
+    // or is stopped mid-round, every token streamed inside that round is lost
+    // even though everything up to the previous round boundary is durable.
+    // The accumulator mutations mark this turn dirty via `streamDirtyHooks`
+    // (module-level, provider-agnostic); a debounced timer flushes the dirty
+    // snapshot through persistAssistantMessage → upsertAssistantCheckpoint so
+    // the checkpoint still collapses into the turn's single DB row. At most
+    // one write per interval; suppressed once the turn has a final persist.
+    const STREAM_CHECKPOINT_MS = 5_000;
+    let streamCheckpointDebounce: ReturnType<typeof setTimeout> | null = null;
+    let lastStreamCheckpointAt = 0;
+    function flushStreamCheckpoint(): void {
+      streamCheckpointDebounce = null;
+      if (assistantTurnPersisted || loopPersisted) return;
+      const acc = sessionStreamingState.get(sessionId);
+      if (!acc) return;
+      if (!acc.content && acc.segments.length === 0 && !acc.thinking && acc.toolCalls.length === 0) return;
+      try {
+        const tcJson = acc.toolCalls.length ? JSON.stringify(acc.toolCalls) : undefined;
+        const segJson = acc.segments.length ? JSON.stringify(acc.segments) : undefined;
+        persistAssistantMessage(acc.content, tcJson, segJson, acc.thinking || undefined);
+        lastStreamCheckpointAt = Date.now();
+      } catch {
+        // Never let a checkpoint write failure break the live stream.
+      }
+    }
+    function markStreamDirty(): void {
+      if (assistantTurnPersisted || loopPersisted) return;
+      if (streamCheckpointDebounce) return;
+      const elapsed = Date.now() - lastStreamCheckpointAt;
+      if (elapsed >= STREAM_CHECKPOINT_MS) {
+        flushStreamCheckpoint();
+        return;
+      }
+      streamCheckpointDebounce = setTimeout(flushStreamCheckpoint, STREAM_CHECKPOINT_MS - elapsed);
+    }
+    streamDirtyHooks.set(sessionId, markStreamDirty);
+
     /**
      * Message from a turn-ending `error` event, if the loop reported one.
      *
@@ -3712,7 +3973,7 @@ export function registerChatRoutes(
                 tokenBytesThisBlock = 0;
                 const acc = sessionStreamingState.get(sessionId);
                 if (acc) {
-                  rollbackAccumulator(acc, event.contentLength, event.segments);
+                  rollbackAccumulator(sessionId, acc, event.contentLength, event.segments);
                 }
               }
               break;
@@ -4232,7 +4493,7 @@ export function registerChatRoutes(
           else if (event.type === "content_rollback") {
             const acc = sessionStreamingState.get(sessionId);
             if (acc) {
-              rollbackAccumulator(acc, event.contentLength, event.segments);
+              rollbackAccumulator(sessionId, acc, event.contentLength, event.segments);
             }
           }
           // Sub-agent reasoning streams on its own channel — keep it out of the
@@ -4531,6 +4792,23 @@ export function registerChatRoutes(
 
     // Stop the SSE keepalive heartbeat now that the turn is finishing.
     clearInterval(keepalive);
+    // Tear down the time-based streaming checkpoint: drop the dirty hook so
+    // late accumulator mutations (cleanup-order edge cases) can't schedule
+    // another checkpoint, and clear any pending debounce timer. The fallback
+    // persist above (or the loop's onPersist) is the authoritative final write;
+    // if the turn never produced anything persistable, a pending timer would
+    // otherwise fire after `activeStreams.delete` and write one anyway.
+    streamDirtyHooks.delete(sessionId);
+    if (streamCheckpointDebounce) {
+      clearTimeout(streamCheckpointDebounce);
+      streamCheckpointDebounce = null;
+    }
+
+    try {
+      sessionStateService?.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+    } catch (error) {
+      app.log.error({ error, sessionId }, "Failed to clear durable active-turn marker");
+    }
 
     activeStreams.delete(sessionId);
     activeCliTurns.delete(sessionId);
@@ -5597,6 +5875,17 @@ export function registerChatRoutes(
 
     return { ok: true, plan_id: plan.id, message: "Plan rejected and discarded." };
   });
+
+  // Route registration is synchronous; defer recovery until every endpoint is
+  // available. Tests invoke the decorated hook explicitly for deterministic
+  // fail-then-pass coverage.
+  if (config.nodeEnv !== "test") {
+    setTimeout(() => {
+      void recoverInterruptedChatTurns().then((count) => {
+        if (count > 0) app.log.warn({ count }, "Recovering interrupted chat turns after gateway restart");
+      });
+    }, 0);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════

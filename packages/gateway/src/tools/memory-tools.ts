@@ -1,6 +1,7 @@
 import type { MemoryService, MemoryScope } from "../memory/contracts.js";
 import type { ReminderService, ReminderStatus } from "../services/reminders.js";
 import type { ToolContext, ToolDefinition } from "./contracts.js";
+import { memoryLine, summarizeWithPreview } from "./list-preview.js";
 
 export function createMemorySaveTool(memory: MemoryService, reminders?: ReminderService): ToolDefinition<{
   scope: MemoryScope;
@@ -103,7 +104,17 @@ export function createMemorySearchTool(memory: MemoryService, reminders?: Remind
       }
       return {
         ok: true,
-        message: `Found ${results.length} memories and ${reminderResults.length} reminders`,
+        message: summarizeWithPreview(
+          `Found ${results.length} memories and ${reminderResults.length} reminders:`,
+          [
+            ...results.map((memory) =>
+              memoryLine(memory.id, memory.content, memory.source.type),
+            ),
+            ...reminderResults.map((reminder) =>
+              memoryLine(reminder.id, reminder.content, "reminder"),
+            ),
+          ],
+        ),
         data: { memories: results, reminders: reminderResults },
       };
     },
@@ -221,7 +232,17 @@ export function createMemoryListTool(reminders?: ReminderService): ToolDefinitio
         sessionId: input.sessionId,
         limit: input.limit ?? 50,
       });
-      return { ok: true, message: `Loaded ${rows.length} memory entries`, data: { memories: rows } };
+      return {
+        ok: true,
+        message: summarizeWithPreview(
+          `Loaded ${rows.length} memory entries:`,
+          rows.map((row) => {
+            const extra = row.status && row.status !== "active" ? row.status : undefined;
+            return memoryLine(row.id, row.content, "memory", extra);
+          }),
+        ),
+        data: { memories: rows },
+      };
     },
   };
 }

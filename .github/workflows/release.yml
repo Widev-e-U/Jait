@@ -292,6 +292,109 @@ jobs:
             apps/desktop/release/*.exe
             apps/desktop/release/latest.yml
 
+  # ── Tauri desktop shell (Windows NSIS setup.exe built via cargo-xwin) ──
+  # Companion to the Electron app: ships Jait_*-setup.exe alongside the
+  # Electron installers on the release. Mirror-tested in the tauri-cicd
+  # container: cargo tauri build --runner cargo-xwin --target
+  # x86_64-pc-windows-msvc --bundles nsis (needs llvm-rc for resource
+  # embedding and makensis for the installer).
+  desktop-tauri:
+    name: "Tauri Desktop Builds (Linux runner: Windows setup.exe)"
+    runs-on: [self-hosted, linux]
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.desktop_changed == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+      && (
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        needs.auto-tag.outputs.changed == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
+      - name: Stamp Tauri version with release version
+        run: |
+          # The Tauri shell embeds the web frontend, so it must ship a new
+          # build on every gateway release. Stamp tauri.conf.json with the
+          # release version so the NSIS installer carries it.
+          if [ -n "${{ needs.auto-tag.outputs.version }}" ]; then
+            REL_VERSION="${{ needs.auto-tag.outputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            REL_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            REL_VERSION=$(jq -r '.version' packages/gateway/package.json)
+          fi
+          echo "Stamping Tauri version -> $REL_VERSION"
+          # Testing-phase naming: build as Jait-Tauri so the NSIS output and
+          # setup paths (Jait-Tauri_<ver>_x64-setup.exe, install dir, Start
+          # Menu entry) are distinguishable from Electron's
+          # Jait-<ver>-x64-setup.exe while both builds coexist side by side.
+          # Remove the productName stamp when Tauri replaces Electron.
+          jq --arg v "$REL_VERSION" --arg n "Jait-Tauri" \
+            '.version = $v | .productName = $n' \
+            apps/desktop-tauri/src-tauri/tauri.conf.json > tmp.json \
+            && mv tmp.json apps/desktop-tauri/src-tauri/tauri.conf.json
+          echo "tauri_release_version=$REL_VERSION" >> $GITHUB_ENV
+      - name: Ensure Tauri Windows cross toolchain
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+
+          apt_install() {
+            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+              sudo apt-get update -qq
+              sudo apt-get install -y "$@"
+            else
+              echo "::warning::sudo requires a password; cannot auto-install: $*. Install manually."
+            fi
+          }
+
+          # NSIS (makensis) — Tauri's NSIS bundler.
+          command -v makensis &>/dev/null || apt_install nsis
+          # LLVM — tauri-winres needs llvm-rc to embed icons/resources.
+          command -v llvm-rc &>/dev/null || apt_install llvm clang
+
+          if ! command -v cargo &>/dev/null; then
+            echo "::error::cargo not found. Install rustup on the runner: curl -sSf https://sh.rustup.rs | sh"
+            exit 1
+          fi
+          # cargo-xwin = MSVC cross-compile runner, tauri-cli = tauri build.
+          # Installs are slow (~5-10 min each) but cached on the self-hosted
+          # runner's persistent ~/.cargo between releases.
+          command -v cargo-xwin &>/dev/null || cargo install --locked cargo-xwin
+          command -v cargo-tauri &>/dev/null || cargo install --locked tauri-cli
+          rustup target list --installed | grep -q '^x86_64-pc-windows-msvc$' || rustup target add x86_64-pc-windows-msvc
+
+          for tool in makensis llvm-rc cargo-xwin cargo-tauri; do
+            if ! command -v "$tool" &>/dev/null; then
+              echo "::error::$tool missing — install it on the runner."
+              exit 1
+            fi
+          done
+          echo "Tauri Windows toolchain OK"
+      - name: Build Tauri NSIS (Windows setup.exe)
+        working-directory: apps/desktop-tauri/src-tauri
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo tauri build --features shell --runner cargo-xwin \
+            --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Stage Tauri release assets on runner
+        if: env.RELEASE_ASSET_MODE == 'runner'
+        run: cp -v apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe "$RELEASE_ASSET_DIR"/
+      - name: Upload Tauri release assets to GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-tauri-release-assets
+          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+
   # ── Build macOS desktop app (skipped — no macOS runner available) ─
   # To enable: add a macOS self-hosted runner or fix GitHub billing,
   # then uncomment this job and add it back to the release 'needs'.
@@ -542,11 +645,12 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: [self-hosted, linux]
-    needs: [auto-tag, npm-publish, desktop, android]
+    needs: [auto-tag, npm-publish, desktop, desktop-tauri, android]
     if: |
       always() && 
       needs.npm-publish.result == 'success' && 
       contains(fromJSON('["success","skipped"]'), needs.desktop.result) && 
+      contains(fromJSON('["success","skipped"]'), needs.desktop-tauri.result) && 
       contains(fromJSON('["success","skipped"]'), needs.android.result) && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||

@@ -1926,8 +1926,10 @@ function App() {
               }
     }
 
-    // Todo list
-    setTodoList((current) => mergeHydratedTodoState(current, state['todo_list']))
+    // The running message snapshot and this WebSocket packet race on reload.
+    // Keep todos recovered from that snapshot when persisted UI state is absent;
+    // an explicit persisted list remains authoritative.
+    setTodoList((current) => mergeHydratedTodoState(current, state['todo_list'], isLoading))
 
     // Changed files
     const cf = state['changed_files']
@@ -1964,7 +1966,7 @@ function App() {
     if (wsEnvelope?.id && wsEnvelope.state && token) {
       primeStateCache('projects', wsEnvelope.id, token, wsEnvelope.state)
     }
-  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, settings?.reasoning_effort, suppressNextUiSync])
+  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, isLoading, settings?.reasoning_effort, suppressNextUiSync])
 
   const loadArchitectureDiagramForProject = useCallback((projectRoot: string, signal?: AbortSignal) => {
     return fetch(`${API_URL}/api/architecture?projectRoot=${encodeURIComponent(projectRoot)}`, {

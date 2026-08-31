@@ -5,6 +5,7 @@ import {
   getManagedTerminalExecutions,
   detectInteractivePrompt,
   rewriteProjectPathForSandboxCommand,
+  buildAgentCommand,
 } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
@@ -84,13 +85,15 @@ function makeSecretPromptTool(
     },
     write(data: string) {
       writes.push(data);
-      if (scriptedCommand && data === `${scriptedCommand.command}\r`) {
+      // The tool prefixes agent commands with pager/editor-disabling env
+      // assignments (buildAgentCommand), so match on the command suffix.
+      if (scriptedCommand && data === buildAgentCommand(scriptedCommand.command, "/bin/bash") + "\r") {
         queueMicrotask(() => listener?.(scriptedCommand.output));
       }
-      if (data === "ssh alice@host\r") {
+      if (data.endsWith("ssh alice@host\r")) {
         queueMicrotask(() => listener?.("alice@host's password: "));
       }
-      if (data === "sudo whoami\r") {
+      if (data.endsWith("sudo whoami\r")) {
         queueMicrotask(() => listener?.("[sudo] password for alice: "));
       }
       if (data === `${secret}\r`) {
@@ -336,7 +339,9 @@ describe("terminal.run tool status reporting", () => {
 
     expect(result.ok).toBe(true);
     expect(result.data).toMatchObject({ outputOffset: 4 });
-    expect(writes[0]).toMatch(/^printf hi\nprintf '\\n__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:%s\\n' "\$\?"\r$/);
+    const [agentCommand, sentinel] = (writes[0] ?? "").split("\n");
+    expect(agentCommand).toBe(buildAgentCommand("printf hi", "/bin/bash"));
+    expect(sentinel).toMatch(/^printf '\\n__JAIT_BACKGROUND_DONE_[0-9a-f-]+__:%s\\n' "\$\?"\r$/);
     expect(getManagedTerminalExecution("term-existing")).toMatchObject({
       command: "printf hi",
       actionId: "a-test",

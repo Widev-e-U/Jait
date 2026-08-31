@@ -14,6 +14,7 @@ import { TrajectoryPanel } from '@/components/debug/trajectory-panel'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import type { ContextUsage } from '@/hooks/useChat'
+import { haveRenderInputsChanged } from '@/lib/message-element-cache'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getProjectRepositoryId } from '@/lib/project-repositories'
 
@@ -246,23 +247,11 @@ export function DeveloperChatWorkspace({
   // placing transcript-only hooks below that return changes the hook count on
   // that transition and makes React abort the entire application.
   const elementCacheRef = useRef<Map<string, {
-    key: string
     element: ReactNode
-    content: unknown
-    contextFlow: unknown
-    hasContextFlow: unknown
-    hasMemoryProvenance: unknown
-    displayContent: unknown
-    referencedFiles: unknown
-    displaySegments: unknown
-    attachments: unknown
-    thinking: unknown
-    thinkingDuration: unknown
-    toolCalls: unknown
-    segments: unknown
-    isStreaming: boolean
-    steered: unknown
+    renderInputs: readonly unknown[]
   }>>(new Map())
+  const sharedRenderInputsRef = useRef<readonly unknown[] | undefined>(undefined)
+  const sharedRenderVersionRef = useRef(0)
   const cacheSessionRef = useRef<string | null>(null)
   const scrollToUserMessageId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -382,15 +371,15 @@ export function DeveloperChatWorkspace({
   // cached element object, so React skips it entirely — no allocation, no
   // memo comparison, no reconciliation. The cache is cleared whenever the
   // active session changes (so we never serve stale elements for a new chat).
-  const sharedPropsKey = [
+  const sharedRenderInputs = [
     chatProvider,
+    token,
     showProject || showScreenShare || previewOpen,
     managerThreads,
     onOpenTerminalFromToolCall,
     renderInlineSecretPrompt,
     onApprovalResponse,
     onEditPreviousMessage,
-    editingMessageId,
     handleMessageEditingChange,
     editComposerBag,
     onOpenMessagePath,
@@ -398,38 +387,41 @@ export function DeveloperChatWorkspace({
     onMemorySourceOpen,
     onHandleMemoryFeedback,
   ]
+  if (haveRenderInputsChanged(sharedRenderInputsRef.current, sharedRenderInputs)) {
+    sharedRenderInputsRef.current = sharedRenderInputs
+    sharedRenderVersionRef.current += 1
+  }
   const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : null
-  const sharedKey = JSON.stringify(sharedPropsKey)
   const messageElements: ReactNode[] = []
   {
     const cache = elementCacheRef.current
     for (let idx = 0; idx < messages.length; idx++) {
       const msg = messages[idx]
       const isStreaming = isLoading && msg.id === lastMsgId
-      // Build a cheap identity-based key. The chat hook keeps a stable object
-      // reference for unchanged messages across token flushes
-      // (`m.id === targetId ? { ...m, ...updates } : m`), so reference equality
-      // of the message object and its prop arrays is a precise change signal —
-      // no need to deep-stringify potentially-huge content/segments each token.
       const cached = cache.get(msg.id)
-      const key =
-        sharedKey
-        + '|' + (msg.content === cached?.content ? 's' : 'd')
-        + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
-        + '|' + (msg.hasContextFlow === cached?.hasContextFlow ? 's' : 'd')
-        + '|' + (msg.hasMemoryProvenance === cached?.hasMemoryProvenance ? 's' : 'd')
-        + '|' + (msg.displayContent === cached?.displayContent ? 's' : 'd')
-        + '|' + (msg.referencedFiles === cached?.referencedFiles ? 's' : 'd')
-        + '|' + (msg.displaySegments === cached?.displaySegments ? 's' : 'd')
-        + '|' + (msg.attachments === cached?.attachments ? 's' : 'd')
-        + '|' + (msg.thinking === cached?.thinking ? 's' : 'd')
-        + '|' + (msg.thinkingDuration === cached?.thinkingDuration ? 's' : 'd')
-        + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
-        + '|' + (msg.segments === cached?.segments ? 's' : 'd')
-        + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
-        + '|' + (msg.steered === cached?.steered ? 's' : 'd')
-        + '|' + msg.role
-      if (cached && cached.key === key && !isStreaming) {
+      const renderInputs = [
+        sharedRenderVersionRef.current,
+        idx,
+        messages.length - 1 - idx,
+        msg.role,
+        msg.kind,
+        msg.content,
+        msg.steered,
+        msg.contextFlow,
+        msg.hasContextFlow,
+        msg.hasMemoryProvenance,
+        msg.displayContent,
+        msg.referencedFiles,
+        msg.displaySegments,
+        msg.attachments,
+        msg.thinking,
+        msg.thinkingDuration,
+        msg.toolCalls,
+        msg.segments,
+        isStreaming,
+        editingMessageId === msg.id,
+      ]
+      if (cached && !haveRenderInputsChanged(cached.renderInputs, renderInputs)) {
         messageElements.push(cached.element)
         continue
       }
@@ -475,22 +467,8 @@ export function DeveloperChatWorkspace({
         />
       )
       cache.set(msg.id, {
-        key,
         element,
-        content: msg.content,
-        contextFlow: msg.contextFlow,
-        hasContextFlow: msg.hasContextFlow,
-        hasMemoryProvenance: msg.hasMemoryProvenance,
-        displayContent: msg.displayContent,
-        referencedFiles: msg.referencedFiles,
-        displaySegments: msg.displaySegments,
-        attachments: msg.attachments,
-        thinking: msg.thinking,
-        thinkingDuration: msg.thinkingDuration,
-        toolCalls: msg.toolCalls,
-        segments: msg.segments,
-        isStreaming,
-        steered: msg.steered,
+        renderInputs,
       })
       messageElements.push(element)
     }

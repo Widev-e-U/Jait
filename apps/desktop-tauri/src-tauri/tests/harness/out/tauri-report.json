@@ -1,0 +1,35 @@
+{
+  "tests": {
+    "bootGatewayUrl": {
+      "ok": true,
+      "v": "http://127.0.0.1:8000"
+    },
+    "getInfo": {
+      "ok": true,
+      "v": "{\"platform\":\"tauri\",\"arch\":null,\"electronVersion\":null,\"appVersion\":null,\"gatewayUrl\":\"http://127.0.0.1:8000\",\"isPackaged\":true,\"deviceId\":\"tauri-011e4b62-5595-49f8-8291-bec6de577e57\"}"
+    },
+    "rootBrowse": {
+      "ok": false,
+      "err": "desktop_ipc not allowed. Plugin not found"
+    },
+    "hostsFile": {
+      "ok": false,
+      "err": "desktop_ipc not allowed. Plugin not found"
+    },
+    "detectProviders": {
+      "ok": false,
+      "err": "desktop_ipc not allowed. Plugin not found"
+    },
+    "searchOp": {
+      "ok": false,
+      "err": "desktop_ipc not allowed. Plugin not found"
+    },
+    "toolOpList": {
+      "ok": false,
+      "err": "desktop_ipc not allowed. Plugin not found"
+    }
+  },
+  "app": "electron",
+  "reportingError": null,
+  "ts": "2026-08-31T09:52:36.595Z"
+}

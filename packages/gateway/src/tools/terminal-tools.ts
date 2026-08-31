@@ -316,6 +316,100 @@ function isPowerShellShell(shell: string): boolean {
   return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
 }
 
+/** True when the shell is cmd.exe — no safe way to prefix env assignments. */
+export function isCmdShell(shell: string): boolean {
+  return /cmd(\.exe)?$/i.test(shell.trim());
+}
+
+/**
+ * Env values that keep pagers and editors from hijacking agent commands.
+ * Agent commands run inside a real PTY, so git, man, and friends happily open
+ * `less`/`vim` and block until the timeout. These values make them behave like
+ * a non-interactive pipe instead:
+ *   PAGER/MANPAGER/GIT_PAGER=cat    — dump and exit instead of paging
+ *   LESS=-FRX                       — even an explicit `less` exits immediately
+ *                                     (F:quit-if-one-screen X:no-init), no
+ *                                     repaint on Ctrl+C (R)
+ *   EDITOR/VISUAL/GIT_EDITOR/…=true — `true` exits 0 immediately; combined
+ *                                     with GIT_MERGE_AUTOEDIT=no, `git commit`
+ *                                     / rebase / tag editors become no-ops
+ *                                     instead of full-screen vim
+ */
+export const AGENT_TERMINAL_ENV_POSIX = [
+  "PAGER=cat",
+  "MANPAGER=cat",
+  "GIT_PAGER=cat",
+  "LESS=-FRX",
+  "EDITOR=true",
+  "VISUAL=true",
+  "GIT_EDITOR=true",
+  "SUDO_EDITOR=true",
+  "GIT_MERGE_AUTOEDIT=no",
+  "SVN_EDITOR=true",
+  "HGEDITOR=true",
+  "CVSEDITOR=true",
+] as const;
+
+/** The same values in PowerShell's `$env:NAME = 'value'` assignment syntax. */
+export const AGENT_TERMINAL_ENV_PWSH = AGENT_TERMINAL_ENV_POSIX.map((entry) => {
+  const eq = entry.indexOf("=");
+  return `$env:${entry.slice(0, eq)} = '${entry.slice(eq + 1)}'`;
+});
+
+/**
+ * Prefix an agent command with pager/editor-disabling env assignments.
+ *
+ * POSIX: `export …;` line — for multi-line commands it is prepended as its own
+ * line so the command still goes through the temp-script path unchanged.
+ * PowerShell: `$env:` assignments joined with `; `.
+ * Only cmd.exe is left unchanged (`export` is not a thing there) — every other
+ * non-PowerShell shell is treated as POSIX-flavored, since bash/zsh/fish all
+ * accept the `export` form. The timeout rescue still applies to anything that
+ * chokes on the prefix (see executeInTerminal).
+ *
+ * Only agent-invoked executions are prefixed. Human keystrokes into the same
+ * terminal are untouched, so the user's own `git log` still pages normally.
+ */
+export function buildAgentCommand(command: string, shell: string): string {
+  if (isCmdShell(shell)) return command;
+  const trimmed = command.trim();
+  if (!trimmed) return command;
+
+  if (isPowerShellShell(shell)) {
+    return `${AGENT_TERMINAL_ENV_PWSH.join("; ")}; ${trimmed}`;
+  }
+
+  const exportPrefix = `export ${AGENT_TERMINAL_ENV_POSIX.join(" ")};`;
+  if (command.includes("\n")) {
+    return `${exportPrefix}\n${command}`;
+  }
+  return `${exportPrefix} ${trimmed}`;
+}
+
+/**
+ * Low-false-positive signals that a pager has stopped mid-command and is
+ * waiting on the PTY. Unlike PAGER_PROMPT_PATTERNS (which scans the entire
+ * output for cheap heuristics like any line ending in ":"), this only accepts
+ * pager markers anchored at the END of the output tail, so healthy build/test
+ * output cannot trigger it. Used by the pager watchdog to send `q` early
+ * instead of letting the command eat the whole timeout.
+ */
+export function hasStrongPagerPrompt(raw: string): boolean {
+  if (!raw) return false;
+  const cleaned = stripAnsi(raw).replace(/\r/g, "");
+  const tail = cleaned.slice(-600);
+  // `(END)` is the archetypal "less is waiting" marker (with or without the
+  // trailing cursor-positioned spaces some terminals add).
+  if (/^\s*\(\s*END\s*\)\s*$/.test(tail.split("\n").pop() ?? "")) return true;
+  // man(1) pager prompts.
+  if (/\bpress\s+RETURN\b|\bNo\s+next\s+tag\b|\bUse\s+old\s+bottom\b/i.test(tail)) return true;
+  // A lone ":" line at the very end — less's default prompt when no status
+  // line is set. The $ anchor plus the lone-line requirement keeps output
+  // like "Dependencies resolved:" from matching.
+  if (/(?:^|\n)\s*:\s*$/.test(tail)) return true;
+  return false;
+}
+
 export function buildTerminalExitMarkerCommand(shell: string, token: string): string {
   return isPowerShellShell(shell)
     ? `$jaitExitCode = if ($?) { 0 } elseif ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }; Write-Output "${token}:$jaitExitCode"`
@@ -571,7 +665,7 @@ function executeInTerminal(
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
   requestInteractiveSecret?: (prompt: string) => Promise<string | null>,
-): Promise<{ output: string; exitCode: number | null; timedOut: boolean; interactionRequired?: boolean }> {
+): Promise<{ output: string; exitCode: number | null; timedOut: boolean; interactionRequired?: boolean; pagerEscaped?: boolean }> {
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
@@ -597,13 +691,58 @@ function executeInTerminal(
     let settleExitCode: number | null = null;
 
     let timer: ReturnType<typeof setTimeout> | null = null;
+
+    // Pager watchdog: pagers block waiting on the PTY, so a wedged command
+    // would otherwise sit until the full timeout and then get Ctrl+C — which
+    // `less`/`man` swallow (or turn into a repaint), leaving the terminal
+    // captured. Instead, once ≥10s has elapsed, probe the output every 5s:
+    // when a strong pager prompt is visible, send `q` (+ Enter for man's
+    // "press RETURN" case) and give the command a fresh 2.5s to finish. An
+    // occasional `q` typed into a shell prompt (no pager) is harmless — it
+    // just echoes or starts an incremental search that immediately ends.
+    let pagerEscaped = false;
+    let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+    const stopPagerWatchdog = () => {
+      if (watchdogTimer) {
+        clearInterval(watchdogTimer);
+        watchdogTimer = null;
+      }
+    };
+    setTimeout(() => {
+      if (settled || timeoutMs <= 0) return;
+      watchdogTimer = setInterval(() => {
+        if (settled) {
+          stopPagerWatchdog();
+          return;
+        }
+        if (hasStrongPagerPrompt(raw)) {
+          pagerEscaped = true;
+          surface.write("q");
+          setTimeout(() => {
+            if (!settled) { try { surface.write("\r"); } catch { /* terminal gone */ } }
+          }, 120);
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => finish(true), 2500);
+        }
+      }, 5000);
+    }, 10_000);
+
     const armTimer = () => {
       if (timeoutMs <= 0 || settled) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        // If stuck in a pager (less/more), send 'q' to exit cleanly;
-        // otherwise send Ctrl+C + Enter for normal interrupt.
-        if (detectPagerPrompt(raw)) {
+        // Rescue a wedged command. A strong pager prompt (less/man waiting)
+        // is best escaped with `q` — Ctrl+C is swallowed by the pager and
+        // leaves the PTY captured. The broader legacy pager check still gets
+        // `q`, and anything else gets Ctrl+C + Enter for a normal interrupt.
+        if (hasStrongPagerPrompt(raw)) {
+          pagerEscaped = true;
+          surface.write("q");
+          setTimeout(() => {
+            if (!settled) { try { surface.write("\r"); } catch { /* terminal gone */ } }
+          }, 120);
+        } else if (detectPagerPrompt(raw)) {
+          pagerEscaped = true;
           surface.write("q");
         } else {
           surface.write("\x03\r");
@@ -760,7 +899,7 @@ function executeInTerminal(
         output = "…(truncated)\n" + output.slice(-200_000);
       }
 
-      resolve({ output: output || "(no output)", exitCode, timedOut, interactionRequired });
+      resolve({ output: output || "(no output)", exitCode, timedOut, interactionRequired, pagerEscaped });
     };
 
     // Listen BEFORE writing so we don't miss fast output
@@ -826,7 +965,9 @@ export function createTerminalRunTool(
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
       "The terminal stays alive between calls — like VS Code's integrated terminal. " +
       "Multi-line scripts, pipes, and complex syntax all work unchanged. " +
-      "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled.",
+      "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. " +
+      "Agent commands are automatically prefixed with pager/editor-disabling variables (PAGER=cat, LESS=-FRX, GIT_EDITOR=true, GIT_MERGE_AUTOEDIT=no, …), so pagers and editors never capture the terminal; " +
+      "if a pager still appears (e.g. `less -S` typed explicitly), it is detected and dismissed with `q` automatically without affecting the user's own keystrokes.",
     tier: "standard",
     category: "terminal",
     source: "builtin",
@@ -938,12 +1079,15 @@ export function createTerminalRunTool(
           // whole thing in the current shell (cwd and variables persist) and
           // produces exactly one completion marker.
           const shell = String(surface.snapshot().metadata?.shell ?? "");
+          // Same pager/editor hardening as foreground commands — background
+          // commands must also never sit in a pager waiting on the PTY.
+          const agentCommand = buildAgentCommand(command, shell);
           const scriptFile = command.includes("\n") && !(surface instanceof RemoteTerminalSurface)
-            ? writeCommandScript(command)
+            ? writeCommandScript(agentCommand)
             : null;
           const commandLine = scriptFile
             ? `. '${scriptFile.replace(/'/g, "''")}'`
-            : command;
+            : agentCommand;
           const terminalInput = completionToken
             ? [commandLine, buildTerminalExitMarkerCommand(shell, completionToken)].join("\n")
             : commandLine;
@@ -976,11 +1120,17 @@ export function createTerminalRunTool(
         let result: Awaited<ReturnType<typeof executeInTerminal>>;
         let outputEndOffset: number | null = null;
         try {
+          // Pager/editor hardening: agent commands run in a real PTY, so
+          // `git log`, `man …`, `git commit`, rebase, etc. would otherwise
+          // open a pager/editor and hold the pipe hostage until the timeout.
+          // Prefixing makes them behave like a non-interactive pipe. Human
+          // keystrokes in the same terminal are unaffected.
+          const shell = String(surface.snapshot().metadata?.shell ?? "");
           const execPromise = executeInTerminal(
             surface,
-            command,
+            buildAgentCommand(command, shell),
             timeout,
-            String(surface.snapshot().metadata?.shell ?? ""),
+            shell,
             context.onOutputChunk,
             context.signal,
             secretInput
@@ -1022,7 +1172,8 @@ export function createTerminalRunTool(
           && result.output.length < 500
           && /^[^\n]*\b(fail(ed)?|error:|fatal:|cannot|connection refused)\b/im.test(result.output);
         const ok = exitOk && !outputLooksLikeFail;
-        const pagerDetected = result.timedOut && detectPagerPrompt(result.output);
+        let pagerDetected = result.timedOut && detectPagerPrompt(result.output);
+        if (!pagerDetected && result.pagerEscaped) pagerDetected = true;
         const needsInteraction = Boolean(result.interactionRequired)
           || (result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected));
         const reason = result.timedOut
@@ -1068,6 +1219,7 @@ export function createTerminalRunTool(
             outputOffset,
             outputEndOffset,
             needsInteraction,
+            pagerEscaped: Boolean(result.pagerEscaped),
             timeoutMs: timeout,
           },
         };
@@ -1100,7 +1252,8 @@ export function createJaitTerminalTool(
       "For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — wait for completion; " +
       "the default 1-hour timeout already covers long-running builds, and `timeout` can be raised (up to 24 hours) when needed. " +
       "Set isBackground: true only for indefinite processes such as servers, " +
-      "watchers, and daemons; Jait notifies you when they finish, so never poll or send another command to their terminal.",
+      "watchers, and daemons; Jait notifies you when they finish, so never poll or send another command to their terminal. " +
+      "Agent commands are automatically hardened against pagers/editors (PAGER=cat, GIT_EDITOR=true, …), so `git log`, man pages, and commit/rebase editors can never wedge the call.",
   };
 }
 

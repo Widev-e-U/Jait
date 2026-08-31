@@ -97,6 +97,8 @@ describe("createJaitTodosTool", () => {
       tags: JSON.stringify(["ui", "todo"]),
     });
     expect((listResult.data as any).todos).toHaveLength(1);
+    expect(listResult.message).toContain("Loaded 1 todo for Jait:");
+    expect(listResult.message).toContain("1. [open] Polish todo tags · high · due 2026-05-10");
   });
 
   it("updates and removes existing todo items", async () => {

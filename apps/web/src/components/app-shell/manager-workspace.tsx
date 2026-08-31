@@ -4,6 +4,7 @@ import { useRef, type ReactNode, type RefObject } from 'react'
 import { Conversation, Message, PromptInput, TodoList, MessageQueue } from '@/components/chat'
 import type { PromptInputHandle, ToolCallInfo } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { haveRenderInputsChanged } from '@/lib/message-element-cache'
 import {
   ManagerRepoPicker,
   ManagerRepoRuntimeMeta,
@@ -147,7 +148,7 @@ export function ManagerWorkspace({
   const activeThreadId = automation.selectedThread?.id ?? null
   const threadRunning = automation.selectedThread?.status === 'running'
   const threadProvider = automation.selectedThread?.providerId as ProviderId | undefined
-  const sharedPropsKey = [
+  const sharedRenderInputs = [
     threadProvider,
     managerThreads,
     renderInlineSecretPrompt,
@@ -156,38 +157,41 @@ export function ManagerWorkspace({
     onMemorySourceOpen,
   ]
   const elementCacheRef = useRef<Map<string, {
-    key: string
     element: ReactNode
-    content: unknown
-    contextFlow: unknown
-    toolCalls: unknown
-    segments: unknown
-    isStreaming: boolean
+    renderInputs: readonly unknown[]
   }>>(new Map())
+  const sharedRenderInputsRef = useRef<readonly unknown[] | undefined>(undefined)
+  const sharedRenderVersionRef = useRef(0)
   const cacheThreadRef = useRef<string | null>(null)
   if (cacheThreadRef.current !== activeThreadId) {
     elementCacheRef.current.clear()
     cacheThreadRef.current = activeThreadId
   }
+  if (haveRenderInputsChanged(sharedRenderInputsRef.current, sharedRenderInputs)) {
+    sharedRenderInputsRef.current = sharedRenderInputs
+    sharedRenderVersionRef.current += 1
+  }
   const lastMsgId = automationMessages.length > 0 ? automationMessages[automationMessages.length - 1].id : null
-  const sharedKey = JSON.stringify(sharedPropsKey)
   const messageElements: ReactNode[] = []
   {
     const cache = elementCacheRef.current
     for (let idx = 0; idx < automationMessages.length; idx++) {
       const msg = automationMessages[idx]
       const isStreaming = threadRunning && msg.id === lastMsgId
-      // Reference-equality key (see DeveloperChatWorkspace for the rationale).
       const cached = cache.get(msg.id)
-      const key =
-        sharedKey
-        + '|' + (msg.content === cached?.content ? 's' : 'd')
-        + '|' + (msg.contextFlow === cached?.contextFlow ? 's' : 'd')
-        + '|' + (msg.toolCalls === cached?.toolCalls ? 's' : 'd')
-        + '|' + (msg.segments === cached?.segments ? 's' : 'd')
-        + '|' + (isStreaming === cached?.isStreaming ? 's' : 'd')
-        + '|' + msg.role
-      if (cached && cached.key === key && !isStreaming) {
+      const renderInputs = [
+        sharedRenderVersionRef.current,
+        idx,
+        automationMessages.length - 1 - idx,
+        msg.role,
+        msg.kind,
+        msg.content,
+        msg.contextFlow,
+        msg.toolCalls,
+        msg.segments,
+        isStreaming,
+      ]
+      if (cached && !haveRenderInputsChanged(cached.renderInputs, renderInputs)) {
         messageElements.push(cached.element)
         continue
       }
@@ -215,19 +219,14 @@ export function ManagerWorkspace({
         />
       )
       cache.set(msg.id, {
-        key,
         element,
-        content: msg.content,
-        contextFlow: msg.contextFlow,
-        toolCalls: msg.toolCalls,
-        segments: msg.segments,
-        isStreaming,
+        renderInputs,
       })
       messageElements.push(element)
     }
     if (cache.size > automationMessages.length) {
       const live = new Set(automationMessages.map((m) => m.id))
-      for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
+      for (const id of cache.keys()) if (!live.has(id)) cache.delete(id)
     }
   }
 

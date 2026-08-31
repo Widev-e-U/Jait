@@ -90,6 +90,9 @@ describe("memory tools with reminders", () => {
       memories: [{ id: "memory-1" }],
       reminders: [{ id: "reminder-1" }],
     });
+    expect(result.message).toContain("Found 1 memories and 1 reminders:");
+    expect(result.message).toContain("[memory-1 · agent] Memory");
+    expect(result.message).toContain("[reminder-1 · reminder] Reminder");
   });
 
   it("lists Memory page entries through memory.list", async () => {
@@ -105,6 +108,8 @@ describe("memory tools with reminders", () => {
 
     expect(result.ok).toBe(true);
     expect(result.data).toMatchObject({ memories: [{ id: "reminder-1", status: "archived", userId: "user-1" }] });
+    expect(result.message).toContain("Loaded 1 memory entries:");
+    expect(result.message).toContain("[reminder-1 · memory] Reminder (archived)");
   });
 
   it("updates Memory page entries through memory.update", async () => {

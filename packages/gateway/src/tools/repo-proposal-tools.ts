@@ -1,4 +1,5 @@
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import { ellipsizeText, summarizeWithPreview } from "./list-preview.js";
 import type { RepositoryService, RepoRow } from "../services/repositories.js";
 import type { RepoProposalService } from "../services/repo-proposals.js";
 import type { ThreadService } from "../services/threads.js";
@@ -127,9 +128,20 @@ export function createJaitTodosTool(deps: {
 
       if (action === "list") {
         const todos = deps.repoProposalService.listByRepo(repo.id);
+        const lines = todos.map((todo, index) => {
+          const details = [
+            todo.priority && todo.priority !== "normal" ? todo.priority : null,
+            todo.dueDate ? `due ${todo.dueDate}` : null,
+          ].filter((part): part is string => part !== null);
+          const suffix = details.length > 0 ? ` · ${details.join(" · ")}` : "";
+          return `${index + 1}. [${todo.status}] ${ellipsizeText(todo.message)}${suffix}`;
+        });
         return {
           ok: true,
-          message: `Loaded ${todos.length} todo${todos.length === 1 ? "" : "s"} for ${repo.name}.`,
+          message: summarizeWithPreview(
+            `Loaded ${todos.length} todo${todos.length === 1 ? "" : "s"} for ${repo.name}:`,
+            lines,
+          ),
           data: { repo, todos },
         };
       }

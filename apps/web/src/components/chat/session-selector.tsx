@@ -20,7 +20,7 @@ import { getProjectMoveTargets } from '@/components/project/project-move-targets
 import type { ProjectRecord, ProjectSearchResults, ProjectSession } from '@/hooks/useProjects'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
-import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME } from '@/lib/jait-dnd'
+import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME, setDragImageChip } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
@@ -609,6 +609,13 @@ export function SessionSelector({
                           return
                         }
                         e.dataTransfer.effectAllowed = 'copyMove'
+                        // Project/folder rows snapshot to nothing during a
+                        // native drag, so always supply an explicit ghost.
+                        setDragImageChip(
+                          e.dataTransfer,
+                          isFolder ? 'folder' : 'project',
+                          project.title || (isFolder ? 'Untitled folder' : 'Untitled Project'),
+                        )
                         if (onMoveProject) {
                           e.dataTransfer.setData(JAIT_PROJECT_MOVE_MIME, project.id)
                         }
@@ -954,6 +961,7 @@ export function SessionSelector({
                                   JAIT_CHAT_REF_MIME,
                                   JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
                                 )
+                                setDragImageChip(e.dataTransfer, 'chat', session.name || 'Untitled session')
                                 dragSessionRef.current = { sessionId: session.id, sourceProjectId: project.id }
                               }}
                               onDragEnd={() => {
@@ -1075,6 +1083,7 @@ export function SessionSelector({
                           JAIT_CHAT_REF_MIME,
                           JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
                         )
+                        setDragImageChip(e.dataTransfer, 'chat', session.name || 'Untitled session')
                         dragSessionRef.current = { sessionId: session.id, sourceProjectId: null }
                       }}
                       onDragEnd={() => {

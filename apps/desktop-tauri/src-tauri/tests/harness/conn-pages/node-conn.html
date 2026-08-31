@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"><title>node-conn test</title></head><body><h1>node-conn test</h1><pre id="out">starting…</pre><script>
+(async () => {
+  const R = { tests: {}, app: 'unknown', reportingError: null, ts: new Date().toISOString() };
+  try {
+    console.warn('tauri-bridge-wait', 0, location.origin, location.pathname, JSON.stringify(window.__TAURI_INTERNALS__ || null));
+    for (let i = 0; i < 100 && !(window.__TAURI_INTERNALS__ || window.jaitDesktop); i++) {
+      console.warn('tauri-bridge-wait', i, location.origin, location.pathname, JSON.stringify(window.__TAURI_INTERNALS__ || null));
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (!window.jaitDesktop) {
+      R.reportingError = 'no window.jaitDesktop (platform bridge missing: ' + (window.__TAURI_INTERNALS__ ? 'internals-present' : 'internals-missing') + ')';
+    } else {
+      R.app = window.jaitDesktop.platform;
+      // shim sync/statics (no node roundtrip yet)
+      R.tests.bootGatewayUrl = { ok: true, v: (window.__JAIT_DESKTOP_BOOT__ || {}).gatewayUrl || null };
+      const j = window.jaitDesktop;
+      const t = async (name, fn) => {
+        try {
+          const v = await fn();
+          R.tests[name] = { ok: true, v: typeof v === 'string' ? v.slice(0, 120) : JSON.stringify(v).slice(0, 200) };
+        } catch (e) { R.tests[name] = { ok: false, err: String(e).slice(0, 200) }; }
+      };
+      // node-backed commands through the shell (same paths as Electron preload)
+      await t('getInfo', () => j.getInfo());
+      await t('rootBrowse', () => j.browsePath());
+      await t('hostsFile', () => j.fsOp({ op: 'read', path: '/etc/hosts' }));
+      await t('detectProviders', () => j.detectProviders());
+      await t('searchOp', () => j.searchOp({ query: 'jait', mode: 'literal' }));
+      await t('toolOpList', () => j.toolOp({ op: 'list' }));
+    }
+  } catch (e) { R.reportingError = String(e); }
+  try {
+    await fetch('/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) });
+  } catch (e) { R.reportingError = 'report fail: ' + e; }
+  document.getElementById('out').textContent = JSON.stringify(R);
+  document.title = 'REPORT_SENT';
+})();
+</script></body></html>

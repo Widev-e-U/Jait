@@ -83,3 +83,13 @@ apps/mobile/android/app/google-services.json
 
 # Windows VM sandbox disk images (multi-GB, never commit)
 docker/windows-sandbox-storage/
+
+# Tauri desktop shell (standalone crate, cross-compiled for Windows)
+apps/desktop-tauri/src-tauri/target/
+apps/desktop-tauri/target/
+
+# Local Tauri Windows cross-compile workdir / container build mirror (14GB+)
+tauri-win/
+
+# Tauri build output (installers are staged via CI, never committed)
+apps/desktop-tauri/dist/

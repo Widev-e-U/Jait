@@ -769,7 +769,10 @@ Environment=PATH=${extraPaths}
 Environment=JAIT_UNIT=${SERVICE_NAME}
 Restart=always
 RestartSec=5
-KillMode=process
+KillMode=mixed
+TimeoutStopSec=45
+MemoryHigh=2G
+MemoryMax=4G
 StandardOutput=journal
 StandardError=journal
 

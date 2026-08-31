@@ -8,7 +8,7 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
 import { parseContextFlowEvent } from '@/lib/context-flow'
-import { normalizeTodoStateValue } from '@/lib/todo-state'
+import { normalizeTodoStateValue, recoverTodoListFromMessages } from '@/lib/todo-state'
 import type { RuntimeMode } from '@/lib/agents-api'
 import { createOptimisticAssistantPlaceholder, mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import {
@@ -994,6 +994,8 @@ export function useChat(
           data.parent_call_id as string | undefined,
         )
         applyStreamSnapshot()
+        const recoveredTodoList = recoverTodoListFromMessages([{ toolCalls: stream.snapshot().toolCalls }])
+        if (recoveredTodoList !== null) setTodoList(recoveredTodoList)
       } else if (data.type === 'approval_required') {
         textPacer.flushNow()
         if (!ensureStreamingAssistant()) return
@@ -1186,6 +1188,8 @@ export function useChat(
           segments: lastMsg.segments,
           toolCalls: lastMsg.toolCalls,
         })
+        const recoveredTodoList = recoverTodoListFromMessages([lastMsg])
+        if (recoveredTodoList !== null) setTodoList(recoveredTodoList)
       }
 
       setState(prev => {
