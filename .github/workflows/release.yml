@@ -345,12 +345,43 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
 
+          userspace_install() {
+            # No passwordless sudo: extract the tool debs into $HOME/.local
+            # (Ubuntu 24.04 noble package set, mirrors the locally-tested
+            # tauri-cicd container toolchain).
+            local marker="$HOME/.local/.jait-tauri-ci-tools"
+            if [ -f "$marker" ]; then
+              echo "userspace toolchain already installed at $HOME/.local"
+            else
+              mkdir -p "$HOME/.local" /tmp/jait-ci-debs
+              (cd /tmp/jait-ci-debs \
+                && apt-get update -qq 2>/dev/null || true
+                apt-get download nsis nsis-common llvm-18 libllvm18 clang-18 libclang-cpp18 \
+                && for d in ./*.deb; do dpkg-deb -x "$d" "$HOME/.local/"; done \
+                && printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/../lib/llvm-18/bin/clang-18" "$@"\n' \
+                   > "$HOME/.local/usr/bin/clang" && chmod +x "$HOME/.local/usr/bin/clang" \
+                && date -Iseconds > "$marker")
+            fi
+            # makensis data dir + llvm lib rpath are not relocatable by
+            # themselves; point them at the userspace prefix.
+            echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
+            echo "$HOME/.local/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
+            echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "NSISDIR=$HOME/.local/usr/share/nsis" >> "$GITHUB_ENV"
+            export PATH="$HOME/.local/usr/bin:$HOME/.local/usr/lib/llvm-18/bin:$PATH"
+            export LD_LIBRARY_PATH="$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export NSISDIR="$HOME/.local/usr/share/nsis"
+          }
+
           apt_install() {
             if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
               sudo apt-get update -qq
               sudo apt-get install -y "$@"
+            elif [ "$(id -u)" -eq 0 ]; then
+              apt-get update -qq && apt-get install -y "$@"
             else
-              echo "::warning::sudo requires a password; cannot auto-install: $*. Install manually."
+              echo "::warning::no root on runner ($*); installing to \$HOME/.local via deb extraction."
+              userspace_install
             fi
           }
 

@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.799](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.799) — 2026-08-31
+- fix(ci): add userspace deb fallback so Tauri Windows toolchain self-heals on sudo-less runners — c60140b9
+
 ## [v0.1.777](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.777) — 2026-08-27
 - fix(web): recover stuck chat on tab return via snapshot — 4b9b691b
 - fix(web): reveal all streaming message parts smoothly — bd1e0313
