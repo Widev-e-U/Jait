@@ -19,7 +19,7 @@ import { NESTED_SCROLL_STYLE, useStickToBottom, type StickToBottomScroll } from 
 import { useToolCardToggleAnchor } from '@/components/chat/tool-card-anchor'
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
-import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo } from '@/components/terminal/terminal-view'
+import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo, type ToolTerminalExecutionMetadata } from '@/components/terminal/terminal-view'
 import { findLiveToolTerminal, getLiveToolTerminals, subscribeLiveToolTerminals, type LiveToolTerminalExecution } from '@/lib/tool-terminal-live'
 
 /**
@@ -478,6 +478,8 @@ function getMemoryResultCount(value: unknown, depth = 0): number | null {
 }
 
 export function shouldRenderToolCall(call: ToolCallInfo): boolean {
+  if (call.callId.startsWith('guardian_assessment:')) return false
+
   const normalizedTool = normalizeTool(call.tool)
   const resultData = call.result?.data && typeof call.result.data === 'object' && !Array.isArray(call.result.data)
     ? call.result.data as Record<string, unknown>
@@ -2694,6 +2696,17 @@ function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null
     : null
 }
 
+export function resolveToolTerminalOutputEndOffset(
+  call: ToolCallInfo,
+  matchedTerminalExecution: ToolTerminalExecutionMetadata | null,
+  completedTerminalExecution: ToolTerminalExecutionMetadata | null,
+): number | null {
+  return getStructuredTerminalOutputEndOffset(call)
+    ?? completedTerminalExecution?.outputEndOffset
+    ?? matchedTerminalExecution?.outputEndOffset
+    ?? null
+}
+
 export function shouldShowToolTerminalSlice(options: {
   hasTerminal: boolean
   outputOffset: number | null
@@ -3707,21 +3720,23 @@ function ToolCallCardInner({
   const canOpenTerminal = terminalId !== null
   const terminalCommand = getCommandFromToolArgs(normalizedArgs)
   const resultOutputOffset = getStructuredTerminalOutputOffset(call)
-  const activeTerminalExecution = getToolTerminalExecution(toolTerminal)
+  const currentTerminalExecution = getToolTerminalExecution(toolTerminal)
   const completedTerminalExecution = findToolTerminalExecution(toolTerminal, {
     actionId: call.callId,
     command: terminalCommand,
     outputOffset: resultOutputOffset,
   })
-  const matchingActiveTerminalExecution = activeTerminalExecution
-    && (activeTerminalExecution.actionId === call.callId || activeTerminalExecution.command === terminalCommand)
-    ? activeTerminalExecution
+  const matchingTerminalExecution = currentTerminalExecution
+    && (currentTerminalExecution.actionId === call.callId || currentTerminalExecution.command === terminalCommand)
+    ? currentTerminalExecution
     : null
-  const terminalExecution = completedTerminalExecution ?? matchingActiveTerminalExecution
+  const terminalExecution = completedTerminalExecution ?? matchingTerminalExecution
   const terminalOutputOffset = resultOutputOffset ?? terminalExecution?.outputOffset ?? null
-  const terminalOutputEndOffset = getStructuredTerminalOutputEndOffset(call)
-    ?? completedTerminalExecution?.outputEndOffset
-    ?? null
+  const terminalOutputEndOffset = resolveToolTerminalOutputEndOffset(
+    call,
+    matchingTerminalExecution,
+    completedTerminalExecution,
+  )
   const terminalDisplayOutput = completedTerminalExecution?.output ?? displayOutput
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)

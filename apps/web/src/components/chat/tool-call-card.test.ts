@@ -27,6 +27,7 @@ let getNextSubAgentVisibleCount: typeof import('./tool-call-card')['getNextSubAg
 let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocationLabels']
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
 let shouldShowToolTerminalSlice: typeof import('./tool-call-card')['shouldShowToolTerminalSlice']
+let resolveToolTerminalOutputEndOffset: typeof import('./tool-call-card')['resolveToolTerminalOutputEndOffset']
 let getStructuredTerminalResult: typeof import('./tool-call-card')['getStructuredTerminalResult']
 let isTerminalCreationCall: typeof import('./tool-call-card')['isTerminalCreationCall']
 let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
@@ -68,6 +69,7 @@ beforeAll(async () => {
     getToolInvocationLabels,
     shouldRenderToolCall,
     shouldShowToolTerminalSlice,
+    resolveToolTerminalOutputEndOffset,
     getStructuredTerminalResult,
     isTerminalCreationCall,
     getToolSearchResultItems,
@@ -87,6 +89,36 @@ describe('shouldShowToolTerminalSlice', () => {
       outputEndOffset: 18,
       activeOrWaiting: false,
     })).toBe(true)
+  })
+})
+
+describe('resolveToolTerminalOutputEndOffset', () => {
+  it('uses the retained live completion boundary before the tool result arrives', () => {
+    const call = {
+      callId: 'call_if9s5s6q',
+      tool: 'execute',
+      args: { command: 'false & sleep 0.2; printf 0' },
+      status: 'success' as const,
+      startedAt: 1,
+      completedAt: 2,
+    }
+    const completedLiveExecution = {
+      command: 'false & sleep 0.2; printf 0',
+      actionId: 'call_if9s5s6q',
+      startedAt: '2026-08-30T15:10:00.000Z',
+      completedAt: '2026-08-30T15:10:03.000Z',
+      outputOffset: 1358,
+      outputEndOffset: 1363,
+      output: '[1] 2082807\n[1]+ Exit 1 false\n0',
+      isBackground: false,
+      watched: null,
+    }
+
+    expect(resolveToolTerminalOutputEndOffset(
+      call,
+      completedLiveExecution,
+      null,
+    )).toBe(1363)
   })
 })
 
@@ -215,6 +247,26 @@ describe('Jait MCP display metadata', () => {
 })
 
 describe('synthetic context tool visibility', () => {
+  it('hides Codex Guardian assessment telemetry without hiding ordinary tool calls', () => {
+    expect(shouldRenderToolCall({
+      callId: 'guardian_assessment:review-1',
+      tool: 'Guardian Review',
+      args: { reviewId: 'review-1' },
+      status: 'success',
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(false)
+
+    expect(shouldRenderToolCall({
+      callId: 'ordinary-review',
+      tool: 'Guardian Review',
+      args: {},
+      status: 'success',
+      startedAt: 1,
+      completedAt: 2,
+    })).toBe(true)
+  })
+
   it('hides empty memory searches and keeps searches that found memories', () => {
     expect(shouldRenderToolCall({
       callId: 'memory-empty',

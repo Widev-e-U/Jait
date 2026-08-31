@@ -100,4 +100,27 @@ describe('buildTrajectory', () => {
       promptCount: 4,
     })
   })
+
+  it('keeps Codex Guardian assessments in the trajectory timeline', () => {
+    const trajectory = buildTrajectory([
+      event(1, 1_000, 'tool_start', {
+        call_id: 'guardian_assessment:review-1',
+        tool: 'Guardian Review',
+        args: { reviewId: 'review-1' },
+      }),
+      event(2, 1_100, 'tool_result', {
+        call_id: 'guardian_assessment:review-1',
+        tool: 'Guardian Review',
+        ok: true,
+        message: 'approved',
+      }),
+    ])
+
+    expect(trajectory.steps).toContainEqual(expect.objectContaining({
+      kind: 'tool',
+      callId: 'guardian_assessment:review-1',
+      tool: 'Guardian Review',
+      completedAt: 1_100,
+    }))
+  })
 })
