@@ -367,7 +367,6 @@ jobs:
             echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
             echo "$HOME/.local/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
             echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-            echo "NSISDIR=$HOME/.local/usr/share/nsis" >> "$GITHUB_ENV"
             local marker="$HOME/.local/.jait-tauri-ci-tools"
             if [ -f "$marker" ]; then
               echo "userspace toolchain already installed at $HOME/.local"
@@ -380,7 +379,10 @@ jobs:
             fi
             export PATH="$HOME/.local/usr/bin:$HOME/.local/usr/lib/llvm-18/bin:$PATH"
             export LD_LIBRARY_PATH="$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            export NSISDIR="$HOME/.local/usr/share/nsis"
+            # makensis ignores NSISDIR — the relocation fix is the
+            # NSIS path-redirect LD_PRELOAD shim (see ci/libnsisredirect.c),
+            # wired by the "Build NSIS path-redirect shim" step below.
+            export NSIS_REAL_DIR="$HOME/.local/usr/share/nsis"
           }
 
           apt_install() {
@@ -471,10 +473,44 @@ jobs:
             fi
           done
           echo "Tauri Windows toolchain OK"
+      - name: Build NSIS path-redirect shim
+        run: |
+          set -euo pipefail
+          # makensis resolves Stubs/Plugins/Include against /usr/share/nsis
+          # compiled into the binary (NSISDIR env is ignored), which does not
+          # exist on this root-less runner. The LD_PRELOAD shim
+          # (ci/libnsisredirect.c) transparently rewrites /usr/share/nsis/* to
+          # $NSIS_REAL_DIR (the userspace deb extraction); a rewritten access
+          # failing with ENOENT falls back to the original path. Skipped when
+          # only a system NSIS is present (its /usr/share/nsis tree works as
+          # compiled in).
+          NSIS_TREE="$HOME/.local/usr/share/nsis"
+          if [ ! -d "$NSIS_TREE/Stubs" ]; then
+            echo "no userspace NSIS tree at $NSIS_TREE; shim skipped (system NSIS)"
+            exit 0
+          fi
+          CC_BIN=$(command -v cc || command -v gcc || command -v clang || true)
+          if [ -z "$CC_BIN" ]; then
+            echo "::error::no C compiler (cc/gcc/clang) for the NSIS redirect shim"
+            exit 1
+          fi
+          SO="$RUNNER_TEMP/libnsisredirect.so"
+          "$CC_BIN" -shared -fPIC -O2 -Wall -Wextra -Werror \
+            -o "$SO" ci/libnsisredirect.c -ldl
+          # Only reached by the userspace install; persist for later steps
+          # (in-process exports do not survive across steps).
+          echo "NSIS_REAL_DIR=$NSIS_TREE" >> "$GITHUB_ENV"
+          echo "NSIS_LD_PRELOAD=$SO" >> "$GITHUB_ENV"
+          echo "NSIS redirect shim ready: $SO ($(wc -c < "$SO") bytes, root: $NSIS_TREE)"
       - name: Build Tauri NSIS (Windows setup.exe)
         working-directory: apps/desktop-tauri/src-tauri
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
+          # NSIS_LD_PRELOAD/NSIS_REAL_DIR are set by the shim step above when
+          # the userspace NSIS tree is in use; tauri-cli spawns makensis, which
+          # inherits LD_PRELOAD and gets its /usr/share/nsis paths redirected.
+          export LD_PRELOAD="${NSIS_LD_PRELOAD:-}"
+          export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
           cargo tauri build --features shell --runner cargo-xwin \
             --target x86_64-pc-windows-msvc --bundles nsis
       - name: Stage Tauri release assets on runner
