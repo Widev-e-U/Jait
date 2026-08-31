@@ -358,6 +358,16 @@ jobs:
           }
 
           userspace_install() {
+            # Env wiring must run on EVERY call (cached or fresh): GITHUB_ENV
+            # exports do not survive to the next run, but the on-disk marker
+            # does (self-hosted runner), so a cached run would otherwise skip
+            # them and makensis would fall back to its compiled-in
+            # /usr/share/nsis ("Error: reading stub"). GITHUB_PATH duplicates
+            # are harmless.
+            echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
+            echo "$HOME/.local/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
+            echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+            echo "NSISDIR=$HOME/.local/usr/share/nsis" >> "$GITHUB_ENV"
             local marker="$HOME/.local/.jait-tauri-ci-tools"
             if [ -f "$marker" ]; then
               echo "userspace toolchain already installed at $HOME/.local"
@@ -368,12 +378,6 @@ jobs:
               chmod +x "$HOME/.local/usr/bin/clang"
               date -Iseconds > "$marker"
             fi
-            # makensis data dir + llvm lib rpath are not relocatable by
-            # themselves; point them at the userspace prefix.
-            echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
-            echo "$HOME/.local/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
-            echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-            echo "NSISDIR=$HOME/.local/usr/share/nsis" >> "$GITHUB_ENV"
             export PATH="$HOME/.local/usr/bin:$HOME/.local/usr/lib/llvm-18/bin:$PATH"
             export LD_LIBRARY_PATH="$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             export NSISDIR="$HOME/.local/usr/share/nsis"
