@@ -33,6 +33,22 @@ const CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
 
 const SETTINGS_KEY = 'permissionsSetupDone'
 
+export interface NodePermissionsGateVisibility {
+  gatewayStep: 'url' | 'auth'
+  authLoading: boolean
+  isAuthenticated: boolean
+  token: string | null
+}
+
+export function shouldShowNodePermissionsGate({
+  gatewayStep,
+  authLoading,
+  isAuthenticated,
+  token,
+}: NodePermissionsGateVisibility): boolean {
+  return gatewayStep === 'auth' && !authLoading && isAuthenticated && token !== null
+}
+
 function allDenied(): Record<NodeCapability, boolean> {
   return Object.fromEntries(NODE_CAPABILITIES.map((c) => [c, false])) as Record<NodeCapability, boolean>
 }

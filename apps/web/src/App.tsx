@@ -55,7 +55,7 @@ import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useProjectState } from '@/hooks/useProjectState'
-import { NodePermissionsGate } from '@/components/onboarding/NodePermissionsGate'
+import { NodePermissionsGate, shouldShowNodePermissionsGate } from '@/components/onboarding/NodePermissionsGate'
 import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
@@ -4321,6 +4321,12 @@ function App() {
 
   const limitReached = error === 'limit_reached'
   const requiresAuthGate = !authLoading && !isAuthenticated
+  const showNodePermissionsGate = shouldShowNodePermissionsGate({
+    gatewayStep,
+    authLoading,
+    isAuthenticated,
+    token,
+  })
   const showDeveloperChatHistoryLoading = shouldShowDeveloperChatHistoryLoading({
     isLoadingHistory,
     sessionCreatedAt: activeSessionRecord?.createdAt,
@@ -4527,7 +4533,7 @@ function App() {
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        <NodePermissionsGate token={token} />
+        {showNodePermissionsGate && <NodePermissionsGate token={token} />}
         {!requiresAuthGate && (
           <>
             <AppHeader
