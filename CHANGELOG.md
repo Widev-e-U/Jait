@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.808](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.808) — 2026-09-01
+- fix(gateway): batch session-event persistence to stop chat streaming stalls — 0375efc8
+- feat(desktop-tauri): add tray, single-instance focus, and launch-flag argv handling — e3581f6d
+
 ## [v0.1.807](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.807) — 2026-09-01
 - fix(desktop-tauri): reach Electron parity for path handling and node ops — c65fc440
 - fix(web): hide floating chat indicators when the chat panel is too narrow — 159ae81a
