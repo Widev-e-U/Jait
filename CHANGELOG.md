@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.804](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.804) — 2026-09-01
+- fix(gateway): wrap PowerShell terminal input in bracketed paste to stop PSReadLine echo doubling — 1e9006c9
+- fix(web,desktop-tauri): let unreachable-gateway screen set the backend URL — be9e6976
+
 ## [v0.1.803](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.803) — 2026-09-01
 - fix(desktop-tauri): bundle frontend in Windows installer — 2b965da1
 
