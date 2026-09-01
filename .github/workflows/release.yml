@@ -316,6 +316,7 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
       - name: Prepare release asset directory
         run: mkdir -p "$RELEASE_ASSET_DIR"
       - name: Stamp Tauri version with release version
@@ -341,6 +342,17 @@ jobs:
             apps/desktop-tauri/src-tauri/tauri.conf.json > tmp.json \
             && mv tmp.json apps/desktop-tauri/src-tauri/tauri.conf.json
           echo "tauri_release_version=$REL_VERSION" >> $GITHUB_ENV
+      - name: Build Tauri frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run --filter @jait/shared build
+          bun run --filter @jait/api-client build
+          bun run --filter @jait/ui-shared build
+          (
+            cd apps/web
+            NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
+          )
+          test -s apps/web/dist/index.html
       - name: Ensure Tauri Windows cross toolchain
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -511,7 +523,7 @@ jobs:
           # inherits LD_PRELOAD and gets its /usr/share/nsis paths redirected.
           export LD_PRELOAD="${NSIS_LD_PRELOAD:-}"
           export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
-          cargo tauri build --features shell --runner cargo-xwin \
+          cargo tauri build --features shell,frontend --runner cargo-xwin \
             --target x86_64-pc-windows-msvc --bundles nsis
       - name: Stage Tauri release assets on runner
         if: env.RELEASE_ASSET_MODE == 'runner'

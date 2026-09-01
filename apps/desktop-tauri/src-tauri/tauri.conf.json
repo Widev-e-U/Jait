@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "dev.jait.desktop",
   "build": {
-    "frontendDist": "./assets"
+    "frontendDist": "../../web/dist"
   },
   "app": {
     "windows": [],

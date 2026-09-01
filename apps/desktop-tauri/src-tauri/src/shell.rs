@@ -202,8 +202,9 @@ fn gateway_url() -> String {
 /// overridable via `JAIT_WEB_DEV_URL`); packaged builds load the bundled web
 /// app from extraResources. Tauri parity:
 /// 1. `JAIT_WEB_DEV_URL` — explicit dev server URL, always wins,
-/// 2. `frontend` feature — the built web dist is compiled into `./assets`
-///    (frontendDist inside the binary) and served from tauri://localhost,
+/// 2. `frontend` feature — the built web dist configured by
+///    `frontendDist` is compiled into the binary and served from
+///    tauri://localhost,
 /// 3. fallback — gateway serves the same web bundle (packages/gateway serves
 ///    apps/web/dist in production), so load it from the gateway URL.
 fn web_url(gateway: &str) -> WebviewUrl {
