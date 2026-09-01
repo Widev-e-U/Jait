@@ -6,6 +6,7 @@ import {
   AGENT_TERMINAL_ENV_POSIX,
   buildAgentCommand,
   buildTerminalExitMarkerCommand,
+  buildSingleLineTerminalInput,
   detectPagerPrompt,
   getTerminalCommandDoneEndOffset,
   hasStrongPagerPrompt,
@@ -206,5 +207,36 @@ describe("detectPagerPrompt", () => {
   it("stays quiet for plain command output", () => {
     expect(detectPagerPrompt("vite v5.0.0 ready in 320 ms\n")).toBe(false);
     expect(detectPagerPrompt("")).toBe(false);
+  });
+});
+
+describe("buildSingleLineTerminalInput", () => {
+  it("wraps single-line PowerShell commands in bracketed paste markers", () => {
+    expect(
+      buildSingleLineTerminalInput(true, "powershell.exe", "Get-Location"),
+    ).toBe("\x1b[200~Get-Location\x1b[201~");
+    expect(
+      buildSingleLineTerminalInput(true, "pwsh", "Get-Location"),
+    ).toBe("\x1b[200~Get-Location\x1b[201~");
+  });
+
+  it("passes commands through when the shell has no bracketed paste", () => {
+    expect(
+      buildSingleLineTerminalInput(false, "powershell.exe", "Get-Location"),
+    ).toBe("Get-Location");
+    expect(buildSingleLineTerminalInput(false, "/bin/bash", "ls -la")).toBe("ls -la");
+  });
+
+  it("passes commands through for non-PowerShell shells", () => {
+    expect(buildSingleLineTerminalInput(true, "/bin/bash", "ls -la")).toBe("ls -la");
+    expect(buildSingleLineTerminalInput(true, "/bin/zsh", "ls -la")).toBe("ls -la");
+    expect(buildSingleLineTerminalInput(true, "C:\\Windows\\System32\\cmd.exe", "dir")).toBe("dir");
+  });
+
+  it("passes multi-line input through unwrapped", () => {
+    const multiLine = "line one\nline two";
+    expect(
+      buildSingleLineTerminalInput(true, "powershell.exe", multiLine),
+    ).toBe(multiLine);
   });
 });

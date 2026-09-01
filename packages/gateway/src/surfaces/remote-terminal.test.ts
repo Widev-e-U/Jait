@@ -142,6 +142,22 @@ describe("RemoteTerminalSurface", () => {
     expect(settled).toHaveBeenCalled();
   });
 
+  it("detects bracketed paste enablement from the prompt sequence", () => {
+    const surface = new RemoteTerminalSurface(
+      "term-remote",
+      new FakeWs() as unknown as WsControlPlane,
+      "node-1",
+    );
+
+    expect(surface.bracketedPasteEnabled).toBe(false);
+    surface.ingestOutput("\x1b]633;B\x07PS C:\\remote\\project> ");
+    expect(surface.bracketedPasteEnabled).toBe(false);
+
+    // PSReadLine enables bracketed paste at the prompt (CSI ?2004h):
+    surface.ingestOutput("\x1b[?2004h\x1b]633;B\x07PS C:\\remote\\project> ");
+    expect(surface.bracketedPasteEnabled).toBe(true);
+  });
+
   it("treats a reattached terminal as already prompt-ready", async () => {
     const surface = new RemoteTerminalSurface(
       "term-remote",

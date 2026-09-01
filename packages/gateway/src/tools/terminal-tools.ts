@@ -387,6 +387,33 @@ export function buildAgentCommand(command: string, shell: string): string {
 }
 
 /**
+ * Prepare a single-line command for a raw write() into a PTY.
+ *
+ * PSReadLine re-renders its whole input buffer every time it processes more
+ * input. A long command written in one write() still reaches ConPTY/Win32
+ * console input in several chunks, so the terminal stream ends up with one
+ * echo frame per chunk — the command text appears duplicated (the card shows
+ * `PS ...> <cmd prefix cut>…<cmd prefix cut>…` style concatenated frames).
+ *
+ * Wrapping the input in bracketed-paste markers (ESC[200~ … ESC[201~) makes
+ * PSReadLine treat the whole command as one paste and render it in a single
+ * frame. It only kicks in when the shell actually enabled bracketed paste
+ * (CSI ?2004h at the prompt — see TerminalSurface/RemoteTerminalSurface
+ * `bracketedPasteEnabled`), it only applies to PowerShell line-editing, and
+ * multi-line input is left alone (the paste path is for one physical line).
+ */
+export function buildSingleLineTerminalInput(
+  bracketedPasteEnabled: boolean,
+  shell: string,
+  text: string,
+): string {
+  if (!bracketedPasteEnabled) return text;
+  if (text.includes("\n")) return text;
+  if (!isPowerShellShell(shell)) return text;
+  return `\x1b[200~${text}\x1b[201~`;
+}
+
+/**
  * Low-false-positive signals that a pager has stopped mid-command and is
  * waiting on the PTY. Unlike PAGER_PROMPT_PATTERNS (which scans the entire
  * output for cheap heuristics like any line ending in ":"), this only accepts
@@ -928,7 +955,12 @@ function executeInTerminal(
       tmpFile = writeCommandScript(command);
       surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
     } else {
-      surface.write(command + "\r");
+      // Single line: wrap in bracketed paste when the shell's line editor
+      // supports it so PSReadLine echoes the command in exactly one frame
+      // (see buildSingleLineTerminalInput).
+      surface.write(
+        buildSingleLineTerminalInput(surface.bracketedPasteEnabled, shell, command) + "\r",
+      );
     }
   });
 }
@@ -1093,8 +1125,15 @@ export function createTerminalRunTool(
             : commandLine;
           if (surface instanceof RemoteTerminalSurface) {
             surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
-          } else {
+          } else if (terminalInput.includes("\n")) {
             surface.write(`${terminalInput}\r`);
+          } else {
+            // Single line: wrap in bracketed paste when the shell's line
+            // editor supports it so PSReadLine echoes the command in exactly
+            // one frame (see buildSingleLineTerminalInput).
+            surface.write(
+              buildSingleLineTerminalInput(surface.bracketedPasteEnabled, shell, terminalInput) + "\r",
+            );
           }
           return {
             ok: true,

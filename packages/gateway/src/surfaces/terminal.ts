@@ -322,6 +322,12 @@ export class TerminalSurface implements Surface {
   private _shellIntegrationReadyResolve?: () => void;
   private _shellIntegrationReadyPromise: Promise<void>;
 
+  /**
+   * Whether the shell's line editor has enabled bracketed paste
+   * (CSI ?2004h at the prompt — PSReadLine and readline both emit this).
+   */
+  private _bracketedPasteSeen = false;
+
   /** Timestamp of last user input, command execution, or output — used for idle detection */
   private _lastActivityAt: number = Date.now();
 
@@ -358,6 +364,15 @@ export class TerminalSurface implements Surface {
   /** True once the shell has emitted at least one OSC 633;B prompt-end marker */
   get shellIntegrationReady(): boolean {
     return this._shellIntegrationReady;
+  }
+
+  /**
+   * True once the shell's line editor enabled bracketed paste (CSI ?2004h).
+   * Agent command writes use this to wrap single-line commands so PSReadLine
+   * renders the echoed input in exactly one frame.
+   */
+  get bracketedPasteEnabled(): boolean {
+    return this._bracketedPasteSeen;
   }
 
   /** Resolves when the shell integration prompt is first ready (or after a timeout fallback) */
@@ -438,6 +453,13 @@ export class TerminalSurface implements Surface {
         if (!this._shellIntegrationReady && data.includes("\x1b]633;B")) {
           this._shellIntegrationReady = true;
           this._shellIntegrationReadyResolve?.();
+        }
+
+        // Remember that the shell's line editor supports bracketed paste so
+        // agent command writes can be wrapped in the paste markers (see
+        // buildSingleLineTerminalInput in tools/terminal-tools.ts).
+        if (!this._bracketedPasteSeen && data.includes("\x1b[?2004h")) {
+          this._bracketedPasteSeen = true;
         }
 
         this.onOutput?.(data);

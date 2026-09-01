@@ -594,6 +594,47 @@ describe("terminal.run tool status reporting", () => {
     expect(writes).toContain("\x03\r");
   });
 
+  it("wraps single-line commands in bracketed paste for PSReadLine terminals", async () => {
+    // Regression: writing a raw command into PowerShell's PSReadLine makes it
+    // echo the command one character per frame, so the paste of a long
+    // env-prefixed command interleaved with its own echo and executed twice.
+    let listener: ((data: string) => void) | null = null;
+    const writes: string[] = [];
+    const surface = {
+      id: "term-existing",
+      type: "terminal",
+      state: "running",
+      touch() {},
+      bracketedPasteEnabled: true,
+      addOutputListener(cb: (data: string) => void) {
+        listener = cb;
+      },
+      removeOutputListener() {
+        listener = null;
+      },
+      write(data: string) {
+        writes.push(data);
+        const echo = data.replace(/\x1b\[20[01]~/g, "").replace(/\r$/, "");
+        setTimeout(() => listener?.(`${echo}\r\nPS C:\\Tankstelle> `), 10);
+      },
+      snapshot() {
+        return { metadata: { shell: "powershell.exe" } };
+      },
+    } as unknown as TerminalSurface;
+    const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+    const tool = createTerminalRunTool(registry);
+
+    const result = await tool.execute(
+      { command: "Get-Location", terminalId: "term-existing", timeout: 1000 },
+      makeContext(),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(writes[0]).toBe(
+      `\x1b[200~${buildAgentCommand("Get-Location", "powershell.exe")}\x1b[201~\r`,
+    );
+  });
+
   it("requests an inline secret when a non-SSH terminal command asks for a password", async () => {
     const { tool, writes, requests } = makeSecretPromptTool();
 

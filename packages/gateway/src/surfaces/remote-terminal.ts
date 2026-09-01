@@ -48,6 +48,11 @@ export class RemoteTerminalSurface implements Surface {
   private _shellIntegrationReady = false;
   private _shellIntegrationReadyResolve?: () => void;
   private readonly _shellIntegrationReadyPromise: Promise<void>;
+  /**
+   * Whether the remote shell's line editor has enabled bracketed paste
+   * (CSI ?2004h at the prompt — PSReadLine and readline both emit this).
+   */
+  private _bracketedPasteSeen = false;
 
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
@@ -156,6 +161,15 @@ export class RemoteTerminalSurface implements Surface {
   }
 
   /**
+   * True once the remote shell's line editor enabled bracketed paste
+   * (CSI ?2004h). Agent command writes use this to wrap single-line commands
+   * so PSReadLine renders the echoed input in exactly one frame.
+   */
+  get bracketedPasteEnabled(): boolean {
+    return this._bracketedPasteSeen;
+  }
+
+  /**
    * Resolves once the remote shell is actually at a prompt (or after a timeout
    * fallback for shells without OSC 633 integration).
    *
@@ -187,6 +201,12 @@ export class RemoteTerminalSurface implements Surface {
     this._lastActivityAt = Date.now();
     if (!this._shellIntegrationReady && data.includes("\x1b]633;B")) {
       this._markShellIntegrationReady();
+    }
+    // Remember that the shell's line editor supports bracketed paste so agent
+    // command writes can be wrapped in the paste markers (see
+    // buildSingleLineTerminalInput in tools/terminal-tools.ts).
+    if (!this._bracketedPasteSeen && data.includes("\x1b[?2004h")) {
+      this._bracketedPasteSeen = true;
     }
     this._outputChunkCount += 1;
     this._outputBuffer.push(data);
