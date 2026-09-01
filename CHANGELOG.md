@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.810](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.810) — 2026-09-01
+- chore(release): maintenance bump — no functional changes since v0.1.809
+
 ## [v0.1.809](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.809) — 2026-09-01
 - fix(tauri): adapt tray menu code to tauri 2.11 MenuItemBuilder API — 4598621b
 
