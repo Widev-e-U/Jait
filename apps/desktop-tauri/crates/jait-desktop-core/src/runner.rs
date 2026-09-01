@@ -56,7 +56,9 @@ pub struct RunnerSpec {
 }
 
 impl RunnerSpec {
-    fn full_access(&self) -> bool { self.mode == "full-access" }
+    fn full_access(&self) -> bool {
+        self.mode == "full-access"
+    }
 }
 
 /// Resolves the actual argv to spawn. The default impl resolves the provider
@@ -155,7 +157,9 @@ pub struct RunnerRegistry {
 const MAX_PROVIDER_SESSIONS: usize = 16; // mirrors remote-agent cap
 
 impl RunnerRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     fn put(&self, session: Arc<RunnerSession>) {
         let id = session.session_id.clone();
@@ -277,8 +281,11 @@ fn spawn_cli(
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::piped());
-    cmd.spawn().map_err(|e| format!("failed to spawn {}: {e}", resolved.program))
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::piped());
+    cmd.spawn()
+        .map_err(|e| format!("failed to spawn {}: {e}", resolved.program))
 }
 
 /// Shared stderr tail used to decorate error messages (mirrors
@@ -484,7 +491,10 @@ impl RunnerHandle {
     /// failure (stderr excerpt appended).
     pub fn send_turn(&self, resolver: &dyn CommandResolver, message: &str) -> Result<(), String> {
         if self.turn_running.swap(true, Ordering::SeqCst) {
-            return Err(format!("turn already running for session {}", self.session_id));
+            return Err(format!(
+                "turn already running for session {}",
+                self.session_id
+            ));
         }
         let result = self.send_turn_inner(resolver, message);
         self.turn_running.store(false, Ordering::SeqCst);
@@ -530,7 +540,9 @@ impl RunnerHandle {
             drain_stdout(stdout, session_id, &event_tx);
         });
 
-        let status = child.wait().map_err(|e| format!("claude wait failed: {e}"))?;
+        let status = child
+            .wait()
+            .map_err(|e| format!("claude wait failed: {e}"))?;
         let _ = out_thread.join();
         *self.session_pid.lock() = None;
 
@@ -643,9 +655,20 @@ impl RunnerHandle {
 
         // Handshake: initialize → thread/start (thread id comes back here).
         let stdin = child.stdin.as_mut().ok_or("codex stdin unavailable")?;
-        send_rpc(stdin, &self.codex_state, "initialize", codex_handshake_body(), RPC_TIMEOUT)?;
-        let thread_result =
-            send_rpc(stdin, &self.codex_state, "thread/start", codex_thread_body(&self.spec), RPC_TIMEOUT)?;
+        send_rpc(
+            stdin,
+            &self.codex_state,
+            "initialize",
+            codex_handshake_body(),
+            RPC_TIMEOUT,
+        )?;
+        let thread_result = send_rpc(
+            stdin,
+            &self.codex_state,
+            "thread/start",
+            codex_thread_body(&self.spec),
+            RPC_TIMEOUT,
+        )?;
         let thread_id = thread_result
             .pointer("/thread/id")
             .and_then(Value::as_str)

@@ -90,7 +90,11 @@ pub async fn git_file_read(
         Some(r) if r.is_empty() => None,
         Some(r) => {
             let out = git_run(cwd, &format!("show {}:{}", r, rel_path)).await?;
-            if out.exit_code != 0 { None } else { Some(out.stdout) }
+            if out.exit_code != 0 {
+                None
+            } else {
+                Some(out.stdout)
+            }
         }
     };
     Ok(BaseWorkingPair { base, working })
@@ -130,15 +134,24 @@ pub async fn git_file_diffs(
         let original = if old_path.is_empty() {
             String::new()
         } else {
-            read_blob(cwd, base_ref, &old_path).await.unwrap_or_default()
+            read_blob(cwd, base_ref, &old_path)
+                .await
+                .unwrap_or_default()
         };
         let modified = if status == "D" {
             String::new()
         } else {
-            read_blob(cwd, head_ref, &new_path).await.unwrap_or_default()
+            read_blob(cwd, head_ref, &new_path)
+                .await
+                .unwrap_or_default()
         };
         let _ = binary;
-        diffs.push(FileDiff { path: new_path, original, modified, status });
+        diffs.push(FileDiff {
+            path: new_path,
+            original,
+            modified,
+            status,
+        });
     }
     Ok(diffs)
 }
@@ -147,7 +160,9 @@ async fn read_blob(cwd: &Path, spec: &str, rel_path: &str) -> Option<String> {
     if spec.is_empty() {
         return None;
     }
-    let out = git_run(cwd, &format!("show {}:{}", spec, rel_path)).await.ok()?;
+    let out = git_run(cwd, &format!("show {}:{}", spec, rel_path))
+        .await
+        .ok()?;
     if out.exit_code != 0 {
         return None;
     }
@@ -237,7 +252,11 @@ mod tests {
 
     #[tokio::test]
     async fn git_run_reports_real_output() {
-        let out = git_run(Path::new(env!("CARGO_MANIFEST_DIR")), "rev-parse --show-toplevel").await;
+        let out = git_run(
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            "rev-parse --show-toplevel",
+        )
+        .await;
         match out {
             Ok(o) => assert_eq!(o.exit_code, 0, "{o:?}"),
             Err(e) => panic!("git missing? {e}"),

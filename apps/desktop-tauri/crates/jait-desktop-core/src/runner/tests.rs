@@ -147,7 +147,11 @@ impl EventSink {
     fn snapshot(&self) -> Vec<ProviderEvent> {
         self.0.lock().clone()
     }
-    fn wait_for(&self, predicate: impl Fn(&[ProviderEvent]) -> bool, timeout: Duration) -> Vec<ProviderEvent> {
+    fn wait_for(
+        &self,
+        predicate: impl Fn(&[ProviderEvent]) -> bool,
+        timeout: Duration,
+    ) -> Vec<ProviderEvent> {
         let deadline = std::time::Instant::now() + timeout;
         loop {
             let events = self.snapshot();
@@ -221,7 +225,10 @@ fn claude_argv_matches_electron_flags() {
         "--effort",
         "medium",
     ];
-    assert_eq!(argv, expected, "default-mode argv parity with runClaudeRemoteTurn");
+    assert_eq!(
+        argv, expected,
+        "default-mode argv parity with runClaudeRemoteTurn"
+    );
 
     spec.mode = "full-access".into();
     let argv = claude_argv(&spec);
@@ -281,18 +288,23 @@ fn claude_turn_streams_lines_and_completes() {
     )
     .unwrap();
 
-    let result = handle.send_turn(&StaticResolver {
-        command: ResolvedCommand {
-            program: "/bin/bash".into(),
-            args: vec![script.to_string_lossy().into_owned()],
+    let result = handle.send_turn(
+        &StaticResolver {
+            command: ResolvedCommand {
+                program: "/bin/bash".into(),
+                args: vec![script.to_string_lossy().into_owned()],
+            },
         },
-    }, "explain the streaming pipeline");
+        "explain the streaming pipeline",
+    );
     assert!(result.is_ok(), "send_turn should succeed: {result:?}");
 
     let events = sink.wait_for(
         |events| {
             matches!(events.last(), Some(ProviderEvent::TurnCompleted { .. }))
-                && events.iter().any(|e| line_text(e).unwrap_or("").contains("FAKE-CLAUDE-RAN"))
+                && events
+                    .iter()
+                    .any(|e| line_text(e).unwrap_or("").contains("FAKE-CLAUDE-RAN"))
         },
         Duration::from_secs(10),
     );
@@ -358,7 +370,10 @@ fn claude_turn_failure_carries_stderr_excerpt() {
         )
         .unwrap_err();
     assert!(err.contains("exited with code 7"), "err: {err}");
-    assert!(err.contains("fake-cli exploded"), "stderr excerpt appended: {err}");
+    assert!(
+        err.contains("fake-cli exploded"),
+        "stderr excerpt appended: {err}"
+    );
     // The event pump thread relays asynchronously — poll instead of asserting
     // immediately, otherwise the Error event may not have been delivered yet.
     let events = sink.wait_for(
@@ -406,7 +421,10 @@ fn claude_rejects_concurrent_turn() {
     std::thread::sleep(Duration::from_millis(150));
     let second = handle.send_turn(&resolver, "overlapping turn");
     assert!(
-        second.err().unwrap_or_default().contains("turn already running"),
+        second
+            .err()
+            .unwrap_or_default()
+            .contains("turn already running"),
         "second concurrent turn must be rejected"
     );
     assert!(t.join().unwrap().is_ok(), "first turn completes");
@@ -432,15 +450,28 @@ fn codex_turn_handshakes_streams_and_reuses_session() {
         },
     };
     let session_spec = spec("codex", &dir);
-    let handle = start(&registry, &resolver, session_spec, move |e| sink_clone.push(e)).unwrap();
+    let handle = start(&registry, &resolver, session_spec, move |e| {
+        sink_clone.push(e)
+    })
+    .unwrap();
 
     // Turn 1 — spawns app-server, handshakes, runs the turn.
-    handle.send_turn(&resolver, "first hello").expect("turn 1 ok");
+    handle
+        .send_turn(&resolver, "first hello")
+        .expect("turn 1 ok");
     // Turn 2 — must reuse the live app-server (no re-handshake events).
-    handle.send_turn(&resolver, "second hello").expect("turn 2 ok");
+    handle
+        .send_turn(&resolver, "second hello")
+        .expect("turn 2 ok");
 
     let events = sink.wait_for(
-        |events| events.iter().filter(|e| matches!(e, ProviderEvent::TurnCompleted { .. })).count() >= 2,
+        |events| {
+            events
+                .iter()
+                .filter(|e| matches!(e, ProviderEvent::TurnCompleted { .. }))
+                .count()
+                >= 2
+        },
         Duration::from_secs(10),
     );
 
@@ -454,7 +485,11 @@ fn codex_turn_handshakes_streams_and_reuses_session() {
         "non-JSON stdout still forwarded: {lines:?}"
     );
     assert!(
-        events.iter().filter(|e| matches!(e, ProviderEvent::TurnCompleted { .. })).count() == 2,
+        events
+            .iter()
+            .filter(|e| matches!(e, ProviderEvent::TurnCompleted { .. }))
+            .count()
+            == 2,
         "exactly two completed turns: {events:?}"
     );
     // JSON-RPC *responses* (which carry "id") are settled internally, never
@@ -468,7 +503,11 @@ fn codex_turn_handshakes_streams_and_reuses_session() {
     // async, so poll for it instead of snapshotting immediately.
     handle.stop();
     let events = sink.wait_for(
-        |events| events.iter().any(|e| matches!(e, ProviderEvent::Stopped { .. })),
+        |events| {
+            events
+                .iter()
+                .any(|e| matches!(e, ProviderEvent::Stopped { .. }))
+        },
         Duration::from_secs(10),
     );
     assert!(
@@ -494,7 +533,10 @@ fn codex_rpc_error_propagates_as_turn_failure() {
             args: vec![script.to_string_lossy().into_owned()],
         },
     };
-    let handle = start(&registry, &resolver, spec("codex", &dir), move |e| sink_clone.push(e)).unwrap();
+    let handle = start(&registry, &resolver, spec("codex", &dir), move |e| {
+        sink_clone.push(e)
+    })
+    .unwrap();
 
     // First turn works…
     handle.send_turn(&resolver, "works").expect("first turn ok");
@@ -506,11 +548,17 @@ fn codex_rpc_error_propagates_as_turn_failure() {
     assert!(err.contains("rpc turn/start failed"), "err: {err}");
     // The Error event is relayed asynchronously; poll for it.
     let events = sink.wait_for(
-        |events| events.iter().any(|e| matches!(e, ProviderEvent::Error { .. })),
+        |events| {
+            events
+                .iter()
+                .any(|e| matches!(e, ProviderEvent::Error { .. }))
+        },
         Duration::from_secs(10),
     );
     assert!(
-        events.iter().any(|e| matches!(e, ProviderEvent::Error { .. })),
+        events
+            .iter()
+            .any(|e| matches!(e, ProviderEvent::Error { .. })),
         "error event relayed: {events:?}"
     );
     std::fs::remove_dir_all(&dir).ok();

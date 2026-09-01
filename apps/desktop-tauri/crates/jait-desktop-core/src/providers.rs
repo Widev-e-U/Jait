@@ -40,7 +40,9 @@ pub struct ProviderSessionRegistry {
 }
 
 impl ProviderSessionRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn put(&self, session: Arc<ProviderSession>) {
         let id = session.session_id.clone();
@@ -112,7 +114,10 @@ pub fn detect_runtime(provider: &str) -> ProviderRuntime {
             }
         }
     }
-    ProviderRuntime { mode: "missing".into(), command: String::new() }
+    ProviderRuntime {
+        mode: "missing".into(),
+        command: String::new(),
+    }
 }
 
 /// Build the argv for a session spawn, mirroring spawnProviderProcess:
@@ -184,7 +189,11 @@ mod tests {
 
     #[test]
     fn codex_argv_is_proto() {
-        let req = ProviderSessionRequest { provider: "codex".into(), model: None, max_turns: None };
+        let req = ProviderSessionRequest {
+            provider: "codex".into(),
+            model: None,
+            max_turns: None,
+        };
         assert_eq!(provider_argv("codex", &req), vec!["proto"]);
     }
 

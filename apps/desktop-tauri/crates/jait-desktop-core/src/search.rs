@@ -9,7 +9,11 @@ const DEFAULT_LIMIT: u64 = 60;
 const DEFAULT_FILE_LIST_LIMIT: u64 = 100;
 
 pub fn search(root: &Path, req: &SearchRequest) -> SearchResult {
-    let limit = req.limit.unwrap_or(if req.mode == "files" { DEFAULT_FILE_LIST_LIMIT } else { DEFAULT_LIMIT });
+    let limit = req.limit.unwrap_or(if req.mode == "files" {
+        DEFAULT_FILE_LIST_LIMIT
+    } else {
+        DEFAULT_LIMIT
+    });
     let walker = ignore::WalkBuilder::new(root)
         .hidden(true)
         .git_ignore(!req.include_ignored_files.unwrap_or(false))
@@ -17,8 +21,16 @@ pub fn search(root: &Path, req: &SearchRequest) -> SearchResult {
 
     let mut results = SearchResult {
         mode: req.mode.clone(),
-        matches: if req.mode == "content" { Some(Vec::new()) } else { None },
-        files: if req.mode == "files" { Some(Vec::new()) } else { None },
+        matches: if req.mode == "content" {
+            Some(Vec::new())
+        } else {
+            None
+        },
+        files: if req.mode == "files" {
+            Some(Vec::new())
+        } else {
+            None
+        },
         limited: false,
     };
 
@@ -30,7 +42,11 @@ pub fn search(root: &Path, req: &SearchRequest) -> SearchResult {
             .flatten()
     });
 
-    let regex = if req.is_regexp.unwrap_or(false) { regex::Regex::new(&req.query).ok() } else { None };
+    let regex = if req.is_regexp.unwrap_or(false) {
+        regex::Regex::new(&req.query).ok()
+    } else {
+        None
+    };
     let lower_query = req.query.to_lowercase();
 
     let mut counter = 0u64;
@@ -57,7 +73,11 @@ pub fn search(root: &Path, req: &SearchRequest) -> SearchResult {
         }
 
         if req.mode == "files" {
-            let hay = if regex.is_some() { entry.file_name().to_string_lossy().into_owned() } else { entry.file_name().to_string_lossy().to_lowercase() };
+            let hay = if regex.is_some() {
+                entry.file_name().to_string_lossy().into_owned()
+            } else {
+                entry.file_name().to_string_lossy().to_lowercase()
+            };
             let hit = match &regex {
                 Some(re) => re.is_match(&hay),
                 None => hay.contains(&lower_query),
@@ -67,7 +87,11 @@ pub fn search(root: &Path, req: &SearchRequest) -> SearchResult {
                     results.limited = true;
                     break;
                 }
-                results.files.as_mut().unwrap().push(SearchFile { path: rel });
+                results
+                    .files
+                    .as_mut()
+                    .unwrap()
+                    .push(SearchFile { path: rel });
                 counter_files += 1;
             }
             continue;
@@ -114,7 +138,11 @@ mod tests {
     fn temp_root(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("jait-search-{name}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(dir.join("src")).unwrap();
-        std::fs::write(dir.join("src/main.rs"), "fn main() {}\n// TODO: fill this in\nlet gateway_url = \"wss://x\";\n").unwrap();
+        std::fs::write(
+            dir.join("src/main.rs"),
+            "fn main() {}\n// TODO: fill this in\nlet gateway_url = \"wss://x\";\n",
+        )
+        .unwrap();
         std::fs::write(dir.join("src/lib.rs"), "pub mod gateway;\nTODO\n").unwrap();
         std::fs::write(dir.join("README.md"), "# Jait\nTODO later\n").unwrap();
         dir
@@ -137,11 +165,15 @@ mod tests {
         matches.sort_by(|a, b| (a.file.clone(), a.line).cmp(&(b.file.clone(), b.line)));
         assert_eq!(matches.len(), 3, "{matches:?}");
         assert!(
-            matches.iter().any(|m| m.file == "src/main.rs" && m.line == 2),
+            matches
+                .iter()
+                .any(|m| m.file == "src/main.rs" && m.line == 2),
             "{matches:?}"
         );
         assert!(
-            matches.iter().any(|m| m.file == "src/lib.rs" && m.line == 2),
+            matches
+                .iter()
+                .any(|m| m.file == "src/lib.rs" && m.line == 2),
             "{matches:?}"
         );
         std::fs::remove_dir_all(root).ok();
@@ -195,7 +227,12 @@ mod tests {
         };
         let res = search(&root, &req);
         // README.md's TODO must NOT appear.
-        assert!(res.matches.as_ref().unwrap().iter().all(|m| m.file.ends_with(".rs")));
+        assert!(res
+            .matches
+            .as_ref()
+            .unwrap()
+            .iter()
+            .all(|m| m.file.ends_with(".rs")));
         std::fs::remove_dir_all(root).ok();
     }
 }

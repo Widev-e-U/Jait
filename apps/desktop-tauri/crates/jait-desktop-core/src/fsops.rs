@@ -39,7 +39,10 @@ pub fn read_binary(path: &std::path::Path) -> Result<ReadBinaryOut, String> {
     assert_readable_size(path, MAX_FS_OP_READ_BINARY_BYTES)?;
     let bytes = std::fs::read(path).map_err(|e| format!("readBinary failed: {e}"))?;
     use base64::Engine;
-    Ok(ReadBinaryOut { base64: base64::engine::general_purpose::STANDARD.encode(&bytes), bytes: bytes.len() as u64 })
+    Ok(ReadBinaryOut {
+        base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        bytes: bytes.len() as u64,
+    })
 }
 
 fn assert_readable_size(path: &std::path::Path, max: u64) -> Result<(), String> {
@@ -61,6 +64,29 @@ pub fn write(path: &std::path::Path, content: &str) -> Result<WriteOut, String> 
     Ok(WriteOut { bytes })
 }
 
+/// `patch` — Electron fs-op case: read the file, replace the first exact
+/// occurrence of `old` with `new`, write back. Errors when `old` is not
+/// found so the renderer can surface a failed edit instead of a silent no-op.
+pub fn patch(path: &std::path::Path, old: &str, new: &str) -> Result<PatchOut, String> {
+    assert_readable_size(path, MAX_FS_OP_READ_BYTES)?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("patch read failed: {e}"))?;
+    if old.is_empty() {
+        return Err("patch failed: oldString is empty".into());
+    }
+    let Some(idx) = text.find(old) else {
+        return Err(format!(
+            "patch failed: oldString not found in {}",
+            path.display()
+        ));
+    };
+    let updated = format!("{}{}{}", &text[..idx], new, &text[idx + old.len()..]);
+    std::fs::write(path, &updated).map_err(|e| format!("patch write failed: {e}"))?;
+    Ok(PatchOut {
+        ok: true,
+        matched: true,
+    })
+}
+
 pub fn list(path: &std::path::Path) -> Result<Vec<FileText>, String> {
     let mut out: Vec<FileText> = Vec::new();
     let rd = std::fs::read_dir(path).map_err(|e| format!("list failed: {e}"))?;
@@ -76,7 +102,10 @@ pub fn exists(path: &std::path::Path) -> bool {
 
 pub fn mkdir(path: &std::path::Path) -> Result<MkdirOut, String> {
     std::fs::create_dir_all(path).map_err(|e| format!("mkdir failed: {e}"))?;
-    Ok(MkdirOut { ok: true, path: path.to_string_lossy().into_owned() })
+    Ok(MkdirOut {
+        ok: true,
+        path: path.to_string_lossy().into_owned(),
+    })
 }
 
 pub fn read_dir(path: &std::path::Path) -> Result<Vec<DirEntryOut>, String> {
@@ -97,17 +126,28 @@ pub fn read_dir(path: &std::path::Path) -> Result<Vec<DirEntryOut>, String> {
 pub fn reveal_in_explorer(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer").arg("/select,").arg(path).spawn().map_err(|e| e.to_string())?;
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").args(["-R"]).arg(path).spawn().map_err(|e| e.to_string())?;
+        std::process::Command::new("open")
+            .args(["-R"])
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        std::process::Command::new("xdg-open").arg(path).spawn().map_err(|e| e.to_string())?;
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 }
@@ -116,13 +156,22 @@ pub fn reveal_in_explorer(path: &std::path::Path) -> Result<(), String> {
 pub fn browse_path(dir_path: &str) -> Result<BrowseOut, String> {
     let resolved = std::fs::canonicalize(dir_path).map_err(|e| format!("browse failed: {e}"))?;
     let mut entries: Vec<BrowseEntry> = Vec::new();
-    for e in std::fs::read_dir(&resolved).map_err(|e| format!("browse failed: {e}"))?.flatten() {
+    for e in std::fs::read_dir(&resolved)
+        .map_err(|e| format!("browse failed: {e}"))?
+        .flatten()
+    {
         let name = e.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
             continue;
         }
         let ft = e.file_type().map_err(|e| format!("browse failed: {e}"))?;
-        let kind = if ft.is_dir() { "dir" } else if ft.is_file() { "file" } else { continue };
+        let kind = if ft.is_dir() {
+            "dir"
+        } else if ft.is_file() {
+            "file"
+        } else {
+            continue;
+        };
         entries.push(BrowseEntry {
             name,
             path: e.path().to_string_lossy().into_owned(),
@@ -130,14 +179,20 @@ pub fn browse_path(dir_path: &str) -> Result<BrowseOut, String> {
         });
     }
     entries.sort_by(|a, b| {
-        (b.entry_type == "dir").cmp(&(a.entry_type == "dir")).then_with(|| a.name.cmp(&b.name))
+        (b.entry_type == "dir")
+            .cmp(&(a.entry_type == "dir"))
+            .then_with(|| a.name.cmp(&b.name))
     });
     let path_str = resolved.to_string_lossy().into_owned();
     let parent = resolved
         .parent()
         .filter(|p| p != &resolved)
         .map(|p| p.to_string_lossy().into_owned());
-    Ok(BrowseOut { path: path_str, parent, entries })
+    Ok(BrowseOut {
+        path: path_str,
+        parent,
+        entries,
+    })
 }
 
 /// `get-roots` handler — mirrors desktop:get-roots (drives on Windows + Home).
@@ -145,19 +200,34 @@ pub fn get_roots() -> RootsOut {
     let mut roots: Vec<BrowseEntry> = Vec::new();
     #[cfg(target_os = "windows")]
     {
-        roots.push(BrowseEntry { name: "C:".into(), path: "C:\\".into(), entry_type: "dir".into() });
+        roots.push(BrowseEntry {
+            name: "C:".into(),
+            path: "C:\\".into(),
+            entry_type: "dir".into(),
+        });
         // Additional drives are enumerated best-effort via wmic in Electron;
         // PowerShell `Get-Volume` handles the same listing here.
         if let Ok(out) = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-Command", "(Get-Volume | Where-Object DriveLetter).DriveLetter"])
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(Get-Volume | Where-Object DriveLetter).DriveLetter",
+            ])
             .output()
         {
             if let Ok(text) = String::from_utf8(out.stdout) {
                 for l in text.lines() {
                     let l = l.trim();
-                    if l.len() == 1 && l.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+                    if l.len() == 1
+                        && l.chars()
+                            .next()
+                            .map(|c| c.is_ascii_alphabetic())
+                            .unwrap_or(false)
+                    {
                         let upper = l.to_uppercase();
-                        if roots.iter().any(|r| r.name == upper) { continue; }
+                        if roots.iter().any(|r| r.name == upper) {
+                            continue;
+                        }
                         roots.push(BrowseEntry {
                             name: upper.clone(),
                             path: format!("{upper}\\"),
@@ -170,7 +240,11 @@ pub fn get_roots() -> RootsOut {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        roots.push(BrowseEntry { name: "/".into(), path: "/".into(), entry_type: "dir".into() });
+        roots.push(BrowseEntry {
+            name: "/".into(),
+            path: "/".into(),
+            entry_type: "dir".into(),
+        });
     }
     if let Some(home) = home_dir() {
         roots.push(BrowseEntry {

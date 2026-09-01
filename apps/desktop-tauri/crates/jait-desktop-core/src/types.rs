@@ -39,6 +39,13 @@ pub struct WriteOut {
     pub bytes: u64,
 }
 
+/// Result of `fs-op:patch` — matches Electron's `{ ok, matched }`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatchOut {
+    pub ok: bool,
+    pub matched: bool,
+}
+
 /// Entry of `fs-op:readdir` — `{ name, isDirectory, isFile? }`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirEntryOut {
@@ -90,7 +97,9 @@ pub struct SearchRequest {
     pub include_ignored_files: Option<bool>,
 }
 
-fn default_search_mode() -> String { "content".into() }
+fn default_search_mode() -> String {
+    "content".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchMatch {

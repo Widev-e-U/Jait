@@ -24,6 +24,88 @@ fn to_json<T: serde::Serialize>(value: T) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|e| e.to_string())
 }
 
+/// Run a git/gh command string like the Electron host's promisified `exec`:
+/// through the shell (so `&&` and quotes behave the same), with a 60s
+/// poll-timeout because dispatch is synchronous. When `clean_gh_env` is set,
+/// `GH_TOKEN`/`GITHUB_TOKEN` are removed so `gh` falls back to keyring-based
+/// credentials from `gh auth login`.
+fn run_git_like(
+    program: &str,
+    command: &str,
+    cwd: &str,
+    clean_gh_env: bool,
+) -> Result<core::types::CommandOut, String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    if command.trim().is_empty() {
+        return Err("missing command".into());
+    }
+    let (shell, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
+    let mut cmd = Command::new(shell);
+    cmd.arg(flag)
+        .arg(command)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if clean_gh_env {
+        cmd.env_remove("GH_TOKEN").env_remove("GITHUB_TOKEN");
+    }
+    if !cwd.is_empty() {
+        cmd.current_dir(cwd);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("{program} spawn failed: {e}"))?;
+    let stdout_t = child.stdout.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let stderr_t = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(e) => return Err(format!("{program} wait failed: {e}")),
+        }
+    };
+    let stdout = stdout_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr = stderr_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    match status {
+        Some(status) if status.success() => Ok(core::types::CommandOut {
+            stdout,
+            stderr,
+            exit_code: 0,
+        }),
+        Some(status) => Err(format!(
+            "{program} exited with {}: {}",
+            status.code().unwrap_or(-1),
+            stderr.trim()
+        )),
+        None => Err(format!("{program} timed out after 60s")),
+    }
+}
+
 pub struct HostState {
     settings: core::settings::SettingsStore,
     terms: core::term::SessionRegistry,
@@ -147,27 +229,387 @@ impl HostState {
             }
 
             // ── File system ops ─────────────────────────────────────────────
+            // Two call shapes, both mirroring the Electron fs-op handler:
+            //   1. gateway/renderer contract: (op, params-object, requestId)
+            //      — used by the ws `proxyFsOp` bridge (node capability).
+            //   2. positional: (op, path, content) — direct renderer calls.
             "desktop:fs-op" => {
                 let op = arg(0).as_str().unwrap_or_default().to_string();
-                let path = arg(1).as_str().unwrap_or_default().to_string();
-                let p = std::path::PathBuf::from(&path);
-                let normalized = op.replace(['-', '_'], "");
+                let params: Value = match arg(1) {
+                    Value::Object(map) => Value::Object(map),
+                    _ => json!({ "path": arg(1), "content": arg(2) }),
+                };
+                let str_param = |key: &str| -> String {
+                    params
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                let path = str_param("path");
+                let p = resolve_fs_path(&path);
+                let normalized = op.replace(['-', '_'], "").to_lowercase();
                 match normalized.as_str() {
-                    "read" => Ok(to_json(core::fsops::read(&p))?),
+                    // Gateway contract: read → { content, size }.
+                    "read" => {
+                        let text = core::fsops::read(&p)?;
+                        Ok(json!({
+                            "content": text,
+                            "size": text.len(),
+                        }))
+                    }
+                    // Gateway contract: readBinary → { content } (base64).
                     "readbinary" | "readfilebinary" | "readfile" => {
-                        Ok(to_json(core::fsops::read_binary(&p))?)
+                        let out = core::fsops::read_binary(&p)?;
+                        Ok(json!({
+                            "content": out.base64,
+                            "size": out.bytes,
+                        }))
                     }
                     "write" => {
-                        let content = arg(2).as_str().unwrap_or_default().to_string();
+                        let content = str_param("content");
                         Ok(to_json(core::fsops::write(&p, &content))?)
                     }
-                    "stat" => Ok(to_json(core::fsops::stat(&p))?),
-                    "listdir" | "readdir" | "list" => Ok(to_json(core::fsops::read_dir(&p))?),
+                    // Gateway contract: stat → { size, isDirectory, modified }.
+                    "stat" => {
+                        let out = core::fsops::stat(&p)?;
+                        Ok(json!({
+                            "size": out.size,
+                            "isDirectory": out.is_directory,
+                            "isFile": out.is_file,
+                            "modified": out.modified,
+                        }))
+                    }
+                    // Gateway contract: list → ["name", "dir/", …] (dirs suffixed).
+                    "list" | "listdir" => {
+                        let out = core::fsops::read_dir(&p)?;
+                        let names: Vec<String> = out
+                            .into_iter()
+                            .map(|e| {
+                                if e.is_directory {
+                                    format!("{}/", e.name)
+                                } else {
+                                    e.name
+                                }
+                            })
+                            .collect();
+                        Ok(json!(names))
+                    }
+                    // Gateway contract: readdir → [{ name, path, type }].
+                    "readdir" => {
+                        let out = core::fsops::read_dir(&p)?;
+                        let entries: Vec<Value> = out
+                            .into_iter()
+                            .map(|e| {
+                                json!({
+                                    "name": e.name,
+                                    "path": p.join(&e.name).to_string_lossy(),
+                                    "type": if e.is_directory { "dir" } else { "file" },
+                                })
+                            })
+                            .collect();
+                        Ok(json!(entries))
+                    }
+                    // Electron `patch`: search/replace write for file.edit.
+                    "patch" => {
+                        let old = str_param("oldString");
+                        let new = str_param("newString");
+                        let out = core::fsops::patch(&p, &old, &new)?;
+                        Ok(json!({ "ok": out.ok, "matched": out.matched }))
+                    }
                     "mkdir" => Ok(to_json(core::fsops::mkdir(&p))?),
                     "exists" => Ok(json!(core::fsops::exists(&p))),
-                    "reveal" | "revealinfilemanager" | "revealpath" => {
+                    "reveal" | "revealinfilemanager" | "revealpath" | "revealinexplorer" => {
                         core::fsops::reveal_in_explorer(&p)?;
                         Ok(json!(true))
+                    }
+                    // Git identity route: gateway proxies `{ args }` through
+                    // the node so commits/branches run on the remote machine.
+                    "git" | "gh" => {
+                        let cwd = if std::path::PathBuf::from(&path).is_absolute() {
+                            path.clone()
+                        } else {
+                            let home = str_param("cwd");
+                            if home.is_empty() {
+                                core::info::home_dir()
+                                    .map(|h| h.join(&path).to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| path.clone())
+                            } else {
+                                PathBuf::from(&home)
+                                    .join(&path)
+                                    .to_string_lossy()
+                                    .into_owned()
+                            }
+                        };
+                        let out = run_git_like(
+                            &normalized,
+                            &git_like_args(&params),
+                            &cwd,
+                            normalized == "gh", // keyring-based auth like Electron
+                        )?;
+                        Ok(to_json(out)?)
+                    }
+                    // Electron parity: `gh-check` reports gh install/auth state
+                    // (auth check strips GH_TOKEN/GITHUB_TOKEN like ghCleanEnv).
+                    "ghcheck" => {
+                        if run_git_like("gh", "gh --version", &path, false).is_err() {
+                            return Ok(
+                                json!({ "installed": false, "authenticated": false, "username": null }),
+                            );
+                        }
+                        let mut authenticated = false;
+                        let mut username: Option<String> = None;
+                        if let Ok(out) = run_git_like("gh", "gh auth status", &path, true) {
+                            let all = format!("{}{}", out.stdout, out.stderr);
+                            if all.contains("Logged in") {
+                                authenticated = true;
+                                if let Some(rest) = all.split("Logged in to ").nth(1) {
+                                    if let Some(tail) = rest.split("account ").nth(1) {
+                                        let name = tail
+                                            .split_whitespace()
+                                            .next()
+                                            .unwrap_or("")
+                                            .trim_end_matches(['.', ',']);
+                                        if !name.is_empty() {
+                                            username = Some(name.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(
+                            json!({ "installed": true, "authenticated": authenticated, "username": username }),
+                        )
+                    }
+                    // Electron parity: per-file diff rows for branch/PR views.
+                    // `{ cwd, baseBranch?, branch? } -> [{ path, original, modified, status }]
+                    "gitfilediffs" => {
+                        let cwd = if std::path::PathBuf::from(&path).is_absolute() {
+                            path.clone()
+                        } else {
+                            let c = str_param("cwd");
+                            if c.is_empty() {
+                                ".".to_string()
+                            } else {
+                                c
+                            }
+                        };
+                        // Electron quotes paths with JSON.stringify — mirror that.
+                        let quoted = |s: &str| -> String {
+                            format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                        };
+                        // run_git_like shells the full command — `program` is
+                        // only used in error messages — so prefix the binary.
+                        let git = |command: &str| -> Result<core::types::CommandOut, String> {
+                            run_git_like("git", &format!("git {command}"), &cwd, false)
+                        };
+                        let read_capped = |rel: &str| -> String {
+                            if rel.is_empty() {
+                                return String::new();
+                            }
+                            let full = std::path::Path::new(&cwd).join(rel);
+                            match core::fsops::stat(&full) {
+                                Ok(s) if s.size <= 2_000_000 => {
+                                    core::fsops::read(&full).unwrap_or_default()
+                                }
+                                _ => String::new(),
+                            }
+                        };
+                        let base_branch = str_param("baseBranch");
+                        let branch = str_param("branch");
+                        let mut entries: Vec<Value> = Vec::new();
+                        let mut seen: std::collections::HashSet<String> =
+                            std::collections::HashSet::new();
+                        let push = |entries: &mut Vec<Value>,
+                                    seen: &mut std::collections::HashSet<String>,
+                                    file_path: &str,
+                                    status: &str,
+                                    original: String,
+                                    modified: String| {
+                            if file_path.is_empty() || !seen.insert(file_path.to_string()) {
+                                return;
+                            }
+                            entries.push(json!({
+                                "path": file_path,
+                                "original": original,
+                                "modified": modified,
+                                "status": status,
+                            }));
+                        };
+                        if !base_branch.is_empty() && !branch.is_empty() {
+                            // PR-style: merge-base against the branch tip.
+                            let diff_base = git(&format!(
+                                "merge-base {} {}",
+                                quoted(&base_branch),
+                                quoted(&branch)
+                            ))
+                            .map(|o| o.stdout.trim().to_string())
+                            .unwrap_or_else(|_| base_branch.clone());
+                            let name_status = git(&format!(
+                                "diff --name-status {} {}",
+                                quoted(&diff_base),
+                                quoted(&branch)
+                            ))
+                            .map(|o| o.stdout)
+                            .unwrap_or_default();
+                            for line in name_status.lines().filter(|l| !l.is_empty()) {
+                                let parts: Vec<&str> = line.split('\t').collect();
+                                let code = parts.first().copied().unwrap_or("M").trim();
+                                let mut file_path =
+                                    parts.last().copied().unwrap_or("").trim().to_string();
+                                let status = if code.starts_with('A') {
+                                    "A"
+                                } else if code.starts_with('D') {
+                                    "D"
+                                } else if code.starts_with('R') {
+                                    if parts.len() >= 3 {
+                                        file_path = parts[2].trim().to_string();
+                                    }
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" {
+                                    git(&format!(
+                                        "show {}:{}",
+                                        quoted(&diff_base),
+                                        quoted(&file_path)
+                                    ))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    git(&format!("show {}:{}", quoted(&branch), quoted(&file_path)))
+                                        .map(|o| o.stdout)
+                                        .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        } else if !base_branch.is_empty() {
+                            // Working tree vs base branch (committed + uncommitted).
+                            let name_status =
+                                git(&format!("diff --name-status {}", quoted(&base_branch)))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default();
+                            for line in name_status.lines().filter(|l| !l.is_empty()) {
+                                let parts: Vec<&str> = line.split('\t').collect();
+                                let code = parts.first().copied().unwrap_or("M").trim();
+                                let mut file_path =
+                                    parts.last().copied().unwrap_or("").trim().to_string();
+                                let status = if code.starts_with('A') {
+                                    "A"
+                                } else if code.starts_with('D') {
+                                    "D"
+                                } else if code.starts_with('R') {
+                                    if parts.len() >= 3 {
+                                        file_path = parts[2].trim().to_string();
+                                    }
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" {
+                                    git(&format!(
+                                        "show {}:{}",
+                                        quoted(&base_branch),
+                                        quoted(&file_path)
+                                    ))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    read_capped(&file_path)
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        } else {
+                            // Working tree vs HEAD (uncommitted only).
+                            let porcelain = git("status --porcelain")
+                                .map(|o| o.stdout)
+                                .unwrap_or_default();
+                            for line in porcelain.lines().filter(|l| !l.is_empty()) {
+                                let xy = &line[..line.len().min(2)];
+                                let mut file_path = line[3..].trim().to_string();
+                                if let Some(rest) = file_path.split(" -> ").last() {
+                                    if line.contains(" -> ") {
+                                        file_path = rest.trim().to_string();
+                                    }
+                                }
+                                let status = if xy.contains('?') {
+                                    "?"
+                                } else if xy.contains('A') {
+                                    "A"
+                                } else if xy.contains('D') {
+                                    "D"
+                                } else if xy.contains('R') {
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" && status != "?" {
+                                    git(&format!("show HEAD:{}", quoted(&file_path)))
+                                        .map(|o| o.stdout)
+                                        .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    read_capped(&file_path)
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        }
+                        Ok(json!(entries))
+                    }
+                    // Capped text read for git file views (size on bytes).
+                    "gitfileread" => {
+                        let bytes = core::fsops::read_binary(&p)?.bytes;
+                        if bytes > 2_000_000 {
+                            return Err("file too large to display".into());
+                        }
+                        let text = core::fsops::read(&p)?;
+                        Ok(json!({ "content": text, "size": bytes }))
+                    }
+                    // Project search routed through the same fs-op switch
+                    // (root resolved relative to cwd like Electron's handler).
+                    "searchproject" | "search" => {
+                        let cwd = str_param("cwd");
+                        let root =
+                            PathBuf::from(if cwd.is_empty() { "." } else { &cwd }).join(&path);
+                        let req = parse_search_request(&params)?;
+                        let hits = core::search::search(&root, &req);
+                        Ok(to_json(hits)?)
                     }
                     other => Err(format!("unsupported fs-op: {other}")),
                 }
@@ -183,7 +625,11 @@ impl HostState {
             "desktop:open-external" => {
                 let url = arg(0).as_str().unwrap_or_default().to_string();
                 let res = core::tools::open_url(&url);
-                if res.ok { Ok(json!({ "ok": true })) } else { Err(res.message) }
+                if res.ok {
+                    Ok(json!({ "ok": true }))
+                } else {
+                    Err(res.message)
+                }
             }
 
             // ── OS terminal ─────────────────────────────────────────────────
@@ -191,7 +637,11 @@ impl HostState {
             "desktop:open-terminal-app" => {
                 let cwd = arg(0).as_str().unwrap_or_default().to_string();
                 let res = core::tools::open_terminal_app(&cwd);
-                if res.ok { Ok(json!({ "ok": true })) } else { Err(res.message) }
+                if res.ok {
+                    Ok(json!({ "ok": true }))
+                } else {
+                    Err(res.message)
+                }
             }
 
             // ── Search ──────────────────────────────────────────────────────
@@ -605,9 +1055,56 @@ fn default_data_dir() -> PathBuf {
         .join("jait-desktop")
 }
 
+/// Resolves an fs-op path Node-style: empty → cwd, `~` → home, relative →
+/// cwd-joined, absolute kept. Windows backslashes are normalized so a path
+/// copied from Windows works on either platform's join logic.
+pub fn resolve_fs_path(path: &str) -> std::path::PathBuf {
+    use std::path::PathBuf;
+    let path = path.replace('\\', "/");
+    let p = PathBuf::from(path.trim());
+    if p.as_os_str().is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else if p.starts_with("~") {
+        match core::info::home_dir() {
+            Some(home) => home.join(p.strip_prefix("~").unwrap_or(&p)),
+            None => p,
+        }
+    } else if p.is_absolute() {
+        p
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(p)
+    }
+}
+
+/// Electron parity: git-like ops accept either `{ command: "status -s" }`
+/// or `{ args: ["status", "-s"] }`; both map onto one argv list.
+fn git_like_args(params: &Value) -> String {
+    if let Some(args) = params.get("args").and_then(Value::as_array) {
+        return args
+            .iter()
+            .map(|v| match v {
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
+    // Gateway also sends `args` as a plain string (`args: "remote"`).
+    if let Some(args) = params.get("args").and_then(Value::as_str) {
+        return args.to_string();
+    }
+    params
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
 fn parse_search_request(params: &Value) -> Result<core::types::SearchRequest, String> {
-    let req: core::types::SearchRequest =
-        serde_json::from_value(params.clone()).map_err(|e| format!("invalid search request: {e}"))?;
+    let req: core::types::SearchRequest = serde_json::from_value(params.clone())
+        .map_err(|e| format!("invalid search request: {e}"))?;
     // Electron rejects anything but these two modes outright.
     if req.mode != "files" && req.mode != "content" {
         return Err("Search mode must be \"files\" or \"content\".".into());
@@ -952,6 +1449,129 @@ done
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// The ws `proxyFsOp` bridge (node capability) sends `(op, params-object)`
+    /// and expects Electron-shaped results: read/readBinary → `{ content }`,
+    /// list → bare names (dirs suffixed "/"), stat → `{ size, isDirectory, modified }`.
+    #[test]
+    fn fs_op_params_object_matches_gateway_contract() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("hello.txt"), "hi glue").unwrap();
+
+        // read → { content, size }
+        let read = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("read"), json!({ "path": dir.join("hello.txt") })],
+            )
+            .expect("params read ok");
+        assert_eq!(read["content"], json!("hi glue"));
+        assert_eq!(read["size"], json!(7));
+
+        // readBinary → { content } base64
+        let bin = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("readBinary"),
+                    json!({ "path": dir.join("hello.txt") }),
+                ],
+            )
+            .expect("params readBinary ok");
+        assert_eq!(
+            String::from_utf8(base64_decode(bin["content"].as_str().expect("base64 str"))).unwrap(),
+            "hi glue"
+        );
+
+        // write via params object
+        st.dispatch(
+            "desktop:fs-op",
+            &[
+                json!("write"),
+                json!({ "path": dir.join("hello.txt"), "content": "bye glue" }),
+            ],
+        )
+        .expect("params write ok");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("hello.txt")).unwrap(),
+            "bye glue"
+        );
+
+        // list → bare names, dirs suffixed "/" (Electron `list` shape)
+        let list = st
+            .dispatch("desktop:fs-op", &[json!("list"), json!({ "path": dir })])
+            .expect("params list ok");
+        let names: Vec<String> = serde_json::from_value(list).expect("list is string[]");
+        assert!(names.iter().any(|n| n == "hello.txt"));
+        assert!(names.iter().any(|n| n == "sub/"));
+
+        // stat → { size, isDirectory, modified }
+        let stat = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("stat"), json!({ "path": dir.join("sub") })],
+            )
+            .expect("params stat ok");
+        assert_eq!(stat["isDirectory"], json!(true));
+        assert!(stat["size"].is_u64());
+        assert!(stat["modified"].is_string());
+
+        // exists via params object
+        let exists = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("exists"), json!({ "path": dir.join("hello.txt") })],
+            )
+            .expect("params exists ok");
+        assert_eq!(exists, json!(true));
+
+        // git → { stdout, stderr, exitCode }
+        let git = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("git"),
+                    json!({ "command": "echo git-ok", "cwd": dir }),
+                ],
+            )
+            .expect("params git ok");
+        assert_eq!(git["stdout"], json!("git-ok\n"));
+        assert_eq!(git["exitCode"], json!(0));
+
+        // errors propagate (unknown path → dispatch error, like Electron rejects)
+        assert!(st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("read"), json!({ "path": dir.join("nope.txt") })],
+            )
+            .is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Minimal standard-base64 decoder for the readBinary contract test.
+    fn base64_decode(input: &str) -> Vec<u8> {
+        const TABLE: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = Vec::new();
+        let mut buf = 0u32;
+        let mut bits = 0u32;
+        for c in input.bytes() {
+            if c == b'=' {
+                break;
+            }
+            let v = TABLE.iter().position(|&t| t == c).expect("valid base64") as u32;
+            buf = (buf << 6) | v;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                out.push((buf >> bits) as u8);
+            }
+        }
+        out
+    }
+
     #[test]
     fn tool_op_execute_runs_command_and_collects_output() {
         let st = state();
@@ -1035,8 +1655,11 @@ done
         // Urgency arrives as the third positional arg (shim parity).
         let (sink_u, events_u) = recording_sink();
         st.add_sink(sink_u);
-        st.dispatch("desktop:notify", &[json!("Urgent"), json!("now"), json!("critical")])
-            .expect("urgent notify ok");
+        st.dispatch(
+            "desktop:notify",
+            &[json!("Urgent"), json!("now"), json!("critical")],
+        )
+        .expect("urgent notify ok");
         let hits_u = wait_for(
             &events_u,
             |(ch, p)| ch == "desktop:notify" && p["urgency"] == json!("critical"),
@@ -1320,5 +1943,225 @@ done
             std::thread::sleep(Duration::from_millis(50));
         }
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── desktop:fs-op contract (Electron parity) ───────────────────────────
+
+    #[test]
+    fn resolve_fs_path_matches_node_semantics() {
+        // Empty → cwd.
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(resolve_fs_path(""), cwd);
+        assert_eq!(resolve_fs_path("  "), cwd);
+
+        // Absolute kept, backslashes normalized.
+        let abs = if cfg!(windows) {
+            "C:\\repo\\file.ts"
+        } else {
+            "/repo/file.ts"
+        };
+        let resolved = resolve_fs_path(abs);
+        assert!(resolved.is_absolute());
+
+        // Relative → cwd-joined.
+        assert_eq!(resolve_fs_path("sub/dir"), cwd.join("sub/dir"));
+
+        // `~` → home.
+        if let Some(home) = core::info::home_dir() {
+            assert_eq!(resolve_fs_path("~/notes.txt"), home.join("notes.txt"));
+            assert_eq!(resolve_fs_path("~"), home);
+        }
+    }
+
+    #[test]
+    fn fs_op_gateway_shapes() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+
+        // Gateway contract shape: (op, params-object, requestId).
+        let read = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("read"),
+                    json!({ "path": dir.join("a.txt") }),
+                    json!(1),
+                ],
+            )
+            .unwrap();
+        assert_eq!(read, json!({ "content": "hello", "size": 5 }));
+
+        // `list` → dirs suffixed with "/".
+        let list = st
+            .dispatch("desktop:fs-op", &[json!("list"), json!({ "path": dir })])
+            .unwrap();
+        let list = list.as_array().unwrap();
+        assert!(list.contains(&json!("a.txt")));
+        assert!(list.contains(&json!("sub/")));
+
+        // `readdir` → [{ name, path, type }].
+        let entries = st
+            .dispatch("desktop:fs-op", &[json!("readdir"), json!({ "path": dir })])
+            .unwrap();
+        let entries = entries.as_array().unwrap();
+        let a = entries.iter().find(|e| e["name"] == "a.txt").unwrap();
+        assert_eq!(a["type"], "file");
+        assert_eq!(
+            a["path"],
+            json!(dir.join("a.txt").to_string_lossy().into_owned())
+        );
+        let sub = entries.iter().find(|e| e["name"] == "sub").unwrap();
+        assert_eq!(sub["type"], "dir");
+
+        // stat → { size, isDirectory, isFile, modified }.
+        let stat = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("stat"), json!({ "path": dir.join("a.txt") })],
+            )
+            .unwrap();
+        assert_eq!(stat["size"], json!(5));
+        assert_eq!(stat["isDirectory"], json!(false));
+        assert_eq!(stat["isFile"], json!(true));
+        assert!(stat["modified"].as_str().is_some());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// gh-check → Electron shape `{ installed, authenticated, username }`
+    /// regardless of whether `gh` exists on this machine.
+    #[test]
+    fn gh_check_reports_electron_shape() {
+        let st = state();
+        let out = st
+            .dispatch("desktop:fs-op", &[json!("gh-check"), json!({})])
+            .expect("gh-check ok");
+        assert!(out.get("installed").is_some());
+        assert!(out.get("authenticated").is_some());
+        if out["installed"].as_bool() == Some(false) {
+            assert_eq!(out["authenticated"], json!(false));
+        }
+    }
+
+    /// git-file-diffs (uncommitted mode) mirrors Electron: rows carry
+    /// path/original/modified/status against a real git repo.
+    #[test]
+    fn git_file_diffs_lists_working_tree_changes() {
+        let st = state();
+        let dir = temp_dir();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .expect("git runs");
+            assert!(
+                out.status.success(),
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        std::fs::write(dir.join("kept.txt"), "one\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "init"]);
+        std::fs::write(dir.join("kept.txt"), "one\ntwo\n").unwrap();
+        std::fs::write(dir.join("new.txt"), "fresh\n").unwrap();
+
+        let rows = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("git-file-diffs"), json!({ "cwd": dir.to_string_lossy() })],
+            )
+            .expect("git-file-diffs ok");
+        let rows = rows.as_array().expect("rows array");
+
+        let kept = rows
+            .iter()
+            .find(|r| r["path"] == "kept.txt")
+            .expect("kept.txt row");
+        assert_eq!(kept["status"], "M");
+        assert_eq!(kept["original"], "one\n");
+        assert!(kept["modified"].as_str().unwrap().contains("two"));
+
+        let fresh = rows
+            .iter()
+            .find(|r| r["path"] == "new.txt")
+            .expect("new.txt row");
+        assert_eq!(fresh["status"], "?");
+        assert_eq!(fresh["original"], "");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_patch_roundtrip() {
+        let st = state();
+        let dir = temp_dir();
+        let file = dir.join("f.txt");
+        std::fs::write(&file, "const a = 1;").unwrap();
+
+        let out = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("patch"),
+                    json!({ "path": file, "oldString": "1", "newString": "2" }),
+                ],
+            )
+            .unwrap();
+        assert_eq!(out, json!({ "ok": true, "matched": true }));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "const a = 2;");
+
+        // Missing oldString errors instead of silently writing.
+        let err = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("patch"),
+                    json!({ "path": file, "oldString": "nope", "newString": "x" }),
+                ],
+            )
+            .unwrap_err();
+        assert!(err.contains("not found"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_write_then_read_positional_shape() {
+        let st = state();
+        let dir = temp_dir();
+        let file = dir.join("pos.txt");
+
+        // Positional shape: (op, path, content).
+        st.dispatch(
+            "desktop:fs-op",
+            &[json!("write"), json!(file), json!("body")],
+        )
+        .unwrap();
+        let read = st
+            .dispatch("desktop:fs-op", &[json!("read"), json!(file)])
+            .unwrap();
+        assert_eq!(read, json!({ "content": "body", "size": 4 }));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_unknown_op_errors() {
+        let st = state();
+        assert!(st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("teleport"), json!({ "path": "/x" })]
+            )
+            .is_err());
     }
 }

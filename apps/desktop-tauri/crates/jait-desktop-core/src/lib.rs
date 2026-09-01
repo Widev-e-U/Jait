@@ -38,19 +38,33 @@ pub use types::ToolResult;
 pub enum DesktopEvent {
     /// Replaces `sendProviderEvent` → arrives on renderer channel `gateway:event`.
     #[serde(rename = "provider.event-from-child")]
-    ProviderEvent { sessionId: String, notification: serde_json::Value },
+    ProviderEvent {
+        sessionId: String,
+        notification: serde_json::Value,
+    },
     /// Replaces `sendTerminalOutputEvent` → arrives on renderer channel `gateway:event`.
     #[serde(rename = "terminal.output-from-child")]
     TerminalOutput { terminalId: String, data: String },
     /// Replaces `sendTerminalExitEvent` → arrives on renderer channel `gateway:event`.
     #[serde(rename = "terminal.exit-from-child")]
-    TerminalExit { terminalId: String, exitCode: Option<i32>, signal: Option<String> },
+    TerminalExit {
+        terminalId: String,
+        exitCode: Option<i32>,
+        signal: Option<String>,
+    },
     /// Replaces `sendBackgroundCommandCompleteEvent` → arrives on `gateway:event`.
     #[serde(rename = "tool.background-complete-from-child")]
-    BackgroundComplete { backgroundId: String, exitCode: Option<i32>, output: String },
+    BackgroundComplete {
+        backgroundId: String,
+        exitCode: Option<i32>,
+        output: String,
+    },
     /// Replaces direct channels (`desktop:open-folder`, `window:maximized-change`, …).
     #[serde(rename = "desktop.event")]
-    Direct { channel: String, payload: serde_json::Value },
+    Direct {
+        channel: String,
+        payload: serde_json::Value,
+    },
 }
 
 impl DesktopEvent {
@@ -60,14 +74,21 @@ impl DesktopEvent {
     pub fn from_provider_event(event: ProviderEvent) -> DesktopEvent {
         let json = match serde_json::to_value(&event) {
             Ok(json) => json,
-            Err(_) => return DesktopEvent::Direct { channel: "gateway:event".into(), payload: serde_json::Value::Null },
+            Err(_) => {
+                return DesktopEvent::Direct {
+                    channel: "gateway:event".into(),
+                    payload: serde_json::Value::Null,
+                }
+            }
         };
         let session_id = json
             .get("sessionId")
             .and_then(serde_json::Value::as_str)
             .unwrap_or_default()
             .to_string();
-        DesktopEvent::ProviderEvent { sessionId: session_id, notification: json }
+        DesktopEvent::ProviderEvent {
+            sessionId: session_id,
+            notification: json,
+        }
     }
 }
-

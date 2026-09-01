@@ -43,7 +43,9 @@ fn os_version() -> String {
         .ok()
         .and_then(|s| {
             s.lines().find(|l| l.starts_with("PRETTY_NAME=")).map(|l| {
-                l.trim_start_matches("PRETTY_NAME=").trim_matches('"').to_string()
+                l.trim_start_matches("PRETTY_NAME=")
+                    .trim_matches('"')
+                    .to_string()
             })
         })
         .unwrap_or_else(|| {
@@ -53,7 +55,11 @@ fn os_version() -> String {
                 .args(["-r"])
                 .output()
                 .ok()
-                .and_then(|o| String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string()))
+                .and_then(|o| {
+                    String::from_utf8(o.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                })
                 .unwrap_or_else(|| "unknown".to_string())
         })
 }
@@ -70,9 +76,11 @@ fn read_meminfo_kb(key: &str) -> u64 {
     std::fs::read_to_string("/proc/meminfo")
         .ok()
         .and_then(|s| {
-            s.lines()
-                .find(|l| l.starts_with(key))
-                .and_then(|l| l.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()))
+            s.lines().find(|l| l.starts_with(key)).and_then(|l| {
+                l.split_whitespace()
+                    .nth(1)
+                    .and_then(|v| v.parse::<u64>().ok())
+            })
         })
         .unwrap_or(0)
 }

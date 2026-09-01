@@ -165,7 +165,11 @@ mod tests {
     fn store_get_clear_roundtrip() {
         // Deterministic: isolated file fallback for the test process.
         std::env::set_var("JAIT_CREDENTIALS_FILE", {
-            let p = std::env::temp_dir().join(format!("jait-cred-{}-{}.b64", std::process::id(), uuid::Uuid::new_v4()));
+            let p = std::env::temp_dir().join(format!(
+                "jait-cred-{}-{}.b64",
+                std::process::id(),
+                uuid::Uuid::new_v4()
+            ));
             p.to_string_lossy().into_owned()
         });
         clear("agent:test").ok();

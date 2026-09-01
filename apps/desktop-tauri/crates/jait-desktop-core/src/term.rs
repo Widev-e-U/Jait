@@ -43,7 +43,9 @@ pub struct SessionRegistry {
 }
 
 impl SessionRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Spawn a PTY running the user's default interactive shell in `cwd`.
     pub async fn start(
@@ -55,12 +57,21 @@ impl SessionRegistry {
         on_exit: impl Fn(Option<i32>, Option<String>) + Send + 'static,
     ) -> Result<TerminalStart, String> {
         let shell = detect_shell();
-        let cwd_path = if cwd.is_empty() { home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")) } else { std::path::PathBuf::from(cwd) };
+        let cwd_path = if cwd.is_empty() {
+            home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+        } else {
+            std::path::PathBuf::from(cwd)
+        };
         std::fs::create_dir_all(&cwd_path).ok();
 
         let pty_system = native_pty_system();
         let pair = pty_system
-            .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|e| format!("failed to open pty: {e}"))?;
 
         let mut cmd = portable_pty::CommandBuilder::new(&shell);
@@ -71,10 +82,19 @@ impl SessionRegistry {
             cmd = portable_pty::CommandBuilder::new(&shell);
             cmd.cwd(&cwd_path);
         }
-        let mut child = pair.slave.spawn_command(cmd).map_err(|e| format!("failed to spawn shell: {e}"))?;
+        let mut child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| format!("failed to spawn shell: {e}"))?;
         let pid = child.process_id();
-        let mut reader = pair.master.try_clone_reader().map_err(|e| format!("failed to clone pty reader: {e}"))?;
-        let writer = pair.master.take_writer().map_err(|e| format!("failed to take pty writer: {e}"))?;
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| format!("failed to clone pty reader: {e}"))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|e| format!("failed to take pty writer: {e}"))?;
 
         let id = uuid::Uuid::new_v4().to_string();
         let session = Arc::new(TermSession {
@@ -135,7 +155,12 @@ impl SessionRegistry {
 
     /// Send raw stdin bytes (base64 or plain string from the renderer).
     pub fn input(&self, terminal_id: &str, data: &str) -> Result<TerminalAck, String> {
-        let session = self.map.lock().get(terminal_id).cloned().ok_or("terminal not found")?;
+        let session = self
+            .map
+            .lock()
+            .get(terminal_id)
+            .cloned()
+            .ok_or("terminal not found")?;
         let mut w = session.writer.lock();
         if let Some(writer) = w.as_mut() {
             if data.starts_with("base64:") {
@@ -145,7 +170,9 @@ impl SessionRegistry {
                     .map_err(|e| format!("bad base64: {e}"))?;
                 writer.write_all(&bytes).map_err(|e| e.to_string())?;
             } else {
-                writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+                writer
+                    .write_all(data.as_bytes())
+                    .map_err(|e| e.to_string())?;
             }
             writer.flush().map_err(|e| e.to_string())?;
             Ok(TerminalAck { ok: true })
@@ -155,11 +182,21 @@ impl SessionRegistry {
     }
 
     pub fn resize(&self, terminal_id: &str, cols: u16, rows: u16) -> Result<TerminalAck, String> {
-        let session = self.map.lock().get(terminal_id).cloned().ok_or("terminal not found")?;
+        let session = self
+            .map
+            .lock()
+            .get(terminal_id)
+            .cloned()
+            .ok_or("terminal not found")?;
         session
             .master
             .lock()
-            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|e| format!("resize failed: {e}"))?;
         Ok(TerminalAck { ok: true })
     }
@@ -171,19 +208,29 @@ impl SessionRegistry {
             let mut map = self.map.lock();
             map.remove(terminal_id)
         };
-        let Some(session) = session else { return Ok(TerminalAck { ok: true }) };
+        let Some(session) = session else {
+            return Ok(TerminalAck { ok: true });
+        };
         *session.alive.lock() = false;
         *session.writer.lock() = None;
         Ok(TerminalAck { ok: true })
     }
 
     pub fn is_alive(&self, terminal_id: &str) -> bool {
-        self.map.lock().get(terminal_id).map(|s| *s.alive.lock()).unwrap_or(false)
+        self.map
+            .lock()
+            .get(terminal_id)
+            .map(|s| *s.alive.lock())
+            .unwrap_or(false)
     }
 }
 
 fn child_wait(child: &mut Box<dyn portable_pty::Child + Send + Sync>) -> Option<i32> {
-    child.wait().ok().and_then(|s| s.exit_code().try_into().ok()).map(|c: i64| c as i32)
+    child
+        .wait()
+        .ok()
+        .and_then(|s| s.exit_code().try_into().ok())
+        .map(|c: i64| c as i32)
 }
 
 pub fn detect_shell() -> String {
@@ -211,7 +258,9 @@ mod tests {
 
     #[tokio::test]
     async fn start_echoes_and_exits() {
-        if cfg!(target_os = "windows") { return; }
+        if cfg!(target_os = "windows") {
+            return;
+        }
         let registry = SessionRegistry::new();
         let dir = std::env::temp_dir().join(format!("jait-term-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -223,21 +272,35 @@ mod tests {
                 dir.to_str().unwrap(),
                 80,
                 24,
-                move |s| { let _ = tx_out.send(s); },
-                move |_, _| { let _ = tx_exit.send(()); },
+                move |s| {
+                    let _ = tx_out.send(s);
+                },
+                move |_, _| {
+                    let _ = tx_exit.send(());
+                },
             )
             .await
             .unwrap();
         assert!(!start.terminal_id.is_empty());
-        assert!(start.shell.contains("bash") || start.shell.contains("sh"), "shell={}", start.shell);
+        assert!(
+            start.shell.contains("bash") || start.shell.contains("sh"),
+            "shell={}",
+            start.shell
+        );
 
-        registry.input(&start.terminal_id, "echo hello-jait\n").unwrap();
+        registry
+            .input(&start.terminal_id, "echo hello-jait\n")
+            .unwrap();
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let mut seen = String::new();
         while std::time::Instant::now() < deadline {
-            if let Ok(s) = rx_out.try_recv() { seen.push_str(&s); }
-            if seen.contains("hello-jait") { break; }
+            if let Ok(s) = rx_out.try_recv() {
+                seen.push_str(&s);
+            }
+            if seen.contains("hello-jait") {
+                break;
+            }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         assert!(seen.contains("hello-jait"), "output: {seen:?}");
