@@ -199,7 +199,10 @@ export function getWsUrl(): string {
  */
 export function isGatewayConfigured(): boolean {
   if (supportsGatewayOverride() && getStoredGatewayUrl()) return true
-  if (typeof window !== 'undefined' && (window as any).jaitDesktop?.gatewayUrl) return true
+  if (typeof window !== 'undefined' && window.jaitDesktop?.gatewayUrl) {
+    const tauriBoot = window.__JAIT_DESKTOP_BOOT__
+    if (tauriBoot?.platform !== 'tauri' || tauriBoot.gatewayConfigured === true) return true
+  }
   if (import.meta.env.VITE_API_URL) return true
   if (!supportsGatewayOverride()) return true
   return false

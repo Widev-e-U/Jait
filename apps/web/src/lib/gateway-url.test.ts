@@ -48,4 +48,57 @@ describe('gateway-url websocket resolution', () => {
     const mod = await import('./gateway-url')
     expect(mod.getWsUrl()).toBe('ws://host.docker.internal:4173')
   })
+
+  it('treats the Tauri localhost fallback as unconfigured until the user saves a URL', async () => {
+    vi.stubGlobal('localStorage', storage)
+    vi.stubGlobal('window', {
+      location: {
+        origin: 'tauri://localhost',
+        protocol: 'tauri:',
+        hostname: 'localhost',
+        port: '',
+      },
+      localStorage: storage,
+      jaitDesktop: {
+        gatewayUrl: 'http://localhost:8000',
+      },
+      __JAIT_DESKTOP_BOOT__: {
+        gatewayUrl: 'http://localhost:8000',
+        gatewayConfigured: false,
+        platform: 'tauri',
+      },
+      dispatchEvent: () => true,
+    } as unknown as Window & typeof globalThis)
+
+    const mod = await import('./gateway-url')
+    expect(mod.isGatewayConfigured()).toBe(false)
+
+    mod.setStoredGatewayUrl('http://192.168.1.20:8000')
+    expect(mod.isGatewayConfigured()).toBe(true)
+  })
+
+  it('respects an explicitly configured Tauri gateway from the environment', async () => {
+    vi.stubGlobal('localStorage', storage)
+    vi.stubGlobal('window', {
+      location: {
+        origin: 'tauri://localhost',
+        protocol: 'tauri:',
+        hostname: 'localhost',
+        port: '',
+      },
+      localStorage: storage,
+      jaitDesktop: {
+        gatewayUrl: 'http://192.168.1.30:8000',
+      },
+      __JAIT_DESKTOP_BOOT__: {
+        gatewayUrl: 'http://192.168.1.30:8000',
+        gatewayConfigured: true,
+        platform: 'tauri',
+      },
+      dispatchEvent: () => true,
+    } as unknown as Window & typeof globalThis)
+
+    const mod = await import('./gateway-url')
+    expect(mod.isGatewayConfigured()).toBe(true)
+  })
 })

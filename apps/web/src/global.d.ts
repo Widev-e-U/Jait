@@ -64,6 +64,12 @@ declare global {
   interface Window {
     jaitDesktop?: JaitDesktop
     Capacitor?: unknown
+    __JAIT_DESKTOP_BOOT__?: {
+      gatewayUrl?: string
+      gatewayConfigured?: boolean
+      deviceID?: string
+      platform?: string
+    }
   }
 }
 

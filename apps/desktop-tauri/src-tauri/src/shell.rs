@@ -198,6 +198,10 @@ fn gateway_url() -> String {
     gateway_url_from(std::env::var("JAIT_GATEWAY_URL").ok())
 }
 
+fn gateway_url_is_configured() -> bool {
+    std::env::var("JAIT_GATEWAY_URL").is_ok()
+}
+
 /// Renderer URL. Electron dev loads `http://localhost:3000` (vite dev server,
 /// overridable via `JAIT_WEB_DEV_URL`); packaged builds load the bundled web
 /// app from extraResources. Tauri parity:
@@ -227,7 +231,7 @@ fn web_url(gateway: &str) -> WebviewUrl {
 
 /// Boot constants injected as an initialization script *before* the shim,
 /// mirroring electron-main.ts / preload.cts contract (gatewayUrl, deviceID).
-fn boot_script(gateway: &str, glue: &Arc<Mutex<HostState>>) -> String {
+fn boot_script(gateway: &str, gateway_configured: bool, glue: &Arc<Mutex<HostState>>) -> String {
     let device_id = glue
         .lock()
         .dispatch("desktop:host-info", &[json!("device-id")])
@@ -235,8 +239,9 @@ fn boot_script(gateway: &str, glue: &Arc<Mutex<HostState>>) -> String {
         .and_then(|v| v.as_str().map(str::to_string))
         .unwrap_or_default();
     format!(
-        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, deviceID: {}, platform: 'tauri' }};",
+        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, deviceID: {}, platform: 'tauri' }};",
         serde_json::to_string(gateway).unwrap_or_else(|_| "null".into()),
+        gateway_configured,
         serde_json::to_string(&device_id).unwrap_or_else(|_| "null".into()),
     )
 }
@@ -260,7 +265,8 @@ pub fn run() {
             glue.lock().add_sink(install_sink(app.handle()));
 
             let gateway = gateway_url();
-            let boot = boot_script(&gateway, &glue);
+            let gateway_configured = gateway_url_is_configured();
+            let boot = boot_script(&gateway, gateway_configured, &glue);
 
             let builder = WebviewWindowBuilder::new(app, "main", web_url(&gateway))
                 .title("Jait")

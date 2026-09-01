@@ -4515,8 +4515,13 @@ function App() {
     return <DetachedTerminalView detachedId={detachedTerminalId} />
   }
 
-  if (gatewayReachable === false) {
-    return <GatewayUnavailable onRetry={retryGatewayReachable} />
+  if (gatewayReachable === false && !(isStandaloneApp && requiresAuthGate)) {
+    return (
+      <GatewayUnavailable
+        onRetry={retryGatewayReachable}
+        canSetBackend={isStandaloneApp}
+      />
+    )
   }
 
   return (
