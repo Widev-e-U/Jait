@@ -138,18 +138,17 @@ fn create_tray(app: &AppHandle, glue: &Arc<Mutex<HostState>>) -> tauri::Result<(
         }
     }
 
-    let show = MenuItemBuilder::with_id(app, "tray-show", "Show Jait").build()?;
-    let share_start = MenuItemBuilder::with_id(app, "tray-share-start", "Start Sharing").build()?;
-    let share_stop = MenuItemBuilder::with_id(app, "tray-share-stop", "Stop Sharing").build()?;
+    let show = MenuItemBuilder::with_id("tray-show", "Show Jait").build(app)?;
+    let share_start = MenuItemBuilder::with_id("tray-share-start", "Start Sharing").build(app)?;
+    let share_stop = MenuItemBuilder::with_id("tray-share-stop", "Stop Sharing").build(app)?;
     let share_submenu =
         Submenu::with_items(app, "Screen Share", true, &[&share_start, &share_stop])?;
     let revoke = MenuItemBuilder::with_id(
-        app,
         "tray-revoke-computer-control",
         "Revoke remembered computer-control approval",
     )
-    .build()?;
-    let quit = MenuItemBuilder::with_id(app, "tray-quit", "Quit").build()?;
+    .build(app)?;
+    let quit = MenuItemBuilder::with_id("tray-quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app)
         .item(&show)
         .separator()
