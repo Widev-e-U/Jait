@@ -1,3 +1,4 @@
+import type React from 'react'
 import { Minus, Square, X } from 'lucide-react'
 
 export interface LinuxWindowControlsProps {
@@ -5,13 +6,17 @@ export interface LinuxWindowControlsProps {
 }
 
 /**
- * Custom minimize/maximize/close caption buttons for the Linux Electron window
- * (Windows uses native `titleBarOverlay`, macOS uses traffic lights). Extracted
- * from the `App` god component.
+ * Custom minimize/maximize/close caption buttons for frameless desktop shells:
+ * Electron Linux (no native controls) and the Tauri shell (frameless on every
+ * platform — it has no `titleBarOverlay` or traffic lights). Marked
+ * `no-drag` so the draggable titlebar can never swallow the clicks.
  */
 export function LinuxWindowControls({ isMaximized }: LinuxWindowControlsProps) {
   return (
-    <div className="flex items-center ml-2 -mr-2">
+    <div
+      className="flex items-center ml-2 -mr-2"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <button
         onClick={() => (window as any).jaitDesktop.windowMinimize()}
         className="flex h-[35px] w-11 items-center justify-center hover:bg-muted/80 transition-colors"

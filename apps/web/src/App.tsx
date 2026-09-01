@@ -353,7 +353,7 @@ function App() {
 
   const automationRefreshRef = useRef<() => Promise<void>>(async () => {})
   const automationRefreshSelectedThreadRef = useRef<() => Promise<void>>(async () => {})
-  const { desktopPlatform, isMaximized } = useDesktopWindow()
+  const { desktopPlatform, isMaximized, desktopRuntime } = useDesktopWindow()
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
   const [activeProjectFileId, setActiveProjectFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<AvailableFileForMention[]>([])
@@ -4545,6 +4545,7 @@ function App() {
               closeScreenSharePanel={closeScreenSharePanel}
               currentView={currentView}
               desktopPlatform={desktopPlatform}
+              desktopRuntime={desktopRuntime}
               handleApplyUpdate={handleApplyUpdate}
               handleLogout={handleLogout}
               handleThemeModeChange={handleThemeModeChange}

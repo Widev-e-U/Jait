@@ -52,6 +52,7 @@ interface AppHeaderProps {
   closeScreenSharePanel: any
   currentView: any
   desktopPlatform: any
+  desktopRuntime: 'electron' | 'tauri' | null
   handleApplyUpdate: any
   handleLogout: any
   handleThemeModeChange: any
@@ -97,6 +98,7 @@ export function AppHeader(props: AppHeaderProps) {
     closeScreenSharePanel,
     currentView,
     desktopPlatform,
+    desktopRuntime,
     handleApplyUpdate,
     handleLogout,
     handleThemeModeChange,
@@ -195,10 +197,14 @@ export function AppHeader(props: AppHeaderProps) {
                   ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
                   : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
               }
+              data-tauri-drag-region={desktopRuntime === 'tauri' || undefined}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
-                paddingRight: desktopPlatform === 'win32' ? 140 : undefined,
+                // Native titleBarOverlay buttons exist only in the Electron
+                // shell; the Tauri shell is frameless everywhere and renders
+                // custom caption buttons instead (see below).
+                paddingRight: (desktopRuntime === 'electron' && desktopPlatform === 'win32') ? 140 : undefined,
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
@@ -480,8 +486,11 @@ export function AppHeader(props: AppHeaderProps) {
             </>
             )}
 
-            {/* Linux custom window controls (Windows uses native titleBarOverlay, macOS uses traffic lights) */}
-            {isElectron && desktopPlatform === 'linux' && (
+            {/* Custom caption buttons: Electron Linux (no native controls) and
+                the Tauri shell (frameless on every platform — no
+                titleBarOverlay or traffic lights). Electron Windows/macOS use
+                their native chrome. */}
+            {isElectron && (desktopPlatform === 'linux' || desktopRuntime === 'tauri') && (
               <LinuxWindowControls isMaximized={isMaximized} />
             )}
           </div>
