@@ -18,6 +18,11 @@ import { haveRenderInputsChanged } from '@/lib/message-element-cache'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getProjectRepositoryId } from '@/lib/project-repositories'
 
+// Below this chat-panel width the floating top indicators (git-diff pill on the
+// left, context-window donut on the right) sit on top of transcript text, so
+// both are hidden entirely (display: none) instead of overlapping the text.
+const FLOATING_CHAT_INDICATORS_MIN_WIDTH = 480
+
 interface DeveloperChatWorkspaceProps {
   activeProject: any
   activeProjectId: string | null
@@ -233,6 +238,30 @@ export function DeveloperChatWorkspace({
 }: DeveloperChatWorkspaceProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [consentPresent, setConsentPresent] = useState(false)
+  // Width of the chat panel, used to hide the floating top indicators when the
+  // panel gets too narrow (they would overlap transcript text otherwise).
+  const [chatPanelWidth, setChatPanelWidth] = useState(0)
+  const chatPanelRef = useRef<HTMLDivElement | null>(null)
+  const attachChatPanelElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      chatPanelRef.current = node
+      setChatPanelElement(node)
+    },
+    [setChatPanelElement],
+  )
+  useEffect(() => {
+    const el = chatPanelRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? el.clientWidth
+      setChatPanelWidth((prev) => (prev === width ? prev : width))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  // 0 = not measured yet; treat as visible so indicators don't flash hidden.
+  const showFloatingChatIndicators =
+    chatPanelWidth === 0 || chatPanelWidth >= FLOATING_CHAT_INDICATORS_MIN_WIDTH
   const handleMessageEditingChange = useCallback((messageId: string, editing: boolean) => {
     setEditingMessageId((current) => editing ? messageId : current === messageId ? null : current)
   }, [])
@@ -483,14 +512,14 @@ export function DeveloperChatWorkspace({
 
   return (
     <div
-      ref={setChatPanelElement}
+      ref={attachChatPanelElement}
       className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
       style={developerChatPanelStyle}
     >
       {!chatCollapsed && (
         <>
           {!showDebugPanel && isProjectChat && activeProjectHasRepo && (
-            <div className="absolute top-2 left-2 z-10">
+            <div className={`absolute top-2 left-2 z-10 ${showFloatingChatIndicators ? '' : 'hidden'}`}>
               <GitDiffIndicator
                 projectRoot={activeProjectRoot}
                 nodeId={activeProject?.nodeId}
@@ -504,7 +533,7 @@ export function DeveloperChatWorkspace({
             // On desktop the conversation shows the minimap scrollbar (96px) flush to
             // the right edge, and the jump-to-previous-user-message button sits just left
             // of that; offset the indicator clear of both, not under them.
-            <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[156px]'}`}>
+            <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[156px]'} ${showFloatingChatIndicators ? '' : 'hidden'}`}>
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}
