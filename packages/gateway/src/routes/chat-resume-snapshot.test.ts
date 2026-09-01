@@ -149,7 +149,11 @@ describe("/events replay tagging", () => {
   // effects — wiping the todo list the snapshot had just restored.
   it("tags replayed payloads with replay:true so clients skip turn-end side effects", () => {
     const src = source();
-    const start = src.indexOf("const history = loadSessionEvents(sessionId);");
+    // The /events replay filters in SQL now, so its call carries the resume
+    // position — match that exact call to slice the /events block (the
+    // trajectory stream's unfiltered `loadSessionEvents(sessionId)` must not
+    // be picked up by this needle).
+    const start = src.indexOf("const history = loadSessionEvents(sessionId, resumeFrom);");
     const end = src.indexOf("// Real turn-state heartbeat", start);
     const replayBlock = src.slice(start, end);
 

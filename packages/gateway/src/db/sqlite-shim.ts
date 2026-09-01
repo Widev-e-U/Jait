@@ -26,6 +26,17 @@ export interface SqliteDatabase {
   exec(sql: string): void;
   prepare(sql: string): SqliteStatement;
   close(): void;
+  /**
+   * better-sqlite3-compatible transaction API: returns an object with
+   * deferred/immediate/exclusive run functions. drizzle-orm's session calls
+   * `client.transaction(fn)[behavior](tx)`. bun:sqlite and better-sqlite3
+   * provide this natively; the node:sqlite wrapper implements it below.
+   */
+  transaction(fn: (...args: unknown[]) => unknown): {
+    deferred(...args: unknown[]): unknown;
+    immediate(...args: unknown[]): unknown;
+    exclusive(...args: unknown[]): unknown;
+  };
 }
 
 // ── Runtime detection ──────────────────────────────────────────────────────
@@ -58,6 +69,34 @@ function wrapNodeSqlite(rawDb: unknown): SqliteDatabase {
   return {
     exec: (sql: string) => db.exec(sql),
     close: () => db.close(),
+    // better-sqlite3 API: db.transaction(fn) returns a function with
+    // .deferred()/.immediate()/.exclusive() variants. drizzle-orm's session
+    // invokes `client.transaction(fn)[behavior](tx)` where `tx` is drizzle's
+    // own transaction wrapper passed through to `fn`.
+    transaction(fn: (...args: unknown[]) => unknown) {
+      const run = (mode: "DEFERRED" | "IMMEDIATE" | "EXCLUSIVE") =>
+        (...args: unknown[]): unknown => {
+          db.exec(`BEGIN ${mode}`);
+          try {
+            const result = fn(...args);
+            db.exec("COMMIT");
+            return result;
+          } catch (err) {
+            try {
+              db.exec("ROLLBACK");
+            } catch {
+              // rollback itself failed (e.g. no active tx) — surface the
+              // original error, not the rollback failure.
+            }
+            throw err;
+          }
+        };
+      return {
+        deferred: run("DEFERRED"),
+        immediate: run("IMMEDIATE"),
+        exclusive: run("EXCLUSIVE"),
+      };
+    },
     prepare: (sql: string) => {
       const stmt = db.prepare(sql);
       let rawMode = false;

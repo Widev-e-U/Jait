@@ -55,6 +55,11 @@ export async function openDatabase(dbPath?: string): Promise<{ db: JaitDB; sqlit
 
   // Enable WAL mode for better concurrent read performance
   sqlite.exec("PRAGMA journal_mode = WAL");
+  // NORMAL (WAL default pairing) syncs only at checkpoints instead of on every
+  // commit. With FULL, each per-event INSERT in the stream log fsyncs the disk
+  // on the gateway event loop, which stalls chat streaming. Durability tradeoff:
+  // a power loss can lose the last commits, but the DB never corrupts (WAL).
+  sqlite.exec("PRAGMA synchronous = NORMAL");
   sqlite.exec("PRAGMA foreign_keys = ON");
 
   const db = await createDrizzle(sqlite);

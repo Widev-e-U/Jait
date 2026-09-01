@@ -23,7 +23,7 @@ import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable, sessionEvents as sessionEventsTable, subAgentHistory as subAgentHistoryTable } from "../db/schema.js";
-import { and, asc, desc, eq, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, ne, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { persistSubAgentHistories, stripSubAgentPayloads } from "../lib/sub-agent-persistence.js";
@@ -1757,6 +1757,9 @@ function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscri
  */
 export function emitTurnDone(sessionId: string, doneEvent: StreamEvent) {
   emitToSubscribers(sessionId, doneEvent);
+  // Terminal event: make the buffered tail durable right away so a restart
+  // (or a client reconnect in a fresh process) replays the complete turn.
+  flushPendingSessionEvents(sessionId);
 }
 
 // ── Session trajectory event log ─────────────────────────────────────
@@ -1766,9 +1769,86 @@ export function emitTurnDone(sessionId: string, doneEvent: StreamEvent) {
 // is a monotonic per-session counter; the trajectory SSE endpoint uses it to
 // dedup replay vs live delivery without relying on the per-turn `seq` field
 // (which resets on every turn and is only meaningful to live resume clients).
-const MAX_PERSISTED_EVENTS_PER_SESSION = 20_000;
+const MAX_PERSISTED_EVENTS_PER_SESSION = 3_000;
+// Stream events (thinking/token deltas especially) arrive in bursts of dozens
+// per second. Writing each one as its own SQLite transaction put a commit on
+// the event loop for every delta. Buffer rows per session and flush them as a
+// single transaction on a short timer — the in-memory counter still advances
+// synchronously, so log_id ordering and replay dedup are unaffected.
+const PERSIST_FLUSH_INTERVAL_MS = 100;
+const PERSIST_FLUSH_MAX_PENDING_ROWS = 2_000;
 const sessionEventCounter = new Map<string, number>();
 const sessionEventBuffer = new Map<string, Array<{ log_id: number; type: string; payload: string; created_at: number }>>();
+
+// Tool results can carry multi-MB payloads (full command output, file dumps).
+// Persisting them unbounded bloated both the DB and every reconnect replay
+// (JSON.parse + re-stringify of the whole log on the event loop). Bounded
+// frames still carry type/status so replay reconciliation works; `truncated`
+// tells clients to render a notice instead of the payload.
+const MAX_EVENT_PAYLOAD_BYTES = 1_000_000;
+
+function clampEventPayload(event: StreamEvent): string {
+  const payload = JSON.stringify(event);
+  if (payload.length <= MAX_EVENT_PAYLOAD_BYTES) return payload;
+  return JSON.stringify({
+    type: event.type,
+    truncated: true,
+    original_bytes: Buffer.byteLength(payload),
+    message: "event payload truncated for the trajectory log (too large to persist)",
+  });
+}
+
+type PendingEventRow = { sessionId: string; logId: number; type: string; payload: string; createdAt: number };
+const pendingEventRows = new Map<string, PendingEventRow[]>();
+const pendingFlushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+let lastFlushFailureLogAt = 0;
+
+function flushPendingSessionEvents(sessionId: string): void {
+  const timer = pendingFlushTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    pendingFlushTimers.delete(sessionId);
+  }
+  const rows = pendingEventRows.get(sessionId);
+  if (!rows || rows.length === 0 || !_dbRef) return;
+  pendingEventRows.set(sessionId, []);
+  try {
+    // Single multi-row INSERT — one statement is atomic in SQLite, so no
+    // explicit transaction is needed (db.transaction() was a silent trap on
+    // the node:sqlite drizzle shim until sqlite-shim.ts grew a real
+    // transaction implementation).
+    _dbRef.insert(sessionEventsTable).values(rows).run();
+    // Prune off the hot path: only when the batch crossed a 1000 boundary.
+    const lastLogId = rows[rows.length - 1]!.logId;
+    if (Math.floor(lastLogId / 1_000) !== Math.floor((lastLogId - rows.length) / 1_000)) {
+      _dbRef.delete(sessionEventsTable)
+        .where(and(
+          eq(sessionEventsTable.sessionId, sessionId),
+          lt(sessionEventsTable.logId, lastLogId - MAX_PERSISTED_EVENTS_PER_SESSION),
+        ))
+        .run();
+    }
+  } catch (e) {
+    // Best-effort, same as the previous per-event insert semantics: a failed
+    // trajectory write must not break live event delivery. But never lose
+    // data silently: re-queue (bounded, newest kept) and log rate-limited.
+    const buffered = pendingEventRows.get(sessionId);
+    const room = PERSIST_FLUSH_MAX_PENDING_ROWS - (buffered?.length ?? 0);
+    if (room > 0) {
+      const back = rows.length > room ? rows.slice(rows.length - room) : rows;
+      pendingEventRows.set(sessionId, [...back, ...(buffered ?? [])]);
+    }
+    const now = Date.now();
+    if (now - lastFlushFailureLogAt > 30_000) {
+      lastFlushFailureLogAt = now;
+      console.error(
+        `[chat] session event flush failed (${rows.length} rows re-queued):`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+}
 
 type SessionEventRow = { log_id: number; type: string; payload: string; created_at: number };
 
@@ -1779,6 +1859,9 @@ function seedSessionEventCounter(sessionId: string): void {
     return;
   }
   try {
+    // A counter can only be missing on the first event after startup, but flush
+    // defensively so the MAX below never under-reads unflushed batched rows.
+    flushPendingSessionEvents(sessionId);
     const row = _dbRef
       .select({ maxLogId: sql<number>`COALESCE(MAX(${sessionEventsTable.logId}), 0)` })
       .from(sessionEventsTable)
@@ -1794,23 +1877,19 @@ function persistStreamEvent(sessionId: string, event: StreamEvent, ts: number): 
   seedSessionEventCounter(sessionId);
   const logId = (sessionEventCounter.get(sessionId) ?? 0) + 1;
   sessionEventCounter.set(sessionId, logId);
-  const payload = JSON.stringify(event);
+  const payload = clampEventPayload(event);
   if (_dbRef) {
-    try {
-      _dbRef.insert(sessionEventsTable)
-        .values({ sessionId, logId, type: event.type, payload, createdAt: ts })
-        .run();
-      // Keep the log bounded: prune the oldest rows occasionally.
-      if (logId % 200 === 0) {
-        _dbRef.delete(sessionEventsTable)
-          .where(and(
-            eq(sessionEventsTable.sessionId, sessionId),
-            lt(sessionEventsTable.logId, logId - MAX_PERSISTED_EVENTS_PER_SESSION),
-          ))
-          .run();
-      }
-    } catch {
-      return null;
+    const rows = pendingEventRows.get(sessionId) ?? [];
+    rows.push({ sessionId, logId, type: event.type, payload, createdAt: ts });
+    pendingEventRows.set(sessionId, rows);
+    const isTerminalEvent = event.type === "done" || event.type === "request";
+    if (isTerminalEvent || rows.length >= PERSIST_FLUSH_MAX_PENDING_ROWS) {
+      flushPendingSessionEvents(sessionId);
+    } else if (!pendingFlushTimers.has(sessionId)) {
+      const timer = setTimeout(() => flushPendingSessionEvents(sessionId), PERSIST_FLUSH_INTERVAL_MS);
+      // Must not keep the process alive just to flush a trajectory buffer.
+      timer.unref?.();
+      pendingFlushTimers.set(sessionId, timer);
     }
   } else {
     const buf = sessionEventBuffer.get(sessionId) ?? [];
@@ -1823,9 +1902,18 @@ function persistStreamEvent(sessionId: string, event: StreamEvent, ts: number): 
   return logId;
 }
 
-function loadSessionEvents(sessionId: string): SessionEventRow[] {
+function loadSessionEvents(sessionId: string, minLogIdExclusive?: number): SessionEventRow[] {
   if (_dbRef) {
+    // Readers must see every emitted event, including rows still waiting in the
+    // batch buffer for their flush timer.
+    flushPendingSessionEvents(sessionId);
     try {
+      const where = typeof minLogIdExclusive === "number"
+        ? and(
+            eq(sessionEventsTable.sessionId, sessionId),
+            gt(sessionEventsTable.logId, minLogIdExclusive),
+          )
+        : eq(sessionEventsTable.sessionId, sessionId);
       return _dbRef
         .select({
           log_id: sessionEventsTable.logId,
@@ -1834,10 +1922,14 @@ function loadSessionEvents(sessionId: string): SessionEventRow[] {
           created_at: sessionEventsTable.createdAt,
         })
         .from(sessionEventsTable)
-        .where(eq(sessionEventsTable.sessionId, sessionId))
+        .where(where)
         .orderBy(asc(sessionEventsTable.logId))
         .all();
-    } catch {
+    } catch (e) {
+      console.error(
+        "[chat] session event replay load failed:",
+        e instanceof Error ? e.message : e,
+      );
       return [];
     }
   }
@@ -5430,10 +5522,11 @@ export function registerChatRoutes(
     // logged between the two: every event already in the log with log_id >
     // resumeFrom was replayed, and every event emitted from here on has
     // log_id > lastReplayedLogId and is forwarded exactly once.
-    const history = loadSessionEvents(sessionId);
+    // Filter resume position in SQL: loading the full log on every reconnect
+    // parsed and re-stringified thousands of stale frames on the event loop.
+    const history = loadSessionEvents(sessionId, resumeFrom);
     let lastReplayedLogId = resumeFrom;
     for (const ev of history) {
-      if (ev.log_id <= resumeFrom) continue;
       lastReplayedLogId = ev.log_id;
       let payloadObj: unknown;
       try { payloadObj = JSON.parse(ev.payload); } catch { payloadObj = {}; }
