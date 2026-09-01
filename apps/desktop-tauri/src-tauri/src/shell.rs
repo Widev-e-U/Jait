@@ -5,12 +5,16 @@
 //! `desktop_ipc` re-enforces the same channel allow-list the preload shim
 //! uses before touching glue.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State, Window, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder, Submenu},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, RunEvent, State, Window, WebviewUrl, WebviewWindowBuilder,
+};
 
 use jait_desktop_glue::{HostSink, HostState};
 
@@ -85,6 +89,111 @@ fn notify_native(payload: &Value) {
 pub fn install_sink(app: &AppHandle) -> HostSink {
     let handle = app.clone();
     Arc::new(move |channel, payload| emit_glue_event(&handle, channel, payload))
+}
+
+/// Set just before `app.exit(0)` so the window-close handler lets the main
+/// window actually close instead of hiding (Electron `isQuitting` parity).
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+/// Show + focus the main window. Electron parity:
+/// `mainWindow?.show(); mainWindow?.focus();` (tray click, second instance).
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Tray icon, bundled from the same asset Electron uses. Requires the
+/// `image-png` tauri feature to decode at runtime.
+fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
+    const TRAY_PNG: &[u8] = include_bytes!("../../../desktop/assets/tray-icon.png");
+    tauri::image::Image::from_bytes(TRAY_PNG)
+        .map_err(|e| tauri::Error::AssetNotFound(format!("tray-icon.png: {e}").into()))
+}
+
+/// Tray icon + background-runtime menu, mirroring `createTray` in
+/// electron-main.ts: Show Jait / Screen Share submenu (Start/Stop Sharing →
+/// `screenshare-start|stop` window events, the names the shim subscribes to) /
+/// revoke remembered computer-control approval / Quit. Left-click shows the
+/// window, right-click opens the menu (`tray.on("click")` + setContextMenu).
+fn create_tray(app: &AppHandle, glue: &Arc<Mutex<HostState>>) -> tauri::Result<()> {
+    fn revoke_computer_control(glue: &Arc<Mutex<HostState>>) {
+        // Electron: if (getSetting("computerControl.trustedUntil", 0) > now)
+        // setSetting("computerControl.trustedUntil", 0); computerControl.stop().
+        // The Tauri glue has no computer-control server yet, so only the
+        // setting is cleared (gap noted in the parity report).
+        let trusted_until = glue
+            .lock()
+            .dispatch("desktop:get-setting", &[json!("computerControl.trustedUntil")])
+            .ok()
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        if trusted_until > 0 {
+            let _ = glue.lock().dispatch(
+                "desktop:set-setting",
+                &[json!("computerControl.trustedUntil"), json!(0)],
+            );
+        }
+    }
+
+    let show = MenuItemBuilder::with_id(app, "tray-show", "Show Jait").build()?;
+    let share_start = MenuItemBuilder::with_id(app, "tray-share-start", "Start Sharing").build()?;
+    let share_stop = MenuItemBuilder::with_id(app, "tray-share-stop", "Stop Sharing").build()?;
+    let share_submenu =
+        Submenu::with_items(app, "Screen Share", true, &[&share_start, &share_stop])?;
+    let revoke = MenuItemBuilder::with_id(
+        app,
+        "tray-revoke-computer-control",
+        "Revoke remembered computer-control approval",
+    )
+    .build()?;
+    let quit = MenuItemBuilder::with_id(app, "tray-quit", "Quit").build()?;
+    let menu = MenuBuilder::new(app)
+        .item(&show)
+        .separator()
+        .item(&share_submenu)
+        .separator()
+        .item(&revoke)
+        .separator()
+        .item(&quit)
+        .build()?;
+
+    let glue_for_menu = glue.clone();
+    TrayIconBuilder::with_id("jait-tray")
+        .icon(tray_icon()?)
+        .tooltip("Jait Desktop")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(move |app, event| match event.id().as_ref() {
+            "tray-show" => show_main_window(app),
+            "tray-share-start" => {
+                let _ = app.emit("screenshare-start", json!({}));
+            }
+            "tray-share-stop" => {
+                let _ = app.emit("screenshare-stop", json!({}));
+            }
+            "tray-revoke-computer-control" => revoke_computer_control(&glue_for_menu),
+            "tray-quit" => {
+                QUITTING.store(true, Ordering::SeqCst);
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            // Electron: tray.on("click"/"double-click") → show + focus.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
 }
 
 /// Single funnel for every Electron-style IPC call from the preload shim.
@@ -231,18 +340,32 @@ fn web_url(gateway: &str) -> WebviewUrl {
 
 /// Boot constants injected as an initialization script *before* the shim,
 /// mirroring electron-main.ts / preload.cts contract (gatewayUrl, deviceID).
-fn boot_script(gateway: &str, gateway_configured: bool, glue: &Arc<Mutex<HostState>>) -> String {
+fn boot_script(
+    gateway: &str,
+    gateway_configured: bool,
+    glue: &Arc<Mutex<HostState>>,
+    open_folder: Option<&std::path::Path>,
+) -> String {
     let device_id = glue
         .lock()
         .dispatch("desktop:host-info", &[json!("device-id")])
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
         .unwrap_or_default();
+    // `openFolder` feeds the shim's initial onOpenFolder callback (Electron:
+    // mainWindow.webContents.send("renderer:open-folder", folder) after
+    // did-finish-load when launched with --open-folder / a file argument).
+    let open_folder_json = match open_folder {
+        Some(path) => serde_json::to_string(&path.display().to_string())
+            .unwrap_or_else(|_| "null".into()),
+        None => "null".to_string(),
+    };
     format!(
-        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, deviceID: {}, platform: 'tauri' }};",
+        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, deviceID: {}, openFolder: {}, platform: 'tauri' }};",
         serde_json::to_string(gateway).unwrap_or_else(|_| "null".into()),
         gateway_configured,
         serde_json::to_string(&device_id).unwrap_or_else(|_| "null".into()),
+        open_folder_json,
     )
 }
 
@@ -250,8 +373,23 @@ fn boot_script(gateway: &str, gateway_configured: bool, glue: &Arc<Mutex<HostSta
 const SHIM_JS: &str = include_str!("../guest-js/shim.js");
 
 pub fn run() {
+    // Launch flags shared with Electron: --hidden (start minimized to the
+    // tray) and --open-folder / bare absolute path (pre-load a folder).
+    let opts = crate::launch_options_from_argv(&std::env::args().collect::<Vec<String>>());
     let glue = Arc::new(Mutex::new(HostState::new()));
     tauri::Builder::default()
+        // Electron `requestSingleInstanceLock` parity. Must be registered
+        // first (plugin docs) so a second launch is rejected before any
+        // window work happens.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Electron second-instance handler: focus the main window and
+            // forward any `--open-folder` / bare path hand-off to the
+            // renderer (electron-main.ts sends `renderer:open-folder`).
+            show_main_window(app);
+            if let Some(folder) = crate::resolve_folder_arg(&argv) {
+                let _ = app.emit("open-folder", json!({ "folderPath": folder.display().to_string() }));
+            }
+        }))
         // Plugins the shim/preload can reach through `plugin:*` invokes. The
         // capability file grants them, but nothing works unless they are
         // actually registered on this builder.
@@ -266,13 +404,18 @@ pub fn run() {
 
             let gateway = gateway_url();
             let gateway_configured = gateway_url_is_configured();
-            let boot = boot_script(&gateway, gateway_configured, &glue);
+            let boot = boot_script(&gateway, gateway_configured, &glue, opts.open_folder.as_deref());
 
-            let builder = WebviewWindowBuilder::new(app, "main", web_url(&gateway))
+            let mut builder = WebviewWindowBuilder::new(app, "main", web_url(&gateway))
                 .title("Jait")
                 .inner_size(1440.0, 900.0)
                 .min_inner_size(960.0, 640.0)
                 .decorations(false);
+            // --hidden launch: build the window hidden; the tray Show item /
+            // second-instance callback bring it up later.
+            if opts.start_hidden {
+                builder = builder.visible(false);
+            }
             // Electron disables HTML file drops on webviews (drag-drop is
             // handled by the app itself); wry exposes that knob on Windows only.
             #[cfg(windows)]
@@ -283,7 +426,20 @@ pub fn run() {
                 .initialization_script(&boot)
                 .initialization_script(SHIM_JS)
                 .build()?;
+            // Electron parity: tray icon + background menu (createTray).
+            create_tray(app.handle(), &glue)?;
             Ok(())
+        })
+        // Closing the main window hides it instead of exiting so tray
+        // background behavior keeps webview state alive (Electron
+        // `close` → preventDefault + hide unless isQuitting).
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && !QUITTING.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             desktop_ipc,
@@ -295,8 +451,14 @@ pub fn run() {
             window_start_drag,
             open_project_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running jait desktop shell");
+        .build(tauri::generate_context!())
+        .expect("error while building jait desktop shell")
+        .run(|_app_handle, event| {
+            // Glue children (PTY shells, background commands) rely on process
+            // teardown at exit; HostState has no stop_all() yet — tracked in
+            // the Electron-parity gap report.
+            if let RunEvent::Exit = event {}
+        });
 }
 
 #[cfg(test)]

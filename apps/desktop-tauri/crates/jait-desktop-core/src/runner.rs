@@ -275,12 +275,16 @@ fn spawn_cli(
     engine_args: &[String],
     spec: &RunnerSpec,
 ) -> Result<Child, String> {
+    use crate::StdCommandConsoleHide;
     let mut cmd = Command::new(&resolved.program);
     cmd.args(resolved.args.iter().chain(engine_args.iter()));
     cmd.current_dir(&spec.working_directory);
     for (k, v) in &spec.env {
         cmd.env(k, v);
     }
+    // Agent CLIs run headless (piped stdio); on Windows they must not flash
+    // a console host in front of the user.
+    cmd.hide_console();
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::piped());

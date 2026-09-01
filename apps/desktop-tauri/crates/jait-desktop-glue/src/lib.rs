@@ -59,6 +59,8 @@ fn run_git_like(
     if !cwd.is_empty() {
         cmd.current_dir(cwd);
     }
+    // Windowed host: no console flash for headless git/gh shell runs.
+    core::StdCommandConsoleHide::hide_console(&mut cmd);
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("{program} spawn failed: {e}"))?;
@@ -1122,6 +1124,8 @@ fn shell_program(command: &str) -> std::process::Command {
     if cfg!(target_os = "windows") {
         let mut c = std::process::Command::new("cmd");
         c.args(["/C", command]);
+        // Windowed host: CREATE_NO_WINDOW so tool runs never flash a console.
+        core::StdCommandConsoleHide::hide_console(&mut c);
         c
     } else {
         let mut c = std::process::Command::new("sh");

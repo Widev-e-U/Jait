@@ -94,9 +94,159 @@ pub fn translate_glue_event(channel: &str, payload: &Value) -> Option<(String, V
     }
 }
 
+/// Folder handed to a second launch via `--open-folder=<path>`, a bare
+/// absolute path (macOS Finder "Open With"), or `--open-folder <path>`.
+/// Mirrors Electron's second-instance → `renderer:open-folder` hand-off:
+/// the path is canonicalized when it exists so the webview receives the
+/// real location, and kept as-is when it doesn't (same as electron-main.ts,
+/// which ignores unresolvable paths).
+///
+/// `argv` includes the program name at index 0, exactly like
+/// `std::env::args()` and the tauri-plugin-single-instance callback.
+pub fn resolve_folder_arg(argv: &[String]) -> Option<std::path::PathBuf> {
+    let mut bare: Option<String> = None;
+    let mut i = 1; // skip program name
+    while i < argv.len() {
+        let arg = &argv[i];
+        if let Some(rest) = arg.strip_prefix("--open-folder=") {
+            if !rest.is_empty() {
+                bare = Some(rest.to_string());
+            }
+        } else if arg == "--open-folder" {
+            if let Some(next) = argv.get(i + 1) {
+                bare = Some(next.clone());
+                i += 1;
+            }
+        } else if !arg.starts_with('-') {
+            // Last non-flag positional arg wins (Finder-style single path).
+            bare = Some(arg.clone());
+        }
+        i += 1;
+    }
+    let raw = bare?;
+    let path = std::path::PathBuf::from(&raw);
+    if !path.is_absolute() {
+        return None; // same guard electron-main.ts applies
+    }
+    match std::fs::canonicalize(&path) {
+        Ok(resolved) => Some(resolved),
+        Err(_) => Some(path), // keep the raw path for new-folder flows
+    }
+}
+
+/// Launch flags shared with Electron: `--hidden` (also `-hidden`/`--start-hidden`,
+/// the electron convention) starts minimized to the tray, `--open-folder`
+/// pre-loads a folder into the main window.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LaunchOptions {
+    pub start_hidden: bool,
+    pub open_folder: Option<std::path::PathBuf>,
+}
+
+pub fn launch_options_from_argv(argv: &[String]) -> LaunchOptions {
+    let start_hidden = argv
+        .iter()
+        .skip(1)
+        .any(|a| a == "--hidden" || a == "-hidden" || a == "--start-hidden");
+    LaunchOptions {
+        start_hidden,
+        open_folder: resolve_folder_arg(argv),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn launch_options_parse_hidden_and_folder() {
+        let argv: Vec<String> = ["/usr/bin/jait", "--hidden", "--open-folder=/tmp"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let opts = launch_options_from_argv(&argv);
+        assert!(opts.start_hidden);
+        assert_eq!(opts.open_folder, Some(std::path::PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn launch_options_electron_hidden_aliases() {
+        for flag in ["-hidden", "--hidden", "--start-hidden"] {
+            let argv: Vec<String> = ["/usr/bin/jait", flag]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            assert!(launch_options_from_argv(&argv).start_hidden, "{flag}");
+        }
+        let argv: Vec<String> = ["/usr/bin/jait", "--hidden-mode"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(!launch_options_from_argv(&argv).start_hidden);
+    }
+
+    #[test]
+    fn launch_options_space_separated_folder() {
+        let argv: Vec<String> = ["/usr/bin/jait", "--open-folder", "/tmp"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let opts = launch_options_from_argv(&argv);
+        assert!(!opts.start_hidden);
+        assert_eq!(opts.open_folder, Some(std::path::PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn launch_options_bare_absolute_path_wins() {
+        let argv: Vec<String> = ["/usr/bin/jait", "/tmp"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let opts = launch_options_from_argv(&argv);
+        assert_eq!(opts.open_folder, Some(std::path::PathBuf::from("/tmp")));
+        assert!(!opts.start_hidden);
+    }
+
+    #[test]
+    fn launch_options_relative_paths_ignored() {
+        let argv: Vec<String> = ["/usr/bin/jait", "sub/dir"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(launch_options_from_argv(&argv).open_folder.is_none());
+        let empty: Vec<String> = vec!["/usr/bin/jait".to_string()];
+        let opts = launch_options_from_argv(&empty);
+        assert!(!opts.start_hidden);
+        assert!(opts.open_folder.is_none());
+    }
+
+    #[test]
+    fn resolve_folder_canonicalizes_existing_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let nested = dir.path().join("link-target");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        let argv: Vec<String> = vec![
+            "/usr/bin/jait".to_string(),
+            format!(
+                "--open-folder={}",
+                dir.path().join("link-target").display()
+            ),
+        ];
+        let resolved = resolve_folder_arg(&argv).expect("folder resolved");
+        assert_eq!(resolved, nested);
+    }
+
+    #[test]
+    fn resolve_folder_keeps_nonexistent_absolute_paths() {
+        let argv: Vec<String> = vec![
+            "/usr/bin/jait".to_string(),
+            "--open-folder=/definitely/not/here".to_string(),
+        ];
+        assert_eq!(
+            resolve_folder_arg(&argv),
+            Some(std::path::PathBuf::from("/definitely/not/here"))
+        );
+    }
 
     #[test]
     fn provider_events_pass_through() {

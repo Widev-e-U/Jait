@@ -51,9 +51,11 @@ fn os_version() -> String {
         .unwrap_or_else(|| {
             // Windows / macOS callers report the OS via their own mechanisms;
             // mirroring Electron requires the real OS version, so query it.
-            std::process::Command::new("uname")
-                .args(["-r"])
-                .output()
+            use crate::StdCommandConsoleHide;
+            let mut cmd = std::process::Command::new("uname");
+            cmd.args(["-r"]);
+            cmd.hide_console();
+            cmd.output()
                 .ok()
                 .and_then(|o| {
                     String::from_utf8(o.stdout)

@@ -223,6 +223,28 @@ impl SessionRegistry {
             .map(|s| *s.alive.lock())
             .unwrap_or(false)
     }
+
+    /// Ids of terminals that are still alive (used for app teardown
+    /// bookkeeping, mirroring electron-main.ts `list` on quit).
+    pub fn alive_ids(&self) -> Vec<String> {
+        self.map
+            .lock()
+            .iter()
+            .filter(|(_, s)| *s.alive.lock())
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// Stop every live terminal and clear the registry. Mirrors
+    /// electron-main.ts `stopAllTerminals` on app quit: kill the process
+    /// group, drop the PTY (SIGHUP-equivalent) and mark not alive.
+    pub fn stop_all(&self) {
+        let sessions: Vec<(String, Arc<TermSession>)> = self.map.lock().drain().collect();
+        for (_, session) in sessions {
+            *session.alive.lock() = false;
+            *session.writer.lock() = None;
+        }
+    }
 }
 
 fn child_wait(child: &mut Box<dyn portable_pty::Child + Send + Sync>) -> Option<i32> {

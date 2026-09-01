@@ -207,13 +207,15 @@ pub fn get_roots() -> RootsOut {
         });
         // Additional drives are enumerated best-effort via wmic in Electron;
         // PowerShell `Get-Volume` handles the same listing here.
-        if let Ok(out) = std::process::Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "(Get-Volume | Where-Object DriveLetter).DriveLetter",
-            ])
-            .output()
+        use crate::StdCommandConsoleHide;
+        let mut ps = std::process::Command::new("powershell.exe");
+        ps.args([
+            "-NoProfile",
+            "-Command",
+            "(Get-Volume | Where-Object DriveLetter).DriveLetter",
+        ]);
+        ps.hide_console();
+        if let Ok(out) = ps.output()
         {
             if let Ok(text) = String::from_utf8(out.stdout) {
                 for l in text.lines() {

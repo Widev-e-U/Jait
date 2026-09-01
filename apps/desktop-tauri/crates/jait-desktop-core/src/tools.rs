@@ -143,12 +143,15 @@ fn cap_output(s: &str) -> String {
 }
 
 fn build_shell_command(command: &str, cwd: &str) -> tokio::process::Command {
+    use crate::TokioCommandConsoleHide;
     if cfg!(target_os = "windows") {
         let mut c = tokio::process::Command::new("cmd");
         c.arg("/C").arg(command);
         if !cwd.is_empty() {
             c.current_dir(cwd);
         }
+        // Windowed host: never let cmd.exe pop a console for tool runs.
+        c.hide_console();
         c
     } else {
         let mut c = tokio::process::Command::new("bash");
@@ -176,14 +179,26 @@ pub fn open_url(url: &str) -> ToolResult {
             data: None,
         };
     }
+    #[allow(unused_mut)]
+    let mut res: std::io::Result<std::process::Child>;
     #[cfg(target_os = "windows")]
-    let res = std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .spawn();
+    {
+        use crate::StdCommandConsoleHide;
+        // cmd /C start is the Windows shell.openExternal equivalent; without
+        // CREATE_NO_WINDOW its console host flashes on every URL open.
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", "", url]);
+        cmd.hide_console();
+        res = cmd.spawn();
+    }
     #[cfg(target_os = "macos")]
-    let res = std::process::Command::new("open").arg(url).spawn();
+    {
+        res = std::process::Command::new("open").arg(url).spawn();
+    }
     #[cfg(all(unix, not(target_os = "macos")))]
-    let res = std::process::Command::new("xdg-open").arg(url).spawn();
+    {
+        res = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
     match res {
         Ok(_) => ToolResult {
             ok: true,

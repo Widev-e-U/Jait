@@ -28,6 +28,54 @@ pub mod types;
 pub use runner::{ProviderEvent, RunnerHandle, RunnerRegistry, RunnerSpec};
 pub use types::ToolResult;
 
+/// Windows `CREATE_NO_WINDOW` flag: keeps spawned console children (cmd,
+/// powershell, git, …) from flashing a console window in front of the user.
+/// Applied through the [`hide_console`] helpers below; a no-op off-Windows.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Extension used by every `std::process::Command` spawn site in the core.
+/// On Windows this sets `CREATE_NO_WINDOW`; other platforms do nothing.
+///
+/// Electron parity note: Electron's `child_process` runs with the same
+/// `windowsHide: true` semantics for a windowed (subsystem=windows) host.
+pub trait StdCommandConsoleHide {
+    fn hide_console(&mut self);
+}
+
+#[cfg(windows)]
+impl StdCommandConsoleHide for std::process::Command {
+    fn hide_console(&mut self) {
+        use std::os::windows::process::CommandExt;
+        self.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+#[cfg(not(windows))]
+impl StdCommandConsoleHide for std::process::Command {
+    fn hide_console(&mut self) {}
+}
+
+/// Same suppression for `tokio::process::Command` spawn sites (git/gh and
+/// shell-tool runners run async under the glue's tokio runtime).
+pub trait TokioCommandConsoleHide {
+    fn hide_console(&mut self);
+}
+
+#[cfg(windows)]
+impl TokioCommandConsoleHide for tokio::process::Command {
+    fn hide_console(&mut self) {
+        // tokio::process::Command mirrors std's CommandExt on Windows.
+        use std::os::windows::process::CommandExt;
+        self.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+#[cfg(not(windows))]
+impl TokioCommandConsoleHide for tokio::process::Command {
+    fn hide_console(&mut self) {}
+}
+
 /// Events the desktop host emits to the web UI (mirrors `webContents.send`).
 /// The JS shim turns these into `window.jaitDesktop` event listeners.
 /// Field names use camelCase on purpose — they must match the Electron

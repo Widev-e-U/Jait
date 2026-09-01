@@ -14,6 +14,7 @@
 //!   FileDiff rows for the Monaco diff editor.
 
 use crate::types::*;
+use crate::TokioCommandConsoleHide;
 use std::path::Path;
 
 /// Run `git <args>` in `cwd`. Arguments arrive space-split from the renderer
@@ -36,10 +37,12 @@ async fn run_with_timeout(program: &str, cwd: &Path, args: &str) -> Result<Comma
     }
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(60),
-        tokio::process::Command::new(program)
-            .args(&argv)
-            .current_dir(cwd)
-            .output(),
+        {
+            let mut cmd = tokio::process::Command::new(program);
+            cmd.args(&argv).current_dir(cwd);
+            cmd.hide_console();
+            cmd.output()
+        },
     )
     .await
     .map_err(|_| format!("{program} timed out after 60s"))?
