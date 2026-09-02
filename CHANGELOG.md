@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.811](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.811) — 2026-09-01
+- feat(web): native Windows caption buttons with Electron-matching sizing — efe044dd
+- feat(desktop): add search-op IPC + browse-path parity for shared web code — 222d2ff7
+- fix(tauri): glue execute envelope + shell parity with Electron — b9f8745c
+
 ## [v0.1.810](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.810) — 2026-09-01
 - chore(release): maintenance bump — no functional changes since v0.1.809
 
