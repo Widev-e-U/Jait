@@ -2167,8 +2167,42 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
   }
 });
 
+// ── Search op handler (parity with the Tauri glue's desktop:search-op) ──────
+// The glue dispatches ("run", {root, query, mode, limit, include?, isRegexp?,
+// includeIgnoredFiles?}) and rejects anything else — mirror that contract.
+ipcMain.handle("desktop:search-op", async (_event, op: string, params: Record<string, unknown>) => {
+  if (op !== "run") throw new Error(`unsupported search-op: ${op}`);
+  const { resolve } = await import("node:path");
+  const root = resolve(
+    typeof params.root === "string" ? params.root
+    : typeof params.rootPath === "string" ? params.rootPath
+    : "",
+  );
+  const mode = params.mode === "content"
+    ? "content"
+    : params.mode === "files"
+      ? "files"
+      : null;
+  if (!mode) throw new Error('Search mode must be "files" or "content".');
+  const { runDesktopProjectSearch } = await import("./project-search.js");
+  return runDesktopProjectSearch({
+    root,
+    query: typeof params.query === "string" ? params.query : "",
+    mode,
+    limit: typeof params.limit === "number" && params.limit > 0 ? params.limit : 20,
+    include: typeof params.include === "string" ? params.include : undefined,
+    isRegexp: params.isRegexp === true,
+    includeIgnoredFiles: params.includeIgnoredFiles === true,
+  });
+});
+
 ipcMain.handle("desktop:browse-path", async (_event, dirPath: string) => {
   const { resolve, dirname, join } = await import("node:path");
+  // The Tauri glue resolves a missing path to a {Err: ...} value instead of
+  // throwing; mirror that so a no-arg browse() call behaves the same here.
+  if (!dirPath) {
+    return { Err: `browse failed: No such file or directory (os error 2)` };
+  }
   const resolved = resolve(dirPath);
   const raw = await readdir(resolved, { withFileTypes: true });
   const entries: { name: string; path: string; type: "dir" | "file" }[] = [];

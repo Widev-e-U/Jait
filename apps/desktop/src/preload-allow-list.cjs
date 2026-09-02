@@ -35,6 +35,7 @@ const allowedIpcChannels = {
         "browser:navigate",
         // Append only — preload.cts addresses these channels by index.
         "desktop:notify-close",
+        "desktop:search-op",
     ],
     on: ["screen-share:start", "screen-share:stop", "gateway:event", "window:maximized-change", "browser:navigation-state"],
 };

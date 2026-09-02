@@ -261,6 +261,10 @@ if (isJaitRenderer()) {
   fsOp: (op: string, params: Record<string, unknown>) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[8], op, params) as Promise<unknown>,
 
+  /** Run a project search (files/content) — parity with the Tauri glue */
+  searchOp: (op: string, params: Record<string, unknown>) =>
+    ipcRenderer.invoke("desktop:search-op", op, params) as Promise<unknown>,
+
   /** Detect locally installed CLI providers (codex, claude-code) */
   detectProviders: () =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[9]) as Promise<Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }>>,
