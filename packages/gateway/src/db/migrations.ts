@@ -1601,4 +1601,20 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 063: Sessions status index ─────────────────────────────────────
+  {
+    id: 63,
+    name: "sessions_status_index",
+    run(db) {
+      // Health metrics and cleanup sweeps count sessions by status. The only
+      // existing index leads with user_id, so SQLite scanned the whole table
+      // for those counts. A narrow (status, last_active_at) index lets the
+      // count run over the index alone.
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_status
+        ON sessions(status, last_active_at DESC)
+      `);
+    },
+  },
+
 ];

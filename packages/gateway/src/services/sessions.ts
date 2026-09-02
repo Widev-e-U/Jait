@@ -1,7 +1,7 @@
 /**
  * Session service — CRUD for sessions in SQLite.
  */
-import { and, eq, desc, not } from "drizzle-orm";
+import { and, eq, desc, not, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -35,6 +35,20 @@ export class SessionService {
     }).run();
 
     return this.getById(id)!;
+  }
+
+  /** Count sessions (optionally by status) without materializing rows. */
+  count(status?: string): number {
+    if (status) {
+      const row = this.db
+        .select({ n: sql<number>`count(*)` })
+        .from(sessions)
+        .where(eq(sessions.status, status))
+        .get();
+      return row?.n ?? 0;
+    }
+    const row = this.db.select({ n: sql<number>`count(*)` }).from(sessions).get();
+    return row?.n ?? 0;
   }
 
   /** List all sessions, newest first. Optionally filter by status. */

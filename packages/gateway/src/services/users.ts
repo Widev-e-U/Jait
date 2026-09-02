@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { JaitBackend } from "@jait/shared/types";
 import type { JaitDB } from "../db/connection.js";
@@ -95,8 +95,8 @@ export class UserService {
   constructor(private readonly db: JaitDB) {}
 
   countUsers(): number {
-    const row = this.db.select({ count: users.id }).from(users).all();
-    return row.length;
+    const row = this.db.select({ n: sql<number>`count(*)` }).from(users).get();
+    return row?.n ?? 0;
   }
 
   findByUsername(username: string): UserRecord | null {

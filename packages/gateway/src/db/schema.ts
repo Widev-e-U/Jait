@@ -49,7 +49,9 @@ export const sessions = sqliteTable("sessions", {
   status: text("status").default("active"), // 'active' | 'archived' | 'deleted'
   metadata: text("metadata"), // JSON
   viewedAt: text("viewed_at"), // last time the user opened/read this session
-});
+}, (table) => [
+  index("idx_sessions_status").on(table.status, table.lastActiveAt),
+]);
 
 // ─── Users ───────────────────────────────────────────────────────────
 export const users = sqliteTable(
