@@ -756,27 +756,68 @@ impl HostState {
             "desktop:tool-op" => {
                 let op = arg(0).as_str().unwrap_or_default().to_string();
                 let params = arg(1);
+                let meta = arg(2);
                 match op.as_str() {
-                    "execute" | "exec" => {
+                    // ── Shell ────────────────────────────────────────────
+                    // Electron parity (electron-main.ts desktop:tool-op execute):
+                    // the foreground envelope is `{ ok, message }` where message
+                    // carries the combined output — no data payload. Non-zero
+                    // exit / spawn errors are ok:false with the output (or the
+                    // spawn error) as the message, like execAsync's rejection.
+                    "execute" => {
                         let command = params
                             .get("command")
                             .and_then(Value::as_str)
-                            .unwrap_or_default();
+                            .unwrap_or_default()
+                            .to_string();
+                        if command.trim().is_empty() {
+                            return Ok(tool_err("No command provided".into()));
+                        }
                         let cwd = params
                             .get("cwd")
                             .and_then(Value::as_str)
-                            .unwrap_or_default();
-                        run_shell_command(command, cwd, None)
+                            .unwrap_or_default()
+                            .to_string();
+                        let timeout_ms = params.get("timeout").and_then(Value::as_u64);
+                        let out = run_shell_command_inner(&command, &cwd, timeout_ms);
+                        let mut output = out.stdout.clone();
+                        if !out.stderr.is_empty() {
+                            output.push('\n');
+                            output.push_str(&out.stderr);
+                        }
+                        let output = output.trim().to_string();
+                        if out.exit_code == 0 && !out.timed_out {
+                            let message = if output.is_empty() {
+                                "Command completed with no output".to_string()
+                            } else {
+                                output
+                            };
+                            Ok(json!({ "ok": true, "message": message }))
+                        } else {
+                            // Non-zero exit → output as message; spawn errors put
+                            // their message in stderr (matches Electron's
+                            // `output || e.message || "Command failed"` chain).
+                            let message = if !output.is_empty() {
+                                output
+                            } else if !out.stderr.trim().is_empty() {
+                                out.stderr.trim().to_string()
+                            } else {
+                                "Command failed".to_string()
+                            };
+                            Ok(json!({ "ok": false, "message": message }))
+                        }
                     }
                     "background" | "execute-background" => {
                         let command = params
                             .get("command")
                             .and_then(Value::as_str)
-                            .unwrap_or_default();
+                            .unwrap_or_default()
+                            .to_string();
                         let cwd = params
                             .get("cwd")
                             .and_then(Value::as_str)
-                            .unwrap_or_default();
+                            .unwrap_or_default()
+                            .to_string();
                         let background_id = params
                             .get("backgroundId")
                             .and_then(Value::as_str)
@@ -784,15 +825,15 @@ impl HostState {
                             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                         self.backgrounds.register(
                             background_id.clone(),
-                            command.to_string(),
-                            cwd.to_string(),
+                            command.clone(),
+                            cwd.clone(),
                         )?;
                         spawn_background(
                             self.backgrounds.clone(),
                             self.sinks.lock().clone(),
                             background_id.clone(),
-                            command.to_string(),
-                            cwd.to_string(),
+                            command,
+                            cwd,
                         );
                         Ok(json!({ "ok": true, "backgroundId": background_id }))
                     }
@@ -803,6 +844,167 @@ impl HostState {
                             .unwrap_or_default();
                         self.backgrounds.unregister(background_id);
                         Ok(json!({ "ok": true }))
+                    }
+                    // ── Files ────────────────────────────────────────────
+                    "file.read" | "read_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::read(&p) {
+                            Ok(txt) => Ok(tool_ok(&txt, json!({ "bytes": txt.len() }))),
+                            Err(e) => {
+                                Ok(tool_err(format!("Failed to read file: {}: {e}", p.display())))
+                            }
+                        }
+                    }
+                    "file.write" | "write_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let content = params
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        match write_file_with_parent(&p, content) {
+                            Ok(()) => Ok(tool_ok(
+                                &format!("File saved successfully to {}", p.display()),
+                                json!({ "bytes": content.len(), "path": p.display().to_string() }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Failed to write file: {e}"))),
+                        }
+                    }
+                    "file.append" | "append_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let content = params
+                            .get("content")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        match std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&p)
+                        {
+                            Ok(mut f) => match std::io::Write::write_all(&mut f, content.as_bytes())
+                            {
+                                Ok(()) => Ok(tool_ok(
+                                    &format!("Appended to {}", p.display()),
+                                    json!({ "bytes": content.len() }),
+                                )),
+                                Err(e) => Ok(tool_err(format!("Failed to append: {e}"))),
+                            },
+                            Err(e) => Ok(tool_err(format!("Failed to open for append: {e}"))),
+                        }
+                    }
+                    "file.edit" | "edit_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let search = params
+                            .get("search")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        let replace = params
+                            .get("replace")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        match core::fsops::patch(&p, search, replace) {
+                            Ok(_) => Ok(tool_ok(
+                                &format!("File edited successfully at {}", p.display()),
+                                json!({ "path": p.display().to_string() }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Edit failed: {e}"))),
+                        }
+                    }
+                    "file.list" | "list_dir" => {
+                        let p = tool_file_path(&params, &meta);
+                        match std::fs::read_dir(&p) {
+                            Ok(entries) => {
+                                let mut names: Vec<String> = entries
+                                    .filter_map(|e| e.ok())
+                                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                                    .collect();
+                                names.sort();
+                                let message = names.join("\n");
+                                Ok(tool_ok(&message, json!({ "names": names })))
+                            }
+                            Err(e) => Ok(tool_err(format!(
+                                "Failed to list directory: {}: {e}",
+                                p.display()
+                            ))),
+                        }
+                    }
+                    "file.stat" | "stat_path" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::stat(&p) {
+                            Ok(s) => Ok(tool_ok(
+                                "",
+                                json!({
+                                    "size": s.size,
+                                    "isDirectory": s.is_directory,
+                                    "isFile": s.is_file,
+                                    "modified": s.modified,
+                                }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Failed to stat: {}: {e}", p.display()))),
+                        }
+                    }
+                    // ── Search ───────────────────────────────────────────
+                    "search" | "file.search" => {
+                        let query = params
+                            .get("query")
+                            .or_else(|| params.get("pattern"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        if query.trim().is_empty() {
+                            return Ok(tool_err("No search string provided".into()));
+                        }
+                        let mode = params
+                            .get("mode")
+                            .and_then(Value::as_str)
+                            .unwrap_or("content")
+                            .to_string();
+                        if mode != "files" && mode != "content" {
+                            return Ok(tool_err(
+                                "Search mode must be \"files\" or \"content\".".into(),
+                            ));
+                        }
+                        let root = tool_file_path(&params, &meta);
+                        let req = core::types::SearchRequest {
+                            query,
+                            mode,
+                            limit: params.get("limit").and_then(Value::as_u64),
+                            include: params
+                                .get("include")
+                                .and_then(Value::as_str)
+                                .map(str::to_string),
+                            is_regexp: params.get("isRegexp").and_then(Value::as_bool),
+                            include_ignored_files: params
+                                .get("includeIgnoredFiles")
+                                .and_then(Value::as_bool),
+                        };
+                        let hits = core::search::search(&root, &req);
+                        Ok(tool_ok("", to_json(hits)?))
+                    }
+                    // ── OS / image ───────────────────────────────────────
+                    "os.query" => Ok(tool_ok("", core::info::os_query())),
+                    "image.view" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::read_binary(&p) {
+                            Ok(img) => Ok(tool_ok(
+                                &format!("data:{};base64,{}", image_mime(&p), img.base64),
+                                json!({ "bytes": img.bytes }),
+                            )),
+                            Err(e) => {
+                                Ok(tool_err(format!("Failed to read image: {}: {e}", p.display())))
+                            }
+                        }
+                    }
+                    // Legacy raw-shape op kept for older web shim paths.
+                    "exec" => {
+                        let command = params
+                            .get("command")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let cwd = params
+                            .get("cwd")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        run_shell_command(command, cwd, None)
                     }
                     "open-url" | "openExternal" => {
                         let url = params
@@ -1080,6 +1282,73 @@ pub fn resolve_fs_path(path: &str) -> std::path::PathBuf {
     }
 }
 
+/// Gateway tool-op failure envelope, mirroring the Electron host's
+/// `{ ok: false, message }` shape so error handling code branches the same.
+fn tool_err(message: String) -> Value {
+    json!({ "ok": false, "message": message })
+}
+
+/// Gateway tool-op success envelope: `{ ok: true, message, data }`.
+fn tool_ok(message: &str, data: Value) -> Value {
+    json!({ "ok": true, "message": message, "data": data })
+}
+
+/// Resolve a tool-op file path like the Electron host: `params.path`, with
+/// empty paths falling back to the `meta.projectRoot` sent by the gateway.
+fn tool_file_path(params: &Value, meta: &Value) -> std::path::PathBuf {
+    let raw = params.get("path").and_then(Value::as_str).unwrap_or("");
+    let project_root = meta.get("projectRoot").and_then(Value::as_str).unwrap_or("");
+    if raw.trim().is_empty() {
+        // Empty path → operate on the project root itself.
+        resolve_fs_path(project_root)
+    } else {
+        let raw = raw.trim();
+        if project_root.trim().is_empty() {
+            return resolve_fs_path(raw);
+        }
+        let p = std::path::Path::new(raw);
+        if p.is_absolute() || raw.starts_with('~') {
+            resolve_fs_path(raw)
+        } else {
+            // Gateway semantics: project-relative paths resolve against
+            // meta.projectRoot, not the host's working directory.
+            resolve_fs_path(project_root).join(p)
+        }
+    }
+}
+
+/// Write `content` to `path`, creating parent directories like the Electron
+/// host does for content-style writes.
+fn write_file_with_parent(path: &std::path::Path, content: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir failed: {e}"))?;
+        }
+    }
+    std::fs::write(path, content).map_err(|e| format!("write failed: {e}"))
+}
+
+/// Best-effort MIME type for `image.view` data URIs.
+fn image_mime(path: &std::path::Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        "ico" => "image/x-icon",
+        _ => "application/octet-stream",
+    }
+}
+
 /// Electron parity: git-like ops accept either `{ command: "status -s" }`
 /// or `{ args: ["status", "-s"] }`; both map onto one argv list.
 fn git_like_args(params: &Value) -> String {
@@ -1118,6 +1387,8 @@ struct ShellOut {
     stdout: String,
     stderr: String,
     exit_code: i32,
+    /// True when the run was killed at its timeout deadline.
+    timed_out: bool,
 }
 
 fn shell_program(command: &str) -> std::process::Command {
@@ -1134,21 +1405,82 @@ fn shell_program(command: &str) -> std::process::Command {
     }
 }
 
-fn run_shell_command_inner(command: &str, cwd: &str) -> ShellOut {
+/// Run a command to completion. With a timeout, the child is killed at the
+/// deadline (mirrors Electron's execAsync timeout default of 30s); background
+/// runs pass `None` for no timeout.
+fn run_shell_command_inner(command: &str, cwd: &str, timeout_ms: Option<u64>) -> ShellOut {
+    use std::io::Read;
+    use std::time::{Duration, Instant};
+
     let mut c = shell_program(command);
     if !cwd.is_empty() {
         c.current_dir(cwd);
     }
-    match c.output() {
-        Ok(out) => ShellOut {
-            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-            exit_code: out.status.code().unwrap_or(-1),
+    let mut child = match c
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => {
+            return ShellOut {
+                stdout: String::new(),
+                stderr: e.to_string(),
+                exit_code: -1,
+                timed_out: false,
+            }
+        }
+    };
+    // Drain pipes on worker threads so large output can't deadlock `wait`.
+    let stdout_t = child.stdout.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let stderr_t = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let deadline =
+        timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms.max(1)));
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) => match deadline {
+                Some(d) if Instant::now() >= d => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(());
+                }
+                _ => std::thread::sleep(Duration::from_millis(20)),
+            },
+            Err(e) => {
+                // try_wait can fail after kill; treat as terminated.
+                let _ = child.wait();
+                let _ = e;
+                break Err(());
+            }
+        }
+    };
+    let stdout = stdout_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr = stderr_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    match status {
+        Ok(status) => ShellOut {
+            stdout,
+            stderr,
+            exit_code: status.code().unwrap_or(-1),
+            timed_out: false,
         },
-        Err(e) => ShellOut {
-            stdout: String::new(),
-            stderr: e.to_string(),
+        Err(()) => ShellOut {
+            stdout,
+            stderr,
             exit_code: -1,
+            timed_out: true,
         },
     }
 }
@@ -1164,7 +1496,8 @@ pub fn spawn_background(
     cwd: String,
 ) {
     std::thread::spawn(move || {
-        let out = run_shell_command_inner(&command, &cwd);
+        // Electron's background exec has no timeout.
+        let out = run_shell_command_inner(&command, &cwd, None);
         registry.unregister(&background_id);
         let payload = json!({
             "backgroundId": background_id,
@@ -1178,15 +1511,16 @@ pub fn spawn_background(
     });
 }
 
-fn run_shell_command(command: &str, cwd: &str, _timeout_ms: Option<u64>) -> Result<Value, String> {
+fn run_shell_command(command: &str, cwd: &str, timeout_ms: Option<u64>) -> Result<Value, String> {
     if command.is_empty() {
         return Err("tool-op execute: command is required".into());
     }
-    let out = run_shell_command_inner(command, cwd);
+    let out = run_shell_command_inner(command, cwd, timeout_ms);
     Ok(json!({
         "stdout": out.stdout,
         "stderr": out.stderr,
         "exitCode": out.exit_code,
+        "timedOut": out.timed_out,
     }))
 }
 
@@ -1585,17 +1919,126 @@ done
                 &[json!("execute"), json!({"command": "echo glue-exec-ok"})],
             )
             .expect("execute ok");
-        assert_eq!(out["exitCode"], json!(0));
-        assert_eq!(out["stdout"], json!("glue-exec-ok\n"));
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(out["message"], json!("Command executed successfully."));
+        assert_eq!(out["data"]["exitCode"], json!(0));
+        assert_eq!(out["data"]["stdout"], json!("glue-exec-ok\n"));
+        let failed = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("execute"), json!({"command": "exit 3"})],
+            )
+            .expect("execute returns envelope even on failure");
+        assert_eq!(failed["ok"], json!(false));
+        assert_eq!(failed["message"], json!("Command execution failed."));
+        assert_eq!(failed["data"]["exitCode"], json!(3));
         assert!(st
             .dispatch(
                 "desktop:tool-op",
                 &[json!("execute"), json!({"command": ""})]
             )
-            .is_err());
+            .expect("empty command is a tool error envelope")["ok"]
+            == json!(false));
         assert!(
             st.dispatch("desktop:tool-op", &[json!("warp")]).is_err(),
             "unsupported op"
+        );
+    }
+
+    #[test]
+    fn tool_op_file_ops_use_meta_project_root() {
+        let st = state();
+        let dir = std::env::temp_dir().join(format!("jait-tool-op-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let meta = json!({ "projectRoot": dir.to_string_lossy() });
+
+        let write = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.write"),
+                    json!({ "path": "notes/hello.txt", "content": "alpha-beta" }),
+                    meta.clone(),
+                ],
+            )
+            .expect("write ok");
+        assert_eq!(write["ok"], json!(true));
+        let read = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("file.read"), json!({ "path": "notes/hello.txt" }), meta.clone()],
+            )
+            .expect("read ok");
+        assert_eq!(read["message"], json!("alpha-beta"));
+
+        let edited = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.edit"),
+                    json!({ "path": "notes/hello.txt", "search": "alpha", "replace": "omega" }),
+                    meta.clone(),
+                ],
+            )
+            .expect("edit ok");
+        assert_eq!(edited["ok"], json!(true));
+        assert_eq!(
+            st.dispatch(
+                "desktop:tool-op",
+                &[json!("file.read"), json!({ "path": "notes/hello.txt" }), meta]
+            )
+            .expect("read ok 2")["message"],
+            json!("omega-beta")
+        );
+
+        let listed = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("file.list"), json!({ "path": "notes" }), json!({ "projectRoot": dir.to_string_lossy() })],
+            )
+            .expect("list ok");
+        assert_eq!(listed["data"]["names"], json!(["hello.txt"]));
+
+        let missing = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("file.read"), json!({ "path": "nope.txt" }), json!({ "projectRoot": dir.to_string_lossy() })],
+            )
+            .expect("missing file is envelope");
+        assert_eq!(missing["ok"], json!(false));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn tool_op_execute_background_fans_envelope_via_meta() {
+        let st = state();
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+        let out = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("execute"),
+                    json!({ "command": "echo meta-bg-ok" }),
+                    json!({ "backgroundId": "bg-meta-1" }),
+                ],
+            )
+            .expect("execute ok");
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(
+            out["data"]["stdout"],
+            json!("meta-bg-ok\n"),
+            "foreground result still returned"
+        );
+        wait_for(
+            &events,
+            |(ch, p)| {
+                ch == "background:complete"
+                    && p["backgroundId"] == json!("bg-meta-1")
+                    && p["stdout"] == json!("meta-bg-ok\n")
+            },
+            Duration::from_secs(10),
         );
     }
 

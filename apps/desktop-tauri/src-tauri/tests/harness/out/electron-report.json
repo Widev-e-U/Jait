@@ -2,11 +2,11 @@
   "tests": {
     "bootGatewayUrl": {
       "ok": true,
-      "v": "http://127.0.0.1:8000"
+      "v": null
     },
     "getInfo": {
       "ok": true,
-      "v": "{\"platform\":\"linux\",\"arch\":\"x64\",\"electronVersion\":null,\"appVersion\":null,\"gatewayUrl\":\"http://127.0.0.1:8000\",\"isPackaged\":true,\"deviceId\":\"tauri-011e4b62-5595-49f8-8291-bec6de577e57\"}"
+      "v": "{\"platform\":\"linux\",\"arch\":\"x64\",\"electronVersion\":\"42.4.1\",\"appVersion\":\"0.0\",\"gatewayUrl\":\"http://127.0.0.1:8000\",\"isPackaged\":false}"
     },
     "rootBrowse": {
       "ok": true,
@@ -18,15 +18,15 @@
     },
     "detectProviders": {
       "ok": true,
-      "v": "[{\"authenticated\":null,\"detail\":\"\",\"id\":\"codex\",\"installed\":false},{\"authenticated\":null,\"detail\":\"\",\"id\":\"claude-code\",\"installed\":false}]"
+      "v": "[]"
     },
     "searchOp": {
       "ok": true,
-      "v": "{\"files\":[{\"path\":\"tests/harness/run-conn-test.sh\"}],\"limited\":false,\"mode\":\"files\"}"
+      "v": "{\"query\":\"run-conn-test\",\"mode\":\"files\",\"limited\":false,\"files\":[{\"path\":\"tests/harness/run-conn-test.sh\",\"name\":\"run-conn-test.sh\"}]}"
     },
     "toolOpExec": {
       "ok": true,
-      "v": "{\"message\":\"glue-tool-ok\",\"ok\":true}"
+      "v": "{\"ok\":true,\"message\":\"glue-tool-ok\"}"
     },
     "loginItem": {
       "ok": true,
@@ -35,5 +35,5 @@
   },
   "app": "electron",
   "reportingError": null,
-  "ts": "2026-09-02T07:15:15.912Z"
+  "ts": "2026-09-02T07:15:28.684Z"
 }

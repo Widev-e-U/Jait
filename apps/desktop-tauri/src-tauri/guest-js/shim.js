@@ -427,9 +427,41 @@
     });
   }
 
-  // ── Unsupported Electron leftovers (fail soft for web code) ─────────────
-  function getLoginItem() { return Promise.resolve({ enabled: false, supported: false }); }
-  function setLoginItem() { return Promise.resolve({ ok: false, supported: false }); }
+  // ── Login item (launch at login) ─────────────────────────────────────────
+  // Electron parity for desktop:get-login-item (electron-main.ts): reports
+  // the OS login-item state merged with the persisted `launchAtLogin`
+  // setting (either being on ⇒ enabled) and `supported: true`. The Rust
+  // side wraps tauri-plugin-autostart; the persisted setting lives in the
+  // glue settings store like every other Electron setting.
+  function getLoginItem() {
+    return Promise.all([
+      invoke('desktop_get_login_item', {}).catch(function () {
+        return { enabled: false, supported: false };
+      }),
+      getSetting('launchAtLogin', null),
+    ]).then(function (results) {
+      var native = results[0] || {};
+      var persisted = results[1];
+      return {
+        enabled: Boolean(native.enabled) || persisted === true,
+        supported: native.supported !== false,
+      };
+    });
+  }
+  function setLoginItem(enabled) {
+    var on = enabled === true;
+    return invoke('desktop_set_login_item', { enabled: on })
+      .then(function (res) {
+        // Mirror electron-main.ts: persist the toggle so the Settings switch
+        // reflects the last requested state even before the next launch.
+        return setSetting('launchAtLogin', on).then(function () {
+          return res && typeof res === 'object' ? res : { ok: true, enabled: on };
+        });
+      })
+      .catch(function (err) {
+        return { ok: false, enabled: false, error: String((err && err.message) || err) };
+      });
+  }
 
   window.jaitDesktop = {
     // statics (Electron preload exposes these synchronously; web's

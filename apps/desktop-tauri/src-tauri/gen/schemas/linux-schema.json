@@ -345,6 +345,12 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the desktop_get_login_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-get-login-item",
+          "markdownDescription": "Enables the desktop_get_login_item command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_ipc command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-ipc",
@@ -355,6 +361,12 @@
           "type": "string",
           "const": "allow-desktop-pick-directory-dialog",
           "markdownDescription": "Enables the desktop_pick_directory_dialog command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_set_login_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-set-login-item",
+          "markdownDescription": "Enables the desktop_set_login_item command without any pre-configured scope."
         },
         {
           "description": "Enables the open_project_window command without any pre-configured scope.",
@@ -393,6 +405,12 @@
           "markdownDescription": "Enables the window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_get_login_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-get-login-item",
+          "markdownDescription": "Denies the desktop_get_login_item command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_ipc command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-ipc",
@@ -403,6 +421,12 @@
           "type": "string",
           "const": "deny-desktop-pick-directory-dialog",
           "markdownDescription": "Denies the desktop_pick_directory_dialog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_set_login_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-set-login-item",
+          "markdownDescription": "Denies the desktop_set_login_item command without any pre-configured scope."
         },
         {
           "description": "Denies the open_project_window command without any pre-configured scope.",
@@ -439,6 +463,48 @@
           "type": "string",
           "const": "deny-window-toggle-maximize",
           "markdownDescription": "Denies the window_toggle_maximize command without any pre-configured scope."
+        },
+        {
+          "description": "This permission set configures if your\napplication can enable or disable auto\nstarting the application on boot.\n\n#### Granted Permissions\n\nIt allows all to check, enable and\ndisable the automatic start on boot.\n\n\n#### This default permission set includes:\n\n- `allow-enable`\n- `allow-disable`\n- `allow-is-enabled`",
+          "type": "string",
+          "const": "autostart:default",
+          "markdownDescription": "This permission set configures if your\napplication can enable or disable auto\nstarting the application on boot.\n\n#### Granted Permissions\n\nIt allows all to check, enable and\ndisable the automatic start on boot.\n\n\n#### This default permission set includes:\n\n- `allow-enable`\n- `allow-disable`\n- `allow-is-enabled`"
+        },
+        {
+          "description": "Enables the disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:allow-disable",
+          "markdownDescription": "Enables the disable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:allow-enable",
+          "markdownDescription": "Enables the enable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the is_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:allow-is-enabled",
+          "markdownDescription": "Enables the is_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:deny-disable",
+          "markdownDescription": "Denies the disable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:deny-enable",
+          "markdownDescription": "Denies the enable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "autostart:deny-is-enabled",
+          "markdownDescription": "Denies the is_enabled command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",

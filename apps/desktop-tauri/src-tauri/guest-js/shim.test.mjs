@@ -263,9 +263,28 @@ test('unsupported capabilities resolve instead of throwing', async () => {
   // Cross-realm objects: assert field-by-field instead of deepEqual.
   assert.equal((await window.jaitDesktop.setTitleBarOverlay()).ok, false);
   assert.equal((await window.jaitDesktop.checkForUpdate()).updateAvailable, false);
-  const login = await window.jaitDesktop.getLoginItem();
-  assert.equal(login.enabled, false);
-  assert.equal(login.supported, false);
+});
+
+test('getLoginItem maps glue results and failure to supported:false', async () => {
+  // Glue reports a native autostart item.
+  const ok = loadShim({
+    responder: (cmd) => (cmd === 'desktop_get_login_item'
+      ? { status: 'ok', value: { enabled: true, supported: true } }
+      : { status: 'ok', value: null }),
+  });
+  const enabledRes = await ok.window.jaitDesktop.getLoginItem();
+  assert.equal(enabledRes.enabled, true);
+  assert.equal(enabledRes.supported, true);
+
+  // Glue missing (older build): fall back to supported:false, never throw.
+  const fail = loadShim({
+    responder: (cmd) => (cmd === 'desktop_get_login_item'
+      ? { status: 'error', error: { message: 'no glue' } }
+      : { status: 'ok', value: null }),
+  });
+  const disabledRes = await fail.window.jaitDesktop.getLoginItem();
+  assert.equal(disabledRes.enabled, false);
+  assert.equal(disabledRes.supported, false);
 });
 
 test('writeClipboardText uses the clipboard-manager plugin fallback', async () => {

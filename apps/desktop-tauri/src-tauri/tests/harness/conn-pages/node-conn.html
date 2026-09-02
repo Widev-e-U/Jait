@@ -23,10 +23,38 @@
       // node-backed commands through the shell (same paths as Electron preload)
       await t('getInfo', () => j.getInfo());
       await t('rootBrowse', () => j.browsePath());
-      await t('hostsFile', () => j.fsOp({ op: 'read', path: '/etc/hosts' }));
+      await t('hostsFile', () => j.fsOp('read', { path: '/etc/hosts' }));
       await t('detectProviders', () => j.detectProviders());
-      await t('searchOp', () => j.searchOp({ query: 'jait', mode: 'literal' }));
-      await t('toolOpList', () => j.toolOp({ op: 'list' }));
+      await t('searchOp', () => j.searchOp('run', { root: '/jait/apps/desktop-tauri/src-tauri', query: 'run-conn-test', mode: 'files' }));
+      await t('toolOpExec', async () => {
+        const r = await j.toolOp('execute', { command: 'echo glue-tool-ok' }, {});
+        // Electron parity: foreground envelope is { ok, message } with the
+        // combined output in `message` (no data payload).
+        if (!r || r.ok !== true || typeof r.message !== 'string'
+            || !r.message.includes('glue-tool-ok')) {
+          throw new Error('toolOp envelope mismatch: ' + JSON.stringify(r).slice(0, 200));
+        }
+        const f = await j.toolOp('execute', { command: 'exit 3' }, {});
+        if (!f || f.ok !== false || typeof f.message !== 'string') {
+          throw new Error('toolOp failure envelope mismatch: ' + JSON.stringify(f).slice(0, 200));
+        }
+        return r;
+      });
+      // login item round-trip: read -> enable -> verify -> restore
+      await t('loginItem', async () => {
+        const before = await j.getLoginItem();
+        let setRes, restore;
+        try { setRes = await j.setLoginItem(true); } catch (e) { setRes = { ok: false, error: String(e) }; }
+        const toggledState = await j.getLoginItem();
+        try { restore = await j.setLoginItem(!!before.enabled); } catch (e) { restore = { ok: false, error: String(e) }; }
+        return {
+          before: before.enabled,
+          setOk: Boolean(setRes && setRes.ok),
+          setErr: setRes && setRes.error ? String(setRes.error).slice(0, 120) : '',
+          toggled: toggledState.enabled,
+          restoredOk: Boolean(restore && restore.ok),
+        };
+      });
     }
   } catch (e) { R.reportingError = String(e); }
   try {

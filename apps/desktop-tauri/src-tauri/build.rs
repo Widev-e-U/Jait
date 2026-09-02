@@ -16,6 +16,8 @@ fn main() {
                 "window_is_maximized",
                 "window_start_drag",
                 "open_project_window",
+                "desktop_get_login_item",
+                "desktop_set_login_item",
             ]),
         ),
     )

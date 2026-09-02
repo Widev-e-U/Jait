@@ -296,6 +296,47 @@ pub fn open_project_window(
     Ok(json!({ "label": label }))
 }
 
+/// Login-item state — Electron parity for `desktop:get-login-item`
+/// (electron-main.ts `app.getLoginItemSettings({ args: AUTO_START_ARGS })`).
+/// The shim merges this with the persisted `launchAtLogin` setting.
+#[tauri::command]
+pub fn desktop_get_login_item(app: AppHandle) -> Result<Value, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let enabled = app
+        .autolaunch()
+        .is_enabled()
+        .map_err(|e| format!("login-item: {e}"))?;
+    Ok(json!({ "enabled": enabled, "supported": true }))
+}
+
+/// Login-item toggle — Electron parity for `desktop:set-login-item`
+/// (electron-main.ts `app.setLoginItemSettings({ openAtLogin, args })`).
+/// The registered launcher keeps the `--hidden` arg from plugin init, so
+/// login-time launches minimize to the tray exactly like Electron.
+#[tauri::command]
+pub fn desktop_set_login_item(app: AppHandle, enabled: bool) -> Result<Value, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    // auto-launch 0.5's Linux backend does a single-level `fs::create_dir` of
+    // ~/.config/autostart, which fails with ENOENT when ~/.config itself is
+    // missing (fresh profiles, containers). Create the full chain first —
+    // Electron's app.setLoginItemSettings has no such quirk, so this keeps
+    // `desktop:set-login-item` reliable everywhere.
+    if enabled {
+        let autostart_dir = dirs::config_dir()
+            .ok_or_else(|| "login-item: no user config directory".to_string())?
+            .join("autostart");
+        std::fs::create_dir_all(&autostart_dir)
+            .map_err(|e| format!("login-item: {e}"))?;
+    }
+    let result = if enabled {
+        app.autolaunch().enable()
+    } else {
+        app.autolaunch().disable()
+    };
+    result.map_err(|e| format!("login-item: {e}"))?;
+    Ok(json!({ "ok": true, "enabled": enabled }))
+}
+
 /// Gateway URL — Electron parity with electron-main.ts:
 /// `process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000"`.
 fn gateway_url_from(env: Option<String>) -> String {
@@ -389,6 +430,13 @@ pub fn run() {
                 let _ = app.emit("open-folder", json!({ "folderPath": folder.display().to_string() }));
             }
         }))
+        // Login-item (launch at login) parity for electron-main.ts's
+        // `desktop:get/set-login-item`. The `--hidden` args match Electron's
+        // AUTO_START_ARGS so a login-time launch minimizes to the tray.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         // Plugins the shim/preload can reach through `plugin:*` invokes. The
         // capability file grants them, but nothing works unless they are
         // actually registered on this builder.
@@ -449,6 +497,8 @@ pub fn run() {
             window_is_maximized,
             window_start_drag,
             open_project_window,
+            desktop_get_login_item,
+            desktop_set_login_item,
         ])
         .build(tauri::generate_context!())
         .expect("error while building jait desktop shell")

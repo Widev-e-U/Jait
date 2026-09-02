@@ -3,6 +3,13 @@
   "identifier": "default",
   "description": "Renderer allow-list for the Jait desktop shell",
   "windows": ["main"],
+  "local": true,
+  "remote": {
+    "urls": [
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*"
+    ]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
@@ -19,6 +26,8 @@
     "allow-window-is-maximized",
     "allow-window-start-drag",
     "allow-open-project-window",
+    "allow-desktop-get-login-item",
+    "allow-desktop-set-login-item",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",

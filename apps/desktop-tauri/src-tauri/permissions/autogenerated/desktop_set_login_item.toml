@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-set-login-item"
+description = "Enables the desktop_set_login_item command without any pre-configured scope."
+commands.allow = ["desktop_set_login_item"]
+
+[[permission]]
+identifier = "deny-desktop-set-login-item"
+description = "Denies the desktop_set_login_item command without any pre-configured scope."
+commands.deny = ["desktop_set_login_item"]
