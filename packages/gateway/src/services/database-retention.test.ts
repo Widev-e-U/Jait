@@ -21,6 +21,7 @@ function policy(overrides: Partial<DatabaseRetentionPolicy> = {}): DatabaseReten
     transientActivityDays: 14,
     auditPayloadDays: 90,
     auditRowDays: null,
+    staleSessionDays: 30,
     batchSize: 1,
     maxBatchesPerRun: 100,
     initialDelayMs: 10,
@@ -79,6 +80,35 @@ describe("DatabaseRetentionService", () => {
       "SELECT context_flow AS contextFlow FROM messages WHERE id = ?",
     ).get("message-dry") as { contextFlow: string };
     expect(row.contextFlow).toBe(contextFlow);
+  });
+
+  it("archives stale sessions but keeps recent, viewed, and running-thread sessions", async () => {
+    const insertSession = sqlite.prepare(
+      `INSERT INTO sessions (id, created_at, last_active_at, status, viewed_at)
+       VALUES (?, ?, ?, 'active', ?)`,
+    );
+    insertSession.run("session-stale", OLD, OLD, null);
+    insertSession.run("session-fresh", RECENT, RECENT, null);
+    insertSession.run("session-viewed", OLD, OLD, RECENT); // recently opened even though inactive
+    insertSession.run("session-running", OLD, OLD, null);
+    sqlite.prepare(
+      `UPDATE agent_threads SET session_id = ? WHERE id = ?`,
+    ).run("session-running", runningThreadId);
+
+    const service = new DatabaseRetentionService(sqlite, policy());
+    const dryRun = await service.runOnce({ dryRun: true, now: NOW });
+    expect(dryRun.candidates.staleSessions.rows).toBe(1);
+    expect(dryRun.processed.staleSessionsArchived).toBe(0);
+
+    const report = await service.runOnce({ dryRun: false, now: NOW });
+    expect(report.processed.staleSessionsArchived).toBe(1);
+    const status = (id: string): string =>
+      (sqlite.prepare(`SELECT status FROM sessions WHERE id = ?`).get(id) as { status: string })
+        .status;
+    expect(status("session-stale")).toBe("archived");
+    expect(status("session-fresh")).toBe("active");
+    expect(status("session-viewed")).toBe("active");
+    expect(status("session-running")).toBe("active");
   });
 
   it("does not run full candidate scans during bounded mutation work", async () => {

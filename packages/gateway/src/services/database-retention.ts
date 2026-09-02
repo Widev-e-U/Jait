@@ -36,6 +36,8 @@ export interface DatabaseRetentionPolicy {
   transientActivityDays: number | null;
   auditPayloadDays: number | null;
   auditRowDays: number | null;
+  /** Archive chat sessions untouched for this many days (null disables the sweep). */
+  staleSessionDays: number | null;
   batchSize: number;
   maxBatchesPerRun: number;
   initialDelayMs: number;
@@ -58,6 +60,7 @@ export interface RetentionCandidates {
   transientActivities: RetentionCandidate;
   auditPayloads: RetentionCandidate;
   auditRows: RetentionCandidate;
+  staleSessions: RetentionCandidate;
 }
 
 export type RetentionMutation =
@@ -67,7 +70,8 @@ export type RetentionMutation =
   | "activityPayloadsCompacted"
   | "transientActivitiesDeleted"
   | "auditPayloadsCleared"
-  | "auditRowsDeleted";
+  | "auditRowsDeleted"
+  | "staleSessionsArchived";
 
 export interface RetentionReport {
   enabled: boolean;
@@ -130,6 +134,7 @@ export function loadDatabaseRetentionPolicy(
     transientActivityDays: parseOptionalDays(env["JAIT_RETENTION_TRANSIENT_ACTIVITY_DAYS"], 14),
     auditPayloadDays: parseOptionalDays(env["JAIT_RETENTION_AUDIT_PAYLOAD_DAYS"], 90),
     auditRowDays: parseOptionalDays(env["JAIT_RETENTION_AUDIT_ROW_DAYS"], null),
+    staleSessionDays: parseOptionalDays(env["JAIT_RETENTION_STALE_SESSION_DAYS"], 30),
     batchSize: parsePositiveInteger(env["JAIT_RETENTION_BATCH_SIZE"], 100),
     maxBatchesPerRun: parsePositiveInteger(env["JAIT_RETENTION_MAX_BATCHES"], 20),
     initialDelayMs: parsePositiveInteger(env["JAIT_RETENTION_INITIAL_DELAY_MS"], 5 * 60 * 1_000),
@@ -157,6 +162,7 @@ function emptyCandidates(): RetentionCandidates {
     transientActivities: emptyCandidate(),
     auditPayloads: emptyCandidate(),
     auditRows: emptyCandidate(),
+    staleSessions: emptyCandidate(),
   };
 }
 
@@ -170,6 +176,7 @@ function retentionCutoffs(
     transientActivities: cutoffIso(now, policy.transientActivityDays),
     auditPayloads: cutoffIso(now, policy.auditPayloadDays),
     auditRows: cutoffIso(now, policy.auditRowDays),
+    staleSessions: cutoffIso(now, policy.staleSessionDays),
   };
 }
 
@@ -182,6 +189,7 @@ function emptyProcessed(): Record<RetentionMutation, number> {
     transientActivitiesDeleted: 0,
     auditPayloadsCleared: 0,
     auditRowsDeleted: 0,
+    staleSessionsArchived: 0,
   };
 }
 
@@ -361,6 +369,18 @@ export class DatabaseRetentionService {
           cutoffs.auditRows,
         )
       : emptyCandidate();
+    const staleSessions = cutoffs.staleSessions
+      ? candidate(
+          `SELECT COUNT(*) AS rows, 0 AS bytes
+           FROM sessions s
+           LEFT JOIN agent_threads t ON t.session_id = s.id AND t.status = 'running'
+           WHERE s.status = 'active'
+             AND (CASE WHEN s.viewed_at IS NOT NULL AND s.viewed_at > s.last_active_at
+                       THEN s.viewed_at ELSE s.last_active_at END) < ?
+             AND t.id IS NULL`,
+          cutoffs.staleSessions,
+        )
+      : emptyCandidate();
 
     return {
       enabled: this.policy.enabled,
@@ -402,6 +422,7 @@ export class DatabaseRetentionService {
         transientActivities,
         auditPayloads,
         auditRows,
+        staleSessions,
       },
       processed: emptyProcessed(),
       batches: 0,
@@ -492,7 +513,7 @@ export class DatabaseRetentionService {
 
     try {
       if (this.policy.searchIndexCleanupEnabled) {
-        const reservedRetentionBatches = this.policy.enabled ? 9 : 0;
+        const reservedRetentionBatches = this.policy.enabled ? 10 : 0;
         await repeat(
           "searchIndexRowsRemoved",
           () => this.removeUnsearchableFtsBatch(batchSize),
@@ -570,6 +591,11 @@ export class DatabaseRetentionService {
       if (report.batches < maxBatches && report.cutoffs.auditRows) {
         await repeat("auditRowsDeleted", () =>
           this.deleteAuditRowBatch(report.cutoffs.auditRows!, batchSize));
+      }
+
+      if (report.batches < maxBatches && report.cutoffs.staleSessions) {
+        await repeat("staleSessionsArchived", () =>
+          this.archiveStaleSessionBatch(report.cutoffs.staleSessions!, batchSize));
       }
       }
     } finally {
@@ -738,6 +764,25 @@ export class DatabaseRetentionService {
     ).all(cutoff, limit) as Array<{ id: string }>;
     const remove = this.sqlite.prepare(`DELETE FROM audit_log WHERE id = ?`);
     for (const row of rows) remove.run(row.id);
+    return rows.length;
+  }
+
+  private archiveStaleSessionBatch(cutoff: string, limit: number): number {
+    const rows = this.sqlite.prepare(
+      `SELECT s.id
+       FROM sessions s
+       LEFT JOIN agent_threads t ON t.session_id = s.id AND t.status = 'running'
+       WHERE s.status = 'active'
+         AND (CASE WHEN s.viewed_at IS NOT NULL AND s.viewed_at > s.last_active_at
+                   THEN s.viewed_at ELSE s.last_active_at END) < ?
+         AND t.id IS NULL
+       ORDER BY s.last_active_at, s.id
+       LIMIT ?`,
+    ).all(cutoff, limit) as Array<{ id: string }>;
+    const update = this.sqlite.prepare(
+      `UPDATE sessions SET status = 'archived' WHERE id = ? AND status = 'active'`,
+    );
+    for (const row of rows) update.run(row.id);
     return rows.length;
   }
 }
