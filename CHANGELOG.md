@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.814](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.814) — 2026-09-02
+- perf(gateway): replace /health count scans with indexed COUNT(*) — 6f9fb2f7
+
 ## [v0.1.813](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.813) — 2026-09-02
 - fix(tauri): maximize glyph no longer sticks after rapid double toggle — 9adf8911
 
