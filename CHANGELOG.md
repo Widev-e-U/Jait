@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.815](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.815) — 2026-09-02
+- feat(gateway): archive stale sessions in retention sweep — 91aa84fc
+
 ## [v0.1.814](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.814) — 2026-09-02
 - perf(gateway): replace /health count scans with indexed COUNT(*) — 6f9fb2f7
 
