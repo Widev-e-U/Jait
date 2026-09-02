@@ -329,21 +329,79 @@
 
   // ── Window controls ─────────────────────────────────────────────────────
   function windowMinimize() { return invoke('window_minimize', {}); }
-  function windowMaximizeToggle() { return invoke('window_toggle_maximize', {}); }
+  function windowMaximizeToggle() {
+    var p = invoke('window_toggle_maximize', {});
+    // Optimistic state: the toggle's intent is deterministic — if the window
+    // was maximized it is being restored, and vice versa. Emit right away so
+    // the caption glyph flips in the same frame as the click (the real WM
+    // state may lag a beat on Windows), then let the settle re-checks
+    // confirm against is_maximized() once the resize lands.
+    p.then(function () {
+      if (typeof maximizedBaseline === 'boolean') emitMaximized(!maximizedBaseline);
+      scheduleMaximizedSettle();
+    }, function () { /* toggle failed — settle stays quiet */ });
+    return p;
+  }
   function windowClose() { return invoke('window_close', {}); }
   function windowIsMaximized() { return invoke('window_is_maximized', {}); }
   function windowStartDrag() { return invoke('window_start_drag', {}); }
 
+  // Maximize-state tracking. Windows applies maximize/restore a beat AFTER
+  // the tauri://resize event and the first is_maximized() poll, so querying
+  // on the resize alone can read the pre-toggle state and wedge the caption
+  // glyph on the wrong mode. Strategy: emissions are change-deduped against
+  // the last value reported, resizes schedule a debounced settle re-poll
+  // (+SETTLE_MS, +2*SETTLE_MS) that confirms against the settled WM state,
+  // and windowMaximizeToggle() optimistically emits the intended state on
+  // success so the glyph flips in the same frame as the click.
+  var maximizedBaseline = null; // last value emitted via emitMaximized
+  var maximizeListeners = [];
+  var settleTimer = null;
+  var SETTLE_MS = 250; // beyond the worst WM-lag window (~30ms)
+
+  function emitMaximized(max) {
+    max = !!max;
+    if (maximizedBaseline === max) return; // dedupe: stale re-checks stay quiet
+    maximizedBaseline = max;
+    var listeners = maximizeListeners.slice();
+    for (var i = 0; i < listeners.length; i++) {
+      try { listeners[i]({ sender: 'tauri', event: 'maximized-change' }, max); } catch (e) {}
+    }
+  }
+
+  function checkMaximizedNow() {
+    return windowIsMaximized()
+      .then(function (max) { emitMaximized(max); })
+      .catch(function () {});
+  }
+
+  // Debounced settle: query the real WM state at +SETTLE_MS and +2*SETTLE_MS
+  // after the last resize. Emissions are change-deduped, so agreement keeps
+  // the glyph quiet and a late WM update still corrects it.
+  function scheduleMaximizedSettle() {
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(function () {
+      settleTimer = null;
+      checkMaximizedNow();
+      setTimeout(function () {
+        if (!settleTimer) checkMaximizedNow();
+      }, SETTLE_MS);
+    }, SETTLE_MS);
+  }
+
   function onMaximizedChange(callback) {
     if (typeof callback !== 'function') return Promise.resolve(function () {});
-    var emit = function (max) {
-      try { callback({ sender: 'tauri', event: 'maximized-change' }, !!max); } catch (e) {}
-    };
-    var stop = onTauriWindowEvent('tauri://resize', function () {
-      windowIsMaximized().then(emit).catch(function () {});
-    });
-    return windowIsMaximized().then(emit).catch(function () {}).then(function () {
-      return typeof stop === 'function' ? stop : function () {};
+    var entry = function (ev, max) { callback(ev, max); };
+    maximizeListeners.push(entry);
+    // Catch up immediately with the current state (deduped like Electron).
+    windowIsMaximized().then(function (max) { emitMaximized(max); }).catch(function () {});
+    var stop = onTauriWindowEvent('tauri://resize', scheduleMaximizedSettle);
+    return Promise.resolve(typeof stop === 'function' ? stop : function () {}).then(function (fn) {
+      return function () {
+        var idx = maximizeListeners.indexOf(entry);
+        if (idx !== -1) maximizeListeners.splice(idx, 1);
+        try { fn(); } catch (e) {}
+      };
     });
   }
 

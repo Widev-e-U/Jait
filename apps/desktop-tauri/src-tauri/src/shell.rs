@@ -246,13 +246,27 @@ pub fn window_minimize(window: Window) -> Result<(), String> {
 
 /// tauri 2.x removed `Window::toggle_maximize`; replicate it manually.
 /// Electron parity: `win.isMaximized() ? win.unmaximize() : win.maximize()`.
+///
+/// Windows applies maximize/restore a beat after the call, so a rapid second
+/// click can re-read the pre-toggle state and wedge the window in the
+/// maximized mode (the "click twice and it sticks" bug). When the read says
+/// "maximize", re-sample once after a short settle: if the first maximize
+/// already landed meanwhile, this click restores instead of maximizing again.
+/// A stale "maximized" read is harmless — a second restore is a no-op.
 #[tauri::command]
 pub fn window_toggle_maximize(window: Window) -> Result<(), String> {
+    const SETTLE_MS: u64 = 50;
     let maxed = window.is_maximized().map_err(|e| e.to_string())?;
     if maxed {
         window.unmaximize().map_err(|e| e.to_string())
     } else {
-        window.maximize().map_err(|e| e.to_string())
+        std::thread::sleep(std::time::Duration::from_millis(SETTLE_MS));
+        let maxed_now = window.is_maximized().map_err(|e| e.to_string())?;
+        if maxed_now {
+            window.unmaximize().map_err(|e| e.to_string())
+        } else {
+            window.maximize().map_err(|e| e.to_string())
+        }
     }
 }
 

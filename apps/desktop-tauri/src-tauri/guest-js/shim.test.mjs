@@ -363,23 +363,78 @@ test('listener errors never break the gateway pump', () => {
 
 // ── Window-state subscription ──────────────────────────────────────────────
 
-test('onMaximizedChange emits initial state and reacts to resize events', async () => {
+function maximizedShim() {
   let maximized = false;
-  const { window, emit } = loadShim({
+  const shim = loadShim({
     responder: (cmd) => {
       if (cmd === 'window_is_maximized') return { status: 'ok', value: maximized };
       return { status: 'ok', value: null };
     },
   });
+  return { shim, setMaximized: (v) => { maximized = v; }, get: () => maximized };
+}
+
+test('onMaximizedChange emits initial state and settles after resize events', async () => {
+  const { shim, setMaximized } = maximizedShim();
+  const { window, emit } = shim;
   const states = [];
   const stop = await window.jaitDesktop.onMaximizedChange((_ev, m) => states.push(m));
   assert.deepEqual(states, [false]);
 
-  maximized = true;
+  // A resize alone must not need a toggle: the settle re-poll (+250/+500ms)
+  // picks up the new WM state even though the event fired before it applied.
+  setMaximized(true);
   emit('tauri://resize', null);
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 700));
+  assert.deepEqual(states, [false, true]);
+
+  // Duplicate resizes re-poll but stay change-deduped (no flicker).
+  emit('tauri://resize', null);
+  await new Promise((r) => setTimeout(r, 700));
   assert.deepEqual(states, [false, true]);
   assert.equal(typeof stop, 'function');
+});
+
+test('stale is_maximized after resize no longer wedges the maximize glyph', async () => {
+  // Regression: Windows applies maximize a beat after tauri://resize, and a
+  // single query on that event used to read the pre-toggle state, leaving the
+  // caption button stuck on the wrong mode until the next manual resize.
+  const { shim, setMaximized } = maximizedShim();
+  const { window, emit } = shim;
+  let firstPollAfterResize = true; // first poll reads the pre-toggle state
+  shim.setResponder((cmd) => {
+    if (cmd === 'window_is_maximized') {
+      const value = firstPollAfterResize ? false : true;
+      firstPollAfterResize = false;
+      return { status: 'ok', value };
+    }
+    return { status: 'ok', value: null };
+  });
+  const states = [];
+  await window.jaitDesktop.onMaximizedChange((_ev, m) => states.push(m));
+  emit('tauri://resize', null); // resize arrives before the WM applies maximize
+  await new Promise((r) => setTimeout(r, 700));
+  assert.deepEqual(states, [false, true], 'settle re-poll must correct the stale read');
+});
+
+test('windowMaximizeToggle flips the glyph optimistically and settles', async () => {
+  const { shim, setMaximized } = maximizedShim();
+  const { window } = shim;
+  const states = [];
+  await window.jaitDesktop.onMaximizedChange((_ev, m) => states.push(m));
+  assert.deepEqual(states, [false]);
+
+  setMaximized(true);
+  await window.jaitDesktop.windowMaximizeToggle();
+  assert.deepEqual(states, [false, true], 'optimistic flip without waiting for the WM event');
+  await new Promise((r) => setTimeout(r, 700));
+  assert.deepEqual(states, [false, true], 'settle agrees, no flicker');
+
+  setMaximized(false);
+  await window.jaitDesktop.windowMaximizeToggle();
+  assert.deepEqual(states, [false, true, false]);
+  await new Promise((r) => setTimeout(r, 700));
+  assert.deepEqual(states, [false, true, false]);
 });
 
 // ── Lifecycle / updater stubs ──────────────────────────────────────────────
