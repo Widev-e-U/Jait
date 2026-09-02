@@ -27,6 +27,7 @@ import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
 import { JaitIcon } from '@/components/icons/model-icons'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
+import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -201,10 +202,11 @@ export function AppHeader(props: AppHeaderProps) {
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
-                // Native titleBarOverlay buttons exist only in the Electron
-                // shell; the Tauri shell is frameless everywhere and renders
-                // custom caption buttons instead (see below).
-                paddingRight: (desktopRuntime === 'electron' && desktopPlatform === 'win32') ? 140 : undefined,
+                // Reserve the right edge for the caption-button strip: the
+                // native titleBarOverlay on Electron Windows, the custom
+                // WinCaptionButtons on the Tauri Windows shell (3 × 47 px
+                // native-metric buttons, see below).
+                paddingRight: (!isMobile && desktopPlatform === 'win32' && (desktopRuntime === 'electron' || desktopRuntime === 'tauri')) ? 140 : undefined,
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
@@ -486,12 +488,17 @@ export function AppHeader(props: AppHeaderProps) {
             </>
             )}
 
-            {/* Custom caption buttons: Electron Linux (no native controls) and
-                the Tauri shell (frameless on every platform — no
-                titleBarOverlay or traffic lights). Electron Windows/macOS use
+            {/* Custom caption buttons. Electron Linux: no native controls.
+                Tauri: frameless on every platform (no titleBarOverlay or
+                traffic lights) — Windows gets the native-metric strip
+                (absolutely positioned at the top-right corner), other
+                platforms the compact control. Electron Windows/macOS use
                 their native chrome. */}
-            {isElectron && (desktopPlatform === 'linux' || desktopRuntime === 'tauri') && (
+            {isElectron && (desktopPlatform === 'linux' || (desktopRuntime === 'tauri' && (isMobile || desktopPlatform !== 'win32'))) && (
               <LinuxWindowControls isMaximized={isMaximized} />
+            )}
+            {isElectron && !isMobile && desktopRuntime === 'tauri' && desktopPlatform === 'win32' && (
+              <WinCaptionButtons isMaximized={isMaximized} />
             )}
           </div>
             </header>

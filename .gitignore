@@ -93,3 +93,6 @@ tauri-win/
 
 # Tauri build output (installers are staged via CI, never committed)
 apps/desktop-tauri/dist/
+
+# stale build dir left by a containerized build (root-owned, not deletable here)
+apps/desktop-tauri/src-tauri/target.stale-root-junk/
