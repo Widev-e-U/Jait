@@ -474,6 +474,9 @@ async function main() {
   // Tool registry — Sprint 3 + Sprint 10
   const voiceService = new VoiceService();
   const screenShare = new ScreenShareService();
+  // Late-bound Fastify app: the registry is built before createServer() runs,
+  // so tools that inject into their own HTTP API resolve it lazily.
+  let httpAppRef: import("fastify").FastifyInstance | undefined;
   let toolRegistry = createToolRegistry(surfaceRegistry, {
     memoryService: memory,
     hooks,
@@ -500,6 +503,7 @@ async function main() {
     previewService,
     architectureDiagramService,
     codeGraphService,
+    getApp: () => httpAppRef,
   });
   providerRegistry.register(new JaitProvider({
     config,
@@ -744,6 +748,7 @@ async function main() {
     userSecretService,
     emailService,
     calendarService,
+    getApp: () => httpAppRef,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -1133,6 +1138,7 @@ async function main() {
     voiceAssistantService,
     shutdown: shutdownRef,
   });
+  httpAppRef = server; // late-bound for tools that inject into their own HTTP API
 
   // Wire terminal WS ↔ PTY
   ws.onTerminalInput = (terminalId, data) => {

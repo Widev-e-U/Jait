@@ -1,14 +1,15 @@
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { ProjectService } from "../services/projects.js";
 import { RepositoryService } from "../services/repositories.js";
+import type { WsControlPlane } from "../ws.js";
 import type { ToolContext } from "./contracts.js";
-import { createProjectMoveTool } from "./project-tools.js";
+import { createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
 
-describe("createProjectMoveTool", () => {
+describe("project tools", () => {
   let db: Awaited<ReturnType<typeof openDatabase>>["db"];
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let projectService: ProjectService;
@@ -46,6 +47,24 @@ describe("createProjectMoveTool", () => {
     for (const root of tempRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("broadcasts projects created by the agent tool to the live UI", async () => {
+    const broadcastToUser = vi.fn();
+    const ws = { broadcastToUser } as unknown as WsControlPlane;
+    const tool = createProjectCreateTool({ projectService, repoService, ws });
+
+    const result = await tool.execute(
+      { title: "Agent Project", assignRepository: false },
+      context(),
+    );
+
+    expect(result.ok).toBe(true);
+    const project = (result.data as { project: { id: string } }).project;
+    expect(broadcastToUser).toHaveBeenCalledWith("user-1", expect.objectContaining({
+      type: "project.created",
+      payload: { project: expect.objectContaining({ id: project.id }) },
+    }));
   });
 
   it("requires nodeId", async () => {

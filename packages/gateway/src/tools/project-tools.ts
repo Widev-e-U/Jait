@@ -95,6 +95,14 @@ export function createProjectCreateTool(deps: {
       }
 
       const fresh = deps.projectService.getById(project.id, context.userId) ?? project;
+      if (deps.ws && context.userId) {
+        deps.ws.broadcastToUser(context.userId, {
+          type: "project.created" as WsEventType,
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: { project: fresh },
+        });
+      }
       const repoName = repository && typeof repository === "object" && "name" in repository
         ? String((repository as { name: unknown }).name)
         : undefined;

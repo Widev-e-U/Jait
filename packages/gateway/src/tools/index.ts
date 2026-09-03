@@ -321,6 +321,12 @@ export interface ToolRegistryDeps {
   emailService?: import("../services/email/index.js").EmailService;
   calendarService?: import("../services/calendar/index.js").CalendarService;
   skillRegistry?: import("../skills/index.js").SkillRegistry;
+  /**
+   * Late-bound Fastify app getter: the registry is built before the HTTP
+   * server exists, so tools that need to inject into their own API (e.g.
+   * project.message starting a chat turn) resolve it lazily.
+   */
+  getApp?: () => import("fastify").FastifyInstance | undefined;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -505,6 +511,7 @@ export function createToolRegistry(
         ws: deps.ws,
         mcpConfig: deps.threadMcpConfig,
         config: deps.config,
+        getApp: deps.getApp,
       }),
     );
   }
