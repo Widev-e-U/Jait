@@ -20,6 +20,16 @@ use jait_desktop_glue::{HostSink, HostState};
 
 use crate::translate_glue_event;
 
+// Updater commands live in `updater.rs`. The fns are imported for
+// `generate_handler!`; the generated `__cmd__`/`__tauri_command_name_`
+// macros reach this module via `#[macro_use]` on `pub mod updater` in
+// lib.rs (declared before `shell`), since rustc forbids importing
+// macro-expanded macro_export macros by absolute path.
+use crate::updater::{desktop_update_check, desktop_update_download, desktop_update_install};
+
+/// First-launch login-item takeover (adopt the Electron install's autostart).
+pub mod login_item;
+
 /// Glue host shared between the setup hook (sink installation) and commands.
 pub struct GlueHost(pub Arc<Mutex<HostState>>);
 
@@ -459,9 +469,20 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
+        // Electron-parity auto-updater (tauri-plugin-updater + custom
+        // check/download/install commands in super::updater). Config lives in
+        // tauri.conf.json `plugins.updater`.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(GlueHost(glue.clone()))
         .setup(move |app| {
             glue.lock().add_sink(install_sink(app.handle()));
+
+            // First-launch login-item takeover: re-adopt the OS autostart
+            // choice made for the Electron install (shared Run key on
+            // Windows, ~/.config/autostart on Linux) before the window
+            // builds, whatever the launch origin (hand, old autostart
+            // entry, or the OS at boot).
+            login_item::sync_login_item(app.handle(), &glue);
 
             let gateway = gateway_url();
             let gateway_configured = gateway_url_is_configured();
@@ -513,6 +534,9 @@ pub fn run() {
             open_project_window,
             desktop_get_login_item,
             desktop_set_login_item,
+            desktop_update_check,
+            desktop_update_download,
+            desktop_update_install,
         ])
         .build(tauri::generate_context!())
         .expect("error while building jait desktop shell")

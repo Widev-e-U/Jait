@@ -464,14 +464,33 @@
     });
   }
 
+  // Electron parity: these call the Rust updater commands (crate::updater),
+  // which mirror electron-updater's behavior — check returns
+  // { updateAvailable, version? }, download pulls the signed artifact behind
+  // `download-progress` window events and caches it, install swaps the
+  // binary/app and relaunches (quitAndInstall). Config + signing live in
+  // tauri.conf.json `plugins.updater` / CI.
   function checkForUpdate() {
-    return Promise.resolve({
-      updateAvailable: false,
-      error: 'updates handled by the Tauri shell build pipeline',
+    return invoke('desktop_update_check')
+      .then(function (v) {
+        // Older shells without the updater commands resolve null; Electron
+        // parity treats "no updater" as "no update available", never throws.
+        return v == null ? { updateAvailable: false } : v;
+      })
+      .catch(function (e) {
+        return { updateAvailable: false, error: String(e) };
+      });
+  }
+  function downloadUpdate() {
+    return invoke('desktop_update_download').catch(function (e) {
+      return { ok: false, error: String(e) };
     });
   }
-  function downloadUpdate() { return Promise.resolve({ ok: false, error: 'not supported in the Tauri shell' }); }
-  function installUpdate() { return Promise.resolve({ ok: false, error: 'not supported in the Tauri shell' }); }
+  function installUpdate() {
+    return invoke('desktop_update_install').catch(function (e) {
+      return { ok: false, error: String(e) };
+    });
+  }
   // Electron contract: onUpdateEvent(eventName, callback) subscribes to the
   // `update:${eventName}` channel for the exact event name requested. The
   // Tauri shell emits each phase as its own window event with the same name,

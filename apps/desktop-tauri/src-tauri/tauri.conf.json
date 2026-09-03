@@ -15,6 +15,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -22,5 +23,13 @@
       "icons/icon.png",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RThDQzkwMDZGMjg4NDYKUldSR2lQSUdrTXpvdEhuWkVYRU5idGtMRXpDZy8weXY3OWsrRmdZSUk5cUxUdHlFRlVOUmR1dXkK",
+      "endpoints": [
+        "https://github.com/Widev-e-U/Jait/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

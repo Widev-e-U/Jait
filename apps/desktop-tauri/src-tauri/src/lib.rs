@@ -11,7 +11,17 @@
 //! event-translation layer tested below — compiles and tests on any machine
 //! via plain `cargo test` (default features).
 
+// `updater` must be declared before `shell` with `#[macro_use]`: the
+// tauri command attribute expands hidden `#[macro_export]` macro_rules!
+// inside it, and those can only reach `generate_handler!` in `shell` via
+// textual scoping — rustc rejects absolute-path imports of
+// macro-expanded macro_export macros.
 #[cfg(feature = "shell")]
+#[macro_use]
+pub mod updater;
+
+#[cfg(feature = "shell")]
+#[macro_use]
 pub mod shell;
 
 #[cfg(feature = "shell")]

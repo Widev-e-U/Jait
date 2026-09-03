@@ -516,7 +516,18 @@ jobs:
           echo "NSIS redirect shim ready: $SO ($(wc -c < "$SO") bytes, root: $NSIS_TREE)"
       - name: Build Tauri NSIS (Windows setup.exe)
         working-directory: apps/desktop-tauri/src-tauri
+        env:
+          # Updater signing (minisign). TAURI_SIGNING_PRIVATE_KEY holds the
+          # base64 body of apps/desktop-tauri/.updater-keys/jait-updater.key;
+          # the key was generated with an empty password. `createUpdaterArtifacts`
+          # makes the bundler emit Jait-Tauri_*_x64-setup.nsis.zip + .sig here.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not configured (content of apps/desktop-tauri/.updater-keys/jait-updater.key)"
+            exit 1
+          fi
           export PATH="$HOME/.cargo/bin:$PATH"
           # NSIS_LD_PRELOAD/NSIS_REAL_DIR are set by the shim step above when
           # the userspace NSIS tree is in use; tauri-cli spawns makensis, which
@@ -525,9 +536,34 @@ jobs:
           export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
           cargo tauri build --features shell,frontend --runner cargo-xwin \
             --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Generate Tauri updater manifest (latest.json)
+        run: |
+          # The Tauri updater polls .../releases/latest/download/latest.json
+          # (static feed, mirrors what electron-updater gets from latest.yml).
+          # The sig is copied verbatim from the .nsis.zip.sig the bundler
+          # produced; the download URL points at the tagged release asset.
+          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          ZIP=$(ls "$NSIS_DIR"/*-setup.nsis.zip | head -n1)
+          SIG=$(ls "$NSIS_DIR"/*-setup.nsis.zip.sig | head -n1)
+          test -s "$ZIP" || { echo "::error::updater archive not found in $NSIS_DIR"; exit 1; }
+          test -s "$SIG" || { echo "::error::updater signature not found in $NSIS_DIR (createUpdaterArtifacts?)"; exit 1; }
+          VERSION="${{ env.tauri_release_version }}"
+          PUBKEY="dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RThDQzkwMDZGMjg4NDYKUldSR2lQSUdrTXpvdEhuWkVYRU5idGtMRXpDZy8weXY3OWsrRmdZSUk5cUxUdHlFRlVOUmR1dXkK"
+          jq -n --arg v "$VERSION" --arg pk "$PUBKEY" \
+                --arg sig "$(cat "$SIG")" \
+                --arg url "https://github.com/Widev-e-U/Jait/releases/download/v$VERSION/$(basename "$ZIP")" \
+                '{version: $v, notes: "Jait Tauri desktop", pubkey: $pk,
+                  platforms: {"windows-x86_64": {signature: $sig, url: $url}}}' \
+            > "$NSIS_DIR/latest.json"
+          cp -v "$ZIP" "$SIG" "$RELEASE_ASSET_DIR"/
+          echo "latest.json ->"; cat "$NSIS_DIR/latest.json"
       - name: Stage Tauri release assets on runner
         if: env.RELEASE_ASSET_MODE == 'runner'
-        run: cp -v apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe "$RELEASE_ASSET_DIR"/
+        run: |
+          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          cp -v "$NSIS_DIR"/*-setup.exe "$NSIS_DIR"/*-setup.nsis.zip \
+                "$NSIS_DIR"/*-setup.nsis.zip.sig "$NSIS_DIR/latest.json" \
+                "$RELEASE_ASSET_DIR"/
       - name: Upload Tauri release assets to GitHub Artifacts
         if: env.RELEASE_ASSET_MODE == 'github-artifacts'
         uses: actions/upload-artifact@v4
@@ -535,7 +571,11 @@ jobs:
           name: desktop-tauri-release-assets
           retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
           if-no-files-found: error
-          path: apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          path: |
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip.sig
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
 
   # ── Build macOS desktop app (skipped — no macOS runner available) ─
   # To enable: add a macOS self-hosted runner or fix GitHub billing,
