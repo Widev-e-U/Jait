@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.817](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.817) — 2026-09-03
+- feat(desktop-tauri): auto-updater with signed NSIS artifacts and login-item takeover — eb92774e
+- fix(web): render memory-engine flow memories as list in memory.search tool card — 38efdc72
+
 ## [v0.1.816](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.816) — 2026-09-03
 - feat(chat): fork sessions into parallel Ask-in-parallel branch chats — 31f3c841
 
