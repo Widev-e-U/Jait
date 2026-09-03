@@ -109,6 +109,7 @@ interface DeveloperChatWorkspaceProps {
   onOpenSourceControl: () => void
   onOpenTerminalFromToolCall: (...args: any[]) => void
   onApprovalResponse: (requestId: string, approved: boolean) => Promise<void> | void
+  onAskQueuedMessageInParallel: (id: string) => void
   onProviderChange: (provider: any) => void
   onProviderRuntimeModeChange: (mode: any) => void
   onQueue: () => void
@@ -216,6 +217,7 @@ export function DeveloperChatWorkspace({
   onOpenSourceControl,
   onOpenTerminalFromToolCall,
   onApprovalResponse,
+  onAskQueuedMessageInParallel,
   onProviderChange,
   onProviderRuntimeModeChange,
   onQueue,
@@ -566,6 +568,8 @@ export function DeveloperChatWorkspace({
                     onEdit={onUpdateQueueItem}
                     onReorder={onReorderQueueItem}
                     onSteer={isLoading && activeSessionId ? onSteerQueuedMessage : undefined}
+                    onSendToParallelThread={onAskQueuedMessageInParallel}
+                    parallelActionLabel="Ask in parallel"
                     onToggleHold={onToggleHoldQueueItem}
                   />
                 )}

@@ -569,6 +569,42 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [activeProjectId, onLoginRequired, persistSelection, token])
 
+  const forkSession = useCallback(async (sourceSessionId: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sourceSessionId}/fork`, {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const session = await response.json() as ProjectSession
+      if (session.projectId) {
+        setProjects((prev) => prev.map((project) => (
+          project.id === session.projectId
+            ? {
+                ...project,
+                lastActiveAt: session.lastActiveAt,
+                sessions: prependProjectSession(project.sessions, session),
+              }
+            : project
+        )))
+      } else {
+        setPersonalSessions((prev) => prependProjectSession(prev, session))
+      }
+      return session
+    } catch (err) {
+      console.error('Failed to fork session:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
   // Writes the new selection to localStorage synchronously, instead of
   // relying on the debounced effect below, so a reload that happens right
   // after switching projects/sessions can't race the write and restore the
@@ -1291,6 +1327,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     fetchProjectSubtree,
     assignProjectRepository,
     createSession,
+    forkSession,
     switchProject,
     switchSession,
     setProjectEditorModeActive,

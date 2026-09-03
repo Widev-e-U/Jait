@@ -3,7 +3,7 @@
  */
 import { and, eq, desc, not, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
-import { sessions } from "../db/schema.js";
+import { messageContextMetadata, messages, sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 export interface CreateSessionParams {
@@ -12,6 +12,18 @@ export interface CreateSessionParams {
   name?: string;
   projectPath?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface SessionForkLiveSnapshot {
+  content: string;
+  toolCalls?: string;
+  segments?: string;
+  thinking?: string;
+}
+
+export interface ForkSessionParams {
+  userId: string;
+  liveSnapshot?: SessionForkLiveSnapshot;
 }
 
 export class SessionService {
@@ -35,6 +47,114 @@ export class SessionService {
     }).run();
 
     return this.getById(id)!;
+  }
+
+  /** Create an independent chat from an immutable snapshot of another chat. */
+  fork(sourceSessionId: string, params: ForkSessionParams) {
+    const source = this.getById(sourceSessionId, params.userId);
+    if (!source) return null;
+
+    const branchSessionId = uuidv7();
+    const forkedAt = new Date().toISOString();
+    let metadata: Record<string, unknown> = {};
+    if (source.metadata) {
+      try {
+        metadata = JSON.parse(source.metadata) as Record<string, unknown>;
+      } catch {
+        metadata = {};
+      }
+    }
+    metadata["branch"] = {
+      kind: "question",
+      parentSessionId: source.id,
+      forkedAt,
+    };
+
+    const sourceRows = this.db
+      .select()
+      .from(messages)
+      .where(eq(messages.sessionId, source.id))
+      .orderBy(messages.createdAt, messages.id)
+      .all();
+
+    // A streaming assistant checkpoint belongs to the in-flight parent turn.
+    // Replace it with the exact live accumulator captured at fork time so the
+    // branch sees one frozen partial answer rather than two competing copies.
+    if (params.liveSnapshot) {
+      for (let index = sourceRows.length - 1; index >= 0; index--) {
+        const row = sourceRows[index]!;
+        if (row.role === "system") continue;
+        if (row.role === "assistant") sourceRows.splice(index, 1);
+        break;
+      }
+    }
+
+    this.db.transaction((tx) => {
+      tx.insert(sessions).values({
+        id: branchSessionId,
+        userId: params.userId,
+        projectId: source.projectId,
+        name: `Question · ${source.name?.trim() || "Chat"}`,
+        projectPath: source.projectPath,
+        createdAt: forkedAt,
+        lastActiveAt: forkedAt,
+        status: "active",
+        metadata: JSON.stringify(metadata),
+      }).run();
+
+      for (const row of sourceRows) {
+        const messageId = uuidv7();
+        tx.insert(messages).values({
+          id: messageId,
+          sessionId: branchSessionId,
+          role: row.role,
+          content: row.content,
+          toolCalls: row.toolCalls,
+          segments: row.segments,
+          contextFlow: row.contextFlow,
+          thinking: row.thinking,
+          createdAt: row.createdAt,
+        }).run();
+        if (row.contextFlow) {
+          tx.insert(messageContextMetadata).values({
+            messageId,
+            hasMemoryProvenance:
+              row.contextFlow.includes('"injectedIds":[')
+              && !row.contextFlow.includes('"injectedIds":[]'),
+          }).run();
+        }
+      }
+
+      if (params.liveSnapshot) {
+        tx.insert(messages).values({
+          id: uuidv7(),
+          sessionId: branchSessionId,
+          role: "system",
+          content: "Forked while the parent response was still running. The following assistant progress is an incomplete snapshot.",
+          createdAt: forkedAt,
+        }).run();
+        const hasLiveAssistant = Boolean(
+          params.liveSnapshot.content
+          || params.liveSnapshot.thinking
+          || params.liveSnapshot.toolCalls
+          || params.liveSnapshot.segments,
+        );
+        if (hasLiveAssistant) {
+          tx.insert(messages).values({
+            id: uuidv7(),
+            sessionId: branchSessionId,
+            role: "assistant",
+            content: params.liveSnapshot.content,
+            toolCalls: params.liveSnapshot.toolCalls ?? null,
+            segments: params.liveSnapshot.segments ?? null,
+            thinking: params.liveSnapshot.thinking ?? null,
+            createdAt: new Date(Date.parse(forkedAt) + 1).toISOString(),
+          }).run();
+        }
+      }
+    });
+
+    return this.getById(branchSessionId, params.userId)!;
   }
 
   /** Count sessions (optionally by status) without materializing rows. */

@@ -18,6 +18,7 @@ import { DeveloperComposerControlRow } from '@/components/app-shell/developer-co
 import { DeveloperSidebars } from '@/components/app-shell/developer-sidebars'
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
+import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
@@ -50,7 +51,7 @@ import { MobileBottomNav } from '@/components/mobile/mobile-bottom-nav'
 import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
 import { shouldForceMessageLifecycleRefresh, useChat, type ChatMode } from '@/hooks/useChat'
 import { useSkills } from '@/hooks/useSkills'
-import { useProjects } from '@/hooks/useProjects'
+import { useProjects, type ProjectSession } from '@/hooks/useProjects'
 import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
@@ -219,6 +220,17 @@ type SavedQueuedMessage = QueuedChatMessage & {
 
 type SavedQueuedThreadMessages = Record<string, ManagerQueuedMessage[]>
 
+interface ParallelChatState {
+  parentSessionId: string
+  session: ProjectSession
+  initialPrompt: ParallelChatPrompt
+  provider: ProviderId
+  runtimeMode?: RuntimeMode
+  responseStyle: ResponseStyle
+  model: string | null
+  reasoningEffort: SessionReasoningEffort | null
+}
+
 function App() {
   const {
     inputValueRef,
@@ -257,6 +269,7 @@ function App() {
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
   const showProjectRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
+  const [parallelChat, setParallelChat] = useState<ParallelChatState | null>(null)
   const projectRestoreRef = useRef<(() => void) | null>(null)
   const closeProjectPanelRef = useRef<(() => void) | null>(null)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
@@ -527,6 +540,7 @@ function App() {
     activeSessionId,
     loading: projectsLoading,
     createSession,
+    forkSession,
     createProject,
     openProjectForRootPath,
     updateProject,
@@ -562,6 +576,12 @@ function App() {
     onLoginRequired,
   )
   fetchProjectsRef.current = fetchProjects
+
+  useEffect(() => {
+    setParallelChat((current) => (
+      current && current.parentSessionId !== activeSessionId ? null : current
+    ))
+  }, [activeSessionId])
 
   // "Open with Jait" on a folder: adopt the project that already owns that
   // directory, or create one, and select it. Gated on the token because the
@@ -3839,6 +3859,45 @@ function App() {
     })
   }, [activeSessionId, dequeueMessage, isLoading, messageQueue, recordSteeredMessage, token])
 
+  const askQueuedChatMessageInParallel = useCallback((id: string) => {
+    const item = messageQueue.find((queued) => queued.id === id)
+    if (!item || !activeSessionId) return
+
+    void (async () => {
+      const branch = await forkSession(activeSessionId)
+      if (!branch) throw new Error('Failed to create question branch')
+      dequeueMessage(id)
+      setParallelChat({
+        parentSessionId: activeSessionId,
+        session: branch,
+        initialPrompt: {
+          content: item.content,
+          displayContent: item.displayContent,
+          referencedFiles: item.referencedFiles,
+          displaySegments: item.displaySegments,
+          attachments: item.attachments,
+        },
+        provider: (item.provider as ProviderId | undefined) ?? chatProvider,
+        runtimeMode: item.runtimeMode ?? chatProviderRuntimeMode,
+        responseStyle: item.responseStyle ?? chatResponseStyle,
+        model: item.model ?? cliModel,
+        reasoningEffort: item.reasoningEffort ?? chatReasoningEffort,
+      })
+    })().catch((err) => {
+      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
+    })
+  }, [
+    activeSessionId,
+    chatProvider,
+    chatProviderRuntimeMode,
+    chatReasoningEffort,
+    chatResponseStyle,
+    cliModel,
+    dequeueMessage,
+    forkSession,
+    messageQueue,
+  ])
+
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
     setManagerMessageQueues((prev) => ({
       ...prev,
@@ -4889,7 +4948,8 @@ function App() {
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
                 inlinePrompts={inlinePrompts}
               />
-            ) : <DeveloperChatWorkspace
+            ) : <>
+              <DeveloperChatWorkspace
                 showDebugPanel={showDebugPanel}
                 onCloseDebugPanel={() => setShowDebugPanel(false)}
                 activeProject={activeProject}
@@ -4975,6 +5035,7 @@ function App() {
                 onOpenSourceControl={handleOpenSourceControl}
                 onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
                 onApprovalResponse={respondToApproval}
+                onAskQueuedMessageInParallel={askQueuedChatMessageInParallel}
                 onProviderChange={handleChatProviderChange}
                 onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                 onQueue={handleQueue}
@@ -4995,6 +5056,34 @@ function App() {
                 onVoiceInput={handleVoiceInput}
                 renderInlineSecretPrompt={renderInlineSecretPrompt}
               />
+              {parallelChat && (
+                <ParallelChatPanel
+                  key={parallelChat.session.id}
+                  session={parallelChat.session}
+                  token={token}
+                  initialPrompt={parallelChat.initialPrompt}
+                  provider={parallelChat.provider}
+                  runtimeMode={parallelChat.runtimeMode}
+                  responseStyle={parallelChat.responseStyle}
+                  model={parallelChat.model}
+                  reasoningEffort={parallelChat.reasoningEffort}
+                  availableFiles={availableFilesForMention}
+                  availableSkills={availableSkills}
+                  projectName={activeProjectDisplayName}
+                  projectPath={activeProjectRoot}
+                  projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
+                  isMobile={isMobile}
+                  onSearchFiles={handleSearchFiles}
+                  onClose={() => setParallelChat(null)}
+                  onOpenAsPrimary={() => {
+                    const branch = parallelChat.session
+                    setParallelChat(null)
+                    setChatMode('ask')
+                    switchSession(branch.projectId, branch.id)
+                  }}
+                />
+              )}
+            </>
             )}
           </div>
         )}

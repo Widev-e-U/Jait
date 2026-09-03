@@ -19,6 +19,7 @@ interface MessageQueueProps {
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
+  parallelActionLabel?: string
   onToggleHold?: (id: string) => void
   className?: string
 }
@@ -97,6 +98,7 @@ function QueueItem({
   onReorder,
   onSteer,
   onSendToParallelThread,
+  parallelActionLabel,
   onToggleHold,
   dragActive,
   dropBefore,
@@ -110,6 +112,7 @@ function QueueItem({
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   onSteer?: (id: string) => void
   onSendToParallelThread?: (id: string) => void
+  parallelActionLabel?: string
   onToggleHold?: (id: string) => void
   dragActive?: boolean
   dropBefore?: boolean
@@ -302,10 +305,14 @@ function QueueItem({
               <button
                 type="button"
                 data-no-drag="true"
-                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                className={cn(
+                  'rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary',
+                  parallelActionLabel ? 'inline-flex h-6 items-center gap-1 border border-primary/20 px-1.5 text-2xs font-medium' : 'p-1',
+                )}
                 onClick={() => onSendToParallelThread(item.id)}
-                title="Send to parallel thread"
+                title={parallelActionLabel ?? 'Send to parallel thread'}
               >
+                {parallelActionLabel && <span>{parallelActionLabel}</span>}
                 <GitBranch className="h-3 w-3" />
               </button>
             )}
@@ -350,7 +357,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, onToggleHold, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -503,6 +510,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSe
           onReorder={onReorder}
           onSteer={onSteer}
           onSendToParallelThread={onSendToParallelThread}
+          parallelActionLabel={parallelActionLabel}
           onToggleHold={onToggleHold}
           dragActive={dragSourceId === item.id}
           dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}

@@ -290,6 +290,16 @@ function truncateExternalContextContent(content: string, max = 1200): string {
   return `${compact.slice(0, max - 3)}...`;
 }
 
+function isQuestionBranchMetadata(metadata: string | null | undefined): boolean {
+  if (!metadata) return false;
+  try {
+    const parsed = JSON.parse(metadata) as { branch?: { kind?: unknown } };
+    return parsed.branch?.kind === "question";
+  } catch {
+    return false;
+  }
+}
+
 function buildExternalProviderRecentContext(history: ChatMessage[], limit = 4): string | null {
   const visibleMessages = history
     .slice(0, -1)
@@ -3257,7 +3267,8 @@ export function registerChatRoutes(
         : typeof body["session_id"] === "string"
           ? (body["session_id"] as string)
           : randomUUID();
-    const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
+    let chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
+    let isQuestionBranch = false;
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     const hasRequestReasoningEffort = Object.prototype.hasOwnProperty.call(body, "reasoningEffort");
@@ -3321,6 +3332,8 @@ export function registerChatRoutes(
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
+      isQuestionBranch = isQuestionBranchMetadata(session.metadata);
+      if (isQuestionBranch) chatMode = "ask";
     }
 
     if (systemNotification && activeStreams.has(sessionId)) {
@@ -4233,7 +4246,9 @@ export function registerChatRoutes(
         );
         const cliContentWithAttachments = appendUploadedAttachmentPromptBlock(systemNotification ?? content, attachments);
         const cliUserContent = memoryBlock ? `${memoryBlock}\n\n${cliContentWithAttachments}` : cliContentWithAttachments;
-        const recentContextBlock = isNewCliSession ? buildExternalProviderRecentContext(history) : null;
+        const recentContextBlock = isNewCliSession
+          ? buildExternalProviderRecentContext(history, isQuestionBranch ? 20 : 4)
+          : null;
         let cliContent = cliUserContent;
         if (isNewCliSession) {
           cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent, recentContextBlock);
@@ -5179,6 +5194,63 @@ export function registerChatRoutes(
       limit: DEFAULT_UI_MESSAGE_LIMIT,
       messages: windowed.messages,
     };
+  });
+
+  // Create an immutable question branch from the transcript visible at this
+  // instant. If the parent is streaming, capture its in-memory accumulator so
+  // the branch can reason about progress that has not reached a DB checkpoint.
+  app.post("/api/sessions/:sessionId/fork", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (!sessionService) {
+      return reply.status(503).send({ error: "UNAVAILABLE", details: "Session service unavailable" });
+    }
+    const source = sessionService.getById(sessionId, authUser.id);
+    if (!source) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+
+    const accumulator = activeStreams.has(sessionId)
+      ? sessionStreamingState.get(sessionId)
+      : undefined;
+    const liveSnapshot = accumulator
+      ? {
+          content: accumulator.content,
+          toolCalls: serializePersistedToolCalls(
+            accumulator.toolCalls.length > 0 ? JSON.stringify(accumulator.toolCalls) : undefined,
+          ) ?? undefined,
+          segments: accumulator.segments.length > 0 ? JSON.stringify(accumulator.segments) : undefined,
+          thinking: accumulator.thinking || undefined,
+        }
+      : undefined;
+    const branch = sessionService.fork(sessionId, {
+      userId: authUser.id,
+      ...(liveSnapshot ? { liveSnapshot } : {}),
+    });
+    if (!branch) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+
+    try {
+      audit?.write({
+        sessionId: branch.id,
+        actionId: randomUUID(),
+        actionType: "session.fork",
+        status: "executed",
+        consentMethod: "auto",
+      });
+      if (branch.projectId) projectService?.touch(branch.projectId);
+    } catch {
+      // The branch itself is already durable; audit/project timestamps are best effort.
+    }
+    ws?.broadcastToUser(authUser.id, {
+      type: "chat.created",
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { projectId: branch.projectId ?? null, session: branch },
+    });
+    return reply.status(201).send(branch);
   });
 
   // Which of the user's sessions are currently generating a response — used
