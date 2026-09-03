@@ -1328,8 +1328,12 @@ function formatMemorySaveResult(data: Record<string, unknown>): string | null {
 }
 
 function formatMemorySearchResult(data: Record<string, unknown>): string | null {
-  // memory.search returns `data.memories` (MemoryEntry[]) plus optional reminders.
-  const rawMemories = data.memories
+  // memory.search returns `data.memories` (MemoryEntry[]); the memory engine's
+  // synthetic memory.search call returns a context flow instead (`data.retrieved`,
+  // LlmContextFlowMemoryEntry[] with a preformatted `source` label + flat fields).
+  const rawMemories = Array.isArray(data.memories) && data.memories.length > 0
+    ? data.memories
+    : data.retrieved
   if (!Array.isArray(rawMemories) || rawMemories.length === 0) return null
 
   const entries = rawMemories
@@ -1346,9 +1350,9 @@ function formatMemorySearchResult(data: Record<string, unknown>): string | null 
     const source = entry.source && typeof entry.source === 'object'
       ? entry.source as Record<string, unknown>
       : undefined
-    const sourceType = typeof source?.type === 'string' ? source.type.trim() : ''
-    const sourceId = typeof source?.id === 'string' ? source.id.trim() : ''
-    const sourceSurface = typeof source?.surface === 'string' ? source.surface.trim() : ''
+    const sourceType = (typeof source?.type === 'string' ? source.type : (typeof entry.sourceType === 'string' ? entry.sourceType : '')).trim()
+    const sourceId = (typeof source?.id === 'string' ? source.id : (typeof entry.sourceId === 'string' ? entry.sourceId : '')).trim()
+    const sourceSurface = (typeof source?.surface === 'string' ? source.surface : (typeof entry.sourceSurface === 'string' ? entry.sourceSurface : '')).trim()
 
     lines.push(`${i + 1}. ${truncate(content, 280) || '(no content)'}`)
     const meta: string[] = []

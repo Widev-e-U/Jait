@@ -678,12 +678,55 @@ describe('formatOutput', () => {
     expect(output).not.toContain('Found 2 memories and 0 reminders')
   })
 
+  it('displays retrieved flow memories for the memory engine memory.search', () => {
+    const output = formatOutput({
+      ok: true,
+      message: 'Loaded 5 relevant memories',
+      data: {
+        retrieved: [
+          {
+            id: 'tj-7HXe82gbI3g_-mhdGE',
+            scope: 'project',
+            source: 'synthesis:jakob-profile-synthesis@chat',
+            sourceType: 'synthesis',
+            sourceId: 'jakob-profile-synthesis',
+            sourceSurface: 'chat',
+            updatedAt: '2026-07-15T21:29:33.377Z',
+            content: 'JAKOB RUNS A HAIR-SALON-TECH STARTUP and built a real-time multi-agent chat platform called Jait.',
+          },
+          {
+            id: 'mem-2',
+            scope: 'project',
+            source: 'compact',
+            sourceType: 'pre_compaction',
+            updatedAt: '2026-07-18T22:51:55.506Z',
+            content: 'Deploy target is the base VPS at 203.0.113.10.',
+          },
+        ],
+      },
+    }, 'memory.search')
+
+    expect(output).toContain('1. JAKOB RUNS A HAIR-SALON-TECH STARTUP')
+    expect(output).toContain('(project • synthesis:jakob-profile-synthesis@chat)')
+    expect(output).toContain('2. Deploy target is the base VPS')
+    expect(output).toContain('(project • pre_compaction)')
+    expect(output).not.toContain('Loaded 5 relevant memories')
+  })
+
   it('falls back to the message when memory.search has no memories', () => {
     expect(formatOutput({
       ok: true,
       message: 'Found 0 memories and 0 reminders',
       data: { memories: [], reminders: [] },
     }, 'memory.search')).toBe('Found 0 memories and 0 reminders')
+  })
+
+  it('falls back to the message when the memory engine flow is empty', () => {
+    expect(formatOutput({
+      ok: true,
+      message: 'No relevant memories',
+      data: { retrieved: [] },
+    }, 'memory.search')).toBe('No relevant memories')
   })
 })
 
