@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
+  formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
   serializeMessagesForOllama,
@@ -71,6 +72,47 @@ describe("serializeMessagesForOllama", () => {
       { role: "assistant", content: "", tool_calls: [{ id: "x", type: "function", function: { name: "f", arguments: "not json" } }] },
     ]) as any[];
     expect(out[0].tool_calls[0].function.arguments).toEqual({});
+  });
+
+  it("converts OpenAI image parts to Ollama's message-level images", () => {
+    const message = {
+      role: "user",
+      content: [
+        { type: "text", text: "What color is this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,aGVsbG8=" } },
+      ],
+    } as unknown as AgentMessage;
+
+    expect(serializeMessagesForOllama([message])).toEqual([{
+      role: "user",
+      content: "What color is this?",
+      images: ["aGVsbG8="],
+    }]);
+  });
+
+  it("preserves bare base64 image values", () => {
+    const message = {
+      role: "user",
+      content: [{ type: "image_url", image_url: { url: "aGVsbG8=" } }],
+    } as unknown as AgentMessage;
+
+    expect(serializeMessagesForOllama([message])).toEqual([{
+      role: "user",
+      content: "",
+      images: ["aGVsbG8="],
+    }]);
+  });
+});
+
+describe("formatLLMError", () => {
+  it("includes Ollama's bare error string", () => {
+    expect(formatLLMError(400, '{"error":"model does not support images"}'))
+      .toBe("Request failed (400): model does not support images");
+  });
+
+  it("includes OpenAI-compatible nested error messages", () => {
+    expect(formatLLMError(400, '{"error":{"message":"invalid image"}}'))
+      .toBe("Request failed (400): invalid image");
   });
 });
 

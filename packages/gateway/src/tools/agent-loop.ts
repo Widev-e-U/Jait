@@ -170,11 +170,17 @@ export type AgentLoopEvent =
   | { type: "error"; message: string; status?: number };
 
 /** Format an LLM HTTP error into a user-friendly message, similar to VS Code Copilot. */
-function formatLLMError(status: number, responseText: string): string {
-  let parsed: { error?: { message?: string; type?: string; code?: string } } | undefined;
+export function formatLLMError(status: number, responseText: string): string {
+  // Error bodies differ by backend: OpenAI-compatible providers send
+  // `{"error":{"message":"..."}}` while Ollama's native /api/chat sends a bare
+  // `{"error":"..."}` string. Handle both, or the provider's real reason
+  // (e.g. "model does not support images") is dropped and the user only sees
+  // a generic "Request failed with status N".
+  let parsed: { error?: { message?: string; type?: string; code?: string } | string } | undefined;
   try { parsed = JSON.parse(responseText); } catch { /* not JSON */ }
-  const serverMsg = parsed?.error?.message;
-  const code = parsed?.error?.code;
+  const errObj = typeof parsed?.error === "object" && parsed?.error !== null ? parsed.error : undefined;
+  const serverMsg = typeof parsed?.error === "string" ? parsed.error : errObj?.message;
+  const code = errObj?.code;
 
   switch (status) {
     case 401:
@@ -666,10 +672,39 @@ export function serializeMessages(messages: AgentMessage[]) {
  *  - assistant tool_calls carry NO `id`/`type`, and `arguments` must be a
  *    parsed object, not a JSON string.
  *  - tool result messages use `tool_name` (not `tool_call_id` + `name`).
+ *  - multimodal content must be flat: text joins into `content` and images
+ *    move to a message-level `images` array of raw base64. OpenAI-style
+ *    content-part arrays (`[{type:"text"...},{type:"image_url"...}]`) are
+ *    rejected with "json: cannot unmarshal array into ... content of type
+ *    string" — which used to surface to the user as a bare 400.
  */
 export function serializeMessagesForOllama(messages: AgentMessage[]) {
   return messages.map((m) => {
-    const msg: Record<string, unknown> = { role: m.role, content: m.content };
+    // User messages with image attachments carry OpenAI-style content-part
+    // arrays (built in routes/chat.ts); flatten them into Ollama's native shape.
+    const rawContent = m.content as unknown;
+    let content: unknown = rawContent;
+    let images: string[] | undefined;
+    if (Array.isArray(rawContent)) {
+      const textChunks: string[] = [];
+      images = [];
+      for (const part of rawContent as Array<Record<string, unknown>>) {
+        if (part?.type === "text" && typeof part.text === "string") {
+          textChunks.push(part.text);
+        } else if (part?.type === "image_url") {
+          const imageUrl = part.image_url as { url?: unknown } | undefined;
+          if (typeof imageUrl?.url !== "string") continue;
+          const url = imageUrl.url;
+          // Native /api/chat wants bare base64 — strip any data-URL prefix.
+          const marker = "base64,";
+          const b64 = url.includes(marker) ? url.slice(url.indexOf(marker) + marker.length) : url;
+          images.push(b64.trim());
+        }
+      }
+      content = textChunks.join("\n");
+      if (images.length === 0) images = undefined;
+    }
+    const msg: Record<string, unknown> = { role: m.role, content };
     if (m.tool_calls) {
       msg.tool_calls = m.tool_calls.map((tc) => {
         let args: unknown = tc.function.arguments;
@@ -682,6 +717,7 @@ export function serializeMessagesForOllama(messages: AgentMessage[]) {
     if (m.role === "tool" && m.name) {
       msg.tool_name = m.name;
     }
+    if (images) msg.images = images;
     // Ollama's native /api/chat format supports message.thinking.
     if (m.thinking) msg.thinking = m.thinking;
     return msg;
