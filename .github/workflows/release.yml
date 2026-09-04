@@ -546,6 +546,27 @@ jobs:
             exit 1
           fi
           export PATH="$HOME/.cargo/bin:$PATH"
+          # ring 0.17's C code takes `#include <stdalign.h>` when compiled with
+          # clang-cl (defines both _MSC_VER and __clang__), but the UCRT headers
+          # xwin downloads never shipped stdalign.h (MSVC treats alignas/alignof
+          # as keywords). Write a C11-compat shim into the xwin UCRT include
+          # dir; idempotent, cached on the persistent runner home.
+          XWIN_UCRT="$HOME/.cache/cargo-xwin/xwin/sdk/include/ucrt"
+          if [ ! -f "$XWIN_UCRT/stdalign.h" ]; then
+            test -d "$XWIN_UCRT" || { echo "::error::xwin ucrt dir missing: $XWIN_UCRT"; exit 1; }
+            cat > "$XWIN_UCRT/stdalign.h" <<'EOF'
+          #ifndef _STDALIGN_H
+          #define _STDALIGN_H
+          #ifndef __cplusplus
+          #define alignas _Alignas
+          #define alignof _Alignof
+          #endif
+          #define __alignas_is_defined 1
+          #define __alignof_is_defined 1
+          #endif /* _STDALIGN_H */
+          EOF
+            echo "wrote stdalign.h shim: $XWIN_UCRT/stdalign.h"
+          fi
           # NSIS_LD_PRELOAD/NSIS_REAL_DIR are set by the shim step above when
           # the userspace NSIS tree is in use; tauri-cli spawns makensis, which
           # inherits LD_PRELOAD and gets its /usr/share/nsis paths redirected.
