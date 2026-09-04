@@ -81,6 +81,7 @@ import { PluginManager } from "./plugins/manager.js";
 import { resolveJaitLlmConfig } from "./services/jait-llm.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 import { SessionSearchService } from "./services/session-search.js";
+import { SessionSqlService } from "./services/session-sql.js";
 import { ChatTracesService } from "./services/chat-traces.js";
 import { DatabaseRetentionService } from "./services/database-retention.js";
 import { DiskJanitor } from "./services/disk-janitor.js";
@@ -194,6 +195,7 @@ async function main() {
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
   const sessionSearchService = new SessionSearchService(sqlite);
+  const sessionSqlService = new SessionSqlService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
   const databaseRetention = new DatabaseRetentionService(sqlite);
   const diskJanitor = new DiskJanitor(sqlite);
@@ -494,6 +496,7 @@ async function main() {
     reminderService,
     sessionSearchService,
     chatTracesService,
+    sessionSqlService,
     gitService,
     userSecretService,
     emailService,
@@ -730,6 +733,7 @@ async function main() {
     reminderService,
     sessionSearchService,
     chatTracesService,
+    sessionSqlService,
     gitService,
     maintenanceService,
     notifications,

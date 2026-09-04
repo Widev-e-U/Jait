@@ -20,6 +20,13 @@ export interface SqliteStatement {
   all(...params: unknown[]): unknown[];
   run(...params: unknown[]): unknown;
   get(...params: unknown[]): unknown;
+  /**
+   * Column metadata for the prepared statement, when the backend exposes it:
+   * better-sqlite3 and node:sqlite provide a `columns()` method; bun:sqlite
+   * provides a `columns` getter (array of { name, ... }). Optional — callers
+   * must fall back (e.g. to inference) when absent.
+   */
+  readonly columns?: (() => Array<{ name: string }>) | Array<{ name: string }>;
 }
 
 export interface SqliteDatabase {
@@ -120,6 +127,12 @@ function wrapNodeSqlite(rawDb: unknown): SqliteDatabase {
         },
         run(...params: unknown[]) {
           return stmt.run(...params);
+        },
+        // Forward node:sqlite's StatementSync.columns() so callers get real
+        // result-column metadata without executing the statement.
+        columns() {
+          const meta = (stmt as { columns?: () => Array<{ name: string }> }).columns;
+          return typeof meta === "function" ? meta.call(stmt) : [];
         },
       } as unknown as SqliteStatement;
     },

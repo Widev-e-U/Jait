@@ -100,6 +100,7 @@ export const ToolName = {
   MemoryForget: "memory.forget",
   SessionSearch: "session.search",
   ChatTraces: "chat.traces",
+  SessionSql: "session.sql",
 
   // ── Voice ──
   VoiceSpeak: "voice.speak",
