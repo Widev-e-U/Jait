@@ -8,7 +8,7 @@ import { SettingsPage } from '@/components/settings/SettingsPage'
 import { TodoPage } from '@/components/todo'
 import { PullRequestsPage } from '@/components/pull-requests'
 import type { ActivityEvent } from '@jait/ui-shared'
-import type { JaitBackend, SttProvider } from '@/hooks/useAuth'
+import type { ChatStreamingAction, JaitBackend, SttProvider } from '@/hooks/useAuth'
 import type { AppView } from '@/lib/app-view'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { AutomationRepository } from '@/lib/automation-repositories'
@@ -39,10 +39,12 @@ interface AppPageOutletProps {
   onClearArchive: () => Promise<number>
   onClearArchivedProjects: () => Promise<number>
   onFetchArchivedProjects: () => Promise<any>
+  chatStreamingAction: ChatStreamingAction
   onJaitBackendChange: (next: JaitBackend) => Promise<void>
   onRestoreProject: (projectId: string) => Promise<boolean>
   onSaveApiKeys: (apiKeys: Record<string, string>) => Promise<void>
   onSttProviderChange: (next: SttProvider) => Promise<void>
+  onChatStreamingActionChange: (next: ChatStreamingAction) => Promise<void>
   onVoiceInput: () => void
   onVoiceStop: () => void
   voiceLevels: number[]
@@ -66,6 +68,7 @@ export function AppPageOutlet({
   isMobile,
   repositories,
   jaitBackend,
+  chatStreamingAction,
   sttProvider,
   token,
   updateApplying,
@@ -84,6 +87,7 @@ export function AppPageOutlet({
   onRestoreProject,
   onSaveApiKeys,
   onSttProviderChange,
+  onChatStreamingActionChange,
   onVoiceInput,
   onVoiceStop,
   voiceLevels,
@@ -181,6 +185,8 @@ export function AppPageOutlet({
           onSaveApiKeys={onSaveApiKeys}
           sttProvider={sttProvider}
           onSttProviderChange={onSttProviderChange}
+          chatStreamingAction={chatStreamingAction}
+          onChatStreamingActionChange={onChatStreamingActionChange}
           jaitBackend={jaitBackend}
           onJaitBackendChange={onJaitBackendChange}
           onClearArchive={onClearArchive}

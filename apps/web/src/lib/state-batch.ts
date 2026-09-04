@@ -1,7 +1,7 @@
 /**
  * Microtask-batched and cache-backed state fetcher.
  *
- * Multiple `useSessionState` / `useProjectState` hooks fire their fetch
+ * Multiple `useBackendState` hooks fire their fetch
  * effects in the same React commit. Instead of one HTTP request per key,
  * this module collects all keys requested in the same microtask and issues
  * a single `GET /api/{sessions|projects}/:id/state?keys=a,b,c` call.

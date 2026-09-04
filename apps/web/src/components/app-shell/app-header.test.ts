@@ -10,9 +10,9 @@ describe('AppHeader manager model control', () => {
     )
 
     expect(source).toContain("viewMode === 'manager'")
-    expect(source).toContain('<CliModelSelector')
+    expect(source).toContain('<ProviderModelSelector')
     expect(source).toContain('model={cliModel}')
-    expect(source).toContain('onChange={onCliModelChange}')
+    expect(source).toContain('onModelChange={onCliModelChange}')
   })
 
   it('shows an avatar skeleton while authentication is loading', () => {

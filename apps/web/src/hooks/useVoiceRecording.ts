@@ -308,8 +308,26 @@ export function useVoiceRecording({
     } catch (err) {
       voiceTranscriptTargetRef.current = null
       stopVoiceVisualizer()
-      console.error('Microphone access denied:', err)
-      window.alert('Microphone access is required for push-to-talk.')
+      console.error('Microphone access failed:', err)
+
+      // `navigator.mediaDevices` is undefined on insecure (plain http) origins,
+      // e.g. a Capacitor Android WebView serving the app with `androidScheme: http`
+      // — that failure is a secure-context issue, not an OS permission problem.
+      let message = 'Microphone access is required for push-to-talk.'
+      if (!navigator.mediaDevices) {
+        message = 'Microphone is unavailable: the app is not running in a secure (https) context.'
+      } else if (
+        err instanceof DOMException &&
+        (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+      ) {
+        message = 'Microphone permission was denied. Allow microphone access for push-to-talk.'
+      } else if (
+        err instanceof DOMException &&
+        (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')
+      ) {
+        message = 'No microphone was found on this device.'
+      }
+      window.alert(message)
     }
   }, [onAuthRequired, startVoiceVisualizer, stopVoiceVisualizer, token])
 

@@ -1,57 +1,29 @@
+/**
+ * automation-selection-storage — Manager page's "last selected repo" storage.
+ *
+ * Read/write mechanics live in `repo-selection-storage`; this module owns the
+ * storage key and the resolution policy used by the automation view
+ * (current selection wins over the persisted one; fall back to first repo).
+ */
+
+import {
+  normalizePersistedRepoSelection,
+  normalizeRepositoryPathForComparison,
+  persistRepoSelection,
+  readPersistedRepoSelection,
+  type PersistedRepoSelection,
+} from '@/lib/repo-selection-storage'
+
 export const SELECTED_REPO_STORAGE_KEY = 'jait:selected-repo-id'
 
-export interface PersistedSelectedRepo {
-  repoId: string | null
-  localPath: string | null
-}
-
-function normalizeRepositoryPathForComparison(path: string): string {
-  const normalized = path.trim().replace(/\\/g, '/').replace(/\/+$/, '')
-  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized
-}
+export type PersistedSelectedRepo = PersistedRepoSelection
 
 export function normalizePersistedSelectedRepo(value: unknown): PersistedSelectedRepo {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const parsed = value as { repoId?: unknown, localPath?: unknown }
-    return {
-      repoId: typeof parsed.repoId === 'string' && parsed.repoId.trim() ? parsed.repoId.trim() : null,
-      localPath: typeof parsed.localPath === 'string' && parsed.localPath.trim() ? parsed.localPath.trim() : null,
-    }
-  }
-
-  if (typeof value === 'string') {
-    return {
-      repoId: value.trim() || null,
-      localPath: null,
-    }
-  }
-
-  return { repoId: null, localPath: null }
-}
-
-function parsePersistedSelectedRepo(raw: string): PersistedSelectedRepo {
-  try {
-    return normalizePersistedSelectedRepo(JSON.parse(raw))
-  } catch {
-    // Support the legacy raw-string repo id format.
-  }
-
-  return normalizePersistedSelectedRepo(raw)
+  return normalizePersistedRepoSelection(value)
 }
 
 export function readPersistedSelectedRepo(): PersistedSelectedRepo {
-  if (typeof window === 'undefined') {
-    return { repoId: null, localPath: null }
-  }
-  try {
-    const value = window.localStorage.getItem(SELECTED_REPO_STORAGE_KEY)?.trim()
-    if (!value) {
-      return { repoId: null, localPath: null }
-    }
-    return parsePersistedSelectedRepo(value)
-  } catch {
-    return { repoId: null, localPath: null }
-  }
+  return readPersistedRepoSelection(SELECTED_REPO_STORAGE_KEY)
 }
 
 export function readPersistedSelectedRepoId(): string | null {
@@ -59,21 +31,7 @@ export function readPersistedSelectedRepoId(): string | null {
 }
 
 export function persistSelectedRepoId(repoId: string | null, localPath?: string | null): void {
-  if (typeof window === 'undefined') return
-  try {
-    const normalizedRepoId = repoId?.trim() || null
-
-    if (normalizedRepoId) {
-      window.localStorage.setItem(SELECTED_REPO_STORAGE_KEY, JSON.stringify({
-        repoId: normalizedRepoId,
-        localPath: localPath?.trim() || null,
-      }))
-    } else {
-      window.localStorage.removeItem(SELECTED_REPO_STORAGE_KEY)
-    }
-  } catch {
-    // Ignore storage failures and keep the in-memory selection working.
-  }
+  persistRepoSelection(SELECTED_REPO_STORAGE_KEY, repoId, localPath)
 }
 
 export function resolvePersistedSelectedRepoId<T extends { id: string, localPath: string }>(

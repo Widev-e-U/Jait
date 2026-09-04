@@ -14,6 +14,7 @@ import { TrajectoryPanel } from '@/components/debug/trajectory-panel'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
 import type { ContextUsage } from '@/hooks/useChat'
+import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { haveRenderInputsChanged } from '@/lib/message-element-cache'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getProjectRepositoryId } from '@/lib/project-repositories'
@@ -43,6 +44,7 @@ interface DeveloperChatWorkspaceProps {
   cliModel: string | null
   reasoningEffort: SessionReasoningEffort | null
   contextUsage: ContextUsage | null
+  defaultStreamingAction: DefaultStreamingAction
   developerChatPanelStyle: CSSProperties
   developerChatSubmitLoading: boolean
   developerChatUiState: { showTodoList: boolean }
@@ -113,6 +115,8 @@ interface DeveloperChatWorkspaceProps {
   onProviderChange: (provider: any) => void
   onProviderRuntimeModeChange: (mode: any) => void
   onQueue: () => void
+  /** Steer the running agent with the currently typed composer content. */
+  onSteer: () => void
   onRejectAllFiles: () => void
   onRejectFile: (file: any) => void
   onRejectPlan: () => void
@@ -161,6 +165,7 @@ export function DeveloperChatWorkspace({
   hasMessages,
   hasMoreMessages,
   hitMaxRounds,
+  defaultStreamingAction,
   inputSegments,
   inputValueRef,
   inputVersion,
@@ -221,6 +226,7 @@ export function DeveloperChatWorkspace({
   onProviderChange,
   onProviderRuntimeModeChange,
   onQueue,
+  onSteer,
   onRejectAllFiles,
   onRejectFile,
   onRejectPlan,
@@ -267,6 +273,13 @@ export function DeveloperChatWorkspace({
   const handleMessageEditingChange = useCallback((messageId: string, editing: boolean) => {
     setEditingMessageId((current) => editing ? messageId : current === messageId ? null : current)
   }, [])
+  // Clicking the previous-user-message chip in the Conversation scrolls there
+  // and hands us the child index; open that user message's editor.
+  const handleEditPreviousUserMessage = useCallback((childIndex: number) => {
+    const message = messages[childIndex]
+    if (message?.role !== 'user') return
+    setEditingMessageId(message.id)
+  }, [messages])
   const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId)
 
   useEffect(() => {
@@ -343,7 +356,9 @@ export function DeveloperChatWorkspace({
                 onChange={onHandleInputChange}
                 onSubmit={onSubmit}
                 onStop={onCancelRequest}
+                defaultStreamingAction={defaultStreamingAction}
                 onQueue={onQueue}
+                onSteer={onSteer}
                 isLoading={isLoading}
                 submitLoading={developerChatSubmitLoading}
                 placeholder={developerPlaceholder}
@@ -533,8 +548,8 @@ export function DeveloperChatWorkspace({
           )}
           {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
             // On desktop the conversation shows the minimap scrollbar (96px) flush to
-            // the right edge, and the jump-to-previous-user-message button sits just left
-            // of that; offset the indicator clear of both, not under them.
+            // the right edge, and the previous-user-message chip hangs just below the
+            // indicator at the same inset; keep the indicator above it, not under.
             <div className={`absolute top-2 z-10 ${isMobile ? 'right-2' : 'right-[156px]'} ${showFloatingChatIndicators ? '' : 'hidden'}`}>
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
@@ -557,6 +572,7 @@ export function DeveloperChatWorkspace({
                 messageEstimateInputs={messages}
                 hasMore={hasMoreMessages}
                 onLoadMore={loadOlderMessages}
+                onEditPreviousUserMessage={handleEditPreviousUserMessage}
                 scrollToMessageId={scrollToUserMessageId}
                 showMinimap={!isMobile}
               >
@@ -649,7 +665,9 @@ export function DeveloperChatWorkspace({
                     onChange={onHandleInputChange}
                     onSubmit={onSubmit}
                     onStop={onCancelRequest}
+                    defaultStreamingAction={defaultStreamingAction}
                     onQueue={onQueue}
+                    onSteer={onSteer}
                     isLoading={isLoading}
                     submitLoading={developerChatSubmitLoading}
                     disabled={limitReached}

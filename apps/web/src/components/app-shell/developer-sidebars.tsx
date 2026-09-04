@@ -1,4 +1,4 @@
-import { Boxes, Bug, Code, Globe, PanelLeftClose, PanelLeftOpen, Settings, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Bug, Code, Folders, Globe, MessageSquare, Settings, Terminal as TerminalIcon } from 'lucide-react'
 import type { FocusEvent, RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
@@ -9,6 +9,7 @@ import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
+import type { DeveloperSidebarView } from '@/lib/developer-sidebar'
 
 interface DeveloperSidebarsProps {
   activeProject: ActiveProjectState
@@ -31,6 +32,7 @@ interface DeveloperSidebarsProps {
   showDebugPanel: boolean
   showProject: boolean
   showSidebar: boolean
+  sidebarView: DeveloperSidebarView
   showTerminal: boolean
   streamingSessionIds: Set<string>
   sidebarRef: RefObject<HTMLElement | null>
@@ -56,7 +58,7 @@ interface DeveloperSidebarsProps {
   onToggleDebug: () => void
   onToggleEditor: () => void
   onTogglePreview: () => void
-  onToggleSidebar: () => void
+  onSelectSidebarView: (view: DeveloperSidebarView) => void
   onToggleTerminal: () => void
   onOpenSettings: () => void
 }
@@ -82,6 +84,7 @@ export function DeveloperSidebars({
   showDebugPanel,
   showProject,
   showSidebar,
+  sidebarView,
   showTerminal,
   streamingSessionIds,
   sidebarRef,
@@ -107,7 +110,7 @@ export function DeveloperSidebars({
   onToggleDebug,
   onToggleEditor,
   onTogglePreview,
-  onToggleSidebar,
+  onSelectSidebarView,
   onToggleTerminal,
   onOpenSettings,
 }: DeveloperSidebarsProps) {
@@ -118,16 +121,32 @@ export function DeveloperSidebars({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={showSidebar ? 'secondary' : 'ghost'}
+                variant={showSidebar && sidebarView === 'projects' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="h-9 w-9 rounded-md p-0"
-                onClick={onToggleSidebar}
-                aria-label="Toggle projects panel"
+                onClick={() => onSelectSidebarView('projects')}
+                aria-label="Projects"
+                aria-pressed={showSidebar && sidebarView === 'projects'}
               >
-                {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                <Folders className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">Projects & Chats</TooltipContent>
+            <TooltipContent side="right">Projects</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showSidebar && sidebarView === 'chats' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-9 w-9 rounded-md p-0"
+                onClick={() => onSelectSidebarView('chats')}
+                aria-label="Personal chats"
+                aria-pressed={showSidebar && sidebarView === 'chats'}
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Personal Chats</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -215,6 +234,7 @@ export function DeveloperSidebars({
         >
           <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
             <SessionSelector
+              view={sidebarView}
               projects={projects}
               personalSessions={personalSessions}
               activeProjectId={activeProjectId}

@@ -16,7 +16,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { cn } from '@/lib/utils'
-import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
+import { alternateStreamingAction, resolvePromptSubmitAction, type DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME, JAIT_CHAT_REF_MIME } from '@/lib/jait-dnd'
 import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
 import {
@@ -72,6 +72,10 @@ interface PromptInputProps {
   onStop?: () => void
   /** Queue a message while the agent is busy. */
   onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
+  /** Steer the running agent with the currently typed content (applied immediately while streaming). */
+  onSteer?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
+  /** Submit the typed content into a fresh thread (used when the streaming default action is "thread"). */
+  onThreadSubmit?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   isLoading?: boolean
   /** Locks just the submit button and shows a spinner while chat state is still becoming ready. */
   submitLoading?: boolean
@@ -95,6 +99,8 @@ interface PromptInputProps {
   sendTarget?: SendTarget
   onSendTargetChange?: (target: SendTarget) => void
   showSendTargetSelector?: boolean
+  /** User-configured default action for Enter/send while a session is streaming. */
+  defaultStreamingAction?: DefaultStreamingAction
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
   responseStyle?: ResponseStyle
@@ -691,6 +697,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onSubmit,
   onStop,
   onQueue,
+  onSteer,
+  onThreadSubmit,
   isLoading,
   submitLoading,
   disabled,
@@ -709,6 +717,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   sendTarget,
   onSendTargetChange,
   showSendTargetSelector = true,
+  defaultStreamingAction,
   provider,
   onProviderChange,
   responseStyle,
@@ -816,7 +825,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
   const hasFooterLeftContent = hasFooterControls
   const submitEmpty = isEmpty && attachments.length === 0
-  const canQueueWhileLoading = shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && Boolean(onQueue)
+  const submitAction = resolvePromptSubmitAction({
+    isLoading,
+    sendTarget,
+    hasQueueHandler: Boolean(onQueue),
+    hasSteerHandler: Boolean(onSteer),
+    hasThreadHandler: Boolean(onThreadSubmit),
+    defaultAction: defaultStreamingAction,
+  })
+  const canSteerWhileLoading = submitAction === 'steer' && Boolean(onSteer)
+  const canQueueWhileLoading = submitAction === 'queue' && Boolean(onQueue)
+  const canThreadWhileLoading = submitAction === 'thread' && Boolean(onThreadSubmit)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1470,8 +1489,45 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
       const hasStructuredRefs = nextSegments.some((segment) => segment.type !== 'text' && segment.type !== 'image')
       if (!(text || chips.length > 0 || hasStructuredRefs || attachments.length > 0)) return
-      if (shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && onQueue) {
+      const action = resolvePromptSubmitAction({
+        isLoading,
+        sendTarget,
+        hasQueueHandler: Boolean(onQueue),
+        hasSteerHandler: Boolean(onSteer),
+        hasThreadHandler: Boolean(onThreadSubmit),
+        defaultAction: defaultStreamingAction,
+      })
+      if (isLoading && e.altKey) {
+        // Alt+Enter is the secondary action: the opposite of the configured default.
+        const altAction = alternateStreamingAction(defaultStreamingAction ?? 'steer')
+        if (altAction === 'steer' && onSteer) {
+          onSteer(chips, attachments, nextSegments)
+          setAttachments([])
+          resetComposer()
+          return
+        }
+        if (altAction === 'queue' && onQueue) {
+          onQueue(chips, attachments, nextSegments)
+          setAttachments([])
+          resetComposer()
+          return
+        }
+        // No handler for the alternate action — fall through to the default.
+      }
+      if (action === 'steer' && onSteer) {
+        onSteer(chips, attachments, nextSegments)
+        setAttachments([])
+        resetComposer()
+        return
+      }
+      if (action === 'queue' && onQueue) {
         onQueue(chips, attachments, nextSegments)
+        setAttachments([])
+        resetComposer()
+        return
+      }
+      if (action === 'thread' && onThreadSubmit) {
+        onThreadSubmit(chips, attachments, nextSegments)
         setAttachments([])
         resetComposer()
         return
@@ -1482,7 +1538,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         resetComposer()
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, defaultStreamingAction, onQueue, onSteer, onThreadSubmit, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -1761,7 +1817,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       className={cn(
         'group relative z-10 flex flex-col',
         merged
-          ? (mergedShowTopDivider ? 'border-t bg-background/50 dark:bg-card/50' : 'bg-background/50 dark:bg-card/50')
+          ? (mergedShowTopDivider ? 'border-t bg-background dark:bg-card' : 'bg-background dark:bg-card')
           : 'rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
@@ -2097,7 +2153,106 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
           )}
-          {canQueueWhileLoading && submitEmpty ? (
+          {canSteerWhileLoading && onSteer ? (
+            <>
+              <Button
+                type="button"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-lg"
+                disabled={submitEmpty || composerDisabled}
+                title="Steer the running agent (Enter)"
+                onClick={() => {
+                  const el = editableRef.current
+                  const chips = el ? getChipFiles(el) : []
+                  const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                  onSteer(chips, attachments, nextSegments)
+                  setAttachments([])
+                  resetComposer()
+                }}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              {onQueue && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  disabled={submitEmpty || composerDisabled}
+                  title="Add to queue (Alt+Enter)"
+                  onClick={() => {
+                    const el = editableRef.current
+                    const chips = el ? getChipFiles(el) : []
+                    const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                    onQueue(chips, attachments, nextSegments)
+                    setAttachments([])
+                    resetComposer()
+                  }}
+                >
+                  <ListPlus className="h-4 w-4" />
+                </Button>
+              )}
+            </>
+          ) : canThreadWhileLoading ? (
+            <>
+              <Button
+                type="button"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-lg"
+                disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
+                title="Send as new thread (Enter)"
+                onClick={() => {
+                  const el = editableRef.current
+                  const chips = el ? getChipFiles(el) : []
+                  const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                  onThreadSubmit?.(chips, attachments, nextSegments)
+                  setAttachments([])
+                  resetComposer()
+                }}
+              >
+                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              </Button>
+              {onSteer ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  disabled={submitEmpty || composerDisabled}
+                  title="Steer instead (Alt+Enter)"
+                  onClick={() => {
+                    const el = editableRef.current
+                    const chips = el ? getChipFiles(el) : []
+                    const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                    onSteer(chips, attachments, nextSegments)
+                    setAttachments([])
+                    resetComposer()
+                  }}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              ) : onQueue ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  disabled={submitEmpty || composerDisabled}
+                  title="Add to queue (Alt+Enter)"
+                  onClick={() => {
+                    const el = editableRef.current
+                    const chips = el ? getChipFiles(el) : []
+                    const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                    onQueue(chips, attachments, nextSegments)
+                    setAttachments([])
+                    resetComposer()
+                  }}
+                >
+                  <ListPlus className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </>
+          ) : canQueueWhileLoading && submitEmpty ? (
             <Button
               type="button"
               size="icon"
@@ -2108,24 +2263,46 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
           ) : canQueueWhileLoading && onQueue ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={submitEmpty || composerDisabled}
-              title="Add to queue"
-              onClick={() => {
-                const el = editableRef.current
-                const chips = el ? getChipFiles(el) : []
-                const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-                onQueue(chips, attachments, nextSegments)
-                setAttachments([])
-                resetComposer()
-              }}
-            >
-              <ListPlus className="h-4 w-4" />
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                className="h-8 w-8 shrink-0 rounded-lg"
+                disabled={submitEmpty || composerDisabled}
+                title="Add to queue"
+                onClick={() => {
+                  const el = editableRef.current
+                  const chips = el ? getChipFiles(el) : []
+                  const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                  onQueue(chips, attachments, nextSegments)
+                  setAttachments([])
+                  resetComposer()
+                }}
+              >
+                <ListPlus className="h-4 w-4" />
+              </Button>
+              {onSteer && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  disabled={submitEmpty || composerDisabled}
+                  title="Steer instead (Alt+Enter)"
+                  onClick={() => {
+                    const el = editableRef.current
+                    const chips = el ? getChipFiles(el) : []
+                    const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                    onSteer(chips, attachments, nextSegments)
+                    setAttachments([])
+                    resetComposer()
+                  }}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           ) : !isLoading || sendTarget === 'thread' ? (
             <Button
               type="button"

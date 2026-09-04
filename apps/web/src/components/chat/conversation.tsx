@@ -1,6 +1,6 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUp, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
@@ -35,6 +35,12 @@ interface ConversationProps {
   hasMore?: boolean
   /** Callback to load older messages (scroll-up lazy loading). */
   onLoadMore?: () => void
+  /**
+   * Invoked when the previous-user-message chip is clicked, with the child
+   * index of that message. The Conversation scrolls it into view; the parent
+   * opens its editor, so one click jumps to and starts editing the message.
+   */
+  onEditPreviousUserMessage?: (childIndex: number) => void
   /**
    * When this changes to a new, non-null message id, force the conversation to
    * reveal that message — even if the user has scrolled up away from the
@@ -400,7 +406,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, scrollToMessageId, showMinimap = false }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // The scroll container may not exist yet on first mount (history still
   // loading renders the skeleton branch), and a plain ref object is not
@@ -646,6 +652,15 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   // of measuring, so touching it before `getTotalSize()` on the render that
   // added a message hands back a cache that predates that message.
   const totalSize = virtualizer.getTotalSize()
+  const virtualItems = virtualizer.getVirtualItems()
+  // A growing tool/reasoning card can out-run `totalSize` for a frame: the
+  // ResizeObserver measurement that folds its real height back into the
+  // virtualizer lands a tick after the DOM already grew. Commit at least the
+  // extent we are about to render so absolutely-positioned items can never
+  // paint below (and through) the composer overlay.
+  const lastVirtualItem = virtualItems[virtualItems.length - 1]
+  const renderedExtent = lastVirtualItem ? lastVirtualItem.start + lastVirtualItem.size : 0
+  const committedSize = Math.max(totalSize, renderedExtent)
   const topAnchoredMessageIndex = findConversationItemIndex(childItems, topAnchoredMessageId)
   const topAnchoredMeasurement = topAnchoredMessageIndex < 0
     ? undefined
@@ -654,7 +669,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     ? computeNewTurnTailPadding({
         viewportHeight: conversationViewportHeight,
         messageStart: topAnchoredMeasurement.start,
-        totalSize,
+        totalSize: committedSize,
       })
     : 0
 
@@ -1052,11 +1067,14 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const target = previousUserMessageIndex ?? findPreviousUserMessage()
     if (target == null) return
     setPreviousMessagePreviewSuppressed(true)
-    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'smooth' })
+    // Land instantly so the editor opens exactly where the user clicked; the
+    // chip *is* the previous message, and clicking it starts editing it.
+    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'auto' })
     // A programmatic jump is the same intent as scrolling by hand: stop
     // following the stream, and anchor wherever it lands.
     detachFromBottom()
-  }, [detachFromBottom, findPreviousUserMessage, previousUserMessageIndex])
+    onEditPreviousUserMessage?.(target)
+  }, [detachFromBottom, findPreviousUserMessage, onEditPreviousUserMessage, previousUserMessageIndex])
 
   const handleMinimapScrub = useCallback(() => {
     setPreviousMessagePreviewSuppressed(false)
@@ -1292,12 +1310,12 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
             <div
               ref={sizerRef}
               style={{
-                height: totalSize + newTurnTailPadding,
+                height: committedSize + newTurnTailPadding,
                 width: '100%',
                 position: 'relative',
               }}
             >
-              {virtualizer.getVirtualItems().map((virtualItem) => (
+              {virtualItems.map((virtualItem) => (
                 <div
                   key={virtualItem.key}
                   data-index={virtualItem.index}
@@ -1326,16 +1344,25 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       )}
 
       {initialScrollReady && !loading && canJumpUp && !previousMessagePreviewSuppressed && (
-        <button
-          type="button"
-          aria-label="Jump to previous user message"
-          title={previousMessagePreview}
-          className="absolute left-1/2 top-14 z-20 flex max-w-[calc(100%-6rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-primary/20 bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-sm backdrop-blur transition-colors hover:bg-muted/80 sm:top-4"
-          onClick={jumpToPreviousMessage}
+        // Styled after the user chat bubble itself (bg-muted, rounded, right
+        // where user messages sit) because the chip *is* the previous message:
+        // clicking it jumps to that message and starts editing it. The frame
+        // mirrors the transcript column (mx-auto max-w-4xl px-*) so the chip
+        // never extends past the chat's width; pointer-events pass through so
+        // the strip only captures clicks on the button itself.
+        <div
+          className="pointer-events-none absolute inset-x-0 top-14 z-20 mx-auto flex max-w-4xl justify-end px-4 sm:top-10 sm:px-5"
         >
-          <ArrowUp className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span className="truncate">{previousMessagePreview}</span>
-        </button>
+          <button
+            type="button"
+            aria-label="Jump to and edit previous user message"
+            title="Jump to and edit previous user message"
+            className="pointer-events-auto block w-fit max-w-full cursor-text rounded-lg bg-muted px-4 py-3 text-left text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-muted/80"
+            onClick={jumpToPreviousMessage}
+          >
+            <span className="block truncate">{previousMessagePreview}</span>
+          </button>
+        </div>
       )}
 
       {initialScrollReady && !loading && !isAtBottom && (

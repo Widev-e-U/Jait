@@ -43,7 +43,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     expect(markup).toContain('Chat 1')
@@ -66,7 +66,7 @@ describe('SessionSelector', () => {
           lastActiveAt: '2026-07-06T00:00:00.000Z',
           viewedAt: null,
           metadata: null,
-        }]}
+        },]}
         activeProjectId={null}
         onSelectProject={() => {}}
         onCreateProject={() => {}}
@@ -83,6 +83,68 @@ describe('SessionSelector', () => {
     expect(markup).toContain('Personal chats')
   })
 
+  it('shows only project content in the projects view', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        view="projects"
+        projects={[createProject({ title: 'Workspace-only', sessions: [] })]}
+        personalSessions={[
+          {
+            id: 'personal-only',
+            projectId: null,
+            name: 'Personal-only',
+            projectPath: null,
+            status: 'active',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            lastActiveAt: '2026-07-06T00:00:00.000Z',
+            viewedAt: null,
+            metadata: null,
+          },
+        ]}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Search projects"')
+    expect(markup).toContain('Workspace-only')
+    expect(markup).not.toContain('Personal-only')
+  })
+
+  it('shows only personal content in the chats view', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        view="chats"
+        projects={[createProject({ title: 'Workspace-only', sessions: [] })]}
+        personalSessions={[
+          {
+            id: 'personal-only',
+            projectId: null,
+            name: 'Personal-only',
+            projectPath: null,
+            status: 'active',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            lastActiveAt: '2026-07-06T00:00:00.000Z',
+            viewedAt: null,
+            metadata: null,
+          },
+        ]}
+        activeProjectId={null}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Search personal chats"')
+    expect(markup).toContain('Personal-only')
+    expect(markup).not.toContain('Workspace-only')
+  })
+
   it('marks projects whose folder path is missing', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
@@ -92,7 +154,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     expect(markup).toContain('Path not found')
@@ -120,7 +182,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     expect(markup).toContain('Personal 1')
@@ -143,7 +205,7 @@ describe('SessionSelector', () => {
           lastActiveAt: '2026-07-06T00:00:00.000Z',
           viewedAt: null,
           metadata: null,
-        }]}
+        },]}
         activeProjectId={null}
         onSelectProject={() => {}}
         onCreateProject={() => {}}
@@ -170,7 +232,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
     expect(markup).toContain('rounded-full bg-blue-500')
   })
@@ -189,7 +251,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
     // Session 1 is active (never viewed) but its dot is suppressed.
     const unreadCount = (markup.match(/rounded-full bg-blue-500/g) ?? []).length
@@ -207,7 +269,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     expect(markup).toContain('aria-label="Editor mode active for Jait"')
@@ -220,8 +282,8 @@ describe('SessionSelector', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector
         projects={[
-          createProject({ id: 'project-1', title: 'Inactive', editorModeActive: false }),
-          createProject({ id: 'project-2', title: 'Active elsewhere', editorModeActive: true }),
+          createProject({ id: 'project-1', title: 'Inactive', editorModeActive: false, }),
+          createProject({ id: 'project-2', title: 'Active elsewhere', editorModeActive: true, }),
         ]}
         activeProjectId="project-1"
         showEditorModeStatus
@@ -246,7 +308,7 @@ describe('SessionSelector', () => {
         onCreateProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     expect(markup).not.toContain('Editor mode active for Jait')
@@ -254,15 +316,15 @@ describe('SessionSelector', () => {
   })
 
   it('keeps the chat context menu inside the viewport', () => {
-    expect(getSessionContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100 })
-    expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 136, top: 352 })
-    expect(getSessionContextMenuPosition(-10, -10, 400, 400)).toEqual({ left: 8, top: 8 })
+    expect(getSessionContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100, })
+    expect(getSessionContextMenuPosition(390, 390, 400, 400)).toEqual({ left: 136, top: 352, })
+    expect(getSessionContextMenuPosition(-10, -10, 400, 400)).toEqual({ left: 8, top: 8, })
   })
 
   it('lifts a tall move menu further up so its last item stays reachable', () => {
     // A menu listing projects is much taller than the old archive-only one;
     // clamping against the small default would push it off-screen.
-    expect(getSessionContextMenuPosition(100, 300, 400, 400, 240)).toEqual({ left: 100, top: 152 })
+    expect(getSessionContextMenuPosition(100, 300, 400, 400, 240)).toEqual({ left: 100, top: 152, })
   })
 
   describe('folder tree', () => {
@@ -297,13 +359,13 @@ describe('SessionSelector', () => {
         onMoveProject={() => {}}
         onRemoveProject={() => {}}
         onChangeDirectory={() => {}}
-      />,
+      />
     )
 
     it('indents a nested folder below its parent', () => {
       const markup = renderTree([
         folder('root', 'Work'),
-        folder('child', 'Client A', { parentId: 'root' }),
+        folder('child', 'Client A', { parentId: 'root' })
       ])
       expect(markup).toContain('Work')
       expect(markup).toContain('Client A')
@@ -343,18 +405,18 @@ describe('SessionSelector', () => {
       // filed under a category folder.
       const markup = renderTree([
         folder('private', 'Private'),
-        { ...createProject(), parentId: 'private' },
+        { ...createProject(), parentId: 'private' }
       ])
       expect(markup).toContain('Private')
       expect(markup).toContain('/workspace/jait')
       expect(markup).toContain('margin-left:12px')
     })
 
-    it('keeps a nested project\'s chats reachable', () => {
+    it("keeps a nested project's chats reachable", () => {
       // Filing a project into a folder must not cost it its chat list.
       const markup = renderTree([
         folder('private', 'Private'),
-        { ...createProject(), parentId: 'private' },
+        { ...createProject(), parentId: 'private' }
       ])
       expect(markup).toContain('Chat 1')
       expect(markup).toContain('Show older')
@@ -363,7 +425,7 @@ describe('SessionSelector', () => {
     it('gives a folder holding a project a collapse control', () => {
       const markup = renderTree([
         folder('private', 'Private'),
-        { ...createProject(), parentId: 'private' },
+        { ...createProject(), parentId: 'private' }
       ])
       // Without this the branch could never be folded away.
       expect(markup).toContain('Collapse folder')

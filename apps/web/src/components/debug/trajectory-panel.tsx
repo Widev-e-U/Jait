@@ -42,15 +42,6 @@ interface TrajectoryPanelProps {
 const BOTTOM_THRESHOLD_PX = 24
 
 /**
- * Quiet period, in ms, after the last replayed history event before the panel
- * snaps to the bottom. Opening a session streams the whole persisted log as a
- * burst, so while it's replaying we hold the view at the top and only jump to
- * the newest step once the burst settles — instead of visibly scrolling through
- * the entire history.
- */
-const REPLAY_SETTLE_MS = 250
-
-/**
  * Whether the timeline should still follow new content after a scroll event.
  *
  * Content streaming in grows `scrollHeight` and fires `scroll` a frame before
@@ -490,15 +481,6 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  // True while the gateway's history replay is still arriving. During the replay
-  // burst we keep the view at the top instead of following every replayed step;
-  // once the burst settles we snap to the bottom exactly once.
-  const replayingRef = useRef(false)
-  const replaySettleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // The session whose replay hold is currently active, so live events for an
-  // already-settled session don't re-enter the "hold at top" state.
-  const replaySessionRef = useRef<string | null>(null)
-
   const pinToBottom = useCallback(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -560,9 +542,9 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
     const el = scrollRef.current
     const content = contentRef.current
     if (!el || !content) return
-    if (stickToBottomRef.current && !replayingRef.current) pinToBottom()
+    if (stickToBottomRef.current) pinToBottom()
     const observer = new ResizeObserver(() => {
-      if (stickToBottomRef.current && !replayingRef.current) pinToBottom()
+      if (stickToBottomRef.current) pinToBottom()
     })
     observer.observe(content)
     // Resizing the viewport itself (window, details pane) moves the bottom too.
@@ -570,50 +552,15 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
     return () => observer.disconnect()
   }, [pinToBottom])
 
-  // When a session opens, the gateway replays the whole persisted history as a
-  // burst of SSE events. Instead of following every replayed step (which makes
-  // the panel visibly scroll down through the log), hold at the top while the
-  // burst is streaming in and snap straight to the newest step once it settles.
-  useEffect(() => {
-    if (!sessionId) {
-      replaySessionRef.current = null
-      return
-    }
-    // Only (re)enter the replay hold when the session actually changes — a live
-    // event after we've already settled must not detach the view again.
-    if (replaySessionRef.current !== sessionId) {
-      replaySessionRef.current = sessionId
-      replayingRef.current = true
-      stickToBottomRef.current = false
-      setShowScrollToBottom(false)
-    }
-    const settle = () => {
-      replayingRef.current = false
-      stickToBottomRef.current = true
-      setShowScrollToBottom(false)
-      pinToBottom()
-    }
-    // Don't start the clock until the first replay event actually arrives, so a
-    // slow first fetch can't prematurely end the "hold at top" window.
-    if (events.length === 0) {
-      clearTimeout(replaySettleTimerRef.current)
-      return
-    }
-    // Reset the debounce on every new event; snap once the burst goes quiet.
-    clearTimeout(replaySettleTimerRef.current)
-    replaySettleTimerRef.current = setTimeout(settle, REPLAY_SETTLE_MS)
-    return () => clearTimeout(replaySettleTimerRef.current)
-  }, [sessionId, events, pinToBottom])
-
-  // Another session opens at its own newest step instead of inheriting
-  // wherever the previous one happened to be left scrolled to.
+  // Opening a panel (or switching sessions) starts pinned at the newest step.
+  // The gateway then replays the whole persisted history as a burst of SSE
+  // events, and the ResizeObserver above keeps the view glued to the bottom as
+  // that history lands — so the replayed log never appears from the top and
+  // there is no visible scroll-down; the panel simply opens at the end.
   useLayoutEffect(() => {
-    if (!sessionId) {
-      // Plain (non-session) mode: just start pinned at the bottom.
-      stickToBottomRef.current = true
-      setShowScrollToBottom(false)
-      pinToBottom()
-    }
+    stickToBottomRef.current = true
+    setShowScrollToBottom(false)
+    pinToBottom()
   }, [sessionId, pinToBottom])
 
   const scrollToBottom = useCallback(() => {

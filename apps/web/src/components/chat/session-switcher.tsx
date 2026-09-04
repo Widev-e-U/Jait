@@ -9,6 +9,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProjectSession } from '@/hooks/useProjects'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
+import { formatAgo } from '@/lib/relative-time'
 
 interface SessionSwitcherProps {
   sessions: ProjectSession[]
@@ -19,16 +20,6 @@ interface SessionSwitcherProps {
   onOpenChange?: (open: boolean) => void
   showTitle?: boolean
   triggerLabel?: string | null
-}
-
-function formatTime(iso: string) {
-  const d = new Date(iso)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return d.toLocaleDateString()
 }
 
 export function SessionSwitcher({
@@ -142,7 +133,7 @@ export function SessionSwitcher({
                           )}
                         </div>
                         <div className="text-2xs text-muted-foreground">
-                          {formatTime(session.lastActiveAt)}
+                          {formatAgo(session.lastActiveAt)}
                         </div>
                       </div>
                     </button>

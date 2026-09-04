@@ -48,14 +48,16 @@ export function Reasoning({ content, isStreaming, duration, onOpenPath }: Reason
   }, [content, isStreaming])
 
   // While the model streams, the block opens itself and is revealed with a
-  // layout-neutral fade. Expanding it by hand afterwards plays a height
+  // layout-neutral fade. Expanding it by hand (even mid-stream) plays a height
   // animation, so anchor the expand like a tool card: pin the block's edge
   // frame by frame instead of letting the transcript follow the bottom and
   // shove the block's header off screen (or let content spill below the
   // composer at the end of the transcript).
   const { cardRef, anchorToggle } = useToolCardToggleAnchor<HTMLDivElement>()
   const handleOpenChange = (next: boolean) => {
-    if (next && !isStreaming) anchorToggle()
+    // Anchor every manual toggle (streaming or not) so an expand mid-stream can
+    // never shove the header off screen or spill content past the composer.
+    if (next) anchorToggle()
     setOpen(next)
   }
 

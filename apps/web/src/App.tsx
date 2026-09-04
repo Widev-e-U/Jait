@@ -16,6 +16,7 @@ import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
 import { AutomationModals } from '@/components/automation/automation-modals'
 import { DeveloperComposerControlRow } from '@/components/app-shell/developer-composer-control-row'
 import { DeveloperSidebars } from '@/components/app-shell/developer-sidebars'
+import { getNextDeveloperSidebarState, type DeveloperSidebarView } from '@/lib/developer-sidebar'
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
 import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
@@ -31,7 +32,7 @@ import { DetachedTerminalView } from '@/components/terminal/detached-terminal-vi
 import { AppFolderPickers } from '@/components/project/app-folder-pickers'
 import { GatewayUnavailable } from '@/components/gateway-unavailable'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
-import { useAuth, type ThemeMode, type SttProvider, type ChatProvider, type ReasoningEffort } from '@/hooks/useAuth'
+import { useAuth, type ThemeMode, type SttProvider, type ChatProvider, type ReasoningEffort, type ChatStreamingAction } from '@/hooks/useAuth'
 import { useAuthForm } from '@/hooks/useAuthForm'
 import { useGatewayConnection } from '@/hooks/useGatewayConnection'
 import { useUpdateChecker } from '@/hooks/useUpdateChecker'
@@ -54,8 +55,7 @@ import { useSkills } from '@/hooks/useSkills'
 import { useProjects, type ProjectSession } from '@/hooks/useProjects'
 import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
-import { useSessionState } from '@/hooks/useSessionState'
-import { useProjectState } from '@/hooks/useProjectState'
+import { useBackendState } from '@/hooks/useBackendState'
 import { NodePermissionsGate, shouldShowNodePermissionsGate } from '@/components/onboarding/NodePermissionsGate'
 import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
@@ -81,7 +81,7 @@ import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-s
 import {
   normalizePersistedSelectedRepo,
   resolvePersistedSelectedRepoId,
-  type PersistedSelectedRepo,
+  type PersistedSelectedRepo
 } from '@/lib/automation-selection-storage'
 import { getApiUrl, getStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import type { AutomationRepository } from '@/lib/automation-repositories'
@@ -93,7 +93,7 @@ import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
-  mergeAttachmentsIntoSegments,
+  mergeAttachmentsIntoSegments
 } from '@/lib/message-segment-builders'
 import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
@@ -102,7 +102,7 @@ import {
   areProjectUiValuesEqual,
   getPersistablePreviewTarget,
   getProjectUiRestoreKey,
-  mergeProjectLayout,
+  mergeProjectLayout
 } from '@/lib/project-ui-state'
 import { projectSuggestions, suggestions } from '@/lib/chat-suggestions'
 import { loadLegacyCliModelsByProvider } from '@/lib/legacy-cli-models'
@@ -115,7 +115,7 @@ import {
   saveProjectModelSelection,
   saveProjectProviderSelection,
   saveProjectReasoningEffortSelection,
-  writeProjectModelSelections,
+  writeProjectModelSelections
 } from '@/lib/project-model-cache'
 import { isResponseStyle } from '@/lib/response-style'
 import { getSessionSelectionSyncKey, normalizeSessionReasoningEffort, type SessionReasoningEffort } from '@/lib/session-chat-selection'
@@ -123,12 +123,12 @@ import { getNonEmptyMessage } from '@/lib/values'
 import {
   getDeveloperChatSubmitLoading,
   getDeveloperChatUiState,
-  shouldShowDeveloperChatHistoryLoading,
+  shouldShowDeveloperChatHistoryLoading
 } from '@/lib/developer-chat-state'
 import {
   buildMemoryFeedbackReminder,
   getMemoryFeedbackSuccessMessage,
-  type MemoryFeedbackKind,
+  type MemoryFeedbackKind
 } from '@/lib/memory-feedback'
 import { secretRequestMatchesTool } from '@/lib/secret-input'
 import { mergeHydratedTodoState, normalizeTodoStateValue } from '@/lib/todo-state'
@@ -136,11 +136,11 @@ import {
   collapseMobileProject,
   getReopenedMobileProjectLayout,
   normalizeHydratedProjectLayout,
-  showMobileProjectPane,
+  showMobileProjectPane
 } from '@/lib/mobile-project-layout'
 import {
   getMobileProjectActiveTarget,
-  resolveProjectPanelOpenAfterChatSelection,
+  resolveProjectPanelOpenAfterChatSelection
 } from '@/lib/mobile-project-controls'
 import { shouldProcessQueuedMessage, shouldPromptBeforeProcessingQueuedMessage } from '@/lib/chat-queue-decision'
 import {
@@ -149,13 +149,13 @@ import {
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
   userReferencedTerminalsFromSegments,
-  userReferencedProjectsFromSegments,
+  userReferencedProjectsFromSegments
 } from '@/lib/user-message-segments'
 import {
   BackgroundSecretPrompt,
   InlineSecretMounted,
   useSecretInputPrompt,
-  useUserQuestionPrompt,
+  useUserQuestionPrompt
 } from '@/components/prompts/input-prompts'
 
 const API_URL = getApiUrl()
@@ -238,7 +238,7 @@ function App() {
     inputSegments,
     setInputSegments,
     setInputValue,
-    handleInputChange,
+    handleInputChange
   } = useInputDraft() as ReturnType<typeof useInputDraft> & {
     inputSegments: UserMessageSegment[] | undefined
     setInputSegments: React.Dispatch<React.SetStateAction<UserMessageSegment[] | undefined>>
@@ -252,7 +252,7 @@ function App() {
   const handleChatInputChange = useCallback((text: string) => {
     handleInputChange(text)
     prewarmDraftRef.current(text)
-  }, [handleInputChange])
+  }, [handleInputChange],)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
@@ -260,6 +260,7 @@ function App() {
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
+  const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'chats' ? 'chats' : 'projects'))
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
@@ -286,7 +287,7 @@ function App() {
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
   const [activeProject, setActiveProject] = useState<ActiveProjectState>(null)
   const setActiveProjectIfChanged = useCallback((next: ActiveProjectState) => {
-    setActiveProject((prev) => areActiveProjectsEqual(prev, next) ? prev : next)
+    setActiveProject((prev) => ( areActiveProjectsEqual(prev, next) ? prev : next))
   }, [])
   const activeProjectRef = useRef(activeProject)
   activeProjectRef.current = activeProject
@@ -350,7 +351,7 @@ function App() {
     gatewayChecking,
     gatewayError,
     setGatewayError,
-    checkGatewayHealth,
+    checkGatewayHealth
   } = gateway
   const { resolvedTheme: appliedThemeMode } = useConfiguredTheme(themeMode)
   const detachedProjectTabId = typeof window !== 'undefined'
@@ -371,7 +372,7 @@ function App() {
   const [activeProjectFileId, setActiveProjectFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<AvailableFileForMention[]>([])
   const handleAvailableFilesForMentionChange = useCallback((files: AvailableFileForMention[]) => {
-    setAvailableFilesForMention((prev) => areAvailableFilesEqual(prev, files) ? prev : files)
+    setAvailableFilesForMention((prev) => ( areAvailableFilesEqual(prev, files) ? prev : files))
   }, [])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const [projectPickerMode, setProjectPickerMode] = useState<'project' | 'editor'>('project')
@@ -426,7 +427,7 @@ function App() {
     }
     showProjectEditorPanel()
     setArchitectureRequest({ key: Date.now() })
-  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel])
+  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel],)
   const closeProjectPreview = useCallback(() => {
     projectRef.current?.closePreviewTarget()
   }, [])
@@ -449,13 +450,13 @@ function App() {
     showProjectEditorPanel()
     setProjectPreviewRequest({ target: trimmed, key: Date.now() })
     return true
-  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel])
+  }, [activeProject?.projectRoot, showProject, showProjectEditorPanel],)
 
   const {
     floatingSSPos,
     floatingSSSize,
     onFloatingDragStart,
-    onFloatingResizeStart,
+    onFloatingResizeStart
   } = useFloatingScreenShare({ showScreenShare })
 
   const {
@@ -469,7 +470,7 @@ function App() {
     logout,
     bindSession,
     updateSettings,
-    clearSessionArchive,
+    clearSessionArchive
   } = useAuth()
 
   const authForm = useAuthForm({
@@ -489,7 +490,7 @@ function App() {
     handleCheckUpdate,
     handleCheckChangelog,
     handleApplyUpdate,
-    handleConnectionRestart,
+    handleConnectionRestart
   } = useUpdateChecker({ token, isElectron, appPlatform, apiUrl: API_URL })
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
@@ -506,7 +507,7 @@ function App() {
       refreshFsNodesRef.current()
     }
     handleConnectionRestart({ connected, reconnected })
-  }, [handleConnectionRestart])
+  }, [handleConnectionRestart],)
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
@@ -517,8 +518,8 @@ function App() {
   const refreshFsNodesRef = useRef<() => void>(() => {})
   const refreshFsNodes = useCallback(() => {
     if (!token) return
-    void fetch(`${API_URL}/api/filesystem/nodes`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.ok ? res.json() : null)
+    void fetch(`${API_URL}/api/filesystem/nodes`, { headers: { Authorization: `Bearer ${token}` }, })
+      .then((res) => ( res.ok ? res.json() : null))
       .then((data) => { if (data?.nodes) setFsNodes(data.nodes) })
       .catch(() => {})
   }, [token])
@@ -570,10 +571,10 @@ function App() {
     showMoreProjects,
     showFewerProjects,
     projectListLimit,
-    handleProjectEvent,
+    handleProjectEvent
   } = useProjects(
     token,
-    onLoginRequired,
+    onLoginRequired
   )
   fetchProjectsRef.current = fetchProjects
 
@@ -634,8 +635,8 @@ function App() {
     })
   }, [])
 
-  const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
-  const userQuestionInput = useUserQuestionPrompt({ token, sessionId: activeSessionId })
+  const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId, })
+  const userQuestionInput = useUserQuestionPrompt({ token, sessionId: activeSessionId, })
   const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
     if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
@@ -645,11 +646,11 @@ function App() {
         {secretInput.form}
       </InlineSecretMounted>
     )
-  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline, secretInput.markInlineMounted])
+  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline, secretInput.markInlineMounted],)
 
   const activeProjectRecord = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
-    [projects, activeProjectId],
+    [projects, activeProjectId]
   )
   const tokenRef = useRef(token)
   tokenRef.current = token
@@ -668,7 +669,7 @@ function App() {
     () => activeProjectRecord?.sessions.find((session) => session.id === activeSessionId)
       ?? personalSessions.find((session) => session.id === activeSessionId)
       ?? null,
-    [activeSessionId, activeProjectRecord, personalSessions],
+    [activeSessionId, activeProjectRecord, personalSessions]
   )
   const activeProjectSessions = useMemo(() => {
     if (!activeProjectRecord) return personalSessions
@@ -703,10 +704,10 @@ function App() {
       variant: 'destructive',
     })
     if (confirmed) await archiveSession(sessionId)
-  }, [archiveSession, confirmDialog, personalSessions, projects])
+  }, [archiveSession, confirmDialog, personalSessions, projects],)
 
   const handleRemoveProject = useCallback(async (projectId: string) => {
-    const project = projects.find(w => w.id === projectId)
+    const project = projects.find((w) => w.id === projectId)
     const label = project?.title || project?.rootPath || 'this project'
     const isFolder = project?.kind === 'folder'
 
@@ -730,7 +731,7 @@ function App() {
       return
     }
     toast.error('Failed to archive project.')
-  }, [confirmDialog, fetchProjectSubtree, removeProject, projects])
+  }, [confirmDialog, fetchProjectSubtree, removeProject, projects],)
 
   // ── Chat folders ────────────────────────────────────────────────────
   const [contextDialogTarget, setContextDialogTarget] = useState<ProjectContextTarget | null>(null)
@@ -748,12 +749,12 @@ function App() {
         ? 'That would nest folders too deeply.'
         : 'Failed to move folder.'
     toast.error(reason)
-  }, [moveProject])
+  }, [moveProject],)
 
 
   const { project: contextDialogProject, ancestors: contextDialogAncestors } = useMemo(
     () => resolveProjectContextView(projects, contextDialogTarget),
-    [contextDialogTarget, projects],
+    [contextDialogTarget, projects]
   )
   const {
     messages,
@@ -795,13 +796,13 @@ function App() {
     setOnChangedFilesSync,
     refreshMessages,
     loadOlderMessages,
-    respondToApproval,
+    respondToApproval
   } = useChat(
     activeSessionId,
     token,
     onLoginRequired,
     activeProject?.surfaceId ?? null,
-    activeSessionRecord?.lastActiveAt ?? null,
+    activeSessionRecord?.lastActiveAt ?? null
   )
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
@@ -848,7 +849,7 @@ function App() {
     selectedRepoOffline,
     threadComposerDisabled,
     threadPlaceholder,
-    developerPlaceholder,
+    developerPlaceholder
   } = useManagerAutomationState({
     activeProjectId,
     activeProjectRecord,
@@ -877,19 +878,19 @@ function App() {
     automation.setSelectedRepoId(result.repo.id)
     toast.success(result.skipped ? `Repository already assigned: ${result.repo.name}` : `Assigned repository: ${result.repo.name}`)
     return result
-  }, [assignProjectRepository, automation.refresh, automation.setSelectedRepoId])
+  }, [assignProjectRepository, automation.refresh, automation.setSelectedRepoId],)
 
   const handleSaveProjectContext = useCallback(async (draft: ProjectContextDraft): Promise<boolean> => {
     const target = contextDialogTarget
     if (!target) return false
     const { repoId, ...fields } = draft
 
-    /**
-     * Attaches the repository the user picked. The gateway honours an explicit
-     * repo id even for a row with no directory, which is what lets a folder
-     * created empty be given a repository afterwards. Re-attaching the one that
-     * is already there is skipped so a plain rename stays a single request.
-     */
+      /**
+       * Attaches the repository the user picked. The gateway honours an explicit
+       * repo id even for a row with no directory, which is what lets a folder
+       * created empty be given a repository afterwards. Re-attaching the one that
+       * is already there is skipped so a plain rename stays a single request.
+       */
     const applyRepository = async (projectId: string, currentRepoId: string | null) => {
       if (!repoId || repoId === currentRepoId) return
       await handleAssignProjectRepository(projectId, repoId)
@@ -923,7 +924,7 @@ function App() {
       return true
     }
 
-    const updated = await updateProject(target.projectId, fields, { onError })
+    const updated = await updateProject(target.projectId, fields, { onError, })
     if (!updated) {
       if (!reported) toast.error('Failed to save settings.')
       return false
@@ -938,8 +939,7 @@ function App() {
     createProject,
     createSession,
     handleAssignProjectRepository,
-    updateProject,
-  ])
+    updateProject],)
 
   // Track whether the WS has delivered an authoritative full-state push.
   const wsFullStateReceivedRef = useRef(false)
@@ -1082,7 +1082,7 @@ function App() {
     setVoiceOverlayOpen,
     voiceAssistant,
     startVoiceSession,
-    announceThreadResult,
+    announceThreadResult
   } = useVoiceSession({ token })
 
   useEffect(() => {
@@ -1149,8 +1149,8 @@ function App() {
   }, [cancelRequest])
 
   // ── Unified project UI state (single DB row) ─────────────────────
-  const [projectUI, setProjectUI, loadingProjectUI] = useProjectState<ProjectUIState>(
-    activeProjectId, 'project.ui', token,
+  const [projectUI, setProjectUI, loadingProjectUI] = useBackendState<ProjectUIState>('projects',
+    activeProjectId, 'project.ui', token
   )
   const projectUIRef = useRef<ProjectUIState | null>(null)
   projectUIRef.current = projectUI
@@ -1159,47 +1159,47 @@ function App() {
   // Eagerly update the ref so consecutive calls within the same render
   // cycle each see the previous call's updates instead of clobbering them.
   const updateProjectUI = useCallback(<K extends keyof ProjectUIState>(
-    key: K, value: ProjectUIState[K], options?: { immediate?: boolean },
+    key: K, value: ProjectUIState[K], options?: { immediate?: boolean }
   ) => {
-    const prev = projectUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
+    const prev = projectUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null, }
     if (areProjectUiValuesEqual(prev[key], value)) return
     if (key === 'panel' || key === 'layout') {
           }
     const next = { ...prev, [key]: value }
     projectUIRef.current = next
     setProjectUI(next, options)
-  }, [activeProjectId, setProjectUI])
+  }, [activeProjectId, setProjectUI],)
 
   // Derived convenience setters matching previous per-key API
-  const setSavedProject = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean }) => {
+  const setSavedProject = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean },) => {
     updateProjectUI('panel', v, { immediate: options?.immediate ?? true })
-  }, [updateProjectUI])
+  }, [updateProjectUI],)
 
   const setSavedTerminal = useCallback((v: { open: boolean; activeTerminalId?: string | null } | null, options?: { immediate?: boolean }) => {
     updateProjectUI('terminal', v, options)
-  }, [updateProjectUI])
+  }, [updateProjectUI],)
 
   const setSavedDevPreview = useCallback((v: DevPreviewPanelState | null) => {
     updateProjectUI('preview', v)
-  }, [updateProjectUI])
+  }, [updateProjectUI],)
 
   const loadingProjectLayout = loadingProjectUI && !!activeProjectId && !!token
   const setSavedProjectLayout = useCallback((v: ProjectUIState['layout'], options?: { immediate?: boolean }) => {
     updateProjectUI('layout', v, { immediate: options?.immediate ?? true })
-  }, [updateProjectUI])
+  }, [updateProjectUI],)
 
   // Persist panel/tree widths per-project. Called only on drag end (never per
   // drag frame), so it cannot spam network requests or re-renders. Merges with
   // the current tree/editor visibility so a size-only update never drops them.
   const handleProjectLayoutSizeChange = useCallback((panelSize: number, treeSize: number) => {
-    const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, { panelSize, treeSize })
+    const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, { panelSize, treeSize, })
     setSavedProjectLayout(next)
-  }, [setSavedProjectLayout])
+  }, [setSavedProjectLayout],)
 
   const handleTerminalLayoutSizeChange = useCallback((layout: TerminalLayoutState) => {
     const next = mergeProjectLayout(projectUIRef.current?.layout ?? null, layout)
     setSavedProjectLayout(next)
-  }, [setSavedProjectLayout])
+  }, [setSavedProjectLayout],)
 
   const {
     terminalHeight,
@@ -1207,7 +1207,7 @@ function App() {
     terminalHeightBeforeFullscreenRef,
     terminalColumnWidth,
     handleTerminalDragStart,
-    handleTerminalColumnDragStart,
+    handleTerminalColumnDragStart
   } = useTerminalLayout({
     projectId: activeProjectId,
     savedHeight: projectUI?.layout?.terminalHeight ?? null,
@@ -1217,59 +1217,59 @@ function App() {
 
   const setSavedProjectTabs = useCallback((v: ProjectTabsState | null) => {
     updateProjectUI('tabs', v)
-  }, [updateProjectUI])
+  }, [updateProjectUI],)
 
   const savedDevPreview = projectUI?.preview ?? null
 
-  const [, setSavedScreenShare] = useSessionState<{ open: boolean }>(
-    activeSessionId, 'screen-share.panel', token,
+  const [, setSavedScreenShare] = useBackendState<{ open: boolean }>('sessions',
+    activeSessionId, 'screen-share.panel', token
   )
-  const [, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
-    activeSessionId, 'chat.mode', token,
+  const [, setSavedChatMode, loadingChatMode] = useBackendState<ChatMode>('sessions',
+    activeSessionId, 'chat.mode', token
   )
-  const [, setSavedChatResponseStyle, loadingChatResponseStyle] = useSessionState<ResponseStyle>(
-    activeSessionId, 'chat.responseStyle', token,
+  const [, setSavedChatResponseStyle, loadingChatResponseStyle] = useBackendState<ResponseStyle>('sessions',
+    activeSessionId, 'chat.responseStyle', token
   )
-  const [, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
-    activeSessionId, 'chat.providerRuntimeMode', token,
+  const [, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useBackendState<RuntimeMode>('sessions',
+    activeSessionId, 'chat.providerRuntimeMode', token
   )
-  const [, setSavedChatProvider, loadingChatProvider] = useSessionState<ProviderId>(
-    activeSessionId, 'chat.provider', token,
+  const [, setSavedChatProvider, loadingChatProvider] = useBackendState<ProviderId>('sessions',
+    activeSessionId, 'chat.provider', token
   )
-  const [, setSavedChatReasoningEffort, loadingChatReasoningEffort] = useSessionState<SessionReasoningEffort>(
-    activeSessionId, 'chat.reasoningEffort', token,
+  const [, setSavedChatReasoningEffort, loadingChatReasoningEffort] = useBackendState<SessionReasoningEffort>('sessions',
+    activeSessionId, 'chat.reasoningEffort', token
   )
-  const [, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
-    activeSessionId, 'chat.cliModels', token,
+  const [, setSavedCliModels, loadingCliModels] = useBackendState<Partial<Record<CliProviderId, string | null>>>('sessions',
+    activeSessionId, 'chat.cliModels', token
   )
-  const [, setSavedChatView, loadingChatView] = useSessionState<ViewMode>(
-    activeSessionId, 'chat.view', token,
+  const [, setSavedChatView, loadingChatView] = useBackendState<ViewMode>('sessions',
+    activeSessionId, 'chat.view', token
   )
-  const [, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
-    activeSessionId, 'queued_messages', token,
+  const [, setSavedQueuedMessages] = useBackendState<SavedQueuedMessage[]>('sessions',
+    activeSessionId, 'queued_messages', token
   )
-  const [, setSavedTodoList] = useSessionState<TodoItem[]>(
-    activeSessionId, 'todo_list', token,
+  const [, setSavedTodoList] = useBackendState<TodoItem[]>('sessions',
+    activeSessionId, 'todo_list', token
   )
-  const [, setSavedQueuedThreadMessages] = useSessionState<SavedQueuedThreadMessages>(
-    activeSessionId, 'queued_thread_messages', token,
+  const [, setSavedQueuedThreadMessages] = useBackendState<SavedQueuedThreadMessages>('sessions',
+    activeSessionId, 'queued_thread_messages', token
   )
-  const [savedManagerSelectedRepo, setSavedManagerSelectedRepo, loadingManagerSelectedRepo] = useSessionState<PersistedSelectedRepo>(
-    activeSessionId, 'manager.selectedRepo', token,
+  const [savedManagerSelectedRepo, setSavedManagerSelectedRepo, loadingManagerSelectedRepo] = useBackendState<PersistedSelectedRepo>('sessions',
+    activeSessionId, 'manager.selectedRepo', token
   )
   const [projectTabsState, setProjectTabsState] = useState<ProjectTabsState | null>(null)
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null)
   const projectStateReady = activeProjectId !== null && projectStateReadyId === activeProjectId
   const setProjectStateReady = useCallback((ready: boolean) => {
     setProjectStateReadyId(ready ? activeProjectId : null)
-  }, [activeProjectId])
+  }, [activeProjectId],)
   const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
   const projectUiRestoreKeyRef = useRef<string | null>(null)
   const projectSurfaceFallbackKeyRef = useRef<string | null>(null)
 
   const normalizedSavedManagerSelectedRepo = useMemo(
     () => normalizePersistedSelectedRepo(savedManagerSelectedRepo),
-    [savedManagerSelectedRepo],
+    [savedManagerSelectedRepo]
   )
 
   useEffect(() => {
@@ -1329,7 +1329,7 @@ function App() {
     automation.setSelectedRepoId,
     loadingManagerSelectedRepo,
     managerRepoStateReady,
-    normalizedSavedManagerSelectedRepo,
+    normalizedSavedManagerSelectedRepo
   ])
 
   const managerRepoPersistInitRef = useRef(false)
@@ -1367,7 +1367,7 @@ function App() {
     managerRepoStateReady,
     normalizedSavedManagerSelectedRepo,
     setSavedManagerSelectedRepo,
-    token,
+    token
   ])
 
   useEffect(() => {
@@ -1404,7 +1404,7 @@ function App() {
     setShowProject(false)
     setShowArchitecture(false)
     setDevPreviewTarget(null)
-    setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
+    setProjectPreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null, })
     setProjectFiles([])
     setActiveProjectFileId(null)
     // Reset tree/editor visibility to the defaults so the previous project's
@@ -1418,8 +1418,9 @@ function App() {
   }, [activeProjectId])
 
   // ── Persistent session state for changed files ─────────────────────
-  type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
-  const [, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
+  type SavedChangedFile =
+    | ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
+  const [, setSavedChangedFiles] = useBackendState<SavedChangedFile[]>('sessions',activeSessionId, 'changed_files', token)
 
   // ── Deferred project state from WS push ──────────────────────────
   // Panel and preview fields depend on activeProjectRecord (loaded async
@@ -1468,12 +1469,12 @@ function App() {
                 ? await fetch(`${API_URL}/api/project/open`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open }),
+                    body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open, }),
                   })
                 : null
               if (response && !response.ok) throw new Error('Failed to open project')
               const data = response
-                ? await response.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
+                ? (( await response.json()) as { surfaceId: string; projectRoot: string; nodeId?: string })
                 : null
               if (cancelled) return
               setActiveProjectIfChanged({
@@ -1551,7 +1552,7 @@ function App() {
         const hydratedLayout = normalizeHydratedProjectLayout({
           tree: ui.layout.tree !== false,
           editor: ui.layout.editor !== false,
-        }, isMobile)
+        }, isMobile,)
                 setShowProjectTree(hydratedLayout.tree)
         setShowProjectEditor(hydratedLayout.editor)
       }
@@ -1583,10 +1584,10 @@ function App() {
               const response = await fetch(`${API_URL}/api/project/open`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open }),
+                body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: wp.open, }),
               })
               if (!response.ok) throw new Error('Failed to open project')
-              const data = await response.json() as { surfaceId: string; projectRoot: string; nodeId?: string }
+              const data = ( await response.json()) as { surfaceId: string; projectRoot: string; nodeId?: string }
               if (cancelled) return
               setActiveProjectIfChanged({
                 surfaceId: data.surfaceId,
@@ -1638,7 +1639,7 @@ function App() {
     suppressNextUiSync,
     token,
     projectStateReady,
-    projectUI,
+    projectUI
   ])
 
   useEffect(() => {
@@ -1659,7 +1660,7 @@ function App() {
     void fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: projectRoot, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: true }),
+      body: JSON.stringify({ path: projectRoot, sessionId: activeSessionId, nodeId: requestedNodeId, openPanel: true, }),
     })
       .then(async (response) => {
         if (!response.ok) throw new Error('Failed to open project')
@@ -1691,7 +1692,7 @@ function App() {
     activeProjectRecord?.rootPath,
     loadingProjectUI,
     showProject,
-    projectStateReady,
+    projectStateReady
   ])
 
   const mobileProjectInitKeyRef = useRef<string | null>(null)
@@ -1726,7 +1727,7 @@ function App() {
           const hydratedLayout = normalizeHydratedProjectLayout({
             tree: (value as { tree?: boolean }).tree !== false,
             editor: (value as { editor?: boolean }).editor !== false,
-          }, isMobile)
+          }, isMobile,)
           setShowProjectTree(hydratedLayout.tree)
           setShowProjectEditor(hydratedLayout.editor)
         }
@@ -1834,7 +1835,7 @@ function App() {
         break
       }
     }
-  }, [activeSessionId, token, setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToProject, closeProjectPreview, isMobile, suppressNextUiSync, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot])
+  }, [activeSessionId, token, setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToProject, closeProjectPreview, isMobile, suppressNextUiSync, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot],)
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   // This is called when the WebSocket delivers the initial full-state push.
@@ -1891,7 +1892,7 @@ function App() {
 
     const cp = state['chat.provider']
     const restoredChatProvider = typeof cp === 'string' && cp.trim()
-      ? cp as ProviderId
+      ? ( cp as ProviderId)
       : chatProvider
     if (restoredChatProvider !== chatProvider) {
       setChatProvider(restoredChatProvider)
@@ -1902,15 +1903,15 @@ function App() {
       : undefined
     const fallbackReasoningEffort = readProjectReasoningEffortSelection(
       activeProjectId,
-      restoredChatProvider,
-    ) ?? (restoredChatProvider === 'jait' ? settings?.reasoning_effort ?? null : null)
+      restoredChatProvider
+    ) ?? (restoredChatProvider === 'jait' ? ( settings?.reasoning_effort ?? null) : null)
     setChatReasoningEffort(
-      sessionReasoningEffort !== undefined ? sessionReasoningEffort : fallbackReasoningEffort,
+      sessionReasoningEffort !== undefined ? sessionReasoningEffort : fallbackReasoningEffort
     )
 
     const ccm = state['chat.cliModels']
     const sessionModels = ccm && typeof ccm === 'object' && !Array.isArray(ccm)
-      ? ccm as Partial<Record<CliProviderId, string | null>>
+      ? ( ccm as Partial<Record<CliProviderId, string | null>>)
       : null
     const cachedProjectModels = readProjectModelSelections(activeProjectId)
     if (sessionModels && Object.keys(sessionModels).length > 0) {
@@ -1986,7 +1987,7 @@ function App() {
     if (wsEnvelope?.id && wsEnvelope.state && token) {
       primeStateCache('projects', wsEnvelope.id, token, wsEnvelope.state)
     }
-  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, isLoading, settings?.reasoning_effort, suppressNextUiSync])
+  }, [activeSessionId, token, activeProjectId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, isLoading, settings?.reasoning_effort, suppressNextUiSync],)
 
   const loadArchitectureDiagramForProject = useCallback((projectRoot: string, signal?: AbortSignal) => {
     return fetch(`${API_URL}/api/architecture?projectRoot=${encodeURIComponent(projectRoot)}`, {
@@ -1995,12 +1996,12 @@ function App() {
     })
       .then(async (response) => {
         if (!response.ok) return null
-        const data = await response.json() as {
+        const data = ( await response.json()) as {
           diagram: { projectRoot: string; diagram: string; updatedAt: string; filePath?: string | null } | null
         }
         return data.diagram
       })
-  }, [token])
+  }, [token],)
 
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
@@ -2022,13 +2023,13 @@ function App() {
         refreshFsNodesRef.current()
         fetchProjectsRef.current()
       }
-    }, [automation]),
+    }, [automation],),
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((payload: FsChangesPayload) => {
       const activeSurfaceId = activeProjectRef.current?.surfaceId ?? null
       if (payload.surfaceId && activeSurfaceId && payload.surfaceId !== activeSurfaceId) return
       setFsWatcherPayload(payload)
-      setFsWatcherVersion(v => v + 1)
+      setFsWatcherVersion((v) => v + 1)
       const projectRoot = activeProjectRef.current?.projectRoot?.trim() || null
       if (!projectRoot || loadedArchitectureProjectRef.current !== projectRoot) return
       const architectureRelativePath = architectureFilePath?.startsWith(projectRoot)
@@ -2048,11 +2049,11 @@ function App() {
           setArchitectureDiagram(null)
           setArchitectureFilePath(null)
         })
-    }, [architectureFilePath, loadArchitectureDiagramForProject]),
+    }, [architectureFilePath, loadArchitectureDiagramForProject],),
     listeners: {
       'project.open': useCallback((data: ProjectOpenData) => {
-        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId })
-      }, [setActiveProjectIfChanged]),
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId, })
+      }, [setActiveProjectIfChanged],),
       'project.close': useCallback(() => {
         setActiveProjectIfChanged(null)
       }, [setActiveProjectIfChanged]),
@@ -2075,11 +2076,11 @@ function App() {
           setShowProjectTree(true)
           setShowProjectEditor(true)
         }
-      }, [isMobile]),
+      }, [isMobile],),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
         setCurrentView('chat')
         setShowTerminal(true)
-        setSavedTerminal({ open: true, activeTerminalId: data.terminalId ?? null })
+        setSavedTerminal({ open: true, activeTerminalId: data.terminalId ?? null, })
         void refresh()
         if (data.terminalId) {
           setActiveTerminalId(data.terminalId)
@@ -2090,14 +2091,14 @@ function App() {
             duration: 10000,
           })
         }
-      }, [refresh, setSavedTerminal, setActiveTerminalId]),
+      }, [refresh, setSavedTerminal, setActiveTerminalId],),
       'dev-preview.open': useCallback((data: { target?: string | null; projectRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
         setCurrentView('chat')
         setDevPreviewTarget(target || null)
-        setSavedDevPreview({ open: true, target: target || null, projectRoot: data.projectRoot ?? null })
+        setSavedDevPreview({ open: true, target: target || null, projectRoot: data.projectRoot ?? null, })
         routePreviewToProject(target || null, data.projectRoot ?? null)
-      }, [routePreviewToProject, setSavedDevPreview]),
+      }, [routePreviewToProject, setSavedDevPreview],),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -2118,7 +2119,7 @@ function App() {
           }
           openArchitectureInProject(data.projectRoot)
         }
-      }, [openArchitectureInProject]),
+      }, [openArchitectureInProject],),
     },
     onPreviewSessionEvent: emitPreviewSession,
   })
@@ -2128,12 +2129,12 @@ function App() {
     if (!requestId) return
     architectureRenderRequestIdRef.current = null
     sendArchitectureRenderResult(requestId, result)
-  }, [sendArchitectureRenderResult])
+  }, [sendArchitectureRenderResult],)
 
   const handleProjectTabsStateChange = useCallback((state: ProjectTabsState | null) => {
-    setProjectTabsState((prev) => areProjectUiValuesEqual(prev, state) ? prev : state)
+    setProjectTabsState((prev) => ( areProjectUiValuesEqual(prev, state) ? prev : state))
     setSavedProjectTabs(state)
-  }, [setSavedProjectTabs])
+  }, [setSavedProjectTabs],)
 
   useEffect(() => {
     const projectRoot = activeProject?.projectRoot?.trim() || null
@@ -2201,7 +2202,7 @@ function App() {
   const prevProjectLayoutPayloadRef = useRef<string | null>(null)
   const applyProjectLayout = useCallback((
     layout: { tree: boolean; editor: boolean },
-    options?: { immediateSync?: boolean },
+    options?: { immediateSync?: boolean }
   ) => {
     setShowProjectTree(layout.tree)
     setShowProjectEditor(layout.editor)
@@ -2219,7 +2220,7 @@ function App() {
     if (activeSessionId) {
       sendUIState('project.layout', layout, activeSessionId)
     }
-  }, [activeSessionId, sendUIState, setSavedProjectLayout])
+  }, [activeSessionId, sendUIState, setSavedProjectLayout],)
 
   useEffect(() => {
     if (activeProjectId && token && (!projectStateReady || loadingProjectLayout)) {
@@ -2272,6 +2273,19 @@ function App() {
   }, [showSidebar])
 
   useEffect(() => {
+    localStorage.setItem('developerSidebarView', sidebarView)
+  }, [sidebarView])
+
+  const handleSelectDeveloperSidebarView = useCallback(
+    (requestedView: DeveloperSidebarView) => {
+      const nextState = getNextDeveloperSidebarState(sidebarView, showSidebar, requestedView)
+      setSidebarView(nextState.view)
+      setShowSidebar(nextState.open)
+    },
+    [showSidebar, sidebarView],
+  )
+
+  useEffect(() => {
     if (!showSidebar) return
 
     const frame = window.requestAnimationFrame(() => {
@@ -2292,7 +2306,7 @@ function App() {
       if (!sidebar || (activeElement && sidebar.contains(activeElement))) return
       setShowSidebar(false)
     })
-  }, [isMobile])
+  }, [isMobile],)
 
   useEffect(() => {
     localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
@@ -2304,13 +2318,13 @@ function App() {
     setChatReasoningEffort(
       savedReasoningEffort !== undefined
         ? savedReasoningEffort
-        : provider === 'jait' ? settings?.reasoning_effort ?? null : null,
+        : provider === 'jait' ? ( settings?.reasoning_effort ?? null) : null
     )
     saveProjectProviderSelection(activeProjectId, provider)
     if (token) {
       void updateSettings({ chat_provider: provider as ChatProvider })
     }
-  }, [activeProjectId, setChatProvider, settings?.reasoning_effort, token, updateSettings])
+  }, [activeProjectId, setChatProvider, settings?.reasoning_effort, token, updateSettings],)
 
   const handleManagerProviderChange = useCallback((provider: ProviderId) => {
     setManagerProvider(provider)
@@ -2319,12 +2333,12 @@ function App() {
     // value the new provider may not even accept.
     setManagerReasoningEffort(readProjectReasoningEffortSelection(activeProjectId, provider) ?? null)
     saveProjectManagerProviderSelection(activeProjectId, provider)
-  }, [activeProjectId, setManagerProvider])
+  }, [activeProjectId, setManagerProvider],)
 
   const handleManagerReasoningEffortChange = useCallback((reasoningEffort: SessionReasoningEffort | null) => {
     setManagerReasoningEffort(reasoningEffort)
     saveProjectReasoningEffortSelection(activeProjectId, managerProvider, reasoningEffort)
-  }, [activeProjectId, managerProvider])
+  }, [activeProjectId, managerProvider],)
 
   const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
     setChatResponseStyle(style)
@@ -2337,7 +2351,7 @@ function App() {
   const handleChatReasoningEffortChange = useCallback((reasoningEffort: SessionReasoningEffort | null) => {
     setChatReasoningEffort(reasoningEffort)
     saveProjectReasoningEffortSelection(activeProjectId, chatProvider, reasoningEffort)
-  }, [activeProjectId, chatProvider])
+  }, [activeProjectId, chatProvider],)
 
   const handleManagerProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
     setManagerProviderRuntimeMode(runtimeMode)
@@ -2349,14 +2363,14 @@ function App() {
       [chatProvider]: model,
     }))
     saveProjectModelSelection(activeProjectId, chatProvider, model)
-  }, [activeProjectId, chatProvider])
+  }, [activeProjectId, chatProvider],)
 
   const handleManagerCliModelChange = useCallback((model: string | null) => {
     setCliModelsByProvider((current) => ({
       ...current,
       [managerProvider]: model,
     }))
-  }, [managerProvider])
+  }, [managerProvider],)
 
   const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -2443,7 +2457,7 @@ function App() {
     if (!activeSessionId || !token) return
     if (!wsFullStateReceivedRef.current || loadingChatProvider || loadingCliModels || loadingChatReasoningEffort) return
     const model = cliModelsByProvider[chatProvider] ?? null
-    const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model, reasoningEffort: chatReasoningEffort })
+    const payload = JSON.stringify({ sessionId: activeSessionId, provider: chatProvider, model, reasoningEffort: chatReasoningEffort, })
     if (payload === prevChatSelectionPayloadRef.current) return
     prevChatSelectionPayloadRef.current = payload
     void updateSessionChatSelection(activeSessionId, {
@@ -2470,8 +2484,8 @@ function App() {
     const savedModel = settings?.selected_model
     if (typeof savedModel !== 'string' || !savedModel.trim()) return
     if (currentJaitModel === savedModel) return
-    setCliModelsByProvider((prev) =>
-      prev['jait'] === savedModel ? prev : { ...prev, jait: savedModel }
+    setCliModelsByProvider((prev) => (
+      prev['jait'] === savedModel ? prev : { ...prev, jait: savedModel })
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId, token, authLoading, loadingCliModels, settings?.selected_model])
@@ -2501,7 +2515,7 @@ function App() {
     showMobileProjectEditorTab,
     showMobileProjectTreeTab,
     toggleProjectEditor,
-    toggleProjectTree,
+    toggleProjectTree
   } = usePanelControllers({
     activeProject,
     activeSessionId,
@@ -2552,13 +2566,13 @@ function App() {
     dirPath: string,
     nodeId?: string,
     sessionIdOverride?: string | null,
-    openPanel?: boolean,
+    openPanel?: boolean
   ) => {
     const sessionId = sessionIdOverride ?? activeSessionId
     const res = await fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel }),
+      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel, }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
@@ -2574,7 +2588,7 @@ function App() {
     }
     // The gateway broadcasts `project.open` via WS and persists state.
     // All clients (including this one) will receive it and hydrate automatically.
-  }, [activeSessionId, token, updateSettings])
+  }, [activeSessionId, token, updateSettings],)
 
   const handleOpenMemorySource = useCallback((source: { sourceId?: string; sourceSurface?: string }) => {
     if (source.sourceSurface === 'chat' && source.sourceId) {
@@ -2591,11 +2605,11 @@ function App() {
       }
     }
     setCurrentView('memory')
-  }, [personalSessions, projects, switchSession])
+  }, [personalSessions, projects, switchSession],)
 
   const handleMemoryFeedback = useCallback(async (feedback: {
-    messageId: string
-    kind: MemoryFeedbackKind
+    messageId: string;
+    kind: MemoryFeedbackKind;
     content: string
   }) => {
     if (!activeSessionId) {
@@ -2611,13 +2625,13 @@ function App() {
         sessionId: activeSessionId,
         projectId: activeProjectId,
         answerContent: feedback.content,
-      }))
+      }),)
       toast.success(getMemoryFeedbackSuccessMessage(feedback.kind))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save memory feedback')
       throw error
     }
-  }, [activeProjectId, activeSessionId])
+  }, [activeProjectId, activeSessionId],)
 
   // Wrap switchProject so clicking a project opens its remote directory and
   // restores that project's saved editor-mode state without leaking another
@@ -2625,9 +2639,9 @@ function App() {
   const handleSwitchProject = useCallback(async (
     projectId: string,
     sessionId?: string,
-    focusChatOnMobile = false,
+    focusChatOnMobile = false
   ) => {
-    const project = projects.find((entry) => entry.id === projectId) ?? await loadProject(projectId)
+    const project = projects.find((entry) => entry.id === projectId) ?? ( await loadProject(projectId))
     if (!project) return
 
     if (isMobile) {
@@ -2711,10 +2725,10 @@ function App() {
           toast.error('Failed to open project files.')
           return
         }
-        const data = await res.json() as ProjectOpenData
+        const data = ( await res.json()) as ProjectOpenData
         if (requestId !== projectSwitchRequestRef.current) return
         const resolvedNodeId = data.nodeId || project.nodeId || undefined
-        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId })
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: resolvedNodeId, })
         const panelOpen = resolveProjectPanelOpenAfterChatSelection({
           isMobile,
           focusChat: focusChatOnMobile,
@@ -2729,15 +2743,15 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync])
+  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     const knownSession = personalSessions.find((session) => session.id === sessionId)
-    const session = knownSession ?? await loadSession(sessionId)
+    const session = knownSession ?? ( await loadSession(sessionId))
     if (!session || session.projectId) return
     if (isMobile) handleMobileChatClick()
     switchSession(null, sessionId)
-  }, [handleMobileChatClick, isMobile, loadSession, personalSessions, switchSession])
+  }, [handleMobileChatClick, isMobile, loadSession, personalSessions, switchSession],)
 
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
     if (isMobile) handleMobileChatClick()
@@ -2756,7 +2770,7 @@ function App() {
       return
     }
     void handleSwitchProject(projectId, sessionId, true)
-  }, [activeProjectId, activeSessionId, handleMobileChatClick, isMobile, switchSession, handleSwitchProject])
+  }, [activeProjectId, activeSessionId, handleMobileChatClick, isMobile, switchSession, handleSwitchProject],)
 
   // The "+" opens the same dialog the folder button used to, rather than the raw
   // file explorer. One form creates both: leave the directory empty for a
@@ -2803,25 +2817,24 @@ function App() {
     loadSession,
     personalSessions,
     projects,
-    switchSession,
-  ])
+    switchSession],)
 
   const handleSessionSwitcherOpen = useCallback((open: boolean) => {
     if (!open || !activeProjectId) return
     if (!archivedSessionsByProject[activeProjectId]) {
       void fetchArchivedSessions(activeProjectId)
     }
-  }, [activeProjectId, archivedSessionsByProject, fetchArchivedSessions])
+  }, [activeProjectId, archivedSessionsByProject, fetchArchivedSessions],)
 
   const handleProjectFolderSelected = useCallback(async (
     path: string,
     nodeId: string,
-    options?: { openEditor?: boolean },
+    options?: { openEditor?: boolean }
   ) => {
     // If we're changing the directory of an existing project
     if (changeDirectoryProjectId) {
       setChangeDirectoryProjectId(null)
-      await updateProject(changeDirectoryProjectId, { rootPath: path, nodeId })
+      await updateProject(changeDirectoryProjectId, { rootPath: path, nodeId, })
       void automation.refresh()
       return
     }
@@ -2829,7 +2842,7 @@ function App() {
     if (!project) {
       throw new Error('Failed to create project')
     }
-    const session = project.sessions[0] ?? await createSession(project.id)
+    const session = project.sessions[0] ?? ( await createSession(project.id))
     if (!session) {
       throw new Error('Failed to create project session')
     }
@@ -2843,7 +2856,7 @@ function App() {
       applyProjectLayout(nextLayout, { immediateSync: true })
     }
     setSavedProject({ open: nextOpen, remotePath: path, nodeId })
-  }, [applyProjectLayout, automation.refresh, changeDirectoryProjectId, createSession, createProject, isMobile, updateProject, openRemoteProjectOnGateway, setSavedProject, projectPickerMode])
+  }, [applyProjectLayout, automation.refresh, changeDirectoryProjectId, createSession, createProject, isMobile, updateProject, openRemoteProjectOnGateway, setSavedProject, projectPickerMode],)
 
   const reopenPersistedProject = useCallback(async (
     path: string,
@@ -2869,12 +2882,12 @@ function App() {
       const savedLayout = normalizeHydratedProjectLayout({
         tree: projectUIRef.current?.layout?.tree !== false,
         editor: projectUIRef.current?.layout?.editor !== false,
-      }, isMobile)
+      }, isMobile,)
       setShowProjectTree(savedLayout.tree)
       setShowProjectEditor(savedLayout.editor)
     }
-    setSavedProject({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
-  }, [applyProjectLayout, isMobile, openRemoteProjectOnGateway, setSavedProject, showProjectEditorPanel])
+    setSavedProject({ open: true, remotePath: path, nodeId: nodeId ?? undefined, })
+  }, [applyProjectLayout, isMobile, openRemoteProjectOnGateway, setSavedProject, showProjectEditorPanel],)
 
   const ensureProjectReadyForSidebarAction = useCallback(async () => {
     if (!activeProjectRef.current && !activeProjectRecordRef.current && (authLoadingRef.current || projectsLoadingRef.current)) {
@@ -2890,7 +2903,7 @@ function App() {
       await reopenPersistedProject(
         currentActiveProjectRecord.rootPath,
         currentActiveProjectRecord.nodeId ?? 'gateway',
-        currentActiveSessionId,
+        currentActiveSessionId
       )
       return activeProjectRef.current
     }
@@ -2901,7 +2914,7 @@ function App() {
       await reopenPersistedProject(
         pendingProjectRoot,
         pendingProjectPanel?.nodeId ?? undefined,
-        currentActiveSessionId,
+        currentActiveSessionId
       )
       return activeProjectRef.current
     }
@@ -2912,7 +2925,7 @@ function App() {
       await reopenPersistedProject(
         persistedProjectRoot,
         persistedProjectPanel?.nodeId ?? undefined,
-        currentActiveSessionId,
+        currentActiveSessionId
       )
       return activeProjectRef.current
     }
@@ -2978,7 +2991,7 @@ function App() {
           else {
             applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
           }
-          const state = { open: true, remotePath: currentActiveProject!.projectRoot, surfaceId: currentActiveProject!.surfaceId, nodeId: currentActiveProject!.nodeId }
+          const state = { open: true, remotePath: currentActiveProject!.projectRoot, surfaceId: currentActiveProject!.surfaceId, nodeId: currentActiveProject!.nodeId, }
           setSavedProject(state)
           return
         }
@@ -3001,7 +3014,7 @@ function App() {
       else {
         applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
       }
-      const state = { open: true, remotePath: currentActiveProject.projectRoot, surfaceId: currentActiveProject.surfaceId, nodeId: currentActiveProject.nodeId }
+      const state = { open: true, remotePath: currentActiveProject.projectRoot, surfaceId: currentActiveProject.surfaceId, nodeId: currentActiveProject.nodeId, }
       setSavedProject(state)
       return
     }
@@ -3019,7 +3032,7 @@ function App() {
         pendingProjectRoot,
         pendingProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
-        { mobileTarget: 'editor' },
+        { mobileTarget: 'editor' }
       )
       return
     }
@@ -3031,7 +3044,7 @@ function App() {
         persistedProjectRoot,
         persistedProjectPanel?.nodeId ?? undefined,
         currentActiveSessionId,
-        { mobileTarget: 'editor' },
+        { mobileTarget: 'editor' }
       )
       return
     }
@@ -3039,11 +3052,11 @@ function App() {
     // Fallback: the mobile UI can race ahead of project hydration after a
     // reconnect/reload. Recover from the loaded project list instead of
     // dropping the user into the picker when we already know the project.
-    const fallbackProject = (
+    const fallbackProject =
       (currentActiveSessionId
         ? currentProjects.find((project) => project.sessions.some((session) => session.id === currentActiveSessionId))
         : null)
-      ?? (currentProjects.length === 1 ? currentProjects[0] ?? null : null)
+      ?? (currentProjects.length === 1 ? ( currentProjects[0] ?? null) : null
     )
     const fallbackRoot = fallbackProject?.rootPath?.trim() || null
     if (fallbackProject && fallbackRoot) {
@@ -3065,7 +3078,7 @@ function App() {
           headers: { Authorization: `Bearer ${currentToken}` },
         })
         if (sessionRes.ok) {
-          const session = await sessionRes.json() as {
+          const session = ( await sessionRes.json()) as {
             id: string
             projectId?: string | null
             projectPath?: string | null
@@ -3076,7 +3089,7 @@ function App() {
               headers: { Authorization: `Bearer ${currentToken}` },
             })
             if (projectRes.ok) {
-              serverProject = await projectRes.json() as { id: string; rootPath?: string | null; nodeId?: string | null }
+              serverProject = ( await projectRes.json()) as { id: string; rootPath?: string | null; nodeId?: string | null }
             }
           }
 
@@ -3098,7 +3111,7 @@ function App() {
           headers: { Authorization: `Bearer ${currentToken}` },
         })
         if (lastActiveRes.ok) {
-          const lastActive = await lastActiveRes.json() as {
+          const lastActive = ( await lastActiveRes.json()) as {
             project: { id: string; rootPath?: string | null; nodeId?: string | null } | null
             session: { id: string } | null
           }
@@ -3110,7 +3123,7 @@ function App() {
               lastActiveRoot,
               lastActive.project.nodeId ?? persistedProjectPanel?.nodeId ?? undefined,
               lastActiveSessionId,
-              { mobileTarget: 'editor' },
+              { mobileTarget: 'editor' }
             )
             return
           }
@@ -3140,7 +3153,7 @@ function App() {
     showMobileProjectEditorTab,
     applyProjectLayout,
     reopenPersistedProject,
-    waitForProjectHydration,
+    waitForProjectHydration
   ])
 
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
@@ -3167,8 +3180,8 @@ function App() {
         if (!openRes.ok || cancelled) return
         const data = (await openRes.json()) as { surfaceId: string; projectRoot: string; nodeId?: string }
         if (cancelled) return
-        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId })
-        const state = { open: showProjectRef.current, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
+        setActiveProjectIfChanged({ surfaceId: data.surfaceId, projectRoot: data.projectRoot, nodeId: data.nodeId, })
+        const state = { open: showProjectRef.current, remotePath: data.projectRoot, surfaceId: data.surfaceId, nodeId: data.nodeId, }
         setSavedProject(state)
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
@@ -3178,7 +3191,7 @@ function App() {
   // Absolute paths of files the agent has modified (undecided only), used to refresh an already-open project editor
   const changedPaths = useMemo(
     () => changedFiles.filter((f) => f.state === 'undecided').map((f) => f.path),
-    [changedFiles],
+    [changedFiles]
   )
 
   useEffect(() => {
@@ -3209,7 +3222,7 @@ function App() {
   useEffect(() => {
     if (authLoading) return
     const cachedProjectManagerProvider = readProjectManagerProviderSelection(activeProjectId)
-    const restoredProvider = cachedProjectManagerProvider as ProviderId | null ?? managerProvider
+    const restoredProvider = ( cachedProjectManagerProvider as ProviderId | null) ?? managerProvider
     if (cachedProjectManagerProvider && cachedProjectManagerProvider !== managerProvider) {
       setManagerProvider(restoredProvider)
     }
@@ -3223,8 +3236,8 @@ function App() {
     const background = styles.getPropertyValue('--background').trim()
     const foreground = styles.getPropertyValue('--foreground').trim()
     ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
-      color: background ? `hsl(${background})` : (appliedThemeMode === 'dark' ? '#202020' : '#e8ecf1'),
-      symbolColor: foreground ? `hsl(${foreground})` : (appliedThemeMode === 'dark' ? '#f2f2f2' : '#0a0a0a'),
+      color: background ? `hsl(${background})` :appliedThemeMode === 'dark' ? '#202020' : '#e8ecf1',
+      symbolColor: foreground ? `hsl(${foreground})` :appliedThemeMode === 'dark' ? '#f2f2f2' : '#0a0a0a',
       height: 39,
     })
   }, [appliedThemeMode, desktopPlatform, isElectron])
@@ -3237,7 +3250,7 @@ function App() {
 
       // Check if any users exist — if not, default to the Register tab
       fetch(`${getApiUrl()}/health`, { signal: AbortSignal.timeout(4000) })
-        .then((r) => r.ok ? r.json() as Promise<{ hasUsers?: boolean }> : null)
+        .then((r) => ( r.ok ? ( r.json() as Promise<{ hasUsers?: boolean }>) : null))
         .then((data) => {
           if (data && typeof data.hasUsers === 'boolean') {
             setServerHasUsers(data.hasUsers)
@@ -3299,13 +3312,13 @@ function App() {
       setThemeMode(previous)
       setActiveVsCodeTheme(previousVsCodeThemeId)
     }
-  }, [themeMode, updateSettings])
+  }, [themeMode, updateSettings],)
 
   const activeProjectRoot = activeProject?.projectRoot ?? activeProjectRecord?.rootPath ?? null
   const [composerGitStatus, setComposerGitStatus] = useState<GitStatusResult | null>(null)
   const changedFilesKey = useMemo(
     () => changedFiles.map((file) => file.path).join('\0'),
-    [changedFiles],
+    [changedFiles]
   )
   useEffect(() => {
     if (!activeProjectRoot || changedFiles.length === 0) {
@@ -3328,7 +3341,7 @@ function App() {
   }, [activeProject?.nodeId, activeProjectRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
   const changedFilesForComposer = useMemo(
     () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeProjectRoot),
-    [activeProjectRoot, changedFiles, composerGitStatus],
+    [activeProjectRoot, changedFiles, composerGitStatus]
   )
   const previewProjectRoot =
     projectPreviewState.projectRoot
@@ -3350,13 +3363,13 @@ function App() {
     return terminals.filter((terminal) => terminalBelongsToProject(
       terminal,
       activeProjectRoot,
-      activeProject?.nodeId ?? 'gateway',
+      activeProject?.nodeId ?? 'gateway'
     ))
   }, [terminals, activeProjectRoot, activeProject?.nodeId])
 
   const activeProjectTerminalId = useMemo(
     () => resolveProjectActiveTerminalId(activeTerminalId, projectTerminals),
-    [activeTerminalId, projectTerminals],
+    [activeTerminalId, projectTerminals]
   )
 
   useEffect(() => {
@@ -3364,7 +3377,7 @@ function App() {
     const nextTerminalId = resolveProjectTerminalSelection(
       activeTerminalId,
       projectUI?.terminal?.activeTerminalId ?? null,
-      projectTerminals,
+      projectTerminals
     )
     if (nextTerminalId !== activeTerminalId) setActiveTerminalId(nextTerminalId)
   }, [activeProjectId, activeTerminalId, loadingProjectUI, projectTerminals, projectUI?.terminal?.activeTerminalId, setActiveTerminalId])
@@ -3385,7 +3398,7 @@ function App() {
     handleReferenceFileSelection,
     handleReferencePreviewElement,
     handleReferenceTerminalSelection,
-    handleToggleTerminal,
+    handleToggleTerminal
   } = useTerminalInteractionHandlers({
     activeProjectRoot,
     activeProjectNodeId: activeProject?.nodeId ?? 'gateway',
@@ -3417,7 +3430,7 @@ function App() {
     handleChangedFileClick,
     handleFileDrop,
     handleOpenMessagePath,
-    handleSearchFiles,
+    handleSearchFiles
   } = useProjectFileActions({
     acceptFile,
     activeProject,
@@ -3476,7 +3489,7 @@ function App() {
     setMobileTreeTab,
     setSavedProject,
     setShowProject,
-    showProjectRef,
+    showProjectRef
   ])
 
   const preparePromptSubmission = useCallback(async (
@@ -3489,7 +3502,7 @@ function App() {
     const referencedFiles = normalizedSegments?.length
       ? userReferencedFilesFromSegments(normalizedSegments)
       : chipFiles?.length
-        ? chipFiles.map((file) => ({ path: file.path, name: file.name, ...(file.lineRange ? { lineRange: file.lineRange } : {}) }))
+        ? chipFiles.map((file) => ({ path: file.path, name: file.name, ...(file.lineRange ? { lineRange: file.lineRange } : {}), }))
         : []
     const referencedProjects = normalizedSegments?.length
       ? userReferencedProjectsFromSegments(normalizedSegments)
@@ -3519,7 +3532,7 @@ function App() {
 
         const cached = projectFiles.find((file) => file.path === fileRef.path)
         if (cached) {
-          fileContents.push({ path: cached.path, content: applyLineRange(cached.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}) })
+          fileContents.push({ path: cached.path, content: applyLineRange(cached.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}), })
           continue
         }
 
@@ -3527,7 +3540,7 @@ function App() {
         if (referenced?.length) {
           for (const file of referenced) {
             if (fileContents.some((entry) => entry.path === file.path && entry.lineRange?.startLine === fileRef.lineRange?.startLine && entry.lineRange?.endLine === fileRef.lineRange?.endLine)) continue
-            fileContents.push({ path: file.path, content: applyLineRange(file.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}) })
+            fileContents.push({ path: file.path, content: applyLineRange(file.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}), })
           }
         }
       }
@@ -3536,72 +3549,121 @@ function App() {
     const referenceSections: string[] = []
 
     if (referencedProjects.length > 0) {
-      referenceSections.push(`Referenced projects:\n${referencedProjects
-        .map((project) => `- ${project.path}`)
-        .join('\n')}`)
+      referenceSections.push(`Referenced projects:\n${referencedProjects.map((project) => `- ${project.path}`).join('\n')}`)
     }
 
     if (referencedTerminals.length > 0) {
-      referenceSections.push(`Referenced terminals:\n${referencedTerminals
-        .map((terminal) => [
-          `- ${terminal.terminalId}${terminal.lineRange ? ` (${formatLineRange(terminal.lineRange)} selected)` : ''}${terminal.projectRoot ? ` (project: ${terminal.projectRoot})` : ''}`,
-          terminal.selectedText ? `\`\`\`\n${terminal.selectedText.slice(0, 2000)}\n\`\`\`` : null,
+      referenceSections.push(`Referenced terminals:\n${referencedTerminals.map((terminal) => [`- ${terminal.terminalId}${terminal.lineRange ? ` (${formatLineRange(terminal.lineRange)} selected)` : ''}${terminal.projectRoot ? ` (project: ${terminal.projectRoot})` : ''}`, terminal.selectedText ? `\`\`\`\n${terminal.selectedText.slice(0, 2000)}\n\`\`\`` : null
         ].filter(Boolean).join('\n'))
         .join('\n')}\nUse the terminal ID when you need to run commands in one of these existing terminals.`)
-    }
+      }
 
-    if (fileContents.length > 0) {
-      referenceSections.push(`Referenced files:\n${fileContents
+      if (fileContents.length > 0) {
+        referenceSections.push(`Referenced files:\n${fileContents
         .map((file) => `- ${file.path}${file.lineRange ? ` (${formatLineRange(file.lineRange)})` : ''}\n\`\`\`\n${file.content.slice(0, 2000)}\n\`\`\``)
         .join('\n')}`)
-    }
+      }
 
-    const promptWithReferences = referenceSections.length > 0
-      ? `${text}${text ? '\n\n' : ''}${referenceSections.join('\n\n')}`
-      : text
+      const promptWithReferences = referenceSections.length > 0 ? `${text}${text ? '\n\n' : ''}${referenceSections.join('\n\n')}` : text
 
-    return {
-      promptWithReferences,
-      displayContent: text,
-      referencedFiles: referencedFiles.length > 0 ? referencedFiles : undefined,
-      displaySegments: normalizedSegments,
-      attachments: attachments.size > 0 ? [...attachments] : undefined,
-    }
-  }, [projectFiles])
+      return {
+        promptWithReferences,
+        displayContent: text,
+        referencedFiles: referencedFiles.length > 0 ? referencedFiles : undefined,
+        displaySegments: normalizedSegments,
+        attachments: attachments.size > 0 ? [...attachments] : undefined,
+      }
+    },
+    [projectFiles],
+  )
 
-  const handleQueue = useCallback(async (
-    chipFiles?: ReferencedFile[],
-    fileAttachments?: ChatAttachment[],
-    displaySegments?: UserMessageSegment[],
-  ) => {
-    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
-    if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
-    const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
-    const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptText
-    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
-    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
-    enqueueMessage({
-      content: promptText,
-      displayContent,
-      mode: outboundMode,
-      provider: chatProvider,
-      runtimeMode: chatProviderRuntimeMode,
-      responseStyle: chatResponseStyle,
-      model: cliModel ?? undefined,
-      reasoningEffort: chatReasoningEffort,
-      referencedFiles: prepared?.referencedFiles,
-      displaySegments: nextDisplaySegments,
-      attachments: fileAttachments,
-    })
-    setInputValue('')
-    setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue])
+  const handleQueue = useCallback(
+    async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
+      const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
+      if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
+      const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
+      const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptText
+      const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
+      const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
+      enqueueMessage({
+        content: promptText,
+        displayContent,
+        mode: outboundMode,
+        provider: chatProvider,
+        runtimeMode: chatProviderRuntimeMode,
+        responseStyle: chatResponseStyle,
+        model: cliModel ?? undefined,
+        reasoningEffort: chatReasoningEffort,
+        referencedFiles: prepared?.referencedFiles,
+        displaySegments: nextDisplaySegments,
+        attachments: fileAttachments,
+      })
+      setInputValue('')
+      setInputSegments(undefined)
+    },
+    [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, sendTarget, setInputValue],
+  )
 
-  const handleSubmit = async (
-    chipFiles?: ReferencedFile[],
-    fileAttachments?: ChatAttachment[],
-    displaySegments?: UserMessageSegment[],
-  ) => {
+  // Enter while streaming: steer the running agent with the composer content
+  // immediately (VS Code-style steering-first flow). If the request fails or
+  // there is no session to steer, fall back to queueing the content so the
+  // user's message is never lost.
+  const handleSteerLive = useCallback(
+    (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => {
+      void (async () => {
+        const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, segments)
+        if (!prepared && (!attachments || attachments.length === 0)) return
+        const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
+        const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(attachments) || promptText
+        const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, attachments)
+        const queueAsFallback = () => {
+          enqueueMessage({
+            content: promptText,
+            displayContent,
+            mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
+            provider: chatProvider,
+            runtimeMode: chatProviderRuntimeMode,
+            responseStyle: chatResponseStyle,
+            model: cliModel ?? undefined,
+            reasoningEffort: chatReasoningEffort,
+            referencedFiles: prepared?.referencedFiles,
+            displaySegments: nextDisplaySegments,
+            attachments,
+          })
+        }
+        setInputValue('')
+        setInputSegments(undefined)
+        if (!isLoading || !activeSessionId) {
+          queueAsFallback()
+          return
+        }
+        try {
+          const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ message: promptText, displayContent }),
+          })
+          if (!response.ok) {
+            const err = (await response.json().catch(() => ({}))) as Record<string, unknown>
+            const details = typeof err.details === 'string' ? err.details : null
+            const error = typeof err.error === 'string' ? err.error : null
+            throw new Error(details || error || `Failed to steer: ${response.statusText}`)
+          }
+          recordSteeredMessage(promptText, displayContent)
+          toast.success('Steered the running agent')
+        } catch (err) {
+          queueAsFallback()
+          toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer — message queued instead'))
+        }
+      })()
+    },
+    [activeSessionId, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, isLoading, preparePromptSubmission, recordSteeredMessage, sendTarget, setInputValue, setInputSegments, token],
+  )
+
+  const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
     if (viewMode === 'manager' || sendTarget === 'thread') {
       return handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
     }
@@ -3618,11 +3680,9 @@ function App() {
     const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
 
     const sid = activeSessionId
-    const sessionIdPromise = sid
-      ? undefined
-      : createSession(undefined).then((session) => session?.id ?? null)
+    const sessionIdPromise = sid ? undefined : createSession(undefined).then((session) => session?.id ?? null)
     if (shouldAutoTitleSession(activeSessionRecord?.name)) {
-      const titleModel = chatProvider === 'jait' ? cliModel ?? undefined : undefined
+      const titleModel = chatProvider === 'jait' ? (cliModel ?? undefined) : undefined
       if (sid) {
         void generateSessionTitle(sid, displayContent, titleModel)
       } else {
@@ -3672,19 +3732,13 @@ function App() {
   }
 
   /** Submit to an automation thread from either developer or manager mode. */
-  const handleThreadSubmit = async (
-    chipFiles?: ReferencedFile[],
-    fileAttachments?: ChatAttachment[],
-    displaySegments?: UserMessageSegment[],
-  ) => {
+  const handleThreadSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
     if ((!prepared && !promptWithUploads) || threadComposerDisabled) return
     const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
     const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
-    const selectedThreadQueueLength = automation.selectedThread
-      ? managerMessageQueues[automation.selectedThread.id]?.length ?? 0
-      : 0
+    const selectedThreadQueueLength = automation.selectedThread ? (managerMessageQueues[automation.selectedThread.id]?.length ?? 0) : 0
     if (automation.selectedThread && (automation.selectedThread.status === 'running' || selectedThreadQueueLength > 0)) {
       enqueueManagerMessage(automation.selectedThread.id, {
         id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -3729,24 +3783,27 @@ function App() {
   useEffect(() => {
     if (viewMode === 'manager' || sendTarget === 'thread') return
     if (!token || !activeSessionId) return
-    if (!shouldProcessQueuedMessage({
-      hasInterruptedExit: hitMaxRounds,
-      isLoading,
-      isLoadingHistory,
-      queuedCount: messageQueue.length,
-      allowQueuedMessageAfterInterruptedExit,
-      isProcessing: chatQueueProcessingRef.current,
-      nextItemHeld: messageQueue[0]?.held ?? false,
-      // While the gateway WS is connected the server-side
-      // `drainQueuedChatMessages` is the authoritative queue consumer
-      // (it runs on every turn's `done` and on every `queued_messages`
-      // state-sync). Letting the client auto-drain too made the two race:
-      // the losing client re-queued the message with a fresh server id and
-      // it got sent twice — the "queued messages multiply" bug. The client
-      // only takes over when the user explicitly approved after an
-      // interrupted exit, or when there is no server connection to drain.
-      deferToServerDrain: wsConnected,
-    })) return
+    if (
+      !shouldProcessQueuedMessage({
+        hasInterruptedExit: hitMaxRounds,
+        isLoading,
+        isLoadingHistory,
+        queuedCount: messageQueue.length,
+        allowQueuedMessageAfterInterruptedExit,
+        isProcessing: chatQueueProcessingRef.current,
+        nextItemHeld: messageQueue[0]?.held ?? false,
+        // While the gateway WS is connected the server-side
+        // `drainQueuedChatMessages` is the authoritative queue consumer
+        // (it runs on every turn's `done` and on every `queued_messages`
+        // state-sync). Letting the client auto-drain too made the two race:
+        // the losing client re-queued the message with a fresh server id and
+        // it got sent twice — the "queued messages multiply" bug. The client
+        // only takes over when the user explicitly approved after an
+        // interrupted exit, or when there is no server connection to drain.
+        deferToServerDrain: wsConnected,
+      })
+    )
+      return
 
     const [nextItem] = messageQueue
     if (!nextItem) return
@@ -3758,9 +3815,10 @@ function App() {
     chatQueueProcessingRef.current = true
     dequeueMessage(nextItem.id)
 
-    void Promise.resolve(sendMessage(nextItem.content, {
-      token,
-      sessionId: activeSessionId,
+    void Promise.resolve(
+      sendMessage(nextItem.content, {
+        token,
+        sessionId: activeSessionId,
         mode: nextItem.mode,
         provider: nextItem.provider,
         runtimeMode: nextItem.runtimeMode,
@@ -3768,135 +3826,126 @@ function App() {
         model: nextItem.model,
         reasoningEffort: nextItem.reasoningEffort,
         onLoginRequired: () => setShowLoginDialog(true),
-      // Mark this as a queue-originated send so the `sendMessage` `queued`
-      // handler does NOT mirror the server-assigned entry back into the local
-      // queue. The server is authoritative and will broadcast the canonical
-      // `queued_messages` state via WS; re-adding locally with a new server id
-      // was the other half of the multiplication race.
-      queued: true,
-      ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
-      ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
-      ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
-      ...(nextItem.displaySegments?.length ? { displaySegments: nextItem.displaySegments } : {}),
-    })).catch((err) => {
-      enqueueMessage({
-        content: nextItem.content,
-        displayContent: nextItem.displayContent,
-        mode: nextItem.mode,
-        provider: nextItem.provider,
-        runtimeMode: nextItem.runtimeMode,
-        responseStyle: nextItem.responseStyle,
-        model: nextItem.model,
-        reasoningEffort: nextItem.reasoningEffort,
-        referencedFiles: nextItem.referencedFiles,
-        displaySegments: nextItem.displaySegments,
-        attachments: nextItem.attachments,
+        // Mark this as a queue-originated send so the `sendMessage` `queued`
+        // handler does NOT mirror the server-assigned entry back into the local
+        // queue. The server is authoritative and will broadcast the canonical
+        // `queued_messages` state via WS; re-adding locally with a new server id
+        // was the other half of the multiplication race.
+        queued: true,
+        ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
+        ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
+        ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
+        ...(nextItem.displaySegments?.length ? { displaySegments: nextItem.displaySegments } : {}),
+      }),
+    )
+      .catch((err) => {
+        enqueueMessage({
+          content: nextItem.content,
+          displayContent: nextItem.displayContent,
+          mode: nextItem.mode,
+          provider: nextItem.provider,
+          runtimeMode: nextItem.runtimeMode,
+          responseStyle: nextItem.responseStyle,
+          model: nextItem.model,
+          reasoningEffort: nextItem.reasoningEffort,
+          referencedFiles: nextItem.referencedFiles,
+          displaySegments: nextItem.displaySegments,
+          attachments: nextItem.attachments,
+        })
+        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to send queued message'))
       })
-      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to send queued message'))
-    }).finally(() => {
-      chatQueueProcessingRef.current = false
-    })
-  }, [
-    activeSessionId,
-    dequeueMessage,
-    enqueueMessage,
-    allowQueuedMessageAfterInterruptedExit,
-    hitMaxRounds,
-    isLoading,
-    isLoadingHistory,
-    messageQueue,
-    sendMessage,
-    sendTarget,
-    token,
-    viewMode,
-    wsConnected,
-  ])
+      .finally(() => {
+        chatQueueProcessingRef.current = false
+      })
+  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token, viewMode, wsConnected])
 
-  const handleContinueChat = useCallback((options: { token: string | null; sessionId: string | null }) => {
-    setAllowQueuedMessageAfterInterruptedExit(false)
-    continueChat({
-      ...options,
-      mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
-      provider: chatProvider,
-      runtimeMode: chatProviderRuntimeMode,
-      model: cliModel ?? undefined,
-      reasoningEffort: chatReasoningEffort,
-    })
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, continueChat, sendTarget])
+  const handleContinueChat = useCallback(
+    (options: { token: string | null; sessionId: string | null }) => {
+      setAllowQueuedMessageAfterInterruptedExit(false)
+      continueChat({
+        ...options,
+        mode: sendTarget === 'swarm' ? 'swarm' : chatMode,
+        provider: chatProvider,
+        runtimeMode: chatProviderRuntimeMode,
+        model: cliModel ?? undefined,
+        reasoningEffort: chatReasoningEffort,
+      })
+    },
+    [chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, continueChat, sendTarget],
+  )
 
   const handleSendQueuedAfterInterruptedExit = useCallback(() => {
     setAllowQueuedMessageAfterInterruptedExit(true)
   }, [])
 
-  const steerQueuedChatMessage = useCallback((id: string) => {
-    const item = messageQueue.find((queued) => queued.id === id)
-    if (!item || !activeSessionId) return
-    if (!isLoading) {
-      toast.info('Steering is only available while the agent is running.')
-      return
-    }
-
-    void (async () => {
-      const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ message: item.content, displayContent: item.displayContent }),
-      })
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({})) as Record<string, unknown>
-        const details = typeof err.details === 'string' ? err.details : null
-        const error = typeof err.error === 'string' ? err.error : null
-        throw new Error(details || error || `Failed to steer: ${response.statusText}`)
+  const steerQueuedChatMessage = useCallback(
+    (id: string) => {
+      const item = messageQueue.find((queued) => queued.id === id)
+      if (!item || !activeSessionId) return
+      if (!isLoading) {
+        toast.info('Steering is only available while the agent is running.')
+        return
       }
-      dequeueMessage(id)
-      recordSteeredMessage(item.content, item.displayContent)
-      toast.success('Steered with queued message')
-    })().catch((err) => {
-      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
-    })
-  }, [activeSessionId, dequeueMessage, isLoading, messageQueue, recordSteeredMessage, token])
 
-  const askQueuedChatMessageInParallel = useCallback((id: string) => {
-    const item = messageQueue.find((queued) => queued.id === id)
-    if (!item || !activeSessionId) return
-
-    void (async () => {
-      const branch = await forkSession(activeSessionId)
-      if (!branch) throw new Error('Failed to create question branch')
-      dequeueMessage(id)
-      setParallelChat({
-        parentSessionId: activeSessionId,
-        session: branch,
-        initialPrompt: {
-          content: item.content,
-          displayContent: item.displayContent,
-          referencedFiles: item.referencedFiles,
-          displaySegments: item.displaySegments,
-          attachments: item.attachments,
-        },
-        provider: (item.provider as ProviderId | undefined) ?? chatProvider,
-        runtimeMode: item.runtimeMode ?? chatProviderRuntimeMode,
-        responseStyle: item.responseStyle ?? chatResponseStyle,
-        model: item.model ?? cliModel,
-        reasoningEffort: item.reasoningEffort ?? chatReasoningEffort,
+      void (async () => {
+        const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(activeSessionId)}/steer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: item.content,
+            displayContent: item.displayContent,
+          }),
+        })
+        if (!response.ok) {
+          const err = (await response.json().catch(() => ({}))) as Record<string, unknown>
+          const details = typeof err.details === 'string' ? err.details : null
+          const error = typeof err.error === 'string' ? err.error : null
+          throw new Error(details || error || `Failed to steer: ${response.statusText}`)
+        }
+        dequeueMessage(id)
+        recordSteeredMessage(item.content, item.displayContent)
+        toast.success('Steered with queued message')
+      })().catch((err) => {
+        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
       })
-    })().catch((err) => {
-      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
-    })
-  }, [
-    activeSessionId,
-    chatProvider,
-    chatProviderRuntimeMode,
-    chatReasoningEffort,
-    chatResponseStyle,
-    cliModel,
-    dequeueMessage,
-    forkSession,
-    messageQueue,
-  ])
+    },
+    [activeSessionId, dequeueMessage, isLoading, messageQueue, recordSteeredMessage, token],
+  )
+
+  const askQueuedChatMessageInParallel = useCallback(
+    (id: string) => {
+      const item = messageQueue.find((queued) => queued.id === id)
+      if (!item || !activeSessionId) return
+
+      void (async () => {
+        const branch = await forkSession(activeSessionId)
+        if (!branch) throw new Error('Failed to create question branch')
+        dequeueMessage(id)
+        setParallelChat({
+          parentSessionId: activeSessionId,
+          session: branch,
+          initialPrompt: {
+            content: item.content,
+            displayContent: item.displayContent,
+            referencedFiles: item.referencedFiles,
+            displaySegments: item.displaySegments,
+            attachments: item.attachments,
+          },
+          provider: (item.provider as ProviderId | undefined) ?? chatProvider,
+          runtimeMode: item.runtimeMode ?? chatProviderRuntimeMode,
+          responseStyle: item.responseStyle ?? chatResponseStyle,
+          model: item.model ?? cliModel,
+          reasoningEffort: item.reasoningEffort ?? chatReasoningEffort,
+        })
+      })().catch((err) => {
+        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
+      })
+    },
+    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, dequeueMessage, forkSession, messageQueue],
+  )
 
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
     setManagerMessageQueues((prev) => ({
@@ -3926,17 +3975,19 @@ function App() {
       if (existing.length === 0) return prev
       return {
         ...prev,
-        [threadId]: existing.map((item) => item.id === id
-          ? {
-            ...item,
-            content: trimmed,
-            displayContent: trimmed,
-            fullContent: trimmed,
-            referencedFiles: undefined,
-            displaySegments: undefined,
-            attachments: undefined,
-          }
-          : item),
+        [threadId]: existing.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                content: trimmed,
+                displayContent: trimmed,
+                fullContent: trimmed,
+                referencedFiles: undefined,
+                displaySegments: undefined,
+                attachments: undefined,
+              }
+            : item,
+        ),
       }
     })
   }, [])
@@ -3965,93 +4016,103 @@ function App() {
     })
   }, [])
 
-  const sendManagerQueueItemToParallelThread = useCallback((id: string) => {
-    const thread = automation.selectedThread
-    const repo = automation.selectedRepo
-    if (!thread || !repo) return
-    const item = managerMessageQueues[thread.id]?.find((i) => i.id === id)
-    if (!item) return
-    dequeueManagerMessage(thread.id, id)
-    void (async () => {
-      const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
-      const baseBranch = thread.branch ?? thread.prBaseBranch ?? repo.defaultBranch
-      let worktreePath: string | undefined
-      try {
-        const wt = await gitApi.createWorktree(repo.localPath, baseBranch, branchName)
-        worktreePath = wt.path
-      } catch {
-        try { await gitApi.createBranch(repo.localPath, branchName, baseBranch) } catch { /* ignore */ }
+  const sendManagerQueueItemToParallelThread = useCallback(
+    (id: string) => {
+      const thread = automation.selectedThread
+      const repo = automation.selectedRepo
+      if (!thread || !repo) return
+      const item = managerMessageQueues[thread.id]?.find((i) => i.id === id)
+      if (!item) return
+      dequeueManagerMessage(thread.id, id)
+      void (async () => {
+        const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
+        const baseBranch = thread.branch ?? thread.prBaseBranch ?? repo.defaultBranch
+        let worktreePath: string | undefined
+        try {
+          const wt = await gitApi.createWorktree(repo.localPath, baseBranch, branchName)
+          worktreePath = wt.path
+        } catch {
+          try {
+            await gitApi.createBranch(repo.localPath, branchName, baseBranch)
+          } catch {
+            /* ignore */
+          }
+        }
+        const newThread = await agentsApi.createThread({
+          title: `[${repo.name}] Generating title…`,
+          providerId: item.providerId,
+          runtimeMode: item.runtimeMode,
+          ...(item.model ? { model: item.model } : {}),
+          kind: 'delivery',
+          workingDirectory: worktreePath ?? repo.localPath,
+          branch: branchName,
+          prBaseBranch: baseBranch,
+        })
+        await agentsApi.startThread(newThread.id, {
+          message: item.fullContent,
+          titlePrefix: `[${repo.name}] `,
+          ...(item.displayContent ? { displayContent: item.displayContent } : {}),
+          ...(item.referencedFiles ? { referencedFiles: item.referencedFiles } : {}),
+          ...(item.displaySegments ? { displaySegments: item.displaySegments } : {}),
+          ...(item.attachments ? { attachments: item.attachments } : {}),
+        })
+      })()
+    },
+    [automation.selectedThread, automation.selectedRepo, managerMessageQueues, dequeueManagerMessage],
+  )
+
+  const steerManagerQueueItem = useCallback(
+    (id: string) => {
+      const thread = automation.selectedThread
+      if (!thread) return
+      const item = managerMessageQueues[thread.id]?.find((queued) => queued.id === id)
+      if (!item) return
+      if (thread.status !== 'running') {
+        toast.info('Steering is only available while the thread is running.')
+        return
       }
-      const newThread = await agentsApi.createThread({
-        title: `[${repo.name}] Generating title…`,
-        providerId: item.providerId,
-        runtimeMode: item.runtimeMode,
-        ...(item.model ? { model: item.model } : {}),
-        kind: 'delivery',
-        workingDirectory: worktreePath ?? repo.localPath,
-        branch: branchName,
-        prBaseBranch: baseBranch,
-      })
-      await agentsApi.startThread(newThread.id, {
-        message: item.fullContent,
-        titlePrefix: `[${repo.name}] `,
-        ...(item.displayContent ? { displayContent: item.displayContent } : {}),
-        ...(item.referencedFiles ? { referencedFiles: item.referencedFiles } : {}),
-        ...(item.displaySegments ? { displaySegments: item.displaySegments } : {}),
-        ...(item.attachments ? { attachments: item.attachments } : {}),
-      })
-    })()
-  }, [automation.selectedThread, automation.selectedRepo, managerMessageQueues, dequeueManagerMessage])
 
-  const steerManagerQueueItem = useCallback((id: string) => {
-    const thread = automation.selectedThread
-    if (!thread) return
-    const item = managerMessageQueues[thread.id]?.find((queued) => queued.id === id)
-    if (!item) return
-    if (thread.status !== 'running') {
-      toast.info('Steering is only available while the thread is running.')
-      return
-    }
+      void agentsApi
+        .steerThread(thread.id, item.fullContent)
+        .then(() => {
+          dequeueManagerMessage(thread.id, id)
+          toast.success('Steered with queued message')
+        })
+        .catch((err) => {
+          toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
+        })
+    },
+    [automation.selectedThread, dequeueManagerMessage, managerMessageQueues],
+  )
 
-    void agentsApi.steerThread(thread.id, item.fullContent)
-      .then(() => {
-        dequeueManagerMessage(thread.id, id)
-        toast.success('Steered with queued message')
+  const handleManagerQueue = useCallback(
+    async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
+      const thread = automation.selectedThread
+      if (!thread) return
+      const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
+      const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
+      if (!prepared && !promptWithUploads) return
+      const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
+      const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
+      enqueueManagerMessage(thread.id, {
+        id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        content: displayContent,
+        displayContent,
+        fullContent: promptWithUploads,
+        referencedFiles: prepared?.referencedFiles,
+        displaySegments: nextDisplaySegments,
+        attachments: prepared?.attachments,
+        providerId: managerProvider,
+        runtimeMode: managerProviderRuntimeMode,
+        model: managerCliModel ?? undefined,
+        reasoningEffort: managerReasoningEffort,
+        queuedAt: Date.now(),
       })
-      .catch((err) => {
-        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to steer with queued message'))
-      })
-  }, [automation.selectedThread, dequeueManagerMessage, managerMessageQueues])
-
-  const handleManagerQueue = useCallback(async (
-    chipFiles?: ReferencedFile[],
-    fileAttachments?: ChatAttachment[],
-    displaySegments?: UserMessageSegment[],
-  ) => {
-    const thread = automation.selectedThread
-    if (!thread) return
-    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
-    const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
-    if (!prepared && !promptWithUploads) return
-    const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
-    const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
-    enqueueManagerMessage(thread.id, {
-      id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      content: displayContent,
-      displayContent,
-      fullContent: promptWithUploads,
-      referencedFiles: prepared?.referencedFiles,
-      displaySegments: nextDisplaySegments,
-      attachments: prepared?.attachments,
-      providerId: managerProvider,
-      runtimeMode: managerProviderRuntimeMode,
-      model: managerCliModel ?? undefined,
-      reasoningEffort: managerReasoningEffort,
-      queuedAt: Date.now(),
-    })
-    setInputValue('')
-    setInputSegments(undefined)
-  }, [automation.selectedThread, enqueueManagerMessage, managerCliModel, managerProvider, managerProviderRuntimeMode, managerReasoningEffort, preparePromptSubmission, setInputValue])
+      setInputValue('')
+      setInputSegments(undefined)
+    },
+    [automation.selectedThread, enqueueManagerMessage, managerCliModel, managerProvider, managerProviderRuntimeMode, managerReasoningEffort, preparePromptSubmission, setInputValue],
+  )
 
   useEffect(() => {
     if (activeSessionId) return
@@ -4084,38 +4145,35 @@ function App() {
         return { ...prev, [threadId]: restQueue }
       })
 
-      void automation.handleSendToThread(
-        threadId,
-        nextItem.fullContent,
-        {
-          providerId: nextItem.providerId,
-          runtimeMode: nextItem.runtimeMode,
-          model: nextItem.model,
-          reasoningEffort: nextItem.reasoningEffort,
-        },
-        {
-          displayContent: nextItem.displayContent ?? nextItem.content,
-          referencedFiles: nextItem.referencedFiles,
-          displaySegments: nextItem.displaySegments,
-          attachments: nextItem.attachments,
-        },
-      ).catch((err) => {
-        setManagerMessageQueues((prev) => ({
-          ...prev,
-          [threadId]: [nextItem, ...(prev[threadId] ?? [])],
-        }))
-        automation.setError(err instanceof Error ? err.message : 'Failed to process queued thread message')
-      }).finally(() => {
-        managerQueueProcessingRef.current.delete(threadId)
-      })
+      void automation
+        .handleSendToThread(
+          threadId,
+          nextItem.fullContent,
+          {
+            providerId: nextItem.providerId,
+            runtimeMode: nextItem.runtimeMode,
+            model: nextItem.model,
+            reasoningEffort: nextItem.reasoningEffort,
+          },
+          {
+            displayContent: nextItem.displayContent ?? nextItem.content,
+            referencedFiles: nextItem.referencedFiles,
+            displaySegments: nextItem.displaySegments,
+            attachments: nextItem.attachments,
+          },
+        )
+        .catch((err) => {
+          setManagerMessageQueues((prev) => ({
+            ...prev,
+            [threadId]: [nextItem, ...(prev[threadId] ?? [])],
+          }))
+          automation.setError(err instanceof Error ? err.message : 'Failed to process queued thread message')
+        })
+        .finally(() => {
+          managerQueueProcessingRef.current.delete(threadId)
+        })
     }
-  }, [
-    activeSessionId,
-    automation.handleSendToThread,
-    automation.setError,
-    automation.threads,
-    managerMessageQueues,
-  ])
+  }, [activeSessionId, automation.handleSendToThread, automation.setError, automation.threads, managerMessageQueues])
 
   /** Move the selected repo to run on the gateway instead of its current device. */
   const handleMoveRepoToGateway = useCallback(async () => {
@@ -4145,45 +4203,63 @@ function App() {
     if (suggestion === 'Generate architecture diagram') {
       setArchitectureGenerating(true)
       setShowArchitecture(true)
-      sendMessage(
-        'Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProviderRuntimeMode, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) },
-      )
+      sendMessage('Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.', {
+        token,
+        sessionId: sid,
+        mode: outboundMode,
+        provider: chatProvider,
+        runtimeMode: chatProviderRuntimeMode,
+        model: cliModel ?? undefined,
+        reasoningEffort: chatReasoningEffort,
+        onLoginRequired: () => setShowLoginDialog(true),
+      })
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: outboundMode, provider: chatProvider, runtimeMode: chatProviderRuntimeMode, model: cliModel ?? undefined, reasoningEffort: chatReasoningEffort, onLoginRequired: () => setShowLoginDialog(true) })
-  }
-
-  const handleEditPreviousMessage = useCallback(async (
-    messageId: string,
-    newContent: string,
-    messageIndex?: number,
-    messageFromEnd?: number,
-    metadata?: {
-      referencedFiles?: { path: string; name: string }[]
-      displaySegments?: UserMessageSegment[]
-      originalContent?: string
-    },
-  ) => {
-    if (!activeSessionId || !token) return false
-    const prepared = await preparePromptSubmission(newContent, metadata?.referencedFiles, metadata?.displaySegments)
-    if (!prepared) return false
-    const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
-    return restartFromMessage(messageId, prepared.promptWithReferences, messageIndex, messageFromEnd, {
+    sendMessage(suggestion, {
       token,
-      sessionId: activeSessionId,
+      sessionId: sid,
       mode: outboundMode,
       provider: chatProvider,
       runtimeMode: chatProviderRuntimeMode,
       model: cliModel ?? undefined,
       reasoningEffort: chatReasoningEffort,
-      displayContent: prepared.displayContent,
-      referencedFiles: prepared.referencedFiles,
-      displaySegments: prepared.displaySegments,
-      expectedContent: metadata?.originalContent,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, preparePromptSubmission, sendTarget])
+  }
+
+  const handleEditPreviousMessage = useCallback(
+    async (
+      messageId: string,
+      newContent: string,
+      messageIndex?: number,
+      messageFromEnd?: number,
+      metadata?: {
+        referencedFiles?: { path: string; name: string }[]
+        displaySegments?: UserMessageSegment[]
+        originalContent?: string
+      },
+    ) => {
+      if (!activeSessionId || !token) return false
+      const prepared = await preparePromptSubmission(newContent, metadata?.referencedFiles, metadata?.displaySegments)
+      if (!prepared) return false
+      const outboundMode: ChatMode = sendTarget === 'swarm' ? 'swarm' : chatMode
+      return restartFromMessage(messageId, prepared.promptWithReferences, messageIndex, messageFromEnd, {
+        token,
+        sessionId: activeSessionId,
+        mode: outboundMode,
+        provider: chatProvider,
+        runtimeMode: chatProviderRuntimeMode,
+        model: cliModel ?? undefined,
+        reasoningEffort: chatReasoningEffort,
+        displayContent: prepared.displayContent,
+        referencedFiles: prepared.referencedFiles,
+        displaySegments: prepared.displaySegments,
+        expectedContent: metadata?.originalContent,
+        onLoginRequired: () => setShowLoginDialog(true),
+      })
+    },
+    [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, cliModel, preparePromptSubmission, sendTarget],
+  )
 
   const authFormProps = {
     gatewayStep,
@@ -4235,42 +4311,48 @@ function App() {
     return url.toString()
   }, [])
 
-  const openNewChatSurface = useCallback(async (target: 'tab' | 'window') => {
-    const previousProjectId = activeProjectId
-    const previousSessionId = activeSessionId
-    // Create the new chat in the active project (if any) rather than always
-    // as a personal chat.
-    const session = await createSession()
-    if (!session) return
+  const openNewChatSurface = useCallback(
+    async (target: 'tab' | 'window') => {
+      const previousProjectId = activeProjectId
+      const previousSessionId = activeSessionId
+      // Create the new chat in the active project (if any) rather than always
+      // as a personal chat.
+      const session = await createSession()
+      if (!session) return
 
-    const url = buildChatSessionUrl(session.id, session.projectId ?? null)
-    const title = session.name && session.name !== 'New Chat' ? session.name : 'New chat'
+      const url = buildChatSessionUrl(session.id, session.projectId ?? null)
+      const title = session.name && session.name !== 'New Chat' ? session.name : 'New chat'
 
-    let opened = false
-    if (target === 'window') {
-      try {
-        if (window.jaitDesktop?.openProjectWindow) {
-          const result = await window.jaitDesktop.openProjectWindow({ url, title })
-          opened = Boolean(result?.ok)
+      let opened = false
+      if (target === 'window') {
+        try {
+          if (window.jaitDesktop?.openProjectWindow) {
+            const result = await window.jaitDesktop.openProjectWindow({
+              url,
+              title,
+            })
+            opened = Boolean(result?.ok)
+          }
+        } catch {
+          opened = false
         }
-      } catch {
-        opened = false
-      }
-      if (!opened) {
-        const popup = window.open(url, `jait-chat-${session.id}`, 'popup=yes,width=960,height=860,resizable=yes,scrollbars=yes')
+        if (!opened) {
+          const popup = window.open(url, `jait-chat-${session.id}`, 'popup=yes,width=960,height=860,resizable=yes,scrollbars=yes')
+          opened = Boolean(popup)
+          popup?.focus?.()
+        }
+      } else {
+        const popup = window.open(url, '_blank', 'noopener,noreferrer')
         opened = Boolean(popup)
-        popup?.focus?.()
       }
-    } else {
-      const popup = window.open(url, '_blank', 'noopener,noreferrer')
-      opened = Boolean(popup)
-    }
 
-    if (previousSessionId) {
-      switchSession(previousProjectId, previousSessionId)
-    }
-    if (!opened) toast.error(target === 'window' ? 'Failed to open chat window' : 'Failed to open chat tab')
-  }, [activeProjectId, activeSessionId, buildChatSessionUrl, createSession, switchSession])
+      if (previousSessionId) {
+        switchSession(previousProjectId, previousSessionId)
+      }
+      if (!opened) toast.error(target === 'window' ? 'Failed to open chat window' : 'Failed to open chat tab')
+    },
+    [activeProjectId, activeSessionId, buildChatSessionUrl, createSession, switchSession],
+  )
 
   const handleStartNewChat = useCallback(() => {
     // Keep the current transcript mounted until the session exists. Clearing it
@@ -4327,13 +4409,7 @@ function App() {
   }, [activeSessionId])
 
   // ── Push-to-talk voice recording ───────────────────────────────
-  const {
-    voiceRecording,
-    voiceTranscribing,
-    voiceLevels,
-    handleVoiceInput,
-    stopRecordingAndTranscribe,
-  } = useVoiceRecording({
+  const { voiceRecording, voiceTranscribing, voiceLevels, handleVoiceInput, stopRecordingAndTranscribe } = useVoiceRecording({
     token,
     activeSessionId,
     sttProvider: settings.stt_provider,
@@ -4343,12 +4419,18 @@ function App() {
 
   // ── Always-on wake word listener ──────────────────────────────
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
-    try { return localStorage.getItem('jait:wake-word') === 'true' } catch { return false }
+    try {
+      return localStorage.getItem('jait:wake-word') === 'true'
+    } catch {
+      return false
+    }
   })
   const toggleWakeWord = useCallback(() => {
-    setWakeWordEnabled(prev => {
+    setWakeWordEnabled((prev) => {
       const next = !prev
-      try { localStorage.setItem('jait:wake-word', String(next)) } catch {}
+      try {
+        localStorage.setItem('jait:wake-word', String(next))
+      } catch {}
       return next
     })
   }, [])
@@ -4412,7 +4494,20 @@ function App() {
     todoCount: todoList.length,
   })
   const mobileActiveProjectTarget = useMemo(
-    () => getMobileProjectActiveTarget({
+    () =>
+      getMobileProjectActiveTarget({
+        showProject,
+        showTerminal,
+        showProjectTree,
+        showProjectEditor,
+        treeTab: mobileTreeTab,
+      }),
+    [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree],
+  )
+  const showMobileProjectFullscreen = isMobile && showMobileProject && mobileActiveProjectTarget !== null && mobileActiveProjectTarget !== 'terminal'
+  const showMobileTerminalFullscreen = isMobile && currentView === 'chat' && viewMode === 'developer' && mobileActiveProjectTarget === 'terminal'
+  const mobileProjectControlState = useMemo(
+    () => ({
       showProject,
       showTerminal,
       showProjectTree,
@@ -4421,34 +4516,23 @@ function App() {
     }),
     [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree],
   )
-  const showMobileProjectFullscreen =
-    isMobile &&
-    showMobileProject &&
-    mobileActiveProjectTarget !== null &&
-    mobileActiveProjectTarget !== 'terminal'
-  const showMobileTerminalFullscreen =
-    isMobile &&
-    currentView === 'chat' &&
-    viewMode === 'developer' &&
-    mobileActiveProjectTarget === 'terminal'
-  const mobileProjectControlState = useMemo(() => ({
-    showProject,
-    showTerminal,
-    showProjectTree,
-    showProjectEditor,
-    treeTab: mobileTreeTab,
-  }), [mobileTreeTab, showTerminal, showProject, showProjectEditor, showProjectTree])
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
   // ── Memoised edit-composer bag (prevents every Message from re-rendering) ──
-  const handleVoiceStop = useCallback(() => { void stopRecordingAndTranscribe() }, [stopRecordingAndTranscribe])
-  const handleFolderPickerOpen = useCallback(() => { automation.setFolderPickerOpen(true) }, [automation.setFolderPickerOpen])
+  const handleVoiceStop = useCallback(() => {
+    void stopRecordingAndTranscribe()
+  }, [stopRecordingAndTranscribe])
+  const handleFolderPickerOpen = useCallback(() => {
+    automation.setFolderPickerOpen(true)
+  }, [automation.setFolderPickerOpen])
 
   // ── Central keyboard shortcuts (defaults + user bindings live in lib/hotkeys) ──
   useHotkeyActions({
     'app.settings': () => setCurrentView('settings'),
-    'app.toggleTheme': () => { void handleThemeModeChange(appliedThemeMode === 'dark' ? 'light' : 'dark') },
+    'app.toggleTheme': () => {
+      void handleThemeModeChange(appliedThemeMode === 'dark' ? 'light' : 'dark')
+    },
     'app.toggleDebugPanel': () => setShowDebugPanel((shown) => !shown),
     'view.chat': () => setCurrentView('chat'),
     'view.pulls': () => setCurrentView('pulls'),
@@ -4458,15 +4542,29 @@ function App() {
     'view.memory': () => setCurrentView('memory'),
     'view.jobs': () => setCurrentView('jobs'),
     'view.network': () => setCurrentView('network'),
-    'chat.new': () => { setCurrentView('chat'); handleStartNewChat() },
+    'chat.new': () => {
+      setCurrentView('chat')
+      handleStartNewChat()
+    },
     'chat.newTab': handleStartNewChatInTab,
-    'chat.focusComposer': () => { setCurrentView('chat'); promptInputRef.current?.focus() },
+    'chat.focusComposer': () => {
+      setCurrentView('chat')
+      promptInputRef.current?.focus()
+    },
     'chat.stop': isLoading ? handleCancelRequest : null,
     'chat.toggleSidebar': () => setShowSidebar((shown) => !shown),
-    'workspace.toggleTerminal': () => { void handleToggleTerminal() },
-    'workspace.toggleEditor': () => { void handleToggleEditor() },
-    'workspace.togglePreview': () => { void handleSidebarPreviewToggle() },
-    'workspace.toggleArchitecture': () => { void handleSidebarArchitectureToggle() },
+    'workspace.toggleTerminal': () => {
+      void handleToggleTerminal()
+    },
+    'workspace.toggleEditor': () => {
+      void handleToggleEditor()
+    },
+    'workspace.togglePreview': () => {
+      void handleSidebarPreviewToggle()
+    },
+    'workspace.toggleArchitecture': () => {
+      void handleSidebarArchitectureToggle()
+    },
     'workspace.toggleScreenShare': () => {
       if (showScreenShare) closeScreenSharePanel()
       else openScreenSharePanel()
@@ -4487,88 +4585,92 @@ function App() {
         flex: '1 1 0%',
         minWidth: 0,
       }
-  const inlinePrompts = (secretInput.inlinePrompt || userQuestionInput.inlinePrompt) ? (
-    <div className="space-y-1.5">
-      {secretInput.inlinePrompt}
-      {userQuestionInput.inlinePrompt}
-    </div>
-  ) : null
+  const inlinePrompts =
+    secretInput.inlinePrompt || userQuestionInput.inlinePrompt ? (
+      <div className="space-y-1.5">
+        {secretInput.inlinePrompt}
+        {userQuestionInput.inlinePrompt}
+      </div>
+    ) : null
 
-  const developerComposerControlRow = viewMode === 'developer' ? (
-    <DeveloperComposerControlRow
-      activeProjectId={activeProjectId}
-      activeProjectSessions={activeProjectSessions}
-      activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
-      activeSessionId={activeSessionId}
-      approveAllInSession={approveAllInSession}
-      compact={compactDeveloperComposer}
-      disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
-      remainingPrompts={remainingPrompts}
-      repositories={automation.repositories}
-      selectedThreadRepo={threadTargetRepo}
-      sendTarget={sendTarget}
-      threadRepoPickerDisabled={automation.creating}
-      getRuntimeInfo={automation.getRuntimeInfoForRepository}
-      onAddRepository={handleFolderPickerOpen}
-      onClearApproveAll={handleClearApproveAll}
-      onCreateSession={() => { void createSession() }}
-      onSendTargetChange={setSendTarget}
-      onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
-      onStartNewChat={handleStartNewChat}
-      onStartNewChatInTab={handleStartNewChatInTab}
-      onStartNewChatInWindow={handleStartNewChatInWindow}
-      onSelectRepo={automation.setSelectedRepoId}
-      onSelectSession={switchSession}
-    />
-  ) : null
-  const editComposerBag = useMemo(() => ({
-    onVoiceInput: handleVoiceInput,
-    voiceRecording,
-    voiceLevels,
-    voiceTranscribing,
-    onVoiceStop: handleVoiceStop,
-    mode: chatMode,
-    onModeChange: setChatMode,
-    sendTarget,
-    onSendTargetChange: setSendTarget,
-    provider: chatProvider,
-    onProviderChange: handleChatProviderChange,
-    responseStyle: chatResponseStyle,
-    onResponseStyleChange: handleChatResponseStyleChange,
-    providerRuntimeMode: chatProviderRuntimeMode,
-    onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
-    cliModel,
-    onCliModelChange: handleCliModelChange,
-    reasoningEffort: chatReasoningEffort,
-    onReasoningEffortChange: handleChatReasoningEffortChange,
-    availableFiles: availableFilesForMention,
-    onSearchFiles: handleSearchFiles,
-    projectOpen: showProject,
-    sessionInfo,
-    projectNodeId: activeProject?.nodeId ?? activeProjectRecord?.nodeId ?? undefined,
-    projectId: activeProjectId,
-  }), [
-    handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
-    chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange,
-    chatResponseStyle, handleChatResponseStyleChange,
-    chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
-    chatReasoningEffort, handleChatReasoningEffortChange,
-    availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectRecord?.nodeId, activeProjectId,
-  ])
+  const developerComposerControlRow =
+    viewMode === 'developer' ? (
+      <DeveloperComposerControlRow
+        activeProjectId={activeProjectId}
+        activeProjectSessions={activeProjectSessions}
+        activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
+        activeSessionId={activeSessionId}
+        approveAllInSession={approveAllInSession}
+        compact={compactDeveloperComposer}
+        disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
+        remainingPrompts={remainingPrompts}
+        repositories={automation.repositories}
+        selectedThreadRepo={threadTargetRepo}
+        sendTarget={sendTarget}
+        threadRepoPickerDisabled={automation.creating}
+        getRuntimeInfo={automation.getRuntimeInfoForRepository}
+        onAddRepository={handleFolderPickerOpen}
+        onClearApproveAll={handleClearApproveAll}
+        onCreateSession={() => {
+          void createSession()
+        }}
+        onSendTargetChange={setSendTarget}
+        onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
+        onStartNewChat={handleStartNewChat}
+        onStartNewChatInTab={handleStartNewChatInTab}
+        onStartNewChatInWindow={handleStartNewChatInWindow}
+        onSelectRepo={automation.setSelectedRepoId}
+        onSelectSession={switchSession}
+      />
+    ) : null
+  const editComposerBag = useMemo(
+    () => ({
+      onVoiceInput: handleVoiceInput,
+      voiceRecording,
+      voiceLevels,
+      voiceTranscribing,
+      onVoiceStop: handleVoiceStop,
+      mode: chatMode,
+      onModeChange: setChatMode,
+      sendTarget,
+      onSendTargetChange: setSendTarget,
+      provider: chatProvider,
+      onProviderChange: handleChatProviderChange,
+      responseStyle: chatResponseStyle,
+      onResponseStyleChange: handleChatResponseStyleChange,
+      providerRuntimeMode: chatProviderRuntimeMode,
+      onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
+      cliModel,
+      onCliModelChange: handleCliModelChange,
+      reasoningEffort: chatReasoningEffort,
+      onReasoningEffortChange: handleChatReasoningEffortChange,
+      availableFiles: availableFilesForMention,
+      onSearchFiles: handleSearchFiles,
+      projectOpen: showProject,
+      sessionInfo,
+      projectNodeId: activeProject?.nodeId ?? activeProjectRecord?.nodeId ?? undefined,
+      projectId: activeProjectId,
+    }),
+    [handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop, chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange, chatResponseStyle, handleChatResponseStyleChange, chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange, chatReasoningEffort, handleChatReasoningEffortChange, availableFilesForMention, handleSearchFiles, showProject, sessionInfo, activeProject?.nodeId, activeProjectRecord?.nodeId, activeProjectId],
+  )
 
   const activityEvents: ActivityEvent[] = [
-    ...messages.slice(-10).map((msg) => createActivityEvent({
-      id: `msg-${msg.id}`,
-      source: 'chat',
-      title: `Message: ${msg.role}`,
-      detail: msg.content.slice(0, 120) || '(empty message)',
-    })),
-    ...terminals.map((terminal) => createActivityEvent({
-      id: `term-${terminal.id}`,
-      source: 'terminal',
-      title: 'Terminal session',
-      detail: `${terminal.id} (${terminal.state})`,
-    })),
+    ...messages.slice(-10).map((msg) =>
+      createActivityEvent({
+        id: `msg-${msg.id}`,
+        source: 'chat',
+        title: `Message: ${msg.role}`,
+        detail: msg.content.slice(0, 120) || '(empty message)',
+      }),
+    ),
+    ...terminals.map((terminal) =>
+      createActivityEvent({
+        id: `term-${terminal.id}`,
+        source: 'terminal',
+        title: 'Terminal session',
+        detail: `${terminal.id} (${terminal.state})`,
+      }),
+    ),
   ]
 
   // ── Early returns for special/detached views (must come after all hooks) ──
@@ -4581,12 +4683,7 @@ function App() {
   }
 
   if (gatewayReachable === false && !(isStandaloneApp && requiresAuthGate)) {
-    return (
-      <GatewayUnavailable
-        onRetry={retryGatewayReachable}
-        canSetBackend={isStandaloneApp}
-      />
-    )
+    return <GatewayUnavailable onRetry={retryGatewayReachable} canSetBackend={isStandaloneApp} />
   }
 
   return (
@@ -4614,6 +4711,7 @@ function App() {
               isMaximized={isMaximized}
               isMobile={isMobile}
               onCliModelChange={viewMode === 'manager' ? handleManagerCliModelChange : handleCliModelChange}
+              onProviderChange={viewMode === 'manager' ? handleManagerProviderChange : handleChatProviderChange}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
               remainingPrompts={remainingPrompts}
@@ -4640,8 +4738,6 @@ function App() {
               activeProjectTitle={activeProjectRecord?.title ?? null}
             />
 
-
-
             <ChatToolbar
               activeProject={activeProject}
               activeProjectId={activeProjectId}
@@ -4664,7 +4760,9 @@ function App() {
                 automation.setSelectedThreadId(null)
                 setInputValue('')
               }}
-              onMobileProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
+              onMobileProjectTargetAction={(target) => {
+                void handleMobileProjectTargetAction(target)
+              }}
               onOpenPlan={setPlanRepo}
               onOpenStrategy={setStrategyRepo}
               onToggleArchitecture={() => {
@@ -4678,16 +4776,15 @@ function App() {
                 }
               }}
               onToggleDebugPanel={() => setShowDebugPanel((d) => !d)}
-              onToggleEditor={() => { void handleToggleEditor() }}
+              onToggleEditor={() => {
+                void handleToggleEditor()
+              }}
               onToggleManagerRepos={() => setShowManagerRepos((s) => !s)}
               onTogglePreview={() => {
                 if (previewOpen) {
                   closeDevPreviewPanel()
                 } else {
-                  const nextTarget = projectPreviewState.target
-                    ?? devPreviewTarget?.trim()
-                    ?? savedDevPreview?.target?.trim()
-                    ?? null
+                  const nextTarget = projectPreviewState.target ?? devPreviewTarget?.trim() ?? savedDevPreview?.target?.trim() ?? null
                   if (routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)) {
                     return
                   }
@@ -4695,411 +4792,468 @@ function App() {
                 }
               }}
               onToggleSidebar={() => setShowSidebar((s) => !s)}
-              onToggleTerminal={() => { void handleToggleTerminal() }}
+              onToggleTerminal={() => {
+                void handleToggleTerminal()
+              }}
             />
 
-        {currentView !== 'chat' ? (
-          <AppPageOutlet
-            activeSessionId={activeSessionId}
-            activityEvents={activityEvents}
-            apiKeys={settings.api_keys}
-            appPlatform={appPlatform}
-            chatProvider={chatProvider}
-            chatProviderRuntimeMode={chatProviderRuntimeMode}
-            cliModel={cliModel}
-            currentView={currentView}
-            isMobile={isMobile}
-            repositories={automation.repositories}
-            jaitBackend={settings.jait_backend ?? 'openai'}
-            sttProvider={settings.stt_provider}
-            token={token}
-            updateApplying={updateApplying}
-            updateChecking={updateChecking}
-            updateInfo={updateInfo}
-            releases={releases}
-            releasesLoading={releasesLoading}
-            username={user?.username ?? ''}
-            onApplyUpdate={() => { void handleApplyUpdate() }}
-            onCheckUpdate={() => { void handleCheckUpdate() }}
-            onCheckChangelog={() => { void handleCheckChangelog() }}
-            onClearArchive={handleClearArchive}
-            onClearArchivedProjects={handleClearArchivedProjects}
-            onFetchArchivedProjects={fetchArchivedProjects}
-            onJaitBackendChange={async (next) => { await updateSettings({ jait_backend: next }) }}
-            onRestoreProject={handleRestoreProject}
-            onSaveApiKeys={handleSaveApiKeys}
-            onSttProviderChange={async (next: SttProvider) => { await updateSettings({ stt_provider: next }) }}
-            onVoiceInput={handleVoiceInput}
-            onVoiceStop={handleVoiceStop}
-            voiceLevels={voiceLevels}
-            voiceRecording={voiceRecording}
-            voiceTranscribing={voiceTranscribing}
-          />
-        ) : (
-          <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
-            <div className={isMobile ? 'contents' : `relative flex min-h-0 ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}>
-              {viewMode === 'developer' && (
-                <DeveloperSidebars
-                  activeProject={activeProject}
-                  activeProjectId={activeProjectId}
-                  activeSessionId={activeSessionId}
-                  authLoading={authLoading}
-                  fsNodes={fsNodes}
-                  hasMoreProjects={hasMoreProjects}
-                  isMobile={isMobile}
-                  personalSessions={personalSessions}
-                  previewOpen={previewOpen}
-                  projectListLimit={projectListLimit}
-                  projects={projects}
-                  projectsLoading={projectsLoading}
-                  repositories={automation.repositories}
-                  searchLoading={searchLoading}
-                  searchResults={searchResults}
-                  sessionInfo={sessionInfo}
-                  showArchitecture={showArchitecture}
-                  showDebugPanel={showDebugPanel}
-                  showProject={showProject}
-                  showSidebar={showSidebar}
-                  showTerminal={showTerminal}
-                  streamingSessionIds={streamingSessionIds}
-                  sidebarRef={sidebarRef}
-                  onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
-                  onArchiveSession={(sessionId) => { void handleArchiveSession(sessionId) }}
-                  onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
-                  onSearchProjects={searchProjects}
-                  onBlur={handleSidebarBlur}
-                  onChangeDirectory={handleChangeDirectory}
-                  onCreateProject={handleCreateProject}
-                  onCreateFolder={handleCreateFolder}
-                  onEditProject={(projectId) => { setContextDialogTarget({ mode: 'edit', projectId }) }}
-                  onMoveProject={(projectId, parentId) => { void handleMoveProject(projectId, parentId) }}
-                  onCreatePersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
-                  onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
-                  onSearch={searchChats}
-                  onSelectPersonalSession={(sessionId) => { void handleSelectPersonalSession(sessionId) }}
-                  onSelectProject={handleSwitchProject}
-                  onSelectProjectSession={handleSelectProjectSession}
-                  onShowFewer={showFewerProjects}
-                  onShowMore={showMoreProjects}
-                  onToggleArchitecture={() => { void handleSidebarArchitectureToggle() }}
-                  onToggleDebug={() => setShowDebugPanel((d) => !d)}
-                  onToggleEditor={() => { void handleToggleEditor() }}
-                  onTogglePreview={() => { void handleSidebarPreviewToggle() }}
-                  onToggleSidebar={() => setShowSidebar((s) => !s)}
-                  onToggleTerminal={() => { void handleToggleTerminal() }}
-                  onOpenSettings={() => setCurrentView('settings')}
-                />
-              )}
-
-              <DeveloperWorkspacePanes
-                activeProject={activeProject}
-                activeProjectId={activeProjectId}
-                activeProjectFileId={activeProjectFileId}
-                activeProjectRoot={activeProjectRoot}
+            {currentView !== 'chat' ? (
+              <AppPageOutlet
                 activeSessionId={activeSessionId}
-                activeTerminalId={activeProjectTerminalId}
-                architectureDiagram={architectureDiagram}
-                architectureGenerating={architectureGenerating}
-                architectureRequest={architectureRequest}
-                automationSelectedThread={automation.selectedThread}
-                changedPaths={changedPaths}
-                chatCollapsed={chatCollapsed}
-                chatProvider={chatProvider}
-                cliModel={cliModel}
-                currentView={currentView}
-                devPreviewTarget={devPreviewTarget}
-                fsWatcherPayload={fsWatcherPayload}
-                fsWatcherVersion={fsWatcherVersion}
-                isMobile={isMobile}
-                mobileTreeTab={mobileTreeTab}
-                previewProjectRoot={previewProjectRoot}
-                projectFiles={projectFiles}
-                projectPreviewRequest={projectPreviewRequest}
-                projectRef={projectRef}
-                projectRestoreRef={projectRestoreRef}
-                projectStateReady={projectStateReady}
-                projectTabsState={projectTabsState}
-                projectTerminals={projectTerminals}
-                showDesktopProject={showDesktopProject}
-                showMobileProjectFullscreen={showMobileProjectFullscreen}
-                showMobileTerminalFullscreen={showMobileTerminalFullscreen}
-                showProjectEditor={showProjectEditor}
-                showProjectTree={showProjectTree}
-                showTerminal={showTerminal}
-                sourceControlRefreshSignal={sourceControlRefreshSignal}
-                terminalColumnWidth={terminalColumnWidth}
-                terminalFullscreen={terminalFullscreen}
-                terminalHeight={terminalHeight}
-                terminalHeightBeforeFullscreenRef={terminalHeightBeforeFullscreenRef}
-                terminalShells={terminalShells}
-                terminalViewRef={terminalViewRef}
-                token={token}
-                viewMode={viewMode}
-                onActiveProjectFileChange={setActiveProjectFileId}
-                onApplyDiff={handleApplyProjectDiff}
-                onArchitectureOpenChange={setShowArchitecture}
-                onArchitectureRenderResult={handleArchitectureRenderResult}
-                onAvailableFilesChange={handleAvailableFilesForMentionChange}
-                onCloseTerminal={closeTerminalPanel}
-                onCreateTerminal={(shell) => {
-                  const nodeId = activeProject?.nodeId ?? 'gateway'
-                  void createTerminal(
-                    activeSessionId ?? 'default',
-                    activeProjectRoot ?? undefined,
-                    shell,
-                    nodeId,
-                  ).catch((err) => {
-                    const reason = err instanceof Error ? err.message : 'Failed to create terminal'
-                    const isRemote = nodeId && nodeId !== 'gateway'
-                    toast.error(isRemote ? 'Terminal unavailable on this node' : 'Failed to open terminal', {
-                      description: isRemote
-                        ? `${reason}. Make sure the node is connected and the project path exists on it.`
-                        : reason,
-                      duration: 8000,
-                    })
-                  })
-                }}
-                onDetachTerminal={handleDetachTerminal}
-                onFileDrop={(files) => { void handleFileDrop(files) }}
-                onGenerateArchitecture={() => {
-                  setArchitectureGenerating(true)
-                  handleSuggestion('Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                }}
-                onKillTerminal={handleKillTerminal}
-                onPreviewOpenChange={handleProjectPreviewOpenChange}
-                onReferenceFile={handleReferenceFile}
-                onReferenceFileSelection={handleReferenceFileSelection}
-                onReferencePreviewElement={handleReferencePreviewElement}
-                onReferenceTerminalSelection={handleReferenceTerminalSelection}
-                onSetChatCollapsed={setChatCollapsed}
-                onSetMobileTreeTab={setMobileTreeTab}
-                onSetTerminalFullscreen={setTerminalFullscreen}
-                onSetTerminalHeight={setTerminalHeight}
-                onTabsStateChange={handleProjectTabsStateChange}
-                onTerminalColumnDragStart={handleTerminalColumnDragStart}
-                onTerminalDragStart={handleTerminalDragStart}
-                onTerminalSelect={setActiveTerminalId}
-                onToggleProjectEditor={toggleProjectEditor}
-                onToggleProjectTree={toggleProjectTree}
-                savedPanelSize={projectUI?.layout?.panelSize ?? null}
-                savedTreeSize={projectUI?.layout?.treeSize ?? null}
-                onLayoutSizeChange={handleProjectLayoutSizeChange}
-              />
-            </div>
-
-            {!showMobileProjectFullscreen && !showMobileTerminalFullscreen && (viewMode === 'manager' ? (
-              <ManagerWorkspace
-                automation={automation}
-                automationMessages={automationMessages}
-                availableFiles={availableFilesForMention}
-                availableSkills={availableSkills}
-                chatProvider={managerProvider}
-                chatProviderRuntimeMode={managerProviderRuntimeMode}
-                chatReasoningEffort={managerReasoningEffort}
-                chatResponseStyle={chatResponseStyle}
-                cliModel={managerCliModel}
-                inputValueRef={inputValueRef}
-                inputVersion={inputVersion}
-                isMobile={isMobile}
-                managerThreads={managerThreads}
-                promptInputRef={promptInputRef}
-                selectedManagerQueue={selectedManagerQueue}
-                selectedRepoOffline={selectedRepoOffline}
-                selectedRepoRuntime={selectedRepoRuntime}
-                selectedThreadRepoRuntime={selectedThreadRepoRuntime}
-                showManagerRepos={showManagerRepos}
-                showProject={showProject}
-                threadComposerDisabled={threadComposerDisabled}
-                threadPlaceholder={threadPlaceholder}
-                voiceLevels={voiceLevels}
-                voiceRecording={voiceRecording}
-                voiceTranscribing={voiceTranscribing}
-                onAddRepository={() => automation.setFolderPickerOpen(true)}
-                onChangedFileClick={handleChangedFileClick}
-                onCliModelChange={handleManagerCliModelChange}
-                onDeleteThread={automation.handleDelete}
-                onDequeueManagerMessage={dequeueManagerMessage}
-                onHandleInputChange={handleInputChange}
-                onManagerQueue={handleManagerQueue}
-                onMemorySourceOpen={handleOpenMemorySource}
-                onMoveRepoToGateway={handleMoveRepoToGateway}
-                onOpenManagerPlan={setPlanRepo}
-                onOpenManagerStrategy={setStrategyRepo}
-                onOpenMessagePath={handleOpenMessagePath}
-                onProviderChange={handleManagerProviderChange}
-                onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
-                onReasoningEffortChange={handleManagerReasoningEffortChange}
-                onRefreshThreads={() => { void automation.refresh() }}
-                onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
-                onReorderManagerQueueItem={reorderManagerQueueItem}
-                onResponseStyleChange={handleChatResponseStyleChange}
-                onSearchFiles={handleSearchFiles}
-                onSelectRepository={automation.setSelectedRepoId}
-                onSelectThread={automation.setSelectedThreadId}
-                onSendManagerQueueItemToParallelThread={sendManagerQueueItemToParallelThread}
-                onSetProjectEditorVisible={setShowProjectEditor}
-                onSetProjectVisible={setShowProject}
-                onSteerManagerQueueItem={steerManagerQueueItem}
-                onStopRecording={() => { void stopRecordingAndTranscribe() }}
-                onStopThread={(threadId) => { void automation.handleStop(threadId) }}
-                onSubmit={handleSubmit}
-                onUpdateManagerQueueItem={updateManagerQueueItem}
-                onVoiceInput={handleVoiceInput}
-                renderInlineSecretPrompt={renderInlineSecretPrompt}
-                inlinePrompts={inlinePrompts}
-              />
-            ) : <>
-              <DeveloperChatWorkspace
-                showDebugPanel={showDebugPanel}
-                onCloseDebugPanel={() => setShowDebugPanel(false)}
-                activeProject={activeProject}
-                activeProjectId={activeProjectId}
-                activeProjectDisplayName={activeProjectDisplayName}
-                activeProjectRoot={activeProjectRoot}
-                activeSessionId={activeSessionId}
-                availableFilesForMention={availableFilesForMention}
-                availableSkills={availableSkills}
-                changedFiles={changedFiles}
-                changedFilesForComposer={changedFilesForComposer}
-                chatCollapsed={chatCollapsed}
-                chatMode={chatMode}
+                activityEvents={activityEvents}
+                apiKeys={settings.api_keys}
+                appPlatform={appPlatform}
                 chatProvider={chatProvider}
                 chatProviderRuntimeMode={chatProviderRuntimeMode}
-                chatResponseStyle={chatResponseStyle}
                 cliModel={cliModel}
-                reasoningEffort={chatReasoningEffort}
-                contextUsage={contextUsage}
-                developerChatPanelStyle={developerChatPanelStyle}
-                developerChatSubmitLoading={developerChatSubmitLoading}
-                developerChatUiState={developerChatUiState}
-                developerComposerControlRow={developerComposerControlRow}
-                developerPlaceholder={developerPlaceholder}
-                editComposerBag={editComposerBag}
-                error={error}
-                hasMessages={hasMessages}
-                hasMoreMessages={hasMoreMessages}
-                hitMaxRounds={hitMaxRounds}
-                inputSegments={inputSegments}
-                inputValueRef={inputValueRef}
-                inputVersion={inputVersion}
-                inlinePrompts={inlinePrompts}
-                isLoading={isLoading}
-                isLoadingHistory={showDeveloperChatHistoryLoading}
+                currentView={currentView}
                 isMobile={isMobile}
-                loadOlderMessages={loadOlderMessages}
-                limitReached={limitReached}
-                managerThreads={managerThreads}
-                messageContents={messageContents}
-                messageQueue={messageQueue}
-                messages={messages}
-                promptBeforeProcessingQueuedMessage={promptBeforeProcessingQueuedMessage}
-                pendingPlan={pendingPlan}
-                previewOpen={previewOpen}
-                projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
-                projectSuggestions={projectSuggestions}
-                projects={projects}
-                projectsLoading={projectsLoading}
-                promptInputRef={promptInputRef}
-                sendTarget={sendTarget}
-                sessionInfo={sessionInfo}
-                setChatPanelElement={setChatPanelElement}
-                showDesktopProject={showDesktopProject}
-                showProject={showProject}
-                showScreenShare={showScreenShare}
-                suggestions={suggestions}
-                threadTargetRepoRuntime={threadTargetRepoRuntime}
+                repositories={automation.repositories}
+                jaitBackend={settings.jait_backend ?? 'openai'}
+                chatStreamingAction={settings.chat_streaming_action ?? 'steer'}
+                sttProvider={settings.stt_provider}
                 token={token}
-                todoList={todoList}
+                updateApplying={updateApplying}
+                updateChecking={updateChecking}
+                updateInfo={updateInfo}
+                releases={releases}
+                releasesLoading={releasesLoading}
+                username={user?.username ?? ''}
+                onApplyUpdate={() => {
+                  void handleApplyUpdate()
+                }}
+                onCheckUpdate={() => {
+                  void handleCheckUpdate()
+                }}
+                onCheckChangelog={() => {
+                  void handleCheckChangelog()
+                }}
+                onClearArchive={handleClearArchive}
+                onClearArchivedProjects={handleClearArchivedProjects}
+                onFetchArchivedProjects={fetchArchivedProjects}
+                onJaitBackendChange={async (next) => {
+                  await updateSettings({ jait_backend: next })
+                }}
+                onRestoreProject={handleRestoreProject}
+                onSaveApiKeys={handleSaveApiKeys}
+                onSttProviderChange={async (next: SttProvider) => {
+                  await updateSettings({ stt_provider: next })
+                }}
+                onChatStreamingActionChange={async (next: ChatStreamingAction) => {
+                  await updateSettings({ chat_streaming_action: next })
+                }}
+                onVoiceInput={handleVoiceInput}
+                onVoiceStop={handleVoiceStop}
                 voiceLevels={voiceLevels}
                 voiceRecording={voiceRecording}
                 voiceTranscribing={voiceTranscribing}
-                onAcceptAllFiles={acceptAllFiles}
-                onAcceptFile={acceptFile}
-                onCancelRequest={handleCancelRequest}
-                onChangedFileClick={handleChangedFileClick}
-                onChatModeChange={setChatMode}
-                onClearTodoList={() => setTodoList([])}
-                onCliModelChange={handleCliModelChange}
-                onReasoningEffortChange={handleChatReasoningEffortChange}
-                onContinueChat={handleContinueChat}
-                onDequeueMessage={dequeueMessage}
-                onEditPreviousMessage={handleEditPreviousMessage}
-                onExecutePlan={executePlan}
-                onHandleInputChange={handleChatInputChange}
-                onHandleMemoryFeedback={handleMemoryFeedback}
-                onHandleSuggestion={handleSuggestion}
-                onMemorySourceOpen={handleOpenMemorySource}
-                onMoveRepoToGateway={handleMoveRepoToGateway}
-                onOpenAddProject={() => { setProjectPickerMode('project'); setFolderPickerOpen(true) }}
-                onOpenMessagePath={handleOpenMessagePath}
-                onOpenSourceControl={handleOpenSourceControl}
-                onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
-                onApprovalResponse={respondToApproval}
-                onAskQueuedMessageInParallel={askQueuedChatMessageInParallel}
-                onProviderChange={handleChatProviderChange}
-                onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                onQueue={handleQueue}
-                onRejectAllFiles={rejectAllFiles}
-                onRejectFile={rejectFile}
-                onRejectPlan={rejectPlan}
-                onReorderQueueItem={reorderQueueItem}
-                onResponseStyleChange={handleChatResponseStyleChange}
-                onSearchFiles={handleSearchFiles}
-                onSendTargetChange={setSendTarget}
-                onSendQueuedAfterInterruptedExit={handleSendQueuedAfterInterruptedExit}
-                onSetApproveAllInSession={setApproveAllInSession}
-                onSteerQueuedMessage={isLoading && activeSessionId ? steerQueuedChatMessage : undefined}
-                onStopRecording={() => { void stopRecordingAndTranscribe() }}
-                onSubmit={handleSubmit}
-                onToggleHoldQueueItem={toggleHoldQueueItem}
-                onUpdateQueueItem={updateQueueItem}
-                onVoiceInput={handleVoiceInput}
-                renderInlineSecretPrompt={renderInlineSecretPrompt}
               />
-              {parallelChat && (
-                <ParallelChatPanel
-                  key={parallelChat.session.id}
-                  session={parallelChat.session}
-                  token={token}
-                  initialPrompt={parallelChat.initialPrompt}
-                  provider={parallelChat.provider}
-                  runtimeMode={parallelChat.runtimeMode}
-                  responseStyle={parallelChat.responseStyle}
-                  model={parallelChat.model}
-                  reasoningEffort={parallelChat.reasoningEffort}
-                  availableFiles={availableFilesForMention}
-                  availableSkills={availableSkills}
-                  projectName={activeProjectDisplayName}
-                  projectPath={activeProjectRoot}
-                  projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
-                  isMobile={isMobile}
-                  onSearchFiles={handleSearchFiles}
-                  onClose={() => setParallelChat(null)}
-                  onOpenAsPrimary={() => {
-                    const branch = parallelChat.session
-                    setParallelChat(null)
-                    setChatMode('ask')
-                    switchSession(branch.projectId, branch.id)
-                  }}
-                />
-              )}
-            </>
-            )}
-          </div>
-        )}
+            ) : (
+              <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
+                <div className={isMobile ? 'contents' : `relative flex min-h-0 ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}>
+                  {viewMode === 'developer' && (
+                    <DeveloperSidebars
+                      activeProject={activeProject}
+                      activeProjectId={activeProjectId}
+                      activeSessionId={activeSessionId}
+                      authLoading={authLoading}
+                      fsNodes={fsNodes}
+                      hasMoreProjects={hasMoreProjects}
+                      isMobile={isMobile}
+                      personalSessions={personalSessions}
+                      previewOpen={previewOpen}
+                      projectListLimit={projectListLimit}
+                      projects={projects}
+                      projectsLoading={projectsLoading}
+                      repositories={automation.repositories}
+                      searchLoading={searchLoading}
+                      searchResults={searchResults}
+                      sessionInfo={sessionInfo}
+                      showArchitecture={showArchitecture}
+                      showDebugPanel={showDebugPanel}
+                      showProject={showProject}
+                      showSidebar={showSidebar}
+                      sidebarView={sidebarView}
+                      showTerminal={showTerminal}
+                      streamingSessionIds={streamingSessionIds}
+                      sidebarRef={sidebarRef}
+                      onAssignRepository={(projectId) => {
+                        void handleAssignProjectRepository(projectId)
+                      }}
+                      onArchiveSession={(sessionId) => {
+                        void handleArchiveSession(sessionId)
+                      }}
+                      onMoveSession={(sessionId, projectId) => {
+                        void moveSession(sessionId, projectId)
+                      }}
+                      onSearchProjects={searchProjects}
+                      onBlur={handleSidebarBlur}
+                      onChangeDirectory={handleChangeDirectory}
+                      onCreateProject={handleCreateProject}
+                      onCreateFolder={handleCreateFolder}
+                      onEditProject={(projectId) => {
+                        setContextDialogTarget({ mode: 'edit', projectId })
+                      }}
+                      onMoveProject={(projectId, parentId) => {
+                        void handleMoveProject(projectId, parentId)
+                      }}
+                      onCreatePersonalSession={() => {
+                        if (isMobile) setShowSidebar(false)
+                        void createSession(null)
+                      }}
+                      onRemoveProject={(projectId) => {
+                        void handleRemoveProject(projectId)
+                      }}
+                      onSearch={searchChats}
+                      onSelectPersonalSession={(sessionId) => {
+                        void handleSelectPersonalSession(sessionId)
+                      }}
+                      onSelectProject={handleSwitchProject}
+                      onSelectProjectSession={handleSelectProjectSession}
+                      onShowFewer={showFewerProjects}
+                      onShowMore={showMoreProjects}
+                      onToggleArchitecture={() => {
+                        void handleSidebarArchitectureToggle()
+                      }}
+                      onToggleDebug={() => setShowDebugPanel((d) => !d)}
+                      onToggleEditor={() => {
+                        void handleToggleEditor()
+                      }}
+                      onTogglePreview={() => {
+                        void handleSidebarPreviewToggle()
+                      }}
+                      onSelectSidebarView={handleSelectDeveloperSidebarView}
+                      onToggleTerminal={() => {
+                        void handleToggleTerminal()
+                      }}
+                      onOpenSettings={() => setCurrentView('settings')}
+                    />
+                  )}
 
-        {isMobile && currentView === 'chat' && (
-          <MobileBottomNav
-            activeProjectId={activeProjectId}
-            changedFilesCount={changedFiles.length}
-            mobileProjectControlState={mobileProjectControlState}
-            showProject={showProject}
-            showSidebar={showSidebar}
-            showTerminal={showTerminal}
-            onChatClick={handleMobileChatClick}
-            onProjectTargetAction={(target) => { void handleMobileProjectTargetAction(target) }}
-          />
-        )}
+                  <DeveloperWorkspacePanes
+                    activeProject={activeProject}
+                    activeProjectId={activeProjectId}
+                    activeProjectFileId={activeProjectFileId}
+                    activeProjectRoot={activeProjectRoot}
+                    activeSessionId={activeSessionId}
+                    activeTerminalId={activeProjectTerminalId}
+                    architectureDiagram={architectureDiagram}
+                    architectureGenerating={architectureGenerating}
+                    architectureRequest={architectureRequest}
+                    automationSelectedThread={automation.selectedThread}
+                    changedPaths={changedPaths}
+                    chatCollapsed={chatCollapsed}
+                    chatProvider={chatProvider}
+                    cliModel={cliModel}
+                    currentView={currentView}
+                    devPreviewTarget={devPreviewTarget}
+                    fsWatcherPayload={fsWatcherPayload}
+                    fsWatcherVersion={fsWatcherVersion}
+                    isMobile={isMobile}
+                    mobileTreeTab={mobileTreeTab}
+                    previewProjectRoot={previewProjectRoot}
+                    projectFiles={projectFiles}
+                    projectPreviewRequest={projectPreviewRequest}
+                    projectRef={projectRef}
+                    projectRestoreRef={projectRestoreRef}
+                    projectStateReady={projectStateReady}
+                    projectTabsState={projectTabsState}
+                    projectTerminals={projectTerminals}
+                    showDesktopProject={showDesktopProject}
+                    showMobileProjectFullscreen={showMobileProjectFullscreen}
+                    showMobileTerminalFullscreen={showMobileTerminalFullscreen}
+                    showProjectEditor={showProjectEditor}
+                    showProjectTree={showProjectTree}
+                    showTerminal={showTerminal}
+                    sourceControlRefreshSignal={sourceControlRefreshSignal}
+                    terminalColumnWidth={terminalColumnWidth}
+                    terminalFullscreen={terminalFullscreen}
+                    terminalHeight={terminalHeight}
+                    terminalHeightBeforeFullscreenRef={terminalHeightBeforeFullscreenRef}
+                    terminalShells={terminalShells}
+                    terminalViewRef={terminalViewRef}
+                    token={token}
+                    viewMode={viewMode}
+                    onActiveProjectFileChange={setActiveProjectFileId}
+                    onApplyDiff={handleApplyProjectDiff}
+                    onArchitectureOpenChange={setShowArchitecture}
+                    onArchitectureRenderResult={handleArchitectureRenderResult}
+                    onAvailableFilesChange={handleAvailableFilesForMentionChange}
+                    onCloseTerminal={closeTerminalPanel}
+                    onCreateTerminal={(shell) => {
+                      const nodeId = activeProject?.nodeId ?? 'gateway'
+                      void createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined, shell, nodeId).catch((err) => {
+                        const reason = err instanceof Error ? err.message : 'Failed to create terminal'
+                        const isRemote = nodeId && nodeId !== 'gateway'
+                        toast.error(isRemote ? 'Terminal unavailable on this node' : 'Failed to open terminal', {
+                          description: isRemote ? `${reason}. Make sure the node is connected and the project path exists on it.` : reason,
+                          duration: 8000,
+                        })
+                      })
+                    }}
+                    onDetachTerminal={handleDetachTerminal}
+                    onFileDrop={(files) => {
+                      void handleFileDrop(files)
+                    }}
+                    onGenerateArchitecture={() => {
+                      setArchitectureGenerating(true)
+                      handleSuggestion('Analyze the project architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                    }}
+                    onKillTerminal={handleKillTerminal}
+                    onPreviewOpenChange={handleProjectPreviewOpenChange}
+                    onReferenceFile={handleReferenceFile}
+                    onReferenceFileSelection={handleReferenceFileSelection}
+                    onReferencePreviewElement={handleReferencePreviewElement}
+                    onReferenceTerminalSelection={handleReferenceTerminalSelection}
+                    onSetChatCollapsed={setChatCollapsed}
+                    onSetMobileTreeTab={setMobileTreeTab}
+                    onSetTerminalFullscreen={setTerminalFullscreen}
+                    onSetTerminalHeight={setTerminalHeight}
+                    onTabsStateChange={handleProjectTabsStateChange}
+                    onTerminalColumnDragStart={handleTerminalColumnDragStart}
+                    onTerminalDragStart={handleTerminalDragStart}
+                    onTerminalSelect={setActiveTerminalId}
+                    onToggleProjectEditor={toggleProjectEditor}
+                    onToggleProjectTree={toggleProjectTree}
+                    savedPanelSize={projectUI?.layout?.panelSize ?? null}
+                    savedTreeSize={projectUI?.layout?.treeSize ?? null}
+                    onLayoutSizeChange={handleProjectLayoutSizeChange}
+                  />
+                </div>
+
+                {!showMobileProjectFullscreen &&
+                  !showMobileTerminalFullscreen &&
+                  (viewMode === 'manager' ? (
+                    <ManagerWorkspace
+                      automation={automation}
+                      automationMessages={automationMessages}
+                      availableFiles={availableFilesForMention}
+                      availableSkills={availableSkills}
+                      chatProvider={managerProvider}
+                      chatProviderRuntimeMode={managerProviderRuntimeMode}
+                      chatReasoningEffort={managerReasoningEffort}
+                      chatResponseStyle={chatResponseStyle}
+                      cliModel={managerCliModel}
+                      inputValueRef={inputValueRef}
+                      inputVersion={inputVersion}
+                      isMobile={isMobile}
+                      managerThreads={managerThreads}
+                      promptInputRef={promptInputRef}
+                      selectedManagerQueue={selectedManagerQueue}
+                      selectedRepoOffline={selectedRepoOffline}
+                      selectedRepoRuntime={selectedRepoRuntime}
+                      selectedThreadRepoRuntime={selectedThreadRepoRuntime}
+                      showManagerRepos={showManagerRepos}
+                      showProject={showProject}
+                      threadComposerDisabled={threadComposerDisabled}
+                      threadPlaceholder={threadPlaceholder}
+                      voiceLevels={voiceLevels}
+                      voiceRecording={voiceRecording}
+                      voiceTranscribing={voiceTranscribing}
+                      onAddRepository={() => automation.setFolderPickerOpen(true)}
+                      onChangedFileClick={handleChangedFileClick}
+                      onCliModelChange={handleManagerCliModelChange}
+                      onDeleteThread={automation.handleDelete}
+                      onDequeueManagerMessage={dequeueManagerMessage}
+                      onHandleInputChange={handleInputChange}
+                      onManagerQueue={handleManagerQueue}
+                      onMemorySourceOpen={handleOpenMemorySource}
+                      onMoveRepoToGateway={handleMoveRepoToGateway}
+                      onOpenManagerPlan={setPlanRepo}
+                      onOpenManagerStrategy={setStrategyRepo}
+                      onOpenMessagePath={handleOpenMessagePath}
+                      onProviderChange={handleManagerProviderChange}
+                      onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
+                      onReasoningEffortChange={handleManagerReasoningEffortChange}
+                      onRefreshThreads={() => {
+                        void automation.refresh()
+                      }}
+                      onRemoveRepository={(repoId) => {
+                        void automation.removeRepository(repoId)
+                      }}
+                      onReorderManagerQueueItem={reorderManagerQueueItem}
+                      onResponseStyleChange={handleChatResponseStyleChange}
+                      onSearchFiles={handleSearchFiles}
+                      onSelectRepository={automation.setSelectedRepoId}
+                      onSelectThread={automation.setSelectedThreadId}
+                      onSendManagerQueueItemToParallelThread={sendManagerQueueItemToParallelThread}
+                      onSetProjectEditorVisible={setShowProjectEditor}
+                      onSetProjectVisible={setShowProject}
+                      onSteerManagerQueueItem={steerManagerQueueItem}
+                      onStopRecording={() => {
+                        void stopRecordingAndTranscribe()
+                      }}
+                      onStopThread={(threadId) => {
+                        void automation.handleStop(threadId)
+                      }}
+                      onSubmit={handleSubmit}
+                      onUpdateManagerQueueItem={updateManagerQueueItem}
+                      onVoiceInput={handleVoiceInput}
+                      renderInlineSecretPrompt={renderInlineSecretPrompt}
+                      inlinePrompts={inlinePrompts}
+                    />
+                  ) : (
+                    <>
+                      <DeveloperChatWorkspace
+                        showDebugPanel={showDebugPanel}
+                        onCloseDebugPanel={() => setShowDebugPanel(false)}
+                        activeProject={activeProject}
+                        activeProjectId={activeProjectId}
+                        activeProjectDisplayName={activeProjectDisplayName}
+                        activeProjectRoot={activeProjectRoot}
+                        activeSessionId={activeSessionId}
+                        availableFilesForMention={availableFilesForMention}
+                        availableSkills={availableSkills}
+                        changedFiles={changedFiles}
+                        changedFilesForComposer={changedFilesForComposer}
+                        chatCollapsed={chatCollapsed}
+                        chatMode={chatMode}
+                        chatProvider={chatProvider}
+                        chatProviderRuntimeMode={chatProviderRuntimeMode}
+                        chatResponseStyle={chatResponseStyle}
+                        cliModel={cliModel}
+                        reasoningEffort={chatReasoningEffort}
+                        contextUsage={contextUsage}
+                        defaultStreamingAction={settings.chat_streaming_action ?? 'steer'}
+                        developerChatPanelStyle={developerChatPanelStyle}
+                        developerChatSubmitLoading={developerChatSubmitLoading}
+                        developerChatUiState={developerChatUiState}
+                        developerComposerControlRow={developerComposerControlRow}
+                        developerPlaceholder={developerPlaceholder}
+                        editComposerBag={editComposerBag}
+                        error={error}
+                        hasMessages={hasMessages}
+                        hasMoreMessages={hasMoreMessages}
+                        hitMaxRounds={hitMaxRounds}
+                        inputSegments={inputSegments}
+                        inputValueRef={inputValueRef}
+                        inputVersion={inputVersion}
+                        inlinePrompts={inlinePrompts}
+                        isLoading={isLoading}
+                        isLoadingHistory={showDeveloperChatHistoryLoading}
+                        isMobile={isMobile}
+                        loadOlderMessages={loadOlderMessages}
+                        limitReached={limitReached}
+                        managerThreads={managerThreads}
+                        messageContents={messageContents}
+                        messageQueue={messageQueue}
+                        messages={messages}
+                        promptBeforeProcessingQueuedMessage={promptBeforeProcessingQueuedMessage}
+                        pendingPlan={pendingPlan}
+                        previewOpen={previewOpen}
+                        projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
+                        projectSuggestions={projectSuggestions}
+                        projects={projects}
+                        projectsLoading={projectsLoading}
+                        promptInputRef={promptInputRef}
+                        sendTarget={sendTarget}
+                        sessionInfo={sessionInfo}
+                        setChatPanelElement={setChatPanelElement}
+                        showDesktopProject={showDesktopProject}
+                        showProject={showProject}
+                        showScreenShare={showScreenShare}
+                        suggestions={suggestions}
+                        threadTargetRepoRuntime={threadTargetRepoRuntime}
+                        token={token}
+                        todoList={todoList}
+                        voiceLevels={voiceLevels}
+                        voiceRecording={voiceRecording}
+                        voiceTranscribing={voiceTranscribing}
+                        onAcceptAllFiles={acceptAllFiles}
+                        onAcceptFile={acceptFile}
+                        onCancelRequest={handleCancelRequest}
+                        onChangedFileClick={handleChangedFileClick}
+                        onChatModeChange={setChatMode}
+                        onClearTodoList={() => setTodoList([])}
+                        onCliModelChange={handleCliModelChange}
+                        onReasoningEffortChange={handleChatReasoningEffortChange}
+                        onContinueChat={handleContinueChat}
+                        onDequeueMessage={dequeueMessage}
+                        onEditPreviousMessage={handleEditPreviousMessage}
+                        onExecutePlan={executePlan}
+                        onHandleInputChange={handleChatInputChange}
+                        onHandleMemoryFeedback={handleMemoryFeedback}
+                        onHandleSuggestion={handleSuggestion}
+                        onMemorySourceOpen={handleOpenMemorySource}
+                        onMoveRepoToGateway={handleMoveRepoToGateway}
+                        onOpenAddProject={() => {
+                          setProjectPickerMode('project')
+                          setFolderPickerOpen(true)
+                        }}
+                        onOpenMessagePath={handleOpenMessagePath}
+                        onOpenSourceControl={handleOpenSourceControl}
+                        onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
+                        onApprovalResponse={respondToApproval}
+                        onAskQueuedMessageInParallel={askQueuedChatMessageInParallel}
+                        onProviderChange={handleChatProviderChange}
+                        onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                        onQueue={handleQueue}
+                        onSteer={handleSteerLive}
+                        onRejectAllFiles={rejectAllFiles}
+                        onRejectFile={rejectFile}
+                        onRejectPlan={rejectPlan}
+                        onReorderQueueItem={reorderQueueItem}
+                        onResponseStyleChange={handleChatResponseStyleChange}
+                        onSearchFiles={handleSearchFiles}
+                        onSendTargetChange={setSendTarget}
+                        onSendQueuedAfterInterruptedExit={handleSendQueuedAfterInterruptedExit}
+                        onSetApproveAllInSession={setApproveAllInSession}
+                        onSteerQueuedMessage={isLoading && activeSessionId ? steerQueuedChatMessage : undefined}
+                        onStopRecording={() => {
+                          void stopRecordingAndTranscribe()
+                        }}
+                        onSubmit={handleSubmit}
+                        onToggleHoldQueueItem={toggleHoldQueueItem}
+                        onUpdateQueueItem={updateQueueItem}
+                        onVoiceInput={handleVoiceInput}
+                        renderInlineSecretPrompt={renderInlineSecretPrompt}
+                      />
+                      {parallelChat && (
+                        <ParallelChatPanel
+                          key={parallelChat.session.id}
+                          session={parallelChat.session}
+                          token={token}
+                          initialPrompt={parallelChat.initialPrompt}
+                          provider={parallelChat.provider}
+                          runtimeMode={parallelChat.runtimeMode}
+                          responseStyle={parallelChat.responseStyle}
+                          model={parallelChat.model}
+                          reasoningEffort={parallelChat.reasoningEffort}
+                          availableFiles={availableFilesForMention}
+                          availableSkills={availableSkills}
+                          projectName={activeProjectDisplayName}
+                          projectPath={activeProjectRoot}
+                          projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
+                          isMobile={isMobile}
+                          onSearchFiles={handleSearchFiles}
+                          onClose={() => setParallelChat(null)}
+                          onOpenAsPrimary={() => {
+                            const branch = parallelChat.session
+                            setParallelChat(null)
+                            setChatMode('ask')
+                            switchSession(branch.projectId, branch.id)
+                          }}
+                        />
+                      )}
+                    </>
+                  ))}
+              </div>
+            )}
+
+            {isMobile && currentView === 'chat' && (
+              <MobileBottomNav
+                activeProjectId={activeProjectId}
+                changedFilesCount={changedFiles.length}
+                mobileProjectControlState={mobileProjectControlState}
+                showProject={showProject}
+                showSidebar={showSidebar}
+                showTerminal={showTerminal}
+                onChatClick={handleMobileChatClick}
+                onProjectTargetAction={(target) => {
+                  void handleMobileProjectTargetAction(target)
+                }}
+              />
+            )}
 
             {/* Terminal panel rendered as sidebar-adjacent column above */}
 
@@ -5128,23 +5282,58 @@ function App() {
                       searchLoading={searchLoading}
                       searchResults={searchResults}
                       onSearch={searchChats}
-                      onSelectProject={(projectId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSwitchProject(projectId) }}
-                      onSelectProjectSession={(projectId, sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); handleSelectProjectSession(projectId, sessionId) }}
-                      onSelectPersonalSession={(sessionId) => { setCurrentView('chat'); setShowMobileToolbar(false); void handleSelectPersonalSession(sessionId) }}
-                      onArchiveSession={(sessionId) => { void handleArchiveSession(sessionId) }}
-                      onMoveSession={(sessionId, projectId) => { void moveSession(sessionId, projectId) }}
+                      onSelectProject={(projectId) => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        void handleSwitchProject(projectId)
+                      }}
+                      onSelectProjectSession={(projectId, sessionId) => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        handleSelectProjectSession(projectId, sessionId)
+                      }}
+                      onSelectPersonalSession={(sessionId) => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        void handleSelectPersonalSession(sessionId)
+                      }}
+                      onArchiveSession={(sessionId) => {
+                        void handleArchiveSession(sessionId)
+                      }}
+                      onMoveSession={(sessionId, projectId) => {
+                        void moveSession(sessionId, projectId)
+                      }}
                       onSearchProjects={searchProjects}
-                      onNewPersonalSession={() => { setCurrentView('chat'); setShowMobileToolbar(false); void createSession(null) }}
+                      onNewPersonalSession={() => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        void createSession(null)
+                      }}
                       onCreateProject={handleCreateProject}
-                      onCreateFolder={(parentId) => { setShowMobileToolbar(false); handleCreateFolder(parentId) }}
-                      onEditProject={(projectId) => { setShowMobileToolbar(false); setContextDialogTarget({ mode: 'edit', projectId }) }}
-                      onMoveProject={(projectId, parentId) => { void handleMoveProject(projectId, parentId) }}
-                      onRemoveProject={(projectId) => { void handleRemoveProject(projectId) }}
+                      onCreateFolder={(parentId) => {
+                        setShowMobileToolbar(false)
+                        handleCreateFolder(parentId)
+                      }}
+                      onEditProject={(projectId) => {
+                        setShowMobileToolbar(false)
+                        setContextDialogTarget({ mode: 'edit', projectId })
+                      }}
+                      onMoveProject={(projectId, parentId) => {
+                        void handleMoveProject(projectId, parentId)
+                      }}
+                      onRemoveProject={(projectId) => {
+                        void handleRemoveProject(projectId)
+                      }}
                       onChangeDirectory={handleChangeDirectory}
-                      onAssignRepository={(projectId) => { void handleAssignProjectRepository(projectId) }}
+                      onAssignRepository={(projectId) => {
+                        void handleAssignProjectRepository(projectId)
+                      }}
                       onShowMore={showMoreProjects}
                       onShowFewer={showFewerProjects}
-                      onDismiss={() => { setCurrentView('chat'); setShowMobileToolbar(false) }}
+                      onDismiss={() => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                      }}
                       sessionInfo={sessionInfo}
                       nodes={fsNodes}
                       repositories={automation.repositories}
@@ -5160,7 +5349,9 @@ function App() {
 
         <ProjectContextDialog
           open={contextDialogTarget !== null}
-          onOpenChange={(open) => { if (!open) setContextDialogTarget(null) }}
+          onOpenChange={(open) => {
+            if (!open) setContextDialogTarget(null)
+          }}
           project={contextDialogProject}
           mode={contextDialogTarget?.mode ?? 'edit'}
           ancestors={contextDialogAncestors}
@@ -5168,17 +5359,14 @@ function App() {
           onSave={handleSaveProjectContext}
         />
 
-        <AuthOverlays
-          requiresAuthGate={requiresAuthGate}
-          isElectron={isElectron}
-          showLoginDialog={showLoginDialog}
-          onShowLoginDialogChange={setShowLoginDialog}
-          authFormProps={authFormProps}
-        />
+        <AuthOverlays requiresAuthGate={requiresAuthGate} isElectron={isElectron} showLoginDialog={showLoginDialog} onShowLoginDialogChange={setShowLoginDialog} authFormProps={authFormProps} />
 
         <AppFolderPickers
           projectOpen={folderPickerOpen}
-          onProjectOpenChange={(open) => { setFolderPickerOpen(open); if (!open) setChangeDirectoryProjectId(null) }}
+          onProjectOpenChange={(open) => {
+            setFolderPickerOpen(open)
+            if (!open) setChangeDirectoryProjectId(null)
+          }}
           projectInitialPath={settings.project_picker_path}
           projectInitialNodeId={settings.project_picker_node_id}
           onProjectSelect={(path, nodeId) => {
@@ -5213,7 +5401,7 @@ function App() {
         )}
 
         {/* Floating screen share window */}
-        {showScreenShare && (
+        {showScreenShare &&
           <FloatingScreenShareWindow
             screenShare={screenShare}
             floatingSSPos={floatingSSPos}
@@ -5221,8 +5409,7 @@ function App() {
             onFloatingDragStart={onFloatingDragStart}
             onFloatingResizeStart={onFloatingResizeStart}
             onClose={closeScreenSharePanel}
-          />
-        )}
+          />}
 
       </div>
 

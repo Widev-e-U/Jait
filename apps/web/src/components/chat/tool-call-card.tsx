@@ -2300,12 +2300,22 @@ function SubAgentHistoryView({
   message,
   status,
   streamingOutput,
+  threadControlThreads,
+  onOpenTerminal,
+  onOpenDiff,
+  renderInlineSecretPrompt,
+  onApprovalResponse,
 }: {
   args: Record<string, unknown>
   data: Record<string, unknown>
   message?: string
   status?: 'pending' | 'running' | 'success' | 'error'
   streamingOutput?: string
+  threadControlThreads?: ThreadListRecord[]
+  onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (filePath: string) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
+  onApprovalResponse?: (requestId: string, approved: boolean) => Promise<void> | void
 }) {
   const data = usePersistedSubAgent(dataProp)
   const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls as SubAgentToolCall[] : []
@@ -2370,7 +2380,17 @@ function SubAgentHistoryView({
           <>
             {loadEarlierButton}
             <div className="px-3 py-1">
-              <AssistantBody segments={segments.slice(segments.length - history.visibleCount)} toolCalls={nestedCalls} isStreaming={isRunning} compact />
+              <AssistantBody
+                segments={segments.slice(segments.length - history.visibleCount)}
+                toolCalls={nestedCalls}
+                isStreaming={isRunning}
+                compact
+                threadControlThreads={threadControlThreads}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
+                onApprovalResponse={onApprovalResponse}
+              />
             </div>
           </>
         ) : (
@@ -2381,7 +2401,15 @@ function SubAgentHistoryView({
             {nestedCalls.length > 0 && (
               <div className="py-1">
                 {nestedCalls.slice(Math.max(0, nestedCalls.length - (history.visibleCount - (finalContent ? 1 : 0)))).map((call) => (
-                  <ToolCallCard key={call.callId} call={call} />
+                  <ToolCallCard
+                    key={call.callId}
+                    call={call}
+                    threadControlThreads={threadControlThreads}
+                    onOpenTerminal={onOpenTerminal}
+                    onOpenDiff={onOpenDiff}
+                    renderInlineSecretPrompt={renderInlineSecretPrompt}
+                    onApprovalResponse={onApprovalResponse}
+                  />
                 ))}
               </div>
             )}
@@ -4024,6 +4052,11 @@ function ToolCallCardInner({
         message={call.result?.message}
         status={call.status}
         streamingOutput={call.streamingOutput}
+        threadControlThreads={threadControlThreads}
+        onOpenTerminal={onOpenTerminal}
+        onOpenDiff={onOpenDiff}
+        renderInlineSecretPrompt={renderInlineSecretPrompt}
+        onApprovalResponse={onApprovalResponse}
       />
     )
   ) : bodyKind === 'threadList' ? (
