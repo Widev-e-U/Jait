@@ -131,13 +131,22 @@ export function inferContextWindow(model: string): number {
   return 128_000; // safe default
 }
 
+let generatedJwtSecret: string | undefined;
+let generatedHookSecret: string | undefined;
+
 export function loadConfig(): AppConfig {
   // Auto-detect provider: if OPENAI_API_KEY is set, default to openai
   const hasOpenAiKey = !!process.env["OPENAI_API_KEY"];
   const explicitProvider = process.env["LLM_PROVIDER"] as LlmProvider | undefined;
 
-  const jwtSecret = process.env["JWT_SECRET"]?.trim() || randomBytes(32).toString("hex");
-  const hookSecret = process.env["HOOK_SECRET"]?.trim() || randomBytes(32).toString("hex");
+  // Generated fallback secrets must stay stable for the process lifetime:
+  // tests and some entrypoints call loadConfig() more than once, and two
+  // different random secrets would make tokens signed with one config
+  // unverifiable by a server built with the other.
+  generatedJwtSecret ??= randomBytes(32).toString("hex");
+  generatedHookSecret ??= randomBytes(32).toString("hex");
+  const jwtSecret = process.env["JWT_SECRET"]?.trim() || generatedJwtSecret;
+  const hookSecret = process.env["HOOK_SECRET"]?.trim() || generatedHookSecret;
   const primaryGateway = process.env["JAIT_PRIMARY_GATEWAY"]?.trim() ?? "";
   const nodeOnlyRaw = process.env["JAIT_NODE_ONLY"]?.trim().toLowerCase();
   const nodeOnly = nodeOnlyRaw

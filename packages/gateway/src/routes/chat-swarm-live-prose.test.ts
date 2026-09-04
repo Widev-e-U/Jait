@@ -16,6 +16,10 @@ const testConfig = {
   logLevel: "silent" as const,
   nodeEnv: "test",
   jwtSecret: "test-jwt-secret",
+  // The fetch mock speaks OpenAI-style SSE. Pin the provider so the agent
+  // loop doesn't switch to Ollama's native NDJSON protocol on hosts (CI)
+  // where OPENAI_API_KEY / LLM_PROVIDER are unset.
+  llmProvider: "openai" as const,
 };
 const originalFetch = globalThis.fetch;
 
