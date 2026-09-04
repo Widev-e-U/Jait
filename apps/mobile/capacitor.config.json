@@ -3,8 +3,11 @@
   "appName": "Jait",
   "webDir": "../../apps/web/dist",
   "server": {
-    "androidScheme": "http",
+    "androidScheme": "https",
     "iosScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
   },
   "plugins": {
     "CapacitorHttp": {
