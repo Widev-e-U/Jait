@@ -474,9 +474,20 @@ jobs:
           ensure_pkgconfig
 
           if ! command -v cargo &>/dev/null; then
-            echo "::error::cargo not found. Install rustup on the runner: curl -sSf https://sh.rustup.rs | sh"
-            exit 1
+            # rustup installs to ~/.cargo/$HOME/.rustup with no sudo, matching
+            # the userspace toolchain pattern above. Cached on the persistent
+            # runner home between releases, so this only pays once.
+            if [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+              echo "cargo not found — installing rustup (minimal profile, stable) into $HOME/.cargo"
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                | sh -s -- -y --profile minimal --default-toolchain stable
+            else
+              echo "cargo exists at $HOME/.cargo/bin but not on PATH"
+            fi
+            export PATH="$HOME/.cargo/bin:$PATH"
           fi
+          command -v cargo &>/dev/null \
+            || { echo "::error::cargo still missing after rustup install attempt"; exit 1; }
           # cargo-xwin = MSVC cross-compile runner, tauri-cli = tauri build.
           # Installs are slow (~5-10 min each) but cached on the self-hosted
           # runner's persistent ~/.cargo between releases.
