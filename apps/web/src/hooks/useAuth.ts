@@ -8,6 +8,8 @@ const API_URL = getApiUrl()
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'wyoming' | 'whisper' | 'gpt' | 'elevenlabs'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
+/** Default composer action while the agent is streaming — set in Settings → General. */
+export type ChatStreamingAction = 'steer' | 'queue' | 'thread'
 /** Single source of truth lives in @jait/shared — re-exported so the UI can never drift from the gateway's validation. */
 export type { JaitBackend }
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
@@ -21,6 +23,7 @@ interface UserSettings {
   theme: ThemeMode
   api_keys: Record<string, string>
   stt_provider: SttProvider
+  chat_streaming_action: ChatStreamingAction
   chat_provider: ChatProvider
   jait_backend: JaitBackend
   recent_models: string[]
@@ -47,6 +50,7 @@ const EMPTY_SETTINGS: UserSettings = {
   theme: 'system',
   api_keys: {},
   stt_provider: 'whisper',
+  chat_streaming_action: 'steer',
   chat_provider: 'jait',
   jait_backend: 'openai',
   recent_models: [],
@@ -190,6 +194,7 @@ function useAuthState() {
     theme?: ThemeMode
     api_keys?: Record<string, string>
     stt_provider?: SttProvider
+    chat_streaming_action?: ChatStreamingAction
     chat_provider?: ChatProvider
     jait_backend?: JaitBackend
     recent_models?: string[]

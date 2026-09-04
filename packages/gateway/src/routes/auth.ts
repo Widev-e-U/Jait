@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode, SttProvider, ChatProvider, ReasoningEffort } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider, ChatProvider, ReasoningEffort, ChatStreamingAction } from "../services/users.js";
 import { REASONING_EFFORT_VALUES } from "../services/users.js";
 // Root entrypoint, not the "/types" subpath: that one resolves to dist/ at
 // runtime and only the root is aliased for Vitest, so a value import here
@@ -32,6 +32,8 @@ function clearAuthCookie(reply: FastifyReply): void {
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper", "gpt", "elevenlabs"]);
+// Default composer action while the agent is streaming (Settings → General).
+export const CHAT_STREAMING_ACTION_VALUES = new Set<string>(["steer", "queue", "thread"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -150,6 +152,7 @@ export function registerAuthRoutes(
       api_keys: settings.apiKeys,
       disabled_tools: settings.disabledTools,
       stt_provider: settings.sttProvider,
+      chat_streaming_action: settings.chatStreamingAction,
       chat_provider: settings.chatProvider,
       jait_backend: settings.jaitBackend,
       recent_models: settings.recentModels,
@@ -170,6 +173,7 @@ export function registerAuthRoutes(
       apiKeys?: Record<string, string>;
       disabledTools?: string[];
       sttProvider?: SttProvider;
+      chatStreamingAction?: ChatStreamingAction;
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
@@ -194,6 +198,10 @@ export function registerAuthRoutes(
 
     if (typeof body.stt_provider === "string" && STT_PROVIDER_VALUES.has(body.stt_provider as SttProvider)) {
       patch.sttProvider = body.stt_provider as SttProvider;
+    }
+
+    if (typeof body.chat_streaming_action === "string" && CHAT_STREAMING_ACTION_VALUES.has(body.chat_streaming_action)) {
+      patch.chatStreamingAction = body.chat_streaming_action as ChatStreamingAction;
     }
 
     if (typeof body.chat_provider === "string" && body.chat_provider.trim()) {
@@ -239,6 +247,7 @@ export function registerAuthRoutes(
       api_keys: updated.apiKeys,
       disabled_tools: updated.disabledTools,
       stt_provider: updated.sttProvider,
+      chat_streaming_action: updated.chatStreamingAction,
       chat_provider: updated.chatProvider,
       jait_backend: updated.jaitBackend,
       recent_models: updated.recentModels,

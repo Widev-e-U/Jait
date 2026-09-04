@@ -24,7 +24,7 @@ import { ActivityFeed } from '@/components/activity'
 import type { ProjectRecord } from '@/hooks/useProjects'
 import { useProviders } from '@/hooks/useProviders'
 import type { ActivityEvent } from '@jait/ui-shared'
-import type { SttProvider } from '@/hooks/useAuth'
+import type { ChatStreamingAction, SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
@@ -353,6 +353,8 @@ interface SettingsPageProps {
   onSaveApiKeys: (next: Record<string, string>) => Promise<void>
   sttProvider: SttProvider
   onSttProviderChange: (next: SttProvider) => Promise<void>
+  chatStreamingAction: ChatStreamingAction
+  onChatStreamingActionChange: (next: ChatStreamingAction) => Promise<void>
   jaitBackend: JaitBackend
   onJaitBackendChange: (next: JaitBackend) => Promise<void>
   onClearArchive: () => Promise<number>
@@ -378,6 +380,8 @@ export function SettingsPage({
   onSaveApiKeys,
   sttProvider,
   onSttProviderChange,
+  chatStreamingAction,
+  onChatStreamingActionChange,
   jaitBackend,
   onJaitBackendChange,
   onClearArchive,
@@ -1131,6 +1135,9 @@ export function SettingsPage({
     'connectors channels telegram bot botfather token whatsapp teams messaging connect link pair qr inbound outbound',
   )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
+  const showChatBehaviorSection = matchesSearch(
+    'chat streaming behavior default action steer queue thread interrupt while agent running busy message submit enter',
+  )
 
   // Whether a tab currently shows any matching content for the active search query.
   // Tabs that never filter (email, shortcuts, usage, nodes, changelog) always count as a match
@@ -1138,7 +1145,7 @@ export function SettingsPage({
   const tabHasMatch = (tab: SettingsTab): boolean => {
     switch (tab) {
       case 'general':
-        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showSpeechSection
+        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showSpeechSection || showChatBehaviorSection
       case 'api':
         return filteredApiFields.length > 0 || showJaitBackendSection || showProviderAccountsSection
       case 'tools':
@@ -1799,6 +1806,36 @@ const providerAccountsCard = (
 
 
 
+          {showChatBehaviorSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Chat behavior')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  What should happen when you send a message while the agent is still working?
+                </p>
+              </div>
+              <div className="max-w-sm">
+                <Label htmlFor="chat-streaming-action" className="mb-1.5 block">Default action while streaming</Label>
+                <Select
+                  value={chatStreamingAction}
+                  onValueChange={(value) => { void onChatStreamingActionChange(value as ChatStreamingAction) }}
+                >
+                  <SelectTrigger id="chat-streaming-action">
+                    <SelectValue placeholder="Choose a default action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="steer">Steer — send immediately as a new user message</SelectItem>
+                    <SelectItem value="queue">Queue — queue it until the current turn finishes</SelectItem>
+                    <SelectItem value="thread">New thread — start a fresh side thread for it</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Applies to the Enter key and the send button in chat. You can still override the default per message by using the arrow/steer, queue, and new-thread actions in the composer.
+                </p>
+              </div>
+            </Card>
+          )}
+
           {showSpeechSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -1863,7 +1900,7 @@ const providerAccountsCard = (
             </Card>
           )}
 
-          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showSpeechSection && emptyState}
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showProjectArchiveSection && !showSpeechSection && !showChatBehaviorSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6 pb-20">

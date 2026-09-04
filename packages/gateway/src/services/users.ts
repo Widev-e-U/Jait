@@ -15,6 +15,11 @@ export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
 
 export const REASONING_EFFORT_VALUES = new Set<ReasoningEffort>(["minimal", "low", "medium", "high"]);
 
+/** Composer action while the agent is streaming: steer the run, queue the message, or start a thread. */
+export type ChatStreamingAction = "steer" | "queue" | "thread";
+
+export const CHAT_STREAMING_ACTION_VALUES = new Set<ChatStreamingAction>(["steer", "queue", "thread"]);
+
 function normalizeSttProvider(value: string | null | undefined): SttProvider {
   if (value === "gpt") return "gpt";
   if (value === "elevenlabs") return "elevenlabs";
@@ -34,6 +39,7 @@ export interface UserSettingsRecord {
   apiKeys: Record<string, string>;
   disabledTools: string[];
   sttProvider: SttProvider;
+  chatStreamingAction: ChatStreamingAction;
   chatProvider: ChatProvider;
   jaitBackend: JaitBackend;
   recentModels: string[];
@@ -138,6 +144,7 @@ export class UserService {
       theme: "system",
       apiKeys: JSON.stringify({}),
       sttProvider: "whisper",
+      chatStreamingAction: "steer",
       projectPickerPath: null,
       projectPickerNodeId: null,
       updatedAt: now,
@@ -168,6 +175,7 @@ export class UserService {
         apiKeys: JSON.stringify({}),
         disabledTools: JSON.stringify([]),
         sttProvider: "whisper",
+        chatStreamingAction: "steer",
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: JSON.stringify([]),
@@ -183,6 +191,7 @@ export class UserService {
         apiKeys: {},
         disabledTools: [],
         sttProvider: "whisper",
+        chatStreamingAction: "steer",
         chatProvider: "jait",
         jaitBackend: "openai",
         recentModels: [],
@@ -199,6 +208,9 @@ export class UserService {
       apiKeys: parseApiKeys(row.apiKeys),
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
       sttProvider: normalizeSttProvider(typeof (row as any).sttProvider === "string" ? (row as any).sttProvider : null),
+      chatStreamingAction: CHAT_STREAMING_ACTION_VALUES.has((row as any).chatStreamingAction)
+        ? (row as any).chatStreamingAction
+        : "steer",
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
       jaitBackend: ((row as any).jaitBackend as JaitBackend) || "openai",
       recentModels: parseStringArray((row as any).recentModels ?? null),
@@ -217,6 +229,7 @@ export class UserService {
       apiKeys?: Record<string, string>;
       disabledTools?: string[];
       sttProvider?: SttProvider;
+      chatStreamingAction?: ChatStreamingAction;
       chatProvider?: ChatProvider;
       jaitBackend?: JaitBackend;
       recentModels?: string[];
@@ -231,6 +244,7 @@ export class UserService {
     const apiKeys = patch.apiKeys ?? existing.apiKeys;
     const disabledTools = patch.disabledTools ?? existing.disabledTools;
     const sttProvider = patch.sttProvider ?? existing.sttProvider;
+    const chatStreamingAction = patch.chatStreamingAction ?? existing.chatStreamingAction;
     const chatProvider = patch.chatProvider ?? existing.chatProvider;
     const jaitBackend = patch.jaitBackend ?? existing.jaitBackend;
     const recentModels = patch.recentModels ?? existing.recentModels;
@@ -254,6 +268,7 @@ export class UserService {
         apiKeys: JSON.stringify(apiKeys),
         disabledTools: JSON.stringify(disabledTools),
         sttProvider,
+        chatStreamingAction,
         chatProvider,
         jaitBackend,
         recentModels: JSON.stringify(recentModels),

@@ -75,6 +75,7 @@ export const userSettings = sqliteTable("user_settings", {
   apiKeys: text("api_keys"), // JSON object
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming' | 'gpt' | 'elevenlabs'
+  chatStreamingAction: text("chat_streaming_action").notNull().default("steer"), // 'steer' | 'queue' | 'thread'
   chatProvider: text("chat_provider").notNull().default("jait"),
   jaitBackend: text("jait_backend").notNull().default("openai"), // JaitBackend: 'openai' | 'openrouter' | 'ollama' | 'omniroute'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids

@@ -1617,4 +1617,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 064: User settings chat streaming action ────────────────────────
+  {
+    id: 64,
+    name: "user_settings_chat_streaming_action",
+    run(db) {
+      // Default action for the composer while the agent is streaming:
+      // 'steer' | 'queue' | 'thread' (user-configurable in Settings → General).
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN chat_streaming_action TEXT NOT NULL DEFAULT 'steer'`); } catch { /* exists */ }
+    },
+  },
+
 ];
