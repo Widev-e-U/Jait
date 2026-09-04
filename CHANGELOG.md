@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.819](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.819) — 2026-09-04
+- docs: goal skills concept proposal (/goal loop engineering) — 90526d10
+- chore(mobile): serve Capacitor Android content over https with mixed content allowed — e9e27d7e
+- refactor(web): unify backend state via useBackendState, drop legacy agent/voice UI, refresh chat composer — a5bf098c
+- feat(web): shared node capability labels in permissions gate and settings tab — 3846c9b9
+- feat(chat): per-user default streaming action setting (steer/queue/thread) — 08c2d1c5
+- feat(providers): report node-local install status and ACP availability — a7091f9c
+- feat(gateway): session.sql tool for safe read-only SQLite queries over chat data — 225b1833
+
 ## [v0.1.818](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.818) — 2026-09-03
 - feat(gateway): project.message reuses the caller's chat — assigns it to the project and runs the turn in it — 2b3e8aa7
 
