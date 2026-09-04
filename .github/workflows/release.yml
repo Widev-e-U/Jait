@@ -492,8 +492,456 @@ jobs:
           # Installs are slow (~5-10 min each) but cached on the self-hosted
           # runner's persistent ~/.cargo between releases.
           command -v cargo-xwin &>/dev/null || cargo install --locked cargo-xwin
-          command -v cargo-tauri &>/dev/null || cargo install --locked tauri-cli
-          rustup target list --installed | grep -q '^x86_64-pc-windows-msvc$' || rustup target add x86_64-pc-windows-msvc
+          # Pin tauri-cli: the v2 updater zips (*-setup.nsis.zip) need a recent
+          # CLI, and the persistent runner home may cache an older one that
+          # still signs the raw .exe (v1 path). Upgrade when older than pin.
+          TAURI_CLI_PIN=2.11.4
+          tauri_ver=$(cargo tauri --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ -z "$tauri_ver" ] || [ "$(printf '%s\n%s\n' "$tauri_ver" "$TAURI_CLI_PIN" | sort -V | head -1)" != "$TAURI_CLI_PIN" ]; then
+            cargo install --locked tauri-cli --version "$TAURI_CLI_PIN" --force
+          fi
+          echo "tauri-cli: $(cargo tauri --version)"
+          rustup target list --installed | grep -q '^x86_64-pc-windows-msvc
+
+          for tool in makensis llvm-rc cargo-xwin cargo-tauri; do
+            if ! command -v "$tool" &>/dev/null; then
+              echo "::error::$tool missing — install it on the runner."
+              exit 1
+            fi
+          done
+          echo "Tauri Windows toolchain OK"
+      - name: Build NSIS path-redirect shim
+        run: |
+          set -euo pipefail
+          # makensis resolves Stubs/Plugins/Include against /usr/share/nsis
+          # compiled into the binary (NSISDIR env is ignored), which does not
+          # exist on this root-less runner. The LD_PRELOAD shim
+          # (ci/libnsisredirect.c) transparently rewrites /usr/share/nsis/* to
+          # $NSIS_REAL_DIR (the userspace deb extraction); a rewritten access
+          # failing with ENOENT falls back to the original path. Skipped when
+          # only a system NSIS is present (its /usr/share/nsis tree works as
+          # compiled in).
+          NSIS_TREE="$HOME/.local/usr/share/nsis"
+          if [ ! -d "$NSIS_TREE/Stubs" ]; then
+            echo "no userspace NSIS tree at $NSIS_TREE; shim skipped (system NSIS)"
+            exit 0
+          fi
+          CC_BIN=$(command -v cc || command -v gcc || command -v clang || true)
+          if [ -z "$CC_BIN" ]; then
+            echo "::error::no C compiler (cc/gcc/clang) for the NSIS redirect shim"
+            exit 1
+          fi
+          SO="$RUNNER_TEMP/libnsisredirect.so"
+          "$CC_BIN" -shared -fPIC -O2 -Wall -Wextra -Werror \
+            -o "$SO" ci/libnsisredirect.c -ldl
+          # Only reached by the userspace install; persist for later steps
+          # (in-process exports do not survive across steps).
+          echo "NSIS_REAL_DIR=$NSIS_TREE" >> "$GITHUB_ENV"
+          echo "NSIS_LD_PRELOAD=$SO" >> "$GITHUB_ENV"
+          echo "NSIS redirect shim ready: $SO ($(wc -c < "$SO") bytes, root: $NSIS_TREE)"
+      - name: Build Tauri NSIS (Windows setup.exe)
+        working-directory: apps/desktop-tauri/src-tauri
+        env:
+          # Updater signing (minisign). TAURI_SIGNING_PRIVATE_KEY holds the
+          # base64 body of apps/desktop-tauri/.updater-keys/jait-updater.key;
+          # the key was generated with an empty password. `createUpdaterArtifacts`
+          # makes the bundler emit Jait-Tauri_*_x64-setup.nsis.zip + .sig here.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not configured (content of apps/desktop-tauri/.updater-keys/jait-updater.key)"
+            exit 1
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          # ring 0.17's C code takes `#include <stdalign.h>` when compiled with
+          # clang-cl (defines both _MSC_VER and __clang__), but the UCRT headers
+          # xwin downloads never shipped stdalign.h (MSVC treats alignas/alignof
+          # as keywords). Write a C11-compat shim into the xwin UCRT include
+          # dir; idempotent, cached on the persistent runner home.
+          XWIN_UCRT="$HOME/.cache/cargo-xwin/xwin/sdk/include/ucrt"
+          if [ ! -f "$XWIN_UCRT/stdalign.h" ]; then
+            test -d "$XWIN_UCRT" || { echo "::error::xwin ucrt dir missing: $XWIN_UCRT"; exit 1; }
+            cat > "$XWIN_UCRT/stdalign.h" <<'EOF'
+          #ifndef _STDALIGN_H
+          #define _STDALIGN_H
+          #ifndef __cplusplus
+          #define alignas _Alignas
+          #define alignof _Alignof
+          #endif
+          #define __alignas_is_defined 1
+          #define __alignof_is_defined 1
+          #endif /* _STDALIGN_H */
+          EOF
+            echo "wrote stdalign.h shim: $XWIN_UCRT/stdalign.h"
+          fi
+          # NSIS_LD_PRELOAD/NSIS_REAL_DIR are set by the shim step above when
+          # the userspace NSIS tree is in use; tauri-cli spawns makensis, which
+          # inherits LD_PRELOAD and gets its /usr/share/nsis paths redirected.
+          export LD_PRELOAD="${NSIS_LD_PRELOAD:-}"
+          export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
+          cargo tauri build --features shell,frontend --runner cargo-xwin \
+            --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Generate Tauri updater manifest (latest.json)
+        run: |
+          # The Tauri updater polls .../releases/latest/download/latest.json
+          # (static feed, mirrors what electron-updater gets from latest.yml).
+          # The sig is copied verbatim from the .nsis.zip.sig the bundler
+          # produced; the download URL points at the tagged release asset.
+          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          ZIP=$(ls "$NSIS_DIR"/*-setup.nsis.zip | head -n1)
+          SIG=$(ls "$NSIS_DIR"/*-setup.nsis.zip.sig | head -n1)
+          test -s "$ZIP" || { echo "::error::updater archive not found in $NSIS_DIR"; exit 1; }
+          test -s "$SIG" || { echo "::error::updater signature not found in $NSIS_DIR (createUpdaterArtifacts?)"; exit 1; }
+          VERSION="${{ env.tauri_release_version }}"
+          PUBKEY="dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RThDQzkwMDZGMjg4NDYKUldSR2lQSUdrTXpvdEhuWkVYRU5idGtMRXpDZy8weXY3OWsrRmdZSUk5cUxUdHlFRlVOUmR1dXkK"
+          jq -n --arg v "$VERSION" --arg pk "$PUBKEY" \
+                --arg sig "$(cat "$SIG")" \
+                --arg url "https://github.com/Widev-e-U/Jait/releases/download/v$VERSION/$(basename "$ZIP")" \
+                '{version: $v, notes: "Jait Tauri desktop", pubkey: $pk,
+                  platforms: {"windows-x86_64": {signature: $sig, url: $url}}}' \
+            > "$NSIS_DIR/latest.json"
+          cp -v "$ZIP" "$SIG" "$RELEASE_ASSET_DIR"/
+          echo "latest.json ->"; cat "$NSIS_DIR/latest.json"
+      - name: Stage Tauri release assets on runner
+        if: env.RELEASE_ASSET_MODE == 'runner'
+        run: |
+          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          cp -v "$NSIS_DIR"/*-setup.exe "$NSIS_DIR"/*-setup.nsis.zip \
+                "$NSIS_DIR"/*-setup.nsis.zip.sig "$NSIS_DIR/latest.json" \
+                "$RELEASE_ASSET_DIR"/
+      - name: Upload Tauri release assets to GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-tauri-release-assets
+          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip.sig
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
+
+  # ── Build macOS desktop app (skipped — no macOS runner available) ─
+  # To enable: add a macOS self-hosted runner or fix GitHub billing,
+  # then uncomment this job and add it back to the release 'needs'.
+  # desktop-macos:
+  #   name: Desktop Build (macOS)
+  #   runs-on: macos-latest
+  #   needs: [auto-tag]
+  #   if: |
+  #     always() && (
+  #       needs.auto-tag.outputs.tagged == 'true' ||
+  #       needs.auto-tag.outputs.changed == 'true' ||
+  #       startsWith(github.ref, 'refs/tags/v') ||
+  #       github.event_name == 'workflow_dispatch'
+  #     )
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: oven-sh/setup-bun@v2
+  #     - run: bun install --frozen-lockfile
+  #     - run: bun run build
+  #     - name: Build Electron (macOS)
+  #       working-directory: apps/desktop
+  #       run: bun run build:mac
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: desktop-macos
+  #         path: |
+  #           apps/desktop/release/*.dmg
+
+  # ── Build Android APK ──────────────────────────────────────────────
+  android:
+    name: Android APK
+    runs-on: [self-hosted, linux]
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.mobile_changed == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+      && (
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        needs.auto-tag.outputs.changed == 'true'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install Android SDK
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "Android SDK already installed — skipping download"
+          else
+            rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            cd /tmp
+            curl -fsSL -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -qo cmdline-tools.zip
+            mv cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Configure Firebase Android client
+        env:
+          FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          test -n "$FIREBASE_ANDROID_CONFIG_BASE64" || { echo "::error::FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 is not configured"; exit 1; }
+          printf "%s" "$FIREBASE_ANDROID_CONFIG_BASE64" | base64 --decode > apps/mobile/android/app/google-services.json
+      - name: Capacitor sync
+        working-directory: apps/mobile
+        run: bunx cap sync android
+      - name: Set Android SDK path
+        run: echo "sdk.dir=$ANDROID_HOME" > apps/mobile/android/local.properties
+      - name: Prepare Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "::error::ANDROID_KEYSTORE_BASE64 is not configured"; exit 1; }
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || { echo "::error::ANDROID_KEYSTORE_PASSWORD is not configured"; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "::error::ANDROID_KEY_ALIAS is not configured"; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "::error::ANDROID_KEY_PASSWORD is not configured"; exit 1; }
+          KEYSTORE_PATH="$RUNNER_TEMP/jait-release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "JAIT_ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Build signed APK
+        working-directory: apps/mobile/android
+        env:
+          JAIT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JAIT_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          JAIT_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: chmod +x gradlew && ./gradlew assembleRelease
+      - name: Verify and name Android APK
+        run: |
+          APK_PATH="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          VERSION=$(jq -r '.version' packages/gateway/package.json)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+          mkdir -p apps/mobile/android/app/build/outputs/release-assets
+          cp "$APK_PATH" "apps/mobile/android/app/build/outputs/release-assets/Jait-$VERSION-android.apk"
+      - name: Verify and name Wear APK
+        run: |
+          APK_PATH="apps/mobile/android/wear/build/outputs/apk/release/wear-release.apk"
+          VERSION=$(jq -r '.version' packages/gateway/package.json)
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+          cp "$APK_PATH" "apps/mobile/android/app/build/outputs/release-assets/Jait-$VERSION-wear.apk"
+      - name: Stage Android release assets on runner
+        if: env.RELEASE_ASSET_MODE == 'runner'
+        run: cp -v apps/mobile/android/app/build/outputs/release-assets/*.apk "$RELEASE_ASSET_DIR"/
+      - name: Upload Android release assets to GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-assets
+          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: apps/mobile/android/app/build/outputs/release-assets/*.apk
+      - name: Remove Android signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/jait-release.keystore"
+
+  # ── Publish npm packages (in dependency order) ─────────────────────
+  npm-publish:
+    name: Publish npm packages
+    runs-on: [self-hosted, linux]
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    environment: npm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+
+      # 1. Publish @jait/shared (no workspace deps)
+      - name: Publish @jait/shared
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.shared_changed == 'true'
+        working-directory: packages/shared
+        run: |
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
+              echo "⏭ Already published — skipping"
+            else
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
+            fi
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 2. Publish @jait/screen-share (depends on shared)
+      - name: Resolve workspace deps (screen-share)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
+        working-directory: packages/screen-share
+        run: |
+          VERSION=$(jq -r '.version' ../shared/package.json)
+          jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
+      - name: Publish @jait/screen-share
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
+        working-directory: packages/screen-share
+        run: |
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
+              echo "⏭ Already published — skipping"
+            else
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
+            fi
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 3. Bundle web frontend into gateway package (no separate @jait/web publish)
+      - name: Bundle web dist into gateway
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        run: |
+          rm -rf packages/gateway/web-dist
+          cp -r apps/web/dist packages/gateway/web-dist
+          echo "✅ Bundled web frontend into packages/gateway/web-dist"
+
+      # 4. Publish @jait/gateway (depends on shared + screen-share, web bundled inside)
+      - name: Resolve workspace deps (gateway)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        working-directory: packages/gateway
+        run: |
+          SHARED_V=$(jq -r '.version' ../shared/package.json)
+          SCREEN_V=$(jq -r '.version' ../screen-share/package.json)
+          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
+            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | del(.dependencies["@jait/web"])' \
+            package.json > tmp.json && mv tmp.json package.json
+      - name: Publish @jait/gateway
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        working-directory: packages/gateway
+        run: |
+          # A 409 here means the version was already published (e.g. the tag
+          # push run beat this main-push run to it) — skip, don't fail.
+          # npm >=10 wording: "Cannot publish over previously staged version".
+          npm publish --access public 2>&1 | tee "/tmp/npm-out-${{ github.run_id }}.log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "/tmp/npm-out-${{ github.run_id }}.log"; then
+              echo "⏭ Already published — skipping"
+            else
+              cat "/tmp/npm-out-${{ github.run_id }}.log"; exit $status
+            fi
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── Create GitHub Release with all assets ──────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: [self-hosted, linux]
+    needs: [auto-tag, npm-publish, desktop, desktop-tauri, android]
+    if: |
+      always() && 
+      needs.npm-publish.result == 'success' && 
+      contains(fromJSON('["success","skipped"]'), needs.desktop.result) && 
+      contains(fromJSON('["success","skipped"]'), needs.desktop-tauri.result) && 
+      contains(fromJSON('["success","skipped"]'), needs.android.result) && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
+      - name: Download GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.RELEASE_ASSET_DIR }}
+          merge-multiple: true
+      - name: Verify staged release assets
+        if: env.RELEASE_ASSET_MODE == 'runner'
+        run: |
+          test -d "$RELEASE_ASSET_DIR"
+          ls -lah "$RELEASE_ASSET_DIR"
+      - name: Verify downloaded release assets
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        run: ls -lah "$RELEASE_ASSET_DIR"
+
+      - name: Extract version
+        id: version
+        run: |
+          # Prefer auto-tag output, fall back to tag ref or package.json
+          if [ -n "${{ needs.auto-tag.outputs.version }}" ]; then
+            echo "version=${{ needs.auto-tag.outputs.version }}" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(jq -r '.version' packages/gateway/package.json)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Delete existing release and recreate
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          echo "Cleaning up release $TAG"
+          gh release delete "$TAG" --yes --repo "${{ github.repository }}" 2>&1 || echo "No existing release for $TAG — nothing to delete"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Jait v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: ${{ env.RELEASE_ASSET_DIR }}/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Self-hosted runner sits behind a TLS-intercepting proxy; Node does
+          # not trust the OS CA store by default. Tell it to use the system
+          # store (same roots gh and the shell already trust) so asset uploads
+          # to api.github.com don't fail with "self-signed certificate".
+          NODE_OPTIONS: --use-system-ca
+
+      - name: Clean up staged release assets
+        if: always()
+        run: rm -rf "$RELEASE_ASSET_DIR" || rustup target add x86_64-pc-windows-msvc
 
           for tool in makensis llvm-rc cargo-xwin cargo-tauri; do
             if ! command -v "$tool" &>/dev/null; then
