@@ -5,9 +5,19 @@
  *  - listRunningOsSandboxes reports the real published ports so the os.*
  *    tools / os.sandbox list can connect to the correct endpoints.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { existsSync } from "node:fs";
+import { describe, expect, it, vi, beforeEach, beforeAll } from "vitest";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SandboxManager } from "./sandbox-manager.js";
+
+// Windows sandbox VM disks are created under /tmp/jait-windows-sandbox by
+// default. On shared CI runners that directory may exist root-owned, which
+// would make mkdirSync fail with EACCES, so point the storage root at a
+// per-run temp directory instead.
+beforeAll(() => {
+  process.env["JAIT_WINDOWS_SANDBOX_STORAGE"] = mkdtempSync(join(tmpdir(), "jait-windows-sandbox-test-"));
+});
 
 // The Windows sandbox start path requires /dev/kvm. Make it appear present so
 // these tests exercise the docker command building, not the host capability.
