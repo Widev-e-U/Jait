@@ -52,7 +52,13 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_ASSET_DIR: ${{ runner.temp }}/jait-release-assets/${{ github.run_id }}
+  # Unique top-level dir per run. The previous shared parent
+  # (/tmp/jait-release-assets) was created root-owned on the shared
+  # self-hosted runner, so non-root jobs failed at `mkdir -p`.
+  # /tmp itself is world-writable, and ${RUN_ID} avoids collisions.
+  # NOTE: cannot use ${{ runner.temp }} here — the runner context is not
+  # available in workflow-level env and breaks workflow parsing.
+  RELEASE_ASSET_DIR: /tmp/jait-release-assets-run-${{ github.run_id }}
   RELEASE_ASSET_MODE: ${{ inputs.release_asset_mode || 'runner' }}
   RELEASE_ASSET_RETENTION_DAYS: 1
 
