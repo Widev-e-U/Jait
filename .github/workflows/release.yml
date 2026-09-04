@@ -52,7 +52,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_ASSET_DIR: /tmp/jait-release-assets/${{ github.run_id }}
+  RELEASE_ASSET_DIR: ${{ runner.temp }}/jait-release-assets/${{ github.run_id }}
   RELEASE_ASSET_MODE: ${{ inputs.release_asset_mode || 'runner' }}
   RELEASE_ASSET_RETENTION_DAYS: 1
 
