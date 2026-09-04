@@ -84,6 +84,32 @@ export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "agent",
 ];
 
+/** Human-readable label per capability (shared by the settings tab and the onboarding gate). */
+export const NODE_CAPABILITY_LABELS: Record<NodeCapability, string> = {
+  terminal: "Terminal",
+  filesystem: "Filesystem",
+  screen: "Screen",
+  input: "Computer input",
+  voice: "Voice",
+  browser: "Browser",
+  camera: "Camera",
+  network: "Network",
+  agent: "Agent",
+};
+
+/** One-line description per capability (shared by the settings tab and the onboarding gate). */
+export const NODE_CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
+  terminal: "Execute shell commands on this node",
+  filesystem: "Read and write files on this node",
+  screen: "Share this node’s screen",
+  input: "Control the mouse and keyboard on this node",
+  voice: "Voice / speech I/O on this node",
+  browser: "Drive a browser on this node",
+  camera: "Access this node’s camera",
+  network: "Use this node’s network / HTTP",
+  agent: "Run the agent / CLI sessions on this node",
+};
+
 export interface NodePermissionRecord {
   nodeId: string;
   capability: NodeCapability;

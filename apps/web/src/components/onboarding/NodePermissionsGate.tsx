@@ -3,33 +3,12 @@ import { AlertCircle, Loader2, Save, ShieldCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Card } from '@/components/ui/card'
-import { NODE_CAPABILITIES, type NodeCapability, type NodeWithPermissions } from '@jait/shared'
+import { NODE_CAPABILITIES, NODE_CAPABILITY_LABELS, NODE_CAPABILITY_DESCRIPTIONS, type NodeCapability, type NodeWithPermissions } from '@jait/shared'
 import { useNodePermissions } from '@/hooks/useNodePermissions'
 import { generateDeviceId } from '@/lib/device-id'
 
-const CAPABILITY_LABELS: Record<NodeCapability, string> = {
-  terminal: 'Terminal',
-  filesystem: 'Filesystem',
-  screen: 'Screen',
-  input: 'Computer input',
-  voice: 'Voice',
-  browser: 'Browser',
-  camera: 'Camera',
-  network: 'Network',
-  agent: 'Agent',
-}
-
-const CAPABILITY_DESCRIPTIONS: Record<NodeCapability, string> = {
-  terminal: 'Execute shell commands on this node',
-  filesystem: 'Read and write files on this node',
-  screen: 'Share this node\u2019s screen',
-  input: 'Control the mouse and keyboard on this node',
-  voice: 'Voice / speech I/O on this node',
-  browser: 'Drive a browser on this node',
-  camera: 'Access this node\u2019s camera',
-  network: 'Use this node\u2019s network / HTTP',
-  agent: 'Run the agent / CLI sessions on this node',
-}
+const CAPABILITY_LABELS = NODE_CAPABILITY_LABELS
+const CAPABILITY_DESCRIPTIONS = NODE_CAPABILITY_DESCRIPTIONS
 
 const SETTINGS_KEY = 'permissionsSetupDone'
 

@@ -51,6 +51,7 @@ export type {
   NodeWithPermissions,
 } from "./node.js";
 export { NODE_PROTOCOL_VERSION, NODE_CAPABILITIES } from "./node.js";
+export { NODE_CAPABILITY_LABELS, NODE_CAPABILITY_DESCRIPTIONS } from "./node.js";
 
 export type {
   ComputerMouseButton,
