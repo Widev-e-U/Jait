@@ -133,26 +133,28 @@ export function scopeProviders({
         )
     : annotated.filter((provider) => provider.nodeId === GATEWAY_NODE_ID)
 
-  const entries = visible.map((provider): ScopedProviderEntry => {
-    if (isGatewayNativeProvider(provider)) {
-      return { ...provider, isAvailable: true }
-    }
-    if (scope && scopeNodeOffline) {
+  const entries = visible
+    .filter((provider) => isGatewayNativeProvider(provider) || provider.installed !== false)
+    .map((provider): ScopedProviderEntry => {
+      if (isGatewayNativeProvider(provider)) {
+        return { ...provider, isAvailable: true }
+      }
+      if (scope && scopeNodeOffline) {
+        return {
+          ...provider,
+          isAvailable: false,
+          reason: `${resolvedScopeLabel ?? 'This device'} is offline`,
+        }
+      }
+      if (loading && !provider.available) {
+        return { ...provider, isAvailable: false, reason: 'Checking device…' }
+      }
       return {
         ...provider,
-        isAvailable: false,
-        reason: `${resolvedScopeLabel ?? 'This device'} is offline`,
+        isAvailable: provider.available,
+        reason: provider.available ? undefined : provider.unavailableReason ?? 'Unavailable',
       }
-    }
-    if (loading && !provider.available) {
-      return { ...provider, isAvailable: false, reason: 'Checking device…' }
-    }
-    return {
-      ...provider,
-      isAvailable: provider.available,
-      reason: provider.available ? undefined : provider.unavailableReason ?? 'Unavailable',
-    }
-  })
+    })
 
   return {
     entries,

@@ -114,6 +114,43 @@ describe('scopeProviders', () => {
     expect(account?.reason).toBe('Login required')
   })
 
+  it('hides provider accounts that are not installed on the selected node', () => {
+    const { entries } = scopeProviders({
+      providers: [
+        jaitProvider,
+        {
+          ...windowsAccount,
+          installed: false,
+          available: false,
+          unavailableReason: 'Not installed on Windows workstation',
+        },
+      ],
+      scopeNodeId: 'windows-node',
+      connectedNodeIds: ['windows-node'],
+    })
+
+    expect(entries.map((entry) => entry.id)).toEqual(['jait'])
+  })
+
+  it('keeps installed provider accounts visible when login is required', () => {
+    const { entries } = scopeProviders({
+      providers: [
+        jaitProvider,
+        {
+          ...windowsAccount,
+          installed: true,
+          available: false,
+          unavailableReason: 'Login required on Windows workstation',
+        },
+      ],
+      scopeNodeId: 'windows-node',
+      connectedNodeIds: ['windows-node'],
+    })
+
+    expect(entries.map((entry) => entry.id)).toEqual(['jait', windowsAccount.id])
+    expect(entries[1]?.isAvailable).toBe(false)
+  })
+
   it('falls back to Jait before providers have loaded', () => {
     const { entries } = scopeProviders({ providers: [], loading: true })
     expect(entries.map((entry) => entry.id)).toEqual(['jait'])

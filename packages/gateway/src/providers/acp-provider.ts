@@ -165,6 +165,8 @@ export interface AcpProviderConfig {
   name: string;
   description: string;
   command: string;
+  /** Optional host executable required by an ACP wrapper launched through npx. */
+  availabilityCommand?: string;
   args?: string[];
   env?: Record<string, string>;
   modes?: RuntimeMode[];
@@ -291,7 +293,7 @@ export class AcpProvider implements CliProviderAdapter {
   readonly executionNodeId?: string;
   readonly info: ProviderInfo;
 
-  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId" | "registry">> & { env?: Record<string, string>; registry?: AcpProviderRegistryMetadata };
+  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId" | "registry" | "availabilityCommand">> & { env?: Record<string, string>; registry?: AcpProviderRegistryMetadata; availabilityCommand?: string };
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
@@ -348,11 +350,12 @@ export class AcpProvider implements CliProviderAdapter {
       this.info.unavailableReason = `Available only on device ${this.executionNodeId}`;
       return false;
     }
-    const command = this.config.command;
+    const command = this.config.availabilityCommand ?? this.config.command;
     // Async probe so we never block the event loop (this runs for every
     // provider on each /api/providers refresh). A non-zero exit still counts
-    // as "available" — only a failure to spawn the binary (ENOENT) means it's
-    // missing. npx is always treated as available (it resolves on demand).
+    // as "available" — only a failure to spawn the required binary (ENOENT)
+    // means it's missing. Registry packages resolve on demand through npx,
+    // while wrappers can name the host CLI they require.
     try {
       await execFileAsync(command, ["--version"], {
         timeout: AVAILABILITY_PROBE_TIMEOUT_MS,
@@ -1673,36 +1676,12 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
     },
     {
-      id: "cursor",
-      name: "Cursor",
-      description: "Cursor Agent via Agent Client Protocol",
+      id: "muse",
+      name: "Muse Code",
+      description: "Meta Muse Code via Agent Client Protocol",
       command: "npx",
-      args: ["-y", "@blowmage/cursor-agent-acp"],
-      auth: false,
-    },
-    {
-      id: "pi",
-      name: "Pi",
-      description: "Pi coding agent via Agent Client Protocol",
-      command: "npx",
-      args: ["-y", "pi-acp"],
-      auth: false,
-    },
-    {
-      id: "pi-gemini",
-      name: "Pi Gemini",
-      description: "Gemini-backed Pi ACP provider",
-      command: "npx",
-      args: ["-y", "pi-gemini-acp"],
-      auth: false,
-    },
-    {
-      id: "deepagents",
-      name: "DeepAgents",
-      description: "DeepAgents via Agent Client Protocol",
-      command: "npx",
-      args: ["-y", "deepagents-acp"],
-      auth: false,
+      availabilityCommand: "muse",
+      args: ["-y", "@bex-co/muse-code-acp"],
     },
   ];
 

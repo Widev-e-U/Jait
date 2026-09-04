@@ -20,6 +20,7 @@ export interface ProviderSnapshot {
   name: string;
   description: string;
   available: boolean;
+  installed: boolean;
   unavailableReason?: string;
   modes: RuntimeMode[];
   auth?: ProviderAuthInfo;
@@ -83,7 +84,7 @@ export class ProviderSnapshotCache {
     const providers = this.registry.list();
     return Promise.all(
       providers.map(async (p) => {
-        await p.checkAvailability().catch(() => false);
+        const installed = await p.checkAvailability().catch(() => false);
         const auth = await p.getAuthStatus?.().catch(() =>
           p.info.auth
             ? { ...p.info.auth, authenticated: null, detail: "Failed to check provider auth status." }
@@ -95,6 +96,7 @@ export class ProviderSnapshotCache {
           name: p.info.name,
           description: p.info.description,
           available: p.info.available,
+          installed,
           unavailableReason: p.info.unavailableReason,
           modes: p.info.modes,
           auth: auth ?? p.info.auth,

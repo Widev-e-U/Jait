@@ -234,6 +234,7 @@ export function registerProviderRoutes(
             providerType: status.providerType,
             name: status.name,
             description: status.detail ?? `Runs on ${node.name}`,
+            installed: status.installed,
             available: status.installed && status.authenticated === true,
             unavailableReason: !status.installed
               ? `Not installed on ${node.name}`

@@ -68,6 +68,8 @@ export interface ProviderInfo {
   providerType?: ProviderId;
   name: string;
   description: string;
+  /** Whether the provider runtime exists on its owning node. */
+  installed?: boolean;
   available: boolean;
   unavailableReason?: string;
   modes: RuntimeMode[];

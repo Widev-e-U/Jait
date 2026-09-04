@@ -134,6 +134,7 @@ describe('provider listing', () => {
     ])
     const windows = providers.find((provider: { id: string }) => provider.id === 'codex-windows')
     expect(windows.nodeName).toBe('Windows workstation')
+    expect(windows.installed).toBe(true)
     expect(windows.available).toBe(true)
 
     // Grouped view stays available for the settings screen.
@@ -154,6 +155,7 @@ describe('provider listing', () => {
     const response = await app.inject({ method: 'GET', url: '/api/providers', headers })
     const windows = response.json().providers.find((provider: { id: string }) => provider.id === 'codex-windows')
 
+    expect(windows.installed).toBe(true)
     expect(windows.available).toBe(false)
     expect(windows.unavailableReason).toContain('Login required')
     expect(windows.auth.authenticated).toBe(false)

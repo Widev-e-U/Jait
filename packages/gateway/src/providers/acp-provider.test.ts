@@ -915,12 +915,38 @@ describe("omnirouteAcpEnv", () => {
   });
 });
 
+describe("AcpProvider availability", () => {
+  it("checks the host CLI required by an npx ACP wrapper", async () => {
+    const provider = new AcpProvider({
+      id: "wrapped-provider",
+      name: "Wrapped provider",
+      description: "ACP wrapper around a host CLI",
+      command: process.execPath,
+      availabilityCommand: "missing-jait-acp-host-cli",
+    });
+
+    await expect(provider.checkAvailability()).resolves.toBe(false);
+    expect(provider.info.unavailableReason).toContain("missing-jait-acp-host-cli");
+  });
+});
+
 describe("AcpProvider auth", () => {
   it("keeps the Jait core MCP namespace directly callable in Codex code mode", () => {
     const codex = loadAcpProviderConfigs().find((config) => config.id === "codex");
     const config = JSON.parse(codex?.env?.CODEX_CONFIG ?? "{}");
 
     expect(config.features?.code_mode?.direct_only_tool_namespaces).toContain("mcp__jait_core");
+  });
+
+  it("keeps bundled ACP agents account-backed and includes Muse Code", () => {
+    const providers = loadAcpProviderConfigs();
+
+    expect(providers.some((provider) => provider.auth === false)).toBe(false);
+    expect(providers.find((provider) => provider.id === "muse")).toMatchObject({
+      command: "npx",
+      availabilityCommand: "muse",
+      args: ["-y", "@bex-co/muse-code-acp"],
+    });
   });
 
   it("exposes ACP-managed login for default ACP providers", () => {
