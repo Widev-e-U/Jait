@@ -492,9 +492,10 @@ jobs:
           # Installs are slow (~5-10 min each) but cached on the self-hosted
           # runner's persistent ~/.cargo between releases.
           command -v cargo-xwin &>/dev/null || cargo install --locked cargo-xwin
-          # Pin tauri-cli: the v2 updater zips (*-setup.nsis.zip) need a recent
-          # CLI, and the persistent runner home may cache an older one that
-          # still signs the raw .exe (v1 path). Upgrade when older than pin.
+          # Pin tauri-cli for reproducible bundler/updater behavior (the
+          # persistent runner home may cache an older CLI indefinitely).
+          # v2 updater mode (createUpdaterArtifacts: true) signs the raw
+          # NSIS installer in place; no nsis.zip is produced on Windows.
           TAURI_CLI_PIN=2.11.4
           tauri_ver=$(cargo tauri --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
           if [ -z "$tauri_ver" ] || [ "$(printf '%s\n%s\n' "$tauri_ver" "$TAURI_CLI_PIN" | sort -V | head -1)" != "$TAURI_CLI_PIN" ]; then
@@ -545,7 +546,8 @@ jobs:
           # Updater signing (minisign). TAURI_SIGNING_PRIVATE_KEY holds the
           # base64 body of apps/desktop-tauri/.updater-keys/jait-updater.key;
           # the key was generated with an empty password. `createUpdaterArtifacts`
-          # makes the bundler emit Jait-Tauri_*_x64-setup.nsis.zip + .sig here.
+          # (v2 updater mode) makes the bundler sign the NSIS installer in
+          # place: Jait-Tauri_*_x64-setup.exe + Jait-Tauri_*_x64-setup.exe.sig.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
@@ -586,29 +588,31 @@ jobs:
         run: |
           # The Tauri updater polls .../releases/latest/download/latest.json
           # (static feed, mirrors what electron-updater gets from latest.yml).
-          # The sig is copied verbatim from the .nsis.zip.sig the bundler
-          # produced; the download URL points at the tagged release asset.
+          # With createUpdaterArtifacts: true (v2 updater mode) the bundler
+          # signs the NSIS installer in place: *-setup.exe + *-setup.exe.sig.
+          # The sig is copied verbatim from that .exe.sig; the download URL
+          # points at the tagged release asset.
           NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
-          ZIP=$(ls "$NSIS_DIR"/*-setup.nsis.zip | head -n1)
-          SIG=$(ls "$NSIS_DIR"/*-setup.nsis.zip.sig | head -n1)
-          test -s "$ZIP" || { echo "::error::updater archive not found in $NSIS_DIR"; exit 1; }
+          EXE=$(ls "$NSIS_DIR"/*-setup.exe | head -n1)
+          SIG=$(ls "$NSIS_DIR"/*-setup.exe.sig | head -n1)
+          test -s "$EXE" || { echo "::error::updater installer not found in $NSIS_DIR"; exit 1; }
           test -s "$SIG" || { echo "::error::updater signature not found in $NSIS_DIR (createUpdaterArtifacts?)"; exit 1; }
           VERSION="${{ env.tauri_release_version }}"
           PUBKEY="dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RThDQzkwMDZGMjg4NDYKUldSR2lQSUdrTXpvdEhuWkVYRU5idGtMRXpDZy8weXY3OWsrRmdZSUk5cUxUdHlFRlVOUmR1dXkK"
           jq -n --arg v "$VERSION" --arg pk "$PUBKEY" \
                 --arg sig "$(cat "$SIG")" \
-                --arg url "https://github.com/Widev-e-U/Jait/releases/download/v$VERSION/$(basename "$ZIP")" \
+                --arg url "https://github.com/Widev-e-U/Jait/releases/download/v$VERSION/$(basename "$EXE")" \
                 '{version: $v, notes: "Jait Tauri desktop", pubkey: $pk,
                   platforms: {"windows-x86_64": {signature: $sig, url: $url}}}' \
             > "$NSIS_DIR/latest.json"
-          cp -v "$ZIP" "$SIG" "$RELEASE_ASSET_DIR"/
+          cp -v "$EXE" "$SIG" "$RELEASE_ASSET_DIR"/
           echo "latest.json ->"; cat "$NSIS_DIR/latest.json"
       - name: Stage Tauri release assets on runner
         if: env.RELEASE_ASSET_MODE == 'runner'
         run: |
           NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
-          cp -v "$NSIS_DIR"/*-setup.exe "$NSIS_DIR"/*-setup.nsis.zip \
-                "$NSIS_DIR"/*-setup.nsis.zip.sig "$NSIS_DIR/latest.json" \
+          cp -v "$NSIS_DIR"/*-setup.exe "$NSIS_DIR"/*-setup.exe.sig \
+                "$NSIS_DIR/latest.json" \
                 "$RELEASE_ASSET_DIR"/
       - name: Upload Tauri release assets to GitHub Artifacts
         if: env.RELEASE_ASSET_MODE == 'github-artifacts'
@@ -619,8 +623,7 @@ jobs:
           if-no-files-found: error
           path: |
             apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip
-            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip.sig
+            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
             apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
 
   # ── Build macOS desktop app (skipped — no macOS runner available) ─
