@@ -62,6 +62,12 @@ public class JaitMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage message) {
         String type = message.getData().get("type");
+        if ("chat.completed".equals(type)) {
+            String id = message.getData().get("id");
+            if (id != null) ChatNotifications.show(this, id,
+                message.getData().get("title"), message.getData().get("body"));
+            return;
+        }
         if ("alarm.schedule".equals(type)) {
             scheduleAlarm(message);
             return;

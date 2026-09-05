@@ -475,11 +475,15 @@ export function useUserQuestionPrompt({
       getPushToken?: () => Promise<{ token: string }>
       configurePush?: (options: { gatewayUrl: string; authToken: string; deviceId: string }) => Promise<unknown>
     } } } | undefined)?.Plugins?.AgentOverlay
-    if (!overlay?.getPushToken) return
-    void Promise.resolve(overlay.requestPermissions?.()).then(() => overlay.getPushToken!()).then(async ({ token: pushToken }) => {
+    if (!overlay) return
+    const deviceId = generateDeviceId()
+    // Watch sync and answers need these credentials even without Firebase.
+    void Promise.resolve(overlay.configurePush?.({ gatewayUrl: API_URL, authToken: token, deviceId }))
+      .then(() => overlay.requestPermissions?.())
+      .then(() => overlay.getPushToken?.())
+      .then(async (result) => {
+      const pushToken = result?.token
       if (!pushToken) return
-      const deviceId = generateDeviceId()
-      await overlay.configurePush?.({ gatewayUrl: API_URL, authToken: token, deviceId })
       await fetch(`${API_URL}/api/mobile/devices/register`, {
         method: 'POST',
         headers: authHeaders(true),

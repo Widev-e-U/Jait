@@ -12,6 +12,9 @@ final class WearSnapshotStore {
     private static final String PREFS = "jait-wear-snapshot";
     private static final String KEY_SNAPSHOT = "snapshot";
 
+    /** Sender role of a transcript message ("user" vs agent/assistant). */
+    static final String ROLE_USER = "user";
+
     static final class Message {
         final String role;
         final String content;

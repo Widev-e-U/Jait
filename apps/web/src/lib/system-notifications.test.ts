@@ -74,6 +74,15 @@ describe('normalizeSystemNotification', () => {
     vi.unstubAllGlobals()
   })
 
+  it('uses the installed Android bridge when LocalNotifications is absent', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', {
+      Capacitor: { Plugins: { AgentOverlay: { notify } } },
+    })
+    await triggerSystemNotification({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
+    expect(notify).toHaveBeenCalledWith({ id: 'chat-complete:session:1', title: 'Chat finished', body: 'Done' })
+  })
+
   it('drops notifications with no visible title or body', () => {
     expect(normalizeSystemNotification({
       id: 'notif-1',

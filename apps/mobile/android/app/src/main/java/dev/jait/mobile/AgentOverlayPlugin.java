@@ -173,11 +173,22 @@ public class AgentOverlayPlugin extends Plugin {
             .putString("authToken", authToken)
             .putString("deviceId", deviceId)
             .apply();
+        PhoneWearListenerService.pushSnapshot(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void notify(PluginCall call) {
+        String id = call.getString("id", "");
+        if (id.isEmpty()) { call.reject("Notification id is required"); return; }
+        ChatNotifications.show(getContext(), id, call.getString("title", "Jait"),
+            call.getString("body", ""));
         call.resolve();
     }
 
     @PluginMethod
     public void getPushToken(PluginCall call) {
+        try {
         FirebaseMessaging.getInstance().getToken()
             .addOnSuccessListener(token -> {
                 JSObject result = new JSObject();
@@ -185,6 +196,9 @@ public class AgentOverlayPlugin extends Plugin {
                 call.resolve(result);
             })
             .addOnFailureListener(error -> call.reject("Unable to obtain Firebase push token", error));
+        } catch (IllegalStateException error) {
+            call.reject("Firebase is not configured for this build", error);
+        }
     }
 
     @PluginMethod

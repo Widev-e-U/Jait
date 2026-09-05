@@ -152,7 +152,7 @@ final class WearPromptView {
             empty.setOrientation(LinearLayout.VERTICAL);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(14), dp(34), dp(14), dp(34));
-            empty.setBackground(rounded(theme.surface(), 18, theme.border()));
+            empty.setBackground(rounded(theme.surface(), 18, Color.TRANSPARENT));
 
             TextView emptyTitle = text("All quiet", 15, theme.primary(), true);
             emptyTitle.setGravity(Gravity.CENTER);
@@ -195,7 +195,7 @@ final class WearPromptView {
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackground(rounded(theme.surface(), 14, theme.border()));
+        card.setBackground(rounded(theme.surface(), 14, Color.TRANSPARENT));
 
         LinearLayout metadata = new LinearLayout(context);
         metadata.setOrientation(LinearLayout.HORIZONTAL);
@@ -307,8 +307,8 @@ final class WearPromptView {
 
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(8), dp(8), dp(8), dp(8));
-        card.setBackground(rounded(theme.surface(), 10, theme.borderActive()));
+        card.setPadding(dp(10), dp(10), dp(10), dp(10));
+        card.setBackground(rounded(theme.surface(), 10, Color.TRANSPARENT));
 
         TextView questionText = text(question.optString("question", ""), 12, theme.primary(), false);
         questionText.setLineSpacing(0, 1.1f);
@@ -345,8 +345,8 @@ final class WearPromptView {
             freeText.setTextColor(theme.primary());
             freeText.setTextSize(12);
             freeText.setMinLines(1);
-            freeText.setPadding(dp(8), dp(6), dp(8), dp(6));
-            freeText.setBackground(rounded(theme.background(), 8, theme.borderActive()));
+            freeText.setPadding(dp(10), dp(8), dp(10), dp(8));
+            freeText.setBackground(rounded(theme.surface(), 8, Color.TRANSPARENT));
             card.addView(freeText, layoutMatch(0, 6, 0, 0));
             freeTextInputs.put(questionId, freeText);
         }

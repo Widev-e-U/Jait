@@ -121,6 +121,29 @@ export class MobilePushService {
     )));
   }
 
+  /**
+   * Tell the chat owner's devices that an agent turn finished. Best effort:
+   * one stale registration failing must not suppress the toast on healthy
+   * devices, and devices owned by other users never receive it.
+   */
+  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string }): Promise<number> {
+    if (!this.serviceAccount) return 0;
+    const targets = this.list(userId);
+    await Promise.all(targets.map(async (registration) => {
+      try {
+        await this.sendData(registration, {
+          type: "chat.completed",
+          id: notification.id,
+          title: notification.title,
+          body: notification.body,
+        }, "3600s");
+      } catch (error) {
+        console.warn("[mobile-push] chat completion push failed for", registration.deviceId, error);
+      }
+    }));
+    return targets.length;
+  }
+
   private async sendData(
     registration: PushRegistration,
     data: Record<string, string>,

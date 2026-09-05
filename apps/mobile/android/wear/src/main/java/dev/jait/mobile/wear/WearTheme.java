@@ -5,8 +5,9 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 
 /**
- * shadcn/ui token palette for the watch. Values mirror apps/web/src/index.css exactly, so the
- * same dark (blue-tinted slate) and light (soft gray-blue) ramp renders on the wrist.
+ * Jait token palette for the watch. Mirrors apps/web/src/index.css, tuned for OLED wrist
+ * displays: dark mode goes near-black (darker than the web shell) and cards are a barely-lifted
+ * fill — the watch UI deliberately renders without hairline borders.
  */
 final class WearTheme {
     private static final String PREFS = "jait-wear-theme";
@@ -28,24 +29,24 @@ final class WearTheme {
             .apply();
     }
 
-    /** --background (page + notification background). */
+    /** --background (page + notification background); OLED-dark, deeper than the web shell. */
     static int background(Context context) {
-        return isDark(context) ? Color.rgb(13, 17, 23) : Color.rgb(222, 229, 237);
+        return isDark(context) ? Color.rgb(6, 7, 9) : Color.rgb(222, 229, 237);
     }
 
     /** --foreground (primary text, icon strokes). */
     static int foreground(Context context) {
-        return isDark(context) ? Color.rgb(227, 233, 240) : Color.rgb(10, 10, 10);
+        return isDark(context) ? Color.rgb(235, 240, 247) : Color.rgb(10, 10, 10);
     }
 
     /** --muted-foreground (secondary text). */
     static int mutedForeground(Context context) {
-        return isDark(context) ? Color.rgb(125, 134, 147) : Color.rgb(115, 115, 115);
+        return isDark(context) ? Color.rgb(120, 130, 148) : Color.rgb(115, 115, 115);
     }
 
-    /** --card (raised surfaces: banners, list rows, bubbles). */
+    /** --card (raised surfaces: banners, list rows, bubbles) — a barely-lifted fill, no border. */
     static int card(Context context) {
-        return isDark(context) ? Color.rgb(21, 27, 35) : Color.rgb(235, 240, 246);
+        return isDark(context) ? Color.rgb(15, 17, 21) : Color.rgb(235, 240, 246);
     }
 
     /** --border (hairlines around cards, chips, rows). */
@@ -63,9 +64,9 @@ final class WearTheme {
         return Color.rgb(239, 246, 255);
     }
 
-    /** Brand mark tile: slightly raised card with a blue hairline. */
+    /** Brand mark tile: blue-tinted fill without a hairline. */
     static int logoBackground(Context context) {
-        return isDark(context) ? Color.rgb(24, 42, 74) : Color.rgb(219, 232, 250);
+        return isDark(context) ? Color.rgb(20, 36, 62) : Color.rgb(219, 232, 250);
     }
 
     static int logoForeground(Context context) {
@@ -74,12 +75,12 @@ final class WearTheme {
 
     /** User message bubble: primary at ~14% over background, like the web composer. */
     static int userBubble(Context context) {
-        return isDark(context) ? Color.rgb(27, 44, 74) : Color.rgb(214, 230, 252);
+        return isDark(context) ? Color.rgb(22, 36, 61) : Color.rgb(214, 230, 252);
     }
 
-    /** Focused/bordered chip background: primary at ~24% (web `chip-active`). */
+    /** Focused chip background: primary at ~24% (web `chip-active`). */
     static int surfaceActive(Context context) {
-        return isDark(context) ? Color.rgb(31, 51, 88) : Color.rgb(202, 223, 249);
+        return isDark(context) ? Color.rgb(26, 43, 74) : Color.rgb(202, 223, 249);
     }
 
     static int success(Context context) {

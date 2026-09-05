@@ -16,6 +16,7 @@ import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { TrajectoryStreamEvent } from "@jait/shared";
 import type { SessionStateService } from "../services/session-state.js";
+import type { MobilePushService } from "../services/mobile-push.js";
 import type { ProjectService } from "../services/projects.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from "../providers/contracts.js";
@@ -2517,6 +2518,7 @@ export interface ChatRouteDeps {
   memoryService?: MemoryService;
   ws?: WsControlPlane;
   sessionState?: SessionStateService;
+  mobilePush?: MobilePushService;
   projectService?: ProjectService;
   providerRegistry?: ProviderRegistry;
   skillRegistry?: SkillRegistry;
@@ -2546,6 +2548,7 @@ export function registerChatRoutes(
   let memoryService: MemoryService | undefined;
   let ws: WsControlPlane | undefined;
   let sessionStateService: SessionStateService | undefined;
+  let mobilePush: MobilePushService | undefined;
   let projectService: ProjectService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
   let skillRegistry: SkillRegistry | undefined;
@@ -2563,6 +2566,7 @@ export function registerChatRoutes(
     memoryService = deps.memoryService;
     ws = deps.ws;
     sessionStateService = deps.sessionState;
+    mobilePush = deps.mobilePush;
     projectService = deps.projectService;
     providerRegistry = deps.providerRegistry;
     skillRegistry = deps.skillRegistry;
@@ -3683,6 +3687,10 @@ export function registerChatRoutes(
      * rather than being an empty assistant bubble.
      */
     let loopErrorMessage: string | undefined;
+    // Set when the turn ended via the catch path (provider error or user
+    // cancel). Success turns leave this false so the mobile "Chat finished"
+    // push only fires for genuinely completed responses.
+    let turnCancelledOrErrored = false;
     let cliEventUnsubscribe: (() => void) | null = null;
     let cliTurnDoneUnsubscribe: (() => void) | null = null;
     const cleanupCliListeners = () => {
@@ -4796,6 +4804,7 @@ export function registerChatRoutes(
       // partial results. This catch only fires for non-abort errors (OpenAI)
       // or for Ollama stream errors (including abort).
       const wasCancelled = isAbortError(err);
+      turnCancelledOrErrored = true;
       if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
 
       // Save the live accumulator for real (non-cancel) errors. The loop result
@@ -4971,6 +4980,23 @@ export function registerChatRoutes(
         timestamp: new Date().toISOString(),
         payload: {},
       });
+    }
+
+    // Mobile/Wear completion toast — mirrors the web's "Chat finished"
+    // notification for the session owner's registered devices. Success turns
+    // only: errors and cancels already surfaced their own event, and the web's
+    // isLoading guard suppresses the toast there too. Skip when more queued
+    // prompts are about to drain so the user isn't toasted after every item.
+    if (mobilePush && !loopErrorMessage && !turnCancelledOrErrored) {
+      const queuedState = sessionStateService?.get(sessionId, ["queued_messages"]);
+      const remainingQueue = parseQueuedChatMessages(queuedState?.queued_messages);
+      if (remainingQueue.length === 0) {
+        void mobilePush.sendChatCompleted(authUser.id, {
+          id: `chat-complete:${sessionId}`,
+          title: "Chat finished",
+          body: "Agent response finished generating.",
+        }).catch(() => { /* push is best-effort */ });
+      }
     }
     void drainQueuedChatMessages(sessionId);
   });

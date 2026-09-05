@@ -156,6 +156,9 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
   }
   const capacitorLocalNotifications = capacitorNotifications()
   const browserNotification = 'Notification' in window ? window.Notification : undefined
+  const android = (window.Capacitor as { Plugins?: { AgentOverlay?: {
+    notify?: (input: { id: string; title: string; body: string }) => Promise<unknown>
+  } } } | undefined)?.Plugins?.AgentOverlay
 
   // Another surface on this machine owns the system toast — show the in-app
   // toast only, so the user is told once per device rather than once per client.
@@ -170,6 +173,10 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
     } catch {
       await notifyWithBrowserApi(browserNotification, notif)
     }
+  } else if (android?.notify) {
+    try {
+      await android.notify({ id: notif.id, title: notif.title, body: notif.body })
+    } catch { /* The in-app toast remains available if Android notifications are disabled. */ }
   } else if (capacitorLocalNotifications) {
     try {
       const perm = await capacitorLocalNotifications.requestPermissions?.()
