@@ -1,3 +1,11 @@
+export function getChatTranscriptBoundaryClassName(): string {
+  return 'relative z-0 isolate min-h-0 flex-1 overflow-hidden border-b'
+}
+
+export function getChatComposerBoundaryClassName(isMobile: boolean, showDesktopProject: boolean): string {
+  return `relative z-30 isolate shrink-0 bg-background ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`
+}
+
 export function getUserMessageEditComposerShellClassName(): string {
   return [
     'fixed left-1/2 top-1/2 z-50',
@@ -5,7 +13,7 @@ export function getUserMessageEditComposerShellClassName(): string {
     // Floating mobile composer needs an opaque card so the chat messages
     // behind it do not bleed through the translucent prompt input.
     'rounded-2xl border border-border bg-background p-1.5 shadow-2xl shadow-black/30',
-    'md:static md:w-full md:max-w-4xl md:translate-x-0 md:translate-y-0',
+    'md:relative md:left-auto md:top-auto md:z-40 md:w-full md:max-w-4xl md:translate-x-0 md:translate-y-0',
     'md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none',
   ].join(' ')
 }

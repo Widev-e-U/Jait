@@ -915,6 +915,17 @@ describe("omnirouteAcpEnv", () => {
   });
 });
 
+describe("bundled ACP providers", () => {
+  it("keeps locally installed Pi available without creating a provider account", () => {
+    expect(loadAcpProviderConfigs().find((config) => config.id === "pi")).toMatchObject({
+      command: "npx",
+      args: ["-y", "pi-acp"],
+      availabilityCommand: "pi",
+      auth: false,
+    });
+  });
+});
+
 describe("AcpProvider availability", () => {
   it("checks the host CLI required by an npx ACP wrapper", async () => {
     const provider = new AcpProvider({
@@ -938,10 +949,10 @@ describe("AcpProvider auth", () => {
     expect(config.features?.code_mode?.direct_only_tool_namespaces).toContain("mcp__jait_core");
   });
 
-  it("keeps bundled ACP agents account-backed and includes Muse Code", () => {
+  it("keeps login-capable bundled ACP agents account-backed and includes Muse Code", () => {
     const providers = loadAcpProviderConfigs();
 
-    expect(providers.some((provider) => provider.auth === false)).toBe(false);
+    expect(providers.filter((provider) => provider.id !== "pi").every((provider) => provider.auth !== false)).toBe(true);
     expect(providers.find((provider) => provider.id === "muse")).toMatchObject({
       command: "npx",
       availabilityCommand: "muse",

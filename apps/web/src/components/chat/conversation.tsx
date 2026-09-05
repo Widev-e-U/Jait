@@ -55,6 +55,8 @@ interface ConversationProps {
    * a shrunken preview of the transcript. Clicking or dragging it scrolls.
    */
   showMinimap?: boolean
+  /** Message row that must paint above neighboring virtualized rows while editing. */
+  elevatedMessageId?: string | null
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
@@ -270,6 +272,22 @@ export function unwrapConversationChildKey(key: string): string {
   return key.slice(marker + 1).replace(/=[02]/g, (escaped) => (escaped === '=0' ? '=' : ':'))
 }
 
+/** Raise the edited virtual row because each translated row is its own stacking context. */
+export function getConversationItemZIndex(itemKey: string | number | bigint, elevatedMessageId: string | null | undefined): number | undefined {
+  return elevatedMessageId != null && unwrapConversationChildKey(String(itemKey)) === elevatedMessageId
+    ? 30
+    : undefined
+}
+
+export function resolvePendingEditJumpIndex(
+  items: readonly unknown[],
+  pendingIndex: number | null,
+  editingMessageId: string | null | undefined,
+): number | null {
+  if (pendingIndex == null || editingMessageId == null) return null
+  return findConversationItemIndex(items, editingMessageId) === pendingIndex ? pendingIndex : null
+}
+
 /** Index of the rendered child that carries `messageId`, or -1 if it isn't rendered. */
 export function findConversationItemIndex(items: readonly unknown[], messageId: string | null): number {
   if (messageId == null) return -1
@@ -406,7 +424,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // The scroll container may not exist yet on first mount (history still
   // loading renders the skeleton branch), and a plain ref object is not
@@ -450,6 +468,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const [canJumpUp, setCanJumpUp] = useState(false)
   const [previousUserMessageIndex, setPreviousUserMessageIndex] = useState<number | null>(null)
   const [previousMessagePreviewSuppressed, setPreviousMessagePreviewSuppressed] = useState(false)
+  const [pendingEditJumpIndex, setPendingEditJumpIndex] = useState<number | null>(null)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
   const [conversationViewportHeight, setConversationViewportHeight] = useState(0)
@@ -1067,14 +1086,21 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     const target = previousUserMessageIndex ?? findPreviousUserMessage()
     if (target == null) return
     setPreviousMessagePreviewSuppressed(true)
-    // Land instantly so the editor opens exactly where the user clicked; the
-    // chip *is* the previous message, and clicking it starts editing it.
-    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'auto' })
+    // Wait until the parent has mounted this exact row's editor. Aligning the
+    // old bubble first lets the editor's larger layout shift it away afterward.
+    setPendingEditJumpIndex(target)
     // A programmatic jump is the same intent as scrolling by hand: stop
     // following the stream, and anchor wherever it lands.
     detachFromBottom()
     onEditPreviousUserMessage?.(target)
   }, [detachFromBottom, findPreviousUserMessage, onEditPreviousUserMessage, previousUserMessageIndex])
+
+  useLayoutEffect(() => {
+    const target = resolvePendingEditJumpIndex(childItems, pendingEditJumpIndex, elevatedMessageId)
+    if (target == null) return
+    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'auto' })
+    setPendingEditJumpIndex(null)
+  }, [childItems, elevatedMessageId, pendingEditJumpIndex])
 
   const handleMinimapScrub = useCallback(() => {
     setPreviousMessagePreviewSuppressed(false)
@@ -1329,6 +1355,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
                     left: 0,
                     width: '100%',
                     transform: `translateY(${virtualItem.start}px)`,
+                    zIndex: getConversationItemZIndex(virtualItem.key, elevatedMessageId),
                   }}
                 >
                   {childItems[virtualItem.index]}

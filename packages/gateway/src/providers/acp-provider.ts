@@ -1676,6 +1676,15 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
     },
     {
+      id: "pi",
+      name: "Pi",
+      description: "Pi coding agent via Agent Client Protocol",
+      command: "npx",
+      availabilityCommand: "pi",
+      args: ["-y", "pi-acp"],
+      auth: false,
+    },
+    {
       id: "muse",
       name: "Muse Code",
       description: "Meta Muse Code via Agent Client Protocol",

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { createUserMessageEditSubmission } from './message-edit'
 import {
+  getChatComposerBoundaryClassName,
+  getChatTranscriptBoundaryClassName,
   getMobileUserMessageEditTop,
   getUserMessageEditComposerShellClassName,
   getUserMessageEditComposerTransitionClassName,
@@ -66,6 +68,20 @@ describe('message edit submission', () => {
   })
 })
 
+describe('chat transcript and composer layout', () => {
+  it('clips streamed transcript content below an isolated opaque composer layer', () => {
+    const transcriptClasses = getChatTranscriptBoundaryClassName()
+    const composerClasses = getChatComposerBoundaryClassName(false, false)
+
+    expect(transcriptClasses).toContain('overflow-hidden')
+    expect(transcriptClasses).toContain('isolate')
+    expect(composerClasses).toContain('relative')
+    expect(composerClasses).toContain('z-30')
+    expect(composerClasses).toContain('isolate')
+    expect(composerClasses).toContain('bg-background')
+  })
+})
+
 describe('message edit mobile layout', () => {
   it('centers the edited user message in the visible mobile viewport', () => {
     const classes = getUserMessageEditComposerShellClassName()
@@ -119,9 +135,13 @@ describe('message edit mobile layout', () => {
   it('restores desktop edits to the original inline message bubble layout', () => {
     const classes = getUserMessageEditComposerShellClassName()
 
-    expect(classes).toContain('md:static')
+    expect(classes).not.toContain('md:static')
     expect(classes).toContain('md:w-full')
     expect(classes).toContain('md:max-w-4xl')
     expect(classes).toContain('md:translate-x-0')
+    expect(classes).toContain('md:relative')
+    expect(classes).toContain('md:z-40')
+    expect(classes).toContain('md:left-auto')
+    expect(classes).toContain('md:top-auto')
   })
 })

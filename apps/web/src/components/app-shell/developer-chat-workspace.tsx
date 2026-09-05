@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import {
+  getChatComposerBoundaryClassName,
+  getChatTranscriptBoundaryClassName,
   shouldShowChatContextIndicator,
   shouldShowNormalChatComposer,
 } from '@/components/chat/message-edit-layout'
@@ -561,10 +563,10 @@ export function DeveloperChatWorkspace({
               <TrajectoryPanel onClose={onCloseDebugPanel} sessionId={activeSessionId} token={token} />
             </ErrorBoundary>
           ) : (
-            <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
+            <ErrorBoundary name="Chat transcript" variant="section" className={getChatTranscriptBoundaryClassName()} resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
               <Conversation
                 key={activeSessionId ?? 'developer-empty'}
-                className="min-h-0 flex-1 border-b"
+                className={getChatTranscriptBoundaryClassName()}
                 compact={showDesktopProject}
                 loading={isLoadingHistory}
                 loadingLabel="Loading chat"
@@ -575,6 +577,7 @@ export function DeveloperChatWorkspace({
                 onEditPreviousUserMessage={handleEditPreviousUserMessage}
                 scrollToMessageId={scrollToUserMessageId}
                 showMinimap={!isMobile}
+                elevatedMessageId={editingMessageId}
               >
                 {messageElements}
                 {messageQueue.length > 0 && (
@@ -594,7 +597,7 @@ export function DeveloperChatWorkspace({
           )}
 
           {showNormalComposer && (
-            <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`}>
+            <div className={getChatComposerBoundaryClassName(isMobile, showDesktopProject)}>
             <div className="mx-auto w-full max-w-4xl space-y-1.5">
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">

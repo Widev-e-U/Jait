@@ -7,6 +7,7 @@ import {
   Conversation,
   computeNewTurnTailPadding,
   findConversationItemIndex,
+  getConversationItemZIndex,
   findPreviousMessageIndex,
   getPreviousMessagePreview,
   INITIAL_CONVERSATION_SCROLL_OFFSET,
@@ -14,6 +15,7 @@ import {
   LOAD_MORE_SCROLL_THRESHOLD_PX,
   pickScrollAnchor,
   positionConversationAtBottom,
+  resolvePendingEditJumpIndex,
   resolvePrependScrollAdjustment,
   scrollAnchorDelta,
   shouldLoadOlderMessages,
@@ -22,6 +24,11 @@ import {
 } from './conversation'
 
 describe('Conversation', () => {
+  it('elevates the entire edited virtual row above neighboring tool rows', () => {
+    expect(getConversationItemZIndex('.0:$message-2', 'message-2')).toBe(30)
+    expect(getConversationItemZIndex('.0:$message-1', 'message-2')).toBeUndefined()
+  })
+
   it('starts at the lowest available scroll position before the chat paints', () => {
     expect(INITIAL_CONVERSATION_SCROLL_OFFSET).toBe(Number.MAX_SAFE_INTEGER)
   })
@@ -361,6 +368,14 @@ describe('locating the message to anchor at the top', () => {
     expect(String((items[1] as { key: string }).key)).not.toBe('m-2')
     expect(findConversationItemIndex(items, 'm-2')).toBe(1)
     expect(findConversationItemIndex(items, 'm-3')).toBe(2)
+  })
+
+  it('waits for the clicked row to enter edit mode before aligning it', () => {
+    const items = conversationChildren(['m-1', 'm-2', 'm-3'])
+
+    expect(resolvePendingEditJumpIndex(items, 1, null)).toBeNull()
+    expect(resolvePendingEditJumpIndex(items, 1, 'm-3')).toBeNull()
+    expect(resolvePendingEditJumpIndex(items, 1, 'm-2')).toBe(1)
   })
 
   it('still finds the newest message when the queue renders below it', () => {
