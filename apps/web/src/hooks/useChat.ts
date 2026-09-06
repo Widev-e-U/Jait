@@ -300,6 +300,7 @@ export interface RoundMetrics {
   promptTokens?: number
   completionTokens?: number
   totalTokens?: number
+  tokenUsageEstimated?: boolean
   tokensPerSecond?: number
   contextUsage?: {
     system: number

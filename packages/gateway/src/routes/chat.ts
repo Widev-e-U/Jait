@@ -59,9 +59,9 @@ import {
   type PlannedAction,
   isValidChatMode,
 } from "../tools/chat-modes.js";
-import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
-import { getResponseStyleInstructions, isResponseStyle, type ResponseStyle } from "../tools/prompts/shared-sections.js";
-import type { Skill, SkillRegistry } from "../skills/index.js";
+import { buildSystemPrompt, loadGlobalJaitInstructions, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
+import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, getModeInstructions, getResponseStyleInstructions, isResponseStyle, type ResponseStyle } from "../tools/prompts/shared-sections.js";
+import { formatSkillsForPrompt, type Skill, type SkillRegistry } from "../skills/index.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -390,22 +390,49 @@ export function canUseGatewayProviderForProject(projectNodeId: string | null | u
   return !projectNodeId || projectNodeId === "gateway";
 }
 
-function buildCliProviderSystemPrompt(
-  provider: ProviderId,
-  model: string | undefined,
+export function buildCliProviderSystemPrompt(
+  _provider: ProviderId,
+  _model: string | undefined,
   mode: ChatMode,
   promptCtx: PromptContext,
 ): string {
-  return buildSystemPrompt(mode, {
-    model: model?.trim() || provider,
-    baseUrl: `jait-cli://${provider}`,
-    backend: provider,
-  }, {
-    ...promptCtx,
-    // CLI providers need the full Jait tool-control prompt even when the
-    // user's normal Jait backend is a compact local model.
-    backend: provider,
-  });
+  const parts = [
+    "Your name is Jait — Just Another Intelligent Tool. You are an AI coding assistant running through an external CLI provider.",
+    JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE,
+  ];
+
+  const modeInstructions = getModeInstructions(mode);
+  if (modeInstructions) parts.push(modeInstructions);
+
+  if (promptCtx.projectRoot) {
+    const environment = [`Project: ${promptCtx.projectRoot}`];
+    if (promptCtx.platform) environment.push(`OS: ${promptCtx.platform}`);
+    if (promptCtx.shell) environment.push(`Shell: ${promptCtx.shell}`);
+    if (promptCtx.hostname) environment.push(`Host: ${promptCtx.hostname}`);
+    parts.push(`<projectContext>\n${environment.join("\n")}\nUse relative paths and stay within this project.\n</projectContext>`);
+  }
+
+  if (promptCtx.skills?.length) {
+    parts.push(formatSkillsForPrompt(promptCtx.skills, {
+      readToolInstruction: "Load a matching SKILL.md through Jait's file-reading tools before applying it.",
+    }).trim());
+  }
+
+  const responseStyleInstructions = getResponseStyleInstructions(promptCtx.responseStyle);
+  if (responseStyleInstructions) {
+    parts.push(`<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`);
+  }
+
+  const globalInstructions = loadGlobalJaitInstructions();
+  if (globalInstructions) {
+    parts.push(`<globalJaitInstructions>\n${globalInstructions}\n</globalJaitInstructions>`);
+  }
+
+  if (promptCtx.projectInstructions?.trim()) {
+    parts.push(`<projectInstructions>\n${promptCtx.projectInstructions.trim()}\n</projectInstructions>`);
+  }
+
+  return parts.join("\n\n");
 }
 
 function buildExternalProviderContextFlow(
@@ -481,6 +508,7 @@ function attachCliTurnMetrics(
     promptTokens,
     completionTokens,
     totalTokens,
+    tokenUsageEstimated: true,
     tokensPerSecond: durationMs > 0 ? Math.round((completionTokens / (durationMs / 1000)) * 10) / 10 : undefined,
   };
 
@@ -537,6 +565,7 @@ function enrichLazyContextFlowMetrics(
     promptTokens,
     completionTokens,
     totalTokens: promptTokens + completionTokens,
+    tokenUsageEstimated: true,
   };
   const contextWindow = inferContextWindow(flow.model ?? round.model);
   if (contextWindow > 0) {

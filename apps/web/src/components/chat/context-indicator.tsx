@@ -227,7 +227,7 @@ export function ContextIndicator({ usage, messages, compact }: ContextIndicatorP
               <div className="grid grid-cols-2 gap-2">
                 {sessionMetrics.completionTokens > 0 && (
                   <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
-                    <div className="text-xs text-muted-foreground">Tokens written</div>
+                    <div className="text-xs text-muted-foreground">{sessionMetrics.tokenUsageEstimated ? 'Estimated tokens written' : 'Tokens written'}</div>
                     <div className="text-sm font-semibold text-foreground tabular-nums">
                       {formatNumber(sessionMetrics.completionTokens)} <span className="text-xs font-normal text-muted-foreground">out</span>
                     </div>
@@ -235,7 +235,7 @@ export function ContextIndicator({ usage, messages, compact }: ContextIndicatorP
                 )}
                 {sessionMetrics.promptTokens > 0 && (
                   <div className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
-                    <div className="text-xs text-muted-foreground">Prompt tokens</div>
+                    <div className="text-xs text-muted-foreground">{sessionMetrics.tokenUsageEstimated ? 'Estimated prompt tokens' : 'Prompt tokens'}</div>
                     <div className="text-sm font-semibold text-foreground tabular-nums">
                       {formatNumber(sessionMetrics.promptTokens)} <span className="text-xs font-normal text-muted-foreground">in</span>
                     </div>

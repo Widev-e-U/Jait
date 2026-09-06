@@ -267,11 +267,13 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
 
 function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
   if (!metrics) return null
+  const tokenLabelPrefix = metrics.tokenUsageEstimated ? 'Estimated ' : ''
+  const tokenTextPrefix = metrics.tokenUsageEstimated ? 'est. ' : ''
   return (
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <TooltipHint content="LLM request duration"><span>{metrics.durationMs > 0 ? formatDuration(metrics.durationMs) : '—'}</span></TooltipHint>
-      {metrics.promptTokens != null && <TooltipHint content="Prompt tokens"><span>{formatNumber(metrics.promptTokens)} prompt</span></TooltipHint>}
-      {metrics.completionTokens != null && <TooltipHint content="Completion tokens"><span>{formatNumber(metrics.completionTokens)} completion</span></TooltipHint>}
+      {metrics.promptTokens != null && <TooltipHint content={`${tokenLabelPrefix}prompt tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.promptTokens)} prompt</span></TooltipHint>}
+      {metrics.completionTokens != null && <TooltipHint content={`${tokenLabelPrefix}completion tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.completionTokens)} completion</span></TooltipHint>}
       {metrics.tokensPerSecond != null && (
         <TooltipHint content="Completion tokens per second"><span className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span></TooltipHint>
       )}

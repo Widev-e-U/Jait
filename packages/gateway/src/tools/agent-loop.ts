@@ -93,6 +93,8 @@ export interface RoundMetrics {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  /** True when token counts were estimated because the provider reported no usage. */
+  tokenUsageEstimated?: boolean;
   /** Estimated tokens/second for the completion. */
   tokensPerSecond?: number;
   /** Context budget snapshot at request time. */

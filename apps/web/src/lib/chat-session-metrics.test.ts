@@ -21,6 +21,7 @@ describe('aggregateSessionMetrics', () => {
       tokensPerSecond: null,
       textWritten: 0,
       assistantTurns: 0,
+      tokenUsageEstimated: false,
     })
     expect(aggregateSessionMetrics([])).toEqual({
       completionTokens: 0,
@@ -29,6 +30,7 @@ describe('aggregateSessionMetrics', () => {
       tokensPerSecond: null,
       textWritten: 0,
       assistantTurns: 0,
+      tokenUsageEstimated: false,
     })
   })
 

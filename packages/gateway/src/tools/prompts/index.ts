@@ -29,6 +29,7 @@ export {
   promptRegistry,
   buildSystemPrompt,
   getReminderInstructions,
+  loadGlobalJaitInstructions,
   DEFAULT_IDENTITY,
   DEFAULT_SAFETY,
   DEFAULT_REMINDER,

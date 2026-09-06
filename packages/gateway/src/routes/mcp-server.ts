@@ -67,12 +67,22 @@ type McpToolContent =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
 
+const MAX_MCP_TOOL_RESULT_TEXT_CHARS = 30_000;
+
+function capMcpToolResultText(text: string): string {
+  if (text.length <= MAX_MCP_TOOL_RESULT_TEXT_CHARS) return text;
+  const marker = `\n\n[truncated for model context — ${text.length} characters total]`;
+  const tailChars = 4_000;
+  const headChars = MAX_MCP_TOOL_RESULT_TEXT_CHARS - tailChars - marker.length;
+  return text.slice(0, headChars) + marker + text.slice(-tailChars);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
-  if (typeof result.data === "string") return [{ type: "text", text: result.data }];
+  if (typeof result.data === "string") return [{ type: "text", text: capMcpToolResultText(result.data) }];
 
   if (isRecord(result.data) && isRecord(result.data.screenshot)) {
     const screenshot = result.data.screenshot;
@@ -83,7 +93,7 @@ export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
       return [
         {
           type: "text",
-          text: result.message + (Object.keys(sanitizedData).length > 0 ? `\n${JSON.stringify(sanitizedData)}` : ""),
+          text: capMcpToolResultText(result.message + (Object.keys(sanitizedData).length > 0 ? `\n${JSON.stringify(sanitizedData)}` : "")),
         },
         { type: "image", data: pngBase64, mimeType: "image/png" },
       ];
@@ -92,7 +102,7 @@ export function mcpContentForToolResult(result: ToolResult): McpToolContent[] {
 
   return [{
     type: "text",
-    text: result.message + (result.data ? `\n${JSON.stringify(result.data)}` : ""),
+    text: capMcpToolResultText(result.message + (result.data ? `\n${JSON.stringify(result.data)}` : "")),
   }];
 }
 

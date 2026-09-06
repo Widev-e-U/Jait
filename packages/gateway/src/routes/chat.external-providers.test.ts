@@ -11,11 +11,38 @@ import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import {
   canUseGatewayProviderForProject,
+  buildCliProviderSystemPrompt,
   getExternalFileMutationPath,
   getProviderRequestErrorMessage,
   isNonRecoverableProviderRequestError,
   normalizeProviderSessionError,
 } from "./chat.js";
+
+describe("buildCliProviderSystemPrompt", () => {
+  it("keeps Jait routing and user context without duplicating the full internal agent manual", () => {
+    const prompt = buildCliProviderSystemPrompt("codex", "gpt-5.4", "agent", {
+      projectRoot: "/work/project",
+      architectureGraph: "graph TD; A-->B".repeat(500),
+      projectInstructions: "Use the repository conventions.",
+      skills: [{
+        id: "debugging",
+        name: "Debugging",
+        description: "Use for root-cause analysis.",
+        filePath: "/skills/debugging/SKILL.md",
+        source: "bundled",
+        enabled: true,
+      }],
+    });
+
+    expect(prompt).toContain("always use `jait.terminal`");
+    expect(prompt).toContain("/work/project");
+    expect(prompt).toContain("/skills/debugging/SKILL.md");
+    expect(prompt).toContain("Use the repository conventions.");
+    expect(prompt).not.toContain("graph TD");
+    expect(prompt).not.toContain("## Preambles and progress updates");
+    expect(prompt.length).toBeLessThan(12_000);
+  });
+});
 
 describe("canUseGatewayProviderForProject", () => {
   it("does not allow gateway CLI profiles in a remote project", () => {
@@ -525,8 +552,9 @@ describe("chat external provider runtime mode selection", () => {
     const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
     expect(typeof firstTurnMessage).toBe("string");
     expect(firstTurnMessage).toContain("Jait session instructions:");
-    expect(firstTurnMessage).toContain("use the todo tool even if you are operating through an external or CLI provider");
-    expect(firstTurnMessage).toContain("Use the edit tool to modify files precisely.");
+    expect(firstTurnMessage).toContain("Use the todo tool for multi-step work");
+    expect(firstTurnMessage).toContain("always use `jait.terminal`");
+    expect(firstTurnMessage).not.toContain("## Preambles and progress updates");
     expect(firstTurnMessage).toContain("User request:");
     expect(firstTurnMessage).toContain("fix the bug");
 
@@ -536,7 +564,7 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
-  it("sends the full external-provider prompt even when the Jait backend is Ollama", { timeout: 30_000 }, async () => {
+  it("sends the compact external-provider prompt even when the Jait backend is Ollama", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(provider);
@@ -564,11 +592,10 @@ describe("chat external provider runtime mode selection", () => {
     const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
     expect(typeof firstTurnMessage).toBe("string");
     expect(firstTurnMessage).toContain("Jait session instructions:");
-    expect(firstTurnMessage).toContain("You are operating inside Jait, a tool-centric coding project and gateway.");
-    expect(firstTurnMessage).toContain("Use `jait.terminal` for all terminal execution in Jait");
-    expect(firstTurnMessage).toContain("The live preview is a controllable browser session.");
-    expect(firstTurnMessage).toContain("Use the edit tool to modify files precisely.");
-    expect(firstTurnMessage).not.toContain("You are an expert coding agent. Use tools to read, edit, search files and run commands.");
+    expect(firstTurnMessage).toContain("You are operating inside Jait, a tool-centric coding project.");
+    expect(firstTurnMessage).toContain("always use `jait.terminal`");
+    expect(firstTurnMessage).not.toContain("The live preview is a controllable browser session.");
+    expect(firstTurnMessage).not.toContain("## Preambles and progress updates");
 
     await app.close();
   });
@@ -1098,6 +1125,7 @@ describe("chat external provider runtime mode selection", () => {
     expect(metrics?.promptTokens).toBeGreaterThan(0);
     expect(metrics?.completionTokens).toBeGreaterThan(0);
     expect(metrics?.totalTokens).toBeGreaterThan(0);
+    expect(metrics?.tokenUsageEstimated).toBe(true);
     expect(metrics?.tokensPerSecond).toBeGreaterThan(0);
     expect(metrics?.contextUsage).toMatchObject({ limit: expect.any(Number), ratio: expect.any(Number) });
 

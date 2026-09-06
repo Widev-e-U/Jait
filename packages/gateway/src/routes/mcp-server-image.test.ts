@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { mcpContentForToolResult } from "./mcp-server.js";
 
 describe("mcpContentForToolResult", () => {
+  it("caps oversized text results before returning them to MCP clients", () => {
+    const content = mcpContentForToolResult({
+      ok: true,
+      message: "done",
+      data: "a".repeat(40_000),
+    });
+
+    expect(content).toHaveLength(1);
+    expect(content[0]?.type).toBe("text");
+    expect(content[0]?.type === "text" ? content[0].text.length : 0).toBeLessThanOrEqual(30_000);
+    expect(content[0]?.type === "text" ? content[0].text : "").toContain("truncated for model context");
+  });
+
   it("emits screenshots as MCP image content without duplicating base64 in text", () => {
     const content = mcpContentForToolResult({
       ok: true,

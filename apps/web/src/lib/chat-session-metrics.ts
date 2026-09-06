@@ -32,6 +32,8 @@ export interface SessionMetrics {
   textWritten: number
   /** Number of assistant messages that produced metrics/response content. */
   assistantTurns: number
+  /** True when any included provider supplied estimated rather than reported token counts. */
+  tokenUsageEstimated: boolean
 }
 
 /**
@@ -46,6 +48,7 @@ export function aggregateSessionMetrics(messages: SessionMetricsMessage[] | unde
   let totalDurationMs = 0
   let textWritten = 0
   let assistantTurns = 0
+  let tokenUsageEstimated = false
 
   // Weighted-average inputs derived from rounds that have both completion
   // tokens and a positive duration (completion tokens / seconds).
@@ -68,6 +71,7 @@ export function aggregateSessionMetrics(messages: SessionMetricsMessage[] | unde
     for (const round of rounds) {
       const m = round.metrics
       if (!m) continue
+      if (m.tokenUsageEstimated) tokenUsageEstimated = true
 
       if (m.durationMs > 0) {
         totalDurationMs += m.durationMs
@@ -104,5 +108,6 @@ export function aggregateSessionMetrics(messages: SessionMetricsMessage[] | unde
     tokensPerSecond,
     textWritten,
     assistantTurns,
+    tokenUsageEstimated,
   }
 }
