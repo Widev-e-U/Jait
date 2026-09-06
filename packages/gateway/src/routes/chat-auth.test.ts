@@ -233,4 +233,66 @@ describe("chat route auth guards", () => {
       await app.close();
     }
   });
+
+  it("does not duplicate an in-flight assistant after its crash checkpoint is persisted", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("streaming-checkpoint-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Streaming Checkpoint" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const checkpointId = "assistant-checkpoint";
+
+    db.insert(messages).values([
+      {
+        id: "checkpoint-user-message",
+        sessionId: session.id,
+        role: "user",
+        content: "continue",
+        createdAt: "2026-08-01T00:00:00.000Z",
+      },
+      {
+        id: checkpointId,
+        sessionId: session.id,
+        role: "assistant",
+        content: "persisted partial",
+        segments: JSON.stringify([{ type: "text", content: "persisted partial" }]),
+        createdAt: "2026-08-01T00:00:01.000Z",
+      },
+    ]).run();
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+    const headers = { authorization: `Bearer ${token}` };
+    __chatTestUtils.activeStreams.add(session.id);
+    __chatTestUtils.activeAssistantCheckpointIds.set(session.id, checkpointId);
+    const accumulator = __chatTestUtils.getOrCreateAccumulator(session.id);
+    accumulator.content = "persisted partial plus live";
+    accumulator.segments = [{ type: "text", content: "persisted partial plus live" }];
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        streaming: true,
+        total: 2,
+        messages: [
+          { role: "user", content: "continue" },
+          { role: "assistant", content: "persisted partial plus live" },
+        ],
+      });
+    } finally {
+      __chatTestUtils.activeStreams.delete(session.id);
+      __chatTestUtils.activeAssistantCheckpointIds.delete(session.id);
+      __chatTestUtils.sessionHistory.delete(session.id);
+      __chatTestUtils.sessionStreamingState.delete(session.id);
+      await app.close();
+    }
+  });
 });

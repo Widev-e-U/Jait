@@ -1,7 +1,18 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuPosition, SessionSelector } from './session-selector'
+import { getSessionContextMenuPosition, SessionSelector as SessionSelectorBase } from './session-selector'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ProjectRecord } from '@/hooks/useProjects'
+
+// The selector relies on the app-level TooltipProvider (see App.tsx); mirror that here.
+function SessionSelector(props: ComponentProps<typeof SessionSelectorBase>) {
+  return (
+    <TooltipProvider>
+      <SessionSelectorBase {...props} />
+    </TooltipProvider>
+  )
+}
 
 function createProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
   return {

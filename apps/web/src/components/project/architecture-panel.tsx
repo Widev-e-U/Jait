@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mermaid from 'mermaid'
 import { Loader2, RefreshCw, Download, Copy, Check, Sparkles, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -297,59 +298,65 @@ export function ArchitecturePanel({
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-2 h-8 border-b bg-muted/20 shrink-0">
         <span className="text-xs font-medium text-muted-foreground mr-auto">Architecture</span>
+        <TooltipHint content="Zoom out">
         <button
           onClick={() => updateZoom(zoom - 0.25)}
-          className="p-1 rounded hover:bg-muted transition-colors"
-          title="Zoom out"
+          className="p-1 rounded hover:bg-muted transition-colors" aria-label="Zoom out"
         >
           <ZoomOut className="h-3 w-3" />
         </button>
+        </TooltipHint>
         <span className="text-2xs text-muted-foreground min-w-[3ch] text-center">{Math.round(zoom * 100)}%</span>
+        <TooltipHint content="Zoom in">
         <button
           onClick={() => updateZoom(zoom + 0.25)}
-          className="p-1 rounded hover:bg-muted transition-colors"
-          title="Zoom in"
+          className="p-1 rounded hover:bg-muted transition-colors" aria-label="Zoom in"
         >
           <ZoomIn className="h-3 w-3" />
         </button>
+        </TooltipHint>
+        <TooltipHint content="Reset zoom">
         <button
           onClick={() => {
             setZoom(1)
             setPan({ x: 0, y: 0 })
           }}
-          className="p-1 rounded hover:bg-muted transition-colors"
-          title="Reset zoom"
+          className="p-1 rounded hover:bg-muted transition-colors" aria-label="Reset zoom"
         >
           <Maximize2 className="h-3 w-3" />
         </button>
+        </TooltipHint>
         <div className="w-px h-4 bg-border mx-1" />
         {diagram && (
           <>
+            <TooltipHint content="Copy Mermaid source">
             <button
               onClick={handleCopy}
               className="p-1 rounded hover:bg-muted transition-colors"
-              title="Copy Mermaid source"
             >
               {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
             </button>
+            </TooltipHint>
+            <TooltipHint content="Download SVG">
             <button
               onClick={handleDownloadSvg}
-              className="p-1 rounded hover:bg-muted transition-colors"
-              title="Download SVG"
+              className="p-1 rounded hover:bg-muted transition-colors" aria-label="Download SVG"
             >
               <Download className="h-3 w-3" />
             </button>
+            </TooltipHint>
           </>
         )}
         {onRegenerate && (
+          <TooltipHint content="Regenerate diagram">
           <button
             onClick={onRegenerate}
-            className="p-1 rounded hover:bg-muted transition-colors"
-            title="Regenerate diagram"
+            className="p-1 rounded hover:bg-muted transition-colors" aria-label="Regenerate diagram"
             disabled={isGenerating}
           >
             <RefreshCw className={`h-3 w-3 ${isGenerating ? 'animate-spin' : ''}`} />
           </button>
+          </TooltipHint>
         )}
       </div>
 

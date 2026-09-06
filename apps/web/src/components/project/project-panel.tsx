@@ -318,6 +318,7 @@ function pathsMatchProjectFile(candidatePath: string, filePath: string, rootPath
 import { getApiUrl } from '@/lib/gateway-url'
 import { deriveManagedPreviewSessionId, isSamePreviewSession, shouldStopManagedPreviewForTarget } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 const OPEN_FILE_MTIME_POLL_MS = 10_000
@@ -524,12 +525,13 @@ const TAB_POPOUT_VIEWPORT_MARGIN = 16
 function GitStatusBadge({ status, className = '' }: { status: string; className?: string }) {
   const label = status === '?' ? 'U' : status
   return (
+    <TooltipHint content={STATUS_LABELS[status] ?? status}>
     <span
       className={`text-2xs font-bold leading-none shrink-0 ${STATUS_COLORS[status] ?? 'text-muted-foreground'} ${className}`}
-      title={STATUS_LABELS[status] ?? status}
     >
       {label}
     </span>
+    </TooltipHint>
   )
 }
 
@@ -1204,28 +1206,30 @@ const TreeNodeRow = memo(function TreeNodeRow({
           <FolderIcon name={node.name} open={expanded} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
           <span className={`truncate flex-1 ${folderHasChanges ? 'text-yellow-600 dark:text-yellow-400' : ''}`}>{node.name}</span>
           {folderHasChanges && (
-            <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 shrink-0" title="Contains modified files" />
+            <TooltipHint content="Contains modified files"><span className="h-1.5 w-1.5 rounded-full bg-yellow-500 shrink-0" /></TooltipHint>
           )}
           {isMobile && (
+            <TooltipHint content="More actions">
             <button
               type="button"
               className="rounded p-2 hover:bg-background touch-manipulation"
               onPointerDown={handleMobileMenuPointerDown}
-              onClick={handleMobileMenuClick}
-              title="More actions"
+              onClick={handleMobileMenuClick} aria-label="More actions"
             >
               <MoreVertical className="h-3.5 w-3.5" />
             </button>
+            </TooltipHint>
           )}
           {!isMobile && (
+            <TooltipHint content="Add to chat">
             <button
               type="button"
               className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
-              onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
-              title="Add to chat"
+              onClick={(e) => { e.stopPropagation(); onContextFile(node) }} aria-label="Add to chat"
             >
               <Plus className="h-3 w-3" />
             </button>
+            </TooltipHint>
           )}
         </div>
         {expanded && node.children?.map((child) => (
@@ -1274,27 +1278,29 @@ const TreeNodeRow = memo(function TreeNodeRow({
       }}
     >
       <FileIcon filename={node.name} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
-      <span className={`truncate flex-1 ${matchedStatus === 'D' ? 'line-through text-muted-foreground' : ''}`} title={node.path}>{node.name}</span>
+      <TooltipHint content={node.path}><span className={`truncate flex-1 ${matchedStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{node.name}</span></TooltipHint>
       {matchedStatus && <GitStatusBadge status={matchedStatus} />}
       {isMobile ? (
+        <TooltipHint content="More actions">
         <button
           type="button"
           className="rounded p-2 hover:bg-background touch-manipulation"
           onPointerDown={handleMobileMenuPointerDown}
-          onClick={handleMobileMenuClick}
-          title="More actions"
+          onClick={handleMobileMenuClick} aria-label="More actions"
         >
           <MoreVertical className="h-3.5 w-3.5" />
         </button>
+        </TooltipHint>
       ) : (
+        <TooltipHint content="Add to chat">
         <button
           type="button"
           className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
-          onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
-          title="Add to chat"
+          onClick={(e) => { e.stopPropagation(); onContextFile(node) }} aria-label="Add to chat"
         >
           <Plus className="h-3 w-3" />
         </button>
+        </TooltipHint>
       )}
     </div>
   )
@@ -2487,19 +2493,22 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             )}
           </div>
           {activePreviewTab?.label ? (
-            <div className="truncate text-xs text-muted-foreground" title={activePreviewTab.label}>
+            <TooltipHint content={activePreviewTab.label}>
+            <div className="truncate text-xs text-muted-foreground">
               {activePreviewTab.label}
             </div>
+            </TooltipHint>
           ) : null}
         </div>
+        <TooltipHint content="Hide preview controls">
         <button
           type="button"
           className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={() => setPreviewSidePanelOpen(false)}
-          title="Hide preview controls"
+          onClick={() => setPreviewSidePanelOpen(false)} aria-label="Hide preview controls"
         >
           <X className="h-3.5 w-3.5" />
         </button>
+        </TooltipHint>
       </div>
 
       <div className="flex items-center gap-1 border-b px-2 py-1.5 text-xs">
@@ -4473,6 +4482,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
   const renderSourceControlViewToggle = (mobile = false) => (
     <div className="ml-auto inline-flex items-center rounded-md border border-input bg-background/90 p-0.5 shadow-sm">
+      <TooltipHint content="List view">
       <button
         type="button"
         className={cn(
@@ -4481,12 +4491,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           sourceControlView === 'list' && 'bg-accent text-accent-foreground shadow-sm',
         )}
         onClick={() => setSourceControlView('list')}
-        title="List view"
         aria-label="List view"
         aria-pressed={sourceControlView === 'list'}
       >
         <List className="h-3.5 w-3.5" />
       </button>
+      </TooltipHint>
+      <TooltipHint content="Tree view">
       <button
         type="button"
         className={cn(
@@ -4495,12 +4506,12 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           sourceControlView === 'tree' && 'bg-accent text-accent-foreground shadow-sm',
         )}
         onClick={() => setSourceControlView('tree')}
-        title="Tree view"
         aria-label="Tree view"
         aria-pressed={sourceControlView === 'tree'}
       >
         <FolderTree className="h-3.5 w-3.5" />
       </button>
+      </TooltipHint>
     </div>
   )
 
@@ -4509,6 +4520,9 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       'flex items-center',
       mobile ? 'gap-1.5' : 'overflow-hidden rounded-[3px]',
     )}>
+      <TooltipHint content={primaryGitAction === 'sync'
+          ? `Synchronize changes with Git${gitStatus ? ` (Behind ${gitStatus.behindCount}, Ahead ${gitStatus.aheadCount})` : ''}`
+          : 'Commit all changes (Ctrl+Enter)'}>
       <Button
         variant={mobile ? 'default' : 'outline'}
         size="sm"
@@ -4525,9 +4539,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           void handleGitAction('commit')
         }}
         disabled={!canRunPrimaryGitAction}
-        title={primaryGitAction === 'sync'
-          ? `Synchronize changes with Git${gitStatus ? ` (Behind ${gitStatus.behindCount}, Ahead ${gitStatus.aheadCount})` : ''}`
-          : 'Commit all changes (Ctrl+Enter)'}
       >
         {gitActionBusy
           ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -4536,8 +4547,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             : <GitCommit className="h-3 w-3" />}
         {primaryGitAction === 'sync' ? 'Sync' : 'Commit'}
       </Button>
+      </TooltipHint>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          <TooltipHint content="More commit actions">
           <Button
             variant={mobile ? 'secondary' : 'outline'}
             size="sm"
@@ -4547,11 +4560,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 : 'h-[22px] w-5 rounded-l-none px-0 shadow-none',
             )}
             disabled={gitActionBusy}
-            title="More commit actions"
             aria-label="More commit actions"
           >
             <ChevronDown className="h-3 w-3" />
           </Button>
+          </TooltipHint>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start" sideOffset={4} className="w-40 p-1">
           <DropdownMenuItem onSelect={() => { void handleGitAction('commit') }} className="gap-2 text-xs" disabled={!canRunCommitAction}>
@@ -4601,6 +4614,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
         }`}
       >
+        <TooltipHint content="Discard changes">
         <button
           type="button"
           className={cn(actionButtonClassName, 'hover:text-red-500')}
@@ -4608,31 +4622,33 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             e.stopPropagation()
             setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
           }}
-          title="Discard changes"
           aria-label="Discard changes"
         >
           <Undo2 className={iconClassName} />
         </button>
+        </TooltipHint>
         {actions === 'stage' ? (
+          <TooltipHint content="Stage file (git add)">
           <button
             type="button"
             className={cn(actionButtonClassName, 'hover:text-foreground')}
             onClick={(e) => { e.stopPropagation(); void handleStageFile(filePath) }}
-            title="Stage file (git add)"
             aria-label="Stage file"
           >
             <Plus className={iconClassName} />
           </button>
+          </TooltipHint>
         ) : (
+          <TooltipHint content="Unstage file">
           <button
             type="button"
             className={cn(actionButtonClassName, 'hover:text-foreground')}
             onClick={(e) => { e.stopPropagation(); void handleUnstageFile(filePath) }}
-            title="Unstage file"
             aria-label="Unstage file"
           >
             <Minus className={iconClassName} />
           </button>
+          </TooltipHint>
         )}
       </span>
     )
@@ -4659,6 +4675,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         }`}
       >
         {actions === 'stage' ? (
+          <TooltipHint content="Stage folder">
           <button
             type="button"
             className={cn(actionButtonClassName, 'hover:text-foreground')}
@@ -4666,12 +4683,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               e.stopPropagation()
               void handleStagePaths(uniquePaths)
             }}
-            title="Stage folder"
             aria-label="Stage folder"
           >
             <Plus className={iconClassName} />
           </button>
+          </TooltipHint>
         ) : (
+          <TooltipHint content="Unstage folder">
           <button
             type="button"
             className={cn(actionButtonClassName, 'hover:text-foreground')}
@@ -4679,12 +4697,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               e.stopPropagation()
               void handleUnstagePaths(uniquePaths)
             }}
-            title="Unstage folder"
             aria-label="Unstage folder"
           >
             <Minus className={iconClassName} />
           </button>
+          </TooltipHint>
         )}
+        <TooltipHint content="Discard changes in folder">
         <button
           type="button"
           className={cn(actionButtonClassName, 'hover:text-red-500')}
@@ -4694,11 +4713,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               ? null
               : { kind: 'folder', path: folderPath, paths: uniquePaths })
           }}
-          title="Discard changes in folder"
           aria-label="Discard changes in folder"
         >
           <Undo2 className={iconClassName} />
         </button>
+        </TooltipHint>
       </span>
     )
   }, [handleStagePaths, handleUnstagePaths])
@@ -4758,6 +4777,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     const isActiveDiff = scDiffFile?.path === node.path
     return (
       <div key={`${actions}:file:${node.path}`}>
+        <TooltipHint content={`${node.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}>
         <button
           type="button"
           className={cn(
@@ -4769,7 +4789,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             handleScOpenDiff(node.path)
             if (mobile) setMobileTab('editor')
           }}
-          title={`${node.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
         >
           <div className="flex min-w-0 items-center gap-1.5">
             <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
@@ -4785,6 +4804,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           </span>
           {renderSourceControlFileActions(node.path, actions, mobile)}
         </button>
+        </TooltipHint>
         {discardConfirm?.kind === 'file' && discardConfirm.path === node.path && (
           <div className={cn('ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
             <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
@@ -4832,49 +4852,53 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           >
             {actions === 'stage' ? (
               <>
+                <TooltipHint content="Discard all changes">
                 <button
                   type="button"
                   className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
                   onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || files.length === 0}
-                  title="Discard all changes"
                   aria-label="Discard all changes"
                 >
                   <Undo2 className="h-3 w-3" />
                 </button>
+                </TooltipHint>
+                <TooltipHint content="Stage all changes">
                 <button
                   type="button"
                   className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                   onClick={() => void handleStageAll()}
                   disabled={gitActionBusy || files.length === 0}
-                  title="Stage all changes"
                   aria-label="Stage all changes"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
+                </TooltipHint>
               </>
             ) : (
               <>
+                <TooltipHint content="Discard all changes">
                 <button
                   type="button"
                   className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
                   onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || changedFileCount === 0}
-                  title="Discard all changes"
                   aria-label="Discard all changes"
                 >
                   <Undo2 className="h-3 w-3" />
                 </button>
+                </TooltipHint>
+                <TooltipHint content="Unstage all files">
                 <button
                   type="button"
                   className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                   onClick={() => void handleUnstageAll()}
                   disabled={gitActionBusy || files.length === 0}
-                  title="Unstage all files"
                   aria-label="Unstage all files"
                 >
                   <Minus className="h-3 w-3" />
                 </button>
+                </TooltipHint>
               </>
             )}
           </div>
@@ -4896,6 +4920,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               const isActiveDiff = scDiffFile?.path === f.path
               return (
                 <div key={`${actions}:${f.path}`}>
+                  <TooltipHint content={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}>
                   <div
                     className={cn(
                       getSourceControlRowClassName(isActiveDiff, mobile),
@@ -4911,7 +4936,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                       e.dataTransfer.effectAllowed = 'copy'
                       e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
                     }}
-                    title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
                   >
                     <div className="flex min-w-0 items-center gap-1.5">
                       <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
@@ -4929,6 +4953,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     </span>
                     {renderSourceControlFileActions(f.path, actions, mobile)}
                   </div>
+                  </TooltipHint>
                   {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
                     <div className={cn('ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
                       <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
@@ -5075,39 +5100,43 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           {effectiveMobileTab === 'editor' && activeTab?.type === 'preview' && (
             <>
               <div className="flex-1" />
+              <TooltipHint content="Refresh preview">
               <button
                 type="button"
                 onClick={handleRefreshPreviewTarget}
-                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                title="Refresh preview"
+                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0" aria-label="Refresh preview"
               >
                 <RefreshCw className="h-3 w-3" />
               </button>
+              </TooltipHint>
+              <TooltipHint content="Preview controls">
               <button
                 type="button"
                 onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
-                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                title="Preview controls"
+                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0" aria-label="Preview controls"
               >
                 <Settings2 className="h-3 w-3" />
               </button>
+              </TooltipHint>
             </>
           )}
           {effectiveMobileTab === 'editor' && activeTabEditable && (
             <>
               <div className="flex-1" />
               {(activeTab?.isDirty || activeTabGitDiffEntry) && (
+                <TooltipHint content={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}>
                 <button
                   type="button"
                   onClick={() => { if (activeTabId) void handleRevertTab(activeTabId) }}
                   className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-red-500 disabled:opacity-50 shrink-0"
-                  title={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
                   aria-label={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
                   disabled={gitActionBusy}
                 >
                   <Undo2 className="h-4 w-4" />
                 </button>
+                </TooltipHint>
               )}
+              <TooltipHint content={activeTab?.isSaving ? 'Saving...' : 'Save file'}>
               <button
                 type="button"
                 onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
@@ -5117,13 +5146,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
-                title={activeTab?.isSaving ? 'Saving...' : 'Save file'}
                 aria-label="Save file"
                 disabled={activeTab?.isSaving}
               >
                 <Save className={`h-4 w-4 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
                 <span>Save</span>
               </button>
+              </TooltipHint>
             </>
           )}
         </div>
@@ -5160,13 +5189,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
+            <TooltipHint content={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}>
             <button
               onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
               className={`px-1.5 h-6 rounded text-2xs font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-              title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
             >
               {fileSearchMode === 'files' ? 'Name' : 'Content'}
             </button>
+            </TooltipHint>
           </div>
 
           {/* Mobile search results or file tree */}
@@ -5193,7 +5223,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     }}
                   >
                     <FileIcon filename={f.name} className="h-4 w-4 shrink-0" />
-                    <span className="truncate flex-1" title={f.path}><HighlightMatch text={f.path} query={fileSearchQuery} /></span>
+                    <TooltipHint content={f.path}><span className="truncate flex-1"><HighlightMatch text={f.path} query={fileSearchQuery} /></span></TooltipHint>
                   </div>
                 ))
               )}
@@ -5221,7 +5251,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   >
                     <div className="flex items-center gap-1">
                       <FileIcon filename={m.file.split('/').pop() || m.file} className="h-4 w-4 shrink-0" />
-                      <span className="truncate text-foreground" title={m.file}><HighlightMatch text={m.file} query={fileSearchQuery} /></span>
+                      <TooltipHint content={m.file}><span className="truncate text-foreground"><HighlightMatch text={m.file} query={fileSearchQuery} /></span></TooltipHint>
                       <span className="text-muted-foreground shrink-0">:{m.line}</span>
                     </div>
                     <span className="truncate text-muted-foreground pl-6"><HighlightMatch text={m.content} query={fileSearchQuery} /></span>
@@ -5274,7 +5304,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                       style={{ paddingLeft: 18 }}
                     >
                       <FileIcon filename={file.name} className="h-4 w-4" />
-                      <span className="truncate flex-1" title={file.path}>{file.path}</span>
+                      <TooltipHint content={file.path}><span className="truncate flex-1">{file.path}</span></TooltipHint>
                     </div>
                   ))}
                 </>
@@ -5330,30 +5360,32 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 <RefreshCw className={`h-3.5 w-3.5 ${gitStatusLoading ? 'animate-spin' : ''}`} />
               </button>
               {gitStatus?.behindCount ? (
+                <TooltipHint content={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}>
                 <button
                   className="relative p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                   onClick={handleGitPull}
                   disabled={gitActionBusy}
-                  title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                     {gitStatus.behindCount}
                   </span>
                 </button>
+                </TooltipHint>
               ) : null}
               {gitStatus?.aheadCount ? (
+                <TooltipHint content={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}>
                 <button
                   className="relative p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                   onClick={() => handleGitAction('commit_push')}
                   disabled={gitActionBusy}
-                  title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
                 >
                   <Upload className="h-3.5 w-3.5" />
                   <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                     {gitStatus.aheadCount}
                   </span>
                 </button>
+                </TooltipHint>
               ) : null}
             </div>
             {/* Commit message + actions (mobile) */}
@@ -5368,16 +5400,17 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   onChange={(e) => setCommitMessage(e.target.value)}
                   disabled={gitActionBusy || commitMsgGenerating}
                 />
+                <TooltipHint content="Generate commit message with AI">
                 <button
                   className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={handleGenerateCommitMessage}
                   disabled={!canGenerateCommitMessage}
-                  title="Generate commit message with AI"
                 >
                   {commitMsgGenerating
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <Sparkles className="h-3.5 w-3.5" />}
                 </button>
+                </TooltipHint>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {renderCommitActions(true)}
@@ -5779,13 +5812,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               <X className="h-3 w-3" />
             </button>
           )}
+          <TooltipHint content={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}>
           <button
             onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
             className={`px-1.5 h-5 rounded text-2xs font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-            title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
           >
             {fileSearchMode === 'files' ? 'Name' : 'Content'}
           </button>
+          </TooltipHint>
         </div>
 
         {/* Search results or file tree */}
@@ -5813,7 +5847,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     }}
                   >
                     <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate flex-1" title={f.path}><HighlightMatch text={f.path} query={fileSearchQuery} /></span>
+                    <TooltipHint content={f.path}><span className="truncate flex-1"><HighlightMatch text={f.path} query={fileSearchQuery} /></span></TooltipHint>
                   </div>
                 ))
               )}
@@ -5842,7 +5876,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   >
                     <div className="flex items-center gap-1">
                       <FileIcon filename={m.file.split('/').pop() || m.file} className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate text-foreground" title={m.file}><HighlightMatch text={m.file} query={fileSearchQuery} /></span>
+                      <TooltipHint content={m.file}><span className="truncate text-foreground"><HighlightMatch text={m.file} query={fileSearchQuery} /></span></TooltipHint>
                       <span className="text-muted-foreground shrink-0">:{m.line}</span>
                     </div>
                     <span className="truncate text-muted-foreground pl-5"><HighlightMatch text={m.content} query={fileSearchQuery} /></span>
@@ -5896,15 +5930,16 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     style={{ paddingLeft: 22 }}
                   >
                     <FileIcon filename={file.name} className="h-3.5 w-3.5" />
-                    <span className="truncate flex-1" title={file.path}>{file.path}</span>
+                    <TooltipHint content={file.path}><span className="truncate flex-1">{file.path}</span></TooltipHint>
+                    <TooltipHint content="Add to chat">
                     <button
                       type="button"
                       className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
-                      onClick={(e) => { e.stopPropagation(); onReferenceFile(file) }}
-                      title="Add to chat"
+                      onClick={(e) => { e.stopPropagation(); onReferenceFile(file) }} aria-label="Add to chat"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
+                    </TooltipHint>
                   </div>
                 ))}
               </>
@@ -5933,10 +5968,12 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           {/* Branch + refresh header */}
           <div className="flex h-[35px] items-center gap-1.5 px-2 border-b bg-muted/10 shrink-0 min-w-0">
             {gitStatus?.branch && (
-              <span className="ui-caption truncate flex-1 min-w-0" title={gitStatus.branch}>
+              <TooltipHint content={gitStatus.branch}>
+              <span className="ui-caption truncate flex-1 min-w-0">
                 <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
                 {gitStatus.branch}
               </span>
+              </TooltipHint>
             )}
             {!gitStatus?.branch && <span className="ui-caption flex-1 min-w-0">No repo</span>}
             {remoteRoot && (
@@ -5954,39 +5991,42 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 </SelectContent>
               </Select>
             )}
+            <TooltipHint content="Refresh git status">
             <button
               className="ui-inline-action p-1"
               onClick={fetchGitStatus}
-              disabled={gitStatusLoading}
-              title="Refresh git status"
+              disabled={gitStatusLoading} aria-label="Refresh git status"
             >
               <RefreshCw className={`h-3 w-3 ${gitStatusLoading ? 'animate-spin' : ''}`} />
             </button>
+            </TooltipHint>
             {gitStatus?.behindCount ? (
+              <TooltipHint content={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}>
               <button
                 className="relative ui-inline-action p-1"
                 onClick={handleGitPull}
                 disabled={gitActionBusy}
-                title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
               >
                 <Download className="h-3 w-3" />
                 <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                   {gitStatus.behindCount}
                 </span>
               </button>
+              </TooltipHint>
             ) : null}
             {gitStatus?.aheadCount ? (
+              <TooltipHint content={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}>
               <button
                 className="relative ui-inline-action p-1"
                 onClick={() => handleGitAction('commit_push')}
                 disabled={gitActionBusy}
-                title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
               >
                 <Upload className="h-3 w-3" />
                 <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                   {gitStatus.aheadCount}
                 </span>
               </button>
+              </TooltipHint>
             ) : null}
           </div>
 
@@ -6012,16 +6052,17 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 }}
                 disabled={gitActionBusy || commitMsgGenerating}
               />
+              <TooltipHint content="Generate commit message with AI">
               <button
                 className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={handleGenerateCommitMessage}
                 disabled={!canGenerateCommitMessage}
-                title="Generate commit message with AI"
               >
                 {commitMsgGenerating
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : <Sparkles className="h-3 w-3" />}
               </button>
+              </TooltipHint>
             </div>
             <div className="flex items-center gap-1 flex-wrap min-w-0">
               {renderCommitActions()}
@@ -6090,13 +6131,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         {/* Tab bar — VS Code style */}
         <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 min-w-0">
           {!effectiveShowTree && (showTreeProp || onToggleTree) && (
+            <TooltipHint content="Show Files">
             <button
               onClick={() => { if (tree.collapsed) tree.restore(); else if (onToggleTree) onToggleTree() }}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 ml-1"
-              title="Show Files"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 ml-1" aria-label="Show Files"
             >
               <FolderTree className="h-3 w-3" />
             </button>
+            </TooltipHint>
           )}
           <div
             ref={tabScrollRef}
@@ -6112,8 +6154,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               const gitStatus4tab = tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? tab.diffEntry.status : undefined
               const canDetachTab = tab.type !== 'preview'
               return (
+                <TooltipHint key={tab.id} content={tab.path}>
                 <div
-                  key={tab.id}
                   data-tab-id={tab.id}
                   className={`group relative flex items-center gap-1.5 h-[35px] px-3 border-r border-border/40 cursor-pointer shrink-0 text-xs select-none transition-colors ${
                     isActive
@@ -6160,7 +6202,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     e.preventDefault()
                     handleReorderTabs(draggingTabId, tab.id)
                   }}
-                  title={tab.path}
                 >
                   {/* Active tab bottom highlight */}
                   {isActive && <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary" />}
@@ -6180,68 +6221,75 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   <span className="truncate max-w-[220px]">
                     {getEditorTabTitle(tab)}
                   </span>
+                  <TooltipHint content="Close (Middle-click)">
                   <button
                     className={`p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 transition-opacity ${
                       isActive ? 'opacity-50 hover:opacity-100' : 'opacity-0 group-hover:opacity-50 hover:!opacity-100'
                     }`}
-                    onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
-                    title="Close (Middle-click)"
+                    onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }} aria-label="Close (Middle-click)"
                   >
                     <X className="h-3 w-3" />
                   </button>
+                  </TooltipHint>
                 </div>
+                </TooltipHint>
               )
             })}
           </div>
           {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab) && (
             <div className="flex items-center shrink-0">
               {canMaximizeActiveTab && (
+                <TooltipHint content={tabMaximized ? 'Restore tab size' : 'Maximize active tab'}>
                 <button
                   onClick={() => setTabMaximized((prev) => !prev)}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title={tabMaximized ? 'Restore tab size' : 'Maximize active tab'}
                 >
                   {tabMaximized ? <Minimize2 className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
                 </button>
+                </TooltipHint>
               )}
               {activeTabEditable && (
                 <>
                   {(activeTab?.isDirty || activeTabGitDiffEntry) && (
+                    <TooltipHint content={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}>
                     <button
                       onClick={() => { if (activeTabId) void handleRevertTab(activeTabId) }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                      title={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0" aria-label={activeTab?.isDirty ? 'Revert unsaved edits' : 'Revert file changes'}
                       disabled={gitActionBusy}
                     >
                       <Undo2 className="h-3 w-3" />
                     </button>
+                    </TooltipHint>
                   )}
+                  <TooltipHint content={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}>
                   <button
                     onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                    title={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0" aria-label={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
                     disabled={activeTab?.isSaving}
                   >
                     <Save className={`h-3 w-3 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
                   </button>
+                  </TooltipHint>
                 </>
               )}
               {activeTab?.type === 'preview' && (
                 <>
+                  <TooltipHint content="Refresh preview">
                   <button
                     onClick={handleRefreshPreviewTarget}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                    title="Refresh preview"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0" aria-label="Refresh preview"
                   >
                     <RefreshCw className="h-3 w-3" />
                   </button>
+                  </TooltipHint>
+                  <TooltipHint content="Preview controls">
                   <button
                     onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                    title="Preview controls"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0" aria-label="Preview controls"
                   >
                     <Settings2 className="h-3 w-3" />
                   </button>
+                  </TooltipHint>
                 </>
               )}
               {onToggleEditor && !panel.collapsed && !panel.maxCollapsed && (
@@ -6253,13 +6301,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 </button>
               )}
               {panel.maxCollapsed && (
+                <TooltipHint content="Show Chat">
                 <button
                   onClick={panel.restore}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title="Show Chat"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0" aria-label="Show Chat"
                 >
                   <MessageSquare className="h-3 w-3" />
                 </button>
+                </TooltipHint>
               )}
             </div>
           )}

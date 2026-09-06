@@ -5,7 +5,7 @@ import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -693,12 +693,13 @@ export function SessionSelector({
                             {project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')}
                           </span>
                           {project.instructions?.trim() && (
+                            <TooltipHint content="This folder adds context to its chats">
                             <span
                               className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-medium text-primary"
-                              title="This folder adds context to its chats"
                             >
                               ctx
                             </span>
+                            </TooltipHint>
                           )}
                           {repository && (
                             <>
@@ -731,13 +732,14 @@ export function SessionSelector({
                           </div>
                         )}
                         {pathMissing && (
+                          <TooltipHint content={project.rootPath ? `Folder not found: ${project.rootPath}` : undefined}>
                           <div
                             className="mt-0.5 flex items-center gap-1 text-2xs text-red-500"
-                            title={project.rootPath ? `Folder not found: ${project.rootPath}` : undefined}
                           >
                             <FolderX className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">Path not found</span>
                           </div>
+                          </TooltipHint>
                         )}
                         {remoteNode && !offline && (
                           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
@@ -864,11 +866,10 @@ export function SessionSelector({
                                   </DropdownMenuItem>
                                   {moveTargets.length > 0 && <DropdownMenuSeparator />}
                                   {moveTargets.map((target) => (
+                                    <TooltipHint key={target.project.id} content={target.reason ?? undefined}>
                                     <DropdownMenuItem
-                                      key={target.project.id}
                                       className="gap-2"
                                       disabled={target.disabled}
-                                      title={target.reason ?? undefined}
                                       style={{ paddingLeft: 10 + target.depth * 12, }}
                                       onSelect={(e) => {
                                         e.preventDefault()
@@ -882,6 +883,7 @@ export function SessionSelector({
                                       {target.isCurrent &&
                                         <span className="shrink-0 text-2xs text-muted-foreground">current</span>}
                                     </DropdownMenuItem>
+                                    </TooltipHint>
                                   ))}
                                   {moveTargets.length === 0 &&
                                     <p className="px-2 py-2 text-center text-2xs text-muted-foreground">

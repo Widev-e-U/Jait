@@ -15,8 +15,20 @@ import {
   shouldUseTerminalCustomContextMenu,
   shouldSuppressTerminalPasteControlData,
   terminalBelongsToProject,
+  terminalTouchDeltaToRows,
   type TerminalInfo,
 } from './terminal-view'
+
+describe('terminalTouchDeltaToRows', () => {
+  it('moves the viewport with the finger in the expected mobile direction', () => {
+    expect(terminalTouchDeltaToRows(-34, 17)).toBe(2)
+    expect(terminalTouchDeltaToRows(34, 17)).toBe(-2)
+  })
+
+  it('waits until a complete row has been dragged', () => {
+    expect(terminalTouchDeltaToRows(-16, 17)).toBe(0)
+  })
+})
 
 const originalWindow = globalThis.window
 

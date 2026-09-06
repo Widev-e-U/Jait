@@ -64,7 +64,11 @@ async fn check_and_emit(app: &AppHandle) -> Value {
                 "available",
                 json!({ "version": version, "currentVersion": current_version(app) }),
             );
-            json!({ "updateAvailable": true, "version": version })
+            json!({
+                "updateAvailable": true,
+                "version": version,
+                "currentVersion": current_version(app),
+            })
         }
         Ok(None) => {
             emit_update_event(app, "not-available", json!({}));

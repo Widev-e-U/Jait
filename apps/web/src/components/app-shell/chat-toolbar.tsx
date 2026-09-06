@@ -25,7 +25,7 @@ import {
 } from '@/components/manager/manager-thread-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import type { useAutomation } from '@/hooks/useAutomation'
 import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
@@ -422,15 +422,16 @@ export function ChatToolbar({
                   </Badge>
                 )}
                 {canStopThread(automation.selectedThread) && (
+                  <TooltipHint content={automation.selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-[18px] w-[18px] sm:h-5 sm:w-5"
-                    onClick={() => void automation.handleStop(automation.selectedThread!.id)}
-                    title={automation.selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
+                    onClick={() => void automation.handleStop(automation.selectedThread!.id)} aria-label={automation.selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
                   >
                     <Square className="h-2.5 w-2.5" />
                   </Button>
+                  </TooltipHint>
                 )}
                 {automation.showGitActions && automation.selectedRepo && (
                   <div className={isMobile ? 'shrink-0' : 'ml-2 shrink-0'}>

@@ -407,6 +407,7 @@ fn web_url(gateway: &str) -> WebviewUrl {
 fn boot_script(
     gateway: &str,
     gateway_configured: bool,
+    version: &str,
     glue: &Arc<Mutex<HostState>>,
     open_folder: Option<&std::path::Path>,
 ) -> String {
@@ -425,9 +426,10 @@ fn boot_script(
         None => "null".to_string(),
     };
     format!(
-        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, deviceID: {}, openFolder: {}, platform: 'tauri' }};",
+        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, version: {}, deviceID: {}, openFolder: {}, platform: 'tauri' }};",
         serde_json::to_string(gateway).unwrap_or_else(|_| "null".into()),
         gateway_configured,
+        serde_json::to_string(version).unwrap_or_else(|_| "null".into()),
         serde_json::to_string(&device_id).unwrap_or_else(|_| "null".into()),
         open_folder_json,
     )
@@ -486,7 +488,14 @@ pub fn run() {
 
             let gateway = gateway_url();
             let gateway_configured = gateway_url_is_configured();
-            let boot = boot_script(&gateway, gateway_configured, &glue, opts.open_folder.as_deref());
+            let version = app.package_info().version.to_string();
+            let boot = boot_script(
+                &gateway,
+                gateway_configured,
+                &version,
+                &glue,
+                opts.open_folder.as_deref(),
+            );
 
             let mut builder = WebviewWindowBuilder::new(app, "main", web_url(&gateway))
                 .title("Jait")

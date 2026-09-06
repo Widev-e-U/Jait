@@ -5,6 +5,7 @@
 import { Check, Pipette, Ban } from 'lucide-react'
 import { PROJECT_COLORS, resolveProjectColor } from '@jait/shared'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface ProjectColorPickerProps {
   value: string | null
@@ -18,11 +19,11 @@ export function ProjectColorPicker({ value, onChange, className }: ProjectColorP
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)} role="group" aria-label="Folder colour">
+      <TooltipHint content="No colour">
       <button
         type="button"
         aria-label="No colour"
         aria-pressed={!resolved}
-        title="No colour"
         onClick={() => onChange(null)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-full border transition-transform',
@@ -32,16 +33,16 @@ export function ProjectColorPicker({ value, onChange, className }: ProjectColorP
       >
         <Ban className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
+      </TooltipHint>
 
       {PROJECT_COLORS.map((color) => {
         const selected = value === color.token
         return (
+          <TooltipHint key={color.token} content={color.label}>
           <button
-            key={color.token}
             type="button"
             aria-label={color.label}
             aria-pressed={selected}
-            title={color.label}
             onClick={() => onChange(color.token)}
             style={{ backgroundColor: color.value }}
             className={cn(
@@ -52,13 +53,14 @@ export function ProjectColorPicker({ value, onChange, className }: ProjectColorP
           >
             {selected && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
           </button>
+          </TooltipHint>
         )
       })}
 
       {/* Native picker: the label is the visible control, the input stays
           off-screen so the swatch matches the palette buttons. */}
+      <TooltipHint content="Custom colour">
       <label
-        title="Custom colour"
         className={cn(
           'relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border transition-transform hover:scale-110',
           isCustom ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : 'border-border',
@@ -74,6 +76,7 @@ export function ProjectColorPicker({ value, onChange, className }: ProjectColorP
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
       </label>
+      </TooltipHint>
     </div>
   )
 }

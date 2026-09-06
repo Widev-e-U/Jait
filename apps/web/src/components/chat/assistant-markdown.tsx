@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { FileIcon } from '@/components/icons/file-icons'
 import { parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
  * Shared assistant-markdown renderer: syntax-highlighted code blocks, project
@@ -197,12 +198,12 @@ function ProjectPathLink({
     : null
 
   return (
+    <TooltipHint content={target.path}>
     <a
       href={href}
       className={cn(
         'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       )}
-      title={target.path}
       onClick={(event) => {
         event.preventDefault()
         void onOpenPath(target.path, target.line, target.column)
@@ -216,6 +217,7 @@ function ProjectPathLink({
         </span>
       ) : null}
     </a>
+    </TooltipHint>
   )
 }
 

@@ -320,6 +320,16 @@ export class AgentsApi {
     this._modelsCachedAt.clear()
   }
 
+  async refreshProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
+    const response = await fetch(`${API_URL}/api/providers/models/reset`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+    })
+    if (!response.ok) throw new Error(`Failed to refresh models: ${response.statusText}`)
+    this.resetProviderModels()
+    return this.listProviderModels(providerId, nodeId)
+  }
+
   async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
     const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
     const cacheKey = `${providerId}:${effectiveNodeId}`

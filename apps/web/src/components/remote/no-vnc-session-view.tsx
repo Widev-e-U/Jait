@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
 import { buildNoVncViewerUrl, isNoVncViewerUrl, isWebSocketUrl, type NoVncResizeMode, type NoVncSessionOptions } from '@/lib/no-vnc'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface NoVncSessionViewProps extends NoVncSessionOptions {
   source?: string | null
@@ -317,16 +318,17 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
       />
       <div className="absolute left-2 top-2 z-20 flex items-start gap-2">
         <div className="pointer-events-auto flex items-start gap-2">
+          <TooltipHint content={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}>
           <button
             type="button"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background sm:h-7 sm:w-7"
             onClick={toggleHint}
             aria-expanded={isHintExpanded}
             aria-label={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}
-            title={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}
           >
             <Info className="h-3.5 w-3.5" />
           </button>
+          </TooltipHint>
           {isHintExpanded ? (
             <div className="max-w-[260px] rounded-xl bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow backdrop-blur-sm">
               Scroll to zoom. Middle-drag to pan. Click the preview to interact.
@@ -346,31 +348,37 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
       ) : null}
       {/* Floating controls — always accessible */}
       <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 rounded bg-background/90 px-2 py-1.5 text-sm text-muted-foreground shadow sm:gap-0.5 sm:px-1.5 sm:py-1 sm:text-xs">
+        <TooltipHint content={navigating ? 'Switch to interact mode (click VNC)' : 'Switch to navigate mode (scroll to zoom)'}>
         <button
           type="button"
           className={`min-h-10 rounded px-2 sm:min-h-0 sm:px-1.5 sm:py-0.5 ${navigating ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}
           onClick={toggleMode}
-          title={navigating ? 'Switch to interact mode (click VNC)' : 'Switch to navigate mode (scroll to zoom)'}
         >
           {navigating ? '🔍 Navigate' : '👆 Interact'}
         </button>
+        </TooltipHint>
         <span className="mx-0.5 text-border">│</span>
-        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomOut} title="Zoom out">
+        <TooltipHint content="Zoom out">
+        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomOut}>
           −
         </button>
+        </TooltipHint>
         <span className="min-w-[3ch] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomIn} title="Zoom in">
+        <TooltipHint content="Zoom in">
+        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomIn}>
           +
         </button>
+        </TooltipHint>
         {isTransformed ? (
+          <TooltipHint content="Reset view (double-click)">
           <button
             type="button"
             className="ml-0.5 min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0"
             onClick={resetView}
-            title="Reset view (double-click)"
           >
             ↺
           </button>
+          </TooltipHint>
         ) : null}
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { Mic, MicOff, PhoneOff } from 'lucide-react'
 
 import { AgentAudioVisualizerWave } from '@/components/agent-audio-visualizer-wave'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import type { useVoiceAssistant } from '@/hooks/useVoiceAssistant'
 import type { useWakeWord } from '@/hooks/useWakeWord'
 
@@ -70,9 +70,11 @@ export function VoiceActiveControls({
       style={noDragStyle(isElectron)}
     >
       {activeProjectTitle ? (
-        <span className="hidden sm:inline max-w-[10rem] truncate px-1.5 text-[11px] text-muted-foreground" title={activeProjectTitle}>
+        <TooltipHint content={activeProjectTitle}>
+        <span className="hidden sm:inline max-w-[10rem] truncate px-1.5 text-[11px] text-muted-foreground">
           {activeProjectTitle}
         </span>
+        </TooltipHint>
       ) : null}
       {/* Mute toggle */}
       <button

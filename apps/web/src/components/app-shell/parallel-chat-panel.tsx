@@ -9,6 +9,7 @@ import type { ProjectSession } from '@/hooks/useProjects'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface ParallelChatPrompt {
   content: string
@@ -135,12 +136,16 @@ export function ParallelChatPanel({
           <div className="truncate text-sm font-medium">Question branch</div>
           <div className="truncate text-[11px] text-muted-foreground">{session.name}</div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenAsPrimary} title="Open as primary chat">
+        <TooltipHint content="Open as primary chat">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenAsPrimary} aria-label="Open as primary chat">
           <Maximize2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="Close question branch">
+        </TooltipHint>
+        <TooltipHint content="Close question branch">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close question branch">
           <X className="h-4 w-4" />
         </Button>
+        </TooltipHint>
       </header>
 
       <Conversation

@@ -5,6 +5,7 @@ import type {
 } from 'react'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { formatAgo } from '@/lib/relative-time'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /** Minimal shape both ProjectSession and the switcher's session objects satisfy. */
 export interface SessionRowSession {
@@ -24,11 +25,12 @@ export function isSessionUnread(session: { lastActiveAt: string; viewedAt: strin
 
 function UnreadDot() {
   return (
+    <TooltipHint content="Unread">
     <span
       className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500"
       aria-label="Unread"
-      title="Unread"
     />
+    </TooltipHint>
   )
 }
 

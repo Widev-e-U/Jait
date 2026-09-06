@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { GitIdentityDialog } from './GitIdentityDialog'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface GitActionsControlProps {
   /** Absolute path to the git repo working directory */
@@ -284,16 +285,17 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
       />
       {/* View changes button */}
       {gitStatus?.hasWorkingTreeChanges && (
+        <TooltipHint content="View changes">
         <Button
           variant="ghost"
           size="sm"
           className="text-xs gap-1"
           onClick={() => setDiffOpen(true)}
-          title="View changes"
           aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
         >
           <DiffCountLabel insertions={changeTotals.insertions} deletions={changeTotals.deletions} />
         </Button>
+        </TooltipHint>
       )}
 
       {/* Quick action + menu */}

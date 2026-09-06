@@ -6,6 +6,7 @@ import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minim
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
 import { cn } from '@/lib/utils'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface ConversationProps {
   children: React.ReactNode
@@ -1380,22 +1381,23 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         <div
           className="pointer-events-none absolute inset-x-0 top-14 z-20 mx-auto flex max-w-4xl justify-end px-4 sm:top-10 sm:px-5"
         >
+          <TooltipHint content="Jump to and edit previous user message">
           <button
             type="button"
             aria-label="Jump to and edit previous user message"
-            title="Jump to and edit previous user message"
             className="pointer-events-auto block w-fit max-w-full cursor-text rounded-lg bg-muted px-4 py-3 text-left text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-muted/80"
             onClick={jumpToPreviousMessage}
           >
             <span className="block truncate">{previousMessagePreview}</span>
           </button>
+          </TooltipHint>
         </div>
       )}
 
       {initialScrollReady && !loading && !isAtBottom && (
+        <TooltipHint content="Scroll to latest message">
         <ConversationScrollButton
           aria-label="Scroll to latest message"
-          title="Scroll to latest message"
           className="left-auto bottom-5 translate-x-0"
           style={{ right: floatingControlInset }}
           onClick={() => {
@@ -1405,6 +1407,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
             scrollToBottom('smooth', true)
           }}
         />
+        </TooltipHint>
       )}
 
       {showMinimap && (

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle2, ChevronDown, Circle, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface TodoItem {
   id: number
@@ -105,14 +106,15 @@ export function TodoList({ items: rawItems, className, onClear, merged }: TodoLi
           {completed}/{total}
         </span>
         {onClear && (
+          <TooltipHint content="Clear todo list">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onClear() }}
-            className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Clear todo list"
+            className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Clear todo list"
           >
             <X className="h-3 w-3" />
           </button>
+          </TooltipHint>
         )}
       </button>
 

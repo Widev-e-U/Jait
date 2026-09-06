@@ -15,6 +15,7 @@ import {
   shouldShowThreadChangesButton,
   shouldUseRecordedBranchDiff,
 } from './thread-actions-state'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -305,34 +306,36 @@ export function ThreadActions({
       />
       <div className="inline-flex items-center gap-1">
         {showChangesButton && displayedChangeTotals && (
+          <TooltipHint content="View changes">
           <Button
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2 text-xs sm:h-6 sm:text-2xs"
             onClick={() => setDiffOpen(true)}
-            title="View changes"
             aria-label={`View changes: +${displayedChangeTotals.insertions} -${displayedChangeTotals.deletions}`}
           >
             <DiffCountLabel insertions={displayedChangeTotals.insertions} deletions={displayedChangeTotals.deletions} />
             {!isMobile && 'Changes'}
           </Button>
+          </TooltipHint>
         )}
+        <TooltipHint content={threadKind !== 'delivery'
+            ? 'Delegation threads do not create pull requests.'
+            : !existingPrLink && threadStatus !== 'completed'
+              ? 'Finish the thread before creating a pull request.'
+              : prButtonTitle}>
         <Button
           variant="ghost"
           size="sm"
           className="h-7 min-w-8 gap-1 px-2 text-xs sm:h-6 sm:min-w-7 sm:text-2xs"
           disabled={isBusy || !canCreatePr}
           onClick={handlePushAndPR}
-          title={threadKind !== 'delivery'
-            ? 'Delegation threads do not create pull requests.'
-            : !existingPrLink && threadStatus !== 'completed'
-              ? 'Finish the thread before creating a pull request.'
-              : prButtonTitle}
           aria-label={prButtonTitle}
         >
           {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-3 sm:w-3" /> : <GitPullRequest className="h-3.5 w-3.5 sm:h-3 sm:w-3" />}
           {!isMobile && buttonLabel}
         </Button>
+        </TooltipHint>
         {showStatusBadge && existingPrLink && (
           <Badge
             variant="outline"

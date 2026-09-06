@@ -20,6 +20,6 @@ describe('MessageQueue parallel action', () => {
 
     expect(markup).toContain('Steer')
     expect(markup).toContain('Ask in parallel')
-    expect(markup).toContain('title="Ask in parallel"')
+    expect(markup).not.toContain('title="Ask in parallel"')
   })
 })

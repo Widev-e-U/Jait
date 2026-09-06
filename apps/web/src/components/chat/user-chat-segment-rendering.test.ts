@@ -29,13 +29,13 @@ describe('chat reference chip rendering', () => {
   it('renders chat references as chips in sent user message bubbles', () => {
     const source = readSource('./message.tsx')
     const chatBranch = source.match(
-      /segment\.type === 'chat' \? \(\s*<span([\s\S]*?)\) : null,/,
+      /segment\.type === 'chat' \? \(\s*<TooltipHint([\s\S]*?)\) : null,/,
     )?.[1] ?? ''
 
     // Regression: the sent bubble branch ended at `skill`, so dragging a chat
     // into the input and sending produced a bubble with no chip at all.
+    expect(chatBranch).toContain('content={`Chat: ${segment.sessionId}`}')
     expect(chatBranch).toContain('<MessageSquare')
     expect(chatBranch).toContain('{segment.name}')
-    expect(chatBranch).toContain('Chat: ${segment.sessionId}')
   })
 })

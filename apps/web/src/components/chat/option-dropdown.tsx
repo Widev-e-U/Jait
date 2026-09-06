@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface DropdownOption<T extends string> {
   value: T
@@ -52,6 +53,7 @@ export function OptionDropdown<T extends string>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
+        <TooltipHint content={`${titlePrefix}: ${current.label}`}>
         <button
           type="button"
           className={cn(
@@ -61,12 +63,12 @@ export function OptionDropdown<T extends string>({
             'disabled:pointer-events-none disabled:opacity-50',
             className,
           )}
-          title={`${titlePrefix}: ${current.label}`}
         >
           <CurrentIcon className="h-4 w-4" />
           {!compact && <span>{current.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
+        </TooltipHint>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} side={side} className={contentClassName}>
         {options.map((option) => {

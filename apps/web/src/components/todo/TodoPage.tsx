@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { agentsApi, type AutomationRepo, type JaitTodo, type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { persistTodoRepoSelection, resolveTodoRepoSelection } from '@/lib/todo-repo-selection-storage'
@@ -448,6 +448,7 @@ function DatePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
+        <TooltipHint content={value ? `Due ${dateLabel(value)}` : placeholder}>
         <Button
           type="button"
           variant="outline"
@@ -456,12 +457,12 @@ function DatePicker({
             !value && 'text-muted-foreground',
             className,
           )}
-          title={value ? `Due ${dateLabel(value)}` : placeholder}
           aria-label={value ? `Due ${dateLabel(value)}` : placeholder}
         >
           <CalendarDays className="h-4 w-4 shrink-0" />
           {!iconOnly && <span className="truncate">{value ? dateLabel(value) : placeholder}</span>}
         </Button>
+        </TooltipHint>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[19rem] p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -543,17 +544,18 @@ function OptionalDatePicker({
 
   if (!isPicking) {
     return (
+      <TooltipHint content="Add date">
       <Button
         type="button"
         variant="outline"
         className={cn(iconOnly ? 'h-8 w-8 justify-center px-0 text-muted-foreground' : 'h-10 justify-start gap-2 text-muted-foreground', className)}
         onClick={() => setIsPicking(true)}
-        title="Add date"
         aria-label="Add date"
       >
         <CalendarDays className="h-4 w-4" />
         {!iconOnly && 'Add date'}
       </Button>
+      </TooltipHint>
     )
   }
 
@@ -592,9 +594,11 @@ function OptionSelect<T extends string>({
   const label = options.find((option) => option.value === value)?.label ?? placeholder ?? value
   return (
     <Select value={value} onValueChange={(next) => onChange(next as T)} disabled={disabled}>
-      <SelectTrigger className={className} title={triggerLabel ? `${triggerLabel}: ${label}` : label} aria-label={triggerLabel ? `${triggerLabel}: ${label}` : label}>
+      <TooltipHint content={triggerLabel ? `${triggerLabel}: ${label}` : label}>
+      <SelectTrigger className={className} aria-label={triggerLabel ? `${triggerLabel}: ${label}` : label}>
         {triggerIcon ? triggerIcon : <SelectValue placeholder={placeholder} />}
       </SelectTrigger>
+      </TooltipHint>
       <SelectContent>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
@@ -1201,22 +1205,23 @@ export function TodoPage({
               ))}
             </SelectContent>
           </Select>
+          <TooltipHint content="Refresh">
           <Button
             variant="outline"
             onClick={() => void loadTodos(repoId)}
             disabled={isLoading || !repoId}
-            title="Refresh"
             aria-label="Refresh"
             className="h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4"
           >
             <RefreshCw className={cn('h-4 w-4 sm:mr-2', isLoading && 'animate-spin')} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
+          </TooltipHint>
+          <TooltipHint content="History">
           <Button
             variant="outline"
             onClick={() => setIsHistoryOpen(true)}
             disabled={completionEvents.length === 0}
-            title="History"
             aria-label="History"
             className="relative h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4"
           >
@@ -1231,6 +1236,7 @@ export function TodoPage({
               </span>
             )}
           </Button>
+          </TooltipHint>
         </div>
       </div>
 
@@ -1355,26 +1361,28 @@ export function TodoPage({
             className="h-10 pl-9"
           />
         </div>
+        <TooltipHint content="List view">
         <Button
           variant={mode === 'list' ? 'secondary' : 'outline'}
           size="icon"
           className="h-10 w-10 shrink-0"
           onClick={() => setMode('list')}
-          title="List view"
           aria-label="List view"
         >
           <ListChecks className="h-4 w-4" />
         </Button>
+        </TooltipHint>
+        <TooltipHint content="Calendar view">
         <Button
           variant={mode === 'calendar' ? 'secondary' : 'outline'}
           size="icon"
           className="h-10 w-10 shrink-0"
           onClick={() => setMode('calendar')}
-          title="Calendar view"
           aria-label="Calendar view"
         >
           <CalendarDays className="h-4 w-4" />
         </Button>
+        </TooltipHint>
         <OptionSelect
           value={statusFilter}
           onChange={setStatusFilter}
@@ -1560,14 +1568,15 @@ export function TodoPage({
                       onChange={(event) => toggleTodoSelection(todo.id, event.target.checked)}
                       aria-label="Select todo"
                     />
+                    <TooltipHint content="Drag to reorder">
                     <div
                       className="shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
-                      title="Drag to reorder"
                       aria-label="Drag to reorder"
                       onPointerDown={(event) => handleDragStart(todo.id, event)}
                     >
                       <GripVertical className="h-4 w-4" />
                     </div>
+                    </TooltipHint>
                     <button className="h-6 w-6 shrink-0 rounded text-muted-foreground hover:text-foreground" onClick={() => void updateTodoStatus(todo, todo.status === 'done' ? 'open' : 'done')} aria-label="Toggle todo status">
                       <TodoStatusIcon status={todo.status} />
                     </button>
@@ -1621,17 +1630,18 @@ export function TodoPage({
                         className="rounded-md border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-accent hover:text-foreground focus:ring-1 focus:ring-ring/50 focus:ring-offset-0"
                       />
                     </ControlTooltip>
+                    <TooltipHint content="Run todo as thread">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-foreground"
                       onClick={() => void runTodoAsThread(todo)}
                       disabled={isRunningTodo || !selectedRepo}
-                      title="Run todo as thread"
                       aria-label="Run todo as thread"
                     >
                       {isRunningTodo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     </Button>
+                    </TooltipHint>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => void removeTodo(todo.id)} aria-label="Remove todo">
                       <Trash2 className="h-4 w-4" />
                     </Button>

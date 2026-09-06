@@ -34,7 +34,7 @@ describe('session chat selection', () => {
     expect(formatSessionChatSelectionLabel(selection!)).toBe('Codex · GPT 5.4 · High effort')
 
     const markup = renderToStaticMarkup(createElement(SessionChatIcon, { metadata }))
-    expect(markup).toContain('title="Codex · GPT 5.4 · High effort"')
+    expect(markup).not.toContain('title="Codex · GPT 5.4 · High effort"')
     expect(markup).toContain('aria-label="Codex · GPT 5.4 · High effort"')
   })
 })

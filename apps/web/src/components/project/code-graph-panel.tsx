@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { apiFetch } from '@/lib/api-fetch'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface GraphNode extends CodeGraphNode {
   x?: number
@@ -76,7 +77,7 @@ function IndexSummary({ index }: { index: CodeGraphIndex }) {
       {stats ? <span>{stats.nodeCount.toLocaleString()} nodes</span> : null}
       {stats ? <span>{stats.edgeCount.toLocaleString()} edges</span> : null}
       <span>GraphRAG {index.graphRagStatus}</span>
-      {index.sourceRevision ? <span title={index.sourceRevision}>revision {index.sourceRevision.slice(0, 8)}</span> : null}
+      {index.sourceRevision ? <TooltipHint content={index.sourceRevision}><span>revision {index.sourceRevision.slice(0, 8)}</span></TooltipHint> : null}
     </div>
   )
 }
@@ -348,7 +349,7 @@ export function CodeGraphPanel({ projectRoot, mode, theme = 'dark' }: CodeGraphP
                   <div className="mb-2 font-medium">Top symbols</div>
                   <div className="space-y-1 text-muted-foreground">
                     {queryResult.nodes.slice(0, 12).map((node) => (
-                      <div key={node.id} className="truncate" title={node.sourceFile}>{node.label} <span className="opacity-60">· {node.type}</span></div>
+                      <TooltipHint key={node.id} content={node.sourceFile}><div className="truncate">{node.label} <span className="opacity-60">· {node.type}</span></div></TooltipHint>
                     ))}
                   </div>
                 </div>

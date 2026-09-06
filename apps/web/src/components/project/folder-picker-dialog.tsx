@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import type { FsNode, FsBrowseEntry } from '@jait/shared'
 import { detectPlatform, generateDeviceId } from '@/lib/device-id'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -240,35 +241,37 @@ export function FolderPickerDialog({
         <div className="flex items-center gap-1 px-3 py-1.5 border-b text-xs text-muted-foreground bg-muted/30">
           {/* Root buttons */}
           {roots.filter(r => r.name !== 'Home').map(r => (
+            <TooltipHint key={r.path} content={r.path}>
             <button
-              key={r.path}
               onClick={() => void browse(r.path)}
               className="px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-1"
-              title={r.path}
             >
               <HardDrive className="h-3 w-3" />
               <span>{r.name}</span>
             </button>
+            </TooltipHint>
           ))}
+          <TooltipHint content="Home directory">
           <button
             onClick={() => {
               const home = roots.find(r => r.name === 'Home')
               if (home) void browse(home.path)
             }}
-            className="px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-1"
-            title="Home directory"
+            className="px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-1" aria-label="Home directory"
           >
             <Home className="h-3 w-3" />
           </button>
+          </TooltipHint>
           <div className="h-3 w-px bg-border mx-1" />
           {parentPath && (
+            <TooltipHint content="Go up">
             <button
               onClick={() => void browse(parentPath)}
-              className="px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-1"
-              title="Go up"
+              className="px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-1" aria-label="Go up"
             >
               <ArrowUp className="h-3 w-3" />
             </button>
+            </TooltipHint>
           )}
           <button
             onClick={() => setShowManualInput(v => !v)}

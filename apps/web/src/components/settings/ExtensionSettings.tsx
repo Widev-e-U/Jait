@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { PluginInfo, PluginStatus } from '@jait/shared'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -216,16 +217,17 @@ function InstalledPlugins({ token }: { token: string | null }) {
                 onCheckedChange={(checked) => void togglePlugin(plugin.id, checked)}
                 aria-label={isEnabled ? 'Disable' : 'Enable'}
               />
+              <TooltipHint content="Uninstall">
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                 disabled={isBusy}
-                onClick={() => void uninstallPlugin(plugin.id)}
-                title="Uninstall"
+                onClick={() => void uninstallPlugin(plugin.id)} aria-label="Uninstall"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
+              </TooltipHint>
             </div>
           </Card>
         )

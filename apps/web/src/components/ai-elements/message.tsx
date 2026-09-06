@@ -1,7 +1,7 @@
 import { type ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipHint } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -60,7 +60,6 @@ export function MessageAction({
       variant="ghost"
       size="icon"
       className={cn('h-7 w-7 rounded-full [&_svg]:h-3.5 [&_svg]:w-3.5', className)}
-      title={tooltip ?? label}
       {...props}
     >
       {children}
@@ -68,15 +67,8 @@ export function MessageAction({
     </Button>
   )
 
-  if (!tooltip) return button
-
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent>{tooltip}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <TooltipHint content={tooltip ?? label}>{button}</TooltipHint>
   )
 }
 

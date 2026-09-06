@@ -1,6 +1,7 @@
 import { ActionCard, ToolIcon, useConsentQueue, type ConsentRequestInfo } from './action-card'
 import { ShieldAlert, ShieldCheck, ShieldX, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 // ── StatusBadge ──────────────────────────────────────────────────────
 
@@ -95,36 +96,39 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
         <span className="text-xs font-semibold text-foreground truncate shrink-0 max-w-[30%]">{first.toolName}</span>
         <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{first.summary}</span>
         {extra > 0 && (
+          <TooltipHint content={`${extra} more pending ${extra === 1 ? 'request' : 'requests'}`}>
           <span
-            title={`${extra} more pending ${extra === 1 ? 'request' : 'requests'}`}
             className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground shrink-0"
           >
             +{extra}
           </span>
+          </TooltipHint>
         )}
         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          <TooltipHint content="Reject this request">
           <button
             type="button"
-            title="Reject this request"
             onClick={() => reject(first.id)}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-colors"
           >
             <ShieldX className="h-3.5 w-3.5" />
             Reject
           </button>
+          </TooltipHint>
+          <TooltipHint content="Approve this request">
           <button
             type="button"
-            title="Approve this request"
             onClick={() => approve(first.id)}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-500 transition-colors"
           >
             <ShieldCheck className="h-3.5 w-3.5" />
             Approve
           </button>
+          </TooltipHint>
           {sessionId && (
+            <TooltipHint content="Approve all pending requests">
             <button
               type="button"
-              title="Approve all pending requests"
               onClick={handleApproveAllInSession}
               disabled={approvingAll}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -132,6 +136,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
               <CheckCircle2 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{approvingAll ? 'Approving...' : 'Approve all'}</span>
             </button>
+            </TooltipHint>
           )}
         </div>
       </div>

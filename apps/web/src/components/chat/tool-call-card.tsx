@@ -3,7 +3,7 @@ import { Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRi
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
@@ -1948,9 +1948,11 @@ export function StructuredDataView({ value, depth = 0 }: { value: unknown; depth
     <div className="divide-y divide-border/35">
       {entries.slice(0, 60).map(([key, entry]) => (
         <div key={key} className="grid grid-cols-[minmax(88px,0.34fr)_minmax(0,1fr)] gap-3 py-1.5 first:pt-0 last:pb-0">
-          <span className="truncate text-2xs font-medium text-muted-foreground" title={humanizeStructuredKey(key)}>
+          <TooltipHint content={humanizeStructuredKey(key)}>
+          <span className="truncate text-2xs font-medium text-muted-foreground">
             {humanizeStructuredKey(key)}
           </span>
+          </TooltipHint>
           <div className="min-w-0 break-words">
             <StructuredDataView value={entry} depth={depth + 1} />
           </div>
@@ -1975,9 +1977,11 @@ export function ToolSearchResultsView({ items }: { items: ToolSearchListItem[] }
         {items.map((item) => (
           <div key={item.name} className="px-3 py-2.5 hover:bg-muted/25">
             <div className="flex min-w-0 items-center gap-2">
-              <code className="min-w-0 truncate text-[11px] font-semibold text-purple-600 dark:text-purple-400" title={item.name}>
+              <TooltipHint content={item.name}>
+              <code className="min-w-0 truncate text-[11px] font-semibold text-purple-600 dark:text-purple-400">
                 {item.name}
               </code>
+              </TooltipHint>
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 {item.category && (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
@@ -2133,7 +2137,7 @@ function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunnin
       <div className="mb-2 flex min-w-0 items-center gap-2">
         {isRunning ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />}
         <span className="shrink-0 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Activity</span>
-        {latest && <span className="truncate text-xs text-foreground" title={latest}>{latest}</span>}
+        {latest && <TooltipHint content={latest}><span className="truncate text-xs text-foreground">{latest}</span></TooltipHint>}
         {isRunning && <span className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary" />}
       </div>
       {output ? (
@@ -3250,21 +3254,22 @@ function FileSummaryButton({
 
   if (!interactive) {
     return (
+      <TooltipHint content={path}>
       <span
         className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
-        title={path}
       >
         {content}
       </span>
+      </TooltipHint>
     )
   }
 
   return (
+    <TooltipHint content={`Open diff for ${path}`}>
     <span
       role="button"
       tabIndex={0}
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
-      title={`Open diff for ${path}`}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -3280,6 +3285,7 @@ function FileSummaryButton({
     >
       {content}
     </span>
+    </TooltipHint>
   )
 }
 
@@ -3509,7 +3515,7 @@ function ThreadListItemCard({ item }: { item: ThreadListItem }) {
         >
           <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')} />
           <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-foreground" title={item.title}>{item.title}</div>
+            <TooltipHint content={item.title}><div className="truncate font-medium text-foreground">{item.title}</div></TooltipHint>
             {item.mission && (
               <div className="mt-0.5 line-clamp-1 text-2xs text-muted-foreground">{item.mission}</div>
             )}
@@ -3521,7 +3527,7 @@ function ThreadListItemCard({ item }: { item: ThreadListItem }) {
                 {location && <span className="min-w-0 truncate">{location}</span>}
               </div>
             )}
-            {item.error && <div className="mt-1 truncate text-2xs text-red-500" title={item.error}>{item.error}</div>}
+            {item.error && <TooltipHint content={item.error}><div className="mt-1 truncate text-2xs text-red-500">{item.error}</div></TooltipHint>}
           </div>
           <ThreadStatusBadge status={item.status} />
         </button>
@@ -3926,7 +3932,7 @@ function ToolCallCardInner({
               Waiting for approval
             </span>
             {summary ? (
-              <span className="min-w-0 truncate text-xs text-muted-foreground" title={summary}>{summary}</span>
+              <TooltipHint content={summary}><span className="min-w-0 truncate text-xs text-muted-foreground">{summary}</span></TooltipHint>
             ) : null}
           </span>
         ) : isPending ? (
@@ -3934,17 +3940,18 @@ function ToolCallCardInner({
         ) : isAgentToolName(displayTool) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             <span className="shrink-0 font-semibold text-foreground">Sub-agent</span>
-            <span className="truncate text-foreground" title={summary}>{summary || (isActive ? 'Working' : 'Completed')}</span>
+            <TooltipHint content={summary}><span className="truncate text-foreground">{summary || (isActive ? 'Working' : 'Completed')}</span></TooltipHint>
           </span>
         ) : isTerminal ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
             <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
+            <TooltipHint content={summary}>
             <code
               className="min-w-0 text-xs font-mono truncate"
-              title={summary}
             >
               {summary}
             </code>
+            </TooltipHint>
           </span>
         ) : showFileSummary ? (
           <span className="flex min-w-0 max-w-full items-center gap-2">

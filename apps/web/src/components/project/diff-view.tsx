@@ -6,6 +6,7 @@ import { useEditorThemeName } from '@/hooks/use-editor-theme'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
 import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -263,9 +264,11 @@ export function DiffView({
       {/* Top toolbar */}
       <div className="flex flex-col gap-2 px-3 py-2 border-b bg-muted/30 shrink-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-medium truncate" title={filePath}>
+          <TooltipHint content={filePath}>
+          <span className="text-xs font-medium truncate">
             {fileName}
           </span>
+          </TooltipHint>
           {hunks.length > 0 && (
             <span className="text-2xs text-muted-foreground shrink-0">
               {hunks.length} change{hunks.length !== 1 ? 's' : ''}
@@ -368,29 +371,31 @@ export function DiffView({
         {/* Floating navigation buttons overlaying the editor */}
         {hunks.length > 1 && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10">
+            <TooltipHint content="Previous change">
             <Button
               size="sm"
               variant="secondary"
               className="h-9 w-9 p-0 rounded-full shadow-lg border bg-background/90 backdrop-blur-sm hover:bg-background"
               onClick={goPrev}
-              disabled={activeIndex === 0}
-              title="Previous change"
+              disabled={activeIndex === 0} aria-label="Previous change"
             >
               <ChevronUp className="h-5 w-5" />
             </Button>
+            </TooltipHint>
             <span className="text-2xs text-center text-muted-foreground font-medium tabular-nums">
               {activeIndex + 1}/{hunks.length}
             </span>
+            <TooltipHint content="Next change">
             <Button
               size="sm"
               variant="secondary"
               className="h-9 w-9 p-0 rounded-full shadow-lg border bg-background/90 backdrop-blur-sm hover:bg-background"
               onClick={goNext}
-              disabled={activeIndex === hunks.length - 1}
-              title="Next change"
+              disabled={activeIndex === hunks.length - 1} aria-label="Next change"
             >
               <ChevronDown className="h-5 w-5" />
             </Button>
+            </TooltipHint>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
 import { encodeTerminalKeyAction, type TerminalKeyAction } from './soft-keyboard'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface SoftKeyDef {
   label: string
@@ -27,8 +28,6 @@ const TERMINAL_SOFT_KEYS: SoftKeyDef[] = [
   { label: '→', title: 'Arrow right', action: 'right' },
   { label: 'Home', title: 'Home', action: 'home' },
   { label: 'End', title: 'End', action: 'end' },
-  { label: 'PgUp', title: 'Page up (scroll terminal)', action: 'pgup' },
-  { label: 'PgDn', title: 'Page down (scroll terminal)', action: 'pgdn' },
   { label: '|', title: 'Pipe', data: '|' },
   { label: '~', title: 'Tilde (home path)', data: '~' },
   { label: '-', title: 'Dash / flag', data: '-' },
@@ -44,10 +43,7 @@ interface TerminalSoftKeyBarProps {
   onCopy: () => void
   onPaste: () => void
   onCollapse: () => void
-  scrollByRows: (rows: number) => void
 }
-
-const SOFT_KEY_SCROLL_ROWS = 10
 
 /**
  * Horizontal accessory key bar shown while the mobile soft keyboard is open.
@@ -55,7 +51,7 @@ const SOFT_KEY_SCROLL_ROWS = 10
  * focus-stealing tap is neutralised with preventDefault on the synthesized
  * mousedown before the click fires.
  */
-export function TerminalSoftKeyBar({ onData, onCopy, onPaste, onCollapse, scrollByRows }: TerminalSoftKeyBarProps) {
+export function TerminalSoftKeyBar({ onData, onCopy, onPaste, onCollapse }: TerminalSoftKeyBarProps) {
   const pressKey = (def: SoftKeyDef) => {
     if (def.icon === 'copy') {
       onCopy()
@@ -63,14 +59,6 @@ export function TerminalSoftKeyBar({ onData, onCopy, onPaste, onCollapse, scroll
     }
     if (def.icon === 'paste') {
       onPaste()
-      return
-    }
-    if (def.action === 'pgup') {
-      scrollByRows(-SOFT_KEY_SCROLL_ROWS)
-      return
-    }
-    if (def.action === 'pgdn') {
-      scrollByRows(SOFT_KEY_SCROLL_ROWS)
       return
     }
     const data = def.data ?? (def.action ? encodeTerminalKeyAction(def.action) : null)
@@ -84,21 +72,21 @@ export function TerminalSoftKeyBar({ onData, onCopy, onPaste, onCollapse, scroll
       onMouseDown={(e) => e.preventDefault()}
       onKeyDown={(e) => e.preventDefault()}
     >
+      <TooltipHint content="Hide key bar">
       <button
         type="button"
         aria-label="Hide terminal key bar"
-        title="Hide key bar"
         onClick={onCollapse}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground active:bg-accent active:text-accent-foreground"
       >
         <ChevronDown className="h-4 w-4" />
       </button>
+      </TooltipHint>
       {TERMINAL_SOFT_KEYS.map((def) => (
+        <TooltipHint key={def.label} content={def.title}>
         <button
-          key={def.label}
           type="button"
           aria-label={def.title}
-          title={def.title}
           onClick={() => pressKey(def)}
           className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-muted/40 px-2 text-xs font-medium text-foreground/90 active:bg-accent active:text-accent-foreground"
         >
@@ -108,6 +96,7 @@ export function TerminalSoftKeyBar({ onData, onCopy, onPaste, onCollapse, scroll
               ? <ClipboardPaste className="h-3.5 w-3.5" />
               : def.label}
         </button>
+        </TooltipHint>
       ))}
     </div>
   )

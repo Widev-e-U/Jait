@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, FileDiff } from 'lucide-react'
-import { gitApi } from '@/lib/git-api'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
+import { useGitChangeCounts } from '@/lib/git-change-counts'
 
 interface GitDiffIndicatorProps {
   /** Absolute project root used to run `git status`. */
   projectRoot: string | null
   /** Optional connected-node id (windows/desktop) for the git API call. */
   nodeId?: string | null
-  /** Number of changed files, used for the tooltip/aria-label. */
-  fileCount: number
   /** Bumping this value forces a refetch (e.g. after a source-control refresh). */
   refreshSignal?: number
   /** Opens the editor + source-control tab. */
@@ -18,58 +16,30 @@ interface GitDiffIndicatorProps {
   compact?: boolean
 }
 
-const REFRESH_INTERVAL_MS = 15_000
-
 /**
  * Small up/down git-diff pill shown in the top-left of a project chat,
- * mirroring the context-window indicator on the top-right. It fetches
- * `git status` itself so the counts appear as soon as there are changes,
- * regardless of whether the composer's enriched file list has loaded yet.
+ * mirroring the context-window indicator on the top-right.
+ *
+ * Counts come from the shared `git-change-counts` store rather than local
+ * state, so the same data also drives the source-control icon badges
+ * (toolbar, bottom nav, project panel tab). Switching projects swaps the
+ * store key, so the pill resets to the newly selected project's totals
+ * as soon as they arrive — no stale numbers from the previous project.
  * Clicking opens the project editor with the source-control (Git) tab focused.
  */
-export function GitDiffIndicator({ projectRoot, nodeId, fileCount, refreshSignal, onOpen, compact }: GitDiffIndicatorProps) {
-  const [insertions, setInsertions] = useState(0)
-  const [deletions, setDeletions] = useState(0)
-
-  useEffect(() => {
-    if (!projectRoot) {
-      setInsertions(0)
-      setDeletions(0)
-      return
-    }
-
-    let cancelled = false
-
-    const load = () => {
-      gitApi
-        .status(projectRoot, undefined, nodeId)
-        .then((status) => {
-          if (cancelled) return
-          setInsertions(status.index.insertions + status.workingTree.insertions)
-          setDeletions(status.index.deletions + status.workingTree.deletions)
-        })
-        .catch(() => {
-          if (cancelled) return
-          setInsertions(0)
-          setDeletions(0)
-        })
-    }
-
-    load()
-    const timer = setInterval(load, REFRESH_INTERVAL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [projectRoot, nodeId, refreshSignal])
+export function GitDiffIndicator({ projectRoot, nodeId, refreshSignal, onOpen, compact }: GitDiffIndicatorProps) {
+  const counts = useGitChangeCounts(nodeId, projectRoot, refreshSignal ?? 0)
+  const fileCount = counts.fileCount
+  const insertions = counts.insertions
+  const deletions = counts.deletions
 
   const hasChanges = insertions > 0 || deletions > 0
 
   return (
+    <TooltipHint content={`${fileCount} changed file${fileCount === 1 ? '' : 's'} — open editor & source control`}>
     <button
       type="button"
       onClick={onOpen}
-      title={`${fileCount} changed file${fileCount === 1 ? '' : 's'} — open editor & source control`}
       aria-label={`${fileCount} changed files. Open editor and source control.`}
       className={cn(
         'flex items-center gap-1 rounded-md hover:bg-muted/50 cursor-pointer transition-colors',
@@ -92,5 +62,6 @@ export function GitDiffIndicator({ projectRoot, nodeId, fileCount, refreshSignal
         <span className="text-2xs text-muted-foreground">0</span>
       )}
     </button>
+    </TooltipHint>
   )
 }

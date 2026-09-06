@@ -28,6 +28,7 @@ import { clearSSEDebugEvents, useSSEDebugEvents } from './sse-debug-panel'
 import { useSessionTrajectory } from './use-session-trajectory'
 import type { TrajectoryStep } from './trajectory-builder'
 import { buildTrajectory } from './trajectory-builder'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface TrajectoryPanelProps {
   onClose: () => void
@@ -342,9 +343,11 @@ function StepDetails({ step, onClose }: { step: TrajectoryStep; onClose: () => v
             </div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md" onClick={onClose} title="Close details">
+        <TooltipHint content="Close details">
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md" onClick={onClose} aria-label="Close details">
           <X className="h-3.5 w-3.5" />
         </Button>
+        </TooltipHint>
       </div>
       <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 bg-muted/20 px-3 py-2" role="tablist" aria-label="Trajectory detail sections">
         {tabs.map(tab => (
@@ -597,29 +600,37 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={handleCopy} title="Copy trajectory">
+            <TooltipHint content="Copy trajectory">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={handleCopy}>
               {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => (sessionId ? sessionTrajectory.clear() : clearSSEDebugEvents())} title="Clear events">
+            </TooltipHint>
+            <TooltipHint content="Clear events">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => (sessionId ? sessionTrajectory.clear() : clearSSEDebugEvents())} aria-label="Clear events">
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={onClose} title="Close trajectory">
+            </TooltipHint>
+            <TooltipHint content="Close trajectory">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={onClose} aria-label="Close trajectory">
               <X className="h-3.5 w-3.5" />
             </Button>
+            </TooltipHint>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border/40 bg-muted/15 px-3 py-2 sm:px-4">
           {sessionId && (
+            <TooltipHint content={sessionTrajectory.connected ? 'Live stream connected' : 'Live stream reconnecting…'}>
             <span className={cn(
               'inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-2xs font-medium',
               sessionTrajectory.connected
                 ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 : 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-            )} title={sessionTrajectory.connected ? 'Live stream connected' : 'Live stream reconnecting…'}>
+            )}>
               <Radio className={cn('h-3 w-3', !sessionTrajectory.connected && 'animate-pulse')} />
               {sessionTrajectory.connected ? 'Live' : 'Reconnecting'}
             </span>
+            </TooltipHint>
           )}
           <span className="rounded-full border border-border/60 bg-background px-2 py-1 text-2xs text-muted-foreground">
             {turnCount} turn{turnCount === 1 ? '' : 's'}
@@ -636,14 +647,18 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
             </span>
           )}
           {meta.provider && (
-            <span className="max-w-32 truncate rounded-full border border-border/60 bg-background px-2 py-1 text-2xs text-foreground/80" title={meta.provider}>
+            <TooltipHint content={meta.provider}>
+            <span className="max-w-32 truncate rounded-full border border-border/60 bg-background px-2 py-1 text-2xs text-foreground/80">
               {meta.provider}
             </span>
+            </TooltipHint>
           )}
           {meta.model && (
-            <span className="max-w-48 truncate rounded-full border border-border/60 bg-background px-2 py-1 text-2xs text-muted-foreground" title={meta.model}>
+            <TooltipHint content={meta.model}>
+            <span className="max-w-48 truncate rounded-full border border-border/60 bg-background px-2 py-1 text-2xs text-muted-foreground">
               {meta.model}
             </span>
+            </TooltipHint>
           )}
           <div className="relative ml-auto min-w-[9rem] flex-1 sm:max-w-52">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -727,16 +742,17 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
 
         {showScrollToBottom && (
           <div className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2">
+            <TooltipHint content="Scroll to latest">
             <Button
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 rounded-full bg-background/95 px-3 text-xs shadow-lg backdrop-blur"
               onClick={scrollToBottom}
-              title="Scroll to latest"
             >
               <ArrowDown className="h-3.5 w-3.5" />
               Latest
             </Button>
+            </TooltipHint>
           </div>
         )}
 

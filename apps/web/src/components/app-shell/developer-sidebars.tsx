@@ -1,5 +1,5 @@
-import { Boxes, Bug, Code, Folders, Globe, MessageSquare, Settings, Terminal as TerminalIcon } from 'lucide-react'
-import type { FocusEvent, RefObject } from 'react'
+import { Boxes, Bug, Code, FolderOpen, Folders, Globe, Settings, Terminal as TerminalIcon } from 'lucide-react'
+import { useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -9,7 +9,18 @@ import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
 import type { AutomationRepository } from '@/lib/automation-repositories'
-import type { DeveloperSidebarView } from '@/lib/developer-sidebar'
+import {
+  DEVELOPER_SIDEBAR_MIN_WIDTH,
+  clampDeveloperSidebarWidth,
+  type DeveloperSidebarView,
+} from '@/lib/developer-sidebar'
+
+const DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY = 'developerSidebarWidth'
+
+function readDeveloperSidebarWidth() {
+  const storedWidth = Number.parseInt(window.localStorage.getItem(DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY) ?? '', 10)
+  return clampDeveloperSidebarWidth(Number.isFinite(storedWidth) ? storedWidth : 256, window.innerWidth)
+}
 
 interface DeveloperSidebarsProps {
   activeProject: ActiveProjectState
@@ -114,6 +125,29 @@ export function DeveloperSidebars({
   onToggleTerminal,
   onOpenSettings,
 }: DeveloperSidebarsProps) {
+  const [sidebarWidth, setSidebarWidth] = useState(readDeveloperSidebarWidth)
+  const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
+
+  const setAndStoreSidebarWidth = (width: number) => {
+    const nextWidth = clampDeveloperSidebarWidth(width, window.innerWidth)
+    setSidebarWidth(nextWidth)
+    window.localStorage.setItem(DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth))
+  }
+
+  const finishSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    resizeStartRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    document.documentElement.classList.remove('is-dragging-col-resize')
+  }
+
+  const handleSidebarResizeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    setAndStoreSidebarWidth(sidebarWidth + (event.key === 'ArrowRight' ? 12 : -12))
+  }
+
   return (
     <>
       {!isMobile && (
@@ -125,29 +159,31 @@ export function DeveloperSidebars({
                 size="sm"
                 className="h-9 w-9 rounded-md p-0"
                 onClick={() => onSelectSidebarView('projects')}
-                aria-label="Projects"
+                aria-label="Projects and chats"
                 aria-pressed={showSidebar && sidebarView === 'projects'}
               >
                 <Folders className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">Projects</TooltipContent>
+            <TooltipContent side="right">Projects & Chats</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showSidebar && sidebarView === 'chats' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                onClick={() => onSelectSidebarView('chats')}
-                aria-label="Personal chats"
-                aria-pressed={showSidebar && sidebarView === 'chats'}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Personal Chats</TooltipContent>
-          </Tooltip>
+          {(activeProjectId || activeProject) && showProject && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showSidebar && sidebarView === 'files' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-9 w-9 rounded-md p-0"
+                  onClick={() => onSelectSidebarView('files')}
+                  aria-label="Files"
+                  aria-pressed={showSidebar && sidebarView === 'files'}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Files</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant={showTerminal ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={onToggleTerminal} aria-label="Terminal">
@@ -225,16 +261,16 @@ export function DeveloperSidebars({
         </aside>
       )}
 
-      {showSidebar && !isMobile && (
+      {showSidebar && sidebarView === 'projects' && !isMobile && (
         <aside
           ref={sidebarRef}
           tabIndex={-1}
           onBlur={onBlur}
-          className="w-64 overflow-hidden border-r outline-none shrink-0"
+          className="relative shrink-0 overflow-hidden border-r outline-none"
+          style={{ width: sidebarWidth }}
         >
           <ErrorBoundary name="Project sidebar" variant="section" className="h-full" resetKeys={[activeProjectId, activeSessionId, projects.length, personalSessions.length]}>
             <SessionSelector
-              view={sidebarView}
               projects={projects}
               personalSessions={personalSessions}
               activeProjectId={activeProjectId}
@@ -268,6 +304,36 @@ export function DeveloperSidebars({
               streamingSessionIds={streamingSessionIds}
             />
           </ErrorBoundary>
+          <div
+            role="separator"
+            aria-label="Resize projects and chats panel"
+            aria-orientation="vertical"
+            aria-valuemin={DEVELOPER_SIDEBAR_MIN_WIDTH}
+            aria-valuemax={clampDeveloperSidebarWidth(Number.POSITIVE_INFINITY, window.innerWidth)}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            className="absolute inset-y-0 right-0 z-20 w-2 translate-x-1/2 cursor-col-resize touch-none outline-none"
+            onKeyDown={handleSidebarResizeKeyDown}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              resizeStartRef.current = { pointerX: event.clientX, width: sidebarWidth }
+              event.currentTarget.setPointerCapture(event.pointerId)
+              document.documentElement.classList.add('is-dragging-col-resize')
+            }}
+            onPointerMove={(event) => {
+              const start = resizeStartRef.current
+              if (!start) return
+              setAndStoreSidebarWidth(start.width + event.clientX - start.pointerX)
+            }}
+            onPointerUp={finishSidebarResize}
+            onPointerCancel={finishSidebarResize}
+            onLostPointerCapture={() => {
+              resizeStartRef.current = null
+              document.documentElement.classList.remove('is-dragging-col-resize')
+            }}
+          >
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors hover:bg-primary/40" />
+          </div>
         </aside>
       )}
     </>

@@ -119,6 +119,8 @@ interface DeveloperChatWorkspaceProps {
   onQueue: () => void
   /** Steer the running agent with the currently typed composer content. */
   onSteer: () => void
+  /** Fork the running session and ask the typed composer content as a parallel question. */
+  onAskInParallel?: () => void
   onRejectAllFiles: () => void
   onRejectFile: (file: any) => void
   onRejectPlan: () => void
@@ -229,6 +231,7 @@ export function DeveloperChatWorkspace({
   onProviderRuntimeModeChange,
   onQueue,
   onSteer,
+  onAskInParallel,
   onRejectAllFiles,
   onRejectFile,
   onRejectPlan,
@@ -361,6 +364,7 @@ export function DeveloperChatWorkspace({
                 defaultStreamingAction={defaultStreamingAction}
                 onQueue={onQueue}
                 onSteer={onSteer}
+                onAskInParallel={onAskInParallel}
                 isLoading={isLoading}
                 submitLoading={developerChatSubmitLoading}
                 placeholder={developerPlaceholder}
@@ -542,7 +546,6 @@ export function DeveloperChatWorkspace({
               <GitDiffIndicator
                 projectRoot={activeProjectRoot}
                 nodeId={activeProject?.nodeId}
-                fileCount={changedFiles.length}
                 onOpen={onOpenSourceControl}
                 compact={isMobile}
               />

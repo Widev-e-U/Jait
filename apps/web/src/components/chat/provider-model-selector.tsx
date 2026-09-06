@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from 'react'
-import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
+import { ChevronDown, CircleCheck, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
+import { toast } from 'sonner'
+import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
@@ -24,6 +26,7 @@ import {
   readProjectReasoningEffortSelection,
   saveProjectReasoningEffortSelection,
 } from '@/lib/project-model-cache'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -232,6 +235,9 @@ export function ProviderModelSelector({
     error: providersError,
     refresh: refreshProviders,
   } = useProviders()
+  const [modelReloadVersion, setModelReloadVersion] = useState(0)
+  const [providerActionBusy, setProviderActionBusy] = useState<ProviderId | null>(null)
+  const providerActionRef = useRef(false)
   const [models, setModels] = useState<ModelDef[]>([])
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
@@ -408,6 +414,30 @@ export function ProviderModelSelector({
     auth: entry.auth,
   })), [scopedEntries])
 
+  const runProviderAction = async (entry: typeof providerEntries[number], action: 'refresh' | 'logout') => {
+    if (providerActionRef.current || authBusyProvider) return
+    providerActionRef.current = true
+    setProviderActionBusy(entry.value)
+    try {
+      if (action === 'refresh') {
+        await agentsApi.refreshProviderModels(entry.value, entry.nodeId)
+        setModelReloadVersion((version) => version + 1)
+        toast.success(`${entry.label} models refreshed.`)
+      } else {
+        const result = await agentsApi.logoutProvider(entry.value)
+        agentsApi.resetProviderModels()
+        await refreshProviders({ fresh: true, force: true })
+        setModelReloadVersion((version) => version + 1)
+        toast.success(result.message || `${entry.label} logged out.`)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Failed to ${action === 'refresh' ? 'refresh models' : 'log out'} for ${entry.label}.`)
+    } finally {
+      providerActionRef.current = false
+      setProviderActionBusy(null)
+    }
+  }
+
   // Models come from the device that hosts the selected provider — never from
   // the project's device, which may be a different machine entirely.
   const activeEntry = providerEntries.find((entry) => entry.value === provider)
@@ -451,7 +481,7 @@ export function ProviderModelSelector({
     return () => {
       cancelled = true
     }
-  }, [provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved])
+  }, [provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved, modelReloadVersion])
 
   useEffect(() => {
     if (provider === 'jait') return
@@ -683,6 +713,7 @@ export function ProviderModelSelector({
   }, [isMobile])
 
   const triggerButton = (
+    <TooltipHint content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
     <button
       type="button"
       disabled={disabled}
@@ -694,7 +725,6 @@ export function ProviderModelSelector({
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
-      title={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}
       aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
     >
       <CurrentIcon className="h-4 w-4 shrink-0" />
@@ -714,6 +744,7 @@ export function ProviderModelSelector({
       {loadingModels && <Loader2 className="h-3 w-3 shrink-0 animate-spin opacity-70" />}
       <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
     </button>
+    </TooltipHint>
   )
 
   const selectorContent = (
@@ -722,10 +753,12 @@ export function ProviderModelSelector({
       <div className={cn('flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2', isMobile && 'min-h-10')}>
         <div id="provider-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
         {locationLabel && (
-          <span className="flex min-w-0 items-center gap-1 text-2xs text-blue-500" title={locationLabel}>
+          <TooltipHint content={locationLabel}>
+          <span className="flex min-w-0 items-center gap-1 text-2xs text-blue-500">
             <Monitor className="h-3 w-3 shrink-0" />
             <span className="truncate">{locationLabel}</span>
           </span>
+          </TooltipHint>
         )}
       </div>
       {repoRuntime?.loading && (
@@ -750,15 +783,25 @@ export function ProviderModelSelector({
             && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           const loginBusy = authBusyProvider === entry.value
           return (
-            <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
+            <ProviderActionsMenu
+              key={entry.value}
+              label={entry.label}
+              className={cn('rounded-sm', active && 'bg-accent/50')}
+              busy={Boolean(providerActionBusy || authBusyProvider)}
+              canRefresh={entry.isAvailable}
+              canLogout={Boolean(entry.auth?.logout) && entry.auth?.authenticated !== false
+                && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)}
+              onRefresh={() => { void runProviderAction(entry, 'refresh') }}
+              onLogout={() => { void runProviderAction(entry, 'logout') }}
+            >
               <div className="flex items-start gap-1.5">
+                <TooltipHint content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
                 <button
                   type="button"
                   role="option"
                   aria-selected={active}
-                  title={!entry.isAvailable && entry.reason ? entry.reason : entry.description}
-                  onClick={() => handleProviderSelect(entry.value)}
-                  disabled={!entry.isAvailable}
+                  onClick={() => { if (entry.isAvailable) handleProviderSelect(entry.value) }}
+                  aria-disabled={!entry.isAvailable}
                   className={cn(
                     'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
                     'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
@@ -775,31 +818,38 @@ export function ProviderModelSelector({
                           {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
                         </span>
                       )}
-                      {entry.auth && entry.auth.authenticated === true && (
-                        <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
+                      {entry.isAvailable && (
+                        <TooltipHint content="Ready to use">
+                        <span role="img" aria-label="Ready to use" className="text-emerald-600 dark:text-emerald-400">
+                          <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        </TooltipHint>
                       )}
+                      {providerActionBusy === entry.value && <Loader2 aria-label="Updating provider" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                     </div>
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
+                </TooltipHint>
                 {showLoginAction && (
+                  <TooltipHint content={`Login to ${entry.label}`}>
                   <button
                     type="button"
-                    title={`Login to ${entry.label}`}
                     aria-label={`Login to ${entry.label}`}
                     onClick={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
                       void startLogin(entry.value, entry.label)
                     }}
-                    disabled={Boolean(authBusyProvider)}
+                    disabled={Boolean(authBusyProvider || providerActionBusy)}
                     className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                   >
                     {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
                   </button>
+                  </TooltipHint>
                 )}
               </div>
-            </div>
+            </ProviderActionsMenu>
           )
         })}
         {showMoveToGateway && onMoveToGateway && (
@@ -979,10 +1029,9 @@ export function ProviderModelSelector({
             {reasoningEfforts!.map((effort) => {
               const active = reasoningEffort === effort.value
               return (
+                <TooltipHint key={effort.value} content={effort.hint}>
                 <button
-                  key={effort.value}
                   type="button"
-                  title={effort.hint}
                   onClick={() => handleReasoningEffortChange(effort.value)}
                   className={cn(
                     'flex items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
@@ -993,6 +1042,7 @@ export function ProviderModelSelector({
                   <span>{effort.label}</span>
                   {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
                 </button>
+                </TooltipHint>
               )
             })}
           </div>

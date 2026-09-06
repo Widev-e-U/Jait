@@ -3,6 +3,7 @@ import { Archive, ChevronRight, Folder, Loader2, MessageSquare, Search, WifiOff 
 import { buildProjectTree, flattenProjectTree } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import type { ProjectRecord } from '@/hooks/useProjects'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /** Above this many projects the picker gets its own search field. */
 export const SESSION_MOVE_SEARCH_THRESHOLD = 5
@@ -164,12 +165,11 @@ export function SessionMoveSubmenu({
           const isCurrent = project.id === sessionProjectId
           const offline = offlineProjectIds?.has(project.id) ?? false
           return (
+            <TooltipHint key={project.id} content={isCurrent ? 'Already in this project' : project.rootPath ?? project.description ?? undefined}>
             <button
-              key={project.id}
               type="button"
               role="menuitem"
               disabled={disabled || isCurrent}
-              title={isCurrent ? 'Already in this project' : project.rootPath ?? project.description ?? undefined}
               style={{ paddingLeft: 8 + depth * 12 }}
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
               onClick={() => onSelectProject(project.id)}
@@ -184,6 +184,7 @@ export function SessionMoveSubmenu({
                 <WifiOff className="h-3 w-3 shrink-0 text-orange-500" aria-label="Node offline" />
               )}
             </button>
+            </TooltipHint>
           )
         })}
       </div>

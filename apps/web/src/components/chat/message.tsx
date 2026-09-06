@@ -54,6 +54,7 @@ import {
   serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface MessageProps {
   messageId?: string
@@ -719,6 +720,7 @@ function MessageInner({
   const showMemoryBadge = !isUser && (memoryProvenanceEntries.length > 0 || (hasMemoryProvenance && !effectiveContextFlow))
   const memoryProvenance = showMemoryBadge ? (
     <div className="not-prose mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <TooltipHint content={memoryExpanded ? 'Hide injected memories' : 'Show memories injected for this answer'}>
       <button
         type="button"
         className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 font-medium text-amber-700 transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:text-amber-200"
@@ -729,7 +731,6 @@ function MessageInner({
           setMemoryExpanded((open) => !open)
         }}
         aria-expanded={memoryExpanded}
-        title={memoryExpanded ? 'Hide injected memories' : 'Show memories injected for this answer'}
       >
         <Brain className="h-3.5 w-3.5 shrink-0" />
         <span>Memory</span>
@@ -739,6 +740,7 @@ function MessageInner({
               ? <Loader2 className="h-3 w-3 animate-spin" />
               : <span className="rounded bg-background/75 px-1 text-2xs">•</span>)}
       </button>
+      </TooltipHint>
       {memoryExpanded && memoryProvenanceEntries.slice(0, 3).map((entry) => {
         const source: MemoryProvenanceSource = {
           memoryId: entry.id,
@@ -748,8 +750,10 @@ function MessageInner({
         }
         const canOpenSource = Boolean(onOpenMemorySource && entry.sourceSurface === 'chat' && entry.sourceId)
         return (
+          <TooltipHint key={entry.id} content={canOpenSource
+              ? `Open source chat for injected memory: ${entry.source || entry.id}`
+              : `View injected memory source: ${entry.source || entry.id}`}>
           <button
-            key={entry.id}
             type="button"
             className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={(event) => {
@@ -758,13 +762,11 @@ function MessageInner({
               if (canOpenSource) onOpenMemorySource?.(source)
               else setContextOpen(true)
             }}
-            title={canOpenSource
-              ? `Open source chat for injected memory: ${entry.source || entry.id}`
-              : `View injected memory source: ${entry.source || entry.id}`}
           >
             {canOpenSource ? <MessageSquare className="h-3.5 w-3.5 shrink-0" /> : <Brain className="h-3.5 w-3.5 shrink-0" />}
             <span className="truncate">{entry.source || entry.id}</span>
           </button>
+          </TooltipHint>
         )
       })}
     </div>
@@ -915,6 +917,7 @@ function MessageInner({
                           onSearchFiles={editComposer?.onSearchFiles}
                           projectOpen={editComposer?.projectOpen ?? userReferencedFilesFromSegments(userDisplaySegments).length > 0}
                           footerTrailingContent={(
+                            <TooltipHint content="Cancel editing">
                             <Button
                               type="button"
                               variant="ghost"
@@ -923,10 +926,10 @@ function MessageInner({
                               onClick={cancelEditing}
                               disabled={isSavingEdit}
                               aria-label="Cancel editing message"
-                              title="Cancel editing"
                             >
                               <X className="h-3.5 w-3.5" />
                             </Button>
+                            </TooltipHint>
                           )}
                           className="rounded-lg border-primary/20 bg-primary/[0.08] dark:!bg-primary/[0.08] shadow-none [&_.text-muted-foreground]:text-muted-foreground [&>div]:!bg-transparent [&_[contenteditable='true']]:!bg-transparent"
                         />
@@ -940,6 +943,7 @@ function MessageInner({
                         Steered into running turn
                       </span>
                     )}
+                    <TooltipHint content={canEdit && !isEditing ? 'Click to edit message' : undefined}>
                     <AIMessageContent
                       ref={userBubbleRef}
                       data-message-from="user"
@@ -950,7 +954,6 @@ function MessageInner({
                         steered && 'border border-dashed border-primary/40 bg-primary/5',
                       )}
                       onClick={handleUserBubbleClick}
-                      title={canEdit && !isEditing ? 'Click to edit message' : undefined}
                     >
                       <div className="min-w-0 space-y-3">
                         <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
@@ -959,50 +962,50 @@ function MessageInner({
                                 segment.type === 'text' ? (
                                   <span key={`text-${index}`}>{segment.text}</span>
                                 ) : segment.type === 'file' ? (
+                                  <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    key={`${segment.path}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={segment.path}
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
+                                  </TooltipHint>
                                 ) : segment.type === 'project' ? (
+                                  <TooltipHint key={`${segment.path}-${index}`} content={segment.path}>
                                   <span
-                                    key={`${segment.path}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={segment.path}
                                   >
                                     <FolderIcon name={segment.name} className="h-3.5 w-3.5 shrink-0" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
+                                  </TooltipHint>
                                 ) : segment.type === 'terminal' ? (
+                                  <TooltipHint key={`${segment.terminalId}-${index}`} content={segment.projectRoot ? `${segment.terminalId} · ${segment.projectRoot}` : segment.terminalId}>
                                   <span
-                                    key={`${segment.terminalId}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={segment.projectRoot ? `${segment.terminalId} · ${segment.projectRoot}` : segment.terminalId}
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
+                                  </TooltipHint>
                                 ) : segment.type === 'skill' ? (
+                                  <TooltipHint key={`${segment.id}-${index}`} content={'/' + segment.id}>
                                   <span
-                                    key={`${segment.id}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={'/' + segment.id}
                                   >
                                     <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">/{segment.name}</span>
                                   </span>
+                                  </TooltipHint>
                                 ) : segment.type === 'chat' ? (
+                                  <TooltipHint key={`chat-${segment.sessionId}-${index}`} content={`Chat: ${segment.sessionId}`}>
                                   <span
-                                    key={`chat-${segment.sessionId}-${index}`}
                                     className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
-                                    title={`Chat: ${segment.sessionId}`}
                                   >
                                     <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
+                                  </TooltipHint>
                                 ) : null,
                               )
                             : (optimisticUserDisplayText ?? userDisplayText)}
@@ -1044,19 +1047,20 @@ function MessageInner({
                         {userFileAttachments.length > 0 && (
                           <div className="flex flex-wrap gap-2">
                             {userFileAttachments.map((attachment, index) => (
+                              <TooltipHint key={`${attachment.name}-${index}`} content={attachment.mimeType}>
                               <span
-                                key={`${attachment.name}-${index}`}
                                 className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
-                                title={attachment.mimeType}
                               >
                                 <FileIcon filename={attachment.name} className="h-3.5 w-3.5 shrink-0" />
                                 <span className="max-w-[180px] truncate">{attachment.name}</span>
                               </span>
+                              </TooltipHint>
                             ))}
                           </div>
                         )}
                       </div>
                     </AIMessageContent>
+                    </TooltipHint>
 
                     {renderActions()}
                   </div>

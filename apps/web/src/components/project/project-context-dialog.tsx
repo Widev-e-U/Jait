@@ -28,6 +28,7 @@ import { FolderPickerDialog } from '@/components/project/folder-picker-dialog'
 import { getProjectRepository, getProjectRepositoryId } from '@/lib/project-repositories'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import type { ProjectRecord } from '@/hooks/useProjects'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface ProjectContextDraft {
   title: string
@@ -277,17 +278,18 @@ export function ProjectContextDialog({
                 </select>
                 {/* Same picker as the "Browse" option — a folder button is what
                     people reach for first, so it sits where they look. */}
+                <TooltipHint content="Browse for a folder">
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 shrink-0"
                   aria-label="Browse for a folder"
-                  title="Browse for a folder"
                   onClick={() => setPickerOpen(true)}
                 >
                   <FolderOpen className="h-4 w-4" />
                 </Button>
+                </TooltipHint>
                 {rootPath && (
                   <Button
                     type="button"
@@ -301,9 +303,11 @@ export function ProjectContextDialog({
                 )}
               </div>
               {rootPath && (
-                <p className="truncate font-mono text-2xs text-muted-foreground" title={rootPath}>
+                <TooltipHint content={rootPath}>
+                <p className="truncate font-mono text-2xs text-muted-foreground">
                   {rootPath}
                 </p>
+                </TooltipHint>
               )}
               {inheritedRoot && (
                 <p className="text-2xs text-muted-foreground">

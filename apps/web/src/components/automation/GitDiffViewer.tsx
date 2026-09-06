@@ -12,6 +12,7 @@ import { Loader2, X, FileCode, FilePlus, FileX, FileEdit } from 'lucide-react'
 import { gitApi, type FileDiffEntry } from '@/lib/git-api'
 import { projectLanguageForPath } from '@/components/project'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface GitDiffViewerProps {
   cwd: string
@@ -129,18 +130,18 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
               </div>
               <div className="flex-1 overflow-y-auto">
                 {files.map((f, i) => (
+                  <TooltipHint key={f.path} content={`${f.path} (${statusLabel(f.status)})`}>
                   <button
-                    key={f.path}
                     className={cn(
                       'flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/50 transition-colors',
                       i === selectedIndex && 'bg-accent',
                     )}
                     onClick={() => setSelectedIndex(i)}
-                    title={`${f.path} (${statusLabel(f.status)})`}
                   >
                     <StatusIcon status={f.status} />
                     <span className="truncate font-mono">{f.path.split(/[/\\]/).pop()}</span>
                   </button>
+                  </TooltipHint>
                 ))}
               </div>
             </div>

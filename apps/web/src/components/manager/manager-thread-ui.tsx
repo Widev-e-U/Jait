@@ -38,6 +38,7 @@ import {
 } from '@/lib/automation-repositories'
 import type { AgentThread } from '@/lib/agents-api'
 import { providerTypeFromId } from '@jait/shared'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const TITLE_PLACEHOLDER_SUFFIX = 'Generating title…'
 export function isTitlePending(title: string): boolean {
@@ -177,12 +178,12 @@ export function ManagerRepoPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        <TooltipHint content={selectedRepo ? selectedRepo.name : 'Select repository'}>
         <Button
           variant="outline"
           size="sm"
           className={`h-8 min-w-0 max-w-full gap-1.5 rounded-lg px-2 text-xs ${className}`.trim()}
           disabled={disabled}
-          title={selectedRepo ? selectedRepo.name : 'Select repository'}
         >
           <FolderOpen className="h-3.5 w-3.5 shrink-0" />
           <span className={`min-w-0 truncate ${compact ? 'max-w-[8rem]' : 'max-w-[140px]'}`}>
@@ -190,6 +191,7 @@ export function ManagerRepoPicker({
           </span>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </Button>
+        </TooltipHint>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-64 max-w-[calc(100vw-1rem)]">
         <DropdownMenuLabel>Repository</DropdownMenuLabel>
@@ -317,9 +319,9 @@ export function ManagerRepositoryPanel({
                   <ManagerRepoRuntimeMeta runtime={runtime} className="mt-1" />
                 </div>
                 <div className="mt-0.5 flex shrink-0 flex-col gap-0.5">
+                  <TooltipHint content="Strategy">
                   <button
-                    type="button"
-                    title="Strategy"
+                    type="button" aria-label="Strategy"
                     className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     onClick={(event) => {
                       event.stopPropagation()
@@ -328,9 +330,10 @@ export function ManagerRepositoryPanel({
                   >
                     <ScrollText className="h-3 w-3" />
                   </button>
+                  </TooltipHint>
+                  <TooltipHint content="Plans">
                   <button
-                    type="button"
-                    title="Plans"
+                    type="button" aria-label="Plans"
                     className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     onClick={(event) => {
                       event.stopPropagation()
@@ -339,10 +342,11 @@ export function ManagerRepositoryPanel({
                   >
                     <ListChecks className="h-3 w-3" />
                   </button>
+                  </TooltipHint>
                   {repo.source === 'local' && (
+                    <TooltipHint content="Remove">
                     <button
-                      type="button"
-                      title="Remove"
+                      type="button" aria-label="Remove"
                       className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
                       onClick={(event) => {
                         event.stopPropagation()
@@ -351,6 +355,7 @@ export function ManagerRepositoryPanel({
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
+                    </TooltipHint>
                   )}
                 </div>
               </div>
@@ -392,10 +397,12 @@ function ThreadDuration({ createdAt, completedAt, status }: { createdAt: string;
   const ms = Math.max(0, end - start)
 
   return (
-    <span className="shrink-0 tabular-nums" title={isRunning ? 'Elapsed time' : 'Total duration'}>
+    <TooltipHint content={isRunning ? 'Elapsed time' : 'Total duration'}>
+    <span className="shrink-0 tabular-nums">
       {isRunning && <Timer className="inline h-3 w-3 mr-0.5 -mt-px" />}
       {formatThreadDuration(ms)}
     </span>
+    </TooltipHint>
   )
 }
 
@@ -550,6 +557,7 @@ export function ManagerThreadListItem({
           </div>
         )}
         {stopThreadVisible && (
+          <TooltipHint content={thread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}>
           <Button
             variant="ghost"
             size="icon"
@@ -557,12 +565,13 @@ export function ManagerThreadListItem({
             onClick={(event) => {
               event.stopPropagation()
               onStop()
-            }}
-            title={thread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
+            }} aria-label={thread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
           >
             <Square className="h-3 w-3" />
           </Button>
+          </TooltipHint>
         )}
+        <TooltipHint content="Delete thread">
         <Button
           variant="ghost"
           size="icon"
@@ -572,10 +581,10 @@ export function ManagerThreadListItem({
             event.stopPropagation()
             void handleDeleteClick()
           }}
-          title="Delete thread"
         >
           {deleting ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </Button>
+        </TooltipHint>
       </div>
     </div>
   )
@@ -605,11 +614,11 @@ export function ManagerActiveThreadsMenu({
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
+        <TooltipHint content={`${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`}>
         <Button
           variant="outline"
           size="sm"
           className="mr-1 h-8 gap-1.5 rounded-lg px-2 text-xs sm:mr-0"
-          title={`${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`}
         >
           <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
           <span className="hidden sm:inline">Active</span>
@@ -617,6 +626,7 @@ export function ManagerActiveThreadsMenu({
             {threads.length}
           </Badge>
         </Button>
+        </TooltipHint>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[min(34rem,calc(100vw-1rem))] p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
@@ -703,6 +713,7 @@ export function ManagerActiveThreadsMenu({
                     </div>
                   )}
                   {canStopThread(thread) && (
+                    <TooltipHint content="Stop thread">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -710,11 +721,11 @@ export function ManagerActiveThreadsMenu({
                       onClick={(event) => {
                         event.stopPropagation()
                         void Promise.resolve(onStopThread(thread.id))
-                      }}
-                      title="Stop thread"
+                      }} aria-label="Stop thread"
                     >
                       <Square className="h-3 w-3" />
                     </Button>
+                    </TooltipHint>
                   )}
                 </div>
               </div>

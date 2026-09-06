@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 import { type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import { useProviders } from '@/hooks/useProviders'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface ProviderRuntimeSelectorProps {
   provider: ProviderId
@@ -50,6 +51,7 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
+        <TooltipHint content={`Runtime: ${activeDef.label}`}>
         <button
           type="button"
           className={cn(
@@ -59,13 +61,13 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
             'disabled:pointer-events-none disabled:opacity-50',
             className,
           )}
-          title={`Runtime: ${activeDef.label}`}
           aria-label={`Runtime: ${activeDef.label}`}
         >
           <ActiveIcon className="h-4 w-4" />
           {!compact && <span>{activeDef.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
+        </TooltipHint>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-64">
         {supportedModes.map((mode) => {

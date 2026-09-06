@@ -260,7 +260,7 @@ function App() {
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
-  const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'chats' ? 'chats' : 'projects'))
+  const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'files' ? 'files' : 'projects'))
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
@@ -381,6 +381,25 @@ function App() {
   const projectRef = useRef<ProjectPanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
+
+  const previousDesktopEditorOpenRef = useRef(showProject)
+  useEffect(() => {
+    const wasOpen = previousDesktopEditorOpenRef.current
+    previousDesktopEditorOpenRef.current = showProject
+    if (isMobile) return
+
+    if (!wasOpen && showProject) {
+      setShowProjectTree(true)
+      setSidebarView('files')
+      setShowSidebar(true)
+      return
+    }
+
+    if (!showProject && sidebarView === 'files') {
+      setSidebarView('projects')
+      setShowSidebar(true)
+    }
+  }, [isMobile, showProject, sidebarView])
 
   useEffect(() => {
     showProjectRef.current = showProject
@@ -2279,6 +2298,7 @@ function App() {
   const handleSelectDeveloperSidebarView = useCallback(
     (requestedView: DeveloperSidebarView) => {
       const nextState = getNextDeveloperSidebarState(sidebarView, showSidebar, requestedView)
+      if (requestedView === 'files') setShowProjectTree(true)
       setSidebarView(nextState.view)
       setShowSidebar(nextState.open)
     },
@@ -2547,6 +2567,18 @@ function App() {
     showProjectTree,
     applyProjectLayout,
   })
+
+  const toggleDeveloperFileSidebar = useCallback(() => {
+    if (isMobile) {
+      toggleProjectTree()
+      return
+    }
+
+    const nextState = getNextDeveloperSidebarState(sidebarView, showSidebar, 'files')
+    setShowProjectTree(true)
+    setSidebarView(nextState.view)
+    setShowSidebar(nextState.open)
+  }, [isMobile, sidebarView, showSidebar, toggleProjectTree])
 
   const handleMobileChatClick = useCallback(() => {
     if (showTerminal) {
@@ -3661,6 +3693,45 @@ function App() {
       })()
     },
     [activeSessionId, chatMode, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, enqueueMessage, isLoading, preparePromptSubmission, recordSteeredMessage, sendTarget, setInputValue, setInputSegments, token],
+  )
+
+  // Fork button in the composer while streaming: fork the running session and
+  // open the typed content as a parallel question branch (same flow as the
+  // queued message fork action).
+  const handleAskInParallelLive = useCallback(
+    (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => {
+      void (async () => {
+        if (!activeSessionId) return
+        const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, segments)
+        if (!prepared && (!attachments || attachments.length === 0)) return
+        const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
+        const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(attachments) || promptText
+        const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, attachments)
+        const branch = await forkSession(activeSessionId)
+        if (!branch) throw new Error('Failed to create question branch')
+        setInputValue('')
+        setInputSegments(undefined)
+        setParallelChat({
+          parentSessionId: activeSessionId,
+          session: branch,
+          initialPrompt: {
+            content: promptText,
+            displayContent,
+            referencedFiles: prepared?.referencedFiles,
+            displaySegments: nextDisplaySegments,
+            attachments,
+          },
+          provider: chatProvider,
+          runtimeMode: chatProviderRuntimeMode,
+          responseStyle: chatResponseStyle,
+          model: cliModel,
+          reasoningEffort: chatReasoningEffort,
+        })
+      })().catch((err) => {
+        toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
+      })
+    },
+    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, forkSession, preparePromptSubmission, setInputSegments, setInputValue],
   )
 
   const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
@@ -4963,7 +5034,7 @@ function App() {
                     showMobileProjectFullscreen={showMobileProjectFullscreen}
                     showMobileTerminalFullscreen={showMobileTerminalFullscreen}
                     showProjectEditor={showProjectEditor}
-                    showProjectTree={showProjectTree}
+                    showProjectTree={isMobile ? showProjectTree : showProjectTree && showSidebar && sidebarView === 'files'}
                     showTerminal={showTerminal}
                     sourceControlRefreshSignal={sourceControlRefreshSignal}
                     terminalColumnWidth={terminalColumnWidth}
@@ -5014,7 +5085,7 @@ function App() {
                     onTerminalDragStart={handleTerminalDragStart}
                     onTerminalSelect={setActiveTerminalId}
                     onToggleProjectEditor={toggleProjectEditor}
-                    onToggleProjectTree={toggleProjectTree}
+                    onToggleProjectTree={toggleDeveloperFileSidebar}
                     savedPanelSize={projectUI?.layout?.panelSize ?? null}
                     savedTreeSize={projectUI?.layout?.treeSize ?? null}
                     onLayoutSizeChange={handleProjectLayoutSizeChange}
@@ -5189,6 +5260,7 @@ function App() {
                         onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                         onQueue={handleQueue}
                         onSteer={handleSteerLive}
+                        onAskInParallel={handleAskInParallelLive}
                         onRejectAllFiles={rejectAllFiles}
                         onRejectFile={rejectFile}
                         onRejectPlan={rejectPlan}

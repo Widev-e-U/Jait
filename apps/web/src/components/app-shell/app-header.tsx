@@ -38,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { PatchNotesTooltip } from '@/components/settings/PatchNotesTooltip'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
@@ -371,9 +371,11 @@ export function AppHeader(props: AppHeaderProps) {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
-                        <span title={user?.username} className="max-w-[12rem] truncate text-sm font-semibold">
+                        <TooltipHint content={user?.username}>
+                        <span className="max-w-[12rem] truncate text-sm font-semibold">
                           {user?.username}
                         </span>
+                        </TooltipHint>
                         {updateInfo?.currentVersion && (
                           <span className="text-xs font-normal text-muted-foreground">
                             Jait v{updateInfo.currentVersion}
@@ -439,9 +441,11 @@ export function AppHeader(props: AppHeaderProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
-                    <span title={user?.username} className="max-w-[12rem] truncate text-sm font-semibold">
+                    <TooltipHint content={user?.username}>
+                    <span className="max-w-[12rem] truncate text-sm font-semibold">
                       {user?.username}
                     </span>
+                    </TooltipHint>
                     {updateInfo?.currentVersion && (
                       <span className="text-xs font-normal text-muted-foreground">
                         Jait v{updateInfo.currentVersion}

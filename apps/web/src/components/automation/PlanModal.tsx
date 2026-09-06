@@ -23,6 +23,7 @@ import {
   type ProviderId,
 } from '@/lib/agents-api'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 
 // ── Status helpers ───────────────────────────────────────────────────
@@ -436,64 +437,70 @@ export function PlanModal({
                             {/* Actions */}
                             <div className="flex shrink-0 items-center gap-0.5">
                               {canStart && (
+                                <TooltipHint content="Start thread">
                                 <button
-                                  type="button"
-                                  title="Start thread"
+                                  type="button" aria-label="Start thread"
                                   className="rounded p-1 text-green-600 hover:bg-green-500/10 dark:text-green-400"
                                   onClick={() => void handleStartTask(task)}
                                 >
                                   <Play className="h-3.5 w-3.5" fill="currentColor" />
                                 </button>
+                                </TooltipHint>
                               )}
                               {task.status === 'proposed' && (
+                                <TooltipHint content="Approve">
                                 <button
-                                  type="button"
-                                  title="Approve"
+                                  type="button" aria-label="Approve"
                                   className="rounded p-1 text-green-600 hover:bg-green-500/10 dark:text-green-400"
                                   onClick={() => void updateTaskStatus(task.id, 'approved')}
                                 >
                                   <Check className="h-3.5 w-3.5" />
                                 </button>
+                                </TooltipHint>
                               )}
                               {canSkip && (
+                                <TooltipHint content="Skip">
                                 <button
-                                  type="button"
-                                  title="Skip"
+                                  type="button" aria-label="Skip"
                                   className="rounded p-1 text-muted-foreground hover:bg-muted"
                                   onClick={() => void updateTaskStatus(task.id, 'skipped')}
                                 >
                                   <SkipForward className="h-3.5 w-3.5" />
                                 </button>
+                                </TooltipHint>
                               )}
                               {!isEditing && (task.status === 'proposed' || task.status === 'approved') && (
+                                <TooltipHint content="Edit">
                                 <button
-                                  type="button"
-                                  title="Edit"
+                                  type="button" aria-label="Edit"
                                   className="rounded p-1 text-muted-foreground hover:bg-muted"
                                   onClick={() => startEditing(task)}
                                 >
                                   <Pencil className="h-3 w-3" />
                                 </button>
+                                </TooltipHint>
                               )}
                               {isEditing && (
+                                <TooltipHint content="Save">
                                 <button
-                                  type="button"
-                                  title="Save"
+                                  type="button" aria-label="Save"
                                   className="rounded p-1 text-green-600 hover:bg-green-500/10"
                                   onClick={() => void saveTaskEdit()}
                                 >
                                   <Check className="h-3.5 w-3.5" />
                                 </button>
+                                </TooltipHint>
                               )}
                               {(task.status === 'proposed' || task.status === 'approved' || task.status === 'skipped') && (
+                                <TooltipHint content="Remove">
                                 <button
-                                  type="button"
-                                  title="Remove"
+                                  type="button" aria-label="Remove"
                                   className="rounded p-1 text-muted-foreground hover:text-destructive"
                                   onClick={() => void removeTask(task.id)}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </button>
+                                </TooltipHint>
                               )}
                             </div>
                           </div>

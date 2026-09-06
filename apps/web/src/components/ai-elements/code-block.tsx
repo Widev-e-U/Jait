@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface CodeBlockContextValue {
   code: string
@@ -100,6 +101,7 @@ export function CodeBlockCopyButton({
   const [copied, setCopied] = useState(false)
 
   return (
+    <TooltipHint content={copied ? 'Copied' : 'Copy code'}>
     <Button
       type="button"
       variant="ghost"
@@ -111,11 +113,11 @@ export function CodeBlockCopyButton({
         window.setTimeout(() => setCopied(false), 1200)
       }}
       aria-label={copied ? 'Copied code' : 'Copy code'}
-      title={copied ? 'Copied' : 'Copy code'}
       {...props}
     >
       {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
     </Button>
+    </TooltipHint>
   )
 }
 

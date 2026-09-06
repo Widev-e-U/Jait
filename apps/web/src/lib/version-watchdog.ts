@@ -56,8 +56,23 @@ async function checkForNewBuild(): Promise<void> {
  * Start polling for a new deploy. On change the page reloads itself, so stale
  * bundles (and any stale runtime behaviour they carry) are never served twice.
  */
-export function installVersionWatchdog(intervalMs = 60_000): void {
+export function installVersionWatchdog(
+  intervalMs = 60_000,
+  opts?: { dev?: boolean },
+): void {
   if (typeof window === 'undefined' || window.location.reload === undefined) return
+
+  // In Vite dev HMR already applies code changes, and a full reload would
+  // interrupt the developer mid-interaction; skip there. (`dev` is injectable
+  // because vitest statically replaces import.meta.env.DEV.)
+  if (opts?.dev ?? import.meta.env.DEV) return
+
+  // Pages served through the gateway's preview proxies (project previews) are
+  // ephemeral. They must not reload just because the *gateway's* own build
+  // stamp changed — that is what produced perceived reload loops while the
+  // gateway (or its web dist) was being rebuilt during active sessions.
+  const { pathname } = window.location
+  if (pathname.startsWith('/api/dev-proxy/') || pathname.startsWith('/api/dev-file/')) return
 
   void checkForNewBuild()
   window.setInterval(() => void checkForNewBuild(), intervalMs)

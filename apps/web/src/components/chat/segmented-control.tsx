@@ -4,6 +4,7 @@
  */
 
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface SegmentedOption<T extends string> {
   value: T
@@ -64,13 +65,12 @@ export function SegmentedControl<T extends string>({
         const Icon = option.icon
         const isActive = value === option.value
         return (
+          <TooltipHint key={option.value} content={`${option.label}: ${option.description}`}>
           <button
-            key={option.value}
             type="button"
             role="tab"
             aria-selected={isActive}
             aria-label={option.label}
-            title={`${option.label}: ${option.description}`}
             disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
@@ -83,6 +83,7 @@ export function SegmentedControl<T extends string>({
             <Icon className="h-3.5 w-3.5 shrink-0" />
             {!iconOnly && <span>{option.label}</span>}
           </button>
+          </TooltipHint>
         )
       })}
     </div>

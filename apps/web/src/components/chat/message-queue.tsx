@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface QueuedMessage {
   id: string
@@ -185,13 +186,13 @@ function QueueItem({
       }}
     >
       {/* Position indicator */}
+      <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
       <button
         type="button"
         data-no-drag="true"
         className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         onClick={() => setCollapsed((prev) => !prev)}
         aria-label={collapsed ? 'Expand queued message' : 'Collapse queued message'}
-        title={collapsed ? 'Expand queued message' : 'Collapse queued message'}
       >
         {collapsed ? (
           <ChevronRight className="h-3.5 w-3.5" />
@@ -201,15 +202,17 @@ function QueueItem({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
+      </TooltipHint>
 
       {onReorder && !editing && (
+        <TooltipHint content="Drag to reorder">
         <div
           className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
-          title="Drag to reorder"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </div>
+        </TooltipHint>
       )}
 
       {/* Content: read-only or editable */}
@@ -257,51 +260,56 @@ function QueueItem({
       )}>
         {editing ? (
           <>
+            <TooltipHint content="Save">
             <button
               type="button"
               data-no-drag="true"
               className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
-              onClick={commitEdit}
-              title="Save"
+              onClick={commitEdit} aria-label="Save"
             >
               <Check className="h-3.5 w-3.5" />
             </button>
+            </TooltipHint>
+            <TooltipHint content="Cancel">
             <button
               type="button"
               data-no-drag="true"
               className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
-              onClick={cancelEdit}
-              title="Cancel"
+              onClick={cancelEdit} aria-label="Cancel"
             >
               <X className="h-3.5 w-3.5" />
             </button>
+            </TooltipHint>
           </>
         ) : (
           <>
             {onEdit && (
+              <TooltipHint content="Edit message">
               <button
                 type="button"
                 data-no-drag="true"
                 className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
-                onClick={() => setEditing(true)}
-                title="Edit message"
+                onClick={() => setEditing(true)} aria-label="Edit message"
               >
                 <Pencil className="h-3 w-3" />
               </button>
+              </TooltipHint>
             )}
             {onSteer && (
+              <TooltipHint content="Steer with message">
               <button
                 type="button"
                 data-no-drag="true"
                 className="inline-flex h-6 items-center gap-1 rounded border border-primary/25 bg-primary/5 px-1.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/10"
                 onClick={() => onSteer(item.id)}
-                title="Steer with message"
               >
                 <span>Steer</span>
                 <ArrowRight className="h-3 w-3" />
               </button>
+              </TooltipHint>
             )}
             {onSendToParallelThread && (
+              <TooltipHint content={parallelActionLabel ?? 'Send to parallel thread'}>
               <button
                 type="button"
                 data-no-drag="true"
@@ -310,13 +318,14 @@ function QueueItem({
                   parallelActionLabel ? 'inline-flex h-6 items-center gap-1 border border-primary/20 px-1.5 text-2xs font-medium' : 'p-1',
                 )}
                 onClick={() => onSendToParallelThread(item.id)}
-                title={parallelActionLabel ?? 'Send to parallel thread'}
               >
                 {parallelActionLabel && <span>{parallelActionLabel}</span>}
                 <GitBranch className="h-3 w-3" />
               </button>
+              </TooltipHint>
             )}
             {onToggleHold && (
+              <TooltipHint content={item.held ? 'Unlock — allow this message to be sent' : 'Hold — keep this message from being sent until you unlock it'}>
               <button
                 type="button"
                 data-no-drag="true"
@@ -327,21 +336,22 @@ function QueueItem({
                     : 'text-muted-foreground hover:bg-foreground/10',
                 )}
                 onClick={() => onToggleHold(item.id)}
-                title={item.held ? 'Unlock — allow this message to be sent' : 'Hold — keep this message from being sent until you unlock it'}
                 aria-pressed={item.held}
               >
                 {item.held ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
               </button>
+              </TooltipHint>
             )}
+            <TooltipHint content="Remove from queue">
             <button
               type="button"
               data-no-drag="true"
               className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-              onClick={() => onRemove?.(item.id)}
-              title="Remove from queue"
+              onClick={() => onRemove?.(item.id)} aria-label="Remove from queue"
             >
               <X className="h-3.5 w-3.5" />
             </button>
+            </TooltipHint>
           </>
         )}
       </div>

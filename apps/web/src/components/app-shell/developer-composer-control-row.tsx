@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { ProjectSession } from '@/hooks/useProjects'
 import type { AutomationRepository, RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface DeveloperComposerControlRowProps {
   activeProjectId: string | null
@@ -91,15 +92,16 @@ export function DeveloperComposerControlRow({
             />
           )}
           {approveAllInSession && (
+            <TooltipHint content="Auto-approved. Clear approve all">
             <button
               type="button"
               onClick={onClearApproveAll}
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
-              title="Auto-approved. Clear approve all"
               aria-label="Auto-approved. Clear approve all"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
             </button>
+            </TooltipHint>
           )}
         </div>
         {!compact && (

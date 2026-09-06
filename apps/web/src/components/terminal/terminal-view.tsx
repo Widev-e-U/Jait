@@ -10,7 +10,8 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { detectTouchDevice } from '@/lib/device-layout'
 import { subscribeSoftKeyboardOpen } from './soft-keyboard'
 import { TerminalSoftKeyBar } from './terminal-soft-key-bar'
-import { ChevronDown, ChevronUp, Copy, ClipboardPaste } from 'lucide-react'
+import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -263,6 +264,11 @@ export function shouldUseTerminalCustomContextMenu(_hasDesktopBridge: boolean): 
   return true
 }
 
+export function terminalTouchDeltaToRows(deltaY: number, rowHeight: number): number {
+  if (!Number.isFinite(deltaY) || !Number.isFinite(rowHeight) || rowHeight <= 0) return 0
+  return -Math.trunc(deltaY / rowHeight)
+}
+
 export function resolveProjectActiveTerminalId<T extends { id: string }>(activeTerminalId: string | null, projectTerminals: T[]): string | null {
   if (!activeTerminalId) return null
   return projectTerminals.some((terminal) => terminal.id === activeTerminalId) ? activeTerminalId : null
@@ -485,8 +491,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   // null = pinned to the latest output. Touch-only affordance for the
   // auto-sized partial console rendered inside tool cards, where the xterm
   // viewport otherwise has no reliable mobile scroll control.
-  const [embeddedScrollPos, setEmbeddedScrollPos] = useState<'top' | 'bottom' | 'middle' | null>(null)
-  const showEmbedScrollRail = readOnly && touchDevice && embeddedScrollPos !== null
 
   // Track soft-keyboard visibility (visualViewport heuristics on mobile).
   useEffect(() => {
@@ -526,22 +530,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
     // --- Embedded console scroll control (mobile) -----------------------
     // The auto-sized partial console in tool cards renders xterm's viewport
-    // which has no native touch scrolling; give it swipe-to-scroll plus a
-    // small scroll rail driven by the buffer's viewport position.
-    const updateEmbedScrollRail = () => {
-      if (!readOnly) return
-      const buf = term.buffer.active
-      const bottomIndex = buf.length - term.rows
-      if (bottomIndex <= 0) {
-        setEmbeddedScrollPos('bottom')
-        return
-      }
-      const ydisp = buf.viewportY
-      if (ydisp <= 0) setEmbeddedScrollPos('top')
-      else if (ydisp >= bottomIndex) setEmbeddedScrollPos('bottom')
-      else setEmbeddedScrollPos('middle')
-    }
-    const embedScrollDisposal = term.onScroll(updateEmbedScrollRail)
+    // which has no native touch scrolling; give it swipe-to-scroll.
 
     const swipe = { active: false, axis: 'none' as 'none' | 'x' | 'y', startX: 0, startY: 0, lastY: 0, accY: 0 }
     const rowHeight = () => {
@@ -575,12 +564,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       swipe.accY += touch.clientY - swipe.lastY
       swipe.lastY = touch.clientY
       const height = rowHeight()
-      const rows = Math.trunc(swipe.accY / height)
+      const rows = terminalTouchDeltaToRows(swipe.accY, height)
       if (rows !== 0) {
-        // Dragging up (negative delta) scrolls towards newer output.
         term.scrollLines(rows)
-        swipe.accY -= rows * height
-        updateEmbedScrollRail()
+        swipe.accY += rows * height
       }
     }
     const handleTouchEnd = () => { swipe.active = false }
@@ -656,7 +643,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       const rowHeight = measuredRowHeight > 0 ? measuredRowHeight : TERMINAL_FALLBACK_ROW_HEIGHT
       const rows = clampTerminalRows(countTerminalContentRows(term.buffer.active), minRows, maxRows)
       setContentHeight(Math.ceil(rows * rowHeight))
-      updateEmbedScrollRail()
     }
     const scheduleContentMeasure = () => {
       if (minRows == null || maxRows == null || measureFrame !== null) return
@@ -846,7 +832,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         embedTouchEl.removeEventListener('touchmove', handleTouchMove)
         embedTouchEl.removeEventListener('touchend', handleTouchEnd)
       }
-      embedScrollDisposal.dispose()
       rootEl.removeEventListener('mousedown', handleRightMouseDown, { capture: true })
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
@@ -900,10 +885,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     requestAnimationFrame(() => termRef.current?.focus())
   }, [])
 
-  const handleSoftKeyScroll = useCallback((rows: number) => {
-    termRef.current?.scrollLines(rows)
-  }, [])
-
   return (
     <div
       className={`relative w-full overflow-hidden ${className ?? ''}`}
@@ -925,54 +906,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     >
       <div className="flex h-full w-full flex-col">
         <div ref={containerRef} className="min-h-0 w-full flex-1" style={{ minHeight: 0 }} />
-        {showEmbedScrollRail ? (
-          <div
-            className="pointer-events-none absolute bottom-1 right-1 z-10 flex flex-col gap-0.5"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            <button
-              type="button"
-              className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900/80 text-zinc-300 ring-1 ring-white/10 backdrop-blur active:bg-zinc-800"
-              onKeyDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onClick={() => {
-                const term = termRef.current
-                if (!term) return
-                term.scrollLines(-Math.max(6, Math.round(term.rows * 0.75)))
-              }}
-              aria-label="Scroll console up"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className={`pointer-events-auto flex h-8 w-8 items-center justify-center rounded-md ring-1 backdrop-blur ${
-                embeddedScrollPos === 'bottom'
-                  ? 'bg-zinc-900/50 text-zinc-500 ring-white/5'
-                  : 'bg-zinc-900/80 text-zinc-300 ring-white/10 active:bg-zinc-800'
-              }`}
-              onKeyDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.stopPropagation()}
-              onClick={() => {
-                const term = termRef.current
-                if (!term) return
-                term.scrollLines(Math.max(6, Math.round(term.rows * 0.75)))
-              }}
-              aria-label={embeddedScrollPos === 'bottom' ? 'Console at latest output' : 'Scroll console down'}
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null}
         {showSoftKeyBar && (
           <TerminalSoftKeyBar
             onData={handleSoftKeyData}
             onCopy={handleCopy}
             onPaste={handlePaste}
             onCollapse={() => setKeyBarCollapsed(true)}
-            scrollByRows={handleSoftKeyScroll}
           />
         )}
       </div>
@@ -1078,9 +1017,11 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
           <span className={`w-1.5 h-1.5 rounded-full ${t.state === 'running' ? 'bg-green-500' : 'bg-zinc-500'}`} />
           <span className="truncate max-w-[100px]">{t.id.replace(/^term-/, '').slice(0, 8)}</span>
           {isTerminalBackgroundWaiting(t) && (
-            <span className="rounded bg-amber-500/15 px-1 text-2xs font-medium text-amber-500" title="Background command is being watched">
+            <TooltipHint content="Background command is being watched">
+            <span className="rounded bg-amber-500/15 px-1 text-2xs font-medium text-amber-500">
               waiting
             </span>
+            </TooltipHint>
           )}
           <button
             onClick={(e) => {

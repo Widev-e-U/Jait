@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, Trash2, ArrowDown, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface SSEDebugEvent {
   id: number
@@ -122,9 +123,11 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
             onChange={e => setFilter(e.target.value)}
             className="h-5 w-28 px-1.5 text-2xs rounded bg-muted/60 border border-border text-popover-foreground placeholder-muted-foreground focus:outline-none focus:border-ring"
           />
-          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy} title="Copy all events">
+          <TooltipHint content="Copy all events">
+          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy}>
             {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
           </Button>
+          </TooltipHint>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={clearSSEDebugEvents}>
             <Trash2 className="h-3 w-3" />
           </Button>

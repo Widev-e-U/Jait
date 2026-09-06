@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X, Copy, Check } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X, Copy, Check, GitFork } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
@@ -74,6 +75,8 @@ interface PromptInputProps {
   onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   /** Steer the running agent with the currently typed content (applied immediately while streaming). */
   onSteer?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
+  /** Fork the running session and ask the typed content as a parallel question branch. */
+  onAskInParallel?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   /** Submit the typed content into a fresh thread (used when the streaming default action is "thread"). */
   onThreadSubmit?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   isLoading?: boolean
@@ -698,6 +701,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onStop,
   onQueue,
   onSteer,
+  onAskInParallel,
   onThreadSubmit,
   isLoading,
   submitLoading,
@@ -1828,19 +1832,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onDrop={onDrop}
     >
       {projectDisplayName && (
+        <TooltipHint content={projectPath?.trim() || projectDisplayName}>
         <div
           className="absolute top-2 right-3 z-10 flex items-center gap-1 text-[10px] leading-none text-muted-foreground"
-          title={projectPath?.trim() || projectDisplayName}
         >
           <span className="block truncate max-w-[180px] pointer-events-none">
             <span className="font-semibold text-foreground/60">PROJECT</span>{' '}
             {projectDisplayName}
           </span>
           {chatId && (
+            <TooltipHint content={`Copy chat id: ${chatId}`}>
             <button
               type="button"
               aria-label="Copy chat id"
-              title={`Copy chat id: ${chatId}`}
               // The box hugs the icon exactly — no padding or extra hit ring. The
               // global `button[aria-label] { min-width: 2.5rem }` mobile rule would
               // blow this tiny inline icon up to 40px wide, so override min-width
@@ -1859,8 +1863,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             >
               {chatIdCopied ? <Check className="h-2.5 w-2.5 text-emerald-500" /> : <Copy className="h-2.5 w-2.5" />}
             </button>
+            </TooltipHint>
           )}
         </div>
+        </TooltipHint>
       )}
       {/* Attachment previews */}
       {attachments.length > 0 && (
@@ -2093,27 +2099,29 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </div>
         )}
         <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
+          <TooltipHint content="Attach files">
           <Button
             type="button"
             size="icon"
             variant="ghost"
             className="h-8 w-8 shrink-0 rounded-lg"
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach files"
+            onClick={() => fileInputRef.current?.click()} aria-label="Attach files"
           >
             <Paperclip className="h-4 w-4" />
           </Button>
+          </TooltipHint>
           {onVoiceInput && !voiceRecording && !voiceTranscribing && (
+            <TooltipHint content="Voice input">
             <Button
               type="button"
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0 rounded-lg"
-              onClick={onVoiceInput}
-              title="Voice input"
+              onClick={onVoiceInput} aria-label="Voice input"
             >
               <Mic className="h-4 w-4" />
             </Button>
+            </TooltipHint>
           )}
           {voiceRecording && onVoiceStop && (
             <div className="flex min-w-0 items-center gap-2">
@@ -2142,65 +2150,101 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           )}
           {footerTrailingContent}
           {isLoading && sendTarget !== 'thread' && (
+            <TooltipHint content="Stop generating">
             <Button
               type="button"
               size="icon"
               variant="outline"
               className="h-8 w-8 shrink-0 rounded-lg"
-              onClick={onStop}
-              title="Stop generating"
+              onClick={onStop} aria-label="Stop generating"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
+            </TooltipHint>
           )}
           {canSteerWhileLoading && onSteer ? (
-            <>
-              <Button
-                type="button"
-                size="icon"
-                className="h-8 w-8 shrink-0 rounded-lg"
-                disabled={submitEmpty || composerDisabled}
-                title="Steer the running agent (Enter)"
-                onClick={() => {
-                  const el = editableRef.current
-                  const chips = el ? getChipFiles(el) : []
-                  const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-                  onSteer(chips, attachments, nextSegments)
-                  setAttachments([])
-                  resetComposer()
-                }}
-              >
-                <ArrowUp className="h-4 w-4" />
-              </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-lg"
+                    disabled={submitEmpty || composerDisabled}
+                    aria-label="Steer the running agent (Enter)"
+                    onClick={() => {
+                      const el = editableRef.current
+                      const chips = el ? getChipFiles(el) : []
+                      const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                      onSteer(chips, attachments, nextSegments)
+                      setAttachments([])
+                      resetComposer()
+                    }}
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Steer instead</TooltipContent>
+              </Tooltip>
               {onQueue && (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-lg"
-                  disabled={submitEmpty || composerDisabled}
-                  title="Add to queue (Alt+Enter)"
-                  onClick={() => {
-                    const el = editableRef.current
-                    const chips = el ? getChipFiles(el) : []
-                    const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-                    onQueue(chips, attachments, nextSegments)
-                    setAttachments([])
-                    resetComposer()
-                  }}
-                >
-                  <ListPlus className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-8 w-8 shrink-0 rounded-lg"
+                      disabled={submitEmpty || composerDisabled}
+                      aria-label="Add to queue (Alt+Enter)"
+                      onClick={() => {
+                        const el = editableRef.current
+                        const chips = el ? getChipFiles(el) : []
+                        const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                        onQueue(chips, attachments, nextSegments)
+                        setAttachments([])
+                        resetComposer()
+                      }}
+                    >
+                      <ListPlus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Add to queue</TooltipContent>
+                </Tooltip>
               )}
-            </>
+              {onAskInParallel && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="h-8 w-8 shrink-0 rounded-lg"
+                      disabled={submitEmpty || composerDisabled}
+                      aria-label="Ask in parallel"
+                      onClick={() => {
+                        const el = editableRef.current
+                        const chips = el ? getChipFiles(el) : []
+                        const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                        onAskInParallel(chips, attachments, nextSegments)
+                        setAttachments([])
+                        resetComposer()
+                      }}
+                    >
+                      <GitFork className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Ask in parallel</TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
           ) : canThreadWhileLoading ? (
             <>
+              <TooltipHint content="Send as new thread (Enter)">
               <Button
                 type="button"
                 size="icon"
                 className="h-8 w-8 shrink-0 rounded-lg"
                 disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
-                title="Send as new thread (Enter)"
                 onClick={() => {
                   const el = editableRef.current
                   const chips = el ? getChipFiles(el) : []
@@ -2212,14 +2256,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               >
                 {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
               </Button>
+              </TooltipHint>
               {onSteer ? (
+                <TooltipHint content="Steer instead (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
                   variant="secondary"
                   className="h-8 w-8 shrink-0 rounded-lg"
-                  disabled={submitEmpty || composerDisabled}
-                  title="Steer instead (Alt+Enter)"
+                  disabled={submitEmpty || composerDisabled} aria-label="Steer instead (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
                     const chips = el ? getChipFiles(el) : []
@@ -2231,14 +2276,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
+                </TooltipHint>
               ) : onQueue ? (
+                <TooltipHint content="Add to queue (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
                   variant="secondary"
                   className="h-8 w-8 shrink-0 rounded-lg"
-                  disabled={submitEmpty || composerDisabled}
-                  title="Add to queue (Alt+Enter)"
+                  disabled={submitEmpty || composerDisabled} aria-label="Add to queue (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
                     const chips = el ? getChipFiles(el) : []
@@ -2250,27 +2296,29 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 >
                   <ListPlus className="h-4 w-4" />
                 </Button>
+                </TooltipHint>
               ) : null}
             </>
           ) : canQueueWhileLoading && submitEmpty ? (
+            <TooltipHint content="Sending">
             <Button
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled
-              title="Sending"
+              disabled aria-label="Sending"
             >
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
+            </TooltipHint>
           ) : canQueueWhileLoading && onQueue ? (
             <>
+              <TooltipHint content="Add to queue">
               <Button
                 type="button"
                 size="icon"
                 variant="secondary"
                 className="h-8 w-8 shrink-0 rounded-lg"
-                disabled={submitEmpty || composerDisabled}
-                title="Add to queue"
+                disabled={submitEmpty || composerDisabled} aria-label="Add to queue"
                 onClick={() => {
                   const el = editableRef.current
                   const chips = el ? getChipFiles(el) : []
@@ -2282,14 +2330,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               >
                 <ListPlus className="h-4 w-4" />
               </Button>
+              </TooltipHint>
               {onSteer && (
+                <TooltipHint content="Steer instead (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
                   variant="secondary"
                   className="h-8 w-8 shrink-0 rounded-lg"
-                  disabled={submitEmpty || composerDisabled}
-                  title="Steer instead (Alt+Enter)"
+                  disabled={submitEmpty || composerDisabled} aria-label="Steer instead (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
                     const chips = el ? getChipFiles(el) : []
@@ -2301,15 +2350,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
+                </TooltipHint>
               )}
             </>
           ) : !isLoading || sendTarget === 'thread' ? (
+            <TooltipHint content={submitLoading ? 'Loading chat' : undefined}>
             <Button
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
               disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
-              title={submitLoading ? 'Loading chat' : undefined}
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
@@ -2323,16 +2373,18 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <ArrowUp className="h-4 w-4" />}
             </Button>
+            </TooltipHint>
           ) : (
+            <TooltipHint content="Sending">
             <Button
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled
-              title="Sending"
+              disabled aria-label="Sending"
             >
               <Loader2 className="h-4 w-4 animate-spin" />
             </Button>
+            </TooltipHint>
           )}
         </div>
       </div>

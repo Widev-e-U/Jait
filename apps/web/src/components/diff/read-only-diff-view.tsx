@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useEditorThemeName } from '@/hooks/use-editor-theme'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface ReadOnlyDiffViewProps {
   original: string
@@ -273,29 +274,31 @@ export function ReadOnlyDiffView({
 
       {changes.length > 1 && (
         <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1.5">
+          <TooltipHint content="Previous change">
           <Button
             size="sm"
             variant="secondary"
             className="h-9 w-9 rounded-full border bg-background/90 p-0 shadow-lg backdrop-blur-sm hover:bg-background"
             onClick={goPrev}
-            disabled={activeIndex === 0}
-            title="Previous change"
+            disabled={activeIndex === 0} aria-label="Previous change"
           >
             <ChevronUp className="h-5 w-5" />
           </Button>
+          </TooltipHint>
           <span className="text-center font-medium tabular-nums text-2xs text-muted-foreground">
             {activeIndex + 1}/{changes.length}
           </span>
+          <TooltipHint content="Next change">
           <Button
             size="sm"
             variant="secondary"
             className="h-9 w-9 rounded-full border bg-background/90 p-0 shadow-lg backdrop-blur-sm hover:bg-background"
             onClick={goNext}
-            disabled={activeIndex === changes.length - 1}
-            title="Next change"
+            disabled={activeIndex === changes.length - 1} aria-label="Next change"
           >
             <ChevronDown className="h-5 w-5" />
           </Button>
+          </TooltipHint>
         </div>
       )}
 

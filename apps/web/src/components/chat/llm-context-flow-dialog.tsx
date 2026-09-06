@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import type { LlmContextFlow, LlmContextFlowRound, RoundMetrics } from '@/hooks/useChat'
 import { useEditorThemeName } from '@/hooks/use-editor-theme'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 type TraceRow =
   | { id: string; kind: 'summary'; flow: LlmContextFlow }
@@ -268,17 +269,19 @@ function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
   if (!metrics) return null
   return (
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span title="LLM request duration">{metrics.durationMs > 0 ? formatDuration(metrics.durationMs) : '—'}</span>
-      {metrics.promptTokens != null && <span title="Prompt tokens">{formatNumber(metrics.promptTokens)} prompt</span>}
-      {metrics.completionTokens != null && <span title="Completion tokens">{formatNumber(metrics.completionTokens)} completion</span>}
+      <TooltipHint content="LLM request duration"><span>{metrics.durationMs > 0 ? formatDuration(metrics.durationMs) : '—'}</span></TooltipHint>
+      {metrics.promptTokens != null && <TooltipHint content="Prompt tokens"><span>{formatNumber(metrics.promptTokens)} prompt</span></TooltipHint>}
+      {metrics.completionTokens != null && <TooltipHint content="Completion tokens"><span>{formatNumber(metrics.completionTokens)} completion</span></TooltipHint>}
       {metrics.tokensPerSecond != null && (
-        <span title="Completion tokens per second" className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span>
+        <TooltipHint content="Completion tokens per second"><span className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span></TooltipHint>
       )}
       {metrics.contextUsage && (
-        <span title="Context window utilisation">
+        <TooltipHint content="Context window utilisation">
+        <span>
           ctx {Math.round(metrics.contextUsage.ratio * 100)}%
           {metrics.contextUsage.pruned ? ' (pruned)' : ''}
         </span>
+        </TooltipHint>
       )}
     </div>
   )
@@ -356,8 +359,8 @@ function TraceRowView({ row }: { row: TraceRow }) {
             <div key={entry.id} className="min-w-0 rounded border border-border/60 bg-background/65 px-2 py-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 <span>{entry.scope}</span>
-                <span className="truncate" title={entry.source}>{entry.source}</span>
-                {entry.sourceId ? <span className="truncate" title={entry.sourceId}>source {entry.sourceId}</span> : null}
+                <TooltipHint content={entry.source}><span className="truncate">{entry.source}</span></TooltipHint>
+                {entry.sourceId ? <TooltipHint content={entry.sourceId}><span className="truncate">source {entry.sourceId}</span></TooltipHint> : null}
                 <span>{new Date(entry.updatedAt).toLocaleDateString()}</span>
               </div>
               <div className="mt-0.5 break-words text-xs text-foreground">{entry.content}</div>

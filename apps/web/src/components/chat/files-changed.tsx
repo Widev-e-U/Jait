@@ -3,6 +3,7 @@ import { Check, ChevronRight, FileText, Undo2, ExternalLink } from 'lucide-react
 import { FileIcon } from '@/components/icons/file-icons'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export type FileChangeState = 'undecided' | 'accepted' | 'rejected'
 
@@ -104,28 +105,30 @@ export function FilesChanged({
         </button>
         {undecided > 0 && (
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <TooltipHint content="Keep all">
             <Button
               size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
               className={cn('h-6 shrink-0 text-xs', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onAcceptAll}
-              title="Keep all"
               aria-label="Keep all"
             >
               <Check className={cn('h-3 w-3 shrink-0', !compactActions && 'mr-1')} />
               {!compactActions && 'Keep all'}
             </Button>
+            </TooltipHint>
+            <TooltipHint content="Undo all">
             <Button
               size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
               className={cn('h-6 shrink-0 text-xs', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onRejectAll}
-              title="Undo all"
               aria-label="Undo all"
             >
               <Undo2 className={cn('h-3 w-3 shrink-0', !compactActions && 'mr-1')} />
               {!compactActions && 'Undo all'}
             </Button>
+            </TooltipHint>
           </div>
         )}
       </div>
@@ -142,47 +145,51 @@ export function FilesChanged({
             )}
           >
             <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
+            <TooltipHint content={`Review diff for ${file.path}`}>
             <button
               type="button"
               className={cn(
                 'min-w-0 flex-1 truncate text-left hover:underline cursor-pointer',
                 file.state === 'rejected' && 'line-through',
               )}
-              title={`Review diff for ${file.path}`}
               onClick={() => onFileClick?.(file.path)}
             >
               {file.path}
             </button>
+            </TooltipHint>
             {hasDiffCounts && (
               <DiffCount insertions={file.insertions ?? 0} deletions={file.deletions ?? 0} />
             )}
 
             {file.state === 'undecided' && (
               <div className="ml-auto flex items-center gap-0.5 shrink-0">
+                <TooltipHint content="Review changes">
                 <button
                   type="button"
                   className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
-                  onClick={() => onFileClick?.(file.path)}
-                  title="Review changes"
+                  onClick={() => onFileClick?.(file.path)} aria-label="Review changes"
                 >
                   <ExternalLink className="h-3 w-3" />
                 </button>
+                </TooltipHint>
+                <TooltipHint content="Keep all changes">
                 <button
                   type="button"
                   className="p-1 rounded hover:bg-green-500/20 text-green-600 dark:text-green-400 transition-colors"
-                  onClick={() => onAccept?.(file.path)}
-                  title="Keep all changes"
+                  onClick={() => onAccept?.(file.path)} aria-label="Keep all changes"
                 >
                   <Check className="h-3 w-3" />
                 </button>
+                </TooltipHint>
+                <TooltipHint content="Undo all changes">
                 <button
                   type="button"
                   className="p-1 rounded hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors"
-                  onClick={() => onReject?.(file.path)}
-                  title="Undo all changes"
+                  onClick={() => onReject?.(file.path)} aria-label="Undo all changes"
                 >
                   <Undo2 className="h-3 w-3" />
                 </button>
+                </TooltipHint>
               </div>
             )}
             {file.state === 'accepted' && (

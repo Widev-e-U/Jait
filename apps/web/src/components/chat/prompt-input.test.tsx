@@ -10,18 +10,23 @@ const baseProps = {
 }
 
 describe('PromptInput steering while loading', () => {
-  it('renders the split Steer (primary) + Queue (secondary) buttons while streaming', () => {
+  it('renders Steer, Queue, and Ask in parallel with fast tooltip labels while streaming', () => {
     const markup = renderToStaticMarkup(
       <PromptInput
         {...baseProps}
         isLoading
         onQueue={() => {}}
         onSteer={() => {}}
+        onAskInParallel={() => {}}
       />,
     )
 
-    expect(markup).toContain('title="Steer the running agent (Enter)"')
-    expect(markup).toContain('title="Add to queue (Alt+Enter)"')
+    expect(markup).toContain('aria-label="Steer the running agent (Enter)"')
+    expect(markup).toContain('aria-label="Add to queue (Alt+Enter)"')
+    expect(markup).toContain('aria-label="Ask in parallel"')
+    expect(markup).not.toContain('title="Steer the running agent (Enter)"')
+    expect(markup).not.toContain('title="Add to queue (Alt+Enter)"')
+    expect(markup).not.toContain('title="Ask in parallel"')
   })
 
   it('keeps the queue-only fallback when no steer handler is provided', () => {
@@ -34,7 +39,7 @@ describe('PromptInput steering while loading', () => {
     )
 
     expect(markup).not.toContain('title="Steer the running agent (Enter)"')
-    expect(markup).toContain('title="Add to queue"')
+    expect(markup).toContain('aria-label="Add to queue"')
   })
 
   it('renders the plain submit button when not loading', () => {

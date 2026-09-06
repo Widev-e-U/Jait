@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { calendarApi, type CalendarAccount, type CalendarEvent } from '@/lib/calendar-api'
 import { isDeviceCalendarAvailable, readDeviceCalendarSnapshot } from '@/lib/device-calendar'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 type ViewMode = 'list' | 'month'
 
@@ -197,13 +198,13 @@ export function CalendarPage() {
                   </span>
                   <div className="flex flex-col gap-0.5 overflow-hidden">
                     {dayEvents.slice(0, 2).map((event) => (
+                      <TooltipHint key={event.id} content={event.title}>
                       <button
-                        key={event.id}
-                        title={event.title}
                         className="truncate rounded bg-primary/15 px-1 py-0.5 text-left text-[11px] leading-tight text-primary hover:bg-primary/25"
                       >
                         {event.title}
                       </button>
+                      </TooltipHint>
                     ))}
                     {dayEvents.length > 2 && (
                       <span className="px-1 text-[11px] text-muted-foreground">+{dayEvents.length - 2} more</span>

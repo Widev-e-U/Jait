@@ -8,6 +8,7 @@ import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/component
 import { getApiUrl } from '@/lib/gateway-url'
 import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 // BrowserSession was removed — keep a minimal type alias for residual references
 type BrowserSession = { id: string; controller: string; previewUrl?: string; targetUrl?: string; origin?: string; secretSafe?: boolean }
@@ -427,9 +428,11 @@ export function DevPreviewPanel({
             </>
           ) : null}
           {previewLabel ? (
-            <span className="truncate text-xs text-muted-foreground" title={previewLabel}>
+            <TooltipHint content={previewLabel}>
+            <span className="truncate text-xs text-muted-foreground">
               {previewLabel}
             </span>
+            </TooltipHint>
           ) : null}
         </div>
         <div className="ml-auto flex items-center gap-1">

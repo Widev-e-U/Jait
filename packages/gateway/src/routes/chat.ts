@@ -1010,6 +1010,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
 
 const sessionHistory = new Map<string, ChatMessage[]>();
 const activeStreams = new Set<string>();
+const activeAssistantCheckpointIds = new Map<string, string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 const drainingQueuedSessions = new Set<string>();
 
@@ -2061,8 +2062,11 @@ function writeMessageContextMetadata(db: JaitDB, messageId: string, contextFlow?
  * including assistant rows that hold only thinking/segments from a cancelled
  * turn, is a real bubble and must keep its slot.
  */
-function visiblePersistedRows(sessionId: string) {
-  return and(eq(messagesTable.sessionId, sessionId), ne(messagesTable.role, "tool"));
+function visiblePersistedRows(sessionId: string, excludeMessageId?: string) {
+  const visibleRows = and(eq(messagesTable.sessionId, sessionId), ne(messagesTable.role, "tool"));
+  return excludeMessageId
+    ? and(visibleRows, ne(messagesTable.id, excludeMessageId))
+    : visibleRows;
 }
 
 function persistedMessageWindow(
@@ -2070,11 +2074,12 @@ function persistedMessageWindow(
   sessionId: string,
   limit: number,
   before?: number,
+  excludeMessageId?: string,
 ): { messages: UIMsg[]; total: number; hasMore: boolean } {
   const totalRow = db
     .select({ count: sql<number>`count(*)` })
     .from(messagesTable)
-    .where(visiblePersistedRows(sessionId))
+    .where(visiblePersistedRows(sessionId, excludeMessageId))
     .get();
   const total = Number(totalRow?.count ?? 0);
   const end = typeof before === "number" && Number.isFinite(before) && before >= 0 && before < total
@@ -2094,7 +2099,7 @@ function persistedMessageWindow(
       })
       .from(messagesTable)
       .leftJoin(messageContextMetadataTable, eq(messageContextMetadataTable.messageId, messagesTable.id))
-      .where(visiblePersistedRows(sessionId))
+      .where(visiblePersistedRows(sessionId, excludeMessageId))
       .orderBy(messagesTable.createdAt, messagesTable.id)
       .limit(end - start)
       .offset(start)
@@ -2119,8 +2124,10 @@ function persistedStreamingMessageWindow(
     { includePendingAssistantToolCalls: true },
   );
 
+  const activeCheckpointId = activeAssistantCheckpointIds.get(sessionId);
+
   if (typeof before === "number" && Number.isFinite(before)) {
-    const persisted = persistedMessageWindow(db, sessionId, limit, before);
+    const persisted = persistedMessageWindow(db, sessionId, limit, before, activeCheckpointId);
     return {
       messages: persisted.messages,
       total: persisted.total + liveMessages.length,
@@ -2132,6 +2139,8 @@ function persistedStreamingMessageWindow(
     db,
     sessionId,
     Math.max(limit - liveMessages.length, 0),
+    undefined,
+    activeCheckpointId,
   );
   return {
     messages: [...persisted.messages, ...liveMessages],
@@ -2485,6 +2494,7 @@ export function notifySessionsOfGatewayRestart(
 /** Internals exposed for unit tests (reconnect-snapshot shape). */
 export const __chatTestUtils = {
   activeStreams,
+  activeAssistantCheckpointIds,
   activeCliTurns,
   sessionHistory,
   sessionStreamingState,
@@ -3635,7 +3645,10 @@ export function registerChatRoutes(
         contextFlowJson,
         thinking,
       );
-      if (id) assistantCheckpointId = id;
+      if (id) {
+        assistantCheckpointId = id;
+        activeAssistantCheckpointIds.set(sessionId, id);
+      }
     }
 
     // ── Crash-safe *time-based* streaming checkpoint ──
@@ -4927,6 +4940,7 @@ export function registerChatRoutes(
     }
 
     activeStreams.delete(sessionId);
+    activeAssistantCheckpointIds.delete(sessionId);
     activeCliTurns.delete(sessionId);
     cleanupCliListeners();
     ws?.broadcastToUser(authUser.id, {

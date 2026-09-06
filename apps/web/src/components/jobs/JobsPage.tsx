@@ -7,6 +7,7 @@ import { JobHistoryDialog } from './JobHistoryDialog'
 import { JobsApi, type ScheduledJob, type JobRun } from '@/lib/jobs-api'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Plus, RefreshCw, Calendar, AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const api = new JobsApi()
 const DEFAULT_PAGE_SIZE = 20
@@ -131,14 +132,18 @@ export function JobsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="shrink-0 px-3 sm:px-4" title="Refresh" aria-label="Refresh">
+          <TooltipHint content="Refresh">
+          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="shrink-0 px-3 sm:px-4" aria-label="Refresh">
             <RefreshCw className={`h-4 w-4 sm:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button onClick={() => setIsCreateOpen(true)} className="shrink-0 px-3 sm:px-4" title="New Job" aria-label="New Job">
+          </TooltipHint>
+          <TooltipHint content="New Job">
+          <Button onClick={() => setIsCreateOpen(true)} className="shrink-0 px-3 sm:px-4" aria-label="New Job">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">New Job</span>
           </Button>
+          </TooltipHint>
         </div>
       </div>
 

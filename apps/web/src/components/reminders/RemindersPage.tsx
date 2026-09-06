@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { agentsApi, type ReminderRecord, type ReminderSnapshot, type UserSecretRecord } from '@/lib/agents-api'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 type ReminderStatusFilter = 'active' | 'archived' | 'all'
 
@@ -227,14 +228,18 @@ export function MemoryPage() {
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void loadSnapshot()} disabled={isLoading} title="Refresh" aria-label="Refresh">
+          <TooltipHint content="Refresh">
+          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void loadSnapshot()} disabled={isLoading} aria-label="Refresh">
             <RefreshCw className={cn('h-4 w-4 sm:mr-2', isLoading && 'animate-spin')} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void copyMarkdownExport()} title="Copy Markdown" aria-label="Copy Markdown">
+          </TooltipHint>
+          <TooltipHint content="Copy Markdown">
+          <Button variant="outline" className="shrink-0 px-3 sm:px-4" onClick={() => void copyMarkdownExport()} aria-label="Copy Markdown">
             <Copy className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">{exportCopied ? 'Copied' : 'Copy Markdown'}</span>
           </Button>
+          </TooltipHint>
         </div>
       </div>
 
@@ -362,14 +367,18 @@ export function MemoryPage() {
                           {session.name || 'Chat'}
                         </span>
                       )}
-                      <span className="inline-flex min-w-0 items-center gap-1" title={sourceLabel}>
+                      <TooltipHint content={sourceLabel}>
+                      <span className="inline-flex min-w-0 items-center gap-1">
                         <MessageSquare className="h-3.5 w-3.5" />
                         <span className="truncate">{sourceLabel}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1" title="Usage count">
+                      </TooltipHint>
+                      <TooltipHint content="Usage count">
+                      <span className="inline-flex items-center gap-1">
                         <Activity className="h-3.5 w-3.5" />
                         {reminder.usageCount ?? 0} uses
                       </span>
+                      </TooltipHint>
                       <span className="inline-flex items-center gap-1">
                         <Clock3 className="h-3.5 w-3.5" />
                         Updated {formatDate(reminder.updatedAt)}

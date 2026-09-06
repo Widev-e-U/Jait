@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { providerTypeFromId } from '@jait/shared'
 import { providerIconFor } from '@/components/chat/provider-model-selector'
 import { formatSessionChatSelectionLabel, parseSessionChatSelection } from '@/lib/session-chat-selection'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
  * Provider-logo badge for a chat's last-used provider/model/mode. Shows the
@@ -18,9 +19,9 @@ export function SessionChatIcon({ metadata }: { metadata: string | null }) {
   const selectionLabel = formatSessionChatSelectionLabel(selection)
 
   return (
+    <TooltipHint content={selectionLabel}>
     <span
       role="img"
-      title={selectionLabel}
       aria-label={selectionLabel}
       className="inline-flex size-3 shrink-0 items-center justify-center text-muted-foreground"
     >
@@ -28,5 +29,6 @@ export function SessionChatIcon({ metadata }: { metadata: string | null }) {
         <Icon className="size-3" />
       </span>
     </span>
+    </TooltipHint>
   )
 }
