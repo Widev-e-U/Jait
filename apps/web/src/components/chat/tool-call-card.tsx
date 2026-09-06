@@ -2732,6 +2732,24 @@ function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null
     : null
 }
 
+export function trimRepeatedTrailingTerminalPrompt(output: string, command: string): string {
+  const trimmedOutput = output.trimEnd()
+  const trimmedCommand = command.trim()
+  if (!trimmedOutput || !trimmedCommand) return trimmedOutput
+
+  const commandIndex = trimmedOutput.indexOf(trimmedCommand)
+  if (commandIndex <= 0) return trimmedOutput
+
+  const openingPrompt = trimmedOutput.slice(0, commandIndex).trimEnd()
+  if (!openingPrompt || openingPrompt.includes('\n') || openingPrompt.includes('\r')) return trimmedOutput
+
+  const lastLineStart = Math.max(trimmedOutput.lastIndexOf('\n'), trimmedOutput.lastIndexOf('\r')) + 1
+  const trailingLine = trimmedOutput.slice(lastLineStart).trimEnd()
+  if (trailingLine !== openingPrompt) return trimmedOutput
+
+  return trimmedOutput.slice(0, lastLineStart).trimEnd()
+}
+
 export function resolveToolTerminalOutputEndOffset(
   call: ToolCallInfo,
   matchedTerminalExecution: ToolTerminalExecutionMetadata | null,
@@ -3775,7 +3793,13 @@ function ToolCallCardInner({
     matchingTerminalExecution,
     completedTerminalExecution,
   )
-  const terminalDisplayOutput = completedTerminalExecution?.output ?? displayOutput
+  const persistedTerminalOutput = typeof structuredTerminalResult?.terminalOutput === 'string'
+    ? structuredTerminalResult.terminalOutput
+    : null
+  const terminalDisplayOutput = trimRepeatedTrailingTerminalPrompt(
+    completedTerminalExecution?.output ?? persistedTerminalOutput ?? displayOutput,
+    terminalCommand,
+  )
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)
   const showTerminalSlice = shouldShowToolTerminalSlice({

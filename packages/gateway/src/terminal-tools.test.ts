@@ -414,6 +414,7 @@ describe("terminal.run tool status reporting", () => {
     expect(fg1.ok).toBe(true);
     const fgTerminalId = (fg1.data as any).terminalId as string;
     expect(fgTerminalId).toBeTruthy();
+    expect((fg1.data as any).terminalOutput).toContain("printf fg1");
 
     // Background command must NOT reuse the session default terminal — otherwise
     // the next foreground command would be typed into a busy shell and Ctrl+C it.

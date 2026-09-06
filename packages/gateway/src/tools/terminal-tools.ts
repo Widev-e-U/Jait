@@ -1202,6 +1202,13 @@ export function createTerminalRunTool(
           clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
         }
 
+        const terminalOutput = "getRecentOutputSince" in surface
+          && typeof surface.getRecentOutputSince === "function"
+          ? cleanChunk(
+              surface.getRecentOutputSince(outputOffset, outputEndOffset ?? undefined),
+            ).trimEnd()
+          : result.output;
+
         // 3. Build response
         // Mark as failed if exit code != 0 or timed out.
         // Also detect likely-failed commands that exit 0 but have short output
@@ -1252,6 +1259,7 @@ export function createTerminalRunTool(
           message,
           data: {
             output: result.output,
+            terminalOutput,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,

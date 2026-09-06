@@ -28,6 +28,7 @@ let getToolInvocationLabels: typeof import('./tool-call-card')['getToolInvocatio
 let shouldRenderToolCall: typeof import('./tool-call-card')['shouldRenderToolCall']
 let shouldShowToolTerminalSlice: typeof import('./tool-call-card')['shouldShowToolTerminalSlice']
 let resolveToolTerminalOutputEndOffset: typeof import('./tool-call-card')['resolveToolTerminalOutputEndOffset']
+let trimRepeatedTrailingTerminalPrompt: typeof import('./tool-call-card')['trimRepeatedTrailingTerminalPrompt']
 let getStructuredTerminalResult: typeof import('./tool-call-card')['getStructuredTerminalResult']
 let isTerminalCreationCall: typeof import('./tool-call-card')['isTerminalCreationCall']
 let getToolSearchResultItems: typeof import('./tool-call-card')['getToolSearchResultItems']
@@ -70,6 +71,7 @@ beforeAll(async () => {
     shouldRenderToolCall,
     shouldShowToolTerminalSlice,
     resolveToolTerminalOutputEndOffset,
+    trimRepeatedTrailingTerminalPrompt,
     getStructuredTerminalResult,
     isTerminalCreationCall,
     getToolSearchResultItems,
@@ -89,6 +91,23 @@ describe('shouldShowToolTerminalSlice', () => {
       outputEndOffset: 18,
       activeOrWaiting: false,
     })).toBe(true)
+  })
+})
+
+describe('trimRepeatedTrailingTerminalPrompt', () => {
+  it('removes the second prompt from a persisted terminal transcript', () => {
+    const prompt = 'jakob@movable-base:~/TizenAnilabStream/watch' + String.fromCharCode(36)
+    expect(trimRepeatedTrailingTerminalPrompt(
+      prompt + ' here is a long command\n' + prompt + '\n',
+      'here is a long command',
+    )).toBe(prompt + ' here is a long command')
+  })
+
+  it('preserves command output that does not repeat the opening prompt', () => {
+    expect(trimRepeatedTrailingTerminalPrompt(
+      'here is a long command\nfinished',
+      'here is a long command',
+    )).toBe('here is a long command\nfinished')
   })
 })
 
