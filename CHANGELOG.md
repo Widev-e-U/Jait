@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.823](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.823) — 2026-09-06
+- feat: refine chat controls and mobile interactions — 620c214d
+
 ## [v0.1.819](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.819) — 2026-09-04
 - docs: goal skills concept proposal (/goal loop engineering) — 90526d10
 - chore(mobile): serve Capacitor Android content over https with mixed content allowed — e9e27d7e
