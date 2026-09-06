@@ -312,7 +312,7 @@ export function DeveloperSidebars({
             aria-valuemax={clampDeveloperSidebarWidth(Number.POSITIVE_INFINITY, window.innerWidth)}
             aria-valuenow={sidebarWidth}
             tabIndex={0}
-            className="absolute inset-y-0 right-0 z-20 w-2 translate-x-1/2 cursor-col-resize touch-none outline-none"
+            className="absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize touch-none outline-none sash-handle"
             onKeyDown={handleSidebarResizeKeyDown}
             onPointerDown={(event) => {
               event.preventDefault()
@@ -331,9 +331,7 @@ export function DeveloperSidebars({
               resizeStartRef.current = null
               document.documentElement.classList.remove('is-dragging-col-resize')
             }}
-          >
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors hover:bg-primary/40" />
-          </div>
+          />
         </aside>
       )}
     </>

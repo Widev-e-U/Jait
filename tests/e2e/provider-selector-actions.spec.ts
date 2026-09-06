@@ -58,7 +58,13 @@ test.describe('provider selector actions', () => {
       await page.goto('/')
       await sessionRestored
       await expect(page.getByRole('button', { name: 'Copy chat id' })).toBeVisible()
-      await page.getByRole('button', { name: /^Provider .*model / }).first().click({ timeout: 30_000 })
+      const providerSelector = page.getByRole('button', { name: /^Provider .*model / }).first()
+      if (!mobile) {
+        await providerSelector.click({ button: 'right', timeout: 30_000 })
+        await expect(page.getByRole('menuitem', { name: 'Refresh models' })).toBeVisible()
+        await page.keyboard.press('Escape')
+      }
+      await providerSelector.click({ timeout: 30_000 })
       const account = page.getByRole('option', { name: /Test Codex/ })
       await expect(account.getByRole('img', { name: 'Ready to use' })).toBeVisible()
       await expect(account).not.toContainText('signed in')

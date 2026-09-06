@@ -260,7 +260,7 @@ export function DeveloperWorkspacePanes({
           {!showDesktopProject && showTerminal && (
             <div
               onMouseDown={onTerminalColumnDragStart}
-              className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize hover:bg-primary/30 transition-colors z-10"
+              className="absolute inset-y-0 right-0 w-3 translate-x-1/2 cursor-col-resize touch-none sash-handle z-10"
             />
           )}
           {shouldShowProject && (
@@ -273,7 +273,7 @@ export function DeveloperWorkspacePanes({
               {!terminalFullscreen && (
                 <div
                   onMouseDown={onTerminalDragStart}
-                  className="absolute inset-x-0 top-0 h-1.5 cursor-row-resize hover:bg-primary/30 transition-colors z-20"
+                  className="absolute inset-x-0 top-0 h-3 -translate-y-1/2 cursor-row-resize touch-none sash-handle sash-handle-horizontal z-20"
                 />
               )}
               <div className="relative shrink-0">

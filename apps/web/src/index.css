@@ -500,3 +500,41 @@ html.is-dragging-row-resize {
     opacity: 1;
   }
 }
+
+/* Resize hit targets stay transparent; only the centered hairline responds.
+   Share feedback across sidebar, editor, chat, and terminal boundaries. */
+.sash-handle::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: transparent;
+  transition: background-color 120ms ease-out;
+}
+.sash-handle-bordered::after {
+  background-color: hsl(var(--border) / 0.6);
+}
+.sash-handle-horizontal::after {
+  inset: 50% 0 auto;
+  width: auto;
+  height: 1px;
+  transform: translateY(-50%);
+}
+@media (hover: hover) {
+  .sash-handle:hover::after {
+    background-color: hsl(var(--primary) / 0.45);
+    transition-delay: 150ms;
+  }
+}
+.sash-handle:active::after,
+.sash-handle:focus-visible::after,
+.sash-handle[data-dragging="true"]::after {
+  background-color: hsl(var(--primary) / 0.75);
+  transition-delay: 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sash-handle::after { transition: none; }
+}

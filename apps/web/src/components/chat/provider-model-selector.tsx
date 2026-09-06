@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
 import { ChevronDown, CircleCheck, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
@@ -747,6 +747,20 @@ export function ProviderModelSelector({
     </TooltipHint>
   )
 
+  const triggerWithProviderActions = (trigger: ReactNode) => activeEntry ? (
+    <ProviderActionsMenu
+      label={activeEntry.label}
+      busy={Boolean(providerActionBusy || authBusyProvider)}
+      canRefresh={activeEntry.isAvailable}
+      canLogout={Boolean(activeEntry.auth?.logout) && activeEntry.auth?.authenticated !== false
+        && !(scopeNodeOffline && activeEntry.nodeId !== GATEWAY_NODE_ID)}
+      onRefresh={() => { void runProviderAction(activeEntry, 'refresh') }}
+      onLogout={() => { void runProviderAction(activeEntry, 'logout') }}
+    >
+      {trigger}
+    </ProviderActionsMenu>
+  ) : trigger
+
   const selectorContent = (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(9.5rem,0.8fr)_minmax(13rem,1.45fr)] overflow-hidden">
       <section className="flex min-h-0 min-w-0 flex-col border-r" aria-labelledby="provider-selector-heading">
@@ -1059,7 +1073,7 @@ export function ProviderModelSelector({
     <>
       {isMobile ? (
         <>
-          {triggerButton}
+          {triggerWithProviderActions(triggerButton)}
           <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent
               showCloseButton={false}
@@ -1092,9 +1106,11 @@ export function ProviderModelSelector({
         </>
       ) : (
         <Popover open={open} onOpenChange={handleOpenChange}>
-          <PopoverTrigger asChild disabled={disabled}>
-            {triggerButton}
-          </PopoverTrigger>
+          {triggerWithProviderActions(
+            <PopoverTrigger asChild disabled={disabled}>
+              {triggerButton}
+            </PopoverTrigger>,
+          )}
           <PopoverContent
             align="start"
             side="top"

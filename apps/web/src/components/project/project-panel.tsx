@@ -6117,11 +6117,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       {/* Resize handle: tree ↔ editor */}
       {showTreeProp && !tabMaximized && !panel.collapsed && effectiveShowEditor && (
       <div
-        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize touch-none sash-handle"
+        className="relative w-3 -mx-1 shrink-0 cursor-col-resize touch-none sash-handle sash-handle-bordered z-10"
+        data-dragging={tree.isDragging}
         onPointerDown={tree.onPointerDown}
         onDoubleClick={tree.collapsed ? () => tree.restore() : undefined}
       >
-        <div className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-[background-color] duration-100 ease-out ${tree.isDragging ? 'bg-primary/50' : 'bg-border/60'}`} />
       </div>
       )}
 
@@ -6791,16 +6791,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       {(showEditorProp || showTreeProp) && (
       <div
         className={`${!showEditorProp || (tabMaximized && !panel.collapsed)
-          ? 'absolute right-0 inset-y-0 w-2 z-30'
+          ? 'absolute right-0 inset-y-0 w-3 translate-x-1/2 z-30'
           : panel.collapsed
-            ? 'absolute left-0 inset-y-0 w-2 z-30'
-            : 'relative w-2 -mx-0.5 shrink-0'} cursor-col-resize touch-none sash-handle`}
+            ? 'absolute left-0 inset-y-0 w-3 -translate-x-1/2 z-30'
+            : 'relative w-3 -mx-1 shrink-0 z-10'} cursor-col-resize touch-none sash-handle sash-handle-bordered`}
+        data-dragging={panel.isDragging}
         onPointerDown={panel.onPointerDown}
         onDoubleClick={(panel.collapsed || panel.maxCollapsed) ? panel.restore : undefined}
       >
-        <div className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-[background-color] duration-100 ease-out ${panel.isDragging ? 'bg-primary/50' : 'bg-border/60'}`} />
-        <style>{`.sash-handle:hover > div { background-color: hsl(var(--primary) / 0.4) !important; transition-delay: 300ms; }
-.sash-handle:active > div { background-color: hsl(var(--primary) / 0.5) !important; transition-delay: 0ms; }`}</style>
       </div>
       )}
     </aside>
