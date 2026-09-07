@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { ChevronDown, CircleCheck, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
+import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -831,13 +831,6 @@ export function ProviderModelSelector({
                           <AlertTriangle className="h-3 w-3" />
                           {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
                         </span>
-                      )}
-                      {entry.isAvailable && (
-                        <TooltipHint content="Ready to use">
-                        <span role="img" aria-label="Ready to use" className="text-emerald-600 dark:text-emerald-400">
-                          <CircleCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                        </span>
-                        </TooltipHint>
                       )}
                       {providerActionBusy === entry.value && <Loader2 aria-label="Updating provider" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                     </div>

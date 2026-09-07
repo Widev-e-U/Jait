@@ -66,7 +66,9 @@ test.describe('provider selector actions', () => {
       }
       await providerSelector.click({ timeout: 30_000 })
       const account = page.getByRole('option', { name: /Test Codex/ })
-      await expect(account.getByRole('img', { name: 'Ready to use' })).toBeVisible()
+      // The green "Ready to use" checkmark was removed from provider rows —
+      // availability is now communicated only by the disabled state + reason text.
+      await expect(account.getByRole('img', { name: 'Ready to use' })).toHaveCount(0)
       await expect(account).not.toContainText('signed in')
 
       const openMenu = async () => {
