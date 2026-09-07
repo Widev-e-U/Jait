@@ -3606,12 +3606,18 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     void navigator.clipboard.writeText(rel)
   }, [remoteRoot])
 
+  /** True when the renderer itself can open the OS file manager (Electron desktop shell). */
+  const isDesktopShell = useMemo(
+    () => typeof window !== 'undefined' && !!(window as any).jaitDesktop?.fsOp,
+    [],
+  )
+
   /** Whether "Reveal in File Explorer" is supported for the current surface. */
   const canRevealInExplorer = useMemo(() => {
     // Supported whenever we have a real path to reveal: on Electron (native IPC)
     // or when a gateway/remote surface is backing the project.
-    return typeof window !== 'undefined' && (!!(window as any).jaitDesktop?.fsOp || !!remoteRoot)
-  }, [remoteRoot])
+    return isDesktopShell || !!remoteRoot
+  }, [isDesktopShell, remoteRoot])
 
   const handleRevealInExplorer = useCallback((node: LazyNode) => {
     void revealInExplorer(node.path, surfaceId)
@@ -5658,7 +5664,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 <Copy className="h-3 w-3" />
                 Copy Relative Path
               </button>
-              {canRevealInExplorer && (
+              {/* Web builds never reveal folders: the explorer would open on the
+                  gateway/node host, invisible to the browser user. Desktop (Electron)
+                  keeps reveal for both files and folders. */}
+              {canRevealInExplorer && (fileContextMenu.node.kind !== 'dir' || isDesktopShell) && (
                 <button
                   className="ui-menu-item"
                   onClick={() => {
@@ -5753,8 +5762,13 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
         style={showEditorProp ? { width: tree.collapsed ? 0 : tree.size } : undefined}
       >
       {effectiveShowTree && (<>
-        {/* Tab bar: Files | Source Control */}
+        {/* Sidebar heading; uncontrolled panels retain their local tabs. */}
         <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5 overflow-hidden">
+          {treeTabProp ? (
+            <span className="px-2 text-xs font-medium">
+              {treeTab === 'git' ? `Source Control (${changedFileCount})` : 'Files'}
+            </span>
+          ) : (<>
           <button
             className={`flex h-7 items-center gap-1 px-2 rounded text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
               treeTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -5778,6 +5792,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               </span>
             )}
           </button>
+          </>)}
           <div className="flex-1" />
           <button
             onClick={() => {
@@ -6605,7 +6620,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               <Copy className="h-3 w-3" />
               Copy Relative Path
             </button>
-            {canRevealInExplorer && (
+            {canRevealInExplorer && (fileContextMenu.node.kind !== 'dir' || isDesktopShell) && (
               <button
                 className="ui-menu-item"
                 onClick={() => {
@@ -6724,7 +6739,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             <Copy className="h-3 w-3" />
             Copy Relative Path
           </button>
-          {canRevealInExplorer && (
+          {canRevealInExplorer && (fileContextMenu.node.kind !== 'dir' || isDesktopShell) && (
             <button
               className="ui-menu-item"
               onClick={() => {

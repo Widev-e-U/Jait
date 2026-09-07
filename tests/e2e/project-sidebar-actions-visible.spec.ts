@@ -100,9 +100,9 @@ test.describe('project sidebar actions', () => {
 
     await page.goto('/')
     await loginInBrowser(page, username, password)
-    const toggleProjects = page.getByRole('button', { name: 'Toggle projects panel', exact: true })
+    const toggleProjects = page.getByRole('button', { name: 'Projects and chats', exact: true })
     await expect(toggleProjects).toBeVisible({ timeout: 15_000 })
-    await toggleProjects.click()
+    if (await toggleProjects.getAttribute('aria-pressed') !== 'true') await toggleProjects.click()
 
     const sidebar = page.locator('aside').filter({
       has: page.getByText(projectTitle, { exact: true }),
@@ -134,4 +134,29 @@ test.describe('project sidebar actions', () => {
       assertWithinBounds(actionBox!, { x: 0, y: 0, width: viewport!.width, height: viewport!.height })
     }
   })
+})
+
+
+test('switches between Files and Source Control using sidebar icons', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const { token, username, password } = await registerUser(request)
+  await createProjectAndSession(request, token, 'Editor icon navigation')
+  await page.addInitScript(([gatewayUrl]) => {
+    window.localStorage.setItem('jait-gateway-url', gatewayUrl)
+    window.localStorage.setItem('jait.viewMode', 'developer')
+  }, [API_URL] as const)
+  await page.goto('/')
+  await loginInBrowser(page, username, password)
+  const files = page.getByRole('button', { name: 'Files', exact: true })
+  if (!(await files.isVisible())) await page.getByRole('button', { name: 'Editor', exact: true }).click()
+  const source = page.getByRole('button', { name: 'Source Control', exact: true })
+  await expect(source).toBeVisible()
+  await expect(source).toHaveText('')
+  await source.click()
+  await expect(source).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText(/^Source Control \(\d+\)$/)).toBeVisible()
+  await files.click()
+  await expect(files).toHaveAttribute('aria-pressed', 'true')
+  await expect(source).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByText(/^Source Control \(\d+\)$/)).not.toBeVisible()
 })

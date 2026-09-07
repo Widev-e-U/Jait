@@ -1,4 +1,4 @@
-export type DeveloperSidebarView = 'projects' | 'files'
+export type DeveloperSidebarView = 'projects' | 'files' | 'git'
 
 export const DEVELOPER_SIDEBAR_MIN_WIDTH = 220
 export const DEVELOPER_SIDEBAR_MAX_WIDTH = 480

@@ -260,7 +260,7 @@ function App() {
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
-  const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'files' ? 'files' : 'projects'))
+  const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'git' ? 'git' : localStorage.getItem('developerSidebarView') === 'files' ? 'files' : 'projects'))
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
@@ -284,7 +284,7 @@ function App() {
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showProjectTree, setShowProjectTree] = useState(true)
   const [showProjectEditor, setShowProjectEditor] = useState(true)
-  const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
+  const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>(() => localStorage.getItem('developerSidebarView') === 'git' ? 'git' : 'files')
   const [activeProject, setActiveProject] = useState<ActiveProjectState>(null)
   const setActiveProjectIfChanged = useCallback((next: ActiveProjectState) => {
     setActiveProject((prev) => ( areActiveProjectsEqual(prev, next) ? prev : next))
@@ -395,7 +395,7 @@ function App() {
       return
     }
 
-    if (!showProject && sidebarView === 'files') {
+    if (!showProject && sidebarView !== 'projects') {
       setSidebarView('projects')
       setShowSidebar(true)
     }
@@ -2298,7 +2298,10 @@ function App() {
   const handleSelectDeveloperSidebarView = useCallback(
     (requestedView: DeveloperSidebarView) => {
       const nextState = getNextDeveloperSidebarState(sidebarView, showSidebar, requestedView)
-      if (requestedView === 'files') setShowProjectTree(true)
+      if (requestedView !== 'projects') {
+        setShowProjectTree(true)
+        setMobileTreeTab(requestedView)
+      }
       setSidebarView(nextState.view)
       setShowSidebar(nextState.open)
     },
@@ -2575,6 +2578,7 @@ function App() {
     }
 
     const nextState = getNextDeveloperSidebarState(sidebarView, showSidebar, 'files')
+    setMobileTreeTab('files')
     setShowProjectTree(true)
     setSidebarView(nextState.view)
     setShowSidebar(nextState.open)
@@ -5034,7 +5038,7 @@ function App() {
                     showMobileProjectFullscreen={showMobileProjectFullscreen}
                     showMobileTerminalFullscreen={showMobileTerminalFullscreen}
                     showProjectEditor={showProjectEditor}
-                    showProjectTree={isMobile ? showProjectTree : showProjectTree && showSidebar && sidebarView === 'files'}
+                    showProjectTree={isMobile ? showProjectTree : showProjectTree && showSidebar && sidebarView !== 'projects'}
                     showTerminal={showTerminal}
                     sourceControlRefreshSignal={sourceControlRefreshSignal}
                     terminalColumnWidth={terminalColumnWidth}

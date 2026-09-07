@@ -9,6 +9,11 @@ describe('getNextDeveloperSidebarState', () => {
     })
   })
 
+  it('switches to source control and toggles it closed', () => {
+    expect(getNextDeveloperSidebarState('files', true, 'git')).toEqual({ open: true, view: 'git' })
+    expect(getNextDeveloperSidebarState('git', true, 'git')).toEqual({ open: false, view: 'git' })
+  })
+
   it('switches views without closing the sidebar', () => {
     expect(getNextDeveloperSidebarState('projects', true, 'files')).toEqual({
       open: true,

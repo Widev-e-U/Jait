@@ -1,4 +1,4 @@
-import { Boxes, Bug, Code, FolderOpen, Folders, Globe, Settings, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Bug, Code, FolderOpen, Folders, GitBranch, Globe, Settings, Terminal as TerminalIcon } from 'lucide-react'
 import { useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
@@ -182,6 +182,23 @@ export function DeveloperSidebars({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">Files</TooltipContent>
+            </Tooltip>
+          )}
+          {(activeProjectId || activeProject) && showProject && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showSidebar && sidebarView === 'git' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-9 w-9 rounded-md p-0"
+                  onClick={() => onSelectSidebarView('git')}
+                  aria-label="Source Control"
+                  aria-pressed={showSidebar && sidebarView === 'git'}
+                >
+                  <GitBranch className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Source Control</TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
