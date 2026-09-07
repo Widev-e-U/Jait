@@ -1,3 +1,4 @@
+import type { SessionService } from "../services/sessions.js";
 import { existsSync } from "node:fs";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { GitService } from "../services/git.js";
@@ -9,6 +10,7 @@ import {
 } from "../services/project-repositories.js";
 import type { WsControlPlane } from "../ws.js";
 import type { WsEventType } from "@jait/shared/types";
+import { transferProjectWithScp, type ProjectTransferRunner } from "../services/project-transfer.js";
 
 function readString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
@@ -16,6 +18,7 @@ function readString(record: Record<string, unknown>, key: string): string | unde
 }
 
 export function createProjectCreateTool(deps: {
+  sessionService?: SessionService;
   projectService: ProjectService;
   repoService: RepositoryService;
   gitService?: GitService;
@@ -25,7 +28,7 @@ export function createProjectCreateTool(deps: {
   return {
     name: "project.create",
     description:
-      "Create a Jait project, or return the existing one for the same folder. When projectRoot points at a git working tree, a repository is detected/created and assigned to the project.",
+      "Create a Jait project, or return the existing one for the same folder, and assign the current chat to it. When projectRoot points at a git working tree, a repository is detected/created and assigned to the project.",
     tier: "standard",
     category: "gateway",
     source: "builtin",
@@ -85,7 +88,6 @@ export function createProjectCreateTool(deps: {
           });
           repository = assignment.repo;
         } catch (err) {
-          // A missing git repo is not fatal — the project is still created.
           repoNote = err instanceof ProjectRepositoryAssignmentError
             ? err.message
             : err instanceof Error
@@ -101,6 +103,25 @@ export function createProjectCreateTool(deps: {
           sessionId: "",
           timestamp: new Date().toISOString(),
           payload: { project: fresh },
+        });
+      }
+      const currentSession = context.userId
+        ? deps.sessionService?.getById(context.sessionId, context.userId)
+        : undefined;
+      if (currentSession && currentSession.projectId !== fresh.id) {
+        const session = deps.sessionService!.moveToProject(
+          currentSession.id, fresh.id, fresh.rootPath ?? null, context.userId,
+        );
+        deps.projectService.touch(fresh.id);
+        deps.ws?.broadcastToUser(context.userId!, {
+          type: "chat.moved" as WsEventType,
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: {
+            session, sessionId: currentSession.id,
+            fromProjectId: currentSession.projectId ?? null,
+            toProjectId: fresh.id, projectId: fresh.id,
+          },
         });
       }
       const repoName = repository && typeof repository === "object" && "name" in repository
@@ -355,6 +376,95 @@ export function createProjectMoveTool(deps: {
           + (repoNote ? ` (repository not re-linked: ${repoNote})` : ""),
         data: { project: moved },
       };
+    },
+  };
+}
+
+export function createProjectTransferTool(deps: {
+  projectService: ProjectService;
+  repoService: RepositoryService;
+  gitService?: GitService;
+  ws?: WsControlPlane;
+  transfer?: ProjectTransferRunner;
+}): ToolDefinition {
+  const transfer = deps.transfer ?? transferProjectWithScp;
+  return {
+    name: "project.transfer",
+    displayName: "Transfer project to node",
+    description:
+      "Copy a gateway-hosted project's files to a specific connected Jait node over SCP, verify the destination, then retarget the project to that node. Uses the gateway's configured SSH keys and leaves the source files in place.",
+    tier: "standard",
+    category: "gateway",
+    source: "builtin",
+    risk: "high",
+    defaultConsentLevel: "always",
+    discovery: {
+      aliases: ["project scp", "copy project to node", "move project to computer"],
+      capabilities: ["transfer project files to a connected node with SCP"],
+      examples: ["Move this project to my workstation and copy its files over."],
+      priority: 20,
+    },
+    parameters: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "Project ID to transfer. If omitted, resolves the gateway project from the current project folder." },
+        nodeId: { type: "string", description: "Connected destination Jait node ID." },
+        rootPath: { type: "string", description: "Absolute destination folder path on the selected node." },
+        sshHost: { type: "string", description: "SSH hostname or IP address for the destination node." },
+        sshUser: { type: "string", description: "SSH username. Authentication uses SSH keys already configured on the gateway." },
+        sshPort: { type: "number", description: "SSH port. Defaults to 22." },
+      },
+      required: ["nodeId", "rootPath", "sshHost", "sshUser"],
+    },
+    execute: async (input: unknown, context: ToolContext): Promise<ToolResult> => {
+      const body = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+      const nodeId = readString(body, "nodeId");
+      const rootPath = readString(body, "rootPath");
+      const sshHost = readString(body, "sshHost");
+      const sshUser = readString(body, "sshUser");
+      const sshPort = typeof body["sshPort"] === "number" ? body["sshPort"] as number : undefined;
+      if (!nodeId || !rootPath || !sshHost || !sshUser) {
+        return { ok: false, message: "nodeId, rootPath, sshHost, and sshUser are required." };
+      }
+      if (nodeId === "gateway") {
+        return { ok: false, message: "project.transfer requires a remote destination node; use project.move for gateway paths that already exist." };
+      }
+      if (!deps.ws) return { ok: false, message: "Cannot transfer to a node without the WebSocket control plane." };
+      const destinationNode = deps.ws.getFsNodes().find((node) => node.id === nodeId && !node.isGateway);
+      if (!destinationNode) return { ok: false, message: `Destination node "${nodeId}" is not connected.` };
+
+      let projectId = readString(body, "projectId");
+      if (!projectId) {
+        const projectRoot = context.projectRoot?.trim();
+        if (!projectRoot) return { ok: false, message: "projectId is required (no project folder in the current context)." };
+        projectId = deps.projectService.findByRoot(projectRoot, "gateway", context.userId)?.id;
+      }
+      if (!projectId) return { ok: false, message: "No gateway project matches the current project folder." };
+      const project = deps.projectService.getById(projectId, context.userId);
+      if (!project) return { ok: false, message: `Project ${projectId} not found.` };
+      if (project.nodeId !== "gateway") {
+        return { ok: false, message: "project.transfer currently copies projects hosted on the gateway. Move or copy remote-source projects to the gateway first." };
+      }
+      if (!project.rootPath || !existsSync(project.rootPath)) {
+        return { ok: false, message: `Source project path does not exist on the gateway: ${project.rootPath ?? "(missing)"}.` };
+      }
+
+      try {
+        const result = await transfer({ sourcePath: project.rootPath, destinationPath: rootPath, sshHost, sshUser, sshPort });
+        const exists = await deps.ws.proxyFsOp<boolean>(nodeId, "exists", { path: rootPath }, 30_000);
+        if (!exists) {
+          return { ok: false, message: `SCP completed, but ${rootPath} was not visible on node "${nodeId}". Project metadata was not changed.`, data: { output: result.output } };
+        }
+        const moved = await createProjectMoveTool(deps).execute({ projectId: project.id, nodeId, rootPath }, context);
+        if (!moved.ok) return moved;
+        return {
+          ...moved,
+          message: `Transferred project "${project.title ?? project.id}" to node "${destinationNode.name || nodeId}" at ${rootPath} and updated the project location.`,
+          data: { ...(moved.data as Record<string, unknown>), transferOutput: result.output },
+        };
+      } catch (err) {
+        return { ok: false, message: `Project transfer failed; project metadata was not changed: ${err instanceof Error ? err.message : String(err)}` };
+      }
     },
   };
 }

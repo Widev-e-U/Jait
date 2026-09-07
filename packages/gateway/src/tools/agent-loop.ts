@@ -560,6 +560,7 @@ const SEQUENTIAL_TOOLS = new Set([
   "gateway.redeploy",
   "project.create",
   "project.move",
+  "project.transfer",
   "project.assign_repository",
   "surfaces.start",
   "surfaces.stop",

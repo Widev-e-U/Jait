@@ -40,6 +40,7 @@ describe("ToolRegistry audit and validation behavior", () => {
 
     expect(registry.get("project.create")?.description).toContain("Create a Jait project");
     expect(registry.get("project.assign_repository")?.description).toContain("project");
+    expect(registry.get("project.transfer")?.description).toContain("SCP");
     expect(registry.get("workspace.create")).toBeUndefined();
     expect(registry.get("workspace.assign_repository")).toBeUndefined();
   });

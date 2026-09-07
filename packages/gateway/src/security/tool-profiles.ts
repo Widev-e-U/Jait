@@ -50,6 +50,7 @@ const MINIMAL: ToolPermission[] = [
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
   perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
+  perm("project.transfer", "always", "high", "Copy a gateway project to a connected node over SCP and retarget it."),
 ];
 
 // ── Coding Profile ───────────────────────────────────────────────────
@@ -92,6 +93,7 @@ const CODING: ToolPermission[] = [
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
   perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
+  perm("project.transfer", "always", "high", "Copy a gateway project to a connected node over SCP and retarget it."),
 ];
 
 // ── Full Profile ─────────────────────────────────────────────────────
@@ -133,6 +135,7 @@ const FULL: ToolPermission[] = [
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
   perm("project.create", "none", "low", "Create or resolve a project from a folder."),
   perm("project.assign_repository", "none", "low", "Assign an existing or detected repository to a project."),
+  perm("project.transfer", "always", "high", "Copy a gateway project to a connected node over SCP and retarget it."),
 ];
 
 // ── Profile Map ──────────────────────────────────────────────────────

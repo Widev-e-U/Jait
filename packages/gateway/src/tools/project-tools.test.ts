@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "../db/index.js";
+import { SessionService } from "../services/sessions.js";
 import { ProjectService } from "../services/projects.js";
 import { RepositoryService } from "../services/repositories.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext } from "./contracts.js";
-import { createProjectCreateTool, createProjectMoveTool } from "./project-tools.js";
+import { createProjectCreateTool, createProjectMoveTool, createProjectTransferTool } from "./project-tools.js";
 
 describe("project tools", () => {
   let db: Awaited<ReturnType<typeof openDatabase>>["db"];
@@ -65,6 +66,32 @@ describe("project tools", () => {
       type: "project.created",
       payload: { project: expect.objectContaining({ id: project.id }) },
     }));
+  });
+
+  it.each([false, true])("moves the current chat into the created project (existing project: %s)", async (existing) => {
+    const sessionService = new SessionService(db);
+    const previous = projectService.create({ userId: "user-1", rootPath: "/old" });
+    const chat = sessionService.create({ userId: "user-1", projectId: previous.id, projectPath: "/old" });
+    if (existing) projectService.create({ userId: "user-1", rootPath: "/new", nodeId: "gateway" });
+    const broadcastToUser = vi.fn();
+    const tool = createProjectCreateTool({ projectService, repoService, sessionService, ws: { broadcastToUser } as unknown as WsControlPlane });
+    const result = await tool.execute({ projectRoot: "/new", assignRepository: false }, context({ sessionId: chat.id }));
+    const project = (result.data as { project: { id: string } }).project;
+    expect(sessionService.getById(chat.id)?.projectId).toBe(project.id);
+    expect(sessionService.getById(chat.id)?.projectPath).toBe("/new");
+    expect(broadcastToUser.mock.calls.map((call) => call[1].type)).toEqual(["project.created", "chat.moved"]);
+    expect(broadcastToUser).toHaveBeenLastCalledWith("user-1", expect.objectContaining({
+      payload: expect.objectContaining({ fromProjectId: previous.id, toProjectId: project.id, sessionId: chat.id }),
+    }));
+  });
+
+  it("does not move another user's chat", async () => {
+    const sessionService = new SessionService(db);
+    const chat = sessionService.create({ userId: "user-2", projectPath: "/old" });
+    const tool = createProjectCreateTool({ projectService, repoService, sessionService });
+    await tool.execute({ projectRoot: "/new", assignRepository: false }, context({ sessionId: chat.id }));
+    expect(sessionService.getById(chat.id)?.projectId).toBeNull();
+    expect(sessionService.getById(chat.id)?.projectPath).toBe("/old");
   });
 
   it("requires nodeId", async () => {
@@ -145,5 +172,60 @@ describe("project tools", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/not found/);
+  });
+
+  it("transfers with SCP before retargeting the project", async () => {
+    const source = makeDir();
+    const project = projectService.create({ userId: "user-1", title: "Move Me", rootPath: source, nodeId: "gateway" });
+    const transfer = vi.fn(async () => ({ output: "copied" }));
+    const proxyFsOp = vi.fn(async () => true);
+    const broadcastToUser = vi.fn();
+    const ws = {
+      getFsNodes: () => [{ id: "node-2", name: "Studio", isGateway: false }],
+      proxyFsOp,
+      broadcastToUser,
+    } as unknown as WsControlPlane;
+    const tool = createProjectTransferTool({ projectService, repoService, transfer, ws });
+
+    const result = await tool.execute({
+      projectId: project.id,
+      nodeId: "node-2",
+      rootPath: "/work/move-me",
+      sshHost: "studio.local",
+      sshUser: "jakob",
+    }, context());
+
+    expect(result.ok).toBe(true);
+    expect(transfer).toHaveBeenCalledWith({
+      sourcePath: source,
+      destinationPath: "/work/move-me",
+      sshHost: "studio.local",
+      sshUser: "jakob",
+      sshPort: undefined,
+    });
+    expect(proxyFsOp).toHaveBeenCalledWith("node-2", "exists", { path: "/work/move-me" }, 30_000);
+    expect(projectService.getById(project.id, "user-1")).toMatchObject({ nodeId: "node-2", rootPath: "/work/move-me" });
+  });
+
+  it("keeps project metadata unchanged when SCP fails", async () => {
+    const source = makeDir();
+    const project = projectService.create({ userId: "user-1", rootPath: source, nodeId: "gateway" });
+    const transfer = vi.fn(async () => { throw new Error("authentication failed"); });
+    const ws = {
+      getFsNodes: () => [{ id: "node-2", name: "Studio", isGateway: false }],
+    } as unknown as WsControlPlane;
+    const tool = createProjectTransferTool({ projectService, repoService, transfer, ws });
+
+    const result = await tool.execute({
+      projectId: project.id,
+      nodeId: "node-2",
+      rootPath: "/work/move-me",
+      sshHost: "studio.local",
+      sshUser: "jakob",
+    }, context());
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/metadata was not changed/);
+    expect(projectService.getById(project.id, "user-1")).toMatchObject({ nodeId: "gateway", rootPath: source });
   });
 });
