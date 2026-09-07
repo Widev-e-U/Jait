@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.826](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.826) — 2026-09-07
+- fix(web): remove ready-to-use icon from provider select — c9f0c0c2
+- fix(gateway): never graphify home/root; default cron projectRoot to session context — a5b2c2c8
+
 ## [v0.1.825](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.825) — 2026-09-06
 - fix(web): refine panel resize handles — 056c8581
 
