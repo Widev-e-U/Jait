@@ -217,7 +217,7 @@ test('pickDirectory falls back to the dialog plugin when glue declines', async (
     },
   });
   const dir = await window.jaitDesktop.pickDirectory('/default');
-  assert.equal(dir, '/picked/dir');
+  assert.deepEqual({ ...dir }, { path: '/picked/dir' });
   const dialogCall = log.find((l) => l.cmd === 'desktop_pick_directory_dialog');
   assert.ok(dialogCall, 'should have invoked the dialog command');
 });
@@ -468,11 +468,12 @@ test('updater events screen by event name and unknown names stay quiet', () => {
 
 // ── Extras: statics, notify, windowMaximize alias, desktop sources ─────────
 
-test('statics expose platform and boot deviceId for Electron parity', () => {
+test('statics expose runtime, native platform, and boot deviceId', () => {
   const { window } = loadShim({
-    boot: { platform: 'electron', deviceID: 'dev-42', version: '9.9.9' },
+    boot: { platform: 'win32', deviceID: 'dev-42', version: '9.9.9' },
   });
   assert.equal(window.jaitDesktop.platform, 'electron');
+  assert.equal(window.jaitDesktop.nativePlatform, 'win32');
   assert.equal(window.jaitDesktop.deviceId, 'dev-42');
   assert.equal(typeof window.jaitDesktop.openFolder, 'function');
 });

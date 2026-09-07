@@ -426,12 +426,14 @@ fn boot_script(
         None => "null".to_string(),
     };
     format!(
-        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, version: {}, deviceID: {}, openFolder: {}, platform: 'tauri' }};",
+        "window.__JAIT_DESKTOP_BOOT__ = {{ gatewayUrl: {}, gatewayConfigured: {}, version: {}, deviceID: {}, openFolder: {}, platform: {}, runtime: 'tauri' }};",
         serde_json::to_string(gateway).unwrap_or_else(|_| "null".into()),
         gateway_configured,
         serde_json::to_string(version).unwrap_or_else(|_| "null".into()),
         serde_json::to_string(&device_id).unwrap_or_else(|_| "null".into()),
         open_folder_json,
+        serde_json::to_string(jait_desktop_core::info::platform_name())
+            .unwrap_or_else(|_| "null".into()),
     )
 }
 

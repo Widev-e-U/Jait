@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { shouldApplySessionScopedWsEvent } from '@/hooks/useUICommands'
+import { resolveFsNodePlatform, shouldApplySessionScopedWsEvent } from '@/hooks/useUICommands'
 
 describe('shouldApplySessionScopedWsEvent', () => {
   it('rejects a delayed full-state packet from the previously open chat', () => {
@@ -10,6 +10,12 @@ describe('shouldApplySessionScopedWsEvent', () => {
 
   it('accepts state and lifecycle packets for the active chat', () => {
     expect(shouldApplySessionScopedWsEvent('chat-high', 'chat-high')).toBe(true)
+  })
+})
+
+describe('desktop filesystem node platform', () => {
+  it('uses Tauri native win32 identity when WebView reports an empty platform', () => {
+    expect(resolveFsNodePlatform('electron', 'win32', '')).toBe('windows')
   })
 })
 

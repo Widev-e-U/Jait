@@ -39,6 +39,8 @@ interface JaitDesktop {
   removeGatewayEventListener: () => void
   getPathForFile: (file: File) => string
   platform: 'electron'
+  /** Native process.platform value exposed synchronously by desktop shells. */
+  nativePlatform?: 'win32' | 'darwin' | 'linux'
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>
   windowClose: () => Promise<void>

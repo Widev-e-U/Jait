@@ -27,7 +27,67 @@ impl SettingsStore {
                 *store.cache.write() = map;
             }
         }
+        store.adopt_legacy_electron_device_id();
         store
+    }
+
+    /// Tauri replaced Electron as the Windows shell, so both must identify as
+    /// the same physical desktop node. Provider accounts and filesystem
+    /// permissions are keyed by this ID in the gateway. Early Tauri builds
+    /// generated a separate `tauri-*` ID under `jait-desktop/settings.json`,
+    /// which made existing Electron-bound accounts and permissions disappear.
+    fn adopt_legacy_electron_device_id(&self) {
+        let current = self
+            .cache
+            .read()
+            .get("deviceId")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string);
+        if current
+            .as_deref()
+            .is_some_and(|id| !id.starts_with("tauri-"))
+        {
+            return;
+        }
+
+        let Some(tauri_dir) = self.path.parent() else {
+            return;
+        };
+        if !tauri_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("jait-desktop"))
+        {
+            return;
+        }
+        let Some(app_data) = tauri_dir.parent() else {
+            return;
+        };
+
+        for app_name in ["Jait", "jait"] {
+            let legacy_path = app_data.join(app_name).join("desktop-settings.json");
+            let Ok(raw) = std::fs::read_to_string(legacy_path) else {
+                continue;
+            };
+            let Ok(Value::Object(settings)) = serde_json::from_str::<Value>(&raw) else {
+                continue;
+            };
+            let Some(legacy_id) = settings
+                .get("deviceId")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            else {
+                continue;
+            };
+            self.cache
+                .write()
+                .insert("deviceId".into(), Value::String(legacy_id.to_string()));
+            let _ = self.flush();
+            return;
+        }
     }
 
     pub fn load(&self) -> Map<String, Value> {
@@ -119,6 +179,39 @@ mod tests {
             Value::String(DEFAULT_GATEWAY_URL.into())
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn adopts_the_legacy_electron_device_id() {
+        let base = std::env::temp_dir().join(format!(
+            "jait-settings-migration-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let legacy_dir = base.join("Jait");
+        let tauri_dir = base.join("jait-desktop");
+        std::fs::create_dir_all(&legacy_dir).unwrap();
+        std::fs::create_dir_all(&tauri_dir).unwrap();
+        std::fs::write(
+            legacy_dir.join("desktop-settings.json"),
+            r#"{ "deviceId": "electron-existing-device" }"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tauri_dir.join("settings.json"),
+            r#"{ "deviceId": "tauri-already-generated" }"#,
+        )
+        .unwrap();
+
+        let store = SettingsStore::new(tauri_dir.join("settings.json"));
+        assert_eq!(store.device_id(), "electron-existing-device");
+        assert_eq!(
+            serde_json::from_str::<Value>(
+                &std::fs::read_to_string(tauri_dir.join("settings.json")).unwrap()
+            )
+            .unwrap()["deviceId"],
+            Value::String("electron-existing-device".into())
+        );
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]

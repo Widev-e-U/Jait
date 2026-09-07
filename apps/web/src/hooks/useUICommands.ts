@@ -73,16 +73,27 @@ function getDeviceName(): string {
   return `Browser (${navigator.platform})`
 }
 
-function detectFsNodePlatform(): string {
-  const p = detectPlatform()
-  if (p === 'capacitor') return 'android' // or ios, but we'll keep it simple
-  if (p === 'electron') {
-    const plat = navigator.platform?.toLowerCase() ?? ''
-    if (plat.includes('win')) return 'windows'
-    if (plat.includes('mac')) return 'macos'
+export function resolveFsNodePlatform(
+  appPlatform: ReturnType<typeof detectPlatform>,
+  nativePlatform: string | null | undefined,
+  browserPlatform: string,
+): string {
+  if (appPlatform === 'capacitor') return 'android' // or ios, but we'll keep it simple
+  if (appPlatform === 'electron') {
+    const plat = (nativePlatform || browserPlatform).toLowerCase()
+    if (plat === 'win32' || plat === 'windows' || plat.includes('win')) return 'windows'
+    if (plat === 'darwin' || plat === 'macos' || plat.includes('mac')) return 'macos'
     return 'linux'
   }
   return 'web'
+}
+
+function detectFsNodePlatform(): string {
+  return resolveFsNodePlatform(
+    detectPlatform(),
+    window.jaitDesktop?.nativePlatform,
+    navigator.platform ?? '',
+  )
 }
 
 /**

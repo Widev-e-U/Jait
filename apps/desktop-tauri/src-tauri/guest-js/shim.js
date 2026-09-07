@@ -232,7 +232,7 @@
       // Glue reports it needs the native dialog shell → use the dialog plugin.
       return invoke('desktop_pick_directory_dialog', { defaultPath: defaultPath })
         .then(function (result) {
-          if (result) return result;
+          if (result) return { path: String(result) };
           var err = new Error('canceled');
           err.canceled = true;
           throw err;
@@ -544,6 +544,7 @@
     // statics (Electron preload exposes these synchronously; web's
     // detectPlatform() keys off presence of window.jaitDesktop itself)
     platform: 'electron',
+    nativePlatform: BOOT.platform || null,
     deviceId: BOOT.deviceID || BOOT.deviceId || null,
     // electron-main.ts / preload.cts expose the gateway URL synchronously so
     // the web app can hit the gateway without awaiting getInfo() first.

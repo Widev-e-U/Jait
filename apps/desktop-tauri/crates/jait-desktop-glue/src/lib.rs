@@ -1173,7 +1173,8 @@ impl HostState {
 
     fn provider_start(&self, params: &Value) -> Result<Value, String> {
         let provider = params
-            .get("provider")
+            .get("providerType")
+            .or_else(|| params.get("provider"))
             .and_then(Value::as_str)
             .unwrap_or("codex")
             .to_string();
@@ -2248,7 +2249,7 @@ done
     }
 
     #[test]
-    fn provider_start_accepts_working_directory_alias() {
+    fn provider_start_accepts_gateway_provider_type_and_working_directory() {
         if !bash_available() {
             return;
         }
@@ -2262,12 +2263,13 @@ done
             .dispatch(
                 "desktop:provider-op",
                 &[
-                    json!("start"),
-                    json!({"provider": "codex", "sessionId": "sess-alias", "workingDirectory": dir.to_string_lossy()}),
+                    json!("start-session"),
+                    json!({"providerId": "work-account", "providerType": "claude-code", "sessionId": "sess-alias", "workingDirectory": dir.to_string_lossy()}),
                 ],
             )
             .expect("start with workingDirectory ok");
         assert_eq!(started["providerThreadId"], json!("sess-alias"));
+        assert_eq!(started["provider"], json!("claude-code"));
         st.dispatch(
             "desktop:provider-op",
             &[json!("stop"), json!({"providerThreadId": "sess-alias"})],
