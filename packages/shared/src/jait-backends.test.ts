@@ -73,4 +73,35 @@ describe("Jait backend instances", () => {
       model: "qwen3:32b/latest",
     });
   });
+
+  it("appends /v1 to root vLLM URLs but leaves existing paths untouched", () => {
+    // Bare host:port with the vllm backend should resolve under /v1 (its OpenAI-compatible root).
+    expect(normalizeJaitBackendBaseUrl("host:8000", "vllm")).toBe("http://host:8000/v1");
+    expect(normalizeJaitBackendBaseUrl("http://host:8000", "vllm")).toBe("http://host:8000/v1");
+    // Already under /v1 (or a custom path) must not be double-appended.
+    expect(normalizeJaitBackendBaseUrl("http://host:8000/v1", "vllm")).toBe("http://host:8000/v1");
+    expect(normalizeJaitBackendBaseUrl("http://host:8000/foo", "vllm")).toBe("http://host:8000/foo");
+    // Empty input stays empty even for vllm.
+    expect(normalizeJaitBackendBaseUrl("", "vllm")).toBe("");
+    // The /v1 rewrite is backend-specific: other backends keep the bare URL.
+    expect(normalizeJaitBackendBaseUrl("http://host:8000", "ollama")).toBe("http://host:8000");
+  });
+
+  it("round-trips special characters through encode/decodeJaitModelId", () => {
+    const encoded = encodeJaitModelId("gemini", "a/b c", "my model 1/x");
+    expect(decodeJaitModelId(encoded)).toEqual({
+      backend: "gemini",
+      instanceId: "a/b c",
+      model: "my model 1/x",
+    });
+  });
+
+  it("rejects malformed or unrecognized model ids", () => {
+    expect(decodeJaitModelId("ollama/qwen3")).toBeNull(); // missing jait:// prefix
+    expect(decodeJaitModelId("jait://unsupported/inst/model")).toBeNull(); // unknown backend
+    expect(decodeJaitModelId("jait://ollama/inst")).toBeNull(); // missing model
+    expect(decodeJaitModelId("jait://ollama/inst/")).toBeNull(); // empty model after separator
+    expect(decodeJaitModelId("jait://ollama/%E0%A4%A/model")).toBeNull(); // invalid percent-encoding
+    expect(decodeJaitModelId("")).toBeNull();
+  });
 });

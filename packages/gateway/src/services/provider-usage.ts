@@ -97,10 +97,10 @@ export class ProviderUsageService {
     if (isNearLimit && !this.warned.has(warnKey)) {
       this.warned.add(warnKey);
       const label = labelForRateLimitType(rateLimitType);
-      const pct = utilization !== null ? `${Math.round(utilization * 100)}%` : "near its limit";
+      const detail = utilization !== null ? `at ${Math.round(utilization * 100)}%` : "near its limit";
       this.notifications?.warning(
         "Approaching usage limit",
-        `Claude Code's ${label} is at ${pct}.`,
+        `Claude Code's ${label} is ${detail}.`,
         "/settings?tab=usage",
       );
     } else if (!isNearLimit && this.warned.has(warnKey)) {

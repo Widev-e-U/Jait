@@ -18,7 +18,7 @@ export interface NetworkScanOptions {
   includeIps?: string[];
 }
 
-interface HostEntry {
+export interface HostEntry {
   ip: string;
   mac: string | null;
   responsive: boolean;
@@ -40,22 +40,34 @@ export function getLocalSubnets(): string[] {
   return [...new Set(subnets)];
 }
 
-function normalizeSubnetPrefix(value: string): string | null {
+function isValidOctet(value: string): boolean {
+  if (!/^\d{1,3}$/.test(value)) return false;
+  const n = Number(value);
+  return n >= 0 && n <= 255;
+}
+
+export function normalizeSubnetPrefix(value: string): string | null {
   const trimmed = value.trim();
   const cidrMatch = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}\/24$/.exec(trimmed);
-  if (cidrMatch) return cidrMatch[1]!;
+  if (cidrMatch) {
+    const ip = cidrMatch[0]!.replace(/\/24$/, "");
+    return ip.split(".").every(isValidOctet) ? cidrMatch[1]! : null;
+  }
 
   const fullIpMatch = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(trimmed);
-  if (fullIpMatch) return fullIpMatch[1]!;
+  if (fullIpMatch) {
+    const ip = fullIpMatch[0]!;
+    return ip.split(".").every(isValidOctet) ? fullIpMatch[1]! : null;
+  }
 
   if (/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(trimmed)) {
-    return trimmed;
+    return trimmed.split(".").every(isValidOctet) ? trimmed : null;
   }
 
   return null;
 }
 
-function isValidIpv4(ip: string): boolean {
+export function isValidIpv4(ip: string): boolean {
   const parts = ip.split(".");
   if (parts.length !== 4) return false;
   return parts.every((part) => {
@@ -65,7 +77,7 @@ function isValidIpv4(ip: string): boolean {
   });
 }
 
-function normalizeIps(ips: string[] | undefined): string[] {
+export function normalizeIps(ips: string[] | undefined): string[] {
   if (!ips?.length) return [];
   return [...new Set(
     ips
@@ -99,16 +111,27 @@ async function detectDefaultGatewayIp(): Promise<string | null> {
   }
 }
 
-function parseArpTable(output: string): HostEntry[] {
+export function parseArpTable(output: string): HostEntry[] {
   const results: HostEntry[] = [];
+  // Standard `arp -a` output wraps the IP in parentheses on Linux/macOS
+  // (`? (192.168.1.1) at 00:11:22:33:44:55 [ether] on eth0`) and may use
+  // single-digit MAC groups on macOS (`0:11:22:33:44:55`). Accept an optional
+  // closing paren and 1-2 hex digits per MAC group to cover both formats.
   const lineRegex =
-    /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:at\s+)?([0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2})/;
+    /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[)\s]+(?:at\s+)?([0-9a-fA-F]{1,2}[:-][0-9a-fA-F]{1,2}[:-][0-9a-fA-F]{1,2}[:-][0-9a-fA-F]{1,2}[:-][0-9a-fA-F]{1,2}[:-][0-9a-fA-F]{1,2})/;
   const ignoredMacs = new Set(["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"]);
 
   for (const line of output.split("\n")) {
     const match = lineRegex.exec(line);
     if (!match) continue;
-    const mac = match[2]!.replace(/-/g, ":").toLowerCase();
+    // Normalize to zero-padded 2-digit groups so the multicast check below is
+    // reliable even for single-digit MAC groups.
+    const mac = match[2]!
+      .replace(/-/g, ":")
+      .toLowerCase()
+      .split(":")
+      .map((part) => part.padStart(2, "0"))
+      .join(":");
     if (ignoredMacs.has(mac)) continue;
     const firstOctet = parseInt(mac.slice(0, 2), 16);
     if (firstOctet & 1) continue;
@@ -280,7 +303,7 @@ async function readWindowsNeighborEntries(subnets: string[]): Promise<HostEntry[
   }
 }
 
-function mergeEntries(entries: HostEntry[]): HostEntry[] {
+export function mergeEntries(entries: HostEntry[]): HostEntry[] {
   const merged = new Map<string, HostEntry>();
   for (const entry of entries) {
     const existing = merged.get(entry.ip);
@@ -297,7 +320,7 @@ function mergeEntries(entries: HostEntry[]): HostEntry[] {
   return [...merged.values()];
 }
 
-function buildSubnetCandidates(subnets: string[]): string[] {
+export function buildSubnetCandidates(subnets: string[]): string[] {
   const candidates: string[] = [];
   for (const subnet of subnets) {
     for (let host = 1; host <= 254; host += 1) {
