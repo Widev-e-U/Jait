@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { projectLanguageForPath, type ProjectFile, type ProjectPanelHandle } from '@/components/project'
 import { getApiUrl } from '@/lib/gateway-url'
 import { gitApi } from '@/lib/git-api'
+import { openHtmlPresentation } from '@/lib/html-presentation'
 import { isPathWithinProject } from '@/lib/project-links'
 
 const API_URL = getApiUrl()
@@ -148,7 +149,7 @@ export function useProjectFileActions({
     }
   }, [activeSessionId, activeProject, openRemoteProjectOnGateway, resolveKnownProjectRootForFile, token, showProject, showProjectEditorPanel, projectRef, setShowProject, showProjectRef])
 
-  const handleOpenMessagePath = useCallback(async (filePath: string) => {
+  const handleOpenMessagePath = useCallback(async (filePath: string, line?: number) => {
     try {
       const targetProjectRoot = resolveKnownProjectRootForFile(filePath)
 
@@ -165,6 +166,24 @@ export function useProjectFileActions({
           return
         }
         toast('File is outside the active project. Open its directory explicitly to browse it.')
+        return
+      }
+
+      if (/\.html?$/i.test(filePath) && line == null) {
+        await openHtmlPresentation(filePath, async () => {
+          if (!activeProject || activeProject.projectRoot !== targetProjectRoot) {
+            await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
+          }
+          const headers: Record<string, string> = {}
+          if (token) headers.Authorization = `Bearer ${token}`
+          const query = new URLSearchParams({ path: filePath })
+          if (activeProject?.surfaceId && targetProjectRoot === activeProject.projectRoot) {
+            query.set('surfaceId', activeProject.surfaceId)
+          }
+          const response = await fetch(`${API_URL}/api/project/read?${query}`, { headers })
+          if (!response.ok) throw new Error(`Failed to open presentation: ${response.status}`)
+          return (await response.json() as { content: string }).content
+        })
         return
       }
 
