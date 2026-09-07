@@ -356,7 +356,14 @@ export class CodeGraphService {
     const normalized = projectRoot.trim();
     if (!normalized) throw new Error("projectRoot is required");
     if (!isAbsolute(normalized)) throw new Error("projectRoot must be absolute");
-    return resolve(normalized);
+    const resolved = resolve(normalized);
+    if (resolved === "/" || resolved === homedir()) {
+      throw new Error(
+        `Refusing to index "${resolved}": not a project directory — graphify would attempt to extract your entire home directory. ` +
+          "Open Jait inside a repository and retry.",
+      );
+    }
+    return resolved;
   }
 
   private outputDirectory(projectRoot: string, userId?: string): string {

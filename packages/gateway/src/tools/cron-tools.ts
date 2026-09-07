@@ -41,7 +41,7 @@ export function createCronAddTool(scheduler: SchedulerService): ToolDefinition {
         toolName: normalizeToolName(body["toolName"]),
         input: (body["input"] as Record<string, unknown> | undefined) ?? {},
         sessionId: normalizeString(body["sessionId"], "default"),
-        projectRoot: normalizeString(body["projectRoot"], process.cwd()),
+        projectRoot: normalizeString(body["projectRoot"], context.projectRoot),
       });
       return { ok: true, message: "Cron job created", data: job };
     },
