@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, readFile, rm, chmod, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, chmod, mkdir, lstat } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir, platform, tmpdir } from "node:os";
@@ -206,13 +206,47 @@ describe("runStackedAction – unstage on commit failure", () => {
 });
 
 describe("GitService worktree cleanup", () => {
-  it("copies repository contents into the existing worktree instead of nesting a checkout", () => {
+  it("excludes repository metadata when copying contents into a worktree", () => {
     const service = new GitService() as unknown as {
       pickCopyCommand(source: string, destination: string): string;
     };
 
-    expect(service.pickCopyCommand("/source-repo", "/target-worktree"))
-      .toContain('"/source-repo/." "/target-worktree"');
+    const command = service.pickCopyCommand("/source-repo", "/target-worktree");
+    expect(command).toContain('find "/source-repo"');
+    expect(command).toContain("! -name .git");
+    expect(command).toContain('"/target-worktree/"');
+  });
+
+  it("keeps the git pointer intact when creating a fast worktree", { timeout: 15_000 }, async () => {
+    const repoDir = await mkdtemp(join(tmpdir(), "git-fast-worktree-test-"));
+    const worktreeDir = `${repoDir}-worktree`;
+    try {
+      git(repoDir, "init");
+      git(repoDir, "config user.email test@test.com");
+      git(repoDir, "config user.name Test");
+      await writeFile(join(repoDir, "tracked.txt"), "tracked");
+      await writeFile(join(repoDir, "untracked.txt"), "copied");
+      git(repoDir, "add tracked.txt");
+      git(repoDir, "commit -m initial");
+      const baseBranch = git(repoDir, "branch --show-current");
+
+      await new GitService().createWorktree(
+        repoDir,
+        baseBranch,
+        "jait/fast-worktree-test",
+        worktreeDir,
+        { fastPath: true },
+      );
+
+      expect((await lstat(join(worktreeDir, ".git"))).isFile()).toBe(true);
+      expect(await readFile(join(worktreeDir, ".git"), "utf8")).toMatch(/^gitdir: /);
+      expect(await readFile(join(worktreeDir, "tracked.txt"), "utf8")).toBe("tracked");
+      expect(await readFile(join(worktreeDir, "untracked.txt"), "utf8")).toBe("copied");
+      expect(git(worktreeDir, "status --porcelain")).toBe("?? untracked.txt");
+    } finally {
+      await rm(worktreeDir, { recursive: true, force: true });
+      await rm(repoDir, { recursive: true, force: true });
+    }
   });
 
   it("accepts only descendants of Jait's managed worktree root", () => {

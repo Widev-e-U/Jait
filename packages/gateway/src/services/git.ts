@@ -1639,32 +1639,15 @@ export class GitService {
       60_000,
     );
 
-    // The worktree's .git is a file pointing at the main repo's gitdir.
-    // Preserve it so we can restore it after the CoW copy overwrites it
-    // with the main repo's .git directory.
-    const gitFile = join(worktreePath, ".git");
-    const gitFileContent = await readFile(gitFile, "utf8").catch(() => null);
-
-    // Remove the .git file first so the recursive copy can lay down the main
-    // repo's .git directory without "cannot overwrite non-directory" errors.
-    await rm(gitFile, { recursive: true, force: true });
-
+    // Leave the worktree's .git pointer file in place. The CoW copy excludes
+    // the source repository's .git entry so a partial or failed copy cannot
+    // replace that pointer with a directory and corrupt the worktree.
     const copyCmd = this.pickCopyCommand(cwd, worktreePath);
-    let copied = false;
     try {
       await exec(copyCmd, { cwd });
-      copied = true;
     } catch {
-      copied = false;
-    }
-
-    if (copied && gitFileContent !== null) {
-      // Drop the copied .git directory and restore the worktree's .git file.
-      await rm(gitFile, { recursive: true, force: true });
-      await writeFile(gitFile, gitFileContent, "utf8");
-    } else if (gitFileContent !== null) {
-      // Copy failed — restore the .git file so the worktree stays valid.
-      await writeFile(gitFile, gitFileContent, "utf8");
+      // Fall through to reset, which performs a normal checkout when the
+      // opportunistic CoW copy is unavailable or interrupted.
     }
 
     // Align the working tree with the branch tip. When the CoW copy
@@ -1679,14 +1662,14 @@ export class GitService {
     const d = escapeShellArg(dst);
     if (process.platform === "darwin") {
       // macOS APFS: `cp -c` uses clonefile(2) — copy-on-write, near-instant.
-      return `cp -c -R "${s}/." "${d}"`;
+      return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp -c -R {} "${d}/" \\;`;
     }
     if (process.platform === "linux") {
       // Linux Btrfs/XFS: `cp --reflink=auto` uses reflink when available and
       // falls back to a plain copy otherwise.
-      return `cp --reflink=auto -R "${s}/." "${d}"`;
+      return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp --reflink=auto -R -- {} "${d}/" \\;`;
     }
-    return `cp -R "${s}/." "${d}"`;
+    return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp -R {} "${d}/" \\;`;
   }
 
   /** Remove a git worktree. */
