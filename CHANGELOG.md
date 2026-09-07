@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.827](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.827) — 2026-09-07
+- feat(desktop): migrate device ID, add nativePlatform and providerType — a9f4af3d
+- feat(web): simplify folder picker with inline path entry — 4c4030d9
+- fix(web): show terminal slice only while tool call is running — 3a337cc5
+- feat(web): add HTML presentation export — 16f814e0
+- feat(web): add source control sidebar view — 982a9c62
+- feat(gateway): add project.transfer tool and session attach on project create — e53e108e
+- fix(gateway): exclude .git from worktree copy-on-write clones — 4809d02f
+
 ## [v0.1.826](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.826) — 2026-09-07
 - fix(web): remove ready-to-use icon from provider select — c9f0c0c2
 - fix(gateway): never graphify home/root; default cron projectRoot to session context — a5b2c2c8
