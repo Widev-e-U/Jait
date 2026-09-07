@@ -2769,7 +2769,8 @@ export function shouldShowToolTerminalSlice(options: {
 }): boolean {
   return options.hasTerminal
     && options.outputOffset !== null
-    && (options.outputEndOffset !== null || options.activeOrWaiting)
+    && options.outputEndOffset === null
+    && options.activeOrWaiting
 }
 
 export function isTerminalCreationCall(call: ToolCallInfo): boolean {
@@ -4033,16 +4034,18 @@ function ToolCallCardInner({
   ) : bodyKind === 'terminal' ? (
     showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
       <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
-        <TerminalView
-          terminalId={toolTerminal.id}
-          token={authToken}
-          readOnly
-          outputOffset={terminalOutputOffset}
-          outputEndOffset={terminalOutputEndOffset}
-          minRows={TOOL_TERMINAL_MIN_ROWS}
-          maxRows={TOOL_TERMINAL_MAX_ROWS}
-          className="bg-zinc-950"
-        />
+        <div className="px-3 py-2">
+          <TerminalView
+            terminalId={toolTerminal.id}
+            token={authToken}
+            readOnly
+            outputOffset={terminalOutputOffset}
+            outputEndOffset={terminalOutputEndOffset}
+            minRows={TOOL_TERMINAL_MIN_ROWS}
+            maxRows={TOOL_TERMINAL_MAX_ROWS}
+            className="bg-zinc-950"
+          />
+        </div>
       </div>
     ) : (
     <pre ref={terminalScrollRef} className={cn(
@@ -4238,7 +4241,10 @@ function ToolCallCardInner({
         <CollapsibleContent
           className={cn('tool-call-collapsible', streamingMounted && 'tool-call-collapsible-streaming')}
         >
-          <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
+          <div className={cn(
+            'ml-8 mr-3 mb-2 rounded-md',
+            bodyKind === 'terminal' ? 'bg-transparent p-0' : cn('px-3 py-2', stateClasses.body),
+          )}>
             {bodyContent}
           </div>
         </CollapsibleContent>
