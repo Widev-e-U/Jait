@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "./config.js";
+import { inferContextWindow, loadConfig } from "./config.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -86,5 +86,44 @@ describe("loadConfig", () => {
     const config = loadConfig();
     expect(config.windowsSshUsername).toBe("jait");
     expect(config.windowsSshPassword).toBe("s3cret");
+  });
+});
+
+describe("inferContextWindow", () => {
+  it("keeps OmniRoute routing aliases at the conservative default", () => {
+    expect(inferContextWindow("auto")).toBe(128_000);
+    expect(inferContextWindow("auto/coding")).toBe(128_000);
+  });
+
+  it("maps OpenAI model families", () => {
+    expect(inferContextWindow("gpt-5")).toBe(400_000);
+    expect(inferContextWindow("gpt-4o")).toBe(128_000);
+    expect(inferContextWindow("gpt-4.1-mini")).toBe(128_000);
+    expect(inferContextWindow("gpt-4-turbo")).toBe(128_000);
+    expect(inferContextWindow("gpt-4")).toBe(8_192);
+    expect(inferContextWindow("gpt-3.5-turbo")).toBe(16_385);
+  });
+
+  it("maps Anthropic model families", () => {
+    expect(inferContextWindow("claude-3-5-sonnet")).toBe(200_000);
+    expect(inferContextWindow("claude-4-sonnet")).toBe(200_000);
+    expect(inferContextWindow("claude-sonnet")).toBe(100_000);
+  });
+
+  it("maps the remaining families and falls back to a safe default", () => {
+    expect(inferContextWindow("gemini-2.0-flash")).toBe(128_000);
+    expect(inferContextWindow("o1-preview")).toBe(200_000);
+    expect(inferContextWindow("o3-mini")).toBe(200_000);
+    expect(inferContextWindow("o4-mini")).toBe(200_000);
+    expect(inferContextWindow("deepseek-chat")).toBe(64_000);
+    expect(inferContextWindow("mistral-large")).toBe(32_000);
+    expect(inferContextWindow("mixtral-8x7b")).toBe(32_000);
+    expect(inferContextWindow("llama3.1")).toBe(8_192);
+    expect(inferContextWindow("some-unknown-model")).toBe(128_000);
+  });
+
+  it("is case-insensitive", () => {
+    expect(inferContextWindow("GPT-4O")).toBe(128_000);
+    expect(inferContextWindow("Claude-3-5-Sonnet")).toBe(200_000);
   });
 });
