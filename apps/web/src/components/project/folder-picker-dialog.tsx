@@ -73,7 +73,6 @@ export function FolderPickerDialog({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [manualPath, setManualPath] = useState('')
-  const [showManualInput, setShowManualInput] = useState(false)
 
   // Device / node state
   const [nodes, setNodes] = useState<FsNode[]>([])
@@ -199,7 +198,6 @@ export function FolderPickerDialog({
   const handleManualGo = useCallback(() => {
     if (manualPath.trim()) {
       void browse(manualPath.trim())
-      setShowManualInput(false)
     }
   }, [manualPath, browse])
 
@@ -208,7 +206,7 @@ export function FolderPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md sm:max-w-lg p-0 gap-0 overflow-hidden">
+      <DialogContent className="!flex h-[min(36rem,calc(100vh-2rem))] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle className="flex items-center gap-2 text-base">
             <FolderOpen className="h-4 w-4" />
@@ -273,39 +271,26 @@ export function FolderPickerDialog({
             </button>
             </TooltipHint>
           )}
-          <button
-            onClick={() => setShowManualInput(v => !v)}
-            className="ml-auto px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground text-2xs"
-          >
-            {showManualInput ? 'Browse' : 'Enter path'}
-          </button>
         </div>
 
-        {/* Manual path input */}
-        {showManualInput && (
-          <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20">
-            <input
-              type="text"
-              value={manualPath}
-              onChange={e => setManualPath(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleManualGo() }}
-              className="flex-1 h-7 px-2 text-xs border rounded bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-              placeholder="Enter absolute path..."
-              autoFocus
-            />
-            <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={handleManualGo}>
-              Go
-            </Button>
-          </div>
-        )}
-
-        {/* Current path display */}
-        <div className="px-3 py-1.5 text-xs font-mono text-muted-foreground truncate border-b">
-          {currentPath ?? '...'}
+        {/* Explorer-style address bar: always editable and synced to the folder. */}
+        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/20 px-3 py-2">
+          <input
+            type="text"
+            value={manualPath}
+            onChange={e => setManualPath(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleManualGo() }}
+            className="h-8 min-w-0 flex-1 rounded border bg-background px-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            placeholder="Enter a folder path"
+            aria-label="Folder path"
+          />
+          <Button size="sm" variant="secondary" className="h-8 px-3 text-xs" onClick={handleManualGo}>
+            Go
+          </Button>
         </div>
 
         {/* Directory listing */}
-        <div className="overflow-y-auto min-h-[120px] max-h-[50vh]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="p-2">
             {loading && (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -336,7 +321,7 @@ export function FolderPickerDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-4 py-3 border-t">
+        <DialogFooter className="shrink-0 border-t px-4 py-3">
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
