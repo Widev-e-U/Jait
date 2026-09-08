@@ -600,8 +600,9 @@ describe("thread.control tool", () => {
 
       const projectRoot = process.cwd();
       const worktreePath = "/tmp/jait-worktrees/jait-abcdef12";
+      const threadService = new ThreadService(db);
       const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
+        threadService,
         providerRegistry,
         userService,
         sessionState,
@@ -646,6 +647,13 @@ describe("thread.control tool", () => {
       expect(sentPrompt).toContain(`Work in ${worktreePath}`);
       expect(sentPrompt).not.toContain(`Project: ${projectRoot}`);
       expect(sentPrompt).not.toContain(`Work in ${projectRoot}`);
+      expect(sentPrompt.length).toBeGreaterThan(500);
+
+      const data = result.data as { thread: { id: string } };
+      const userActivity = threadService.getActivities(data.thread.id)
+        .find((activity) => activity.kind === "message");
+      expect(userActivity?.summary).toBe(sentPrompt.slice(0, 500));
+      expect(userActivity?.payload).toEqual({ role: "user", content: sentPrompt });
     } finally {
       sqlite.close();
     }

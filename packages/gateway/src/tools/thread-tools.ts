@@ -730,7 +730,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
       const historyReplayPrompt = buildThreadHistoryReplayPrompt(deps.threadService, effectiveThread.id);
 
-      const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
+      const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), {
+        role: "user",
+        content: message,
+      });
       broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
 
       // Run thread router for the first turn
@@ -967,7 +970,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
 
             if (!input.start) {
-              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
+              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), {
+                role: "user",
+                content: prompt,
+              });
               broadcastThreadEvent(thread.id, "activity", { activity });
               return { ok: true, message: "Thread created", data: { thread } };
             }
@@ -1122,7 +1128,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
             for (const { thread, prompt, spec } of created) {
               if (spec.start === true || input.start === true) continue;
-              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
+              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), {
+                role: "user",
+                content: prompt,
+              });
               broadcastThreadEvent(thread.id, "activity", { activity });
             }
             const threads = [...threadById.values()];
@@ -1238,7 +1247,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             deps.threadService.update(thread.id, { status: "running", error: null, completedAt: null });
             broadcastThreadStatus(thread.id, "running");
             await provider.sendTurn(thread.providerSessionId, prompt, input.attachments);
-            const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
+            const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), {
+              role: "user",
+              content: prompt,
+            });
             broadcastThreadEvent(thread.id, "activity", { activity });
             return { ok: true, message: "Turn sent", data: { threadId: thread.id } };
           }
