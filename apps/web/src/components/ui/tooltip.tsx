@@ -62,16 +62,18 @@ function TooltipContent({
 
 function TooltipHint({
   content,
+  side,
   children,
   ...props
 }: Omit<React.ComponentProps<typeof TooltipPrimitive.Trigger>, "content" | "children" | "asChild"> & {
   content: React.ReactNode
+  side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"]
   children: React.ReactElement
 }) {
   return (
     <Tooltip open={content ? undefined : false}>
       <TooltipTrigger asChild {...props}>{children}</TooltipTrigger>
-      {content && <TooltipContent>{content}</TooltipContent>}
+      {content && <TooltipContent side={side}>{content}</TooltipContent>}
     </Tooltip>
   )
 }

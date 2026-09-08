@@ -713,7 +713,7 @@ export function ProviderModelSelector({
   }, [isMobile])
 
   const triggerButton = (
-    <TooltipHint content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
+    <TooltipHint side="left" content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
     <button
       type="button"
       disabled={disabled}
@@ -767,7 +767,7 @@ export function ProviderModelSelector({
       <div className={cn('flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2', isMobile && 'min-h-10')}>
         <div id="provider-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
         {locationLabel && (
-          <TooltipHint content={locationLabel}>
+          <TooltipHint side="left" content={locationLabel}>
           <span className="flex min-w-0 items-center gap-1 text-2xs text-blue-500">
             <Monitor className="h-3 w-3 shrink-0" />
             <span className="truncate">{locationLabel}</span>
@@ -809,7 +809,7 @@ export function ProviderModelSelector({
               onLogout={() => { void runProviderAction(entry, 'logout') }}
             >
               <div className="flex items-start gap-1.5">
-                <TooltipHint content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
+                <TooltipHint side="left" content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
                 <button
                   type="button"
                   role="option"
@@ -839,7 +839,7 @@ export function ProviderModelSelector({
                 </button>
                 </TooltipHint>
                 {showLoginAction && (
-                  <TooltipHint content={`Login to ${entry.label}`}>
+                  <TooltipHint side="left" content={`Login to ${entry.label}`}>
                   <button
                     type="button"
                     aria-label={`Login to ${entry.label}`}
@@ -1036,7 +1036,7 @@ export function ProviderModelSelector({
             {reasoningEfforts!.map((effort) => {
               const active = reasoningEffort === effort.value
               return (
-                <TooltipHint key={effort.value} content={effort.hint}>
+                <TooltipHint key={effort.value} side="left" content={effort.hint}>
                 <button
                   type="button"
                   onClick={() => handleReasoningEffortChange(effort.value)}
