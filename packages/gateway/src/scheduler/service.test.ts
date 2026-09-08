@@ -84,6 +84,71 @@ describe("one-shot jobs", () => {
   });
 });
 
+describe("concurrent scheduling", () => {
+  it("starts jobs due in the same minute without waiting for another job", async () => {
+    let releaseSlowJob: (() => void) | undefined;
+    const slowJobBlocked = new Promise<void>((resolve) => { releaseSlowJob = resolve; });
+    const executeTool = vi.fn(async ({ toolName }: { toolName: string }) => {
+      if (toolName === "slow.tool") await slowJobBlocked;
+      return { ok: true, message: "done" };
+    });
+    const { scheduler: s } = await scheduler(executeTool);
+    s.create({ name: "fast", cron: "0 * * * *", toolName: "fast.tool" });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    s.create({ name: "slow", cron: "0 * * * *", toolName: "slow.tool" });
+
+    const tick = s.tick(new Date("2026-09-08T18:00:00Z"));
+    await vi.waitFor(() => {
+      expect(executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    releaseSlowJob?.();
+    await tick;
+  });
+
+  it("allows a later tick to run other jobs while one job is still running", async () => {
+    let releaseSlowJob: (() => void) | undefined;
+    const slowJobBlocked = new Promise<void>((resolve) => { releaseSlowJob = resolve; });
+    const executeTool = vi.fn(async ({ toolName }: { toolName: string }) => {
+      if (toolName === "slow.tool") await slowJobBlocked;
+      return { ok: true, message: "done" };
+    });
+    const { scheduler: s } = await scheduler(executeTool);
+    s.create({ name: "slow", cron: "0 * * * *", toolName: "slow.tool" });
+    s.create({ name: "later", cron: "1 * * * *", toolName: "later.tool" });
+
+    const firstTick = s.tick(new Date("2026-09-08T18:00:00Z"));
+    await vi.waitFor(() => {
+      expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolName: "slow.tool" }));
+    });
+
+    await s.tick(new Date("2026-09-08T18:01:00Z"));
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolName: "later.tool" }));
+
+    releaseSlowJob?.();
+    await firstTick;
+  });
+
+  it("does not overlap two runs of the same job", async () => {
+    let releaseJob: (() => void) | undefined;
+    const jobBlocked = new Promise<void>((resolve) => { releaseJob = resolve; });
+    const executeTool = vi.fn(async () => {
+      await jobBlocked;
+      return { ok: true, message: "done" };
+    });
+    const { scheduler: s } = await scheduler(executeTool);
+    s.create({ name: "slow", cron: "* * * * *", toolName: "slow.tool" });
+
+    const firstTick = s.tick(new Date("2026-09-08T18:00:00Z"));
+    await vi.waitFor(() => expect(executeTool).toHaveBeenCalledOnce());
+    await s.tick(new Date("2026-09-08T18:01:00Z"));
+    expect(executeTool).toHaveBeenCalledOnce();
+
+    releaseJob?.();
+    await firstTick;
+  });
+});
+
 describe("cleaning up spent one-shots", () => {
   /** A one-off that fired, failed, and was disarmed `hoursAgo` hours ago. */
   async function failedOneShot(hoursAgo: number) {

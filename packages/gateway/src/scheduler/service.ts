@@ -265,7 +265,7 @@ function mapJob(row: typeof scheduledJobs.$inferSelect): ScheduledJobRecord {
 
 export class SchedulerService {
   private timer: ReturnType<typeof setInterval> | null = null;
-  private ticking = false;
+  private readonly runningJobIds = new Set<string>();
   /** Epoch millis of the last cleanup sweep. `0` → sweep on the first tick. */
   private lastPurgeAt = 0;
 
@@ -491,23 +491,26 @@ export class SchedulerService {
   }
 
   async tick(now = new Date()): Promise<void> {
-    if (this.ticking) return;
-    this.ticking = true;
-    try {
-      const jobs = this.list().filter((j) => j.enabled);
-      for (const job of jobs) {
-        if (matchesCronMinute(job.cron, now, getScheduledTimeZone(job.input)) && !isSameUtcMinute(job.lastRunAt, now)) {
-          try {
-            await this.trigger(job.id, undefined, now, "schedule");
-          } catch (err) {
-            console.error(`Scheduled job failed: ${job.id}`, err);
-          }
-        }
+    const jobs = this.list().filter((job) =>
+      job.enabled
+      && !this.runningJobIds.has(job.id)
+      && matchesCronMinute(job.cron, now, getScheduledTimeZone(job.input))
+      && !isSameUtcMinute(job.lastRunAt, now)
+    );
+
+    const executions = jobs.map(async (job) => {
+      this.runningJobIds.add(job.id);
+      try {
+        await this.trigger(job.id, undefined, now, "schedule");
+      } catch (err) {
+        console.error(`Scheduled job failed: ${job.id}`, err);
+      } finally {
+        this.runningJobIds.delete(job.id);
       }
-      this.purgeIfDue(now);
-    } finally {
-      this.ticking = false;
-    }
+    });
+
+    this.purgeIfDue(now);
+    await Promise.all(executions);
   }
 
   /**
