@@ -21,6 +21,8 @@ import { listJaitModels } from "../services/jait-models.js";
 import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { ProviderUsageService } from "../services/provider-usage.js";
+import { summarizeProviderUsage } from "../services/usage-summary.js";
+import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
@@ -59,6 +61,7 @@ export interface ProviderRouteDeps {
   providerUsageService?: ProviderUsageService;
   userService?: UserService;
   ws?: WsControlPlane;
+  sqlite?: SqliteDatabase;
 }
 
 export function registerProviderRoutes(
@@ -100,6 +103,22 @@ export function registerProviderRoutes(
     if (!authUser) return;
     const accountIds = (deps.providerAccountService?.list(authUser.id) ?? []).map((account) => account.id);
     return { usage: deps.providerUsageService?.listForUser(accountIds) ?? [] };
+  });
+
+  // Historical usage summary for the avatar-menu usage modal: per-provider
+  // request counts bucketed hourly/daily/weekly, plus live quota snapshots.
+  app.get("/api/provider-usage/summary", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.sqlite) return reply.status(503).send({ error: "Usage summary is unavailable" });
+    const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
+    const quotas = deps.providerUsageService?.listForUser(accounts.map((account) => account.id)) ?? [];
+    return summarizeProviderUsage(
+      deps.sqlite,
+      authUser.id,
+      accounts.map((account) => ({ id: account.id, providerType: account.providerType, label: account.label })),
+      quotas,
+    );
   });
 
   app.post("/api/provider-accounts", async (request, reply) => {

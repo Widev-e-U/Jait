@@ -2,6 +2,7 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpCircle,
+  BarChart3,
   Brain,
   Calendar,
   CalendarDays,
@@ -40,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { PatchNotesTooltip } from '@/components/settings/PatchNotesTooltip'
+import { UsageModal } from '@/components/app-shell/usage-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
 import type { ProviderId } from '@/lib/agents-api'
@@ -144,6 +146,9 @@ export function AppHeader(props: AppHeaderProps) {
   const selectorRef = useRef<HTMLDivElement>(null)
   const [navAvailableWidth, setNavAvailableWidth] = useState(0)
 
+  // Provider usage modal (avatar dropdown → "Usage")
+  const [usageModalOpen, setUsageModalOpen] = useState(false)
+
   const hasCentered = currentView === 'chat' && !voiceOverlayOpen
 
   useEffect(() => {
@@ -194,6 +199,7 @@ export function AppHeader(props: AppHeaderProps) {
   ]
 
   return (
+            <>
             <header
               className={
                 isMobile
@@ -387,6 +393,10 @@ export function AppHeader(props: AppHeaderProps) {
                         <Settings className="h-4 w-4 mr-2" />
                         Settings
                       </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}>
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Usage
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <div className="px-2 py-1.5">
                         <span className="text-xs font-medium text-muted-foreground">Theme</span>
@@ -457,6 +467,10 @@ export function AppHeader(props: AppHeaderProps) {
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Usage
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-1.5">
                     <span className="text-xs font-medium text-muted-foreground">Theme</span>
@@ -509,5 +523,7 @@ export function AppHeader(props: AppHeaderProps) {
             )}
           </div>
             </header>
+            <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
+            </>
   )
 }

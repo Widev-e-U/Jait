@@ -345,6 +345,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       providerUsageService: deps.providerUsageService,
       userService: deps.userService,
       ws: deps.ws,
+      sqlite: deps.sqlite,
     });
   }
 
