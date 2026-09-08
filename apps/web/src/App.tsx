@@ -382,25 +382,6 @@ function App() {
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
 
-  const previousDesktopEditorOpenRef = useRef(showProject)
-  useEffect(() => {
-    const wasOpen = previousDesktopEditorOpenRef.current
-    previousDesktopEditorOpenRef.current = showProject
-    if (isMobile) return
-
-    if (!wasOpen && showProject) {
-      setShowProjectTree(true)
-      setSidebarView('files')
-      setShowSidebar(true)
-      return
-    }
-
-    if (!showProject && sidebarView !== 'projects') {
-      setSidebarView('projects')
-      setShowSidebar(true)
-    }
-  }, [isMobile, showProject, sidebarView])
-
   useEffect(() => {
     showProjectRef.current = showProject
   }, [showProject])
@@ -3192,6 +3173,24 @@ function App() {
     waitForProjectHydration
   ])
 
+  const handleDeveloperSidebarView = useCallback(async (requestedView: DeveloperSidebarView) => {
+    if (requestedView !== 'projects' && !showProject) {
+      await handleToggleEditor()
+      if (!showProjectRef.current) return
+
+      // Files and Source Control live inside the project workspace. When that
+      // workspace was closed, this click is an open request rather than a
+      // request to toggle the remembered sidebar selection off.
+      setShowProjectTree(true)
+      setMobileTreeTab(requestedView)
+      setSidebarView(requestedView)
+      setShowSidebar(true)
+      return
+    }
+
+    handleSelectDeveloperSidebarView(requestedView)
+  }, [handleSelectDeveloperSidebarView, handleToggleEditor, showProject])
+
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
     if (!activeProject?.projectRoot || !activeSessionId || activeProject.opening) return
@@ -4997,7 +4996,9 @@ function App() {
                       onTogglePreview={() => {
                         void handleSidebarPreviewToggle()
                       }}
-                      onSelectSidebarView={handleSelectDeveloperSidebarView}
+                      onSelectSidebarView={(view) => {
+                        void handleDeveloperSidebarView(view)
+                      }}
                       onToggleTerminal={() => {
                         void handleToggleTerminal()
                       }}

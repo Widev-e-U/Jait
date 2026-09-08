@@ -512,7 +512,7 @@ html.is-dragging-row-resize {
   width: 1px;
   transform: translateX(-50%);
   background-color: transparent;
-  transition: background-color 120ms ease-out;
+  transition: background-color 120ms ease-out, width 120ms ease-out, height 120ms ease-out;
 }
 .sash-handle-bordered::after {
   background-color: hsl(var(--border) / 0.6);
@@ -525,15 +525,27 @@ html.is-dragging-row-resize {
 }
 @media (hover: hover) {
   .sash-handle:hover::after {
-    background-color: hsl(var(--primary) / 0.45);
+    width: 2px;
+    background-color: hsl(var(--primary) / 0.5);
     transition-delay: 150ms;
+  }
+  .sash-handle-horizontal:hover::after {
+    width: auto;
+    height: 2px;
   }
 }
 .sash-handle:active::after,
 .sash-handle:focus-visible::after,
 .sash-handle[data-dragging="true"]::after {
+  width: 2px;
   background-color: hsl(var(--primary) / 0.75);
   transition-delay: 0ms;
+}
+.sash-handle-horizontal:active::after,
+.sash-handle-horizontal:focus-visible::after,
+.sash-handle-horizontal[data-dragging="true"]::after {
+  width: auto;
+  height: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
   .sash-handle::after { transition: none; }

@@ -148,8 +148,8 @@ test('switches between Files and Source Control using sidebar icons', async ({ p
   await page.goto('/')
   await loginInBrowser(page, username, password)
   const files = page.getByRole('button', { name: 'Files', exact: true })
-  if (!(await files.isVisible())) await page.getByRole('button', { name: 'Editor', exact: true }).click()
   const source = page.getByRole('button', { name: 'Source Control', exact: true })
+  await expect(files).toBeVisible()
   await expect(source).toBeVisible()
   await expect(source).toHaveText('')
   await source.click()
@@ -159,4 +159,27 @@ test('switches between Files and Source Control using sidebar icons', async ({ p
   await expect(files).toHaveAttribute('aria-pressed', 'true')
   await expect(source).toHaveAttribute('aria-pressed', 'false')
   await expect(page.getByText(/^Source Control \(\d+\)$/)).not.toBeVisible()
+})
+
+test('opening editor preserves the selected projects and chats panel', async ({ page, request }) => {
+  test.setTimeout(60_000)
+  const { token, username, password } = await registerUser(request)
+  await createProjectAndSession(request, token, 'Independent editor navigation')
+  await page.addInitScript(([gatewayUrl]) => {
+    window.localStorage.setItem('jait-gateway-url', gatewayUrl)
+    window.localStorage.setItem('jait.viewMode', 'developer')
+    window.localStorage.setItem('showSessionsSidebar', 'true')
+    window.localStorage.setItem('developerSidebarView', 'projects')
+  }, [API_URL] as const)
+  await page.goto('/')
+  await loginInBrowser(page, username, password)
+
+  const projects = page.getByRole('button', { name: 'Projects and chats', exact: true })
+  const editor = page.getByRole('button', { name: 'Editor', exact: true })
+  await expect(projects).toHaveAttribute('aria-pressed', 'true')
+  await expect(editor).toHaveAttribute('aria-pressed', 'false')
+
+  await editor.click()
+  await expect(editor).toHaveAttribute('aria-pressed', 'true')
+  await expect(projects).toHaveAttribute('aria-pressed', 'true')
 })

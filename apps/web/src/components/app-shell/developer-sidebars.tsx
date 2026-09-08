@@ -167,7 +167,7 @@ export function DeveloperSidebars({
             </TooltipTrigger>
             <TooltipContent side="right">Projects & Chats</TooltipContent>
           </Tooltip>
-          {(activeProjectId || activeProject) && showProject && (
+          {(activeProjectId || activeProject) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -184,7 +184,7 @@ export function DeveloperSidebars({
               <TooltipContent side="right">Files</TooltipContent>
             </Tooltip>
           )}
-          {(activeProjectId || activeProject) && showProject && (
+          {(activeProjectId || activeProject) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -213,7 +213,14 @@ export function DeveloperSidebars({
             <>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant={showProject ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={onToggleEditor} aria-label="Editor">
+                  <Button
+                    variant={showProject ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    onClick={onToggleEditor}
+                    aria-label="Editor"
+                    aria-pressed={showProject}
+                  >
                     <Code className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
