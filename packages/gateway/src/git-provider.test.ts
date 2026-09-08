@@ -22,6 +22,78 @@ describe("git remote provider detection", () => {
       repo: "repo",
     });
   });
+
+  it("parses GitHub remotes from HTTPS and SSH forms", () => {
+    expect(parseGitRemote("https://github.com/acme/repo.git")).toEqual({
+      provider: "github",
+      host: "github.com",
+      normalizedUrl: "https://github.com/acme/repo",
+      owner: "acme",
+      repo: "repo",
+    });
+    expect(parseGitRemote("git@github.com:acme/repo.git")).toEqual({
+      provider: "github",
+      host: "github.com",
+      normalizedUrl: "https://github.com/acme/repo",
+      owner: "acme",
+      repo: "repo",
+    });
+  });
+
+  it("parses Azure DevOps SSH remotes into the canonical HTTPS form", () => {
+    expect(parseGitRemote("git@ssh.dev.azure.com:v3/acme/project/repo")).toEqual({
+      provider: "azure-devops",
+      host: "dev.azure.com",
+      normalizedUrl: "https://dev.azure.com/acme/project/_git/repo",
+      organization: "acme",
+      project: "project",
+      repo: "repo",
+    });
+  });
+
+  it("parses legacy visualstudio.com remotes", () => {
+    expect(parseGitRemote("https://acme.visualstudio.com/project/_git/repo")).toEqual({
+      provider: "azure-devops",
+      host: "acme.visualstudio.com",
+      normalizedUrl: "https://acme.visualstudio.com/project/_git/repo",
+      organization: "acme",
+      project: "project",
+      repo: "repo",
+    });
+  });
+
+  it("parses GitLab remotes with nested group paths", () => {
+    expect(parseGitRemote("https://gitlab.com/group/subgroup/repo.git")).toEqual({
+      provider: "gitlab",
+      host: "gitlab.com",
+      normalizedUrl: "https://gitlab.com/group/subgroup/repo",
+      owner: "group/subgroup",
+      repo: "repo",
+    });
+  });
+
+  it("parses Bitbucket remotes", () => {
+    expect(parseGitRemote("https://bitbucket.org/acme/repo.git")).toEqual({
+      provider: "bitbucket",
+      host: "bitbucket.org",
+      normalizedUrl: "https://bitbucket.org/acme/repo",
+      owner: "acme",
+      repo: "repo",
+    });
+  });
+
+  it("returns null for null, empty, or unparseable remotes", () => {
+    expect(parseGitRemote(null)).toBeNull();
+    expect(parseGitRemote("")).toBeNull();
+    expect(parseGitRemote("   ")).toBeNull();
+    expect(parseGitRemote("not a url")).toBeNull();
+    expect(parseGitRemote("https://github.com/acme")).toBeNull();
+  });
+
+  it("reports 'none' for null and 'unknown' for unparseable remotes", () => {
+    expect(detectGitRemoteProvider(null)).toBe("none");
+    expect(detectGitRemoteProvider("garbage")).toBe("unknown");
+  });
 });
 
 describe("buildCreatePrUrl", () => {
