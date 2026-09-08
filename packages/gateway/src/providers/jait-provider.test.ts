@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runAgentLoopMock = vi.hoisted(() => vi.fn());
 
@@ -7,7 +7,12 @@ vi.mock("../tools/index.js", async (importOriginal) => ({
   runAgentLoop: runAgentLoopMock,
 }));
 import type { ToolContext } from "../tools/contracts.js";
+import type { ProviderEvent } from "./contracts.js";
 import { JaitProvider, prepareJaitThreadSandboxToolInput } from "./jait-provider.js";
+
+beforeEach(() => {
+  runAgentLoopMock.mockReset();
+});
 
 describe("prepareJaitThreadSandboxToolInput", () => {
   it("forces command tools through the read-write sandbox", () => {
@@ -66,6 +71,66 @@ describe("JaitProvider reasoning effort", () => {
 
     expect(runAgentLoopMock).toHaveBeenCalledOnce();
     expect(runAgentLoopMock.mock.calls[0]?.[0].auth.reasoningEffort).toBe("high");
+  });
+});
+
+describe("JaitProvider context flow", () => {
+  it("emits one bounded context snapshot after a long turn", async () => {
+    const emitted: ProviderEvent[] = [];
+    let serializedContextBytes = 0;
+    runAgentLoopMock.mockImplementationOnce(async (options) => {
+      for (let round = 1; round <= 40; round++) {
+        options.onContext?.({
+          round,
+          createdAt: new Date().toISOString(),
+          model: "test",
+          messages: [{ role: "assistant", content: "x".repeat(8_000) }],
+        });
+      }
+      return { content: "ok", executedToolCalls: [] };
+    });
+    const provider = new JaitProvider({
+      config: {
+        openaiApiKey: "test",
+        openaiBaseUrl: "http://localhost:11434/v1",
+        openaiModel: "test",
+        ollamaUrl: "http://localhost:11434",
+        ollamaModel: "test",
+        ollamaContextWindow: 0,
+        agentMaxRounds: 0,
+      } as any,
+      threadService: { getById: () => ({ userId: "user-1" }) } as any,
+      userService: {
+        getSettings: () => ({ apiKeys: {}, jaitBackend: "ollama" }),
+      } as any,
+    });
+    provider.onEvent((event) => {
+      emitted.push(event);
+      if (event.type === "activity" && event.kind === "context_flow") {
+        serializedContextBytes += Buffer.byteLength(JSON.stringify(event), "utf8");
+      }
+    });
+
+    const session = await provider.startSession({
+      threadId: "thread-1",
+      workingDirectory: "/repo-worktree",
+      mode: "full-access",
+    });
+    await provider.sendTurn(session.id, "test");
+
+    const contextEvents = emitted.filter(
+      (event) => event.type === "activity" && event.kind === "context_flow",
+    );
+    expect(contextEvents).toHaveLength(1);
+    expect(serializedContextBytes).toBeLessThan(500_000);
+    expect(contextEvents[0]).toMatchObject({
+      payload: {
+        rounds: expect.arrayContaining([
+          expect.objectContaining({ round: 1 }),
+          expect.objectContaining({ round: 40 }),
+        ]),
+      },
+    });
   });
 });
 

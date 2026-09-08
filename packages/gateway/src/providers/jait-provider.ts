@@ -285,7 +285,7 @@ export class JaitProvider implements CliProviderAdapter {
               }
               this.forwardAgentLoopEvent(sessionId, event);
             },
-            onContext: (round) => this.forwardContextRound(sessionId, state, round),
+            onContext: (round) => this.recordContextRound(state, round),
           },
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
@@ -322,6 +322,7 @@ export class JaitProvider implements CliProviderAdapter {
           : result.content;
         streamedAssistantContent = remainingContent || streamedAssistantContent;
         flushStreamedAssistantMessage();
+        this.flushContextRounds(sessionId, state);
 
         const session = this.sessions.get(sessionId)?.session;
         if (session) {
@@ -331,6 +332,7 @@ export class JaitProvider implements CliProviderAdapter {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         flushStreamedAssistantMessage();
+        this.flushContextRounds(sessionId, state);
         const session = this.sessions.get(sessionId)?.session;
         if (session) {
           session.status = "error";
@@ -483,20 +485,25 @@ export class JaitProvider implements CliProviderAdapter {
     return state.sandboxStart;
   }
 
-  private forwardContextRound(sessionId: string, state: JaitSessionState, round: LlmContextFlowRound): void {
-    // Accumulate rounds so we can emit the full flow each time
+  private recordContextRound(state: JaitSessionState, round: LlmContextFlowRound): void {
     if (!state.contextRounds) state.contextRounds = [];
     state.contextRounds.push(round);
+  }
+
+  private flushContextRounds(sessionId: string, state: JaitSessionState): void {
+    const rounds = state.contextRounds;
+    if (!rounds || rounds.length === 0) return;
+    state.contextRounds = undefined;
     const llm = this.buildLlmConfig(state.userId, state.model);
     this.emit({
       type: "activity",
       sessionId,
       kind: "context_flow",
-      summary: `Round ${round.round} context`,
+      summary: `Turn context (${rounds.length} round${rounds.length === 1 ? "" : "s"})`,
       payload: {
         provider: "jait",
         model: llm.openaiModel,
-        rounds: state.contextRounds,
+        rounds,
       },
     });
   }
