@@ -126,6 +126,49 @@ describe("mapCodexNotification", () => {
     }]);
   });
 
+  it("maps file read items as read tool events instead of dropping them", () => {
+    const started = mapCodexNotification("codex/event/item_started", {
+      msg: {
+        id: "read-1",
+        type: "file_read",
+        file_path: "/home/user/project/src/main.ts",
+      },
+    }, "session-1");
+
+    expect(started).toEqual([{
+      type: "tool.start",
+      sessionId: "session-1",
+      tool: "read",
+      args: {
+        path: "/home/user/project/src/main.ts",
+        id: "read-1",
+        type: "file_read",
+        file_path: "/home/user/project/src/main.ts",
+      },
+      callId: "read-1",
+    }]);
+
+    const completed = mapCodexNotification("codex/event/item_completed", {
+      msg: {
+        id: "read-1",
+        type: "file_read",
+        file_path: "/home/user/project/src/main.ts",
+        status: "completed",
+        output: "export const x = 1;\n",
+      },
+    }, "session-1");
+
+    expect(completed).toEqual([{
+      type: "tool.result",
+      sessionId: "session-1",
+      tool: "read",
+      ok: true,
+      message: "export const x = 1;\n",
+      callId: "read-1",
+      data: undefined,
+    }]);
+  });
+
   it("does not treat assistant agent messages as tool calls", () => {
     const events = mapCodexNotification("codex/event/item_completed", {
       msg: {

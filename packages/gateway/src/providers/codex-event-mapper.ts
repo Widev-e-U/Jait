@@ -347,6 +347,8 @@ function isToolItemType(normalized: string): boolean {
     normalized.includes("function") ||
     normalized.includes("file change") ||
     normalized.includes("file_change") ||
+    normalized.includes("file read") ||
+    normalized.includes("file_read") ||
     normalized.includes("patch") ||
     normalized.includes("edit") ||
     normalized.includes("mcp") ||
