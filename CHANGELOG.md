@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.830](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.830) — 2026-09-08
+- fix(gateway): emit context snapshot once per turn to bound memory — e6992c52
+- fix(web): open provider select tooltips to the left — dd0a4552
+
 ## [v0.1.827](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.827) — 2026-09-07
 - feat(desktop): migrate device ID, add nativePlatform and providerType — a9f4af3d
 - feat(web): simplify folder picker with inline path entry — 4c4030d9
