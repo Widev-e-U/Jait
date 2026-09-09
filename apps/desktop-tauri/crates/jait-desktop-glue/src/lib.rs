@@ -618,7 +618,7 @@ impl HostState {
             }
             "desktop:browse-path" => Ok(to_json(core::fsops::browse_path(
                 arg(0).as_str().unwrap_or_default(),
-            ))?),
+            )?)?),
             "desktop:get-roots" => Ok(to_json(core::fsops::get_roots())?),
             "desktop:pick-directory" => Err("pick-directory requires a native dialog shell".into()),
 
@@ -1785,6 +1785,35 @@ done
         assert!(st
             .dispatch("desktop:fs-op", &[json!("frobnicate")])
             .is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn browse_path_dispatch_returns_the_browse_payload_and_propagates_errors() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::create_dir_all(dir.join("project")).unwrap();
+
+        let browsed = st
+            .dispatch("desktop:browse-path", &[json!(dir)])
+            .expect("browse succeeds");
+        assert_eq!(browsed["path"], json!(dir.to_string_lossy()));
+        assert_eq!(browsed["entries"][0]["name"], json!("project"));
+        assert_eq!(browsed["entries"][0]["type"], json!("dir"));
+        assert!(
+            browsed.get("Ok").is_none(),
+            "the web bridge expects the payload directly, got {browsed}"
+        );
+
+        assert!(
+            st.dispatch(
+                "desktop:browse-path",
+                &[json!(dir.join("does-not-exist"))],
+            )
+            .is_err(),
+            "filesystem errors must reject the web bridge request"
+        );
+
         std::fs::remove_dir_all(&dir).ok();
     }
 

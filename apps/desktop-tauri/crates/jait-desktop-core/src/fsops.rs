@@ -195,6 +195,13 @@ pub fn browse_path(dir_path: &str) -> Result<BrowseOut, String> {
     })
 }
 
+#[cfg(any(target_os = "windows", test))]
+fn windows_drive_name(value: &str) -> Option<String> {
+    let value = value.trim();
+    (value.len() == 1 && value.as_bytes()[0].is_ascii_alphabetic())
+        .then(|| format!("{}:", value.to_ascii_uppercase()))
+}
+
 /// `get-roots` handler — mirrors desktop:get-roots (drives on Windows + Home).
 pub fn get_roots() -> RootsOut {
     let mut roots: Vec<BrowseEntry> = Vec::new();
@@ -218,24 +225,18 @@ pub fn get_roots() -> RootsOut {
         if let Ok(out) = ps.output()
         {
             if let Ok(text) = String::from_utf8(out.stdout) {
-                for l in text.lines() {
-                    let l = l.trim();
-                    if l.len() == 1
-                        && l.chars()
-                            .next()
-                            .map(|c| c.is_ascii_alphabetic())
-                            .unwrap_or(false)
-                    {
-                        let upper = l.to_uppercase();
-                        if roots.iter().any(|r| r.name == upper) {
-                            continue;
-                        }
-                        roots.push(BrowseEntry {
-                            name: upper.clone(),
-                            path: format!("{upper}\\"),
-                            entry_type: "dir".into(),
-                        });
+                for line in text.lines() {
+                    let Some(drive) = windows_drive_name(line) else {
+                        continue;
+                    };
+                    if roots.iter().any(|r| r.name.eq_ignore_ascii_case(&drive)) {
+                        continue;
                     }
+                    roots.push(BrowseEntry {
+                        name: drive.clone(),
+                        path: format!("{drive}\\"),
+                        entry_type: "dir".into(),
+                    });
                 }
             }
         }
@@ -263,6 +264,14 @@ use crate::info::home_dir;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_drive_letters_include_the_colon() {
+        assert_eq!(windows_drive_name("c\r"), Some("C:".into()));
+        assert_eq!(windows_drive_name("D"), Some("D:".into()));
+        assert_eq!(windows_drive_name("CD"), None);
+        assert_eq!(windows_drive_name("7"), None);
+    }
 
     #[test]
     fn write_read_stat_roundtrip() {
