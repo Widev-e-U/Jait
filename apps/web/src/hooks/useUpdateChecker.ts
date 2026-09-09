@@ -65,12 +65,15 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         const desktop = (window as any).jaitDesktop
         const [info, result, healthRes] = await Promise.all([
           desktop.getInfo?.() as Promise<{ appVersion: string }>,
-          desktop.checkForUpdate() as Promise<{ updateAvailable: boolean; version?: string }>,
+          desktop.checkForUpdate() as Promise<{ updateAvailable: boolean; version?: string; error?: string }>,
           fetch(`${apiUrl}/health`).then(r => r.ok ? r.json() as Promise<{ version?: string }> : null).catch(() => null),
         ])
         const gatewayVersion = (healthRes as { version?: string } | null)?.version ?? ''
         const appVersion = info?.appVersion ?? ''
         const latestVersion = result.version ?? appVersion ?? ''
+        if (result.error) {
+          toast.error(`Desktop update check failed: ${result.error}`)
+        }
         // The desktop binary and the gateway are released together but update
         // independently: the gateway self-updates via npm, while the desktop
         // binary only updates through electron-updater (download + install).

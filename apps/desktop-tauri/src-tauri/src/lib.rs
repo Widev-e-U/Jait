@@ -335,4 +335,32 @@ mod tests {
         assert_eq!(name, "some:new-event");
         assert_eq!(out, payload);
     }
+
+    #[test]
+    fn updater_commands_are_exposed_and_poll_is_started() {
+        let build_script = include_str!("../build.rs");
+        let capability = include_str!("../capabilities/default.json");
+        let shell = include_str!("shell.rs");
+
+        for command in [
+            "desktop_update_check",
+            "desktop_update_download",
+            "desktop_update_install",
+        ] {
+            assert!(
+                build_script.contains(&format!("\"{command}\"")),
+                "{command} is missing from tauri_build::AppManifest"
+            );
+            let permission = format!("allow-{}", command.replace('_', "-"));
+            assert!(
+                capability.contains(&format!("\"{permission}\"")),
+                "{permission} is missing from the main window capability"
+            );
+        }
+
+        assert!(
+            shell.contains("updater::spawn_poll(app.handle().clone())"),
+            "the Tauri updater background poll is never started"
+        );
+    }
 }

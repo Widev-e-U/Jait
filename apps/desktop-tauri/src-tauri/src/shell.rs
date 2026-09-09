@@ -1,9 +1,9 @@
 //! Tauri shell layer (feature-gated): commands + sink installation.
 //!
-//! Security note: custom Tauri commands are callable from any webview frame
-//! regardless of `capabilities/*.json` (those gate core/plugin commands), so
-//! `desktop_ipc` re-enforces the same channel allow-list the preload shim
-//! uses before touching glue.
+//! Security note: the main-window capability grants this app's custom Tauri
+//! commands. `desktop_ipc` also re-enforces the preload shim's channel
+//! allow-list before touching glue, because one permitted funnel command must
+//! not expose arbitrary glue operations.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use crate::translate_glue_event;
 // macros reach this module via `#[macro_use]` on `pub mod updater` in
 // lib.rs (declared before `shell`), since rustc forbids importing
 // macro-expanded macro_export macros by absolute path.
-use crate::updater::{desktop_update_check, desktop_update_download, desktop_update_install};
+use crate::updater::{self, desktop_update_check, desktop_update_download, desktop_update_install};
 
 /// First-launch login-item takeover (adopt the Electron install's autostart).
 pub mod login_item;
@@ -521,6 +521,7 @@ pub fn run() {
                 .build()?;
             // Electron parity: tray icon + background menu (createTray).
             create_tray(app.handle(), &glue)?;
+            updater::spawn_poll(app.handle().clone());
             Ok(())
         })
         // Closing the main window hides it instead of exiting so tray
