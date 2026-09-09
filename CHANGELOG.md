@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.833](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.833) — 2026-09-09
+- fix(desktop-tauri): enable updater commands and polling — 6edd6619
+
 ## [v0.1.832](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.832) — 2026-09-09
 - fix(desktop-tauri): unwrap browse Result envelope and fix Windows drive roots — 149b77a8
 
