@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.834](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.834) — 2026-09-10
+- feat(gateway): fetch live provider subscription usage per profile — 2d9726c0
+- feat(web): panel-based shell with parallel chat panels — c7ce66d1
+- feat(web): render per-result entries for project search tool calls — 44891123
+- fix(terminal): strip OSC title sequences before single-char ANSI branch — 142421a0
+
 ## [v0.1.833](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.833) — 2026-09-09
 - fix(desktop-tauri): enable updater commands and polling — 6edd6619
 
