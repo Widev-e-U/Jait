@@ -1,7 +1,18 @@
 import { AlertTriangle, FolderOpen, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
-import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
+import {
+  ChatComposerSurface,
+  Conversation,
+  Message,
+  PromptInput,
+  Suggestions,
+  TodoList,
+  MessageQueue,
+  FilesChanged,
+  getChatTranscriptColumnLeft,
+  shouldShowFloatingLeftIndicator,
+} from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import {
   getChatComposerBoundaryClassName,
@@ -22,10 +33,13 @@ import { haveRenderInputsChanged } from '@/lib/message-element-cache'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import { getProjectRepositoryId } from '@/lib/project-repositories'
 
-// Below this chat-panel width the floating top indicators (git-diff pill on the
-// left, context-window donut on the right) sit on top of transcript text, so
-// both are hidden entirely (display: none) instead of overlapping the text.
+// Below this chat-panel width the floating context-window indicator (top-right)
+// sits on top of transcript text, so it is hidden entirely (display: none)
+// instead of overlapping the text. The git-diff pill (top-left) instead hides
+// based on a measured collision with the transcript text column.
 const FLOATING_CHAT_INDICATORS_MIN_WIDTH = 480
+// Left inset (`left-2`) of the floating git-diff pill inside the chat panel.
+const GIT_DIFF_INDICATOR_LEFT_INSET_PX = 8
 
 interface DeveloperChatWorkspaceProps {
   activeProject: any
@@ -280,6 +294,34 @@ export function DeveloperChatWorkspace({
   // 0 = not measured yet; treat as visible so indicators don't flash hidden.
   const showFloatingChatIndicators =
     chatPanelWidth === 0 || chatPanelWidth >= FLOATING_CHAT_INDICATORS_MIN_WIDTH
+  // The floating git-diff pill hides as soon as its right edge would come
+  // within a small gap of the transcript text column (instead of sitting on
+  // top of the text), measured against the actual rendered pill width.
+  const [gitDiffIndicatorElement, setGitDiffIndicatorElement] = useState<HTMLDivElement | null>(null)
+  const [gitDiffIndicatorWidth, setGitDiffIndicatorWidth] = useState(0)
+  const attachGitDiffIndicator = useCallback((node: HTMLDivElement | null) => {
+    setGitDiffIndicatorElement(node)
+    if (node && node.offsetWidth > 0) setGitDiffIndicatorWidth(node.offsetWidth)
+  }, [])
+  useEffect(() => {
+    const el = gitDiffIndicatorElement
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      // display:none collapses the pill to 0 — keep the last measured width so
+      // the collision check stays stable across show/hide toggles.
+      if (width > 0) setGitDiffIndicatorWidth((prev) => (prev === width ? prev : width))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [gitDiffIndicatorElement])
+  const showGitDiffIndicator =
+    chatPanelWidth === 0 ||
+    gitDiffIndicatorWidth === 0 ||
+    shouldShowFloatingLeftIndicator({
+      indicatorRight: GIT_DIFF_INDICATOR_LEFT_INSET_PX + gitDiffIndicatorWidth,
+      contentLeft: getChatTranscriptColumnLeft(chatPanelWidth, isMobile),
+    })
   const handleMessageEditingChange = useCallback((messageId: string, editing: boolean) => {
     setEditingMessageId((current) => editing ? messageId : current === messageId ? null : current)
   }, [])
@@ -364,7 +406,7 @@ export function DeveloperChatWorkspace({
           ) : (
             <Suggestions suggestions={showProject && activeProject ? projectSuggestions : suggestions} onSelect={onHandleSuggestion} />
           )}
-          <div className="overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+          <ChatComposerSurface>
             {developerChatUiState.showTodoList && (
               <TodoList items={todoList} onClear={onClearTodoList} merged />
             )}
@@ -422,7 +464,7 @@ export function DeveloperChatWorkspace({
                 mergedShowTopDivider={developerChatUiState.showTodoList || Boolean(inlinePrompts)}
               />
             </ErrorBoundary>
-          </div>
+          </ChatComposerSurface>
           {developerComposerControlRow}
         </div>
       </div>
@@ -562,7 +604,7 @@ export function DeveloperChatWorkspace({
       {!chatCollapsed && (
         <>
           {!showDebugPanel && isProjectChat && activeProjectHasRepo && (
-            <div className={`absolute top-2 left-2 z-10 ${showFloatingChatIndicators ? '' : 'hidden'}`}>
+            <div ref={attachGitDiffIndicator} className={`absolute top-2 left-2 z-10 ${showGitDiffIndicator ? '' : 'hidden'}`}>
               <GitDiffIndicator
                 projectRoot={activeProjectRoot}
                 nodeId={activeProject?.nodeId}
@@ -658,7 +700,7 @@ export function DeveloperChatWorkspace({
               {limitReached && (
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
-              <div className="overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+              <ChatComposerSurface>
                 <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
                   {developerChatUiState.showTodoList && (
                     <TodoList items={todoList} onClear={onClearTodoList} merged />
@@ -735,7 +777,7 @@ export function DeveloperChatWorkspace({
                 </ErrorBoundary>
                   )
                 })()}
-              </div>
+              </ChatComposerSurface>
               {developerComposerControlRow}
             </div>
           </div>

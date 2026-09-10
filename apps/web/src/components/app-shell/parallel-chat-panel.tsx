@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
-import { Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
+import { ChatComposerSurface, Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
 import { Button } from '@/components/ui/button'
 import { useChat, type ChatAttachment } from '@/hooks/useChat'
 import type { ProjectSession } from '@/hooks/useProjects'
@@ -184,12 +184,14 @@ export function ParallelChatPanel({
         ))}
       </Conversation>
 
-      <div className="shrink-0 px-4 pb-3">
+      <div className="relative z-30 isolate shrink-0 bg-background px-2 py-2 pb-3 sm:px-4">
         {error && !isLoading && (
-          <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div className="mx-auto mb-2 w-full max-w-4xl rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
           </div>
         )}
+        <div className="mx-auto w-full max-w-4xl">
+        <ChatComposerSurface>
         <PromptInput
           value={draft}
           syncKey={inputVersion}
@@ -215,6 +217,8 @@ export function ParallelChatPanel({
           projectId={session.projectId}
           chatId={session.id}
         />
+        </ChatComposerSurface>
+        </div>
       </div>
     </section>
   )
