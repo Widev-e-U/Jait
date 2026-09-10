@@ -11,6 +11,7 @@
 
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import { createWebSearchTool, createWebFetchTool } from "../browser-tools.js";
+import { formatEllipsedList } from "../list-preview.js";
 
 interface WebInput {
   /** What to do: "search" (web search) or "fetch" (get URL contents). Default: inferred from params */
@@ -132,9 +133,10 @@ export function createWebTool(): ToolDefinition<WebInput> {
         });
 
         const okCount = fetched.filter((f) => f.ok).length;
+        const lines = fetched.map((f) => `• ${f.ok ? "ok" : "FAILED"} ${f.url}`);
         return {
           ok: okCount > 0,
-          message: `Fetched ${okCount}/${allUrls.length} URLs successfully`,
+          message: `Fetched ${okCount}/${allUrls.length} URLs successfully:\n${formatEllipsedList(lines)}`,
           data: { results: fetched },
         };
       }

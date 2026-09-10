@@ -1,6 +1,7 @@
 import type { SessionSearchService } from "../services/session-search.js";
 import type { ToolContext, ToolDefinition } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
+import { ellipsizeText, formatEllipsedList } from "./list-preview.js";
 
 export interface SessionSearchToolInput {
   query: string;
@@ -61,9 +62,15 @@ export function createSessionSearchTool(searchService: SessionSearchService): To
         includeMessages: input.includeMessages,
         includeThreadActivities: input.includeThreadActivities,
       });
+      const lines = results.map((r) => {
+        const label = r.source === "thread_activity" ? `thread "${r.threadTitle ?? r.threadId ?? "?"}"` : `chat "${r.sessionName ?? r.sessionId ?? "?"}"`;
+        return `• [${label}] ${ellipsizeText(r.snippet, 120)}`;
+      });
       return {
         ok: true,
-        message: `Found ${results.length} prior conversation result(s)`,
+        message:
+          `Found ${results.length} prior conversation result(s)` +
+          (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
         data: { results },
       };
     },

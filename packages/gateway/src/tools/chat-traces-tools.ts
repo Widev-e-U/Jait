@@ -10,6 +10,7 @@
 import type { ToolContext, ToolDefinition } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
 import type { ChatTracesService } from "../services/chat-traces.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 export interface ChatTracesToolInput {
   /** Chat (session) id to fetch traces for. */
@@ -99,9 +100,17 @@ export function createChatTracesTool(tracesService: ChatTracesService): ToolDefi
         };
       }
 
+      const threadLines = (result.threads ?? [])
+        .slice(0, 6)
+        .map(
+          (thread) =>
+            `• [${thread.status}] ${thread.kind}${thread.model ? ` · ${thread.model}` : ""} — ${thread.title}`,
+        );
       return {
         ok: true,
-        message: `Chat ${input.chatId}: ${result.counts.messages} message(s), ${result.counts.threads} thread(s), ${result.counts.threadActivities} thread activit(ies).`,
+        message:
+          `Chat ${input.chatId}: ${result.counts.messages} message(s), ${result.counts.threads} thread(s), ${result.counts.threadActivities} thread activit(ies).` +
+          (threadLines.length ? `\nThreads:\n${formatEllipsedList(threadLines)}` : ""),
         data: result,
       };
     },

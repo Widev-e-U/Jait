@@ -1290,7 +1290,9 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      expect(result.message).toBe("Created 2 thread(s) and waited for 2 to finish.");
+      expect(result.message).toContain("Created 2 thread(s) and waited for 2 to finish.");
+      expect(result.message).toContain("• Thread A [delegation · completed]");
+      expect(result.message).toContain("• Thread B [delegation · completed]");
       expect(outputChunks.join("")).toContain("Waiting for 2 thread(s) to finish");
       const data = result.data as {
         threads: Array<{ status: string; completedAt: string | null }>;

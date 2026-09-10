@@ -14,6 +14,7 @@ import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import type { NestedAgentEvent, ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
+import { ellipsizeText, formatEllipsedList } from "./list-preview.js";
 import type { SkillRegistry } from "../skills/index.js";
 import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
 
@@ -910,9 +911,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               ? deps.threadService.listBySession(input.sessionId)
               : deps.threadService.list(userId))
               .filter((t) => !t.userId || t.userId === userId);
+            const lines = threads.map(
+              (t) =>
+                `• [${t.id.slice(0, 8)} · ${t.kind}] ${t.status}${t.model ? ` · ${t.model}` : ""}${t.createdAt ? ` · ${t.createdAt}` : ""}`,
+            );
             return {
               ok: true,
-              message: `${threads.length} thread(s)`,
+              message:
+                `${threads.length} thread(s)` + (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
               data: { threads },
             };
           }
@@ -1067,9 +1073,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
             const worktreeFailures = created.filter((entry) => entry.worktreeError);
             if (worktreeFailures.length > 0) {
+              const createdLines = created
+                .slice(0, 10)
+                .map((entry) => `• ${ellipsizeText(entry.thread.title ?? "Untitled", 60)} [${entry.thread.kind}]`);
               return {
                 ok: false,
-                message: `Created ${created.length} thread(s), ${worktreeFailures.length} failed to create delivery worktrees.`,
+                message:
+                  `Created ${created.length} thread(s), ${worktreeFailures.length} failed to create delivery worktrees.` +
+                  (createdLines.length ? `\nThreads:\n${formatEllipsedList(createdLines)}` : ""),
                 data: {
                   threads: created.map((entry) => entry.thread),
                   failedWorktrees: worktreeFailures.map((entry) => ({
@@ -1137,17 +1148,24 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const threads = [...threadById.values()];
             const terminalFailures = threads.filter((thread) => thread.status === "error" || thread.status === "interrupted");
             const threadSummaries = threads.map((thread) => summarizeThreadForToolResult(thread));
+            const createdLines = created
+              .slice(0, 10)
+              .map((entry) => {
+                const status = threadById.get(entry.thread.id)?.status ?? entry.thread.status;
+                return `• ${ellipsizeText(entry.thread.title ?? "Untitled", 60)} [${entry.thread.kind} · ${status}]`;
+              });
 
             return {
               ok: failedStarts.length === 0 && terminalFailures.length === 0,
               message:
-                failedStarts.length > 0
+                (failedStarts.length > 0
                   ? `Created ${threads.length} thread(s), ${failedStarts.length} failed to start.`
                   : terminalFailures.length > 0
                     ? `Created ${threads.length} thread(s), ${terminalFailures.length} did not complete successfully.`
                     : waitTargets.length > 0
                       ? `Created ${threads.length} thread(s) and waited for ${waitTargets.length} to finish.`
-                      : `Created ${threads.length} thread(s).`,
+                      : `Created ${threads.length} thread(s).`) +
+                (createdLines.length ? `\nThreads:\n${formatEllipsedList(createdLines)}` : ""),
               data: {
                 threads,
                 startedCount: startResults.length - failedStarts.length,
@@ -1310,9 +1328,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!thread) return { ok: false, message: "Thread not found." };
             const limit = Math.min(Math.max(input.limit ?? 100, 1), 500);
             const activities = deps.threadService.getActivities(thread.id, limit);
+            const lines = activities.map(
+              (a) => `• [${a.kind}] ${ellipsizeText(a.summary ?? "", 100)}`,
+            );
             return {
               ok: true,
-              message: `${activities.length} activit${activities.length === 1 ? "y" : "ies"}`,
+              message:
+                `${activities.length} activit${activities.length === 1 ? "y" : "ies"}` +
+                (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
               data: { activities, threadId: thread.id },
             };
           }

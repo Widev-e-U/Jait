@@ -8,6 +8,7 @@
 
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinition<Record<string, never>> {
   return {
@@ -22,9 +23,13 @@ export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinitio
     },
     async execute(_input: Record<string, never>, _context: ToolContext): Promise<ToolResult> {
       const snapshots = registry.listSnapshots();
+      const lines = snapshots.map(
+        (s) => `• ${s.id} (${s.type}) — ${s.state}${s.sessionId ? ` · session ${s.sessionId.slice(0, 8)}` : ""}`,
+      );
       return {
         ok: true,
-        message: `${snapshots.length} active surface(s)`,
+        message:
+          `${snapshots.length} active surface(s)` + (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
         data: {
           surfaces: snapshots,
           registeredTypes: registry.registeredTypes,

@@ -1,5 +1,6 @@
 import type { CalendarService } from "../services/calendar/index.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 function userId(context: ToolContext): string | null {
   return context.userId ?? null;
@@ -27,9 +28,15 @@ export function createCalendarListTool(calendar: CalendarService): ToolDefinitio
     async execute(input, context): Promise<ToolResult> {
       try {
         const { account, calendars } = await calendar.listCalendars(userId(context), input?.accountId);
+        const lines = calendars.map(
+          (cal) =>
+            `• ${cal.name}${cal.primary ? " [primary]" : ""}${cal.selected ? "" : " [unselected]"} — ${cal.timeZone}`,
+        );
         return {
           ok: true,
-          message: `${calendars.length} calendar(s) from ${account.email}.`,
+          message:
+            `${calendars.length} calendar(s) from ${account.email}` +
+            (lines.length ? `:\n${formatEllipsedList(lines, 20)}` : "."),
           data: { account: { id: account.id, email: account.email, provider: account.provider }, calendars },
         };
       } catch (error) {
@@ -77,9 +84,16 @@ export function createCalendarEventsTool(calendar: CalendarService): ToolDefinit
           query: input?.query,
           limit: input?.limit,
         });
+        const lines = events.map((event) => {
+          const when = event.start.includes("T") ? event.start.slice(0, 16).replace("T", " ") : event.start.slice(0, 10);
+          const where = event.location ? ` — ${event.location}` : "";
+          return `• ${when} — ${event.title} (${event.calendarName})${where}`;
+        });
         return {
           ok: true,
-          message: `${events.length} event(s) from ${account.email}.`,
+          message:
+            `${events.length} event(s) from ${account.email}` +
+            (lines.length ? `:\n${formatEllipsedList(lines, 20)}` : "."),
           data: { account: { id: account.id, email: account.email, provider: account.provider }, events },
         };
       } catch (error) {

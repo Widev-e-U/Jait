@@ -1607,6 +1607,26 @@ function resolveProviderRuntimeMode(provider: CliProviderAdapter, requestedMode:
   return provider.info.modes.includes(requestedMode) ? requestedMode : (provider.info.modes[0] ?? "full-access");
 }
 
+function getInternalRequestHost(config: Pick<AppConfig, "host" | "port">): string {
+  const connectHost = config.host === "0.0.0.0"
+    ? "127.0.0.1"
+    : config.host === "::"
+      ? "::1"
+      : config.host;
+  const authority = connectHost.includes(":") ? `[${connectHost}]` : connectHost;
+  return `${authority}:${config.port}`;
+}
+
+function getInternalChatRequestHeaders(
+  config: Pick<AppConfig, "host" | "port">,
+  token: string,
+): { authorization: string; host: string } {
+  return {
+    authorization: `Bearer ${token}`,
+    host: getInternalRequestHost(config),
+  };
+}
+
 function getRequestBaseUrl(request: FastifyRequest): string | undefined {
   const forwardedProto = request.headers["x-forwarded-proto"];
   const proto = typeof forwardedProto === "string"
@@ -2686,7 +2706,7 @@ export function registerChatRoutes(
       const response = await app.inject({
         method: "POST",
         url: "/api/chat",
-        headers: { authorization: `Bearer ${token}` },
+        headers: getInternalChatRequestHeaders(config, token),
         payload: {
           ...continuation,
           mode: marker.mode,
@@ -2852,7 +2872,7 @@ export function registerChatRoutes(
         const response = await app.inject({
           method: "POST",
           url: "/api/chat",
-          headers: { authorization: `Bearer ${token}` },
+          headers: getInternalChatRequestHeaders(config, token),
           payload: {
             content: nextMessage.content,
             sessionId,
@@ -2943,7 +2963,7 @@ export function registerChatRoutes(
       await app.inject({
         method: "POST",
         url: "/api/chat",
-        headers: { authorization: `Bearer ${token}` },
+        headers: getInternalChatRequestHeaders(config, token),
         payload: buildBackgroundCommandContinuationPayload({
           sessionId: result.sessionId,
           notification: note,

@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 import type { SchedulerService } from "../scheduler/service.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 function normalizeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -56,11 +57,18 @@ export function createCronListTool(scheduler: SchedulerService): ToolDefinition 
     category: "scheduler",
     source: "builtin",
     parameters: { type: "object", properties: {} },
-    execute: async (_input, context): Promise<ToolResult> => ({
-      ok: true,
-      message: "Cron jobs",
-      data: { jobs: scheduler.list(context.userId) },
-    }),
+    execute: async (_input, context): Promise<ToolResult> => {
+      const jobs = scheduler.list(context.userId);
+      const lines = jobs.map(
+        (job) => `• ${job.name} — "${job.cron}" → ${job.toolName}${job.enabled ? "" : " [disabled]"}`,
+      );
+      return {
+        ok: true,
+        message:
+          `${jobs.length} cron job(s)` + (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
+        data: { jobs },
+      };
+    },
   };
 }
 

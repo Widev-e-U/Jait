@@ -15,6 +15,7 @@
 import type { ToolDefinition, ToolCategory } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { toOpenAIName } from "./agent-loop.js";
+import { ellipsizeText, formatEllipsedList, summarizeWithPreview } from "./list-preview.js";
 
 // ── tools.list ───────────────────────────────────────────────────────
 
@@ -76,18 +77,25 @@ export function createToolsListTool(registry: ToolRegistry): ToolDefinition<Tool
       }
 
       const lines: string[] = [];
+      const previewLines: string[] = [];
       for (const [cat, items] of grouped) {
         lines.push(`## ${cat}`);
+        previewLines.push(`## ${cat}`);
         for (const t of items) {
           const tierBadge = t.tier === "core" ? " [core]" : t.tier === "external" ? " [external]" : "";
           lines.push(`- **${t.name}**${tierBadge}: ${t.description}`);
+          previewLines.push(`- **${t.name}**${tierBadge}: ${ellipsizeText(t.description)}`);
         }
         lines.push("");
       }
 
+      const summary =
+        `Found ${tools.length} tool(s) across ${grouped.size} category/categories.`;
+      const preview = formatEllipsedList(previewLines, 60);
+
       return {
         ok: true,
-        message: `Found ${tools.length} tool(s) across ${grouped.size} category/categories.`,
+        message: preview ? `${summary}\n${preview}` : summary,
         data: {
           total: tools.length,
           categories: [...grouped.keys()],
@@ -154,7 +162,12 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
 
       return {
         ok: true,
-        message: `Found ${ranked.length} tool(s) matching "${input.query}". You can now call these tools directly.`,
+        message: summarizeWithPreview(
+          `Found ${ranked.length} tool(s) matching "${input.query}". You can now call these tools directly.`,
+          schemas.map((schema) =>
+            `• **${schema.name}** (score ${schema.score}): ${ellipsizeText(schema.description)}`,
+          ),
+        ),
         data: { matches: schemas },
       };
     },

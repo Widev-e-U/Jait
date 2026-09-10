@@ -84,13 +84,13 @@ beforeAll(async () => {
 }, 30_000)
 
 describe('shouldShowToolTerminalSlice', () => {
-  it('uses the frozen transcript after a bounded command completes', () => {
+  it('keeps a completed bounded command in the actual terminal renderer', () => {
     expect(shouldShowToolTerminalSlice({
       hasTerminal: true,
       outputOffset: 12,
       outputEndOffset: 18,
       activeOrWaiting: false,
-    })).toBe(false)
+    })).toBe(true)
   })
 
   it('keeps an active command in the live terminal renderer', () => {
@@ -102,13 +102,13 @@ describe('shouldShowToolTerminalSlice', () => {
     })).toBe(true)
   })
 
-  it('freezes immediately when terminal completion arrives before tool completion', () => {
+  it('keeps the actual terminal renderer when terminal completion arrives before tool completion', () => {
     expect(shouldShowToolTerminalSlice({
       hasTerminal: true,
       outputOffset: 12,
       outputEndOffset: 18,
       activeOrWaiting: true,
-    })).toBe(false)
+    })).toBe(true)
   })
 })
 

@@ -2897,8 +2897,7 @@ export function shouldShowToolTerminalSlice(options: {
 }): boolean {
   return options.hasTerminal
     && options.outputOffset !== null
-    && options.outputEndOffset === null
-    && options.activeOrWaiting
+    && (options.outputEndOffset !== null || options.activeOrWaiting)
 }
 
 export function isTerminalCreationCall(call: ToolCallInfo): boolean {

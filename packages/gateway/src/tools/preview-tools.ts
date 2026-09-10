@@ -2,6 +2,17 @@ import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 import type { PreviewService } from "../services/preview.js";
+import { ellipsizeText, formatEllipsedList } from "./list-preview.js";
+
+const shortenUrl = (url: string | undefined): string => {
+  if (!url) return "unknown";
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}` || parsed.host;
+  } catch {
+    return ellipsizeText(url, 60);
+  }
+};
 
 interface DevPreviewPanelState {
   open: boolean;
@@ -331,9 +342,14 @@ export function createPreviewLogsTool(
       );
       const consoleEntries = browserEvents.filter((e) => e.type === "console");
 
+      const logLines = logs
+        .slice(-6)
+        .map((entry) => `[${entry.stream}] ${entry.text}`);
       return {
         ok: true,
-        message: `${logs.length} log entries, ${consoleEntries.length} console messages, ${errors.length} browser errors`,
+        message:
+          `${logs.length} log entries, ${consoleEntries.length} console messages, ${errors.length} browser errors` +
+          (logLines.length ? `\nRecent logs:\n${formatEllipsedList(logLines)}` : ""),
         data: {
           logs: logs.slice(-100),
           console: consoleEntries.slice(-50),
@@ -388,10 +404,24 @@ export function createPreviewInspectTool(
       const errorCount = result.browserEvents.filter((e) =>
         e.type === "pageerror" || e.type === "requestfailed" || (e.type === "response" && (e.status ?? 0) >= 400),
       ).length;
+      const eventLines = result.browserEvents
+        .slice(-6)
+        .reverse()
+        .map((event) => {
+          const detail =
+            event.type === "response"
+              ? `${event.method ?? "GET"} ${event.status ?? 0} ${shortenUrl(event.url)}`
+              : event.type === "requestfailed"
+                ? `${event.method ?? "GET"} ${shortenUrl(event.url)}`
+                : ellipsizeText(event.text ?? "", 80);
+          return `• [${event.type}${event.level ? `/${event.level}` : ""}] ${detail}`;
+        });
 
       return {
         ok: true,
-        message: `Preview ${result.status} at ${result.url ?? "unknown"} — ${result.browserEvents.length} events, ${errorCount} errors${result.metrics ? ", metrics included" : ""}${result.screenshot ? ", screenshot included" : ""}`,
+        message:
+          `Preview ${result.status} at ${result.url ?? "unknown"} — ${result.browserEvents.length} events, ${errorCount} errors${result.metrics ? ", metrics included" : ""}${result.screenshot ? ", screenshot included" : ""}` +
+          (eventLines.length ? `\nRecent events:\n${formatEllipsedList(eventLines)}` : ""),
         data: { browserId, ...result },
       };
     },

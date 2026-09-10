@@ -15,6 +15,7 @@
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import { getFs } from "./get-fs.js";
+import { formatEllipsedList } from "../list-preview.js";
 
 /**
  * Hard cap on lines returned in a single read. Raised well above Copilot's
@@ -95,7 +96,9 @@ export function createReadTool(registry: SurfaceRegistry): ToolDefinition<ReadIn
           });
           return {
             ok: true,
-            message: `Directory ${input.path} — ${formatted.length} entries`,
+            message:
+              `Directory ${input.path} — ${formatted.length} entries` +
+              (formatted.length ? `:\n${formatEllipsedList(formatted.map((n) => `• ${n}`))}` : ""),
             data: { path: input.path, type: "directory", entries: formatted },
           };
         }

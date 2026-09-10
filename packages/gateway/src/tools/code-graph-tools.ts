@@ -1,6 +1,7 @@
 import type { CodeGraphQueryResult } from "@jait/shared";
 import type { CodeGraphService } from "../services/code-graph/code-graphs.js";
 import type { ToolDefinition } from "./contracts.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 interface CodeGraphIndexInput {}
 
@@ -98,9 +99,13 @@ export function createCodeGraphTools(service: CodeGraphService): ToolDefinition[
           maxNodes: input.maxNodes,
           maxDepth: input.maxDepth,
         });
+        const topNodes = [...result.nodes].sort((a, b) => b.degree - a.degree).slice(0, 8);
+        const nodeLines = topNodes.map((node) => `• ${node.label} (${node.type})`);
         return {
           ok: true,
-          message: `Retrieved ${result.nodes.length} nodes and ${result.edges.length} relationships.`,
+          message:
+            `Retrieved ${result.nodes.length} nodes and ${result.edges.length} relationships.` +
+            (nodeLines.length ? `\nTop nodes:\n${formatEllipsedList(nodeLines)}` : ""),
           data: result,
         };
       } catch (error) {
@@ -149,9 +154,10 @@ export function createCodeGraphTools(service: CodeGraphService): ToolDefinition[
         if (!result) {
           return { ok: false, message: "No code graph path found." };
         }
+        const pathLine = result.nodes.map((node) => node.label).join(" → ");
         return {
           ok: true,
-          message: `Found a ${result.edges.length}-hop path.`,
+          message: `Found a ${result.edges.length}-hop path: ${pathLine}`,
           data: result,
         };
       } catch (error) {

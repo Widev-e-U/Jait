@@ -1,4 +1,5 @@
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 // ---------------------------------------------------------------------------
 // Home Assistant tools — talk to a Home Assistant instance over its REST API.
@@ -133,9 +134,15 @@ export function createHomeAssistantStatesTool(): ToolDefinition<StatesInput> {
           };
         }
         const all = Array.isArray(res.data) ? res.data : [];
+        const lines = all
+          .map((e) => (e as { entity_id?: string; state?: string }) as { entity_id?: string; state?: string })
+          .filter((e) => typeof e.entity_id === "string")
+          .map((e) => `• ${e.entity_id}${e.state !== undefined ? ` = ${e.state}` : ""}`);
         return {
           ok: true,
-          message: `Fetched ${all.length} entities from Home Assistant.`,
+          message:
+            `Fetched ${all.length} entities from Home Assistant` +
+            (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
           data: all,
         };
       } catch (err) {

@@ -29,6 +29,8 @@ interface ProgressiveNavProps {
   availableWidth: number
   /** Ref attached to the live nav element so the parent can measure its start position. */
   navRef?: React.RefObject<HTMLElement | null>
+  /** Marks the empty flex area as draggable in the frameless Tauri window. */
+  tauriDragRegion?: boolean
   className?: string
   style?: React.CSSProperties
 }
@@ -72,7 +74,7 @@ export function computeVisibleCount(itemEnds: number[], availableWidth: number):
  * visible; items are moved into the menu one at a time instead of collapsing
  * all at once.
  */
-export function ProgressiveNav({ items, availableWidth, navRef, className, style }: ProgressiveNavProps) {
+export function ProgressiveNav({ items, availableWidth, navRef, tauriDragRegion, className, style }: ProgressiveNavProps) {
   // Hidden off-screen container that lays out every item so we can measure each
   // button's end position (accounting for the same gap as the live nav).
   const measureRef = useRef<HTMLDivElement>(null)
@@ -105,7 +107,11 @@ export function ProgressiveNav({ items, availableWidth, navRef, className, style
   const overflowItems = items.slice(visibleCount)
 
   return (
-    <div className={cn('flex min-w-0 items-center gap-1', className)} style={style}>
+    <div
+      className={cn('flex min-w-0 items-center gap-1', className)}
+      data-tauri-drag-region={tauriDragRegion || undefined}
+      style={style}
+    >
       {/* Live nav — only the items that fit are rendered inline. */}
       <nav ref={navRef} className="flex min-w-0 items-center gap-1 overflow-hidden">
         {visibleItems.map((item) => (

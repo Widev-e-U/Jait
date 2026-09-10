@@ -404,7 +404,16 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               return { ok: false, message: "Scheduler not available." };
             }
             const jobs = deps.scheduler.list(context.userId);
-            return { ok: true, message: `${jobs.length} cron jobs`, data: { jobs } };
+            return {
+              ok: true,
+              message: summarizeWithPreview(
+                `${jobs.length} cron job(s):`,
+                jobs.map((job) =>
+                  `• ${job.name ?? job.id} — "${job.cron}" → ${job.toolName}${job.enabled ? "" : " (disabled)"}`,
+                ),
+              ),
+              data: { jobs },
+            };
           }
 
           case "cron.update": {
@@ -454,9 +463,20 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             const enabledJobs = jobs.filter((j: any) => j.enabled).length;
             const hookEventTypes = deps.hooks?.registeredEventTypes() ?? [];
 
+            const summary =
+              `Gateway status — ${sessions} active session(s), ${surfaces} surface(s), ` +
+              `${devices} device(s), ${enabledJobs}/${jobs.length} cron job(s) enabled, ` +
+              `${hookEventTypes.length} hook event type(s).`;
+            const previewLines = [
+              ...jobs
+                .filter((j: any) => j.enabled)
+                .map((j: any) => `• cron: ${j.name ?? j.id} — "${j.cron}" → ${j.toolName}`),
+              ...hookEventTypes.map((type: string) => `• hook event: ${type}`),
+            ];
+
             return {
               ok: true,
-              message: "Gateway status",
+              message: summarizeWithPreview(summary, previewLines, 12),
               data: {
                 healthy: true,
                 uptime: Math.floor((Date.now() - (deps.startedAt ?? Date.now())) / 1000),

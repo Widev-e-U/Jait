@@ -3,16 +3,28 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 describe('AppHeader manager model control', () => {
-  it('shows the shared model selector in the header for manager mode', () => {
+  it('does not show the provider/model selector in the header', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./app-header.tsx', import.meta.url)),
       'utf8',
     )
 
-    expect(source).toContain("viewMode === 'manager'")
-    expect(source).toContain('<ProviderModelSelector')
-    expect(source).toContain('model={cliModel}')
-    expect(source).toContain('onModelChange={onCliModelChange}')
+    expect(source).not.toContain('<ProviderModelSelector')
+    expect(source).not.toContain('ProviderModelSelector')
+  })
+
+  it('keeps the empty navigation area draggable in Tauri', () => {
+    const headerSource = readFileSync(
+      fileURLToPath(new URL('./app-header.tsx', import.meta.url)),
+      'utf8',
+    )
+    const navSource = readFileSync(
+      fileURLToPath(new URL('./progressive-nav.tsx', import.meta.url)),
+      'utf8',
+    )
+
+    expect(headerSource).toContain("tauriDragRegion={desktopRuntime === 'tauri'}")
+    expect(navSource).toContain('data-tauri-drag-region={tauriDragRegion || undefined}')
   })
 
   it('shows an avatar skeleton while authentication is loading', () => {

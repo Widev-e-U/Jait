@@ -4,6 +4,7 @@
 import type { EmailService } from "../services/email/index.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+import { ellipsizeText, formatEllipsedList } from "./list-preview.js";
 
 function userId(context: ToolContext): string | null {
   return context.userId ?? null;
@@ -55,9 +56,17 @@ export function createEmailListTool(email: EmailService): ToolDefinition<ListInp
           query: input?.query,
           limit: input?.limit,
         });
+        const lines = messages.map((message) => {
+          const when = message.date.includes("T") ? message.date.slice(0, 16).replace("T", " ") : message.date;
+          const flags =
+            (message.unread ? " [unread]" : "") + (message.hasAttachments ? " [attachments]" : "");
+          return `• ${when} — ${message.from}: ${ellipsizeText(message.subject || message.snippet)}${flags}`;
+        });
         return {
           ok: true,
-          message: `${messages.length} message(s) from ${account.email}.`,
+          message:
+            `${messages.length} message(s) from ${account.email}` +
+            (lines.length ? `:\n${formatEllipsedList(lines, 15)}` : "."),
           data: { account: { id: account.id, email: account.email, provider: account.provider }, messages },
         };
       } catch (err) {

@@ -23,7 +23,6 @@ import {
 import { toast } from 'sonner'
 
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
-import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import { ProgressiveNav, type ProgressiveNavItem } from '@/components/app-shell/progressive-nav'
 import { JaitIcon } from '@/components/icons/model-icons'
@@ -44,14 +43,11 @@ import { PatchNotesTooltip } from '@/components/settings/PatchNotesTooltip'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
-import type { ProviderId } from '@/lib/agents-api'
 
 interface AppHeaderProps {
   activeManagerThreads: any
   appPlatform: any
   automation: any
-  chatProvider: ProviderId
-  cliModel: string | null
   closeScreenSharePanel: any
   currentView: any
   desktopPlatform: any
@@ -64,8 +60,6 @@ interface AppHeaderProps {
   isElectron: any
   isMaximized: any
   isMobile: any
-  onCliModelChange: (model: string | null) => void
-  onProviderChange: (provider: ProviderId) => void
   onOpenMobileNav: any
   openScreenSharePanel: any
   remainingPrompts: any
@@ -97,8 +91,6 @@ export function AppHeader(props: AppHeaderProps) {
     activeManagerThreads,
     appPlatform,
     automation,
-    chatProvider,
-    cliModel,
     closeScreenSharePanel,
     currentView,
     desktopPlatform,
@@ -111,8 +103,6 @@ export function AppHeader(props: AppHeaderProps) {
     isElectron,
     isMaximized,
     isMobile,
-    onCliModelChange,
-    onProviderChange,
     onOpenMobileNav,
     openScreenSharePanel,
     remainingPrompts,
@@ -254,6 +244,7 @@ export function AppHeader(props: AppHeaderProps) {
               items={navItems}
               availableWidth={navAvailableWidth}
               navRef={navRef}
+              tauriDragRegion={desktopRuntime === 'tauri'}
               className="flex-1"
             />
           )}
@@ -278,16 +269,6 @@ export function AppHeader(props: AppHeaderProps) {
 
           {/* Right: Context + Model + Account */}
           <div ref={rightRef} className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            {currentView === 'chat' && viewMode === 'manager' && (
-              <ProviderModelSelector
-                provider={chatProvider}
-                model={cliModel}
-                onProviderChange={onProviderChange}
-                onModelChange={onCliModelChange}
-                compact={isMobile}
-                className="shrink-0"
-              />
-            )}
 
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">

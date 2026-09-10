@@ -10,6 +10,7 @@
 import type { ToolDefinition } from "./contracts.js";
 import type { SkillRegistry } from "../skills/index.js";
 import { checkSkillTools } from "../skills/index.js";
+import { ellipsizeText, formatEllipsedList } from "./list-preview.js";
 import {
   installClawHubSkill,
   uninstallClawHubSkill,
@@ -115,9 +116,15 @@ export function createSkillsManageTool(deps: SkillsManageDeps): ToolDefinition<S
                 ...(tools.missing.length ? { missingTools: tools.missing } : {}),
               };
             });
+            const lines = skills.map(
+              (s) =>
+                `• ${s.name} (${s.id})${s.enabled ? "" : " [disabled]"}${s.toolsSatisfied ? "" : " [missing tools]"} — ${ellipsizeText(s.description, 90)}`,
+            );
             return {
               ok: true,
-              message: `${skills.length} skill(s) installed, ${skills.filter((s) => s.enabled).length} enabled.`,
+              message:
+                `${skills.length} skill(s) installed, ${skills.filter((s) => s.enabled).length} enabled` +
+                (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
               data: { skills },
             };
           }
@@ -133,7 +140,15 @@ export function createSkillsManageTool(deps: SkillsManageDeps): ToolDefinition<S
                 summary: r.summary ?? undefined,
                 installed: installed.has(r.slug ?? ""),
               }));
-            return { ok: true, message: `Found ${results.length} skill(s) on ClawHub.`, data: { results } };
+            const lines = results.map(
+              (r) =>
+                `• ${r.name} (${r.slug ?? "?"})${r.installed ? " [installed]" : ""}${r.summary ? ` — ${ellipsizeText(r.summary, 90)}` : ""}`,
+            );
+            return {
+              ok: true,
+              message: `Found ${results.length} skill(s) on ClawHub` + (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
+              data: { results },
+            };
           }
 
           case "install": {
@@ -262,13 +277,29 @@ export function createExtensionsManageTool(deps: ExtensionsManageDeps): ToolDefi
               status: p.status,
               ...(p.error ? { error: p.error } : {}),
             }));
-            return { ok: true, message: `${plugins.length} extension(s) installed.`, data: { plugins } };
+            const lines = plugins.map(
+              (p) => `• ${p.displayName || p.id}${p.version ? ` v${p.version}` : ""}${p.status === "disabled" || p.status === "error" ? ` [${p.status}]` : ""}`,
+            );
+            return {
+              ok: true,
+              message:
+                `${plugins.length} extension(s) installed` + (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
+              data: { plugins },
+            };
           }
 
           case "scan": {
             await pluginManager.syncAndLoad();
             const plugins = pluginManager.listInstalled();
-            return { ok: true, message: `Scan complete — ${plugins.length} extension(s) known.`, data: { plugins } };
+            const lines = plugins.map(
+              (p) => `• ${p.displayName || p.id}${p.version ? ` v${p.version}` : ""}${p.status === "disabled" || p.status === "error" ? ` [${p.status}]` : ""}`,
+            );
+            return {
+              ok: true,
+              message:
+                `Scan complete — ${plugins.length} extension(s) known` + (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
+              data: { plugins },
+            };
           }
 
           case "enable": {
@@ -295,7 +326,16 @@ export function createExtensionsManageTool(deps: ExtensionsManageDeps): ToolDefi
           case "search": {
             if (!clawhub) return { ok: false, message: "ClawHub marketplace is not available." };
             const items = await clawhub.listPackages({ limit: Math.min(input.limit ?? 25, 100) });
-            return { ok: true, message: `Found ${items.length} plugin(s) on ClawHub.`, data: { items } };
+            const lines = items.map(
+              (item) =>
+                `• ${item.displayName || item.name || "?"}${item.version ? ` v${item.version}` : ""}${item.type ? ` [${item.type}]` : ""}${item.description ? ` — ${ellipsizeText(item.description, 90)}` : ""}`,
+            );
+            return {
+              ok: true,
+              message:
+                `Found ${items.length} plugin(s) on ClawHub` + (lines.length ? `:\n${formatEllipsedList(lines, 25)}` : "."),
+              data: { items },
+            };
           }
 
           default:

@@ -41,7 +41,8 @@ describe("session.search tool", () => {
     }, context);
 
     expect(response.ok).toBe(true);
-    expect(response.message).toBe("Found 1 prior conversation result(s)");
+    expect(response.message).toContain("Found 1 prior conversation result(s)");
+    expect(response.message).toContain("• [chat \"session-1\"] [Prior] context");
     expect(response.data).toEqual({ results: [result] });
     expect(received).toEqual({
       query: "prior context",

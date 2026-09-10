@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { getFs } from "./core/get-fs.js";
+import { formatEllipsedList } from "./list-preview.js";
 import { basename } from "node:path";
 
 interface FileReadInput {
@@ -161,9 +162,17 @@ export function createFileListTool(registry: SurfaceRegistry): ToolDefinition<Fi
       try {
         const fs = await getFs(registry, context, input.path);
         const entries = await fs.list(input.path);
+        const lines = (entries as Array<unknown>).map((e) => {
+          if (typeof e === "string") return `• ${e}`;
+          const obj = e as { name?: string; isDirectory?: boolean };
+          if (obj?.name) return `• ${obj.name}${obj.isDirectory ? "/" : ""}`;
+          return `• ${String(e)}`;
+        });
         return {
           ok: true,
-          message: `Listed ${entries.length} entries in ${input.path}`,
+          message:
+            `Listed ${entries.length} entries in ${input.path}` +
+            (lines.length ? `:\n${formatEllipsedList(lines)}` : "."),
           data: { path: input.path, entries },
         };
       } catch (err) {

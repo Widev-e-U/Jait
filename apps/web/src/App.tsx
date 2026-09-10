@@ -4841,8 +4841,6 @@ function App() {
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
-              chatProvider={viewMode === 'manager' ? managerProvider : chatProvider}
-              cliModel={viewMode === 'manager' ? managerCliModel : cliModel}
               closeScreenSharePanel={closeScreenSharePanel}
               currentView={currentView}
               desktopPlatform={desktopPlatform}
@@ -4855,8 +4853,6 @@ function App() {
               isElectron={isElectron}
               isMaximized={isMaximized}
               isMobile={isMobile}
-              onCliModelChange={viewMode === 'manager' ? handleManagerCliModelChange : handleCliModelChange}
-              onProviderChange={viewMode === 'manager' ? handleManagerProviderChange : handleChatProviderChange}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
               openScreenSharePanel={openScreenSharePanel}
               remainingPrompts={remainingPrompts}
@@ -5457,6 +5453,10 @@ function App() {
                       }}
                       onArchiveSession={(sessionId) => {
                         void handleArchiveSession(sessionId)
+                      }}
+                      onOpenSessionInPanel={(sessionId, projectId) => {
+                        setShowMobileToolbar(false)
+                        handleOpenSessionInPanel(sessionId, projectId)
                       }}
                       onMoveSession={(sessionId, projectId) => {
                         void moveSession(sessionId, projectId)

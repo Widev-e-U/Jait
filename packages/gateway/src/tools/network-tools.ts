@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 import { scanNetwork } from "../lib/network-scan.js";
+import { formatEllipsedList } from "./list-preview.js";
 
 // ---------------------------------------------------------------------------
 // Shared scan result cache — accessible from network routes too
@@ -127,10 +128,18 @@ export function createNetworkScanTool(): ToolDefinition {
 
         const gatewayCount = result.hosts.filter((host) => host.agentStatus === "running").length;
         const sshCount = result.hosts.filter((host) => host.sshReachable).length;
-
+        const hostLines = result.hosts
+          .slice(0, 10)
+          .map((host) => {
+            const name = host.hostname ? ` (${host.hostname})` : "";
+            const tags = host.agentStatus === "running" ? " · gateway" : host.sshReachable ? " · ssh" : "";
+            return `• ${host.ip}${name}${tags}`;
+          });
         return {
           ok: true,
-          message: `Network scan complete: ${result.hosts.length} hosts found (${sshCount} with SSH, ${gatewayCount} running Jait Gateway)`,
+          message:
+            `Network scan complete: ${result.hosts.length} hosts found (${sshCount} with SSH, ${gatewayCount} running Jait Gateway)` +
+            (hostLines.length ? `\nHosts:\n${formatEllipsedList(hostLines)}` : ""),
           data: result,
         };
       } catch (err) {
