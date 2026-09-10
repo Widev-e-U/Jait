@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.838](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.838) — 2026-09-10
+- feat(web): unify panel chat composer and fix floating indicator overlap — 612769b5
+
 ## [v0.1.837](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.837) — 2026-09-10
 - feat(web): make workspace panels consistent — 301eae20
 - fix(web): freeze tool terminal transcript once a bounded command completes — ab48b2ef
