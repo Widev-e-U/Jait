@@ -42,6 +42,7 @@ interface DeveloperSidebarsProps {
   showArchitecture: boolean
   showDebugPanel: boolean
   showProject: boolean
+  showProjectEditor: boolean
   showSidebar: boolean
   sidebarView: DeveloperSidebarView
   showTerminal: boolean
@@ -49,6 +50,7 @@ interface DeveloperSidebarsProps {
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
   onArchiveSession: (sessionId: string) => void
+  onOpenSessionInPanel: (sessionId: string, projectId: string | null) => void
   onMoveSession: (sessionId: string, projectId: string | null) => void
   onSearchProjects: (query: string) => Promise<ProjectRecord[]>
   onBlur: (event: FocusEvent<HTMLElement>) => void
@@ -94,6 +96,7 @@ export function DeveloperSidebars({
   showArchitecture,
   showDebugPanel,
   showProject,
+  showProjectEditor,
   showSidebar,
   sidebarView,
   showTerminal,
@@ -101,6 +104,7 @@ export function DeveloperSidebars({
   sidebarRef,
   onAssignRepository,
   onArchiveSession,
+  onOpenSessionInPanel,
   onMoveSession,
   onSearchProjects,
   onBlur,
@@ -214,12 +218,12 @@ export function DeveloperSidebars({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showProject ? 'secondary' : 'ghost'}
+                    variant={showProject && showProjectEditor ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-9 w-9 rounded-md p-0"
                     onClick={onToggleEditor}
                     aria-label="Editor"
-                    aria-pressed={showProject}
+                    aria-pressed={showProject && showProjectEditor}
                   >
                     <Code className="h-4 w-4" />
                   </Button>
@@ -309,6 +313,7 @@ export function DeveloperSidebars({
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
               onArchiveSession={onArchiveSession}
+              onOpenSessionInPanel={onOpenSessionInPanel}
               onMoveSession={onMoveSession}
               onSearchProjects={onSearchProjects}
               onNewPersonalSession={onCreatePersonalSession}

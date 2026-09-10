@@ -208,7 +208,15 @@ export function AppHeader(props: AppHeaderProps) {
               }
               data-tauri-drag-region={desktopRuntime === 'tauri' || undefined}
               style={isElectron ? {
-                WebkitAppRegion: 'drag',
+                // `WebkitAppRegion` is Electron's drag-region property. The
+                // Tauri shell also exposes `jaitDesktop`, so `isElectron` is
+                // true under Tauri too — but WebView2 doesn't honor
+                // app-region, and the Tauri header drags via the
+                // `data-tauri-drag-region` attribute above instead. Keep the
+                // style Electron-only so the two drag mechanisms don't
+                // compete on the same mousedown (a frame of hitch at drag
+                // start).
+                WebkitAppRegion: desktopRuntime === 'electron' ? 'drag' : undefined,
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
                 // Reserve the right edge for the caption-button strip: the
                 // native titleBarOverlay on Electron Windows, the custom

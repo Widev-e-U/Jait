@@ -20,6 +20,7 @@ import { getNextDeveloperSidebarState, type DeveloperSidebarView } from '@/lib/d
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
 import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
+import { appendSecondaryChatPanel, MAX_SECONDARY_CHAT_PANELS } from '@/lib/secondary-chat-panels'
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
@@ -221,9 +222,9 @@ type SavedQueuedMessage = QueuedChatMessage & {
 type SavedQueuedThreadMessages = Record<string, ManagerQueuedMessage[]>
 
 interface ParallelChatState {
-  parentSessionId: string
+  parentSessionId?: string
   session: ProjectSession
-  initialPrompt: ParallelChatPrompt
+  initialPrompt?: ParallelChatPrompt
   provider: ProviderId
   runtimeMode?: RuntimeMode
   responseStyle: ResponseStyle
@@ -270,7 +271,17 @@ function App() {
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
   const showProjectRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
-  const [parallelChat, setParallelChat] = useState<ParallelChatState | null>(null)
+  const [parallelChats, setParallelChats] = useState<ParallelChatState[]>([])
+  const openSecondaryChatPanel = useCallback((panel: ParallelChatState) => {
+    setParallelChats((current) => {
+      if (current.some((entry) => entry.session.id === panel.session.id)) return current
+      if (current.length >= MAX_SECONDARY_CHAT_PANELS) {
+        queueMicrotask(() => toast.info('You can open up to three chat panels.'))
+        return current
+      }
+      return appendSecondaryChatPanel(current, panel)
+    })
+  }, [])
   const projectRestoreRef = useRef<(() => void) | null>(null)
   const closeProjectPanelRef = useRef<(() => void) | null>(null)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
@@ -577,12 +588,6 @@ function App() {
     onLoginRequired
   )
   fetchProjectsRef.current = fetchProjects
-
-  useEffect(() => {
-    setParallelChat((current) => (
-      current && current.parentSessionId !== activeSessionId ? null : current
-    ))
-  }, [activeSessionId])
 
   // "Open with Jait" on a folder: adopt the project that already owns that
   // directory, or create one, and select it. Gated on the token because the
@@ -2173,8 +2178,8 @@ function App() {
 
   useEffect(() => {
     if (!activeProjectId || !projectStateReady || loadingProjectUI) return
-    setProjectEditorModeActive(activeProjectId, showProject)
-  }, [activeProjectId, loadingProjectUI, projectStateReady, setProjectEditorModeActive, showProject])
+    setProjectEditorModeActive(activeProjectId, showProject && showProjectEditor)
+  }, [activeProjectId, loadingProjectUI, projectStateReady, setProjectEditorModeActive, showProject, showProjectEditor])
 
   const prevProjectPanelPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -2669,6 +2674,9 @@ function App() {
     // an explicit sessionId (e.g. picked from the sidebar's recent-sessions
     // list) wins over the project's most-recently-active session.
     const nextSessionId = sessionId ?? getLatestProjectSessionId(project)
+    if (nextSessionId) {
+      setParallelChats((current) => current.filter((entry) => entry.session.id !== nextSessionId))
+    }
     const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
     const cachedProjectProvider = readProjectProviderSelection(projectId)
@@ -2767,11 +2775,38 @@ function App() {
     const session = knownSession ?? ( await loadSession(sessionId))
     if (!session || session.projectId) return
     if (isMobile) handleMobileChatClick()
+    setParallelChats((current) => current.filter((entry) => entry.session.id !== sessionId))
     switchSession(null, sessionId)
   }, [handleMobileChatClick, isMobile, loadSession, personalSessions, switchSession],)
 
+  const handleOpenSessionInPanel = useCallback(async (sessionId: string, projectId: string | null) => {
+    if (sessionId === activeSessionId) {
+      toast.info('This chat is already open in the main panel.')
+      return
+    }
+
+    const knownSession = projectId
+      ? projects.find((project) => project.id === projectId)?.sessions.find((session) => session.id === sessionId)
+      : personalSessions.find((session) => session.id === sessionId)
+    const session = knownSession ?? (await loadSession(sessionId))
+    if (!session) {
+      toast.error('Failed to open chat panel.')
+      return
+    }
+
+    openSecondaryChatPanel({
+      session,
+      provider: chatProvider,
+      runtimeMode: chatProviderRuntimeMode,
+      responseStyle: chatResponseStyle,
+      model: cliModel,
+      reasoningEffort: chatReasoningEffort,
+    })
+  }, [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, loadSession, openSecondaryChatPanel, personalSessions, projects])
+
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
     if (isMobile) handleMobileChatClick()
+    setParallelChats((current) => current.filter((entry) => entry.session.id !== sessionId))
     if (projectId === activeProjectId) {
       if (sessionId === activeSessionId) return
       // If the project's editor surface isn't open yet (e.g. right after a
@@ -2983,6 +3018,21 @@ function App() {
   }, [ensureProjectReadyForSidebarAction, openArchitectureInProject, showArchitecture])
 
   const handleToggleEditor = useCallback(async () => {
+    if (showProject && !isMobile) {
+      if (!showProjectEditor) {
+        showProjectEditorPanel()
+        return
+      }
+
+      closeDevPreviewPanel()
+      projectRef.current?.closeArchitectureTab()
+      setArchitectureRequest(null)
+      setShowArchitecture(false)
+      setShowProjectEditor(false)
+      if (!(showProjectTree && showSidebar && sidebarView !== 'projects')) closeProjectPanel()
+      return
+    }
+
     if (showProject) {
       closeProjectPanel()
       return
@@ -3006,7 +3056,7 @@ function App() {
           setShowProject(true)
           if (isMobile) showMobileProjectEditorTab()
           else {
-            applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
+            applyProjectLayout({ tree: false, editor: true }, { immediateSync: true })
           }
           const state = { open: true, remotePath: currentActiveProject!.projectRoot, surfaceId: currentActiveProject!.surfaceId, nodeId: currentActiveProject!.nodeId, }
           setSavedProject(state)
@@ -3029,7 +3079,7 @@ function App() {
       setShowProject(true)
       if (isMobile) showMobileProjectEditorTab()
       else {
-        applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
+        applyProjectLayout({ tree: false, editor: true }, { immediateSync: true })
       }
       const state = { open: true, remotePath: currentActiveProject.projectRoot, surfaceId: currentActiveProject.surfaceId, nodeId: currentActiveProject.nodeId, }
       setSavedProject(state)
@@ -3154,6 +3204,12 @@ function App() {
     setFolderPickerOpen(true)
   }, [
     showProject,
+    showProjectEditor,
+    showProjectTree,
+    showProjectEditorPanel,
+    showSidebar,
+    sidebarView,
+    closeDevPreviewPanel,
     activeProject,
     activeProjectRecord,
     closeProjectPanel,
@@ -3182,14 +3238,21 @@ function App() {
       // workspace was closed, this click is an open request rather than a
       // request to toggle the remembered sidebar selection off.
       setShowProjectTree(true)
+      setShowProjectEditor(false)
       setMobileTreeTab(requestedView)
       setSidebarView(requestedView)
       setShowSidebar(true)
       return
     }
 
+    if (requestedView !== 'projects' && showProject && !showProjectEditor && showSidebar && sidebarView === requestedView) {
+      handleSelectDeveloperSidebarView(requestedView)
+      closeProjectPanel()
+      return
+    }
+
     handleSelectDeveloperSidebarView(requestedView)
-  }, [handleSelectDeveloperSidebarView, handleToggleEditor, showProject])
+  }, [closeProjectPanel, handleSelectDeveloperSidebarView, handleToggleEditor, showProject, showProjectEditor, showSidebar, sidebarView])
 
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
@@ -3705,6 +3768,10 @@ function App() {
     (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => {
       void (async () => {
         if (!activeSessionId) return
+        if (parallelChats.length >= MAX_SECONDARY_CHAT_PANELS) {
+          toast.info('You can open up to three chat panels.')
+          return
+        }
         const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, segments)
         if (!prepared && (!attachments || attachments.length === 0)) return
         const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
@@ -3714,7 +3781,7 @@ function App() {
         if (!branch) throw new Error('Failed to create question branch')
         setInputValue('')
         setInputSegments(undefined)
-        setParallelChat({
+        openSecondaryChatPanel({
           parentSessionId: activeSessionId,
           session: branch,
           initialPrompt: {
@@ -3734,7 +3801,7 @@ function App() {
         toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
       })
     },
-    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, forkSession, preparePromptSubmission, setInputSegments, setInputValue],
+    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, forkSession, openSecondaryChatPanel, parallelChats.length, preparePromptSubmission, setInputSegments, setInputValue],
   )
 
   const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
@@ -3954,6 +4021,10 @@ function App() {
 
   const steerQueuedChatMessage = useCallback(
     (id: string) => {
+      if (parallelChats.length >= MAX_SECONDARY_CHAT_PANELS) {
+        toast.info('You can open up to three chat panels.')
+        return
+      }
       const item = messageQueue.find((queued) => queued.id === id)
       if (!item || !activeSessionId) return
       if (!isLoading) {
@@ -3998,7 +4069,7 @@ function App() {
         const branch = await forkSession(activeSessionId)
         if (!branch) throw new Error('Failed to create question branch')
         dequeueMessage(id)
-        setParallelChat({
+        openSecondaryChatPanel({
           parentSessionId: activeSessionId,
           session: branch,
           initialPrompt: {
@@ -4018,7 +4089,7 @@ function App() {
         toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to open question branch'))
       })
     },
-    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, dequeueMessage, forkSession, messageQueue],
+    [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, dequeueMessage, forkSession, messageQueue, openSecondaryChatPanel, parallelChats.length],
   )
 
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
@@ -4946,6 +5017,7 @@ function App() {
                       showArchitecture={showArchitecture}
                       showDebugPanel={showDebugPanel}
                       showProject={showProject}
+                      showProjectEditor={showProjectEditor}
                       showSidebar={showSidebar}
                       sidebarView={sidebarView}
                       showTerminal={showTerminal}
@@ -4956,6 +5028,9 @@ function App() {
                       }}
                       onArchiveSession={(sessionId) => {
                         void handleArchiveSession(sessionId)
+                      }}
+                      onOpenSessionInPanel={(sessionId, projectId) => {
+                        void handleOpenSessionInPanel(sessionId, projectId)
                       }}
                       onMoveSession={(sessionId, projectId) => {
                         void moveSession(sessionId, projectId)
@@ -5050,7 +5125,10 @@ function App() {
                     terminalViewRef={terminalViewRef}
                     token={token}
                     viewMode={viewMode}
-                    onActiveProjectFileChange={setActiveProjectFileId}
+                    onActiveProjectFileChange={(fileId) => {
+                      setActiveProjectFileId(fileId)
+                      if (fileId) showProjectEditorPanel()
+                    }}
                     onApplyDiff={handleApplyProjectDiff}
                     onArchitectureOpenChange={setShowArchitecture}
                     onArchitectureRenderResult={handleArchitectureRenderResult}
@@ -5285,33 +5363,36 @@ function App() {
                         onVoiceInput={handleVoiceInput}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
-                      {parallelChat && (
-                        <ParallelChatPanel
-                          key={parallelChat.session.id}
-                          session={parallelChat.session}
-                          token={token}
-                          initialPrompt={parallelChat.initialPrompt}
-                          provider={parallelChat.provider}
-                          runtimeMode={parallelChat.runtimeMode}
-                          responseStyle={parallelChat.responseStyle}
-                          model={parallelChat.model}
-                          reasoningEffort={parallelChat.reasoningEffort}
-                          availableFiles={availableFilesForMention}
-                          availableSkills={availableSkills}
-                          projectName={activeProjectDisplayName}
-                          projectPath={activeProjectRoot}
-                          projectNodeId={activeProject?.nodeId ?? activeProjectRecord?.nodeId}
-                          isMobile={isMobile}
-                          onSearchFiles={handleSearchFiles}
-                          onClose={() => setParallelChat(null)}
-                          onOpenAsPrimary={() => {
-                            const branch = parallelChat.session
-                            setParallelChat(null)
-                            setChatMode('ask')
-                            switchSession(branch.projectId, branch.id)
-                          }}
-                        />
-                      )}
+                      {parallelChats.map((parallelChat) => {
+                        const panelProject = projects.find((project) => project.id === parallelChat.session.projectId)
+                        return (
+                          <ParallelChatPanel
+                            key={parallelChat.session.id}
+                            session={parallelChat.session}
+                            token={token}
+                            initialPrompt={parallelChat.initialPrompt}
+                            provider={parallelChat.provider}
+                            runtimeMode={parallelChat.runtimeMode}
+                            responseStyle={parallelChat.responseStyle}
+                            model={parallelChat.model}
+                            reasoningEffort={parallelChat.reasoningEffort}
+                            availableFiles={availableFilesForMention}
+                            availableSkills={availableSkills}
+                            projectName={panelProject?.title}
+                            projectPath={panelProject?.rootPath ?? parallelChat.session.projectPath}
+                            projectNodeId={panelProject?.nodeId}
+                            isMobile={isMobile}
+                            onSearchFiles={handleSearchFiles}
+                            onClose={() => setParallelChats((current) => current.filter((entry) => entry.session.id !== parallelChat.session.id))}
+                            onOpenAsPrimary={() => {
+                              const branch = parallelChat.session
+                              setParallelChats((current) => current.filter((entry) => entry.session.id !== branch.id))
+                              setChatMode('ask')
+                              switchSession(branch.projectId, branch.id)
+                            }}
+                          />
+                        )
+                      })}
                     </>
                   ))}
               </div>

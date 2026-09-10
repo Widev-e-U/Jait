@@ -46,6 +46,7 @@ interface SessionSelectorProps {
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onArchiveSession?: (sessionId: string) => void
+  onOpenSessionInPanel?: (sessionId: string, projectId: string | null) => void
   /** Moves a chat into a project, or back to the personal chats when null. */
   onMoveSession?: (sessionId: string, projectId: string | null) => void
   /** Finds move targets beyond the projects the sidebar has paged in. */
@@ -176,6 +177,7 @@ export function SessionSelector({
   onSelectProjectSession,
   onSelectPersonalSession,
   onArchiveSession,
+  onOpenSessionInPanel,
   onMoveSession,
   onSearchProjects,
   onNewPersonalSession,
@@ -317,11 +319,12 @@ export function SessionSelector({
     return validateProjectMove(projects, draggedId, targetId) === null
   }, [onMoveProject, projects],)
 
-  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession)
+  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel)
 
   const openSessionContextMenu = (x: number, y: number, sessionId: string, projectId: string | null) => {
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
+      showOpenInPanel: Boolean(onOpenSessionInPanel),
       showMoveSection: Boolean(onMoveSession),
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
       showPersonalTarget: projectId !== null,
@@ -1131,6 +1134,7 @@ export function SessionSelector({
               isStreaming={streamingSessionIds?.has(sessionContextMenu.sessionId) ?? false}
               onMoveSession={onMoveSession}
               onArchiveSession={onArchiveSession}
+              onOpenInPanel={onOpenSessionInPanel}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}
             />

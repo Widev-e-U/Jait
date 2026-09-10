@@ -90,6 +90,12 @@ describe('SessionContextMenu', () => {
     expect(markup).not.toContain('Move to project')
     expect(markup).toContain('Archive chat')
   })
+
+  it('offers a separate panel without changing the normal row action', () => {
+    const markup = renderMenu({ onOpenInPanel: () => {} })
+
+    expect(markup).toContain('Open in new panel')
+  })
 })
 
 describe('SessionMoveSubmenu', () => {
@@ -154,6 +160,7 @@ describe('getSessionContextMenuHeight', () => {
 
     expect(getSessionContextMenuHeight({ ...base, showPersonalTarget: true })).toBeGreaterThan(plain)
     expect(getSessionContextMenuHeight({ ...base, showStreamingNote: true })).toBeGreaterThan(plain)
+    expect(getSessionContextMenuHeight({ ...base, showOpenInPanel: true })).toBe(plain + 30)
   })
 
   it('stays compact now that the projects live in a submenu', () => {

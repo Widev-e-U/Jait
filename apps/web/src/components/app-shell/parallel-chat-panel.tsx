@@ -22,7 +22,7 @@ export interface ParallelChatPrompt {
 interface ParallelChatPanelProps {
   session: ProjectSession
   token: string | null
-  initialPrompt: ParallelChatPrompt
+  initialPrompt?: ParallelChatPrompt
   provider: ProviderId
   runtimeMode?: RuntimeMode
   responseStyle: ResponseStyle
@@ -91,7 +91,7 @@ export function ParallelChatPanel({
   }, [model, provider, reasoningEffort, responseStyle, runtimeMode, sendMessage, session.id, token])
 
   useEffect(() => {
-    if (isLoadingHistory || initialPromptSentRef.current) return
+    if (!initialPrompt || isLoadingHistory || initialPromptSentRef.current) return
     initialPromptSentRef.current = true
     void sendPrompt(initialPrompt)
   }, [initialPrompt, isLoadingHistory, sendPrompt])
@@ -128,21 +128,21 @@ export function ParallelChatPanel({
           ? 'absolute inset-0 z-30 flex min-h-0 flex-col bg-background'
           : 'flex min-h-0 w-[min(42vw,560px)] shrink-0 flex-col border-l bg-background'
       }
-      aria-label="Parallel question branch"
+      aria-label="Secondary chat panel"
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <GitBranch className="h-4 w-4 text-primary" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">Question branch</div>
-          <div className="truncate text-[11px] text-muted-foreground">{session.name}</div>
+          <div className="truncate text-sm font-medium">{session.name || 'Untitled chat'}</div>
+          <div className="truncate text-[11px] text-muted-foreground">Secondary chat</div>
         </div>
         <TooltipHint content="Open as primary chat">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenAsPrimary} aria-label="Open as primary chat">
           <Maximize2 className="h-4 w-4" />
         </Button>
         </TooltipHint>
-        <TooltipHint content="Close question branch">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close question branch">
+        <TooltipHint content="Close chat panel">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close chat panel">
           <X className="h-4 w-4" />
         </Button>
         </TooltipHint>
