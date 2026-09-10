@@ -206,7 +206,18 @@ export function createComputerTools(
             data: { session, remote: remote.data },
           };
         } catch (error) {
-          if (session) sessions.stop(session.id);
+          if (session) {
+            sessions.stop(session.id);
+            // A timed-out request may still have an approval dialog open on
+            // the target. Cancel it so a late approval cannot start an orphan.
+            try {
+              await ws.proxyToolOp(session.nodeId, "computer.session",
+                { action: "stop", sessionId: session.id },
+                { sessionId: context.sessionId, timeoutMs: 5_000 });
+            } catch {
+              // Preserve the original failure when the target disconnected.
+            }
+          }
           return failure(error);
         }
       }

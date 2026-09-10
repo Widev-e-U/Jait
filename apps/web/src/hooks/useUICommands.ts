@@ -16,6 +16,7 @@ import {
   TerminalExecutionPayload,
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
+import { desktopOperationError } from '@/lib/desktop-operation-error'
 import { applyTerminalExecutionEvent } from '@/lib/tool-terminal-live'
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
@@ -577,7 +578,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         type: 'provider.op-response',
         payload: {
           requestId,
-          error: err instanceof Error ? err.message : 'Provider operation failed',
+          error: desktopOperationError(err, 'Provider operation failed'),
         },
       }))
     }
@@ -614,7 +615,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         type: 'tool.op-response',
         payload: {
           requestId,
-          error: err instanceof Error ? err.message : 'Tool execution failed',
+          error: desktopOperationError(err, 'Tool execution failed'),
         },
       }))
     }

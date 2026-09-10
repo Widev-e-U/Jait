@@ -153,4 +153,17 @@ describe("computer tools", () => {
     expect(stopped).toEqual({ ok: false, message: "node disconnected" });
     expect(status).toMatchObject({ ok: true, data: { sessions: [] } });
   });
+  it("cancels target startup after a transport timeout", async () => {
+    const { tools, proxyToolOp, sessions } = setup();
+    proxyToolOp.mockRejectedValueOnce(new Error("Tool 'computer.session' timed out"));
+    const result = await tool<Record<string, unknown>>(tools, "computer.session")
+      .execute({ action: "start" }, context);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("timed out") });
+    expect(proxyToolOp).toHaveBeenLastCalledWith(
+      "windows-a", "computer.session", expect.objectContaining({ action: "stop" }),
+      expect.objectContaining({ sessionId: context.sessionId }),
+    );
+    expect(sessions.listForOwner(context.sessionId)).toEqual([]);
+  });
+
 });

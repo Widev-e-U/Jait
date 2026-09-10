@@ -174,12 +174,14 @@ try {
    * travels the full path like a real mouse. Every intermediate position is
    * reported through onGlideFrame so the overlay cursor can mirror the motion.
    */
-  async move(x: number, y: number): Promise<void> {
-    return this.glideTo(x, y);
+  async move(x: number, y: number, signal?: AbortSignal): Promise<void> {
+    return this.glideTo(x, y, signal);
   }
 
-  private async glideTo(x: number, y: number): Promise<void> {
+  private async glideTo(x: number, y: number, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
     const input = await this.input();
+    signal?.throwIfAborted();
     const targetX = roundedCoordinate(x);
     const targetY = roundedCoordinate(y);
     const start = input.getCursorPos();
@@ -193,10 +195,12 @@ try {
       this.onGlideFrame?.(point.x, point.y);
     };
     for (const point of glidePath(plan, start)) {
+      signal?.throwIfAborted();
       input.setCursorPos(point.x, point.y);
       frame(point);
       await input.sleep(plan.stepMs);
     }
+    signal?.throwIfAborted();
     input.setCursorPos(targetX, targetY);
     frame({ x: targetX, y: targetY });
   }
@@ -206,41 +210,54 @@ try {
     y: number,
     button: ComputerMouseButton = "left",
     clicks = 1,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (!Number.isInteger(clicks) || clicks < 1 || clicks > 3) {
       throw new Error("Click count must be an integer from 1 to 3");
     }
-    await this.glideTo(x, y);
+    await this.glideTo(x, y, signal);
     const input = await this.input();
     for (let i = 0; i < clicks; i += 1) {
+      signal?.throwIfAborted();
       input.mouseButton(button, true);
-      await input.sleep(40);
-      input.mouseButton(button, false);
+      try {
+        await input.sleep(40);
+      } finally {
+        input.mouseButton(button, false);
+      }
+      signal?.throwIfAborted();
       if (i < clicks - 1) await input.sleep(60);
     }
   }
 
-  async type(text: string): Promise<void> {
+  async type(text: string, signal?: AbortSignal): Promise<void> {
     if (!text) throw new Error("Text cannot be empty");
     const input = await this.input();
+    signal?.throwIfAborted();
     input.typeUnicode(text);
   }
 
-  async key(combo: string): Promise<void> {
+  async key(combo: string, signal?: AbortSignal): Promise<void> {
     const keys = virtualKeysForCombo(combo);
     const input = await this.input();
-    for (const code of keys) {
-      input.keyVirtual(code, true);
+    signal?.throwIfAborted();
+    const pressed: number[] = [];
+    try {
+      for (const code of keys) {
+        input.keyVirtual(code, true);
+        pressed.push(code);
+      }
+      await input.sleep(50);
+    } finally {
+      for (const code of pressed.reverse()) input.keyVirtual(code, false);
     }
-    await input.sleep(50);
-    for (const code of [...keys].reverse()) {
-      input.keyVirtual(code, false);
-    }
+    signal?.throwIfAborted();
   }
 
-  async scroll(direction: ComputerScrollDirection, amount = 3): Promise<void> {
+  async scroll(direction: ComputerScrollDirection, amount = 3, signal?: AbortSignal): Promise<void> {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Scroll amount must be positive");
     const input = await this.input();
+    signal?.throwIfAborted();
     input.scroll(direction, amount);
   }
 }

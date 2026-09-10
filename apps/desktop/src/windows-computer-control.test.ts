@@ -153,3 +153,24 @@ describe("WindowsComputerDriver", () => {
     expect(attempts).toBe(2);
   });
 });
+
+describe("computer control cancellation", () => {
+  it("stops a glide before the queued click when the session ends", async () => {
+    const input = new FakeInput();
+    const abort = new AbortController();
+    input.sleep = async () => { abort.abort(); };
+    const driver = new WindowsComputerDriver({ inputFactory: () => input });
+    await expect(driver.click(900, 600, "left", 1, abort.signal)).rejects.toThrow();
+    expect(input.buttons).toEqual([]);
+    expect(input.positions).toHaveLength(1);
+  });
+
+  it("releases a pressed button when cancellation occurs during a click", async () => {
+    const input = new FakeInput();
+    const abort = new AbortController();
+    input.sleep = async () => { abort.abort(); };
+    const driver = new WindowsComputerDriver({ inputFactory: () => input });
+    await expect(driver.click(0, 0, "left", 2, abort.signal)).rejects.toThrow();
+    expect(input.buttons).toEqual(["down:left", "up:left"]);
+  });
+});

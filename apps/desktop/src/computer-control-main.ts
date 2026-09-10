@@ -21,6 +21,7 @@ interface ActiveComputerSession {
   sessionId: string;
   expiresAt: string;
   expiryTimer: ReturnType<typeof setTimeout>;
+  abort: AbortController;
 }
 
 /**
@@ -166,6 +167,7 @@ function overlayHtml(originX: number, originY: number): string {
 export class ComputerControlController {
   private active: ActiveComputerSession | null = null;
   private overlay: BrowserWindow | null = null;
+  private pending: { sessionId: string; abort: AbortController } | null = null;
 
   constructor(
     private readonly getParentWindow: () => BrowserWindow | null,
@@ -183,7 +185,9 @@ export class ComputerControlController {
   }
 
   stop(sessionId?: string): void {
-    if (sessionId && this.active && this.active.sessionId !== sessionId) return;
+    if (sessionId && (this.active?.sessionId ?? this.pending?.sessionId) !== sessionId) return;
+    this.pending?.abort.abort();
+    this.active?.abort.abort();
     if (this.active) clearTimeout(this.active.expiryTimer);
     this.active = null;
     globalShortcut.unregister(EMERGENCY_STOP_ACCELERATOR);
@@ -213,6 +217,19 @@ export class ComputerControlController {
   }
 
   private async start(args: Record<string, unknown>): Promise<DesktopToolResult> {
+    if (this.pending) return { ok: false, message: "Another computer control start is pending." };
+    const sessionId = requiredString(args.sessionId, "sessionId");
+    this.pending = { sessionId, abort: new AbortController() };
+    try {
+      return await this.startSession(args);
+    } catch (error) {
+      return { ok: false, message: `Could not start computer control: ${error instanceof Error ? error.message : String(error)}` };
+    } finally {
+      this.pending = null;
+    }
+  }
+
+  private async startSession(args: Record<string, unknown>): Promise<DesktopToolResult> {
     if (process.platform !== "win32") {
       return { ok: false, message: "Computer control is currently supported on Windows only." };
     }
@@ -244,6 +261,7 @@ export class ComputerControlController {
 
     const options: MessageBoxOptions = {
       type: "warning",
+      signal: this.pending?.abort.signal,
       title: "Allow Jait computer control?",
       message: "An AI agent is asking to control this Windows computer.",
       detail: "Jait will show a small blue virtual cursor while it uses the mouse and keyboard. Control lasts up to 30 minutes. Press Ctrl+Alt+Esc at any time to stop immediately.",
@@ -276,6 +294,7 @@ export class ComputerControlController {
     const decision = parent
       ? await dialog.showMessageBox(parent, options)
       : await dialog.showMessageBox(options);
+    if (this.pending?.abort.signal.aborted) return { ok: false, message: "Computer control start was cancelled." };
     if (decision.response !== 0) {
       return { ok: false, message: "Computer control was denied on the Windows desktop." };
     }
@@ -297,6 +316,9 @@ export class ComputerControlController {
 
   /** Register the emergency shortcut + overlay and mark the session active. */
   private async activate(sessionId: string, expiresAtMs: number): Promise<DesktopToolResult> {
+    if (this.pending?.abort.signal.aborted || expiresAtMs <= Date.now()) {
+      return { ok: false, message: "Computer control start was cancelled or expired." };
+    }
     const shortcutRegistered = globalShortcut.register(EMERGENCY_STOP_ACCELERATOR, () => this.stop());
     if (!shortcutRegistered) {
       return { ok: false, message: "Could not register Ctrl+Alt+Esc; computer control was not started." };
@@ -304,6 +326,10 @@ export class ComputerControlController {
 
     try {
       await this.createOverlay();
+      if (this.pending?.abort.signal.aborted || expiresAtMs <= Date.now()) {
+        this.stop(sessionId);
+        return { ok: false, message: "Computer control start was cancelled or expired." };
+      }
       const expiryTimer = setTimeout(
         () => this.stop(sessionId),
         Math.max(1, expiresAtMs - Date.now()),
@@ -312,6 +338,7 @@ export class ComputerControlController {
         sessionId,
         expiresAt: new Date(expiresAtMs).toISOString(),
         expiryTimer,
+        abort: new AbortController(),
       };
       return {
         ok: true,
@@ -335,43 +362,48 @@ export class ComputerControlController {
   }
 
   private async act(args: ComputerActArgs): Promise<DesktopToolResult> {
-    this.requireActive(requiredString(args.sessionId, "sessionId"));
+    const { abort } = this.requireActive(requiredString(args.sessionId, "sessionId"));
     const action = requiredString(args.action, "action") as ComputerActArgs["action"];
     await this.setOverlayState(action);
+    abort.signal.throwIfAborted();
 
-    if (action === "move") {
-      const x = requiredNumber(args.x, "x");
-      const y = requiredNumber(args.y, "y");
-      await this.driver.move(x, y);
-    } else if (action === "click") {
-      const x = requiredNumber(args.x, "x");
-      const y = requiredNumber(args.y, "y");
-      await this.driver.click(x, y, args.button ?? "left", args.clicks ?? 1);
-      await this.pulseOverlay();
-    } else if (action === "type") {
-      await this.driver.type(requiredString(args.text, "text"));
-    } else if (action === "key") {
-      await this.driver.key(requiredString(args.combo, "combo"));
-    } else if (action === "scroll") {
-      await this.driver.scroll(args.direction ?? "down", args.amount ?? 3);
-    } else {
-      throw new Error(`Unsupported computer action: ${String(action)}`);
-    }
-
-    const defaultWait = action === "key" ? 450 : action === "click" ? 200 : 120;
-    const waitAfterMs = Math.min(10_000, Math.max(0, args.waitAfterMs ?? defaultWait));
-    if (waitAfterMs > 0) await delay(waitAfterMs);
-    await this.setOverlayState("");
-
-    const data: Record<string, unknown> = { action };
-    if (args.includeScreenshot !== false) {
-      try {
-        data.screenshot = await this.driver.screenshot();
-      } catch (error) {
-        data.screenshotError = error instanceof Error ? error.message : String(error);
+    try {
+      if (action === "move") {
+        const x = requiredNumber(args.x, "x");
+        const y = requiredNumber(args.y, "y");
+        await this.driver.move(x, y, abort.signal);
+      } else if (action === "click") {
+        const x = requiredNumber(args.x, "x");
+        const y = requiredNumber(args.y, "y");
+        await this.driver.click(x, y, args.button ?? "left", args.clicks ?? 1, abort.signal);
+        await this.pulseOverlay();
+      } else if (action === "type") {
+        await this.driver.type(requiredString(args.text, "text"), abort.signal);
+      } else if (action === "key") {
+        await this.driver.key(requiredString(args.combo, "combo"), abort.signal);
+      } else if (action === "scroll") {
+        await this.driver.scroll(args.direction ?? "down", args.amount ?? 3, abort.signal);
+      } else {
+        throw new Error(`Unsupported computer action: ${String(action)}`);
       }
+
+      const defaultWait = action === "key" ? 450 : action === "click" ? 200 : 120;
+      const waitAfterMs = Math.min(10_000, Math.max(0, args.waitAfterMs ?? defaultWait));
+      if (waitAfterMs > 0) await delay(waitAfterMs);
+      abort.signal.throwIfAborted();
+
+      const data: Record<string, unknown> = { action };
+      if (args.includeScreenshot !== false) {
+        try {
+          data.screenshot = await this.driver.screenshot();
+        } catch (error) {
+          data.screenshotError = error instanceof Error ? error.message : String(error);
+        }
+      }
+      return { ok: true, message: `Computer action ${action} completed.`, data };
+    } finally {
+      if (this.active?.abort === abort) await this.setOverlayState("");
     }
-    return { ok: true, message: `Computer action ${action} completed.`, data };
   }
 
   private requireActive(sessionId: string): ActiveComputerSession {
@@ -415,14 +447,15 @@ export class ComputerControlController {
         sandbox: true,
       },
     });
+    this.overlay = overlay;
     overlay.setAlwaysOnTop(true, "screen-saver");
     overlay.setIgnoreMouseEvents(true, { forward: true });
     overlay.on("closed", () => {
       if (this.overlay === overlay) this.overlay = null;
     });
     await overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayHtml(left, top))}`);
+    if (overlay.isDestroyed() || this.pending?.abort.signal.aborted) throw new Error("Computer control start was cancelled");
     overlay.showInactive();
-    this.overlay = overlay;
     const current = screen.getCursorScreenPoint();
     await this.moveOverlay(current.x, current.y);
   }
@@ -441,8 +474,10 @@ export class ComputerControlController {
    */
   private trackOverlay(x: number, y: number): void {
     if (!this.overlay || this.overlay.isDestroyed()) return;
+    // Native input uses physical pixels; Electron overlay windows use DIPs.
+    const point = screen.screenToDipPoint({ x: Math.round(x), y: Math.round(y) });
     this.overlay.webContents
-      .executeJavaScript(`window.jaitMove?.(${Math.round(x)}, ${Math.round(y)})`, true)
+      .executeJavaScript(`window.jaitMove?.(${point.x}, ${point.y})`, true)
       .catch(() => {});
   }
 
