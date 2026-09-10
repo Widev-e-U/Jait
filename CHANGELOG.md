@@ -4,6 +4,17 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.837](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.837) — 2026-09-10
+- feat(web): make workspace panels consistent — 301eae20
+- fix(web): freeze tool terminal transcript once a bounded command completes — ab48b2ef
+- fix(desktop): make koffi bindings safe for repeated Node-ESM loads — dbeb776b
+
+## [v0.1.836](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.836) — 2026-09-10
+- Remove provider model selector from app header — b3eadd54
+
+## [v0.1.835](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.835) — 2026-09-10
+- fix(desktop): make computer control lifecycle reliable — a3614ef0
+
 ## [v0.1.834](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.834) — 2026-09-10
 - feat(gateway): fetch live provider subscription usage per profile — 2d9726c0
 - feat(web): panel-based shell with parallel chat panels — c7ce66d1
