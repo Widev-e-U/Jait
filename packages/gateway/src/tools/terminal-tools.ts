@@ -238,8 +238,11 @@ function sessionTerminalKey(context: ToolContext): string {
 
 /** Strip ANSI escape sequences from PTY output for clean text */
 function stripAnsi(s: string): string {
+  // The OSC branch must come before the single-char branch: `[@-Z\\-_]`
+  // also matches `ESC ]`, which would eat only the introducer and leave the
+  // window-title payload ("0;user@host: dir") visible in the output.
   // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
+  return s.replace(/\x1B(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, "");
 }
 
 /** Strip OSC 633 sequences + ANSI + stray BEL from a PTY chunk for safe display */

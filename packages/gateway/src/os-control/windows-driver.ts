@@ -62,10 +62,12 @@ function loadPtyFactory(): PtyFactory {
   return (require("node-pty") as { spawn: PtyFactory }).spawn;
 }
 
-/** Strip ANSI escape sequences from PTY output. */
+/** Strip ANSI escape sequences from PTY output. OSC branch must come first,
+ * otherwise `ESC ]` matches `[@-Z\\-_]` and the "0;user@host: dir" title
+ * payload leaks into the cleaned output. */
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
+  return value.replace(/\x1B(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, "");
 }
 
 /**

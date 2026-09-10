@@ -19,10 +19,12 @@ import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-/** Strip ANSI escape sequences */
+/** Strip ANSI escape sequences. OSC must be tried before the single-char
+ * class, otherwise `ESC ]` matches `[@-Z\\-_]` and the "0;user@host: dir"
+ * title payload leaks into the cleaned output. */
 function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
+  return s.replace(/\x1B(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, "");
 }
 
 function escapeRegExp(value: string): string {

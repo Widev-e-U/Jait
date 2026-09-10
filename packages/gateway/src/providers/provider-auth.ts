@@ -93,9 +93,14 @@ export function parseCommandLine(commandLine: string): { command: string; args: 
   };
 }
 
+// OSC branch must come before the single-char class, otherwise `ESC ]`
+// matches `[@-Z\\-_]` and the "0;user@host: dir" title payload leaks into
+// the cleaned output.
+// eslint-disable-next-line no-control-regex
+const ANSI_ESCAPE_PATTERN = /\x1B(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g;
+
 export function stripAnsi(value: string): string {
-  const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`, "g");
-  return value.replace(ansiEscapePattern, "");
+  return value.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 export function buildProviderAuthEnv(overrides?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
