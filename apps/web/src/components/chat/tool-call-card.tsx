@@ -1546,6 +1546,79 @@ function formatToolSearchResults(...values: unknown[]): string | null {
     .join('\n')
 }
 
+type ProjectSearchEntry = {
+  path: string
+  line?: number
+  content?: string
+}
+
+/**
+ * Extract per-result entries from a `search` tool call result.
+ * Handles both result shapes produced by the gateway:
+ * - content mode: `{ pattern, matches: [{ file, line, content }] }`
+ * - files mode:   `{ pattern, files: string[] }` (or `[{ path }]` from the legacy HTTP route)
+ */
+export function getProjectSearchEntries(
+  data: unknown,
+  message?: string | null,
+): ProjectSearchEntry[] {
+  const entries: ProjectSearchEntry[] = []
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const record = data as Record<string, unknown>
+
+    if (Array.isArray(record.matches)) {
+      for (const raw of record.matches) {
+        if (!raw || typeof raw !== 'object') continue
+        const match = raw as Record<string, unknown>
+        const path = displayStr(match.file ?? match.path)
+        if (!path) continue
+        entries.push({
+          path,
+          line: typeof match.line === 'number' ? match.line : undefined,
+          content: typeof match.content === 'string' ? match.content : undefined,
+        })
+      }
+      if (entries.length > 0) return entries
+    }
+
+    if (Array.isArray(record.files)) {
+      for (const raw of record.files) {
+        const path = typeof raw === 'string'
+          ? raw
+          : displayStr((raw as Record<string, unknown> | null)?.path)
+        if (path) entries.push({ path })
+      }
+      if (entries.length > 0) return entries
+    }
+  }
+
+  // Historical results may persist only the count message — return no entries so
+  // callers can fall back to the plain message instead of rendering a fake list.
+  void message
+  return entries
+}
+
+/**
+ * Format the header's ellipsed path list: dedupe paths (content mode can return
+ * several matches per file), cap the number shown and mark the cut with an
+ * ellipsis, e.g. `a.ts, b.ts, c.ts…`.
+ */
+export function formatSearchResultList(entries: ProjectSearchEntry[], maxEntries = 8): string {
+  const paths: string[] = []
+  for (const entry of entries) {
+    if (!paths.includes(entry.path)) paths.push(entry.path)
+    if (paths.length > maxEntries) break
+  }
+  if (paths.length === 0) return ''
+  const truncated = paths.length > maxEntries
+  return `${paths.slice(0, maxEntries).map((p) => basenameLike(p)).join(', ')}${truncated ? '…' : ''}`
+}
+
+function basenameLike(path: string): string {
+  const segments = path.split('/')
+  return segments[segments.length - 1] ?? path
+}
+
 function formatMcpContentText(value: string): string {
   const parsed = parseEmbeddedJsonRecord(value)
   if (!parsed) return value
@@ -2001,6 +2074,52 @@ export function ToolSearchResultsView({ items }: { items: ToolSearchListItem[] }
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Structured list of `search` tool results: one row per match with the file
+ * path, optional line number and matched content snippet. Falls back to the
+ * plain count message when no per-entry data is available.
+ */
+export function SearchResultsView({ entries, message }: { entries: ProjectSearchEntry[]; message?: string | null }) {
+  const fileCount = new Set(entries.map((entry) => entry.path)).size
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/55 bg-card/55 text-xs shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border/45 bg-muted/25 px-3 py-2">
+        <Search className="h-3.5 w-3.5 text-sky-500" />
+        <span className="font-medium text-foreground">Search results</span>
+        <span className="ml-auto rounded-full bg-sky-500/10 px-2 py-0.5 text-2xs font-medium text-sky-600 dark:text-sky-400">
+          {entries.length === fileCount
+            ? `${fileCount} file${fileCount === 1 ? '' : 's'}`
+            : `${entries.length} match${entries.length === 1 ? '' : 'es'} in ${fileCount} file${fileCount === 1 ? '' : 's'}`}
+        </span>
+      </div>
+      <div className="max-h-80 divide-y divide-border/40 overflow-y-auto">
+        {entries.map((entry, index) => (
+          <div key={`${entry.path}-${entry.line ?? 'x'}-${index}`} className="px-3 py-2 hover:bg-muted/25">
+            <div className="flex min-w-0 items-center gap-2">
+              <TooltipHint content={entry.path}>
+                <code className="min-w-0 truncate text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                  {entry.path}
+                </code>
+              </TooltipHint>
+              {entry.line != null && (
+                <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground">
+                  :{entry.line}
+                </span>
+              )}
+            </div>
+            {entry.content && (
+              <p className="mt-1 break-all font-mono text-[11px] leading-4 text-muted-foreground">{entry.content}</p>
+            )}
+          </div>
+        ))}
+      </div>
+      {message && (
+        <div className="border-t border-border/45 px-3 py-1.5 text-[11px] text-muted-foreground/70">{message}</div>
+      )}
     </div>
   )
 }
@@ -2730,6 +2849,15 @@ function getStructuredTerminalOutputEndOffset(call: ToolCallInfo): number | null
   return typeof outputEndOffset === 'number' && Number.isFinite(outputEndOffset) && outputEndOffset >= 0
     ? Math.trunc(outputEndOffset)
     : null
+}
+
+/** Best-effort cleanup for persisted terminal output stored by older gateway
+ * builds, which could leak OSC window-title payloads ("0;user@host: dir"),
+ * stray BEL characters, and raw ANSI sequences into the stored text. */
+export function stripTerminalOutputAnsiResidue(output: string): string {
+  return output
+    .replace(/\x1B(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g, '')
+    .replace(/\x07/g, '')
 }
 
 export function trimRepeatedTrailingTerminalPrompt(output: string, command: string): string {
@@ -3710,6 +3838,15 @@ function ToolCallCardInner({
   const toolSearchItems = displayTool === 'tools.search'
     ? getToolSearchResultItems(call.result?.data, call.result?.message)
     : []
+  const searchEntries = displayTool === 'search'
+    ? getProjectSearchEntries(call.result?.data, call.result?.message)
+    : []
+  const searchSummaryList = searchEntries.length > 0
+    ? formatSearchResultList(searchEntries)
+    : null
+  const searchFileCount = searchEntries.length > 0
+    ? new Set(searchEntries.map((entry) => entry.path)).size
+    : 0
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)
   const imageDataUri = getToolImageDataUri(displayTool, normalizedArgs, resultData)
@@ -3798,7 +3935,9 @@ function ToolCallCardInner({
     ? structuredTerminalResult.terminalOutput
     : null
   const terminalDisplayOutput = trimRepeatedTrailingTerminalPrompt(
-    completedTerminalExecution?.output ?? persistedTerminalOutput ?? displayOutput,
+    stripTerminalOutputAnsiResidue(
+      completedTerminalExecution?.output ?? persistedTerminalOutput ?? displayOutput,
+    ),
     terminalCommand,
   )
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
@@ -3994,6 +4133,15 @@ function ToolCallCardInner({
               ))}
             </span>
           </span>
+        ) : searchSummaryList ? (
+          <span className="inline-flex min-w-0 max-w-full items-baseline gap-2">
+            <span className="shrink-0">
+              {invocationLabel} ({searchFileCount}):
+            </span>
+            <TooltipHint content={searchSummaryList}>
+              <code className="min-w-0 truncate text-[11px] font-mono">{searchSummaryList}</code>
+            </TooltipHint>
+          </span>
         ) : mcpLabel && !isJaitMcpTool && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             {mcpLabel.title ? (
@@ -4033,7 +4181,7 @@ function ToolCallCardInner({
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} bodyScrollRef={editBodyScrollRef} />
   ) : bodyKind === 'terminal' ? (
     showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
-      <div className="overflow-hidden rounded-md bg-zinc-950 shadow-inner ring-1 ring-border/40">
+      <div className="overflow-hidden rounded-md bg-background">
         <div className="px-3 py-2">
           <TerminalView
             terminalId={toolTerminal.id}
@@ -4043,22 +4191,22 @@ function ToolCallCardInner({
             outputEndOffset={terminalOutputEndOffset}
             minRows={TOOL_TERMINAL_MIN_ROWS}
             maxRows={TOOL_TERMINAL_MAX_ROWS}
-            className="bg-zinc-950"
+            className="bg-background"
           />
         </div>
       </div>
     ) : (
     <pre ref={terminalScrollRef} className={cn(
       'text-xs font-mono leading-5 rounded-md px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words',
-      'bg-zinc-950 text-zinc-100 shadow-inner ring-1 ring-border/40',
-      call.result && !call.result.ok && 'text-red-200'
+      'bg-muted/50 text-foreground',
+      call.result && !call.result.ok && 'text-destructive'
     )}>
       {terminalDisplayOutput}
       {(call.status === 'running' || call.status === 'pending') && !terminalDisplayOutput && (
-        <span className="text-zinc-400">{summary ? `Executing ${summary}...` : 'Running...'}</span>
+        <span className="text-muted-foreground">{summary ? `Executing ${summary}...` : 'Running...'}</span>
       )}
       {(call.status === 'running' || call.status === 'pending') && (
-        <span className="inline-block w-1.5 h-3.5 bg-zinc-100 animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
     )
@@ -4109,7 +4257,9 @@ function ToolCallCardInner({
       isNewFile={normalizedTool === 'file.write'}
     />
   ) : bodyKind === 'output' ? (
-    toolSearchItems.length > 0 ? (
+    searchEntries.length > 0 && normalizedTool === 'search' ? (
+      <SearchResultsView entries={searchEntries} message={call.result?.message} />
+    ) : toolSearchItems.length > 0 ? (
       <ToolSearchResultsView items={toolSearchItems} />
     ) : (
       <ToolOutputView
