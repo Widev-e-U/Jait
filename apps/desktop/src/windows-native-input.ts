@@ -38,6 +38,19 @@ interface IUser32 {
   func(prototype: string): (...args: unknown[]) => unknown;
 }
 
+/** koffi type names are process-global; cache registrations so repeated
+ * `createWindowsInput()` calls never hit koffi's duplicate-name guard. */
+const koffiTypes = new Map<string, unknown>();
+
+function ensureType<T>(name: string, register: () => T): T {
+  let value = koffiTypes.get(name) as T | undefined;
+  if (!value) {
+    value = register();
+    koffiTypes.set(name, value);
+  }
+  return value;
+}
+
 function mouseEvent(flags: number, mouseData = 0) {
   return {
     type: INPUT_MOUSE,
@@ -81,36 +94,49 @@ class KoffiWindowsInput implements WindowsInput {
     if (process.platform !== "win32") {
       throw new Error("Native Windows input is only available on win32");
     }
-    const { load, struct, union, sizeof } = await import("koffi");
-    struct("JaitPOINT", { x: "long", y: "long" });
-    const MOUSEINPUT = struct("JaitMOUSEINPUT", {
-      dx: "long",
-      dy: "long",
-      mouseData: "uint32_t",
-      dwFlags: "uint32_t",
-      time: "uint32_t",
-      dwExtraInfo: "uintptr_t",
-    });
-    const KEYBDINPUT = struct("JaitKEYBDINPUT", {
-      wVk: "uint16_t",
-      wScan: "uint16_t",
-      dwFlags: "uint32_t",
-      time: "uint32_t",
-      dwExtraInfo: "uintptr_t",
-    });
-    const HARDWAREINPUT = struct("JaitHARDWAREINPUT", {
-      uMsg: "uint32_t",
-      wParamL: "uint16_t",
-      wParamH: "uint16_t",
-    });
-    struct("JaitINPUT", {
-      type: "uint32_t",
-      u: union({
-        mi: MOUSEINPUT,
-        ki: KEYBDINPUT,
-        hi: HARDWAREINPUT,
+    // koffi is CommonJS; under Node ESM the module namespace only exposes
+    // `default`/`detect`/`init`, so resolve the API off the default export
+    // (which is also the object tests monkey-patch via `koffi.load = ...`).
+    const koffiNs = await import("koffi");
+    const koffi = (koffiNs as unknown as { default?: typeof koffiNs }).default ?? koffiNs;
+    const { load, struct, union, sizeof } = koffi;
+    ensureType("JaitPOINT", () => struct("JaitPOINT", { x: "long", y: "long" }));
+    const MOUSEINPUT = ensureType("JaitMOUSEINPUT", () =>
+      struct("JaitMOUSEINPUT", {
+        dx: "long",
+        dy: "long",
+        mouseData: "uint32_t",
+        dwFlags: "uint32_t",
+        time: "uint32_t",
+        dwExtraInfo: "uintptr_t",
       }),
-    });
+    );
+    const KEYBDINPUT = ensureType("JaitKEYBDINPUT", () =>
+      struct("JaitKEYBDINPUT", {
+        wVk: "uint16_t",
+        wScan: "uint16_t",
+        dwFlags: "uint32_t",
+        time: "uint32_t",
+        dwExtraInfo: "uintptr_t",
+      }),
+    );
+    const HARDWAREINPUT = ensureType("JaitHARDWAREINPUT", () =>
+      struct("JaitHARDWAREINPUT", {
+        uMsg: "uint32_t",
+        wParamL: "uint16_t",
+        wParamH: "uint16_t",
+      }),
+    );
+    ensureType("JaitINPUT", () =>
+      struct("JaitINPUT", {
+        type: "uint32_t",
+        u: union({
+          mi: MOUSEINPUT,
+          ki: KEYBDINPUT,
+          hi: HARDWAREINPUT,
+        }),
+      }),
+    );
     const user32 = load("user32.dll") as unknown as IUser32;
     return new KoffiWindowsInput(user32, sizeof("JaitINPUT"));
   }
