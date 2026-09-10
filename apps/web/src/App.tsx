@@ -16,11 +16,12 @@ import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
 import { AutomationModals } from '@/components/automation/automation-modals'
 import { DeveloperComposerControlRow } from '@/components/app-shell/developer-composer-control-row'
 import { DeveloperSidebars } from '@/components/app-shell/developer-sidebars'
-import { getNextDeveloperSidebarState, type DeveloperSidebarView } from '@/lib/developer-sidebar'
+import { clampDeveloperSidebarWidth, getNextDeveloperSidebarState, readDeveloperSidebarWidth, storeDeveloperSidebarWidth, type DeveloperSidebarView } from '@/lib/developer-sidebar'
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
 import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
-import { appendSecondaryChatPanel, MAX_SECONDARY_CHAT_PANELS } from '@/lib/secondary-chat-panels'
+import { appendSecondaryChatPanel, getVisibleChatPanelCount, MAX_SECONDARY_CHAT_PANELS, shouldShowChatPanelHideButton } from '@/lib/secondary-chat-panels'
+import { beginEditorSubpanelToggle, endEditorSubpanelToggle, getEditorSubpanelToggleIntent } from '@/lib/editor-subpanels'
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
@@ -262,6 +263,12 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [sidebarView, setSidebarView] = useState<DeveloperSidebarView>(() => (localStorage.getItem('developerSidebarView') === 'git' ? 'git' : localStorage.getItem('developerSidebarView') === 'files' ? 'files' : 'projects'))
+  const [developerSidebarWidth, setDeveloperSidebarWidth] = useState(() => readDeveloperSidebarWidth(localStorage, window.innerWidth))
+  const handleDeveloperSidebarWidthChange = useCallback((width: number) => {
+    const nextWidth = clampDeveloperSidebarWidth(width, window.innerWidth)
+    setDeveloperSidebarWidth(nextWidth)
+    storeDeveloperSidebarWidth(localStorage, nextWidth)
+  }, [])
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
@@ -272,6 +279,7 @@ function App() {
   const showProjectRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const [parallelChats, setParallelChats] = useState<ParallelChatState[]>([])
+  const [primaryChatPanelHidden, setPrimaryChatPanelHidden] = useState(false)
   const openSecondaryChatPanel = useCallback((panel: ParallelChatState) => {
     setParallelChats((current) => {
       if (current.some((entry) => entry.session.id === panel.session.id)) return current
@@ -286,6 +294,8 @@ function App() {
   const closeProjectPanelRef = useRef<(() => void) | null>(null)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [projectPreviewRequest, setProjectPreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
+  const projectPreviewRequestKeyRef = useRef(0)
+  const previewTogglePendingRef = useRef(false)
   const [projectPreviewState, setProjectPreviewState] = useState<DevPreviewPanelState>({
     open: false,
     target: null,
@@ -309,6 +319,8 @@ function App() {
   const [architectureFilePath, setArchitectureFilePath] = useState<string | null>(null)
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
+  const architectureRequestKeyRef = useRef(0)
+  const architectureTogglePendingRef = useRef(false)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureProjectRef = useRef<string | null>(null)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
@@ -432,12 +444,14 @@ function App() {
       }
     })
     setViewMode('developer')
+    setCurrentView('chat')
     if (!showProject) {
       showProjectRef.current = true
       setShowProject(true)
     }
     showProjectEditorPanel()
-    setArchitectureRequest({ key: Date.now() })
+    setShowArchitecture(true)
+    setArchitectureRequest({ key: ++architectureRequestKeyRef.current })
   }, [activeProject?.projectRoot, showProject, showProjectEditorPanel],)
   const closeProjectPreview = useCallback(() => {
     projectRef.current?.closePreviewTarget()
@@ -452,6 +466,7 @@ function App() {
       displayTarget: trimmed,
     }
     setViewMode('developer')
+    setCurrentView('chat')
     setDevPreviewTarget(trimmed)
     setProjectPreviewState(nextPreviewState)
     if (!showProject) {
@@ -459,7 +474,7 @@ function App() {
       setShowProject(true)
     }
     showProjectEditorPanel()
-    setProjectPreviewRequest({ target: trimmed, key: Date.now() })
+    setProjectPreviewRequest({ target: trimmed, key: ++projectPreviewRequestKeyRef.current })
     return true
   }, [activeProject?.projectRoot, showProject, showProjectEditorPanel],)
 
@@ -588,6 +603,9 @@ function App() {
     onLoginRequired
   )
   fetchProjectsRef.current = fetchProjects
+  useEffect(() => {
+    setPrimaryChatPanelHidden(false)
+  }, [activeSessionId])
 
   // "Open with Jait" on a folder: adopt the project that already owns that
   // directory, or create one, and select it. Gated on the token because the
@@ -1946,10 +1964,12 @@ function App() {
     const cv = state['chat.view']
     if (cv === 'developer' || cv === 'manager') {
       const storedViewMode = readStoredViewMode()
+      // localStorage wins on mismatch: it reflects the most recent explicit
+      // choice on this device (see the viewMode persistence effect below),
+      // while the recovered session state can be stale across sessions.
       if (storedViewMode === cv) {
         setViewMode(cv)
-      } else {
-              }
+      }
     }
 
     // The running message snapshot and this WebSocket packet race on reload.
@@ -2771,6 +2791,7 @@ function App() {
   }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
+    setPrimaryChatPanelHidden(false)
     const knownSession = personalSessions.find((session) => session.id === sessionId)
     const session = knownSession ?? ( await loadSession(sessionId))
     if (!session || session.projectId) return
@@ -2805,6 +2826,7 @@ function App() {
   }, [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, loadSession, openSecondaryChatPanel, personalSessions, projects])
 
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
+    setPrimaryChatPanelHidden(false)
     if (isMobile) handleMobileChatClick()
     setParallelChats((current) => current.filter((entry) => entry.session.id !== sessionId))
     if (projectId === activeProjectId) {
@@ -2986,36 +3008,58 @@ function App() {
   }, [reopenPersistedProject, waitForProjectHydration])
 
   const handleSidebarPreviewToggle = useCallback(async () => {
-    const project = await ensureProjectReadyForSidebarAction()
-    if (!project) return
+    if (!beginEditorSubpanelToggle(previewTogglePendingRef)) return
+    try {
+      const intent = getEditorSubpanelToggleIntent({
+        editorOpen: showProject && showProjectEditor,
+        subpanelOpen: previewOpen,
+      })
+      if (intent === 'close') {
+        closeDevPreviewPanel()
+        return
+      }
 
-    if (previewOpen) {
-      closeDevPreviewPanel()
-      return
+      const project = await ensureProjectReadyForSidebarAction()
+      if (!project) return
+      const nextTarget = projectPreviewState.target
+        ?? devPreviewTarget?.trim()
+        ?? savedDevPreview?.target?.trim()
+        ?? null
+      if (routePreviewToProject(nextTarget, project.projectRoot ?? null)) return
+      openDevPreviewPanel(nextTarget)
+    } finally {
+      endEditorSubpanelToggle(previewTogglePendingRef)
     }
-
-    const nextTarget = projectPreviewState.target
-      ?? devPreviewTarget?.trim()
-      ?? savedDevPreview?.target?.trim()
-      ?? null
-    if (routePreviewToProject(nextTarget, project.projectRoot ?? null)) return
-    openDevPreviewPanel(nextTarget)
-  }, [closeDevPreviewPanel, devPreviewTarget, ensureProjectReadyForSidebarAction, openDevPreviewPanel, previewOpen, routePreviewToProject, savedDevPreview?.target, projectPreviewState.target])
+  }, [closeDevPreviewPanel, devPreviewTarget, ensureProjectReadyForSidebarAction, openDevPreviewPanel, previewOpen, routePreviewToProject, savedDevPreview?.target, projectPreviewState.target, showProject, showProjectEditor])
 
   const handleSidebarArchitectureToggle = useCallback(async () => {
-    const project = await ensureProjectReadyForSidebarAction()
-    if (!project) return
+    if (!beginEditorSubpanelToggle(architectureTogglePendingRef)) return
+    try {
+      const intent = getEditorSubpanelToggleIntent({
+        editorOpen: showProject && showProjectEditor,
+        subpanelOpen: showArchitecture,
+      })
+      if (intent === 'close') {
+        projectRef.current?.closeArchitectureTab()
+        setArchitectureRequest(null)
+        setShowArchitecture(false)
+        return
+      }
 
-    if (showArchitecture) {
-      projectRef.current?.closeArchitectureTab()
-      setArchitectureRequest(null)
-      setShowArchitecture(false)
-      return
+      const project = await ensureProjectReadyForSidebarAction()
+      if (!project) return
+      openArchitectureInProject(project.projectRoot)
+    } finally {
+      endEditorSubpanelToggle(architectureTogglePendingRef)
     }
+  }, [ensureProjectReadyForSidebarAction, openArchitectureInProject, showArchitecture, showProject, showProjectEditor])
 
-    setShowArchitecture(true)
-    openArchitectureInProject(project.projectRoot)
-  }, [ensureProjectReadyForSidebarAction, openArchitectureInProject, showArchitecture])
+  const closeEditorSubpanels = useCallback(() => {
+    closeDevPreviewPanel()
+    projectRef.current?.closeArchitectureTab()
+    setArchitectureRequest(null)
+    setShowArchitecture(false)
+  }, [closeDevPreviewPanel])
 
   const handleToggleEditor = useCallback(async () => {
     if (showProject && !isMobile) {
@@ -3024,16 +3068,14 @@ function App() {
         return
       }
 
-      closeDevPreviewPanel()
-      projectRef.current?.closeArchitectureTab()
-      setArchitectureRequest(null)
-      setShowArchitecture(false)
+      closeEditorSubpanels()
       setShowProjectEditor(false)
       if (!(showProjectTree && showSidebar && sidebarView !== 'projects')) closeProjectPanel()
       return
     }
 
     if (showProject) {
+      closeEditorSubpanels()
       closeProjectPanel()
       return
     }
@@ -3209,7 +3251,7 @@ function App() {
     showProjectEditorPanel,
     showSidebar,
     sidebarView,
-    closeDevPreviewPanel,
+    closeEditorSubpanels,
     activeProject,
     activeProjectRecord,
     closeProjectPanel,
@@ -4719,7 +4761,10 @@ function App() {
       else void handleVoiceInput()
     },
   })
-  const developerChatPanelStyle: React.CSSProperties = chatCollapsed
+  const primaryChatPanelCollapsed = chatCollapsed || primaryChatPanelHidden
+  const visibleChatPanelCount = getVisibleChatPanelCount(!primaryChatPanelHidden, parallelChats.length)
+  const showChatPanelHideButtons = !isMobile && shouldShowChatPanelHideButton(visibleChatPanelCount)
+  const developerChatPanelStyle: React.CSSProperties = primaryChatPanelCollapsed
     ? {
         flex: '0 0 0px',
         width: 0,
@@ -4907,14 +4952,7 @@ function App() {
               onOpenPlan={setPlanRepo}
               onOpenStrategy={setStrategyRepo}
               onToggleArchitecture={() => {
-                if (showArchitecture) {
-                  projectRef.current?.closeArchitectureTab()
-                  setArchitectureRequest(null)
-                  setShowArchitecture(false)
-                } else {
-                  setShowArchitecture(true)
-                  openArchitectureInProject()
-                }
+                void handleSidebarArchitectureToggle()
               }}
               onToggleDebugPanel={() => setShowDebugPanel((d) => !d)}
               onToggleEditor={() => {
@@ -4922,15 +4960,7 @@ function App() {
               }}
               onToggleManagerRepos={() => setShowManagerRepos((s) => !s)}
               onTogglePreview={() => {
-                if (previewOpen) {
-                  closeDevPreviewPanel()
-                } else {
-                  const nextTarget = projectPreviewState.target ?? devPreviewTarget?.trim() ?? savedDevPreview?.target?.trim() ?? null
-                  if (routePreviewToProject(nextTarget, activeProject?.projectRoot ?? null)) {
-                    return
-                  }
-                  openDevPreviewPanel()
-                }
+                void handleSidebarPreviewToggle()
               }}
               onToggleSidebar={() => setShowSidebar((s) => !s)}
               onToggleTerminal={() => {
@@ -4991,7 +5021,7 @@ function App() {
               />
             ) : (
               <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
-                <div className={isMobile ? 'contents' : `relative flex min-h-0 ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}>
+                <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
                   {viewMode === 'developer' && (
                     <DeveloperSidebars
                       activeProject={activeProject}
@@ -5016,6 +5046,7 @@ function App() {
                       showProjectEditor={showProjectEditor}
                       showSidebar={showSidebar}
                       sidebarView={sidebarView}
+                      sidebarWidth={developerSidebarWidth}
                       showTerminal={showTerminal}
                       streamingSessionIds={streamingSessionIds}
                       sidebarRef={sidebarRef}
@@ -5070,6 +5101,7 @@ function App() {
                       onSelectSidebarView={(view) => {
                         void handleDeveloperSidebarView(view)
                       }}
+                      onSidebarWidthChange={handleDeveloperSidebarWidthChange}
                       onToggleTerminal={() => {
                         void handleToggleTerminal()
                       }}
@@ -5167,6 +5199,8 @@ function App() {
                     onToggleProjectTree={toggleDeveloperFileSidebar}
                     savedPanelSize={projectUI?.layout?.panelSize ?? null}
                     savedTreeSize={projectUI?.layout?.treeSize ?? null}
+                    sidebarWidth={developerSidebarWidth}
+                    onSidebarWidthChange={handleDeveloperSidebarWidthChange}
                     onLayoutSizeChange={handleProjectLayoutSizeChange}
                   />
                 </div>
@@ -5256,7 +5290,7 @@ function App() {
                         availableSkills={availableSkills}
                         changedFiles={changedFiles}
                         changedFilesForComposer={changedFilesForComposer}
-                        chatCollapsed={chatCollapsed}
+                        chatCollapsed={primaryChatPanelCollapsed}
                         chatMode={chatMode}
                         chatProvider={chatProvider}
                         chatProviderRuntimeMode={chatProviderRuntimeMode}
@@ -5302,6 +5336,7 @@ function App() {
                         showDesktopProject={showDesktopProject}
                         showProject={showProject}
                         showScreenShare={showScreenShare}
+                        showPanelHideButton={showChatPanelHideButtons}
                         suggestions={suggestions}
                         threadTargetRepoRuntime={threadTargetRepoRuntime}
                         token={token}
@@ -5333,6 +5368,7 @@ function App() {
                         onOpenMessagePath={handleOpenMessagePath}
                         onOpenSourceControl={handleOpenSourceControl}
                         onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
+                        onHidePanel={() => setPrimaryChatPanelHidden(true)}
                         onApprovalResponse={respondToApproval}
                         onAskQueuedMessageInParallel={askQueuedChatMessageInParallel}
                         onProviderChange={handleChatProviderChange}
@@ -5379,13 +5415,8 @@ function App() {
                             projectNodeId={panelProject?.nodeId}
                             isMobile={isMobile}
                             onSearchFiles={handleSearchFiles}
+                            showHideButton={showChatPanelHideButtons}
                             onClose={() => setParallelChats((current) => current.filter((entry) => entry.session.id !== parallelChat.session.id))}
-                            onOpenAsPrimary={() => {
-                              const branch = parallelChat.session
-                              setParallelChats((current) => current.filter((entry) => entry.session.id !== branch.id))
-                              setChatMode('ask')
-                              switchSession(branch.projectId, branch.id)
-                            }}
                           />
                         )
                       })}

@@ -1,5 +1,5 @@
 import { Boxes, Bug, Code, FolderOpen, Folders, GitBranch, Globe, Settings, Terminal as TerminalIcon } from 'lucide-react'
-import { useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { useRef, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -14,13 +14,6 @@ import {
   clampDeveloperSidebarWidth,
   type DeveloperSidebarView,
 } from '@/lib/developer-sidebar'
-
-const DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY = 'developerSidebarWidth'
-
-function readDeveloperSidebarWidth() {
-  const storedWidth = Number.parseInt(window.localStorage.getItem(DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY) ?? '', 10)
-  return clampDeveloperSidebarWidth(Number.isFinite(storedWidth) ? storedWidth : 256, window.innerWidth)
-}
 
 interface DeveloperSidebarsProps {
   activeProject: ActiveProjectState
@@ -45,6 +38,7 @@ interface DeveloperSidebarsProps {
   showProjectEditor: boolean
   showSidebar: boolean
   sidebarView: DeveloperSidebarView
+  sidebarWidth: number
   showTerminal: boolean
   streamingSessionIds: Set<string>
   sidebarRef: RefObject<HTMLElement | null>
@@ -72,6 +66,7 @@ interface DeveloperSidebarsProps {
   onToggleEditor: () => void
   onTogglePreview: () => void
   onSelectSidebarView: (view: DeveloperSidebarView) => void
+  onSidebarWidthChange: (width: number) => void
   onToggleTerminal: () => void
   onOpenSettings: () => void
 }
@@ -99,6 +94,7 @@ export function DeveloperSidebars({
   showProjectEditor,
   showSidebar,
   sidebarView,
+  sidebarWidth,
   showTerminal,
   streamingSessionIds,
   sidebarRef,
@@ -126,16 +122,15 @@ export function DeveloperSidebars({
   onToggleEditor,
   onTogglePreview,
   onSelectSidebarView,
+  onSidebarWidthChange,
   onToggleTerminal,
   onOpenSettings,
 }: DeveloperSidebarsProps) {
-  const [sidebarWidth, setSidebarWidth] = useState(readDeveloperSidebarWidth)
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
 
   const setAndStoreSidebarWidth = (width: number) => {
     const nextWidth = clampDeveloperSidebarWidth(width, window.innerWidth)
-    setSidebarWidth(nextWidth)
-    window.localStorage.setItem(DEVELOPER_SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth))
+    onSidebarWidthChange(nextWidth)
   }
 
   const finishSidebarResize = (event: ReactPointerEvent<HTMLDivElement>) => {

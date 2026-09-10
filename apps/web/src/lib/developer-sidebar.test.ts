@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampDeveloperSidebarWidth, getNextDeveloperSidebarState } from './developer-sidebar'
+import { clampDeveloperSidebarWidth, getNextDeveloperSidebarState, readDeveloperSidebarWidth, storeDeveloperSidebarWidth } from './developer-sidebar'
 
 describe('getNextDeveloperSidebarState', () => {
   it('opens the requested view when the sidebar is closed', () => {
@@ -38,5 +38,19 @@ describe('clampDeveloperSidebarWidth', () => {
 
   it('leaves room for the workspace on narrower screens', () => {
     expect(clampDeveloperSidebarWidth(480, 820)).toBe(340)
+  })
+})
+
+describe('developer sidebar width persistence', () => {
+  it('uses one stored width for every sidebar view', () => {
+    const values = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+    }
+
+    expect(readDeveloperSidebarWidth(storage, 1440)).toBe(256)
+    storeDeveloperSidebarWidth(storage, 336)
+    expect(readDeveloperSidebarWidth(storage, 1440)).toBe(336)
   })
 })

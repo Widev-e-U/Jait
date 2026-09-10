@@ -33,6 +33,7 @@ import {
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import type { FsChangesPayload } from '@jait/shared'
 import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
+import { DEVELOPER_SIDEBAR_MAX_WIDTH, DEVELOPER_SIDEBAR_MIN_WIDTH } from '@/lib/developer-sidebar'
 import {
   PreviewMetricsPanel,
   type PreviewInspectInteractiveElement,
@@ -143,6 +144,8 @@ interface ProjectPanelProps {
   savedPanelSize?: number | null
   /** Per-project persisted tree pane width — overrides the global localStorage fallback. */
   savedTreeSize?: number | null
+  sidebarWidth?: number | null
+  onSidebarWidthChange?: (width: number) => void
   /** Reports final panel/tree widths after a drag ends (for per-project persistence). */
   onLayoutSizeChange?: (panelSize: number, treeSize: number) => void
 }
@@ -857,6 +860,7 @@ function useDragResize(
     persistedInitial?: number | null
     /** Called once with the final size when a drag ends (never mid-drag). */
     onSizeChange?: (size: number) => void
+    controlledSize?: number | null
   },
 ) {
   const snapCollapse = options?.snapCollapse ?? false
@@ -864,6 +868,7 @@ function useDragResize(
   const snapMaxSize = options?.snapMaxSize ?? max
   const minStoredSize = options?.minStoredSize ?? min
   const persistedInitial = options?.persistedInitial ?? null
+  const controlledSize = options?.controlledSize ?? null
   const [size, setSize] = useState(() => {
     if (typeof window === 'undefined') return initial
     // Per-project persisted value wins over the global localStorage fallback.
@@ -916,6 +921,13 @@ function useDragResize(
     const clamped = resolvePersistedResizeSize(persistedInitial, min, max)
     setSize((prev) => (prev === clamped ? prev : clamped))
   }, [persistedInitial, min, max, collapsed, maxCollapsed])
+
+  useEffect(() => {
+    if (controlledSize == null || !Number.isFinite(controlledSize) || dragging.current) return
+    if (collapsed || maxCollapsed) return
+    const clamped = resolvePersistedResizeSize(controlledSize, min, max)
+    setSize((prev) => (prev === clamped ? prev : clamped))
+  }, [controlledSize, min, max, collapsed, maxCollapsed])
 
   // Keep cachedSizeRef in sync with actual size when not collapsed
   useEffect(() => {
@@ -1356,6 +1368,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   restoreRef,
   savedPanelSize,
   savedTreeSize,
+  sidebarWidth: controlledSidebarWidth,
+  onSidebarWidthChange,
   onLayoutSizeChange,
 }, ref) {
   const confirm = useConfirmDialog()
@@ -1412,11 +1426,15 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   useEffect(() => { if (restoreRef) restoreRef.current = panel.restore }, [restoreRef, panel.restore])
 
   // Tree max is clamped so the editor pane never disappears
-  const treeMax = Math.max(240, panel.size - minEditorWidth)
-  const tree = useDragResize(260, 240, treeMax, 'horizontal', 'projectTreePaneWidth', {
+  const treeMax = Math.min(DEVELOPER_SIDEBAR_MAX_WIDTH, Math.max(DEVELOPER_SIDEBAR_MIN_WIDTH, panel.size - minEditorWidth))
+  const tree = useDragResize(controlledSidebarWidth ?? 260, DEVELOPER_SIDEBAR_MIN_WIDTH, treeMax, 'horizontal', 'projectTreePaneWidth', {
     snapCollapse: true,
-    persistedInitial: savedTreeSize ?? null,
-    onSizeChange: (size) => onLayoutSizeChange?.(panelSizeRef.current, size),
+    persistedInitial: controlledSidebarWidth ?? savedTreeSize ?? null,
+    controlledSize: controlledSidebarWidth,
+    onSizeChange: (size) => {
+      onSidebarWidthChange?.(size)
+      onLayoutSizeChange?.(panelSizeRef.current, size)
+    },
   })
   treeSizeRef.current = tree.size
 

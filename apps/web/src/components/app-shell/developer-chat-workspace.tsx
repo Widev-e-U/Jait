@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen } from 'lucide-react'
+import { AlertTriangle, FolderOpen, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
@@ -15,6 +15,7 @@ import { ConsentQueue } from '@/components/consent'
 import { TrajectoryPanel } from '@/components/debug/trajectory-panel'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
+import { TooltipHint } from '@/components/ui/tooltip'
 import type { ContextUsage } from '@/hooks/useChat'
 import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { haveRenderInputsChanged } from '@/lib/message-element-cache'
@@ -84,6 +85,7 @@ interface DeveloperChatWorkspaceProps {
   showDesktopProject: boolean
   showProject: boolean
   showScreenShare: boolean
+  showPanelHideButton: boolean
   suggestions: any[]
   threadTargetRepoRuntime: any
   token: string | null
@@ -112,6 +114,7 @@ interface DeveloperChatWorkspaceProps {
   onOpenMessagePath: (path: string) => void
   onOpenSourceControl: () => void
   onOpenTerminalFromToolCall: (...args: any[]) => void
+  onHidePanel: () => void
   onApprovalResponse: (requestId: string, approved: boolean) => Promise<void> | void
   onAskQueuedMessageInParallel: (id: string) => void
   onProviderChange: (provider: any) => void
@@ -197,6 +200,7 @@ export function DeveloperChatWorkspace({
   showDesktopProject,
   showProject,
   showScreenShare,
+  showPanelHideButton,
   suggestions,
   threadTargetRepoRuntime,
   token,
@@ -225,6 +229,7 @@ export function DeveloperChatWorkspace({
   onOpenMessagePath,
   onOpenSourceControl,
   onOpenTerminalFromToolCall,
+  onHidePanel,
   onApprovalResponse,
   onAskQueuedMessageInParallel,
   onProviderChange,
@@ -286,6 +291,19 @@ export function DeveloperChatWorkspace({
     setEditingMessageId(message.id)
   }, [messages])
   const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId)
+  const panelHideButton = showPanelHideButton ? (
+    <TooltipHint content="Hide chat panel">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute right-2 top-2 z-20 h-8 w-8 bg-background/80 backdrop-blur-sm"
+        onClick={onHidePanel}
+        aria-label="Hide chat panel"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </TooltipHint>
+  ) : null
 
   useEffect(() => {
     setEditingMessageId(null)
@@ -329,6 +347,7 @@ export function DeveloperChatWorkspace({
         className={`relative flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
         style={developerChatPanelStyle}
       >
+        {panelHideButton}
         <div className="w-full max-w-4xl space-y-8">
           <div className="text-center">
             <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -539,6 +558,7 @@ export function DeveloperChatWorkspace({
       className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
       style={developerChatPanelStyle}
     >
+      {panelHideButton}
       {!chatCollapsed && (
         <>
           {!showDebugPanel && isProjectChat && activeProjectHasRepo && (

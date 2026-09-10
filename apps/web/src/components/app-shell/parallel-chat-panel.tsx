@@ -1,4 +1,4 @@
-import { GitBranch, Maximize2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
@@ -35,8 +35,8 @@ interface ParallelChatPanelProps {
   projectNodeId?: string | null
   isMobile: boolean
   onSearchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
+  showHideButton: boolean
   onClose: () => void
-  onOpenAsPrimary: () => void
 }
 
 export function ParallelChatPanel({
@@ -55,8 +55,8 @@ export function ParallelChatPanel({
   projectNodeId,
   isMobile,
   onSearchFiles,
+  showHideButton,
   onClose,
-  onOpenAsPrimary,
 }: ParallelChatPanelProps) {
   const {
     messages,
@@ -126,37 +126,33 @@ export function ParallelChatPanel({
       className={
         isMobile
           ? 'absolute inset-0 z-30 flex min-h-0 flex-col bg-background'
-          : 'flex min-h-0 w-[min(42vw,560px)] shrink-0 flex-col border-l bg-background'
+          : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l bg-background'
       }
       aria-label="Secondary chat panel"
     >
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-        <GitBranch className="h-4 w-4 text-primary" />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{session.name || 'Untitled chat'}</div>
-          <div className="truncate text-[11px] text-muted-foreground">Secondary chat</div>
-        </div>
-        <TooltipHint content="Open as primary chat">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenAsPrimary} aria-label="Open as primary chat">
-          <Maximize2 className="h-4 w-4" />
-        </Button>
+      {showHideButton && (
+        <TooltipHint content="Hide chat panel">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-2 z-20 h-8 w-8 bg-background/80 backdrop-blur-sm"
+            onClick={onClose}
+            aria-label="Hide chat panel"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </TooltipHint>
-        <TooltipHint content="Close chat panel">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close chat panel">
-          <X className="h-4 w-4" />
-        </Button>
-        </TooltipHint>
-      </header>
+      )}
 
       <Conversation
         className="min-h-0 flex-1 border-b"
-        compact
         loading={isLoadingHistory}
-        loadingLabel="Loading branch"
+        loadingLabel="Loading chat"
         messageContents={messageContents}
         messageEstimateInputs={messageEstimateInputs}
         hasMore={hasMore}
         onLoadMore={loadOlderMessages}
+        showMinimap={!isMobile}
       >
         {messages.map((message, index) => (
           <Message
@@ -182,14 +178,13 @@ export function ParallelChatPanel({
             toolCalls={message.toolCalls}
             segments={message.segments}
             isStreaming={isLoading && index === messages.length - 1}
-            compact
             preferLlmUi
             provider={provider}
           />
         ))}
       </Conversation>
 
-      <div className="shrink-0 p-3">
+      <div className="shrink-0 px-4 pb-3">
         {error && !isLoading && (
           <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
@@ -219,11 +214,6 @@ export function ParallelChatPanel({
           projectNodeId={projectNodeId ?? undefined}
           projectId={session.projectId}
           chatId={session.id}
-          footerLeadingContent={(
-            <span className="inline-flex h-7 items-center rounded-md bg-muted px-2 text-xs font-medium text-muted-foreground">
-              Ask mode · independent snapshot
-            </span>
-          )}
         />
       </div>
     </section>

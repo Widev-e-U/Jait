@@ -79,6 +79,8 @@ interface DeveloperWorkspacePanesProps {
   onToggleProjectTree: () => void
   savedPanelSize?: number | null
   savedTreeSize?: number | null
+  sidebarWidth?: number | null
+  onSidebarWidthChange?: (width: number) => void
   onLayoutSizeChange?: (panelSize: number, treeSize: number) => void
 }
 
@@ -154,6 +156,8 @@ export function DeveloperWorkspacePanes({
   onToggleProjectTree,
   savedPanelSize,
   savedTreeSize,
+  sidebarWidth,
+  onSidebarWidthChange,
   onLayoutSizeChange,
 }: DeveloperWorkspacePanesProps) {
   const hasManagerThread = Boolean(automationSelectedThread)
@@ -223,6 +227,8 @@ export function DeveloperWorkspacePanes({
         restoreRef={mobile ? undefined : projectRestoreRef}
         savedPanelSize={mobile ? undefined : savedPanelSize}
         savedTreeSize={mobile ? undefined : savedTreeSize}
+        sidebarWidth={mobile ? undefined : sidebarWidth}
+        onSidebarWidthChange={mobile ? undefined : onSidebarWidthChange}
         onLayoutSizeChange={mobile ? undefined : onLayoutSizeChange}
       />
     </ErrorBoundary>

@@ -9,3 +9,11 @@ export function appendSecondaryChatPanel<T extends { session: { id: string } }>(
   if (panels.length >= MAX_SECONDARY_CHAT_PANELS) return panels
   return [...panels, panel]
 }
+
+export function getVisibleChatPanelCount(primaryVisible: boolean, secondaryPanelCount: number): number {
+  return (primaryVisible ? 1 : 0) + secondaryPanelCount
+}
+
+export function shouldShowChatPanelHideButton(visiblePanelCount: number): boolean {
+  return visiblePanelCount > 1
+}
