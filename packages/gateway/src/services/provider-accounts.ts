@@ -8,6 +8,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 import { AcpProvider, type AcpProviderConfig } from "../providers/acp-provider.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ClaudeRateLimitInfo, ProviderUsageService } from "./provider-usage.js";
+import { fetchCodexRateLimits } from "./provider-quota-fetchers.js";
 
 export interface ProviderAccountRecord {
   id: string;
@@ -80,6 +81,26 @@ export class ProviderAccountService {
 
   getType(providerType: string): ProviderAccountType | null {
     return this.listTypes().find((type) => type.providerType === providerType) ?? null;
+  }
+
+  /** Refresh exact subscription quota for providers with a side-effect-free API. */
+  async refreshUsage(userId: string): Promise<Record<string, string>> {
+    if (!this.usageService) return {};
+    const errors: Record<string, string> = {};
+    const codexAccounts = this.list(userId).filter((account) => account.providerType === "codex");
+    await Promise.all(codexAccounts.map(async (account) => {
+      if (account.nodeId !== "gateway") {
+        errors[account.id] = "Live quota refresh is not available for accounts on remote nodes yet.";
+        return;
+      }
+      try {
+        const response = await fetchCodexRateLimits(this.accountHome(account.id));
+        this.usageService?.recordCodexRateLimits(account.id, response);
+      } catch (error) {
+        errors[account.id] = error instanceof Error ? error.message : "Codex usage refresh failed";
+      }
+    }));
+    return errors;
   }
 
   get(id: string, userId: string): ProviderAccountRecord | null {

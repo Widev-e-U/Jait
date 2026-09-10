@@ -21,6 +21,7 @@ import { listJaitModels } from "../services/jait-models.js";
 import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { ProviderUsageService } from "../services/provider-usage.js";
+import { fetchOllamaUsage } from "../services/provider-quota-fetchers.js";
 import { summarizeProviderUsage } from "../services/usage-summary.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { WsControlPlane } from "../ws.js";
@@ -28,7 +29,7 @@ import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
 import { resetModelFetcherCaches } from "../providers/model-fetchers.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
-import { isJaitBackend, JAIT_BACKEND_DEFAULT_URLS, normalizeJaitBackendBaseUrl } from "@jait/shared";
+import { isJaitBackend, JAIT_BACKEND_DEFAULT_URLS, normalizeJaitBackendBaseUrl, parseJaitBackendInstances } from "@jait/shared";
 
 // ── Route registration ───────────────────────────────────────────
 
@@ -36,6 +37,15 @@ const GATEWAY_NODE_NAME = "Gateway";
 
 /** Probe budget for the OmniRoute connection test — long enough for a cold local start. */
 const OMNIROUTE_PROBE_TIMEOUT_MS = 8_000;
+
+function isOllamaCloudUrl(raw: string): boolean {
+  try {
+    const hostname = new URL(normalizeJaitBackendBaseUrl(raw, "ollama")).hostname.toLowerCase();
+    return hostname === "ollama.com" || hostname.endsWith(".ollama.com");
+  } catch {
+    return false;
+  }
+}
 
 type ProviderInfoPayload = ProviderSnapshot & { nodeId: string; nodeName: string };
 
@@ -105,20 +115,73 @@ export function registerProviderRoutes(
     return { usage: deps.providerUsageService?.listForUser(accountIds) ?? [] };
   });
 
-  // Historical usage summary for the avatar-menu usage modal: per-provider
-  // request counts bucketed hourly/daily/weekly, plus live quota snapshots.
+  // Subscription usage by connected provider profile. Ollama is a Jait
+  // backend profile because requests to it are routed through the Jait provider.
   app.get("/api/provider-usage/summary", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    if (!deps.sqlite) return reply.status(503).send({ error: "Usage summary is unavailable" });
     const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
-    const quotas = deps.providerUsageService?.listForUser(accounts.map((account) => account.id)) ?? [];
-    return summarizeProviderUsage(
-      deps.sqlite,
-      authUser.id,
-      accounts.map((account) => ({ id: account.id, providerType: account.providerType, label: account.label })),
-      quotas,
+    const quotaErrors = await deps.providerAccountService?.refreshUsage(authUser.id) ?? {};
+    const settings = deps.userService?.getSettings(authUser.id);
+    const apiKeys = settings?.apiKeys ?? {};
+    const instances = parseJaitBackendInstances(apiKeys["JAIT_BACKEND_INSTANCES"]);
+    const configuredOllamaBackends = instances.filter((instance) => instance.type === "ollama");
+    const hasLegacyOllama =
+      settings?.jaitBackend === "ollama" || Boolean(apiKeys["OLLAMA_URL"]?.trim());
+    const ollamaBackends = configuredOllamaBackends.length > 0
+      ? configuredOllamaBackends
+      : hasLegacyOllama
+        ? [{
+            id: "ollama",
+            type: "ollama" as const,
+            name: "Ollama",
+            baseUrl: apiKeys["OLLAMA_URL"]?.trim() || JAIT_BACKEND_DEFAULT_URLS.ollama,
+          }]
+        : [];
+    const explicitCloudApiKey = apiKeys["OLLAMA_API_KEY"]?.trim();
+
+    await Promise.all(ollamaBackends.map(async (backend) => {
+      const quotaAccountId = `jait-backend:${backend.id}`;
+      const backendApiKey =
+        "apiKey" in backend && isOllamaCloudUrl(backend.baseUrl)
+          ? backend.apiKey?.trim()
+          : undefined;
+      const apiKey = explicitCloudApiKey || backendApiKey;
+      if (!apiKey || !deps.providerUsageService) {
+        quotaErrors[quotaAccountId] = isOllamaCloudUrl(backend.baseUrl)
+          ? "Add an Ollama Cloud API key to this Jait backend to load subscription usage."
+          : "Self-hosted Ollama has no provider subscription limit.";
+        return;
+      }
+      try {
+        deps.providerUsageService.recordOllamaUsage(
+          quotaAccountId,
+          await fetchOllamaUsage(apiKey),
+        );
+      } catch (error) {
+        quotaErrors[quotaAccountId] =
+          error instanceof Error ? error.message : "Ollama usage refresh failed";
+      }
+    }));
+
+    const ollamaQuotaAccountIds = ollamaBackends.map(
+      (backend) => `jait-backend:${backend.id}`,
     );
+    const quotaAccountIds = [
+      ...accounts.map((account) => account.id),
+      ...ollamaQuotaAccountIds,
+    ];
+    const quotas = deps.providerUsageService?.listForUser(quotaAccountIds) ?? [];
+    return summarizeProviderUsage(accounts, quotas, {
+      quotaErrors,
+      jaitBackendProfiles: ollamaBackends.map((backend) => ({
+        id: `jait-backend:${backend.id}`,
+        providerType: "ollama",
+        providerLabel: "Ollama",
+        profileLabel: backend.name,
+        quotaAccountId: `jait-backend:${backend.id}`,
+      })),
+    });
   });
 
   app.post("/api/provider-accounts", async (request, reply) => {

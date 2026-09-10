@@ -31,6 +31,7 @@ const RATE_LIMIT_LABELS: Record<string, string> = {
   seven_day: 'Weekly limit',
   seven_day_opus: 'Opus weekly limit',
   seven_day_sonnet: 'Sonnet weekly limit',
+  monthly: 'Monthly limit',
   overage: 'Extra usage',
 }
 
@@ -131,9 +132,8 @@ export function UsageSettings({ token }: { token: string | null }) {
         <div>
           <h2 className="text-base font-medium">Codex</h2>
           <p className="text-sm text-muted-foreground">
-            Codex doesn't push rate-limit updates the way Claude Code does — the only way to check
-            is running <code className="text-xs bg-muted px-1 py-0.5 rounded">/status</code> in a
-            Codex chat, which costs a real turn. {codexAccounts.length > 0 ? 'Check there for now.' : 'No Codex accounts configured.'}
+            Jait reads Codex subscription limits directly when you open or refresh the Usage modal.
+            {codexAccounts.length > 0 ? ' Open Usage from the avatar menu for session and weekly limits.' : ' No Codex accounts configured.'}
           </p>
         </div>
       </Card>
