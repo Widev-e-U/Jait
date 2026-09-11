@@ -5333,6 +5333,7 @@ function App() {
                         sendTarget={sendTarget}
                         sessionInfo={sessionInfo}
                         setChatPanelElement={setChatPanelElement}
+                        chatPanelWidth={chatMeasuredWidth}
                         showDesktopProject={showDesktopProject}
                         showProject={showProject}
                         showScreenShare={showScreenShare}

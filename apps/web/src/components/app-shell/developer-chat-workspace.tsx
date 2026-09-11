@@ -53,6 +53,7 @@ interface DeveloperChatWorkspaceProps {
   changedFilesForComposer: any[]
   chatCollapsed: boolean
   chatMode: any
+  chatPanelWidth?: number | null
   chatProvider: any
   chatProviderRuntimeMode: any
   chatResponseStyle: any
@@ -197,6 +198,7 @@ export function DeveloperChatWorkspace({
   loadOlderMessages,
   limitReached,
   managerThreads,
+  chatPanelWidth: measuredChatPanelWidth,
   messageContents,
   messageQueue,
   messages,
@@ -272,25 +274,12 @@ export function DeveloperChatWorkspace({
   const [consentPresent, setConsentPresent] = useState(false)
   // Width of the chat panel, used to hide the floating top indicators when the
   // panel gets too narrow (they would overlap transcript text otherwise).
-  const [chatPanelWidth, setChatPanelWidth] = useState(0)
-  const chatPanelRef = useRef<HTMLDivElement | null>(null)
-  const attachChatPanelElement = useCallback(
-    (node: HTMLDivElement | null) => {
-      chatPanelRef.current = node
-      setChatPanelElement(node)
-    },
-    [setChatPanelElement],
-  )
-  useEffect(() => {
-    const el = chatPanelRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? el.clientWidth
-      setChatPanelWidth((prev) => (prev === width ? prev : width))
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
+  // Measured by the App-level `useChatPanelMeasure` hook and handed down via
+  // `setChatPanelElement` (attached to the panel root below). That hook
+  // re-measures whenever the root node changes, so this stays correct even
+  // though the panel swaps between an empty-state div and the transcript layout
+  // and remounts across sessions.
+  const chatPanelWidth = measuredChatPanelWidth ?? 0
   // 0 = not measured yet; treat as visible so indicators don't flash hidden.
   const showFloatingChatIndicators =
     chatPanelWidth === 0 || chatPanelWidth >= FLOATING_CHAT_INDICATORS_MIN_WIDTH
@@ -596,7 +585,7 @@ export function DeveloperChatWorkspace({
 
   return (
     <div
-      ref={attachChatPanelElement}
+      ref={setChatPanelElement}
       className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
       style={developerChatPanelStyle}
     >
