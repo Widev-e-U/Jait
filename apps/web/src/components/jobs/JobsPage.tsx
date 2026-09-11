@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
-import { JobCard } from './JobCard'
+import { JobsTable } from './JobsTable'
 import { CreateJobDialog } from './CreateJobDialog'
 import { JobHistoryDialog } from './JobHistoryDialog'
 import { JobsApi, type ScheduledJob, type JobRun } from '@/lib/jobs-api'
@@ -198,21 +198,16 @@ export function JobsPage() {
           </Button>
         </div>
       ) : (
-        /* Jobs grid */
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {jobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              recentRun={recentRuns[job.id]}
-              onToggle={handleToggle}
-              onTrigger={handleTrigger}
-              onDelete={handleDelete}
-              onEdit={setEditingJob}
-              onViewHistory={setHistoryJob}
-            />
-          ))}
-        </div>
+        /* Jobs table */
+        <JobsTable
+          jobs={jobs}
+          recentRuns={recentRuns}
+          onToggle={handleToggle}
+          onTrigger={handleTrigger}
+          onDelete={handleDelete}
+          onEdit={setEditingJob}
+          onViewHistory={setHistoryJob}
+        />
       )}
 
       {/* Pagination */}

@@ -145,17 +145,17 @@ test.describe('Job Card Actions', () => {
     return response.json()
   }
 
-  test('should display job card with correct information', async ({ authenticatedPage, apiToken }) => {
+  test('should display job row with correct information', async ({ authenticatedPage, apiToken }) => {
     // Create a job via API
     const job = await createTestJob(authenticatedPage, apiToken)
     
     await openJobsPage(authenticatedPage)
     
-    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
-    await expect(jobCard).toBeVisible()
-    await expect(jobCard.getByText(job.name, { exact: true })).toBeVisible()
-    await expect(jobCard.getByText('Agent Task', { exact: true })).toBeVisible()
-    await expect(jobCard.getByText('0 * * * *', { exact: true })).toBeVisible()
+    const jobRow = authenticatedPage.getByTestId(`job-row-${job.id}`)
+    await expect(jobRow).toBeVisible()
+    await expect(jobRow.getByText(job.name, { exact: true })).toBeVisible()
+    await expect(jobRow.getByText('Agent Task', { exact: true })).toBeVisible()
+    await expect(jobRow.getByText('0 * * * *', { exact: true })).toBeVisible()
   })
 
   test('should toggle job enabled state', async ({ authenticatedPage, apiToken }) => {
@@ -163,8 +163,8 @@ test.describe('Job Card Actions', () => {
     
     await openJobsPage(authenticatedPage)
     
-    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
-    const toggle = jobCard.locator('button[role="switch"]')
+    const jobRow = authenticatedPage.getByTestId(`job-row-${job.id}`)
+    const toggle = jobRow.locator('button[role="switch"]')
     
     // Check initial state
     await expect(toggle).toHaveAttribute('data-state', 'checked')
@@ -219,14 +219,14 @@ test.describe('Job Card Actions', () => {
     
     await openJobsPage(authenticatedPage)
     
-    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
-    await expect(jobCard).toBeVisible()
+    const jobRow = authenticatedPage.getByTestId(`job-row-${job.id}`)
+    await expect(jobRow).toBeVisible()
     
     await authenticatedPage.getByTestId(`job-delete-${job.id}`).click()
     await authenticatedPage.getByRole('button', { name: 'Delete' }).click()
     
     // Job should be removed from the list
-    await expect(authenticatedPage.getByTestId(`job-card-${job.id}`)).not.toBeVisible({ timeout: 10000 })
+    await expect(authenticatedPage.getByTestId(`job-row-${job.id}`)).not.toBeVisible({ timeout: 10000 })
   })
 })
 
