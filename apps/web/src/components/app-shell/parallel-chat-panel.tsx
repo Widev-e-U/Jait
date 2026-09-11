@@ -4,7 +4,7 @@ import type { ResponseStyle } from '@jait/shared'
 
 import { ChatComposerSurface, Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
 import { Button } from '@/components/ui/button'
-import { useChat, type ChatAttachment } from '@/hooks/useChat'
+import { useChat, type ChatAttachment, type ChatMode } from '@/hooks/useChat'
 import type { ProjectSession } from '@/hooks/useProjects'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
@@ -72,23 +72,77 @@ export function ParallelChatPanel({
   const [inputVersion, setInputVersion] = useState(0)
   const initialPromptSentRef = useRef(false)
 
+  // Composer selection is panel-local: it starts from whatever the originating
+  // request used, then the user can change it here without affecting the main chat.
+  const [panelMode, setPanelMode] = useState<ChatMode>('ask')
+  const [panelProvider, setPanelProvider] = useState<ProviderId>(provider)
+  const [panelRuntimeMode, setPanelRuntimeMode] = useState<RuntimeMode | undefined>(runtimeMode)
+  const [panelResponseStyle, setPanelResponseStyle] = useState<ResponseStyle>(responseStyle)
+  const [panelModel, setPanelModel] = useState<string | null>(model)
+  const [panelReasoningEffort, setPanelReasoningEffort] = useState<SessionReasoningEffort | null>(reasoningEffort)
+  const selectionCustomizedRef = useRef(false)
+
+  // Follow the originating selection until the user customizes this panel.
+  useEffect(() => {
+    if (selectionCustomizedRef.current) return
+    setPanelProvider(provider)
+    setPanelRuntimeMode(runtimeMode)
+    setPanelResponseStyle(responseStyle)
+    setPanelModel(model)
+    setPanelReasoningEffort(reasoningEffort)
+  }, [model, provider, reasoningEffort, responseStyle, runtimeMode])
+
+  const customizeSelection = useCallback(() => {
+    selectionCustomizedRef.current = true
+  }, [])
+
+  const handleProviderChange = useCallback((next: ProviderId) => {
+    customizeSelection()
+    setPanelProvider(next)
+  }, [customizeSelection])
+
+  const handleModelChange = useCallback((next: string | null) => {
+    customizeSelection()
+    setPanelModel(next)
+  }, [customizeSelection])
+
+  const handleRuntimeModeChange = useCallback((next: RuntimeMode) => {
+    customizeSelection()
+    setPanelRuntimeMode(next)
+  }, [customizeSelection])
+
+  const handleResponseStyleChange = useCallback((next: ResponseStyle) => {
+    customizeSelection()
+    setPanelResponseStyle(next)
+  }, [customizeSelection])
+
+  const handleReasoningEffortChange = useCallback((next: SessionReasoningEffort | null) => {
+    customizeSelection()
+    setPanelReasoningEffort(next)
+  }, [customizeSelection])
+
+  const handleModeChange = useCallback((next: ChatMode) => {
+    customizeSelection()
+    setPanelMode(next)
+  }, [customizeSelection])
+
   const sendPrompt = useCallback(async (prompt: ParallelChatPrompt) => {
     const result = await sendMessage(prompt.content, {
       token,
       sessionId: session.id,
-      mode: 'ask',
-      provider,
-      runtimeMode,
-      responseStyle,
-      model,
-      reasoningEffort,
+      mode: panelMode,
+      provider: panelProvider,
+      runtimeMode: panelRuntimeMode,
+      responseStyle: panelResponseStyle,
+      model: panelModel,
+      reasoningEffort: panelReasoningEffort,
       displayContent: prompt.displayContent,
       referencedFiles: prompt.referencedFiles,
       displaySegments: prompt.displaySegments,
       attachments: prompt.attachments,
     })
     return result
-  }, [model, provider, reasoningEffort, responseStyle, runtimeMode, sendMessage, session.id, token])
+  }, [panelMode, panelModel, panelProvider, panelReasoningEffort, panelResponseStyle, panelRuntimeMode, sendMessage, session.id, token])
 
   useEffect(() => {
     if (!initialPrompt || isLoadingHistory || initialPromptSentRef.current) return
@@ -201,12 +255,18 @@ export function ParallelChatPanel({
           onStop={cancelRequest}
           isLoading={isLoading}
           placeholder="Ask about the running task…"
-          mode="ask"
-          provider={provider}
-          providerRuntimeMode={runtimeMode}
-          cliModel={model}
-          reasoningEffort={reasoningEffort}
-          responseStyle={responseStyle}
+          mode={panelMode}
+          onModeChange={handleModeChange}
+          provider={panelProvider}
+          onProviderChange={handleProviderChange}
+          providerRuntimeMode={panelRuntimeMode}
+          onProviderRuntimeModeChange={handleRuntimeModeChange}
+          cliModel={panelModel}
+          onCliModelChange={handleModelChange}
+          reasoningEffort={panelReasoningEffort}
+          onReasoningEffortChange={handleReasoningEffortChange}
+          responseStyle={panelResponseStyle}
+          onResponseStyleChange={handleResponseStyleChange}
           availableFiles={availableFiles}
           availableSkills={availableSkills}
           onSearchFiles={onSearchFiles}
