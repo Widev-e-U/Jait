@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.839](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.839) — 2026-09-11
+- feat(web): replace jobs card grid with a compact jobs table — 3bc7d468
+- fix(web): hand the measured chat panel width down from App — 2d081ed6
+- fix(gateway): stop quarantining re-reads whose earlier result was compacted — 969dbb57
+
 ## [v0.1.838](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.838) — 2026-09-10
 - feat(web): unify panel chat composer and fix floating indicator overlap — 612769b5
 
