@@ -3125,6 +3125,10 @@ export async function runAgentLoop(
           log.info(
             `Context compacted: ${usage.total}/${contextWindow} tokens (${(usage.ratio * 100).toFixed(0)}%)`,
           );
+          // Coverage tracking describes tool results that were just summarised
+          // away. Keeping it would mark the model's legitimate re-reads of that
+          // now-invisible content as stalled orbits over the same line range.
+          readCoverageByTarget.clear();
         }
       }
     }
@@ -3806,8 +3810,28 @@ export async function runAgentLoop(
         if (duplicateInterventionSignatures.size > 0 && ignoredInterventionSignatures.size === 0) {
           duplicateInterventionSignatures.clear();
         }
+        // A call is only a *duplicate* if the earlier identical call is still
+        // visible to the model. Compaction summarises old tool rounds away
+        // wholesale (pruneHistory / compactActiveTurnHistory), so a repeated
+        // read of a file whose contents were just pruned is not a loop — it is
+        // the model's only route back to content it can no longer see. Counting
+        // those as duplicates skipped the read and quarantined the tool, which
+        // is exactly what turned the re-read treadmill into
+        // "Skipped repeated tool call (read)".
+        const signaturesStillVisible = new Set<string>();
+        for (const message of history) {
+          if (message.role === "assistant" && message.tool_calls?.length) {
+            for (const priorCall of message.tool_calls) {
+              signaturesStillVisible.add(toolCallSignature(priorCall));
+            }
+          }
+        }
+        const previousCallsVisible = currentCallSignatures.some((signature) =>
+          signaturesStillVisible.has(signature)
+        );
+
         const callSignature = JSON.stringify([...currentCallSignatures].sort());
-        if (callSignature === lastToolCallSignature) {
+        if (callSignature === lastToolCallSignature && previousCallsVisible) {
           duplicateCallStreak++;
         } else {
           lastToolCallSignature = callSignature;
@@ -3818,13 +3842,29 @@ export async function runAgentLoop(
         /** Signatures past a hard limit — skipped outright, never merely nudged. */
         const exhaustedSignatures = new Set<string>();
         for (const signature of currentCallSignatures) {
-          const occurrences = (toolCallOccurrences.get(signature) ?? 0) + 1;
-          toolCallOccurrences.set(signature, occurrences);
-          if (occurrences >= MAX_SAME_TOOL_CALLS_PER_TURN) repeatedAcrossTurn.add(signature);
-
+          // The hard cap is a turn-wide backstop, so it counts every occurrence
+          // even when the earlier result has been summarised away. It is what
+          // eventually stops a model that keeps re-reading content that
+          // compaction keeps erasing.
           const lifetime = (toolCallLifetimeOccurrences.get(signature) ?? 0) + 1;
           toolCallLifetimeOccurrences.set(signature, lifetime);
           if (lifetime >= MAX_SAME_TOOL_CALLS_PER_TURN_HARD) exhaustedSignatures.add(signature);
+
+          // The earlier identical call may have been summarised out of the
+          // window by compaction. Repeating it is then not a loop: it is the
+          // only route back to content the model can no longer see. Neither the
+          // per-turn repeat budget nor the identical-failure budget can be
+          // judged from a result that is no longer in the conversation, so give
+          // the call a fresh budget instead of counting it as a repeat.
+          if (!signaturesStillVisible.has(signature)) {
+            toolCallOccurrences.set(signature, 1);
+            repeatedFailureCounts.delete(signature);
+            continue;
+          }
+
+          const occurrences = (toolCallOccurrences.get(signature) ?? 0) + 1;
+          toolCallOccurrences.set(signature, occurrences);
+          if (occurrences >= MAX_SAME_TOOL_CALLS_PER_TURN) repeatedAcrossTurn.add(signature);
 
           // A call that keeps returning the same error is never worth another
           // attempt — the tool is broken or misused for the whole turn.

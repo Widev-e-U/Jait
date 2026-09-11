@@ -3283,6 +3283,98 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(preservedRecentEvidence).toBe(true);
   });
 
+  it("does not quarantine a re-read whose earlier result compaction erased", async () => {
+    // Observed in a real session: across a long investigation the model re-read
+    // the same file every few rounds. Each read's result was summarised away by
+    // active-turn compaction long before the next read, so the model was never
+    // circling content it could still see — yet the per-turn duplicate counter
+    // kept the old occurrences, hit its limit, and answered the read with
+    // "Skipped repeated tool call (read); temporarily quarantining read".
+    // Repeating a call whose earlier result is no longer in the window is a
+    // re-read, not a loop.
+    let executedReads = 0;
+    let fetchCalls = 0;
+    const events: Array<{ type: string; message?: string; pruned?: boolean }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const round = fetchCalls++;
+      if (round % 10 === 0 && round <= 50) {
+        return toolCallSSE(`read-${round}`, "read", { path: "big.ts" });
+      }
+      if (round > 50) return textResponse("Done.");
+      // Distinct filler calls so the *filler* never trips the duplicate guard —
+      // only the read repeats, and it repeats with an identical signature.
+      return toolCallSSE(`search-${round}`, "search", { pattern: `filler-${round}` });
+    });
+
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "test-model",
+          contextWindow: 4_000,
+        },
+        history: [
+          { role: "system", content: "system" },
+          { role: "user", content: "Keep reading big.ts until you can explain it." },
+        ],
+        toolSchemas: [
+          {
+            type: "function",
+            function: {
+              name: "read",
+              description: "Read a file",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "search",
+              description: "Search",
+              parameters: { type: "object", properties: {} },
+            },
+          },
+        ],
+        hasTools: true,
+        sessionId: "session-compacted-reread",
+        abort: new AbortController(),
+        maxRounds: 60,
+        continuous: true,
+        mode: "agent",
+        onEvent: (event) => {
+          events.push(event as { type: string; message?: string; pruned?: boolean });
+        },
+      },
+      async (name) => {
+        if (name === "read") {
+          executedReads++;
+          return {
+            ok: true,
+            message: "read complete",
+            data: { output: `contents ${"x".repeat(2_000)}` },
+          };
+        }
+        return {
+          ok: true,
+          message: "search complete",
+          data: { output: `filler ${"y".repeat(2_000)}` },
+        };
+      },
+    );
+
+    // Compaction must actually have run, otherwise the test proves nothing.
+    expect(events.some((event) => event.type === "context_usage" && event.pruned)).toBe(true);
+    expect(result.content).toBe("Done.");
+    expect(executedReads).toBe(6);
+    expect(
+      events.some(
+        (event) =>
+          event.type === "steering" && /Skipped repeated tool call/i.test(event.message ?? ""),
+      ),
+    ).toBe(false);
+  });
+
   it("keeps tool results verbatim below the Codex-style trigger — no lossy truncation", async () => {
     // This usage band (~60-65% of the window) is exactly where the old scheme
     // fired: it truncated older tool results into head/tail stubs. Codex-style
