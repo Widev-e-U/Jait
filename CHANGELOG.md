@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.845](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.845) — 2026-09-12
+- fix(desktop): preserve Windows resource path in gateway test — 45e34302
+- perf(web): reduce long-chat minimap work — c4c2157e
+
 ## [v0.1.844](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.844) — 2026-09-12
 - feat(desktop): host the gateway from the Tauri app — 9a6da115
 
