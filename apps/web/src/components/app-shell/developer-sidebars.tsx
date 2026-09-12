@@ -16,6 +16,7 @@ import {
 } from '@/lib/developer-sidebar'
 
 interface DeveloperSidebarsProps {
+  changedFilesCount?: number
   activeProject: ActiveProjectState
   activeProjectId: string | null
   activeSessionId: string | null
@@ -72,6 +73,7 @@ interface DeveloperSidebarsProps {
 }
 
 export function DeveloperSidebars({
+  changedFilesCount = 0,
   activeProject,
   activeProjectId,
   activeSessionId,
@@ -189,12 +191,17 @@ export function DeveloperSidebars({
                 <Button
                   variant={showSidebar && sidebarView === 'git' ? 'secondary' : 'ghost'}
                   size="sm"
-                  className="h-9 w-9 rounded-md p-0"
+                  className="relative h-9 w-9 rounded-md p-0"
                   onClick={() => onSelectSidebarView('git')}
                   aria-label="Source Control"
                   aria-pressed={showSidebar && sidebarView === 'git'}
                 >
                   <GitBranch className="h-4 w-4" />
+                  {changedFilesCount > 0 && (
+                    <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">
+                      {changedFilesCount > 99 ? '99+' : changedFilesCount}
+                    </span>
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">Source Control</TooltipContent>

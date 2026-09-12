@@ -50,7 +50,7 @@ describe('gitApi remote node routing', () => {
   it('sends the owning project node with Windows source-control requests', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({}),
+      json: async () => makeStatus(),
     })
     vi.stubGlobal('fetch', fetchMock)
 

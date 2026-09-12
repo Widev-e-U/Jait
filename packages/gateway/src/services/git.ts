@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * Server-side git operations service.
  *
@@ -10,7 +11,7 @@ import { exec as execCb, spawn } from "node:child_process";
 import { readFile, writeFile, unlink, mkdir, rm, readdir, stat, lstat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execCb(
@@ -41,6 +42,8 @@ function trimCommandOutput(stdout: string): string {
 // this process and every client that receives the diff payload — desktop
 // renderers hit V8's ~2 GB heap ceiling and OOM-crash on every reconnect.
 const MAX_DIFF_FILE_BYTES = 10 * 1024 * 1024;
+/** Ceiling for one batched `git cat-file --batch` diff read; past it we fall back to per-file reads. */
+const MAX_DIFF_BATCH_OUTPUT_BYTES = 64 * 1024 * 1024;
 const COMMITTABLE_PATHSPEC = '-- . ":(exclude).jait/release-checkout-*"';
 
 // A repo is treated as "large" (and routed through the fast CoW worktree
@@ -64,23 +67,142 @@ function escapeShellArg(value: string): string {
   return value.replace(/(["\\$`])/g, "\\$1");
 }
 
+/**
+ * Read many revision blobs (`<rev>:<path>` specs) in a single
+ * `git cat-file --batch` process instead of one `git show` per file. A diff of
+ * a 40-file change drops from 40 process spawns to one, which is the dominant
+ * cost of opening the diff HUD on large changesets. Objects that don't exist
+ * (new files, deleted parents, bad refs) map to the empty string, matching the
+ * old best-effort `git show` behaviour. Oversized blobs get the same
+ * "too large to diff" placeholder the working-tree reader uses so a stray
+ * artifact can't blow up the payload.
+ */
+async function readBlobsBatch(
+  cwd: string,
+  specs: readonly string[],
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  const unique = [...new Set(specs)];
+  if (!unique.length) return results;
+
+  const input = Buffer.from(unique.map((spec) => `${spec}\n`).join(""), "utf8");
+  const stdout = await gitExecBufferArgs(cwd, ["cat-file", "--batch"], DEFAULT_TIMEOUT, {
+    input,
+    maxOutputBytes: MAX_DIFF_BATCH_OUTPUT_BYTES,
+  });
+
+  let offset = 0;
+  for (const spec of unique) {
+    if (offset >= stdout.length) break;
+    const headerEnd = stdout.indexOf(0x0a, offset);
+    if (headerEnd === -1) break;
+    const header = stdout.toString("utf8", offset, headerEnd);
+    offset = headerEnd + 1;
+    if (header.endsWith(" missing")) {
+      results.set(spec, "");
+      continue;
+    }
+    const size = Number.parseInt(header.slice(header.lastIndexOf(" ") + 1), 10);
+    if (!Number.isFinite(size) || size < 0) {
+      results.set(spec, "");
+      continue;
+    }
+    if (size > MAX_DIFF_FILE_BYTES) {
+      results.set(spec, `(file too large to diff: ${(size / 1048576).toFixed(1)} MB, limit ${(MAX_DIFF_FILE_BYTES / 1048576).toFixed(0)} MB)`);
+    } else {
+      results.set(spec, trimCommandOutput(stdout.toString("utf8", offset, offset + size)));
+    }
+    offset += size + 1;
+  }
+  return results;
+}
+
+/**
+ * Batch reader that degrades to per-file `git show` if the single `cat-file`
+ * process fails (output cap exceeded, git too old, repo mid-GC). The fallback
+ * is still bounded to `DIFF_READ_CONCURRENCY` spawns at once, never all N.
+ */
+async function readBlobsBatchSafe(
+  cwd: string,
+  specs: readonly string[],
+): Promise<Map<string, string>> {
+  try {
+    return await readBlobsBatch(cwd, specs);
+  } catch {
+    const results = new Map<string, string>();
+    await mapWithConcurrency([...new Set(specs)], DIFF_READ_CONCURRENCY, async (spec) => {
+      try {
+        results.set(spec, trimCommandOutput(await gitExec(cwd, `show ${JSON.stringify(spec)}`)));
+      } catch {
+        results.set(spec, "");
+      }
+    });
+    return results;
+  }
+}
+
+/** How many file contents a diff request reads at once. */
+const DIFF_READ_CONCURRENCY = 8;
+
+/** Normalize a requested path subset; `undefined`/empty means "every change". */
+function normalizeDiffPathFilter(paths?: string[]): Set<string> | null {
+  if (!paths?.length) return null;
+  const filter = new Set<string>();
+  for (const raw of paths) {
+    if (typeof raw !== "string") continue;
+    const normalized = raw.replace(/^\/+/, "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (normalized) filter.add(normalized);
+  }
+  return filter.size ? filter : null;
+}
+
+function matchesDiffPathFilter(filePath: string, filter: Set<string> | null): boolean {
+  if (!filter) return true;
+  const normalized = filePath.replace(/\\/g, "/");
+  return filter.has(normalized) || filter.has(normalized.replace(/^\.\//, ""));
+}
+
+/** Ordered bounded-concurrency map: fast for I/O, never spawns N processes at once. */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return [];
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index]!, index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 /** True only for descendants of Jait's owned worktree root. */
 export function isManagedWorktreePath(worktreePath: string): boolean {
-  const managedRoot = resolve(homedir(), ".jait", "worktrees");
+  const managedRoot = resolve(getStateDirectory(), "worktrees");
   const candidate = resolve(worktreePath);
   return candidate !== managedRoot && candidate.startsWith(`${managedRoot}${sep}`);
 }
 
 async function getBranchUpstream(cwd: string, branch: string): Promise<string | null> {
-  const ref = escapeShellArg(`refs/heads/${branch}`);
-  const upstream = await gitExec(cwd, `for-each-ref --format="%(upstream:short)" "${ref}"`).catch(() => "");
-  return upstream.trim() || null;
+  return BRANCH_UPSTREAM_MEMO(repoFactKey(cwd, `upstream${GIT_FACT_SEP}${branch}`), async () => {
+    const ref = escapeShellArg(`refs/heads/${branch}`);
+    const upstream = await gitExec(cwd, `for-each-ref --format="%(upstream:short)" "${ref}"`).catch(() => "");
+    return upstream.trim() || null;
+  });
 }
 
 async function getConfiguredBranchRemote(cwd: string, branch: string): Promise<string | null> {
-  const key = escapeShellArg(`branch.${branch}.remote`);
-  const remote = await gitExec(cwd, `config --default "" --get "${key}"`).catch(() => "");
-  return remote.trim() || null;
+  return BRANCH_REMOTE_MEMO(repoFactKey(cwd, `branch-remote${GIT_FACT_SEP}${branch}`), async () => {
+    const key = escapeShellArg(`branch.${branch}.remote`);
+    const remote = await gitExec(cwd, `config --default "" --get "${key}"`).catch(() => "");
+    return remote.trim() || null;
+  });
 }
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -256,31 +378,287 @@ export interface ParsedRemote {
 // ── Per-worktree mutex ─────────────────────────────────────────────
 
 /**
- * Serializes git operations per working directory to prevent index.lock
- * races when multiple threads/requests target the same repo or worktree.
+ * Per-working-directory reader/writer lock.
+ *
+ * Mutating git commands (commit, checkout, merge, add, …) must never overlap
+ * inside one repo: that is what index.lock races came from. Pure reads
+ * (`status`, `diff`, `show`, `log`, `cat-file`, …) only take transient locks
+ * and are safe to overlap, so they share the repo concurrently. Every reader
+ * still blocks writers and vice versa, so writers keep the old serialization
+ * guarantee while read-heavy surfaces (status badge, diff HUD) stop queueing
+ * behind each other.
  */
-const gitLocks = new Map<string, Promise<unknown>>();
+type GitLockMode = "read" | "write";
 
-function withGitLock<T>(cwd: string, fn: () => Promise<T>): Promise<T> {
-  const key = cwd.replace(/\\/g, "/");
-  const prev = gitLocks.get(key) ?? Promise.resolve();
-  const next = prev.then(fn, fn);           // run even if previous rejected
-  gitLocks.set(key, next);
-  // Cleanup: swallow rejections on the derived chain so Node doesn't
-  // report unhandled rejections — callers catch on `next` directly.
-  next.catch(() => {}).finally(() => {
-    if (gitLocks.get(key) === next) gitLocks.delete(key);
+interface GitLockState {
+  readers: number;
+  writerActive: boolean;
+  /** FIFO waiters; a draining writer blocks queued readers to avoid starvation. */
+  waiters: Array<{ mode: GitLockMode; grant: () => void }>;
+}
+
+const gitLocks = new Map<string, GitLockState>();
+
+/**
+ * git subcommands that never mutate the index, refs or object database and can
+ * therefore run concurrently with other readers. Anything not listed (unknown
+ * subcommands, plumbing that writes, `branch -d`, `stash`, `worktree`, …)
+ * defaults to exclusive, so the safe behaviour is what you get for free.
+ */
+const GIT_READ_ONLY_SUBCOMMANDS = new Set([
+  "status",
+  "diff",
+  "show",
+  "log",
+  "rev-parse",
+  "rev-list",
+  "cat-file",
+  "ls-files",
+  "ls-tree",
+  "for-each-ref",
+  "merge-base",
+  "describe",
+  "shortlog",
+  "name-rev",
+  "blame",
+  "whatchanged",
+  "count-objects",
+  "var",
+  "grep",
+  "show-ref",
+]);
+
+/** Classify a `git <args>` invocation as a concurrent-safe read or a mutation. */
+export function gitCommandMode(args: string): GitLockMode {
+  const match = args.trim().match(/^([a-z][a-z0-9-]*)/i);
+  const subcommand = match?.[1]?.toLowerCase() ?? "";
+  if (!subcommand) return "write";
+  // `config --get`/`--list` only read; bare `config <k> <v>` writes.
+  if (subcommand === "config") return /\s--(get|get-all|list|get-regexp)\b/.test(args) ? "read" : "write";
+  // `remote -v` / bare `remote` list; `remote add`/`set-url` write.
+  if (subcommand === "remote") return /^remote(\s+-v|\s*)$/.test(args.trim()) ? "read" : "write";
+  // `branch --list`-style reads only.
+  if (subcommand === "branch") {
+    return /\s(--list|-l|--all|-a|--remotes|-r|--show-current|--contains|--merged|--no-merged|--format)\b/.test(args)
+      ? "read"
+      : "write";
+  }
+  if (subcommand === "symbolic-ref") return args.trim().split(/\s+/).length <= 2 ? "read" : "write";
+  return GIT_READ_ONLY_SUBCOMMANDS.has(subcommand) ? "read" : "write";
+}
+
+function acquireGitLock(key: string, mode: GitLockMode): Promise<() => void> {
+  const state = gitLocks.get(key) ?? { readers: 0, writerActive: false, waiters: [] };
+  gitLocks.set(key, state);
+
+  return new Promise<() => void>((resolve) => {
+    const release = () => {
+      if (mode === "read") state.readers = Math.max(0, state.readers - 1);
+      else state.writerActive = false;
+      drain(key, state);
+    };
+    if (canGrant(state, mode)) {
+      reserve(state, mode);
+      resolve(release);
+      return;
+    }
+    state.waiters.push({
+      mode,
+      grant: () => {
+        reserve(state, mode);
+        resolve(release);
+      },
+    });
   });
-  return next;
+}
+
+function canGrant(state: GitLockState, mode: GitLockMode): boolean {
+  if (state.writerActive) return false;
+  if (mode === "read") return state.waiters.length === 0;
+  return state.readers === 0 && state.waiters.length === 0;
+}
+
+function reserve(state: GitLockState, mode: GitLockMode): void {
+  if (mode === "read") state.readers += 1;
+  else state.writerActive = true;
+}
+
+function drain(key: string, state: GitLockState): void {
+  // A queued writer takes priority: grant it only when the repo is idle.
+  while (state.waiters.length) {
+    const head = state.waiters[0]!;
+    if (state.writerActive) return;
+    if (head.mode === "read") {
+      // Grant every consecutive reader at the head of the queue in one go.
+      do {
+        state.waiters.shift()!.grant();
+      } while (state.waiters[0]?.mode === "read");
+      continue;
+    }
+    if (state.readers > 0) return; // readers still draining
+    state.waiters.shift()!.grant();
+  }
+  if (!state.writerActive && state.readers === 0 && gitLocks.get(key) === state) {
+    gitLocks.delete(key);
+  }
+}
+
+function withGitLock<T>(cwd: string, fn: () => Promise<T>, mode: GitLockMode = "write"): Promise<T> {
+  const key = resolve(cwd).replace(/\\/g, "/");
+  return acquireGitLock(key, mode).then(async (release) => {
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  });
+}
+
+/** Run a git command under the repo's shared reader lock (concurrent-safe read). */
+export function gitExecRead(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
+  return withGitLock(cwd, async () => {
+    const { stdout } = await exec(`git ${args}`, { cwd, timeout });
+    return trimCommandOutput(stdout);
+  }, "read");
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+/**
+ * Promise-aware value-TTL memo.
+ *
+ * Git surfaces repeatedly ask the same "constant" questions — is this path a
+ * repo, is `gh` installed — and each probe costs a process spawn. This memo
+ * collapses those to at most one spawn per TTL window and also dedupes probes
+ * that arrive while the first one is still in flight. TTLs are keyed off the
+ * *value* so cheap negative answers (e.g. "not a repo yet") can expire almost
+ * immediately while stable positive answers are cached for longer. Failures are
+ * never cached.
+ */
+interface ValueMemo<T> {
+  (key: string, factory: () => Promise<T>): Promise<T>;
+  /** Forget a cached value so the next call re-probes. */
+  invalidate(key: string): void;
+  /** Forget every entry whose key starts with `prefix` (per-repo fact groups). */
+  invalidatePrefix(prefix: string): void;
+  /** Forget everything (tests / explicit refresh). */
+  clear(): void;
+}
+
+function createValueMemo<T>(ttlFor: (value: T) => number): ValueMemo<T> {
+  const cache = new Map<string, { value: T; expiresAt: number }>();
+  const pending = new Map<string, Promise<T>>();
+  const memo = ((key: string, factory: () => Promise<T>): Promise<T> => {
+    const hit = cache.get(key);
+    if (hit) {
+      if (hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
+      cache.delete(key);
+    }
+    const inflight = pending.get(key);
+    if (inflight) return inflight;
+    const promise = factory()
+      .then((value) => {
+        pending.delete(key);
+        cache.set(key, { value, expiresAt: Date.now() + ttlFor(value) });
+        return value;
+      })
+      .catch((error: unknown) => {
+        pending.delete(key);
+        throw error;
+      });
+    pending.set(key, promise);
+    return promise;
+  }) as ValueMemo<T>;
+  memo.invalidate = (key) => { cache.delete(key); };
+  memo.invalidatePrefix = (prefix) => {
+    for (const key of [...cache.keys()]) if (key.startsWith(prefix)) cache.delete(key);
+  };
+  memo.clear = () => { cache.clear(); pending.clear(); };
+  return memo;
+}
+
+const IS_REPO_MEMO = createValueMemo<boolean>((isRepo) => (isRepo ? 60_000 : 1_000));
+const GH_AVAILABLE_MEMO = createValueMemo<boolean>((available) => (available ? 300_000 : 10_000));
+// Remote topology and branch-tracking facts change only on explicit git writes
+// (`remote add`, `push -u`, `branch --set-upstream`), so they stay cached until a
+// write to that repo drops them. Every value below is positive when true, so the
+// long TTL is safe: a negative answer means the fact genuinely isn't configured.
+const REMOTE_LIST_MEMO = createValueMemo<string[]>(() => 300_000);
+const REMOTE_URL_MEMO = createValueMemo<string | null>(() => 60_000);
+const HAS_REMOTE_MEMO = createValueMemo<boolean>((exists) => (exists ? 300_000 : 5_000));
+const BRANCH_UPSTREAM_MEMO = createValueMemo<string | null>((upstream) => (upstream ? 300_000 : 5_000));
+const BRANCH_REMOTE_MEMO = createValueMemo<string | null>((remote) => (remote ? 300_000 : 5_000));
+// Short-TTL memo for whole status payloads: several surfaces (badge, HUD, panel,
+// watcher) and several clients poll the same repo within the same second, and
+// each uncached poll costs 3+ git spawns. Cleared by any write to the repo.
+const STATUS_MEMO_MS = 1_000;
+const STATUS_MEMO = createValueMemo<GitStatusResult | null>(() => STATUS_MEMO_MS);
+// The branch list is read by pickers/panels that can re-mount on every render,
+// and each uncached list costs 3-4 git spawns. Branch/remote/worktree topology
+// only changes on a git write (which drops this), so a short TTL absorbs the
+// burst without ever serving stale topology across a mutation.
+const BRANCH_LIST_MEMO_MS = 1_000;
+const BRANCH_LIST_MEMO = createValueMemo<GitListBranchesResult>(() => BRANCH_LIST_MEMO_MS);
+// Resolving the main repo root costs a `rev-parse` per call and is hit by every
+// preferred-remote lookup; like the facts above it only moves on a write.
+const MAIN_REPO_ROOT_MEMO = createValueMemo<string>(() => 300_000);
+const GIT_FACT_SEP = "\u0000";
+
+/** Shared frozen payload for a directory that is not a git repo. */
+const EMPTY_STATUS: GitStatusResult = Object.freeze({
+  branch: null,
+  hasWorkingTreeChanges: false,
+  index: { files: [], insertions: 0, deletions: 0 },
+  workingTree: { files: [], insertions: 0, deletions: 0 },
+  hasUpstream: false,
+  aheadCount: 0,
+  behindCount: 0,
+  pr: null,
+  ghAvailable: false,
+  prProvider: "none",
+  remoteUrl: null,
+}) as GitStatusResult;
+
+/** Cache key for per-repo memos; absolute + normalized so aliases collapse. */
+function repoMemoKey(cwd: string): string {
+  return resolve(cwd).replace(/\\/g, "/");
+}
+
+/** Namespaced cache key for one repo fact, so a write can drop the whole group. */
+function repoFactKey(cwd: string, fact: string): string {
+  return `${repoMemoKey(cwd)}${GIT_FACT_SEP}${fact}`;
+}
+
+/** Drop memoized repo facts for a path (call after init/clone creates a repo). */
+export function invalidateGitRepoMemo(cwd: string): void {
+  dropRepoGitCaches(cwd);
+}
+
+/** Drop every cached fact about one repo after a command that may change it. */
+function dropRepoGitCaches(cwd: string): void {
+  const prefix = `${repoMemoKey(cwd)}${GIT_FACT_SEP}`;
+  IS_REPO_MEMO.invalidatePrefix(prefix);
+  REMOTE_LIST_MEMO.invalidatePrefix(prefix);
+  REMOTE_URL_MEMO.invalidatePrefix(prefix);
+  HAS_REMOTE_MEMO.invalidatePrefix(prefix);
+  BRANCH_UPSTREAM_MEMO.invalidatePrefix(prefix);
+  BRANCH_REMOTE_MEMO.invalidatePrefix(prefix);
+  STATUS_MEMO.invalidatePrefix(prefix);
+  BRANCH_LIST_MEMO.invalidatePrefix(prefix);
+  MAIN_REPO_ROOT_MEMO.invalidatePrefix(prefix);
+}
+
+
 async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
-  return withGitLock(cwd, async () => {
+  const mode = gitCommandMode(args);
+  const output = await withGitLock(cwd, async () => {
     const { stdout } = await exec(`git ${args}`, { cwd, timeout });
     return trimCommandOutput(stdout);
-  });
+  }, mode);
+  // Any mutation can change branch/remote/status facts; drop that repo's memo
+  // group so the next read re-probes instead of serving a stale badge.
+  if (mode === "write") dropRepoGitCaches(cwd);
+  return output;
 }
 
 export { gitExec };
@@ -294,6 +672,8 @@ export interface GitArgExecOptions {
   env?: NodeJS.ProcessEnv;
   redactions?: readonly string[];
   maxOutputBytes?: number;
+  /** Payload written to the child's stdin before it is closed. */
+  input?: string | Buffer;
 }
 
 const DEFAULT_ARG_OUTPUT_BYTES = 16 * 1024 * 1024;
@@ -315,7 +695,7 @@ function execArgs(
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env ?? process.env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       windowsHide: true,
     });
     const stdoutChunks: Buffer[] = [];
@@ -343,8 +723,17 @@ function execArgs(
       target.push(chunk);
     };
 
+    if (!child.stdout || !child.stderr) {
+      finish(new Error(`${command} failed to start.`));
+      return;
+    }
     child.stdout.on("data", (chunk: Buffer) => append(stdoutChunks, chunk));
     child.stderr.on("data", (chunk: Buffer) => append(stderrChunks, chunk));
+    if (options.input !== undefined && child.stdin) {
+      // EPIPE is expected when the child exits before consuming all input.
+      child.stdin.on("error", () => {});
+      child.stdin.end(options.input);
+    }
     child.on("error", (error) => finish(new Error(
       redactCommandError(error.message, options.redactions),
     )));
@@ -373,10 +762,11 @@ export async function gitExecArgs(
   timeout = DEFAULT_TIMEOUT,
   options: GitArgExecOptions = {},
 ): Promise<string> {
+  const mode = gitCommandMode(args.join(" "));
   return withGitLock(cwd, async () => {
     const { stdout } = await execArgs("git", args, { cwd, timeout, ...options });
     return trimCommandOutput(stdout.toString("utf8"));
-  });
+  }, mode);
 }
 
 export async function gitExecBufferArgs(
@@ -385,10 +775,11 @@ export async function gitExecBufferArgs(
   timeout = DEFAULT_TIMEOUT,
   options: GitArgExecOptions = {},
 ): Promise<Buffer> {
+  const mode = gitCommandMode(args.join(" "));
   return withGitLock(cwd, async () => {
     const { stdout } = await execArgs("git", args, { cwd, timeout, ...options });
     return stdout;
-  });
+  }, mode);
 }
 
 function gitRevisionPath(filePath: string): string {
@@ -407,15 +798,13 @@ export async function ghExecArgs(
   timeout = DEFAULT_TIMEOUT,
   options: GitArgExecOptions = {},
 ): Promise<string> {
-  return withGitLock(cwd, async () => {
-    const { stdout } = await execArgs("gh", args, {
-      cwd,
-      timeout,
-      ...options,
-      env: options.env ?? ghCleanEnv(),
-    });
-    return trimCommandOutput(stdout.toString("utf8"));
+  const { stdout } = await execArgs("gh", args, {
+    cwd,
+    timeout,
+    ...options,
+    env: options.env ?? ghCleanEnv(),
   });
+  return trimCommandOutput(stdout.toString("utf8"));
 }
 
 async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
@@ -426,12 +815,14 @@ async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pro
 export { ghExec };
 
 async function ghAvailable(cwd: string): Promise<boolean> {
-  try {
-    await exec("gh --version", { cwd, timeout: 5_000, env: ghCleanEnv() });
-    return true;
-  } catch {
-    return false;
-  }
+  return GH_AVAILABLE_MEMO("gh", async () => {
+    try {
+      await exec("gh --version", { cwd, timeout: 5_000, env: ghCleanEnv() });
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 async function listChildPackageJsonFiles(root: string): Promise<string[]> {
@@ -634,16 +1025,19 @@ async function azExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pro
 
 export class GitService {
   async isRepo(cwd: string): Promise<boolean> {
-    try {
-      await gitExec(cwd, "rev-parse --is-inside-work-tree");
-      return true;
-    } catch {
-      return false;
-    }
+    return IS_REPO_MEMO(repoMemoKey(cwd), async () => {
+      try {
+        await gitExec(cwd, "rev-parse --is-inside-work-tree");
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
 
   async init(cwd: string): Promise<void> {
     await gitExec(cwd, "init");
+    invalidateGitRepoMemo(cwd);
   }
 
   async getIdentity(cwd: string): Promise<GitIdentity> {
@@ -667,23 +1061,17 @@ export class GitService {
   }
 
   async status(cwd: string, requestedBranch?: string, githubToken?: string): Promise<GitStatusResult> {
+    // Coalesce the many same-second pollers (badge, HUD, panel, watcher, N
+    // clients) onto one git pass. Any write to the repo drops this entry.
+    const key = repoFactKey(cwd, `status${GIT_FACT_SEP}${requestedBranch ?? ""}`);
+    const result = await STATUS_MEMO(key, () => this.computeStatus(cwd, requestedBranch, githubToken));
+    return result ?? EMPTY_STATUS;
+  }
+
+  private async computeStatus(cwd: string, requestedBranch?: string, githubToken?: string): Promise<GitStatusResult | null> {
     const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
     const isGit = await this.isRepo(cwd);
-    if (!isGit) {
-      return {
-        branch: null,
-        hasWorkingTreeChanges: false,
-        index: { files: [], insertions: 0, deletions: 0 },
-        workingTree: { files: [], insertions: 0, deletions: 0 },
-        hasUpstream: false,
-        aheadCount: 0,
-        behindCount: 0,
-        pr: null,
-        ghAvailable: false,
-        prProvider: "none",
-        remoteUrl: null,
-      };
-    }
+    if (!isGit) return null;
 
     // Branch
     let branch: string | null = null;
@@ -692,69 +1080,57 @@ export class GitService {
       if (branch === "HEAD") branch = null;
     } catch { /* detached HEAD */ }
 
-    // Status summary
-    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    // NUL delimiters preserve spaces, tabs, newlines and rename destinations.
+    // Enumerate untracked files individually so consumers never need full diffs
+    // just to discover files inside new directories.
+    const porcelain = await gitExec(cwd, "status --porcelain -z --untracked-files=all");
     const hasChanges = porcelain.length > 0;
-
-    // Build per-file staged/unstaged status maps from porcelain output
     const indexStatusMap = new Map<string, string>();
     const workingTreeStatusMap = new Map<string, string>();
-    for (const line of porcelain.split("\n").filter(Boolean)) {
-      const xy = line.slice(0, 2);
-      const staged = xy[0] ?? " ";
-      const unstaged = xy[1] ?? " ";
-      // Strip the two status columns plus any whitespace, without chopping off the first path character.
-      let fp = line.replace(/^[ MADRCU?!]{2}\s+/, "");
-      if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
-      if (!fp) continue;
-      if (xy === "??") {
-        workingTreeStatusMap.set(fp, "?");
-        continue;
+    const records = porcelain.split("\0");
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i]!;
+      if (!record) continue;
+      const xy = record.slice(0, 2);
+      const fp = record.slice(3);
+      if (xy.includes("R") || xy.includes("C")) i++; // source follows destination
+      if (xy === "??") workingTreeStatusMap.set(fp, "?");
+      else {
+        if (xy[0] !== " ") indexStatusMap.set(fp, normalizeStatusChar(xy[0]!));
+        if (xy[1] !== " ") workingTreeStatusMap.set(fp, normalizeStatusChar(xy[1]!));
       }
-      if (staged !== " ") indexStatusMap.set(fp, normalizeStatusChar(staged));
-      if (unstaged !== " ") workingTreeStatusMap.set(fp, normalizeStatusChar(unstaged));
     }
 
-    // Diff stats for staged and unstaged files
-    const indexFiles: GitStatusFile[] = [];
-    const workingTreeFiles: GitStatusFile[] = [];
-    let indexInsertions = 0;
-    let indexDeletions = 0;
-    let workingTreeInsertions = 0;
-    let workingTreeDeletions = 0;
-    if (hasChanges) {
-      try {
-        const stagedDiffStat = await gitExec(cwd, "diff --cached --numstat").catch(() => "");
-        for (const line of stagedDiffStat.split("\n").filter(Boolean)) {
-          const [ins, del, filePath] = line.split("\t");
-          const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
-          const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
-          if (filePath) {
-            indexFiles.push({ path: filePath, insertions, deletions, status: indexStatusMap.get(filePath) ?? "M" });
-            indexInsertions += insertions;
-            indexDeletions += deletions;
-          }
-        }
-
-        const workingTreeDiffStat = await gitExec(cwd, "diff --numstat").catch(() => "");
-        for (const line of workingTreeDiffStat.split("\n").filter(Boolean)) {
-          const [ins, del, filePath] = line.split("\t");
-          const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
-          const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
-          if (filePath) {
-            workingTreeFiles.push({ path: filePath, insertions, deletions, status: workingTreeStatusMap.get(filePath) ?? "M" });
-            workingTreeInsertions += insertions;
-            workingTreeDeletions += deletions;
-          }
-        }
-
-        for (const [filePath, status] of workingTreeStatusMap) {
-          if (!workingTreeFiles.some((f) => f.path === filePath)) {
-            workingTreeFiles.push({ path: filePath, insertions: 0, deletions: 0, status });
-          }
-        }
-      } catch { /* ignore diff failures */ }
-    }
+    const readStats = (output: string, statuses: Map<string, string>): GitStatusFile[] => {
+      const stats = new Map<string, { insertions: number; deletions: number }>();
+      const records = output.split("\0");
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i]!;
+        if (!record) continue;
+        const firstTab = record.indexOf("\t");
+        const secondTab = record.indexOf("\t", firstTab + 1);
+        if (firstTab < 0 || secondTab < 0) continue;
+        let path = record.slice(secondTab + 1);
+        if (!path) { i++; path = records[++i] ?? ""; } // rename: old\0new\0
+        stats.set(path, {
+          insertions: Number.parseInt(record.slice(0, firstTab), 10) || 0,
+          deletions: Number.parseInt(record.slice(firstTab + 1, secondTab), 10) || 0,
+        });
+      }
+      return [...statuses].map(([path, status]) => ({ path, status, ...(stats.get(path) ?? { insertions: 0, deletions: 0 }) }));
+    };
+    // Independent index and working-tree diffs run together; clean sides cost
+    // no subprocess. Building from status also retains zero-line mode changes.
+    const [indexStat, workingTreeStat] = await Promise.all([
+      indexStatusMap.size ? gitExec(cwd, "diff --cached --numstat -z") : Promise.resolve(""),
+      [...workingTreeStatusMap.values()].some(status => status !== "?") ? gitExec(cwd, "diff --numstat -z") : Promise.resolve(""),
+    ]);
+    const indexFiles = readStats(indexStat, indexStatusMap);
+    const workingTreeFiles = readStats(workingTreeStat, workingTreeStatusMap);
+    const indexInsertions = indexFiles.reduce((total, file) => total + file.insertions, 0);
+    const indexDeletions = indexFiles.reduce((total, file) => total + file.deletions, 0);
+    const workingTreeInsertions = workingTreeFiles.reduce((total, file) => total + file.insertions, 0);
+    const workingTreeDeletions = workingTreeFiles.reduce((total, file) => total + file.deletions, 0);
 
     // Upstream tracking
     let hasUpstream = false;
@@ -852,7 +1228,10 @@ export class GitService {
   async listBranches(cwd: string): Promise<GitListBranchesResult> {
     const isGit = await this.isRepo(cwd);
     if (!isGit) return { branches: [], isRepo: false };
+    return BRANCH_LIST_MEMO(repoFactKey(cwd, "branch-list"), () => this.computeListBranches(cwd));
+  }
 
+  private async computeListBranches(cwd: string): Promise<GitListBranchesResult> {
     try {
       const raw = await gitExec(cwd, "branch -a --format='%(HEAD) %(refname:short) %(upstream:short) %(worktreepath)'");
       const branches: GitBranch[] = [];
@@ -1515,7 +1894,7 @@ export class GitService {
       throw new Error("Repository name is not safe for a local clone path.");
     }
 
-    const clonesRoot = join(homedir(), ".jait", "clones");
+    const clonesRoot = join(getStateDirectory(), "clones");
     const clonePath = resolve(clonesRoot, repoName);
     const relativeClonePath = relative(clonesRoot, clonePath);
     if (!relativeClonePath || relativeClonePath.startsWith("..") || relativeClonePath.includes("://")) {
@@ -1595,7 +1974,7 @@ export class GitService {
     const repoName = basename(cwd);
     const worktreePath =
       customPath ??
-      join(homedir(), ".jait", "worktrees", repoName, sanitized);
+      join(getStateDirectory(), "worktrees", repoName, sanitized);
 
     // Ensure parent directory exists
     await mkdir(join(worktreePath, ".."), { recursive: true });
@@ -1727,6 +2106,10 @@ export class GitService {
 
   /** Get the top-level git directory (the main repo root, even from a worktree). */
   async getMainRepoRoot(cwd: string): Promise<string> {
+    return MAIN_REPO_ROOT_MEMO(repoFactKey(cwd, "main-repo-root"), () => this.computeMainRepoRoot(cwd));
+  }
+
+  private async computeMainRepoRoot(cwd: string): Promise<string> {
     // In a worktree, --git-common-dir points to the main repo's .git
     // and --show-toplevel gives the worktree root. We need the main root.
     try {
@@ -1745,30 +2128,36 @@ export class GitService {
 
   /** Check whether a named remote (e.g. "origin") exists. */
   async hasRemote(cwd: string, name: string): Promise<boolean> {
-    try {
-      await gitExec(cwd, `remote get-url ${name}`);
-      return true;
-    } catch {
-      return false;
-    }
+    return HAS_REMOTE_MEMO(repoFactKey(cwd, `has-remote${GIT_FACT_SEP}${name}`), async () => {
+      try {
+        await gitExec(cwd, `remote get-url ${name}`);
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
 
   /** Get the remote URL for a named remote, or null if not set. */
   async getRemoteUrl(cwd: string, name: string): Promise<string | null> {
-    try {
-      return (await gitExec(cwd, `remote get-url ${name}`)).trim() || null;
-    } catch {
-      return null;
-    }
+    return REMOTE_URL_MEMO(repoFactKey(cwd, `remote-url${GIT_FACT_SEP}${name}`), async () => {
+      try {
+        return (await gitExec(cwd, `remote get-url ${name}`)).trim() || null;
+      } catch {
+        return null;
+      }
+    });
   }
 
   /** List configured remote names. */
   async listRemotes(cwd: string): Promise<string[]> {
-    const raw = await gitExec(cwd, "remote").catch(() => "");
-    return raw
-      .split("\n")
-      .map((r) => r.trim())
-      .filter(Boolean);
+    return REMOTE_LIST_MEMO(repoFactKey(cwd, "remotes"), async () => {
+      const raw = await gitExec(cwd, "remote").catch(() => "");
+      return raw
+        .split("\n")
+        .map((r) => r.trim())
+        .filter(Boolean);
+    });
   }
 
   /**
@@ -2105,32 +2494,33 @@ export class GitService {
     const isGit = await this.isRepo(cwd);
     if (!isGit) return { diff: "", files: [], hasChanges: false };
 
-    // Combine staged and unstaged diff
+    // One diff pass against HEAD covers staged + unstaged changes. An unborn
+    // HEAD fails, so fall back to the two separate diffs (rare: fresh repo).
     let diffText = "";
     try {
+      diffText = await gitExec(cwd, "diff HEAD");
+    } catch {
       const staged = await gitExec(cwd, "diff --cached").catch(() => "");
       const unstaged = await gitExec(cwd, "diff").catch(() => "");
       diffText = [staged, unstaged].filter(Boolean).join("\n");
-    } catch { /* ignore */ }
+    }
 
-    // Also include untracked files as a summary
-    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
-    const untrackedFiles = porcelain
-      .split("\n")
-      .filter((l) => l.startsWith("??"))
-      .map((l) => l.slice(3).trim())
-      .filter(Boolean);
+    // Reuse the memoized status pass for the changed-file list + untracked
+    // files instead of spawning a dedicated `git status --porcelain`.
+    const status = await this.status(cwd);
+    const fileSet = new Set<string>();
+    for (const file of status.index.files) fileSet.add(file.path);
+    for (const file of status.workingTree.files) fileSet.add(file.path);
+    const untrackedFiles = status.workingTree.files
+      .filter((f) => f.status === "?")
+      .map((f) => f.path);
 
     if (untrackedFiles.length > 0) {
       const untrackedSection = untrackedFiles.map((f) => `+++ new file: ${f}`).join("\n");
       diffText = diffText ? `${diffText}\n\n# Untracked files:\n${untrackedSection}` : `# Untracked files:\n${untrackedSection}`;
     }
 
-    const files = porcelain
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => l.slice(3).trim())
-      .filter(Boolean);
+    const files = [...fileSet];
 
     return {
       diff: diffText,
@@ -2149,8 +2539,7 @@ export class GitService {
     let insertions = 0;
     let deletions = 0;
 
-    const collectNumstat = async (args: string): Promise<void> => {
-      const numstat = await gitExec(cwd, args).catch(() => "");
+    const collectNumstatText = (numstat: string): void => {
       for (const line of numstat.split("\n").filter(Boolean)) {
         const [ins, del, filePath] = line.split("\t");
         if (!filePath) continue;
@@ -2158,6 +2547,9 @@ export class GitService {
         insertions += ins === "-" ? 0 : parseInt(ins ?? "0", 10);
         deletions += del === "-" ? 0 : parseInt(del ?? "0", 10);
       }
+    };
+    const collectNumstat = async (args: string): Promise<void> => {
+      collectNumstatText(await gitExec(cwd, args).catch(() => ""));
     };
 
     if (baseBranch && branch) {
@@ -2167,16 +2559,24 @@ export class GitService {
       const diffBase = await this.resolveWorkingTreeDiffBase(cwd, baseBranch);
       await collectNumstat(`diff --numstat ${JSON.stringify(diffBase)}`);
     } else {
-      await collectNumstat("diff --cached --numstat");
-      await collectNumstat("diff --numstat");
+      // A single `diff HEAD` pass covers staged + unstaged changes in one spawn.
+      // An unborn HEAD (repo with no commits yet) makes it fail, so fall back.
+      const combined = await gitExec(cwd, "diff --numstat HEAD").catch(() => null);
+      if (combined === null) {
+        await collectNumstat("diff --cached --numstat");
+        await collectNumstat("diff --numstat");
+      } else {
+        collectNumstatText(combined);
+      }
     }
 
     if (!branch) {
-      const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
-      for (const line of porcelain.split("\n").filter(Boolean)) {
-        if (!line.startsWith("??")) continue;
-        const filePath = line.slice(3).trim();
-        if (filePath) filePaths.add(filePath);
+      // Untracked files never appear in a diff, and the memoized status pass
+      // already enumerates them (with -uall) — reuse it instead of spawning
+      // another `git status`.
+      const status = await this.status(cwd);
+      for (const file of status.workingTree.files) {
+        if (file.status === "?") filePaths.add(file.path);
       }
     }
 
@@ -2199,30 +2599,36 @@ export class GitService {
    *   When omitted entirely, only uncommitted working-tree changes are
    *   returned (original = HEAD).
    */
-  async fileDiffs(cwd: string, baseBranch?: string, branch?: string): Promise<FileDiffEntry[]> {
+  async fileDiffs(
+    cwd: string,
+    baseBranch?: string,
+    branch?: string,
+    paths?: string[],
+  ): Promise<FileDiffEntry[]> {
+    const filter = normalizeDiffPathFilter(paths);
     const isGit = await this.isRepo(cwd);
     if (!isGit) return [];
 
     if (baseBranch && branch) {
-      return this.fileDiffsBetweenRefs(cwd, baseBranch, branch);
+      return this.fileDiffsBetweenRefs(cwd, baseBranch, branch, filter);
     }
 
     if (baseBranch) {
-      return this.fileDiffsBranch(cwd, baseBranch);
+      return this.fileDiffsBranch(cwd, baseBranch, filter);
     }
 
-    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
-    const lines = porcelain.split("\n").filter(Boolean);
-    const entries: FileDiffEntry[] = [];
+    const porcelain = await gitExec(cwd, "status --porcelain -z --untracked-files=all");
+    const records = porcelain.split("\0");
+    // Collect the changed paths first, then read every file's contents in
+    // parallel: the per-file `git show`/read used to run strictly serially.
+    const candidates: Array<{ path: string; originalPath: string; status: string }> = [];
 
-    for (const line of lines) {
-      const xy = line.slice(0, 2);
-      let filePath = line.slice(3).trim();
-
-      // Handle renames: "R  old -> new"
-      if (filePath.includes(" -> ")) {
-        filePath = filePath.split(" -> ").pop()!.trim();
-      }
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i]!;
+      if (!record) continue;
+      const xy = record.slice(0, 2);
+      const filePath = record.slice(3);
+      const originalPath = xy.includes("R") || xy.includes("C") ? records[++i]! : filePath;
 
       // Determine status code
       let status = "M";
@@ -2231,42 +2637,55 @@ export class GitService {
       else if (xy.includes("D")) status = "D";
       else if (xy.includes("R")) status = "R";
 
-      // Get original from HEAD
-      let original = "";
-      if (status !== "A" && status !== "?") {
-        try {
-          original = await gitExec(cwd, `show HEAD:${JSON.stringify(gitRevisionPath(filePath))}`);
-        } catch {
-          original = "";
-        }
-      }
-
-      // Get current working tree content
-      let modified = "";
-      if (status !== "D") {
-        try {
-          modified = await readDiffFileCapped(join(cwd, filePath));
-        } catch {
-          modified = "";
-        }
-      }
-
-      entries.push({ path: filePath, original, modified, status });
+      candidates.push({ path: filePath, originalPath, status });
     }
 
-    return entries;
+    const selected = candidates.filter((candidate) => matchesDiffPathFilter(candidate.path, filter));
+    // One `git cat-file --batch` call covers every HEAD blob in the changeset.
+    const headSpecs = new Map<string, string>();
+    for (const candidate of selected) {
+      if (candidate.status !== "A" && candidate.status !== "?") {
+        headSpecs.set(candidate.path, `HEAD:${gitRevisionPath(candidate.originalPath)}`);
+      }
+    }
+    const headBlobs = await readBlobsBatchSafe(cwd, [...headSpecs.values()]);
+
+    return mapWithConcurrency(
+      selected,
+      DIFF_READ_CONCURRENCY,
+      async (candidate): Promise<FileDiffEntry> => {
+        const spec = headSpecs.get(candidate.path);
+        const original = spec === undefined ? "" : headBlobs.get(spec) ?? "";
+
+        // Get current working tree content
+        let modified = "";
+        if (candidate.status !== "D") {
+          try {
+            modified = await readDiffFileCapped(join(cwd, candidate.path));
+          } catch {
+            modified = "";
+          }
+        }
+
+        return { path: candidate.path, original, modified, status: candidate.status };
+      },
+    );
   }
 
   /**
    * Diff working tree against a base branch (shows all committed + uncommitted changes).
    */
-  private async fileDiffsBranch(cwd: string, baseBranch: string): Promise<FileDiffEntry[]> {
+  private async fileDiffsBranch(
+    cwd: string,
+    baseBranch: string,
+    filter: Set<string> | null = null,
+  ): Promise<FileDiffEntry[]> {
     // Diff the working tree against the point it diverged from baseBranch, so
     // commits the base gained after this branch was created aren't reported.
     const diffBase = await this.resolveWorkingTreeDiffBase(cwd, baseBranch);
     const nameStatus = await gitExec(cwd, `diff --name-status ${JSON.stringify(diffBase)}`).catch(() => "");
     const lines = nameStatus.split("\n").filter(Boolean);
-    const entries: FileDiffEntry[] = [];
+    const candidates: Array<{ path: string; status: string }> = [];
     const seen = new Set<string>();
 
     for (const line of lines) {
@@ -2284,22 +2703,8 @@ export class GitService {
 
       if (!filePath || seen.has(filePath)) continue;
       seen.add(filePath);
-
-      let original = "";
-      if (status !== "A") {
-        try {
-          original = await gitExec(cwd, `show ${JSON.stringify(`${diffBase}:${gitRevisionPath(filePath)}`)}`);
-        } catch { original = ""; }
-      }
-
-      let modified = "";
-      if (status !== "D") {
-        try {
-          modified = await readDiffFileCapped(join(cwd, filePath));
-        } catch { modified = ""; }
-      }
-
-      entries.push({ path: filePath, original, modified, status });
+      if (!matchesDiffPathFilter(filePath, filter)) continue;
+      candidates.push({ path: filePath, status });
     }
 
     // Also include untracked files that aren't already listed
@@ -2309,23 +2714,48 @@ export class GitService {
       const fp = pl.slice(3).trim();
       if (!fp || seen.has(fp)) continue;
       seen.add(fp);
-      let modified = "";
-      try { modified = await readDiffFileCapped(join(cwd, fp)); } catch { /* skip */ }
-      entries.push({ path: fp, original: "", modified, status: "?" });
+      if (!matchesDiffPathFilter(fp, filter)) continue;
+      candidates.push({ path: fp, status: "?" });
     }
 
-    return entries;
+    const baseBlobs = await readBlobsBatchSafe(
+      cwd,
+      candidates
+        .filter((candidate) => candidate.status !== "A" && candidate.status !== "?")
+        .map((candidate) => `${diffBase}:${gitRevisionPath(candidate.path)}`),
+    );
+
+    return mapWithConcurrency(candidates, DIFF_READ_CONCURRENCY, async (candidate) => {
+      const spec = candidate.status === "A" || candidate.status === "?"
+        ? undefined
+        : `${diffBase}:${gitRevisionPath(candidate.path)}`;
+      const original = spec === undefined ? "" : baseBlobs.get(spec) ?? "";
+
+      let modified = "";
+      if (candidate.status !== "D") {
+        try {
+          modified = await readDiffFileCapped(join(cwd, candidate.path));
+        } catch { modified = ""; }
+      }
+
+      return { path: candidate.path, original, modified, status: candidate.status };
+    });
   }
 
   /**
    * Diff a branch against its merge-base with the base branch, matching the
    * PR view even after the base branch has moved on.
    */
-  private async fileDiffsBetweenRefs(cwd: string, baseBranch: string, branch: string): Promise<FileDiffEntry[]> {
+  private async fileDiffsBetweenRefs(
+    cwd: string,
+    baseBranch: string,
+    branch: string,
+    filter: Set<string> | null = null,
+  ): Promise<FileDiffEntry[]> {
     const diffBase = await this.resolveBranchDiffBase(cwd, baseBranch, branch);
     const nameStatus = await gitExec(cwd, `diff --name-status ${JSON.stringify(diffBase)} ${JSON.stringify(branch)}`).catch(() => "");
     const lines = nameStatus.split("\n").filter(Boolean);
-    const entries: FileDiffEntry[] = [];
+    const candidates: Array<{ path: string; status: string }> = [];
     const seen = new Set<string>();
 
     for (const line of lines) {
@@ -2343,25 +2773,33 @@ export class GitService {
 
       if (!filePath || seen.has(filePath)) continue;
       seen.add(filePath);
-
-      let original = "";
-      if (status !== "A") {
-        try {
-          original = await gitExec(cwd, `show ${JSON.stringify(`${diffBase}:${gitRevisionPath(filePath)}`)}`);
-        } catch { original = ""; }
-      }
-
-      let modified = "";
-      if (status !== "D") {
-        try {
-          modified = await gitExec(cwd, `show ${branch}:${JSON.stringify(gitRevisionPath(filePath))}`);
-        } catch { modified = ""; }
-      }
-
-      entries.push({ path: filePath, original, modified, status });
+      if (!matchesDiffPathFilter(filePath, filter)) continue;
+      candidates.push({ path: filePath, status });
     }
 
-    return entries;
+    const baseSpecs = new Map<string, string>();
+    const branchSpecs = new Map<string, string>();
+    for (const candidate of candidates) {
+      if (candidate.status !== "A") {
+        baseSpecs.set(candidate.path, `${diffBase}:${gitRevisionPath(candidate.path)}`);
+      }
+      if (candidate.status !== "D") {
+        branchSpecs.set(candidate.path, `${branch}:${gitRevisionPath(candidate.path)}`);
+      }
+    }
+    const [baseBlobs, branchBlobs] = await Promise.all([
+      readBlobsBatchSafe(cwd, [...baseSpecs.values()]),
+      readBlobsBatchSafe(cwd, [...branchSpecs.values()]),
+    ]);
+
+    return mapWithConcurrency(candidates, DIFF_READ_CONCURRENCY, async (candidate) => {
+      const baseSpec = baseSpecs.get(candidate.path);
+      const branchSpec = branchSpecs.get(candidate.path);
+      const original = baseSpec === undefined ? "" : baseBlobs.get(baseSpec) ?? "";
+      const modified = branchSpec === undefined ? "" : branchBlobs.get(branchSpec) ?? "";
+
+      return { path: candidate.path, original, modified, status: candidate.status };
+    });
   }
 
   /**

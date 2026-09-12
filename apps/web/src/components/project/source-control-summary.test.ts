@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 
 describe('getSourceControlChangeCount', () => {
-  it('counts staged and working-tree entries separately', () => {
+  it('counts a file changed in both index and working tree once', () => {
     expect(getSourceControlChangeCount(
       [{ path: 'src/app.ts', insertions: 1, deletions: 0, status: 'M' }],
-      [{ path: 'src/app.ts', status: 'M' }],
-    )).toBe(2)
+      [{ path: 'src/app.ts', status: 'M', insertions: 1, deletions: 0 }],
+    )).toBe(1)
   })
 
   it('counts merged working-tree entries that are not present in raw git status', () => {

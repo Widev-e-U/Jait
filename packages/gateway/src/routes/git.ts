@@ -728,8 +728,9 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
   app.post("/api/git/file-diffs", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const body = request.body as { cwd?: string; baseBranch?: string; branch?: string };
+    const body = request.body as { cwd?: string; baseBranch?: string; branch?: string; paths?: string[] };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    const paths = Array.isArray(body.paths) && body.paths.length ? body.paths : undefined;
     try {
       const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd, getRequestedGitNodeId(request));
       if (remoteNodeId && ws) {
@@ -738,10 +739,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           cwd: body.cwd,
           baseBranch: body.baseBranch || undefined,
           branch: body.branch || undefined,
+          ...(paths ? { paths } : {}),
         }, 60_000);
         return { files };
       }
-      const files = await git.fileDiffs(body.cwd, body.baseBranch || undefined, body.branch || undefined);
+      const files = await git.fileDiffs(body.cwd, body.baseBranch || undefined, body.branch || undefined, paths);
       return { files };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "File diffs failed" });

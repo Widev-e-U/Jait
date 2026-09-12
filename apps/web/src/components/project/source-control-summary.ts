@@ -51,5 +51,5 @@ export function getSourceControlChangeCount(
   stagedFiles: GitStatusFile[],
   workingTreeFiles: GitStatusFile[],
 ): number {
-  return stagedFiles.length + workingTreeFiles.length
+  return new Set([...stagedFiles, ...workingTreeFiles].map(file => normalizePath(file.path))).size
 }

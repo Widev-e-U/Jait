@@ -1,7 +1,8 @@
+import { useGitChangeCounts, refreshGitChangeCounts } from '@/lib/git-service'
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
 import Editor, { loader } from '@monaco-editor/react'
 import { AlertCircle, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
-import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
+import { gitApi as gitApiImport, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitectureWorkspace } from './architecture-workspace'
 import { Button } from '@/components/ui/button'
@@ -30,7 +31,6 @@ import {
   resolveDragEndSize,
   resolvePersistedResizeSize,
 } from './project-panel-layout'
-import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import type { FsChangesPayload } from '@jait/shared'
 import { fsChangesIncludeFile, getFsWatcherRefreshDirs } from './project-fs-changes'
 import { DEVELOPER_SIDEBAR_MAX_WIDTH, DEVELOPER_SIDEBAR_MIN_WIDTH } from '@/lib/developer-sidebar'
@@ -1460,10 +1460,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const [tabMaximized, setTabMaximized] = useState(false)
 
   // ── Git status state ──
-  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
+  const gitCounts = useGitChangeCounts(projectNodeId, remoteRoot)
+  const gitStatus = gitCounts.status
   const [gitStatusLoading, setGitStatusLoading] = useState(false)
   const [workingTreeDiffEntries, setWorkingTreeDiffEntries] = useState<FileDiffEntry[]>([])
-  const gitStatusRequestSeqRef = useRef(0)
   /** Map of relative file path → status code (A/M/D/R/?) */
   const gitStatusMap = useMemo(() => {
     if (!gitStatus) return new Map<string, string>()
@@ -1517,6 +1517,18 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const activeTabGitDiffEntry = useMemo(() => (
     activeTab?.type === 'file' ? findWorkingTreeDiffEntry(activeTab.path) : null
   ), [activeTab, findWorkingTreeDiffEntry])
+  // Editor decorations/revert need contents only while a changed file is open.
+  useEffect(() => {
+    if (!remoteRoot || activeTab?.type !== 'file' || !gitStatus) return
+    const changed = [...gitStatus.index.files, ...gitStatus.workingTree.files]
+      .some(file => pathsMatchProjectFile(file.path, activeTab.path, remoteRoot))
+    if (!changed) return
+    let cancelled = false
+    void gitApi.fileDiffs(remoteRoot, undefined, undefined, projectNodeId)
+      .then(entries => { if (!cancelled) setWorkingTreeDiffEntries(entries) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeTab?.path, activeTab?.type, remoteRoot, projectNodeId, gitStatus, fsWatcherVersion])
   const activeTabEditable = isEditableProjectTab(activeTab)
   const canMaximizeActiveTab = Boolean(activeTab)
   const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed && !tree.collapsed
@@ -1957,28 +1969,16 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
-    const requestSeq = ++gitStatusRequestSeqRef.current
     setGitStatusLoading(true)
+    setWorkingTreeDiffEntries([])
     try {
-      const [status, diffs] = await Promise.all([
-        gitApi.status(remoteRoot, undefined, projectNodeId),
-        gitApi.fileDiffs(remoteRoot, undefined, undefined, projectNodeId).catch(() => [] as FileDiffEntry[]),
-      ])
-      if (requestSeq === gitStatusRequestSeqRef.current) {
-        setGitStatus(status)
-        setWorkingTreeDiffEntries(diffs)
-      }
-    } catch {
-      if (requestSeq === gitStatusRequestSeqRef.current) {
-        setGitStatus(null)
-        setWorkingTreeDiffEntries([])
-      }
+      await refreshGitChangeCounts(projectNodeId, remoteRoot)
     } finally {
-      if (requestSeq === gitStatusRequestSeqRef.current) {
-        setGitStatusLoading(false)
-      }
+      setGitStatusLoading(false)
     }
   }, [projectNodeId, remoteRoot])
+
+  useEffect(() => { setWorkingTreeDiffEntries([]) }, [gitStatus, remoteRoot, projectNodeId])
 
   const persistGitAutoFetchMode = useCallback((mode: GitAutoFetchMode) => {
     setGitAutoFetchMode(mode)
@@ -4460,8 +4460,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   const stagedFiles = gitStatus?.index.files ?? []
   const workingTreeFiles = useMemo(() => {
     const statusFiles = gitStatus?.workingTree.files ?? []
-    return mergeSourceControlWorkingTreeFiles(statusFiles, workingTreeDiffEntries, stagedFiles)
-  }, [gitStatus?.workingTree.files, stagedFiles, workingTreeDiffEntries])
+    return statusFiles
+  }, [gitStatus?.workingTree.files])
   const stagedTree = useMemo(
     () => buildSourceControlTree(stagedFiles.map((file) => ({
       path: file.path,
@@ -4480,10 +4480,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     }))),
     [workingTreeFiles],
   )
-  const changedFileCount = useMemo(
-    () => getSourceControlChangeCount(stagedFiles, workingTreeFiles),
-    [stagedFiles, workingTreeFiles],
-  )
+  const changedFileCount = gitCounts.fileCount
   const handleGenerateCommitMessage = useCallback(async () => {
     if (!remoteRoot || changedFileCount === 0 || commitMsgGenerating || gitActionBusy) return
     setCommitMsgGenerating(true)

@@ -91,7 +91,7 @@ import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { shouldAutoTitleSession } from '@/lib/session-title'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { updateModeProviderSelection, type ModeProviderSelection } from '@/lib/mode-provider-selection'
-import { gitApi, type GitStatusResult } from '@/lib/git-api'
+import { gitApi, useGitChangeCounts } from '@/lib/git-service'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
@@ -3455,30 +3455,8 @@ function App() {
   }, [themeMode, updateSettings],)
 
   const activeProjectRoot = activeProject?.projectRoot ?? activeProjectRecord?.rootPath ?? null
-  const [composerGitStatus, setComposerGitStatus] = useState<GitStatusResult | null>(null)
-  const changedFilesKey = useMemo(
-    () => changedFiles.map((file) => file.path).join('\0'),
-    [changedFiles]
-  )
-  useEffect(() => {
-    if (!activeProjectRoot || changedFiles.length === 0) {
-      setComposerGitStatus(null)
-      return
-    }
-
-    let cancelled = false
-    gitApi.status(activeProjectRoot, undefined, activeProject?.nodeId)
-      .then((status) => {
-        if (!cancelled) setComposerGitStatus(status)
-      })
-      .catch(() => {
-        if (!cancelled) setComposerGitStatus(null)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeProject?.nodeId, activeProjectRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
+  const gitCounts = useGitChangeCounts(activeProject?.nodeId, activeProjectRoot, sourceControlRefreshSignal)
+  const composerGitStatus = gitCounts.status
   const changedFilesForComposer = useMemo(
     () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeProjectRoot),
     [activeProjectRoot, changedFiles, composerGitStatus]
@@ -4928,7 +4906,7 @@ function App() {
               activeProject={activeProject}
               activeProjectId={activeProjectId}
               automation={automation}
-              changedFilesCount={changedFiles.length}
+              changedFilesCount={gitCounts.fileCount}
               compactManagerToolbar={compactManagerToolbar}
               currentView={currentView}
               isMobile={isMobile}
@@ -5024,6 +5002,7 @@ function App() {
                 <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
                   {viewMode === 'developer' && (
                     <DeveloperSidebars
+                      changedFilesCount={gitCounts.fileCount}
                       activeProject={activeProject}
                       activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}
@@ -5429,7 +5408,7 @@ function App() {
             {isMobile && currentView === 'chat' && (
               <MobileBottomNav
                 activeProjectId={activeProjectId}
-                changedFilesCount={changedFiles.length}
+                changedFilesCount={gitCounts.fileCount}
                 mobileProjectControlState={mobileProjectControlState}
                 showProject={showProject}
                 showSidebar={showSidebar}
