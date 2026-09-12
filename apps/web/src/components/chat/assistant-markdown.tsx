@@ -320,6 +320,22 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
   }
 }
 
+// Keep the expensive parser behind a memo boundary: an urgent render with
+// unchanged deferred content must reuse its tree instead of parsing it again.
+const MarkdownTree = memo(function MarkdownTree({
+  content,
+  components,
+}: {
+  content: string
+  components: Components | undefined
+}) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      {content}
+    </ReactMarkdown>
+  )
+})
+
 function StaticMarkdown({
   content,
   compact,
@@ -344,9 +360,7 @@ function StaticMarkdown({
   const deferredContent = useDeferredValue(content)
   return (
     <div className={proseClassName(compact)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {deferredContent}
-      </ReactMarkdown>
+      <MarkdownTree content={deferredContent} components={components} />
     </div>
   )
 }

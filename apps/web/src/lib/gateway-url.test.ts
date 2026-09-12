@@ -102,3 +102,32 @@ describe('gateway-url websocket resolution', () => {
     expect(mod.isGatewayConfigured()).toBe(true)
   })
 })
+
+describe('native gateway selection', () => {
+  afterEach(() => { vi.resetModules(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
+  it.each(['local', 'remote'] as const)('keeps HTTP and WebSocket on the selected %s gateway', async (mode) => {
+    const config = { mode, remoteUrl: 'https://selected.example', port: 18000, allowNetwork: false }
+    vi.stubGlobal('window', {
+      __JAIT_DESKTOP_BOOT__: { runtime: 'tauri', platform: 'win32', gatewayConfig: config },
+      jaitDesktop: { gatewayUrl: 'https://old-boot.example' },
+      location: { origin: 'http://tauri.localhost' },
+    })
+    vi.stubGlobal('localStorage', { getItem: () => 'https://stale.example' })
+    vi.stubEnv('VITE_API_URL', 'https://build.example')
+    vi.stubEnv('VITE_WS_URL', 'wss://build.example')
+    const mod = await import('./gateway-url')
+    const expected = mode === 'local' ? 'http://127.0.0.1:18000' : 'https://selected.example'
+    expect(mod.getApiUrl()).toBe(expected)
+    expect(mod.getWsUrl()).toBe(expected.replace(/^http/, 'ws'))
+    expect(mod.isGatewayConfigured()).toBe(true)
+  })
+  it('shows setup for the actual Tauri boot shape on a fresh install', async () => {
+    vi.stubGlobal('window', {
+      __JAIT_DESKTOP_BOOT__: { runtime: 'tauri', platform: 'win32', gatewayConfigured: false },
+      jaitDesktop: { gatewayUrl: 'http://localhost:8000' },
+    })
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    vi.stubEnv('VITE_API_URL', '')
+    expect((await import('./gateway-url')).isGatewayConfigured()).toBe(false)
+  })
+})

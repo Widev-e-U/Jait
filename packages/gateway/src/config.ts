@@ -1,8 +1,8 @@
+import { getStateDirectory } from "./state-directory.js";
 import { config } from "dotenv";
 import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { existsSync } from "fs";
-import { homedir } from "os";
 import { randomBytes } from "crypto";
 
 // Skip dotenv loading if already handled by CLI entry (bin/jait.mjs)
@@ -14,7 +14,7 @@ if (!process.env["__JAIT_CLI"]) {
   //   3. Monorepo root (dev; 3 levels up from src/config.ts)
   const candidates = [
     resolve(process.cwd(), ".env"),
-    join(homedir(), ".jait", ".env"),
+    join(getStateDirectory(), ".env"),
     resolve(__dirname, "../../../.env"),
   ];
   const envPath = candidates.find((p) => existsSync(p));

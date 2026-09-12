@@ -1,3 +1,4 @@
+import { getStateDirectory } from "./state-directory.js";
 // Must be the very first import — patches globalThis.crypto before jose loads
 import "./crypto-polyfill.js";
 
@@ -22,7 +23,6 @@ import { MemoryEngine } from "./memory/service.js";
 import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { homedir } from "node:os";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -148,9 +148,15 @@ async function listenWithRetryOnConflict(
 }
 
 async function main() {
-  await ensureGraphifyRuntime({
+  const graphifyReady = ensureGraphifyRuntime({
     onProgress: (message) => console.log(`[graphify] ${message}`),
   });
+  // Desktop first launch must work before optional Python tooling is installed.
+  if (process.env["JAIT_DESKTOP_HOST"] === "1") {
+    void graphifyReady.catch((error) => console.warn("[graphify] Setup unavailable:", error.message));
+  } else {
+    await graphifyReady;
+  }
   const config = loadConfig();
 
   if (config.nodeOnly) {
@@ -470,7 +476,7 @@ async function main() {
   // Memory engine — Sprint 6
   const memory = new MemoryEngine({
     backend: new SqliteMemoryBackend(db),
-    memoryDir: join(homedir(), ".jait", "memory"),
+    memoryDir: join(getStateDirectory(), "memory"),
   });
 
   // Tool registry — Sprint 3 + Sprint 10

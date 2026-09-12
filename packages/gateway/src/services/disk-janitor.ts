@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * DiskJanitor — reclaims disk that Jait allocates but never frees.
  *
@@ -19,7 +20,7 @@
 
 import { existsSync, type Dirent } from "node:fs";
 import { readdir, rm, stat } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import type { SqliteDatabase } from "../db/index.js";
 import { GitService } from "./git.js";
@@ -113,7 +114,7 @@ export function loadDiskJanitorPolicy(
 
 /** Root holding the per-repo managed worktree directories. */
 export function managedWorktreeRoot(): string {
-  return join(homedir(), ".jait", "worktrees");
+  return join(getStateDirectory(), "worktrees");
 }
 
 /** Root holding Windows sandbox VM disks (mirrors sandbox-manager). */

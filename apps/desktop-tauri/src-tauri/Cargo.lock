@@ -2077,6 +2077,7 @@ dependencies = [
  "dirs 5.0.1",
  "jait-desktop-core",
  "jait-desktop-glue",
+ "libc",
  "parking_lot",
  "serde",
  "serde_json",
@@ -2092,6 +2093,8 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
+ "url",
+ "windows-sys 0.61.2",
  "winreg 0.55.0",
 ]
 

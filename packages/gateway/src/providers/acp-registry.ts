@@ -1,5 +1,5 @@
+import { getStateDirectory } from "../state-directory.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AcpProviderConfig, AcpProviderRegistryMetadata } from "./acp-provider.js";
@@ -68,7 +68,7 @@ export async function loadAcpRegistryProviderConfigs(
   }
 
   const cacheFile = options.cacheFile === undefined
-    ? join(homedir(), ".jait", "cache", "acp-registry.json")
+    ? join(getStateDirectory(), "cache", "acp-registry.json")
     : options.cacheFile;
   const fetchImpl = options.fetchImpl ?? fetch;
 
@@ -184,7 +184,7 @@ function parseRegistryAgent(value: unknown): AcpProviderConfig | null {
   }), "utf8").toString("base64url");
   return providerConfig(id, name, description, process.execPath, [launcherPath, spec], {
     ...binary.env,
-    JAIT_ACP_BINARY_ROOT: join(homedir(), ".jait", "acp-agents"),
+    JAIT_ACP_BINARY_ROOT: join(getStateDirectory(), "acp-agents"),
   }, { ...metadataBase, distribution: "binary" });
 }
 

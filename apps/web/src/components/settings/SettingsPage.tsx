@@ -1,3 +1,4 @@
+import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy, Watch, Network } from 'lucide-react'
@@ -1734,6 +1735,7 @@ const providerAccountsCard = (
               <p className="text-xs text-muted-foreground">
                 Current gateway: <code className="rounded bg-muted px-1 py-0.5 text-xs">{getApiUrl()}</code>
               </p>
+              {window.jaitDesktop?.configureGateway && <DesktopGatewaySetup />}
             </Card>
           )}
 

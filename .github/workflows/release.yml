@@ -304,10 +304,57 @@ jobs:
   # container: cargo tauri build --runner cargo-xwin --target
   # x86_64-pc-windows-msvc --bundles nsis (needs llvm-rc for resource
   # embedding and makensis for the installer).
+  desktop-gateway-runtime:
+    name: "Package Windows gateway runtime"
+    runs-on: windows-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.desktop_changed == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+      && (
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        needs.auto-tag.outputs.changed == 'true'
+      )
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build gateway distribution
+        env:
+          JAIT_HOSTING_TEST_RESOURCES: ${{ github.workspace }}/apps/desktop-tauri/src-tauri/gateway
+          JAIT_GRAPHIFY_COMMAND: __jait_smoke_no_optional_python__
+        run: |
+          bun install --frozen-lockfile
+          bun run --filter @jait/shared build
+          bun run --filter @jait/screen-share build
+          bun run --filter @jait/api-client build
+          bun run --filter @jait/ui-shared build
+          bun run --filter @jait/gateway build
+          node packages/gateway/scripts/package-desktop.mjs
+          node packages/gateway/scripts/smoke-desktop.mjs
+          cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml packaged_runtime_lifecycle -- --ignored
+          tar -czf desktop-gateway.tar.gz -C apps/desktop-tauri/src-tauri gateway
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-gateway-runtime
+          path: desktop-gateway.tar.gz
+          retention-days: 3
+
   desktop-tauri:
     name: "Tauri Desktop Builds (Linux runner: Windows setup.exe)"
     runs-on: [self-hosted, linux]
-    needs: [auto-tag]
+    needs: [auto-tag, desktop-gateway-runtime]
     if: |
       always() && (
         needs.auto-tag.outputs.desktop_changed == 'true' ||
@@ -359,6 +406,12 @@ jobs:
             NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
           )
           test -s apps/web/dist/index.html
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-gateway-runtime
+          path: desktop-gateway-artifact
+      - name: Unpack gateway runtime
+        run: tar -xzf desktop-gateway-artifact/desktop-gateway.tar.gz -C apps/desktop-tauri/src-tauri
       - name: Ensure Tauri Windows cross toolchain
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -582,7 +635,7 @@ jobs:
           # inherits LD_PRELOAD and gets its /usr/share/nsis paths redirected.
           export LD_PRELOAD="${NSIS_LD_PRELOAD:-}"
           export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
-          cargo tauri build --features shell,frontend --runner cargo-xwin \
+          cargo tauri build --config tauri.gateway.conf.json --features shell,frontend --runner cargo-xwin \
             --target x86_64-pc-windows-msvc --bundles nsis
       - name: Generate Tauri updater manifest (latest.json)
         run: |

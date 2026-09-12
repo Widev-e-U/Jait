@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../../state-directory.js";
 /**
  * WhatsApp channel connector (baileys / WhatsApp Web).
  *
@@ -10,7 +11,6 @@
  */
 
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { rm } from "node:fs/promises";
 import type {
   ChannelConnector,
@@ -116,7 +116,7 @@ export class WhatsAppConnector implements ChannelConnector {
 
   constructor(deps: WhatsAppConnectorDeps = {}) {
     this.deps = deps;
-    this.authDir = deps.authDir ?? join(homedir(), ".jait", "channels", "whatsapp");
+    this.authDir = deps.authDir ?? join(getStateDirectory(), "channels", "whatsapp");
   }
 
   status(): ChannelStatus { return this._status; }

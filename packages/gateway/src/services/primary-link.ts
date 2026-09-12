@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * PrimaryLink — link a deployed gateway to an upstream/primary gateway as a
  * browseable filesystem node.
@@ -91,7 +92,7 @@ function detectPlatform(): FsPlatform {
 /** Stable per-machine node id, persisted under ~/.jait/node-id. */
 function getNodeId(): string {
   try {
-    const idPath = join(homedir(), ".jait", "node-id");
+    const idPath = join(getStateDirectory(), "node-id");
     if (existsSync(idPath)) {
       const existing = readFileSync(idPath, "utf-8").trim();
       if (existing) return existing;

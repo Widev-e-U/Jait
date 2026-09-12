@@ -116,7 +116,16 @@ export function setStoredGatewayUrl(url: string | null): void {
 /**
  * HTTP(S) gateway URL used by `fetch()` calls.
  */
+function nativeGatewayUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const config = window.__JAIT_DESKTOP_BOOT__?.gatewayConfig
+  if (!config) return undefined
+  return config.mode === 'local' ? `http://127.0.0.1:${config.port}` : config.remoteUrl ?? undefined
+}
+
 export function getApiUrl(): string {
+  const native = nativeGatewayUrl()
+  if (native) return stripTrailingSlash(native)
   // Build-time env (Vite)
   const env = import.meta.env.VITE_API_URL as string | undefined
   if (import.meta.env.DEV && env) return stripTrailingSlash(env)
@@ -166,6 +175,8 @@ function routeViaWsProxy(wsUrl: string, pageUrl: string): string {
  * root path directly.
  */
 export function getWsUrl(): string {
+  const native = nativeGatewayUrl()
+  if (native) return httpToWs(stripTrailingSlash(native))
   const env = import.meta.env.VITE_WS_URL as string | undefined
   if (import.meta.env.DEV && env) return stripTrailingSlash(env)
 
@@ -198,10 +209,11 @@ export function getWsUrl(): string {
  * and API calls should be deferred until the user sets a URL.
  */
 export function isGatewayConfigured(): boolean {
+  if (nativeGatewayUrl()) return true
   if (supportsGatewayOverride() && getStoredGatewayUrl()) return true
   if (typeof window !== 'undefined' && window.jaitDesktop?.gatewayUrl) {
     const tauriBoot = window.__JAIT_DESKTOP_BOOT__
-    if (tauriBoot?.platform !== 'tauri' || tauriBoot.gatewayConfigured === true) return true
+    if ((tauriBoot?.runtime !== 'tauri' && tauriBoot?.platform !== 'tauri') || tauriBoot.gatewayConfigured === true) return true
   }
   if (import.meta.env.VITE_API_URL) return true
   if (!supportsGatewayOverride()) return true

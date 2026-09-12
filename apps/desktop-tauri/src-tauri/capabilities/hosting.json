@@ -1,0 +1,13 @@
+{
+  "identifier": "hosting",
+  "description": "Local bundled desktop gateway lifecycle controls",
+  "windows": [
+    "main"
+  ],
+  "local": true,
+  "permissions": [
+    "allow-desktop-gateway-status",
+    "allow-desktop-gateway-configure",
+    "allow-desktop-gateway-restart-app"
+  ]
+}

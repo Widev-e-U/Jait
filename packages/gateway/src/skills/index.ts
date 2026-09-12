@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * Skill system — discovery, loading, and prompt injection.
  *
@@ -11,7 +12,6 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, basename, delimiter } from "node:path";
-import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
 import { parse as parseYaml } from "yaml";
 
@@ -214,7 +214,7 @@ async function scanSkillDir(
 
 /** User-level skills directory: ~/.jait/skills/ */
 export function userSkillsDir(): string {
-  return join(homedir(), ".jait", "skills");
+  return join(getStateDirectory(), "skills");
 }
 
 /* ------------------------------------------------------------------ */

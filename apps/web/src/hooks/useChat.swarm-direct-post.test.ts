@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { createMessageStream } from '@/lib/message-stream'
-import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
 
 /**
@@ -15,29 +14,25 @@ import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
  *   -> `tool_output` (specialist live prose, channel text) -> `tool_result`.
  *
  * The coordinator's FIRST content is a TOOL event, not text. Pre-fix the
- * handler did `await textPacer.waitUntilIdle()` before each tool event.
- * Because the (long) `mode_notice` text is queued in the text pacer and only
- * drains on a rAF/deadline tick, that await BLOCKS event delivery — so the
- * agent tool card + specialist prose are NOT committed until the text pacer
- * drains. The fix uses `textPacer.flushNow()`, which drains pending text
- * synchronously, so the tool content is committed in the same pass without
- * blocking on rAF/deadline timers.
+ * handler awaited a text "pacer" (`await textPacer.waitUntilIdle()`) before each
+ * tool event. Because the (long) `mode_notice` text was queued in that pacer and
+ * only drained on a rAF/deadline tick, the await BLOCKED event delivery — so the
+ * agent tool card + specialist prose were NOT committed until the text finished
+ * animating.
  *
- * Because this repo's vitest environment is `node` (no jsdom / happy-dom /
- * @testing-library/react are installed), the full React `useChat` hook cannot
- * be mounted. Instead this test drives the SMALLEST REAL unit that contains
- * the event-handling logic: the actual `message-stream`, `stream-text-pacer`
- * and `stream-render-scheduler` modules wired in the exact order `useChat.ts`
- * wires them, running a real `ReadableStream` reader loop that reproduces the
- * event handling (including the exact `flushNow`/`waitUntilIdle` gating
- * branch). The gating branch is the only thing that differs between the
- * pre-fix and fixed `useChat.ts`, and it is parameterized here so both variants
- * are exercised against the real libs.
+ * The fix removes the pacer: text is pushed straight into the message stream in
+ * wire order (see `useChat.ts` `handleEvent`), so tool content is committed in
+ * the same pass without waiting on rAF/deadline timers. This test drives the
+ * SMALLEST REAL unit that contains the event-handling logic — the actual
+ * `message-stream` and `stream-render-scheduler` modules wired in the exact
+ * order `useChat.ts` wires them — behind a real `ReadableStream` reader loop.
+ * The only thing parameterized is the tool-event gate, so both the pre-fix
+ * (blocking) and fixed (direct) paths are exercised against the real libs.
  *
  * A second suite reads the REAL `useChat.ts` source and asserts the `handleEvent`
- * tool-event handlers still use `textPacer.flushNow()` (not the pre-fix
- * `await textPacer.waitUntilIdle()`), so this file genuinely fails if
- * `useChat.ts` regresses even though the full hook cannot be mounted here.
+ * tool-event handlers ingest text directly and contain no pacer/waitUntilIdle
+ * gate, so this file genuinely fails if `useChat.ts` regresses even though the
+ * full hook cannot be mounted here.
  */
 
 /** Frozen clock: rAF/deadline callbacks are captured but NEVER fired. */
@@ -56,7 +51,8 @@ type Gate = 'flushNow' | 'waitUntilIdle'
 interface LoopInternals {
   stream: ReturnType<typeof createMessageStream>
   scheduler: ReturnType<typeof createStreamRenderScheduler>
-  textPacer: ReturnType<typeof createStreamTextPacer>
+  /** Releases a tool event blocked by the pre-fix ('waitUntilIdle') gate. */
+  releaseGate: () => void
   commits: any[]
   done: Promise<void>
 }
@@ -66,9 +62,12 @@ interface LoopInternals {
  * `handleEvent` function that processes subscription events).
  *
  * Only the tool-event gating differs between pre-fix and fixed:
- *   - 'flushNow'       (FIXED) : `textPacer.flushNow()` — synchronous drain
- *   - 'waitUntilIdle'  (PRE-FIX): `await textPacer.waitUntilIdle()` — blocks
- *                                 while long mode_notice text is still queued.
+ *   - 'flushNow'       (FIXED)  : nothing to drain — text is already ingested
+ *                                 directly, so tool events commit immediately.
+ *   - 'waitUntilIdle'  (PRE-FIX): the reader waited for a still-animating text
+ *                                 pacer before processing each tool event. Here
+ *                                 that is modeled as a promise that never
+ *                                 resolves until `releaseGate()` is called.
  */
 async function runDirectPostLoop(body: string, gate: Gate): Promise<LoopInternals> {
   const stream = createMessageStream()
@@ -85,20 +84,7 @@ async function runDirectPostLoop(body: string, gate: Gate): Promise<LoopInternal
   })
   const flushBufferImmediately = scheduler.flushNow
 
-  const textPacer = createStreamTextPacer({
-    onText: (chunk) => stream.pushText(chunk),
-    onThinking: (chunk) => stream.pushThinking(chunk),
-    // useChat: textPacer.onCommit -> updateMessage({ immediate: true })
-    onCommit: () => flushBufferImmediately(),
-    requestFrame: clock.requestFrame,
-    cancelFrame: clock.cancelFrame,
-    setDeadline: clock.setDeadline,
-    clearDeadline: clock.clearDeadline,
-    maxChunkChars: 24,
-    deadlineMs: 300,
-  })
-
-  // useChat wires every stream mutation to schedule a commit.
+  // useChat wires every stream mutation to schedule a coalesced commit.
   stream.markDirty(scheduler.schedule)
 
   const updateMessage = (options?: { immediate?: boolean }) => {
@@ -109,13 +95,19 @@ async function runDirectPostLoop(body: string, gate: Gate): Promise<LoopInternal
     scheduler.schedule()
   }
 
+  let releaseGate: () => void = () => {}
+  const blocked = new Promise<void>((resolve) => { releaseGate = resolve })
+
   // THE GATING BRANCH — the exact pre-fix vs fixed difference.
   const gateToolEvent = (): Promise<void> => {
     if (gate === 'flushNow') {
-      textPacer.flushNow()
       return Promise.resolve()
     }
-    return textPacer.waitUntilIdle()
+    // Pre-fix: the handler awaited the text pacer draining its animation queue
+    // (which only advances on a rAF/deadline tick). With the frozen clock that
+    // never happens, so the reader loop stalls here — exactly the historical
+    // regression. `releaseGate()` lets the loop unwind during cleanup.
+    return blocked
   }
 
   const done = (async () => {
@@ -137,7 +129,9 @@ async function runDirectPostLoop(body: string, gate: Gate): Promise<LoopInternal
         const data = JSON.parse(line.slice(6))
 
         if (data.type === 'mode_notice') {
-          textPacer.enqueueText(`\n\n*${data.message as string}*`)
+          // useChat: text is ingested directly, in wire order.
+          stream.pushText(`\n\n*${data.message as string}*`)
+          updateMessage()
         } else if (data.type === 'tool_call_delta') {
           await gateToolEvent()
           stream.pushToolCallDelta(
@@ -182,21 +176,23 @@ async function runDirectPostLoop(body: string, gate: Gate): Promise<LoopInternal
     flushBufferImmediately()
   })()
 
-  return { stream, scheduler, textPacer, commits, done }
+  return { stream, scheduler, releaseGate, commits, done }
 }
 
 /**
  * Read the REAL `useChat.ts` and detect which tool-event gating the `handleEvent`
- * function currently uses. This lets the reader loop be driven with the gate
- * the actual production code uses, so the test genuinely captures a regression
- * even though the full React hook cannot be mounted here.
+ * function currently uses. This lets the reader loop be driven with the gate the
+ * actual production code uses, so the test genuinely captures a regression even
+ * though the full React hook cannot be mounted here.
  */
 function detectDirectPostGate(): Gate {
   const src = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
   const start = src.indexOf('const handleEvent = (data: Record<string, unknown>) => {')
   const end = src.indexOf("data.type === 'done'", start)
   const block = src.slice(start, end)
-  return block.includes('textPacer.flushNow()') ? 'flushNow' : 'waitUntilIdle'
+  // A blocking text drain (`waitUntilIdle()` / a text pacer) before tool events
+  // is the regression. Production ingests text directly, so this is 'flushNow'.
+  return /waitUntilIdle|textPacer/.test(block) ? 'waitUntilIdle' : 'flushNow'
 }
 
 function sseLine(obj: unknown): string {
@@ -236,14 +232,14 @@ const flushMicrotasks = async (n = 30) => {
   for (let i = 0; i < n; i++) await Promise.resolve()
 }
 
-describe('swarm: tool content is committed synchronously (no text-pacer drain required)', () => {
-  it('FIXED (flushNow): agent tool card + specialist prose render immediately, without pumping rAF/deadline timers', async () => {
+describe('swarm: tool content is committed synchronously (no text animation drain required)', () => {
+  it('FIXED (direct ingestion): agent tool card + specialist prose render immediately, without pumping rAF/deadline timers', async () => {
     const { stream, done } = await runDirectPostLoop(buildSwarmBody(), 'flushNow')
 
     await done
     const snap = stream.snapshot() as any
 
-    // mode_notice text drained synchronously ahead of the tool events.
+    // mode_notice text landed ahead of the tool events, in wire order.
     expect(
       snap.segments?.some((s: any) => s.type === 'text' && /Running in Swarm mode/.test(s.content ?? '')),
     ).toBe(true)
@@ -259,30 +255,31 @@ describe('swarm: tool content is committed synchronously (no text-pacer drain re
     ).toBe(true)
   })
 
-  it('PRE-FIX (await waitUntilIdle): the reader loop BLOCKS behind the paced mode_notice, so the tool card is NOT committed', async () => {
-    const { stream, textPacer } = await runDirectPostLoop(buildSwarmBody(), 'waitUntilIdle')
+  it('PRE-FIX (await text drain): the reader loop BLOCKS behind the animating mode_notice, so the tool card is NOT committed', async () => {
+    const { stream, releaseGate, done } = await runDirectPostLoop(buildSwarmBody(), 'waitUntilIdle')
 
     // Give the reader loop microtasks to consume the SSE and reach the first
-    // tool event, where it blocks on waitUntilIdle (never resolves because the
-    // text pacer's rAF/deadline never fire and flushNow is never called).
+    // tool event, where it blocks on the text-drain gate (never resolves because
+    // the text pacer's rAF/deadline never fire and releaseGate is not called).
     await flushMicrotasks(30)
 
     const snap = stream.snapshot() as any
 
-    // The first visible text chunk now commits immediately, but the rest of
-    // the mode notice remains paced. The historical waitUntilIdle gate still
-    // blocks the reader before it can process the following tool event.
+    // The mode_notice text is ingested immediately (direct push), so it is
+    // present even in the pre-fix loop...
     expect(snap.segments?.some((s: any) => s.type === 'text')).toBe(true)
 
-    // THE REGRESSION: the tool event was never processed, so no tool card.
+    // ...but the tool event was never processed, so no tool card.
+    // THE REGRESSION.
     expect(snap.toolCalls?.length ?? 0).toBe(0)
     expect(snap.toolCalls?.some((t: any) => t.callId === 'agent-call')).toBe(false)
 
-    // Clean up: resolving the pacer lets the stalled loop unwind.
-    textPacer.cancel()
+    // Clean up: releasing the gate lets the stalled loop unwind.
+    releaseGate()
+    await done
   })
 
-  it('proves the gating branch is the discriminator: flushNow commits, waitUntilIdle does not', async () => {
+  it('proves the gating branch is the discriminator: direct ingestion commits, blocking does not', async () => {
     const fixed = await runDirectPostLoop(buildSwarmBody(), 'flushNow')
     await fixed.done
     const fixedSnap = fixed.stream.snapshot() as any
@@ -292,12 +289,13 @@ describe('swarm: tool content is committed synchronously (no text-pacer drain re
     await flushMicrotasks(30)
     const brokenSnap = broken.stream.snapshot() as any
     expect(brokenSnap.toolCalls?.length ?? 0).toBe(0)
-    broken.textPacer.cancel()
+    broken.releaseGate()
+    await broken.done
   })
 
   it('GENUINE: drives the real-lib reader loop with the gate the REAL useChat.ts currently uses (tool content must commit)', async () => {
     // Determine the gate from the actual production source, then run the real
-    // reader loop with it. If useChat.ts regresses to `await waitUntilIdle()`,
+    // reader loop with it. If useChat.ts regresses to a blocking text drain,
     // the loop stalls and the tool content never commits -> this fails.
     const gate = detectDirectPostGate()
     const { stream, done } = await runDirectPostLoop(buildSwarmBody(), gate)
@@ -310,7 +308,7 @@ describe('swarm: tool content is committed synchronously (no text-pacer drain re
     const snap = stream.snapshot() as any
     const toolCard = snap.toolCalls?.some((t: any) => t.callId === 'agent-call')
 
-    expect(committed, 'event handling stalled behind textPacer.waitUntilIdle() — tool content never committed (swarm live-stream regression)')
+    expect(committed, 'event handling stalled behind a text drain — tool content never committed (swarm live-stream regression)')
       .toBe(true)
     expect(toolCard).toBe(true)
     // specialist prose must be attached to the tool card as well
@@ -319,29 +317,30 @@ describe('swarm: tool content is committed synchronously (no text-pacer drain re
   })
 })
 
-describe('swarm: the REAL useChat.ts must gate tool events on flushNow (source guard)', () => {
-  it('the handleEvent tool-event handlers in useChat.ts do not gate tool events behind await textPacer.waitUntilIdle()', () => {
+describe('swarm: the REAL useChat.ts must not wait for text animation (source guard)', () => {
+  it('the handleEvent tool-event handlers in useChat.ts ingest text directly and gate no tool event behind a text drain', () => {
     const src = readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
 
     // Extract the `handleEvent` function, the single place that processes
     // subscription events (token / mode_notice / tool_* / approval_required).
     const start = src.indexOf('const handleEvent = (data: Record<string, unknown>) => {')
-    // Slice up to the `done` terminal handler so the only `waitUntilIdle`
-    // usages captured are the tool-event handlers (the legit terminal
-    // `await waitUntilIdle()` in `done` comes AFTER this marker).
+    // Slice up to the `done` terminal handler so the only gate usages captured
+    // are the tool-event handlers (the legit terminal handling in `done` comes
+    // AFTER this marker).
     const endMarker = src.indexOf("data.type === 'done'", start)
     expect(start, 'handleEvent not found in useChat.ts').toBeGreaterThan(-1)
     expect(endMarker, 'handleEvent done terminal not found in useChat.ts').toBeGreaterThan(start)
 
     const block = src.slice(start, endMarker)
 
-    // Fixed: tool events (incl. approval_required) flush pending text synchronously.
-    expect(block).toMatch(/textPacer\.flushNow\(\)/)
+    // Production ingests stream text straight into the message stream.
+    expect(block).toMatch(/stream\.pushText\(|stream\.pushThinking\(/)
 
-    // Pre-fix code awaited waitUntilIdle() directly before pushing tool events,
-    // which is what blocked event delivery (e.g. the approver appearing while
-    // long mode-notice text is still queued). Within the tool-event window it
-    // must NOT appear at all.
-    expect(block).not.toContain('await textPacer.waitUntilIdle()')
+    // Neither the historical synchronous-drain pacer nor its blocking
+    // `waitUntilIdle()` gate may appear in the tool-event window — reintroducing
+    // either re-creates the stall (e.g. the approver/tool card appearing only
+    // after a long mode-notice finishes animating).
+    expect(block).not.toContain('textPacer')
+    expect(block).not.toContain('waitUntilIdle')
   })
 })

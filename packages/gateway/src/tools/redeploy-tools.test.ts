@@ -23,6 +23,19 @@ describe("redeploy-tools switchover guardrails", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps desktop-owned gateways under desktop update control", async () => {
+    vi.stubEnv("JAIT_DESKTOP_HOST", "1");
+    const { createRedeployTool } = await import("./redeploy-tools.js");
+    const shutdown = vi.fn();
+    const result = await createRedeployTool({ port: 18000, shutdown }).execute({}, {} as any);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("desktop Settings");
+    expect(execSyncMock).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+    expect(shutdown).not.toHaveBeenCalled();
   });
 
   it("refuses to restart a systemd unit whose file is missing, leaving the current process running", async () => {

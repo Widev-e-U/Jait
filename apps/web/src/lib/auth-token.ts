@@ -143,6 +143,11 @@ export function setAuthToken(token: string): void {
 }
 
 export function clearAuthToken(): void {
+  void clearAuthTokenForGatewayChange().catch(() => {})
+}
+
+/** Wait for native credential deletion before selecting a different server. */
+export async function clearAuthTokenForGatewayChange(): Promise<void> {
   memoryToken = null
 
   // Clean up any client-side storage
@@ -153,7 +158,7 @@ export function clearAuthToken(): void {
   if (isNativeApp()) {
     const desktop = getDesktopBridge()
     if (desktop?.credentialClear) {
-      desktop.credentialClear(CREDENTIAL_KEY).catch(() => {})
+      await desktop.credentialClear(CREDENTIAL_KEY)
     }
   }
 }

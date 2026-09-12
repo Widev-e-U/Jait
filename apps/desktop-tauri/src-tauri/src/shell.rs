@@ -19,6 +19,8 @@ use tauri::{
 use jait_desktop_glue::{HostSink, HostState};
 
 use crate::translate_glue_event;
+use crate::hosting::{DesktopGateway, desktop_gateway_status, desktop_gateway_configure, desktop_gateway_restart_app};
+use crate::gateway_host::GatewayHost;
 
 // Updater commands live in `updater.rs`. The fns are imported for
 // `generate_handler!`; the generated `__cmd__`/`__tauri_command_name_`
@@ -488,16 +490,33 @@ pub fn run() {
             // entry, or the OS at boot).
             login_item::sync_login_item(app.handle(), &glue);
 
-            let gateway = gateway_url();
-            let gateway_configured = gateway_url_is_configured();
+            let host = Arc::new(Mutex::new(GatewayHost::new(
+                app.path().resource_dir()?.join("gateway"),
+                app.path().app_data_dir()?.join("gateway-host"),
+            )));
+            let config = host.lock().config.clone();
+            let gateway = config.url().unwrap_or_else(gateway_url);
+            let gateway_configured = config.url().is_some() || gateway_url_is_configured();
+            app.manage(DesktopGateway(host.clone()));
+            let weak = Arc::downgrade(&host);
+            std::thread::spawn(move || {
+                if let Some(host) = weak.upgrade() { let _ = host.lock().start(); }
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    let Some(host) = weak.upgrade() else { break; };
+                    host.lock().monitor();
+                }
+            });
             let version = app.package_info().version.to_string();
-            let boot = boot_script(
+            let mut boot = boot_script(
                 &gateway,
                 gateway_configured,
                 &version,
                 &glue,
                 opts.open_folder.as_deref(),
             );
+
+            boot.push_str(&format!("window.__JAIT_DESKTOP_BOOT__.gatewayConfig = {};", serde_json::to_string(&config)?));
 
             let mut builder = WebviewWindowBuilder::new(app, "main", web_url(&gateway))
                 .title("Jait")
@@ -537,6 +556,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_ipc,
+            desktop_gateway_status,
+            desktop_gateway_configure,
+            desktop_gateway_restart_app,
             desktop_pick_directory_dialog,
             window_minimize,
             window_toggle_maximize,
@@ -552,11 +574,13 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building jait desktop shell")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             // Glue children (PTY shells, background commands) rely on process
             // teardown at exit; HostState has no stop_all() yet — tracked in
             // the Electron-parity gap report.
-            if let RunEvent::Exit = event {}
+            if let RunEvent::Exit = event {
+                if let Some(host) = app_handle.try_state::<DesktopGateway>() { host.0.lock().stop(); }
+            }
         });
 }
 

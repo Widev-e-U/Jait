@@ -162,6 +162,7 @@ pub async fn desktop_update_install(app: AppHandle) -> Result<Value, String> {
     let pending = PENDING.lock().take();
     match pending {
         Some(pending) => {
+            crate::hosting::stop(&app).await;
             tauri::async_runtime::spawn_blocking(move || {
                 if let Err(e) = pending.update.install(&pending.bytes) {
                     // Surface the failure instead of dying silently; the

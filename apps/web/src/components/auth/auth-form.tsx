@@ -1,3 +1,4 @@
+import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
 import type { FormEvent } from 'react'
 import { Server, XCircle, Eye, EyeOff, Loader2 as SpinnerIcon } from 'lucide-react'
 
@@ -92,6 +93,10 @@ export function AuthForm(props: AuthFormProps) {
     showRegisterConfirmPassword,
     setShowRegisterConfirmPassword,
   } = props
+
+  if (gatewayStep === 'url' && (typeof window !== 'undefined' && window.jaitDesktop?.configureGateway)) {
+    return <DesktopGatewaySetup />
+  }
 
   if (gatewayStep === 'url') {
     return (

@@ -1,6 +1,7 @@
+import { getStateDirectory } from "../../state-directory.js";
 import { execFile } from "node:child_process";
 import { access, mkdir, writeFile } from "node:fs/promises";
-import { homedir, platform } from "node:os";
+import { platform } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -73,7 +74,7 @@ async function defaultExecute(command: string, args: string[], options: ExecuteO
   };
 }
 
-export function getGraphifyRuntimePaths(jaitDir = join(homedir(), ".jait")): GraphifyRuntimePaths {
+export function getGraphifyRuntimePaths(jaitDir = join(getStateDirectory())): GraphifyRuntimePaths {
   const runtimeDir = join(jaitDir, "runtime", "graphify");
   const venvDir = join(runtimeDir, "venv");
   const windows = platform() === "win32";
@@ -232,7 +233,7 @@ async function provisionGraphifyRuntime(options: EnsureGraphifyRuntimeOptions): 
 
 export async function ensureGraphifyRuntime(options: EnsureGraphifyRuntimeOptions = {}): Promise<GraphifyRuntimeStatus> {
   const env = options.env ?? process.env;
-  const key = `${options.jaitDir ?? join(homedir(), ".jait")}:${env["JAIT_GRAPHIFY_COMMAND"]?.trim() ?? "managed"}`;
+  const key = `${options.jaitDir ?? join(getStateDirectory())}:${env["JAIT_GRAPHIFY_COMMAND"]?.trim() ?? "managed"}`;
   const existing = installs.get(key);
   if (existing) return existing;
 

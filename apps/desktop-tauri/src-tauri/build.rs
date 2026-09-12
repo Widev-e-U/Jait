@@ -8,6 +8,9 @@ fn main() {
         // "not allowed. Plugin not found" once any capability exists.
         tauri_build::AppManifest::new().commands(&[
             "desktop_ipc",
+            "desktop_gateway_status",
+            "desktop_gateway_configure",
+            "desktop_gateway_restart_app",
             "desktop_pick_directory_dialog",
             "window_minimize",
             "window_toggle_maximize",

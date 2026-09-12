@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 import { and, eq } from "drizzle-orm";
 import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -38,7 +39,7 @@ export class ProviderAccountService {
     private readonly db: JaitDB,
     private readonly registry: ProviderRegistry,
     definitions: AcpProviderConfig[],
-    private readonly accountsRoot = join(homedir(), ".jait", "provider-accounts"),
+    private readonly accountsRoot = join(getStateDirectory(), "provider-accounts"),
     private readonly usageService?: ProviderUsageService,
     private readonly definitionsLoader?: () => Promise<AcpProviderConfig[]>,
   ) {

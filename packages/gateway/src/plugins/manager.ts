@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * Plugin Manager — discovery, loading, lifecycle, and persistence.
  *
@@ -8,7 +9,6 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { homedir } from "node:os";
 
 import type { PluginManifest } from "./manifest.js";
 import { validateManifest } from "./manifest.js";
@@ -30,7 +30,7 @@ import { discoverOpenClawPlugins, openclawToJaitManifest, createOpenClawPluginMo
 
 /** Default extensions root: ~/.jait/extensions/ */
 export function defaultExtensionsDir(): string {
-  return join(homedir(), ".jait", "extensions");
+  return join(getStateDirectory(), "extensions");
 }
 
 /* ------------------------------------------------------------------ */

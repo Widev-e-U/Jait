@@ -1,4 +1,9 @@
+import type { DesktopGatewayConfig, DesktopGatewayStatus } from "@jait/shared"
+
 interface JaitDesktop {
+  getGatewayStatus?: () => Promise<DesktopGatewayStatus>
+  configureGateway?: (config: DesktopGatewayConfig) => Promise<DesktopGatewayStatus>
+  restartGatewayApp?: () => Promise<void>
   gatewayUrl?: string
   /**
    * Folder passed on the command line — the "Open with Jait" context-menu
@@ -68,6 +73,8 @@ declare global {
     jaitDesktop?: JaitDesktop
     Capacitor?: unknown
     __JAIT_DESKTOP_BOOT__?: {
+      gatewayConfig?: DesktopGatewayConfig
+      runtime?: string
       gatewayUrl?: string
       gatewayConfigured?: boolean
       deviceID?: string

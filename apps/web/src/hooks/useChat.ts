@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
-import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { TodoItem } from '@/components/chat/todo-list'
 import type { ChangedFile, FileChangeState } from '@/components/chat/files-changed'
@@ -25,7 +24,6 @@ import {
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamSnapshot, type MessageStreamWriter } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
-import { createStreamTextPacer } from '@/lib/stream-text-pacer'
 import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
 import {
   openSessionEventSubscription,
@@ -114,7 +112,7 @@ export interface ChatTransportSnapshot {
  * The gateway heartbeats every 15s while a stream is open. Idle past ~3
  * heartbeats means the machine slept, the socket half-died, or the tab was
  * frozen enough that reads stalled — everything short of that is recoverable
- * in place (durable replay + the client-side pacer).
+ * in place (durable replay + the client-side accumulator).
  */
 export const WAKE_TRANSPORT_STALE_MS = 45_000
 
@@ -136,7 +134,7 @@ export function getChatWakeRecoveryAction(params: {
     transport.idleMs <= WAKE_TRANSPORT_STALE_MS
   ) {
     // The durable subscription replays any gap from Last-Event-ID and the
-    // pacer holds every uncommitted chunk, so tearing down and refetching a
+    // accumulator holds every uncommitted delta, so tearing down and refetching a
     // snapshot would drop work mid-stream rather than repair it — and the
     // rebuild is exactly the jank users see when returning to the tab.
     return 'none'
@@ -846,7 +844,7 @@ export function useChat(
 
     const batchUpdate = (updates: Partial<ChatMessage>, immediate = false) => {
       pendingUpdates = { ...pendingUpdates, ...updates }
-      if (immediate) flushSync(scheduler.flushNow)
+      if (immediate) scheduler.flushNow()
       else scheduler.schedule()
     }
 
@@ -855,13 +853,6 @@ export function useChat(
       if (pendingContextFlow !== undefined) updates.contextFlow = pendingContextFlow
       batchUpdate(updates, immediate)
     }
-
-    const textPacer = createStreamTextPacer({
-      onText: (chunk) => stream.pushText(chunk),
-      onThinking: (chunk) => stream.pushThinking(chunk),
-      onCommit: () => applyStreamSnapshot(true),
-      deadlineMs: STREAMING_FLUSH_DEADLINE_MS,
-    })
 
     activeStreamRef.current = {
       getAssistantId: () => assistantId,
@@ -903,7 +894,6 @@ export function useChat(
     /** Turn boundary: drop the previous turn's accumulator and start clean. */
     const beginTurn = () => {
       // Drain into the *outgoing* stream/message before swapping them out.
-      textPacer.flushNow()
       scheduler.flushNow()
       stream = createMessageStream()
       assistantId = null
@@ -957,23 +947,20 @@ export function useChat(
         beginTurn()
       } else if (data.type === 'token') {
         if (!ensureStreamingAssistant()) return
-        textPacer.enqueueText(data.content as string)
+        stream.pushText(data.content as string)
+        applyStreamSnapshot()
       } else if (data.type === 'thinking') {
         if (!ensureStreamingAssistant()) return
-        textPacer.enqueueThinking(data.content as string)
+        stream.pushThinking(data.content as string)
+        applyStreamSnapshot()
       } else if (data.type === 'mode_notice') {
         if (!ensureStreamingAssistant()) return
-        textPacer.enqueueText(`\n\n*${data.message as string}*`)
+        stream.pushText(`\n\n*${data.message as string}*`)
+        applyStreamSnapshot()
       } else if (data.type === 'tool_call_delta') {
-        // Flush pending text synchronously instead of awaiting the text pacer's
-        // idle. In swarm mode the coordinator's first content is a tool call
-        // (not text), so awaiting would block event delivery behind the (long)
-        // paced mode-notice text and delay tool / sub-agent / approval
-        // rendering. flushNow drains text now and keeps ordering (text before
-        // tool) without blocking.
-        textPacer.flushNow()
+        // Text is already ingested in wire order. Include it with the tool
+        // event on the next paint, without waiting for a typing animation.
         if (!ensureStreamingAssistant()) return
-        scheduler.flushNow()
         stream.pushToolCallDelta(
           data.call_id as string,
           (data.name_delta as string) || '',
@@ -985,9 +972,7 @@ export function useChat(
         )
         applyStreamSnapshot()
       } else if (data.type === 'tool_start') {
-        textPacer.flushNow()
         if (!ensureStreamingAssistant()) return
-        scheduler.flushNow()
         stream.pushToolStart(
           data.call_id as string,
           data.tool as string,
@@ -998,9 +983,7 @@ export function useChat(
         const recoveredTodoList = recoverTodoListFromMessages([{ toolCalls: stream.snapshot().toolCalls }])
         if (recoveredTodoList !== null) setTodoList(recoveredTodoList)
       } else if (data.type === 'approval_required') {
-        textPacer.flushNow()
         if (!ensureStreamingAssistant()) return
-        scheduler.flushNow()
         stream.pushApprovalRequired(
           data.request_id as string,
           (data.call_id as string) || `approval-${data.request_id as string}`,
@@ -1009,14 +992,11 @@ export function useChat(
         )
         applyStreamSnapshot()
       } else if (data.type === 'tool_output') {
-        textPacer.flushNow()
         if (!ensureStreamingAssistant()) return
         stream.pushToolOutput(data.call_id as string, data.content as string, data.channel as 'text' | 'thinking' | undefined)
         applyStreamSnapshot()
       } else if (data.type === 'tool_result') {
-        textPacer.flushNow()
         if (!ensureStreamingAssistant()) return
-        scheduler.flushNow()
         stream.pushToolResult(
           data.call_id as string,
           data.ok as boolean,
@@ -1044,7 +1024,6 @@ export function useChat(
         // The gateway discarded a degenerate generation after streaming
         // (runaway repetition / replayed-reasoning loop); drop the
         // already-rendered text past the rollback point.
-        textPacer.flushNow()
         stream.rollbackText((data.contentLength as number) ?? 0)
         applyStreamSnapshot(true)
       } else if (data.type === 'plan_complete') {
@@ -1075,7 +1054,6 @@ export function useChat(
         setFileChangeCount((count) => count + 1)
         trackChangedFile(data.path as string, data.name as string)
       } else if (data.type === 'done') {
-        textPacer.flushNow()
         scheduler.flushNow()
         const finalSnapshot = stream.finish()
         const finishedId = endTurn()
@@ -1112,7 +1090,6 @@ export function useChat(
         })
       } else if (data.type === 'error') {
         const errorMsg = data.message as string
-        textPacer.flushNow()
         scheduler.flushNow()
         const finalSnapshot = stream.finish()
         const finishedId = endTurn()
@@ -1164,7 +1141,6 @@ export function useChat(
     let snapshotApplied = false
 
     const applySnapshot = (data: SnapshotResponse) => {
-      textPacer.flushNow()
       scheduler.flushNow()
       pendingUpdates = null
       snapshotApplied = true
@@ -1322,7 +1298,6 @@ export function useChat(
       cancelled = true
       subscriptionRef.current?.close()
       subscriptionRef.current = null
-      textPacer.cancel()
       scheduler.cancel()
       if (activeStreamRef.current?.isCurrent === isCurrent) activeStreamRef.current = null
       // Reset so React strict-mode re-mount can re-run the effect
@@ -1765,7 +1740,7 @@ export function useChat(
   // teardown + authoritative snapshot when the wire looks dead or stale. When
   // the subscription is still open and hearing the gateway's ~15s heartbeat,
   // doing nothing is correct — the durable replay covers any gap from
-  // Last-Event-ID and the pacer drains the queued backlog on the next visible
+  // Last-Event-ID and the latest accumulated state paints on the next visible
   // frame. Rebuilding unconditionally was visible as jank + a refetch pause
   // every time the user returned to the tab mid-stream.
   useEffect(() => {

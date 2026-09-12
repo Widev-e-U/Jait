@@ -11,6 +11,8 @@
 //! event-translation layer tested below — compiles and tests on any machine
 //! via plain `cargo test` (default features).
 
+pub mod gateway_host;
+
 // `updater` must be declared before `shell` with `#[macro_use]`: the
 // tauri command attribute expands hidden `#[macro_export]` macro_rules!
 // inside it, and those can only reach `generate_handler!` in `shell` via
@@ -19,6 +21,10 @@
 #[cfg(feature = "shell")]
 #[macro_use]
 pub mod updater;
+
+#[cfg(feature = "shell")]
+#[macro_use]
+pub mod hosting;
 
 #[cfg(feature = "shell")]
 #[macro_use]

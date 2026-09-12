@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../state-directory.js";
 /**
  * SQLite connection — runtime-agnostic (bun:sqlite under Bun, better-sqlite3 under Node).
  *
@@ -9,14 +10,13 @@ import { openRawSqlite, createDrizzle } from "./sqlite-shim.js";
 import { migrations } from "./migrations.js";
 import { mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { homedir } from "node:os";
 
 export type { SqliteDatabase } from "./sqlite-shim.js";
 export type JaitDB = DrizzleDB;
 
 /** Resolve the default DB path: ~/.jait/data/jait.db */
 export function defaultDbPath(): string {
-  return join(homedir(), ".jait", "data", "jait.db");
+  return join(getStateDirectory(), "data", "jait.db");
 }
 
 export function resolveDatabasePath(

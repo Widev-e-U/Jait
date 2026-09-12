@@ -599,6 +599,9 @@
     downloadUpdate: downloadUpdate,
     installUpdate: installUpdate,
     onUpdateEvent: onUpdateEvent,
+    getGatewayStatus: function () { return invoke('desktop_gateway_status', {}); },
+    configureGateway: function (config) { return invoke('desktop_gateway_configure', { config: config }); },
+    restartGatewayApp: function () { return invoke('desktop_gateway_restart_app', {}); },
     getLoginItem: getLoginItem,
     setLoginItem: setLoginItem,
   };

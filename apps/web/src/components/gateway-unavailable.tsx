@@ -1,3 +1,4 @@
+import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
 import { useState, type FormEvent } from 'react'
 import { RefreshCw, ServerCrash, Settings2 } from 'lucide-react'
 import { getApiUrl, setStoredGatewayUrl } from '@/lib/gateway-url'
@@ -70,7 +71,7 @@ export function GatewayUnavailable({ onRetry, canSetBackend = false }: GatewayUn
           </p>
         </div>
 
-        {editingBackend ? (
+        {(typeof window !== 'undefined' && window.jaitDesktop?.configureGateway) ? <DesktopGatewaySetup onReady={onRetry} /> : editingBackend ? (
           <form className="w-full space-y-4 text-left" onSubmit={handleSaveBackend}>
             <div className="space-y-2">
               <label htmlFor="gateway-url" className="text-sm font-medium">

@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../../state-directory.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -283,7 +284,7 @@ export class CodeGraphService {
     private readonly db: JaitDB,
     options: CodeGraphServiceOptions = {},
   ) {
-    this.dataRoot = options.dataRoot ?? join(homedir(), ".jait", "data", "code-graphs");
+    this.dataRoot = options.dataRoot ?? join(getStateDirectory(), "data", "code-graphs");
     this.runner = options.runner ?? new GraphifyRunner();
   }
 

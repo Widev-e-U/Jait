@@ -69,6 +69,9 @@ export function createRedeployTool(deps: RedeployDeps): ToolDefinition<RedeployI
     },
 
     async execute(input: RedeployInput, context: ToolContext): Promise<ToolResult> {
+      if (process.env["JAIT_DESKTOP_HOST"] === "1") {
+        return { ok: false, message: "This gateway is managed by the Jait desktop app. Update it through desktop Settings so the app and bundled gateway stay together." };
+      }
       const tag = input.version ?? "latest";
       const log = context.onOutputChunk ?? console.log;
 

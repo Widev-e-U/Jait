@@ -1,3 +1,4 @@
+import { getStateDirectory } from "../../state-directory.js";
 /**
  * Prompt Registry — per-model prompt resolution for Jait.
  *
@@ -58,7 +59,7 @@ Avoid content that violates copyrights.`;
 
 export const DEFAULT_REMINDER = `[REMINDER] Send a brief progress update to the user before your next tool calls. If you have a todo list, update it now. Keep going until the task is fully resolved.`;
 
-export const DEFAULT_GLOBAL_INSTRUCTIONS_PATH = join(homedir(), ".jait", "SOUL.md");
+export const DEFAULT_GLOBAL_INSTRUCTIONS_PATH = join(getStateDirectory(), "SOUL.md");
 const MAX_GLOBAL_INSTRUCTIONS_CHARS = 12_000;
 
 function resolveGlobalInstructionsPath(): string {

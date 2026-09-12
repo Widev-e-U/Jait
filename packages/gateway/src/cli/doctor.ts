@@ -1,6 +1,6 @@
+import { getStateDirectory } from "../state-directory.js";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { inspectGraphifyRuntime, type GraphifyRuntimeStatus } from "../services/code-graph/graphify-runtime.js";
@@ -60,7 +60,7 @@ const PROVIDER_COMMANDS = [
 
 export function resolveDoctorEnvCandidates(options: Pick<RunDoctorOptions, "cwd" | "envPath" | "jaitDir">): string[] {
   const cwd = options.cwd ?? process.cwd();
-  const jaitDir = options.jaitDir ?? join(homedir(), ".jait");
+  const jaitDir = options.jaitDir ?? join(getStateDirectory());
   return [options.envPath, resolve(cwd, ".env"), join(jaitDir, ".env")].filter((value): value is string => Boolean(value));
 }
 
@@ -97,7 +97,7 @@ function detectPlaywright(): boolean {
 
 export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorResult> {
   const checks: DoctorCheck[] = [];
-  const jaitDir = options.jaitDir ?? join(homedir(), ".jait");
+  const jaitDir = options.jaitDir ?? join(getStateDirectory());
   const envCandidates = resolveDoctorEnvCandidates(options);
   const resolvedEnv = envCandidates.find((candidate) => existsSync(candidate));
   const dbPath = join(jaitDir, "data", "jait.db");

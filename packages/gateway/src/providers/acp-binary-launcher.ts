@@ -1,7 +1,7 @@
+import { getStateDirectory } from "../state-directory.js";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
 }
 
 async function ensureInstalled(spec: BinarySpec): Promise<string> {
-  const root = process.env.JAIT_ACP_BINARY_ROOT?.trim() || join(homedir(), ".jait", "acp-agents");
+  const root = process.env.JAIT_ACP_BINARY_ROOT?.trim() || join(getStateDirectory(), "acp-agents");
   const installDir = join(root, spec.id, spec.version, spec.target);
   const command = resolveArchiveCommand(installDir, spec.cmd);
   const marker = join(installDir, ".jait-acp-install.json");
