@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.841](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.841) — 2026-09-12
+- feat(git): unify source-control badge and diff HUD on one Git service — b0a0a849
+
 ## [v0.1.840](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.840) — 2026-09-11
 - fix(web): restore composer controls in parallel chat panels — e87aaffc
 
