@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { type Virtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { prepareWithSegments, walkLineRanges } from '@chenglou/pretext'
@@ -497,6 +497,15 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
 
+  // Text shaping and rebuilding the full document map are allowed to trail an
+  // urgent stream render. This lets new prose and tool output paint first while
+  // React coalesces superseded minimap work during a burst of provider events.
+  const minimapContent = useMemo(
+    () => ({ roles, texts, messageInputs }),
+    [messageInputs, roles, texts],
+  )
+  const deferredMinimapContent = useDeferredValue(minimapContent)
+
   useEffect(() => {
     if (!scrollElement) return
     const update = () => setViewportHeight(scrollElement.clientHeight)
@@ -516,6 +525,7 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
 
   // Reads (and populates) the virtualizer's measurement cache below.
   const totalSize = virtualizer.getTotalSize()
+  const deferredTotalSize = useDeferredValue(totalSize)
 
   // Line shapes are derived once per message and reused until its content or
   // wrapping width changes, so a streaming turn only re-splits its own rows.
@@ -547,16 +557,21 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
   // items only ever span the visible window, which is why the old bars used to
   // flash in and appear to vanish while scrolling.
   const blocks = useMemo(() => {
-    if (totalSize <= 0) return [] as MinimapBlock[]
+    if (deferredTotalSize <= 0) return [] as MinimapBlock[]
     const cache = shapeCacheRef.current
     const measurements = virtualizer.measurementsCache
+    const {
+      roles: deferredRoles,
+      texts: deferredTexts,
+      messageInputs: deferredMessageInputs,
+    } = deferredMinimapContent
     const out: MinimapBlock[] = []
     for (let index = 0; index < measurements.length; index++) {
       const measurement = measurements[index]
       if (!measurement || measurement.size <= 0) continue
-      const role = roles[index] ?? 'agent'
-      const text = texts[index] ?? ''
-      const message = messageInputs[index]
+      const role = deferredRoles[index] ?? 'agent'
+      const text = deferredTexts[index] ?? ''
+      const message = deferredMessageInputs[index]
       const cached = cache.get(index)
       const wrapWidth = computeMinimapMessageWrapWidth(textWidth, role)
       const current = { text, message, wrapWidth }
@@ -579,11 +594,9 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
     return out
     // `totalSize` stands in for the measurement cache, which mutates in place:
     // it changes whenever an item is measured or the list grows.
-  }, [messageInputs, roles, texts, textWidth, totalSize, virtualizer])
+  }, [deferredMinimapContent, deferredTotalSize, textWidth, virtualizer])
 
   const { rows, contentHeight, spans } = useMemo(() => computeMinimapLayout({ blocks }), [blocks])
-
-  if (totalSize <= 0 || viewportHeight <= 0) return null
 
   // The real scrollable range of the container. The virtualized sizer is inset
   // inside it (top padding + "load earlier messages" button), so its height is
@@ -602,12 +615,18 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
   // The preview keeps its own fixed scale; the rail pans over it when the
   // conversation has more lines than the rail has room for.
   const railOffset = computeMinimapRailOffset({ contentHeight, viewportHeight, contentTop, contentTopMax })
+  const visibleRows = useMemo(
+    () => getVisibleMinimapRows(rows, railOffset, viewportHeight),
+    [railOffset, rows, viewportHeight],
+  )
   const indicator = clampMinimapIndicator({
     top: contentTop - railOffset,
     height: minimapDocumentToContent(documentScrollTop + viewportHeight, spans) - contentTop,
     viewportHeight,
     maxScroll,
   })
+
+  if (totalSize <= 0 || viewportHeight <= 0) return null
 
   const handlePointer = (rail: HTMLElement, clientY: number) => {
     if (!scrollElement) return
@@ -651,7 +670,7 @@ export function ConversationMinimap({ virtualizer, scrollElement, sizerOffset, r
         }}
       />
       <div className="absolute inset-x-0 top-0" style={{ transform: `translateY(${-railOffset}px)` }}>
-        <MinimapLines rows={rows} />
+        <MinimapLines rows={visibleRows} />
       </div>
     </div>
   )
@@ -699,6 +718,31 @@ export interface MinimapLayout {
   /** Total height of the fixed-pitch preview, in px. */
   contentHeight: number
   spans: MinimapSpan[]
+}
+
+/** Return only the minimap rows that can paint inside the visible rail. */
+export function getVisibleMinimapRows(
+  rows: readonly MinimapRow[],
+  railOffset: number,
+  viewportHeight: number,
+  overscan = MINIMAP_ROW_PITCH_PX * 2,
+): MinimapRow[] {
+  if (rows.length === 0 || viewportHeight <= 0) return []
+  const start = Math.max(railOffset - overscan, 0)
+  const end = railOffset + viewportHeight + overscan
+
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    const row = rows[middle]
+    if (row.y + row.height < start) low = middle + 1
+    else high = middle
+  }
+
+  let last = low
+  while (last < rows.length && rows[last].y <= end) last++
+  return rows.slice(low, last)
 }
 
 /**

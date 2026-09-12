@@ -628,6 +628,8 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     initialOffset: INITIAL_CONVERSATION_SCROLL_OFFSET,
     estimateSize: estimateItemSize,
     overscan: 5,
+    useScrollendEvent: true,
+    useAnimationFrameWithResizeObserver: true,
     getItemKey: (index) => {
       const child = childItems[index]
       if (typeof child === 'object' && child !== null && 'key' in child) {

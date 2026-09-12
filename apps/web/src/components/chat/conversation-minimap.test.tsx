@@ -37,9 +37,34 @@ import {
   computeMinimapMessageWrapWidth,
   computeMinimapRailOffset,
   computeMinimapScrollTop,
+  getVisibleMinimapRows,
   minimapDocumentToContent,
   type MinimapBlock,
 } from './conversation-minimap'
+
+describe('getVisibleMinimapRows', () => {
+  const rows = Array.from({ length: 10_000 }, (_, index) => ({
+    key: String(index),
+    y: index * 3,
+    height: 2,
+    width: 1,
+    isUser: false,
+    isError: false,
+  }))
+
+  it('keeps the minimap DOM bounded to the visible rail window', () => {
+    const visible = getVisibleMinimapRows(rows, 15_000, 800)
+
+    expect(visible.length).toBeLessThan(280)
+    expect(visible[0].y).toBeLessThanOrEqual(15_000)
+    expect(visible.at(-1)!.y).toBeGreaterThanOrEqual(15_800)
+  })
+
+  it('handles empty and hidden rails', () => {
+    expect(getVisibleMinimapRows([], 0, 800)).toEqual([])
+    expect(getVisibleMinimapRows(rows, 0, 0)).toEqual([])
+  })
+})
 
 describe('computeMinimapLineShape', () => {
   it('turns a short paragraph into one partial-width line', () => {
