@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.844](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.844) — 2026-09-12
+- feat(desktop): host the gateway from the Tauri app — 9a6da115
+
+## [v0.1.843](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.843) — 2026-09-12
+- fix(web): restore stream-text-pacer module and bump gateway to v0.1.843 — cffbf21c
+
+## [v0.1.842](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.842) — 2026-09-12
+- fix(gateway): add missing state-directory module used by the Git service — 9fbbb282
+
 ## [v0.1.841](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.841) — 2026-09-12
 - feat(git): unify source-control badge and diff HUD on one Git service — b0a0a849
 
