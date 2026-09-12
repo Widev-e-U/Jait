@@ -476,7 +476,10 @@ mod tests {
         let resources = PathBuf::from(
             std::env::var("JAIT_HOSTING_TEST_RESOURCES").expect("packaged resources path"),
         );
-        let resources = resources.canonicalize().unwrap();
+        assert!(
+            resources.is_absolute(),
+            "packaged resources path must be absolute"
+        );
         let dir = tempfile::tempdir().unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
