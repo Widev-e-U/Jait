@@ -251,20 +251,19 @@ export class SessionService {
       .run();
   }
 
-  /**
-   * Mark a session as read/viewed by the user. Only bumps viewed_at when the
-   * session actually has unread activity (last_active_at newer than the last
-   * view), so background activity doesn't keep resetting the timestamp.
-   */
-  markViewed(id: string, userId?: string) {
+  /** Acknowledge only the activity the client actually displayed. */
+  markViewed(id: string, userId?: string, observedLastActiveAt?: string) {
     const existing = this.getById(id, userId);
     if (!existing) return;
     const lastActive = Date.parse(existing.lastActiveAt);
-    const viewed = existing.viewedAt ? Date.parse(existing.viewedAt) : 0;
-    if (viewed >= lastActive) return;
+    const observed = observedLastActiveAt === undefined ? lastActive : Date.parse(observedLastActiveAt);
+    if (!Number.isFinite(observed)) return;
+    const nextViewed = Math.min(lastActive, observed);
+    const viewed = existing.viewedAt ? Date.parse(existing.viewedAt) : -Infinity;
+    if (viewed >= nextViewed) return;
     this.db
       .update(sessions)
-      .set({ viewedAt: new Date().toISOString() })
+      .set({ viewedAt: new Date(nextViewed).toISOString() })
       .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
       .run();
   }

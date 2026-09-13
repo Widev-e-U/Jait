@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "./sessions.js";
 import { UserService } from "./users.js";
 
-describe("SessionService.moveToProject", () => {
+describe("SessionService", () => {
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let sessions: SessionService;
   let userId: string;
@@ -18,6 +18,25 @@ describe("SessionService.moveToProject", () => {
 
   afterEach(() => {
     sqlite.close();
+  });
+
+  it("acknowledges only observed activity and keeps later replies unread", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-09-13T10:00:00.000Z"));
+      const session = sessions.create({ userId });
+      const observedAt = session.lastActiveAt;
+      vi.setSystemTime(new Date("2026-09-13T10:01:00.000Z"));
+      sessions.touch(session.id);
+      sessions.markViewed(session.id, userId, observedAt);
+      expect(sessions.getById(session.id)?.viewedAt).toBe(observedAt);
+      expect(sessions.getById(session.id)?.lastActiveAt).toBe("2026-09-13T10:01:00.000Z");
+      sessions.markViewed(session.id, userId, "2026-09-13T10:01:00.000Z");
+      sessions.markViewed(session.id, userId, observedAt);
+      expect(sessions.getById(session.id)?.viewedAt).toBe("2026-09-13T10:01:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("files a personal chat into a project and adopts the project root", () => {

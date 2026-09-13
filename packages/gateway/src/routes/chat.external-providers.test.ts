@@ -1133,3 +1133,41 @@ describe("chat external provider runtime mode selection", () => {
     sqlite.close();
   });
 });
+
+it("marks replies completed after a reader leaves as new unread activity", async () => {
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const userService = new UserService(db);
+  const user = userService.createUser("read-marker-owner", "password123");
+  const sessionService = new SessionService(db);
+  const session = sessionService.create({ userId: user.id });
+  const provider = new MockChatProvider();
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  let observedAt = "";
+  const realTouch = sessionService.touch.bind(sessionService);
+  vi.spyOn(sessionService, "touch").mockImplementation((id) => {
+    realTouch(id);
+    // Simulate the reader acknowledging the prompt, then leaving before the reply.
+    if (!observedAt) {
+      observedAt = sessionService.getById(id)!.lastActiveAt;
+      sessionService.markViewed(id, user.id, observedAt);
+    }
+  });
+  const app = await createServer(testConfig, { db, sqlite, sessionService, userService, providerRegistry: registry });
+  try {
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const response = await app.inject({
+      method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "Reply after I leave", provider: "codex" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"type":"done"');
+    const completed = sessionService.getById(session.id)!;
+    expect(Date.parse(completed.lastActiveAt)).toBeGreaterThan(Date.parse(observedAt));
+    expect(completed.viewedAt).toBe(observedAt);
+  } finally {
+    await app.close();
+    sqlite.close();
+  }
+});

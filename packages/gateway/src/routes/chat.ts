@@ -2418,31 +2418,6 @@ function resolveMaxToolRounds(
 let _dbRef: JaitDB | undefined;
 let _appRef: FastifyInstance | undefined;
 
-// @ts-ignore TS6133 — reserved for upcoming global persistence refactor
-function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
-  if (!_dbRef) return;
-  try {
-    const messageId = randomUUID();
-    persistSubAgentHistories(_dbRef, sessionId, messageId, toolCalls);
-    _dbRef.insert(messagesTable)
-      .values({
-        id: messageId,
-        sessionId,
-        role,
-        content,
-        toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
-        segments: segments ?? null,
-        contextFlow: contextFlow ?? null,
-        thinking: thinking ?? null,
-        createdAt: new Date().toISOString(),
-      })
-      .run();
-    writeMessageContextMetadata(_dbRef, messageId, contextFlow);
-  } catch (err) {
-    _appRef?.log.error(err, "Failed to persist message");
-  }
-}
-
 /**
  * Crash-safe assistant checkpoint: insert-once, update-many. The agent loop
  * checkpoints the turn's accumulated output at every round boundary; if the
@@ -4988,6 +4963,20 @@ export function registerChatRoutes(
       app.log.error({ error, sessionId }, "Failed to clear durable active-turn marker");
     }
 
+    // A reply finishing after the user leaves is new activity, even when the
+    // prompt itself was already read. Publish before done so visible readers
+    // can acknowledge this server timestamp when the final content paints.
+    sessionService?.touch(sessionId);
+    const completedSession = sessionService?.getById(sessionId, authUser.id);
+    if (completedSession) {
+      ws?.broadcastToUser(authUser.id, {
+        type: "chat.updated",
+        sessionId: "",
+        timestamp: completedSession.lastActiveAt,
+        payload: { session: completedSession },
+      });
+    }
+
     activeStreams.delete(sessionId);
     activeAssistantCheckpointIds.delete(sessionId);
     activeCliTurns.delete(sessionId);
@@ -5027,6 +5016,7 @@ export function registerChatRoutes(
       session_id: sessionId,
       prompt_count: history.filter(m => m.role === "user" && !m.synthetic).length,
       remaining_prompts: null,
+      last_active_at: completedSession?.lastActiveAt,
       hit_max_rounds: hitMaxRounds,
       has_timed_out_tools: hasTimedOutTools,
     };
@@ -5390,6 +5380,7 @@ export function registerChatRoutes(
       sessionId,
       streaming,
       seq: sessionEventCounter.get(sessionId) ?? 0,
+      lastActiveAt: sessionService?.getById(sessionId, authUser.id)?.lastActiveAt,
       total: windowed.total,
       hasMore: windowed.hasMore,
       limit,

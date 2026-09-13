@@ -182,8 +182,17 @@ export function registerSessionRoutes(
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-    sessionService.markViewed(id, authUser.id);
-    return { ok: true, session: sessionService.getById(id, authUser.id) };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const observed = body.lastActiveAt;
+    if (observed !== undefined && (typeof observed !== "string" || !Number.isFinite(Date.parse(observed)))) {
+      return reply.status(400).send({ error: "INVALID_TIMESTAMP" });
+    }
+    sessionService.markViewed(id, authUser.id, observed as string | undefined);
+    const updated = sessionService.getById(id, authUser.id)!;
+    if (updated.viewedAt !== session.viewedAt) {
+      broadcastChatEvent(authUser.id, "updated", { session: updated });
+    }
+    return { ok: true, session: updated };
   });
 
   app.post("/api/sessions/:id/generate-title", async (request, reply) => {
