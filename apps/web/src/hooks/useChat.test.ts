@@ -382,8 +382,9 @@ describe('durable subscription lifecycle', () => {
     const beginTurn = src.slice(src.indexOf('const beginTurn = () => {'), src.indexOf('/** Resolve which bubble'))
     expect(beginTurn).toContain('stream = createMessageStream()')
     expect(beginTurn).toContain('assistantId = null')
-    // Pending text belongs to the outgoing turn, so it must drain first.
-    expect(beginTurn.indexOf('textPacer.flushNow()')).toBeLessThan(beginTurn.indexOf('stream = createMessageStream()'))
+    // Pending updates belong to the outgoing turn, so they must render first.
+    expect(beginTurn).toContain('scheduler.flushNow()')
+    expect(beginTurn.indexOf('scheduler.flushNow()')).toBeLessThan(beginTurn.indexOf('stream = createMessageStream()'))
   })
 
   it('only adopts a snapshot assistant bubble while that turn is still running', () => {
