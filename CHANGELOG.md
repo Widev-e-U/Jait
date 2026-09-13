@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.846](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.846) — 2026-09-13
+- fix(web): keep chat read markers tied to the visible transcript — 4ba15d20
+- fix(gateway): acknowledge read state from the client's observed activity — 8bc59249
+- chore(web): drop unused stream text pacer module — 20e290f4
+
 ## [v0.1.845](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.845) — 2026-09-12
 - fix(desktop): preserve Windows resource path in gateway test — 45e34302
 - perf(web): reduce long-chat minimap work — c4c2157e
