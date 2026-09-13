@@ -477,6 +477,9 @@ function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: b
 }
 
 interface ChatState {
+  /** Server activity delivered with this transcript, never inferred from the sidebar. */
+  readActivity?: { sessionId: string; cacheScope: string | null; at: string }
+
   messages: ChatMessage[]
   isLoading: boolean
   isLoadingHistory: boolean
@@ -804,6 +807,7 @@ export function useChat(
     // caused a stale-then-sudden-update flash once the snapshot arrived.
     setState(prev => ({
       ...prev,
+      readActivity: undefined,
       messages: preserveExistingMessages ? prev.messages : [],
       isLoading: startupCache?.streaming === true,
       isLoadingHistory: !preserveExistingMessages,
@@ -1073,6 +1077,9 @@ export function useChat(
           return {
             ...prev,
             isLoading: false,
+            readActivity: typeof data.last_active_at === 'string'
+              ? { sessionId, cacheScope, at: data.last_active_at }
+              : prev.readActivity,
             promptCount: (data.prompt_count as number) ?? prev.promptCount,
             remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
             hitMaxRounds: shouldShowContinueAfterDone(data),
@@ -1134,6 +1141,7 @@ export function useChat(
       messages?: RawSnapshotMessage[]
       streaming?: boolean
       seq?: number
+      lastActiveAt?: string
       total?: number
       hasMore?: boolean
     }
@@ -1179,6 +1187,7 @@ export function useChat(
         return {
           ...prev,
           messages: nextMessages,
+          readActivity: data.lastActiveAt ? { sessionId, cacheScope, at: data.lastActiveAt } : undefined,
           isLoadingHistory: false,
           isLoading: snapshotStreaming,
           error: null,
@@ -2199,6 +2208,9 @@ export function useChat(
 
   return {
     messages: isSwitchingSession ? [] : state.messages,
+    viewedActivityAt: !isLoadingHistory && !state.isLoading
+      && state.readActivity?.sessionId === sessionId && state.readActivity?.cacheScope === cacheScope
+      ? state.readActivity.at : null,
     isLoading: state.isLoading,
     isLoadingHistory,
     remainingPrompts: state.remainingPrompts,

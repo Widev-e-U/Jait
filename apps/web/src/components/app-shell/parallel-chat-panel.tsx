@@ -20,6 +20,7 @@ export interface ParallelChatPrompt {
 }
 
 interface ParallelChatPanelProps {
+  onSessionViewed?: (sessionId: string, lastActiveAt: string) => void
   session: ProjectSession
   token: string | null
   initialPrompt?: ParallelChatPrompt
@@ -41,6 +42,7 @@ interface ParallelChatPanelProps {
 
 export function ParallelChatPanel({
   session,
+  onSessionViewed,
   token,
   initialPrompt,
   provider,
@@ -60,6 +62,7 @@ export function ParallelChatPanel({
 }: ParallelChatPanelProps) {
   const {
     messages,
+    viewedActivityAt,
     isLoading,
     isLoadingHistory,
     error,
@@ -68,6 +71,9 @@ export function ParallelChatPanel({
     cancelRequest,
     loadOlderMessages,
   } = useChat(session.id, token, undefined, null, session.lastActiveAt)
+  const handleLatestContentViewed = useCallback(() => {
+    if (viewedActivityAt) onSessionViewed?.(session.id, viewedActivityAt)
+  }, [onSessionViewed, session.id, viewedActivityAt])
   const [draft, setDraft] = useState('')
   const [inputVersion, setInputVersion] = useState(0)
   const initialPromptSentRef = useRef(false)
@@ -199,6 +205,7 @@ export function ParallelChatPanel({
       )}
 
       <Conversation
+        onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
         className="min-h-0 flex-1 border-b"
         loading={isLoadingHistory}
         loadingLabel="Loading chat"

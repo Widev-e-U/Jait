@@ -629,43 +629,85 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     persistActiveSelectionToCache(projectId, sessionId)
   }, [persistActiveSelectionToCache, persistSelection, projects])
 
-  /**
-   * Mark a session as read on the gateway (clears its unread dot) and reflect
-   * the new viewedAt locally so the indicator disappears without a refetch.
-   */
-  const markSessionViewed = useCallback(async (sessionId: string) => {
-    if (!token) return
-    const now = new Date().toISOString()
-    // Optimistically clear the dot immediately.
-    setPersonalSessions((prev) => prev.map((s) =>
-      s.id === sessionId ? { ...s, viewedAt: now } : s,
-    ))
-    setProjects((prev) => prev.map((p) => ({
-      ...p,
-      sessions: p.sessions.map((s) => s.id === sessionId ? { ...s, viewedAt: now } : s),
-    })))
+  // Keep acknowledgments across stale list responses and out-of-order WS events.
+  const readReceiptsRef = useRef(new Map<string, string>())
+  const pendingReadReceiptsRef = useRef(new Set<string>())
+  const readReceiptTokenRef = useRef(token)
+  if (readReceiptTokenRef.current !== token) {
+    readReceiptTokenRef.current = token
+    readReceiptsRef.current.clear()
+    pendingReadReceiptsRef.current.clear()
+  }
+
+  const markSessionViewed = useCallback(async (sessionId: string, lastActiveAt: string) => {
+    if (!token || !Number.isFinite(Date.parse(lastActiveAt))) return
+    const acknowledged = readReceiptsRef.current.get(sessionId)
+    if (acknowledged && Date.parse(acknowledged) >= Date.parse(lastActiveAt)) return
+    const key = `${sessionId}:${lastActiveAt}`
+    if (pendingReadReceiptsRef.current.has(key)) return
+    pendingReadReceiptsRef.current.add(key)
     try {
       const response = await fetch(`${API_URL}/api/sessions/${sessionId}/viewed`, {
         method: 'POST',
-        headers: authHeaders(token),
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lastActiveAt }),
       })
       if (response.status === 401) {
         onLoginRequired?.()
         return
       }
+      if (!response.ok || readReceiptTokenRef.current !== token) return
+      const { session } = await response.json() as { session: ProjectSession }
+      if (!session.viewedAt || readReceiptTokenRef.current !== token) return
+      const previous = readReceiptsRef.current.get(sessionId)
+      const viewedAt = previous && Date.parse(previous) > Date.parse(session.viewedAt) ? previous : session.viewedAt
+      readReceiptsRef.current.set(sessionId, viewedAt)
+      const apply = (entry: ProjectSession) => entry.id === sessionId
+        ? { ...entry, viewedAt: entry.viewedAt && Date.parse(entry.viewedAt) > Date.parse(viewedAt) ? entry.viewedAt : viewedAt }
+        : entry
+      setPersonalSessions(prev => prev.map(apply))
+      setProjects(prev => prev.map(project => ({ ...project, sessions: project.sessions.map(apply) })))
     } catch (err) {
       console.error('Failed to mark session viewed:', err)
+    } finally {
+      pendingReadReceiptsRef.current.delete(key)
     }
   }, [onLoginRequired, token])
+
+  useLayoutEffect(() => {
+    const reconcile = (entries: ProjectSession[]) => {
+      let changed = false
+      const next = entries.map(entry => {
+        const known = readReceiptsRef.current.get(entry.id)
+        if (entry.viewedAt && (!known || Date.parse(entry.viewedAt) > Date.parse(known))) {
+          readReceiptsRef.current.set(entry.id, entry.viewedAt)
+          return entry
+        }
+        if (!known || (entry.viewedAt && Date.parse(entry.viewedAt) >= Date.parse(known))) return entry
+        changed = true
+        return { ...entry, viewedAt: known }
+      })
+      return changed ? next : entries
+    }
+    setPersonalSessions(reconcile)
+    setProjects(prev => {
+      let changed = false
+      const next = prev.map(project => {
+        const sessions = reconcile(project.sessions)
+        if (sessions === project.sessions) return project
+        changed = true
+        return { ...project, sessions }
+      })
+      return changed ? next : prev
+    })
+  }, [personalSessions, projects])
 
   const switchSession = useCallback((projectId: string | null, sessionId: string) => {
     setActiveProjectId(projectId)
     setActiveSessionId(sessionId)
     persistSelection(projectId, sessionId)
     persistActiveSelectionToCache(projectId, sessionId)
-    // Opening a session counts as viewing it — clear its unread indicator.
-    void markSessionViewed(sessionId)
-  }, [persistActiveSelectionToCache, persistSelection, markSessionViewed])
+  }, [persistActiveSelectionToCache, persistSelection])
 
   /**
    * Opens a directory as a project: adopts the project that already owns that
@@ -1345,5 +1387,6 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     showFewerProjects,
     projectListLimit: PROJECT_LIST_LIMIT,
     handleProjectEvent,
+    markSessionViewed,
   }
 }

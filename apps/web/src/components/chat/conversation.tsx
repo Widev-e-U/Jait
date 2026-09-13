@@ -13,6 +13,7 @@ interface ConversationProps {
   className?: string
   compact?: boolean
   loading?: boolean
+  onLatestContentViewed?: () => void
   loadingLabel?: string
   /** Raw text per child item for pretext-based virtual item height estimation. */
   messageContents?: string[]
@@ -425,7 +426,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // The scroll container may not exist yet on first mount (history still
   // loading renders the skeleton branch), and a plain ref object is not
@@ -472,6 +473,41 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const [pendingEditJumpIndex, setPendingEditJumpIndex] = useState<number | null>(null)
   const [stickToBottom, setStickToBottom] = useState(true)
   const [initialScrollReady, setInitialScrollReady] = useState(false)
+  // A selected chat is not necessarily visible: it may be loading, hidden by
+  // another panel, in a background tab, or scrolled to older messages.
+  useEffect(() => {
+    if (!onLatestContentViewed || loading || !initialScrollReady || !scrollElement) return
+    let frame = 0
+    const acknowledge = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const rect = scrollElement.getBoundingClientRect()
+        if (document.visibilityState !== 'visible' || !document.hasFocus()) return
+        if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) return
+        if (scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight > STICKY_BOTTOM_THRESHOLD_PX) return
+        onLatestContentViewed()
+      })
+    }
+    acknowledge()
+    const observer = new IntersectionObserver(acknowledge)
+    observer.observe(scrollElement)
+    const resizeObserver = new ResizeObserver(acknowledge)
+    resizeObserver.observe(scrollElement)
+    scrollElement.addEventListener('scroll', acknowledge, { passive: true })
+    document.addEventListener('visibilitychange', acknowledge)
+    window.addEventListener('focus', acknowledge)
+    window.addEventListener('pageshow', acknowledge)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      resizeObserver.disconnect()
+      scrollElement.removeEventListener('scroll', acknowledge)
+      document.removeEventListener('visibilitychange', acknowledge)
+      window.removeEventListener('focus', acknowledge)
+      window.removeEventListener('pageshow', acknowledge)
+    }
+  }, [initialScrollReady, loading, messageContents, onLatestContentViewed, scrollElement])
+
   const [conversationViewportHeight, setConversationViewportHeight] = useState(0)
   const [topAnchoredMessageId, setTopAnchoredMessageId] = useState<string | null>(null)
   const prevChildCount = useRef(0)
@@ -1308,6 +1344,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       ) : (
         <div
           ref={attachScrollElement}
+          data-conversation-scroll
           onScroll={updateBottomState}
           className="h-full min-w-0 flex-1 overflow-y-auto scrollbar-none"
           style={{

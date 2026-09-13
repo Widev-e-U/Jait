@@ -597,7 +597,8 @@ function App() {
     showMoreProjects,
     showFewerProjects,
     projectListLimit,
-    handleProjectEvent
+    handleProjectEvent,
+    markSessionViewed
   } = useProjects(
     token,
     onLoginRequired
@@ -781,6 +782,7 @@ function App() {
   )
   const {
     messages,
+    viewedActivityAt,
     isLoading,
     isLoadingHistory,
     remainingPrompts,
@@ -827,6 +829,9 @@ function App() {
     activeProject?.surfaceId ?? null,
     activeSessionRecord?.lastActiveAt ?? null
   )
+  const handleLatestContentViewed = useCallback(() => {
+    if (activeSessionId && viewedActivityAt) void markSessionViewed(activeSessionId, viewedActivityAt)
+  }, [activeSessionId, markSessionViewed, viewedActivityAt])
   const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
@@ -5258,6 +5263,7 @@ function App() {
                   ) : (
                     <>
                       <DeveloperChatWorkspace
+                        onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
                         showDebugPanel={showDebugPanel}
                         onCloseDebugPanel={() => setShowDebugPanel(false)}
                         activeProject={activeProject}
@@ -5379,6 +5385,7 @@ function App() {
                         const panelProject = projects.find((project) => project.id === parallelChat.session.projectId)
                         return (
                           <ParallelChatPanel
+                            onSessionViewed={markSessionViewed}
                             key={parallelChat.session.id}
                             session={parallelChat.session}
                             token={token}

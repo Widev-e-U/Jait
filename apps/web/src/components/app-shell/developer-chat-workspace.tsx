@@ -46,6 +46,7 @@ interface DeveloperChatWorkspaceProps {
   activeProjectId: string | null
   activeProjectDisplayName: string | null
   activeProjectRoot: string | null
+  onLatestContentViewed?: () => void
   activeSessionId: string | null
   availableFilesForMention: any[]
   availableSkills: any[]
@@ -162,6 +163,7 @@ export function DeveloperChatWorkspace({
   activeProjectId,
   activeProjectDisplayName,
   activeProjectRoot,
+  onLatestContentViewed,
   activeSessionId,
   availableFilesForMention,
   availableSkills,
@@ -620,6 +622,7 @@ export function DeveloperChatWorkspace({
             <ErrorBoundary name="Chat transcript" variant="section" className={getChatTranscriptBoundaryClassName()} resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopProject]}>
               <Conversation
                 key={activeSessionId ?? 'developer-empty'}
+                onLatestContentViewed={onLatestContentViewed}
                 className={getChatTranscriptBoundaryClassName()}
                 compact={showDesktopProject}
                 loading={isLoadingHistory}
