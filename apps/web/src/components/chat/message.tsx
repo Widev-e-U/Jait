@@ -490,7 +490,7 @@ function MessageInner({
 
   const handleUserBubbleClick = (event: ReactMouseEvent<HTMLElement>) => {
     const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : ''
-    if (!shouldStartUserMessageEdit(event, selection, { canEdit, isEditing })) return
+    if (!shouldStartUserMessageEdit(event, selection, { canEdit, isEditing }, event.currentTarget)) return
     startEditing()
   }
 
@@ -1020,7 +1020,14 @@ function MessageInner({
                                     <button
                                       type="button"
                                       data-no-message-edit
-                                      onClick={(event) => event.stopPropagation()}
+                                      onClick={(event) => {
+                                        // Expanding the image must never fall through to
+                                        // the bubble's "click to edit" handler. Do not
+                                        // preventDefault here: Radix composes event
+                                        // handlers and skips its own open handler as soon
+                                        // as the event's default is prevented.
+                                        event.stopPropagation()
+                                      }}
                                       className="group block overflow-hidden rounded-lg border border-primary/10 bg-background/65 text-left transition-colors hover:border-primary/25 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                                       aria-label={`Expand image ${attachment.name}`}
                                     >

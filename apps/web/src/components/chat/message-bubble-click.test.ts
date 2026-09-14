@@ -16,6 +16,11 @@ function targetMatching(...selectors: string[]) {
   }
 }
 
+/** Fake bubble element whose `contains` reports whether a match is nested in it. */
+function bubbleContaining(nestedInBubble: boolean) {
+  return { contains: () => nestedInBubble }
+}
+
 const editable = { canEdit: true, isEditing: false }
 
 describe('USER_BUBBLE_INTERACTIVE_SELECTOR', () => {
@@ -41,6 +46,14 @@ describe('isInteractiveBubbleTarget', () => {
     expect(isInteractiveBubbleTarget(undefined)).toBe(false)
     expect(isInteractiveBubbleTarget({})).toBe(false)
     expect(isInteractiveBubbleTarget('text')).toBe(false)
+  })
+
+  it('only counts matches nested inside the bubble when a boundary is passed', () => {
+    expect(isInteractiveBubbleTarget(targetMatching('button'), bubbleContaining(true))).toBe(true)
+    expect(isInteractiveBubbleTarget(targetMatching('button'), bubbleContaining(false))).toBe(false)
+    // A boundary without `contains` (or a missing boundary) falls back to accepting matches.
+    expect(isInteractiveBubbleTarget(targetMatching('button'), {})).toBe(true)
+    expect(isInteractiveBubbleTarget(targetMatching('button'), null)).toBe(true)
   })
 })
 
@@ -88,5 +101,23 @@ describe('shouldStartUserMessageEdit', () => {
   it('is safe when the event is missing', () => {
     expect(shouldStartUserMessageEdit(null, '', editable)).toBe(true)
     expect(shouldStartUserMessageEdit(undefined, '', editable)).toBe(true)
+  })
+
+  it('still starts editing when the interactive match is an ancestor, not a child', () => {
+    // e.g. the bubble sits inside a clickable message row: the row matches the
+    // selector but is not nested in the bubble, so editing must still work.
+    const event = { target: targetMatching('button'), currentTarget: bubbleContaining(false) }
+    expect(shouldStartUserMessageEdit(event, '', editable)).toBe(true)
+    expect(isInteractiveBubbleTarget(event.target, bubbleContaining(false))).toBe(false)
+  })
+
+  it('uses the event currentTarget as the boundary when none is passed explicitly', () => {
+    const event = { target: targetMatching('button'), currentTarget: bubbleContaining(false) }
+    expect(shouldStartUserMessageEdit(event, '', editable)).toBe(true)
+  })
+
+  it('does NOT start editing for an interactive child inside the bubble', () => {
+    const event = { target: targetMatching('button'), currentTarget: bubbleContaining(true) }
+    expect(shouldStartUserMessageEdit(event, '', editable)).toBe(false)
   })
 })
