@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.849](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.849) — 2026-09-14
+- feat(gateway): query Ollama Cloud quota with the signed-in device key — 94704e8d
+- perf(web): bound minimap work for large transcripts — 9288f5b1
+- fix(web): highlight every open chat and resize panels by dragging — 5e579f74
+- test(web): cover the parallel chat layout end to end — ecfe9281
+
 ## [v0.1.848](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.848) — 2026-09-14
 - fix(web): show shared composer controls in parallel chat panels — b1157e65
 
