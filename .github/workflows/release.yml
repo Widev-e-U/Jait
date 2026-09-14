@@ -925,6 +925,36 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # 5. Confirm the version is actually retrievable from the registry.
+      # npm can exit 0 ("Uploaded") and still never commit the version — a run
+      # once cut the v0.1.849 release while the npm version silently never
+      # landed. Poll the registry and re-publish once or twice; fail loudly so
+      # the release job (which needs this one) does not ship a phantom version.
+      - name: Verify @jait/gateway on the registry
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        working-directory: packages/gateway
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          URL="https://registry.npmjs.org/@jait/gateway/$VERSION"
+          attempt=0
+          while [ "$(curl -s -o /dev/null -w '%{http_code}' "$URL")" != "200" ]; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -gt 30 ]; then
+              echo "❌ @jait/gateway@$VERSION is still absent after $((attempt * 10))s."
+              echo "   npm accepted the upload but never committed the version."
+              echo "   Not cutting a release for a version nobody can install."
+              exit 1
+            fi
+            if [ "$attempt" -eq 6 ] || [ "$attempt" -eq 16 ]; then
+              echo "↻ @jait/gateway@$VERSION missing — retrying publish"
+              npm publish --access public || true
+            fi
+            sleep 10
+          done
+          echo "✅ @jait/gateway@$VERSION is live on registry.npmjs.org"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   # ── Create GitHub Release with all assets ──────────────────────────
   release:
     name: Create GitHub Release
