@@ -10,6 +10,7 @@ import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { ChatPanelDivider } from './chat-panel-divider'
 
 export interface ParallelChatPrompt {
   content: string
@@ -38,6 +39,7 @@ interface ParallelChatPanelProps {
   onSearchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   showHideButton: boolean
   onClose: () => void
+  showDivider?: boolean
   /**
    * The shared composer control row (history + new chat + send-target switcher)
    * rendered below the prompt input. Reusing the exact same element as the main
@@ -66,6 +68,7 @@ export function ParallelChatPanel({
   showHideButton,
   onClose,
   composerControlRow,
+  showDivider = true,
 }: ParallelChatPanelProps) {
   const {
     messages,
@@ -183,18 +186,19 @@ export function ParallelChatPanel({
   }, [draft, isLoading, sendPrompt])
 
   const messageContents = useMemo(() => messages.map((message) => message.content), [messages])
-  const messageEstimateInputs = useMemo(() => messages.map((message) => ({
-    ...message,
-    role: message.role === 'assistant' ? 'agent' as const : 'user' as const,
-  })), [messages])
 
+  // Preserve message identities: the minimap caches text layout per message.
+  // Cloning history on each token invalidates every cached shape.
   return (
+    <>
+    {!isMobile && showDivider && <ChatPanelDivider />}
     <section
       className={
         isMobile
           ? 'absolute inset-0 z-30 flex min-h-0 flex-col bg-background'
-          : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l bg-background'
+          : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background'
       }
+      style={isMobile ? undefined : { flex: 'var(--chat-panel-grow, 1) 1 0%' }}
       aria-label="Secondary chat panel"
     >
       {showHideButton && (
@@ -217,7 +221,7 @@ export function ParallelChatPanel({
         loading={isLoadingHistory}
         loadingLabel="Loading chat"
         messageContents={messageContents}
-        messageEstimateInputs={messageEstimateInputs}
+        messageEstimateInputs={messages}
         hasMore={hasMore}
         onLoadMore={loadOlderMessages}
         showMinimap={!isMobile}
@@ -296,5 +300,6 @@ export function ParallelChatPanel({
         </div>
       </div>
     </section>
+    </>
   )
 }

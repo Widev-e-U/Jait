@@ -19,6 +19,7 @@ interface DeveloperSidebarsProps {
   changedFilesCount?: number
   activeProject: ActiveProjectState
   activeProjectId: string | null
+  openSessionIds?: ReadonlySet<string>
   activeSessionId: string | null
   authLoading: boolean
   fsNodes: import('@jait/shared').FsNode[]
@@ -77,6 +78,7 @@ export function DeveloperSidebars({
   activeProject,
   activeProjectId,
   activeSessionId,
+  openSessionIds,
   authLoading,
   fsNodes,
   hasMoreProjects,
@@ -305,6 +307,7 @@ export function DeveloperSidebars({
               personalSessions={personalSessions}
               activeProjectId={activeProjectId}
               activeSessionId={activeSessionId}
+              openSessionIds={openSessionIds}
               loading={projectsLoading}
               hasMoreProjects={hasMoreProjects}
               showFewerProjects={projects.length > projectListLimit}

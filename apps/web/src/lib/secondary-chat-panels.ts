@@ -17,3 +17,27 @@ export function getVisibleChatPanelCount(primaryVisible: boolean, secondaryPanel
 export function shouldShowChatPanelHideButton(visiblePanelCount: number): boolean {
   return visiblePanelCount > 1
 }
+
+export function closeSecondaryChatPanel<T extends { session: { id: string } }>(
+  panels: T[],
+  sessionId: string,
+): T[] {
+  return panels.filter((entry) => entry.session.id !== sessionId)
+}
+
+/**
+ * Session ids that are currently open in a chat panel and should therefore be
+ * highlighted (blue) in the sidebar. The main panel only counts while it is
+ * visible; every secondary panel counts until it is closed — closing one panel
+ * must leave the others highlighted.
+ */
+export function getOpenChatSessionIds(
+  primaryVisible: boolean,
+  activeSessionId: string | null | undefined,
+  secondaryPanels: ReadonlyArray<{ session: { id: string } }>,
+): Set<string> {
+  const ids = new Set<string>()
+  if (primaryVisible && activeSessionId) ids.add(activeSessionId)
+  for (const panel of secondaryPanels) ids.add(panel.session.id)
+  return ids
+}

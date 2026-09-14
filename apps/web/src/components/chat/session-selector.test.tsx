@@ -449,3 +449,19 @@ describe('SessionSelector', () => {
     })
   })
 })
+
+
+it('highlights every open chat across projects and removes closed highlights', () => {
+  const project = createProject()
+  const other = createProject({ id: 'project-2', sessions: [{ ...project.sessions[0], id: 'other', projectId: 'project-2' }] })
+  const personal = { ...project.sessions[0], id: 'personal', projectId: null }
+  const render = (ids: string[]) => renderToStaticMarkup(<SessionSelector
+    projects={[project, other]} personalSessions={[personal]} activeProjectId="project-1" activeSessionId="session-1"
+    openSessionIds={new Set(ids)} onSelectProject={() => {}} onCreateProject={() => {}}
+    onRemoveProject={() => {}} onChangeDirectory={() => {}}
+  />)
+  expect(render(['session-1', 'session-2']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
+  expect(render(['session-1', 'other']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
+  expect(render(['session-1', 'personal']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
+  expect(render(['session-1']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(1)
+})

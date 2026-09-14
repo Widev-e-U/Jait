@@ -35,6 +35,7 @@ interface SessionSelectorProps {
   projects: ProjectRecord[]
   personalSessions?: ProjectSession[]
   activeProjectId: string | null
+  openSessionIds?: ReadonlySet<string>
   activeSessionId?: string | null
   loading?: boolean
   hasMoreProjects?: boolean
@@ -167,6 +168,7 @@ export function SessionSelector({
   personalSessions = [],
   activeProjectId,
   activeSessionId,
+  openSessionIds,
   loading = false,
   hasMoreProjects = false,
   showFewerProjects = false,
@@ -579,7 +581,7 @@ export function SessionSelector({
                   const isDropTarget = dropTargetId === project.id
                   const isActiveProject = project.id === activeProjectId
                   const latestSessionId = getLatestProjectSessionId(project)
-                  const isLatestProjectSessionActive = isActiveProject && latestSessionId === activeSessionId
+                  const isLatestProjectSessionActive = latestSessionId != null && (openSessionIds?.has(latestSessionId) ?? (isActiveProject && latestSessionId === activeSessionId))
                   const remoteNode = project.nodeId && project.nodeId !== 'gateway'
                     ? nodes.find((n) => n.id === project.nodeId)
                     : null
@@ -937,7 +939,7 @@ export function SessionSelector({
                     {recentSessions.length > 0 && (
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
                         {recentSessions.map((session) => {
-                          const isActiveSession = isActiveProject && session.id === activeSessionId
+                          const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)
                           const isStreaming = streamingSessionIds?.has(session.id) ?? false
                           return (
                             <SessionRow
@@ -1064,7 +1066,7 @@ export function SessionSelector({
                       <p className="py-4 text-center text-xs text-muted-foreground">No matching personal chats.</p>
                     )}
                     {recentPersonalSessions.map((session) => {
-                      const isActive = activeProjectId === null && session.id === activeSessionId
+                      const isActive = openSessionIds?.has(session.id) ?? (activeProjectId === null && session.id === activeSessionId)
                       const isStreaming = streamingSessionIds?.has(session.id) ?? false
                   return (
                     <SessionRow

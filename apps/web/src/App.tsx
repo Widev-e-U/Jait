@@ -20,7 +20,7 @@ import { clampDeveloperSidebarWidth, getNextDeveloperSidebarState, readDeveloper
 import { DeveloperChatWorkspace } from '@/components/app-shell/developer-chat-workspace'
 import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-workspace-panes'
 import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
-import { appendSecondaryChatPanel, getVisibleChatPanelCount, MAX_SECONDARY_CHAT_PANELS, shouldShowChatPanelHideButton } from '@/lib/secondary-chat-panels'
+import { appendSecondaryChatPanel, closeSecondaryChatPanel, getOpenChatSessionIds, getVisibleChatPanelCount, MAX_SECONDARY_CHAT_PANELS, shouldShowChatPanelHideButton } from '@/lib/secondary-chat-panels'
 import { beginEditorSubpanelToggle, endEditorSubpanelToggle, getEditorSubpanelToggleIntent } from '@/lib/editor-subpanels'
 import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
 
@@ -2700,7 +2700,7 @@ function App() {
     // list) wins over the project's most-recently-active session.
     const nextSessionId = sessionId ?? getLatestProjectSessionId(project)
     if (nextSessionId) {
-      setParallelChats((current) => current.filter((entry) => entry.session.id !== nextSessionId))
+      setParallelChats((current) => closeSecondaryChatPanel(current, nextSessionId))
     }
     const requestId = ++projectSwitchRequestRef.current
     const cachedProjectModels = readProjectModelSelections(projectId)
@@ -2801,7 +2801,7 @@ function App() {
     const session = knownSession ?? ( await loadSession(sessionId))
     if (!session || session.projectId) return
     if (isMobile) handleMobileChatClick()
-    setParallelChats((current) => current.filter((entry) => entry.session.id !== sessionId))
+    setParallelChats((current) => closeSecondaryChatPanel(current, sessionId))
     switchSession(null, sessionId)
   }, [handleMobileChatClick, isMobile, loadSession, personalSessions, switchSession],)
 
@@ -2833,7 +2833,7 @@ function App() {
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
     setPrimaryChatPanelHidden(false)
     if (isMobile) handleMobileChatClick()
-    setParallelChats((current) => current.filter((entry) => entry.session.id !== sessionId))
+    setParallelChats((current) => closeSecondaryChatPanel(current, sessionId))
     if (projectId === activeProjectId) {
       if (sessionId === activeSessionId) return
       // If the project's editor surface isn't open yet (e.g. right after a
@@ -4745,6 +4745,11 @@ function App() {
     },
   })
   const primaryChatPanelCollapsed = chatCollapsed || primaryChatPanelHidden
+  const openChatSessionIds = useMemo(
+    () => getOpenChatSessionIds(!primaryChatPanelHidden, activeSessionId, parallelChats),
+    [activeSessionId, parallelChats, primaryChatPanelHidden],
+  )
+
   const visibleChatPanelCount = getVisibleChatPanelCount(!primaryChatPanelHidden, parallelChats.length)
   const showChatPanelHideButtons = !isMobile && shouldShowChatPanelHideButton(visibleChatPanelCount)
   const developerChatPanelStyle: React.CSSProperties = primaryChatPanelCollapsed
@@ -4755,7 +4760,7 @@ function App() {
         visibility: 'hidden',
       }
     : {
-        flex: '1 1 0%',
+        flex: 'var(--chat-panel-grow, 1) 1 0%',
         minWidth: 0,
       }
   const inlinePrompts =
@@ -5007,6 +5012,7 @@ function App() {
                 <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
                   {viewMode === 'developer' && (
                     <DeveloperSidebars
+                      openSessionIds={openChatSessionIds}
                       changedFilesCount={gitCounts.fileCount}
                       activeProject={activeProject}
                       activeProjectId={activeProjectId}
@@ -5381,10 +5387,11 @@ function App() {
                         onVoiceInput={handleVoiceInput}
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
-                      {parallelChats.map((parallelChat) => {
+                      {parallelChats.map((parallelChat, panelIndex) => {
                         const panelProject = projects.find((project) => project.id === parallelChat.session.projectId)
                         return (
                           <ParallelChatPanel
+                            showDivider={panelIndex > 0 || !primaryChatPanelCollapsed}
                             onSessionViewed={markSessionViewed}
                             key={parallelChat.session.id}
                             session={parallelChat.session}
@@ -5404,7 +5411,7 @@ function App() {
                             isMobile={isMobile}
                             onSearchFiles={handleSearchFiles}
                             showHideButton={showChatPanelHideButtons}
-                            onClose={() => setParallelChats((current) => current.filter((entry) => entry.session.id !== parallelChat.session.id))}
+                            onClose={() => setParallelChats((current) => closeSecondaryChatPanel(current, parallelChat.session.id))}
                           />
                         )
                       })}
