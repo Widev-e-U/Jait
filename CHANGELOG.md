@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.851](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.851) — 2026-09-14
+- ci(release): verify the npm publish through npm's own registry — 99896c25
+
 ## [v0.1.850](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.850) — 2026-09-14
 - ci(release): verify the gateway version on the registry — 97720c4c
 - test(web): cover the live terminal binding end to end — 9ed0f774
