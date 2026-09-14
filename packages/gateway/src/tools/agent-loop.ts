@@ -1759,7 +1759,7 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
         message: result.message.length > TOOL_RESULT_MAX_CHARS
           ? result.message.slice(0, TOOL_RESULT_MAX_CHARS) + `\n\n[truncated — ${result.message.length} chars total, showing first ${TOOL_RESULT_MAX_CHARS}]`
           : result.message,
-        data: capToolResultData(result.data),
+        data: capToolResultData(stripUiOnlyToolResultFields(result.data)),
       }),
       tool_call_id: tc.id,
       name: tc.function.name,
@@ -1917,6 +1917,25 @@ function capToolResultData(data: unknown): unknown {
     originalChars: serialized.length,
     preview: serialized.slice(0, TOOL_RESULT_MAX_CHARS),
   };
+}
+
+/**
+ * Result `data` keys that exist purely for the chat UI and must never reach the
+ * model.
+ *
+ * `terminalOutputAnsi` is the ANSI-preserving replay of a command's PTY output
+ * that tool-call-card.tsx feeds to xterm so a settled card looks like the live
+ * view. Escape sequences are pure noise in a conversation: they cost tokens,
+ * break readability, and some providers mangle or reject them. The plain
+ * `terminalOutput`/`output` strings remain available to the model.
+ */
+const UI_ONLY_TOOL_RESULT_KEYS = ["terminalOutputAnsi"] as const;
+
+function stripUiOnlyToolResultFields(data: unknown): unknown {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
+  const clone: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+  for (const key of UI_ONLY_TOOL_RESULT_KEYS) delete clone[key];
+  return clone;
 }
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
@@ -4687,7 +4706,11 @@ export async function retryToolCall(
   if (histIdx !== -1) {
     history[histIdx] = {
       role: "tool",
-      content: JSON.stringify({ ok: result.ok, message: result.message, data: result.data }),
+      content: JSON.stringify({
+        ok: result.ok,
+        message: result.message,
+        data: capToolResultData(stripUiOnlyToolResultFields(result.data)),
+      }),
       tool_call_id: callId,
       name: toOpenAIName(original.tool),
     };

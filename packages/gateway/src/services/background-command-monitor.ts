@@ -50,6 +50,13 @@ export interface TrackBackgroundCommandOptions {
    * (servers/watchers) leaking listeners forever. Default 6 hours.
    */
   maxWatchMs?: number;
+  /** Output already collected before a foreground wait yielded. */
+  initialOutput?: string;
+  startedAt?: number;
+  /** Startup output for a still-pending tool call. */
+  onOutput?: (raw: string) => void;
+  /** Suppress a wake-up when completion is returned inline by the tool. */
+  shouldNotify?: () => boolean;
   /** Called when the command completion marker is observed. */
   onComplete?: (result: { exitCode: number | null; output: string }) => void;
   /** Called once when the watcher completes, expires, or is cancelled. */
@@ -250,8 +257,8 @@ class BackgroundCommandMonitor {
       return false;
     }
 
-    const startedAt = Date.now();
-    let raw = "";
+    const startedAt = options.startedAt ?? Date.now();
+    let raw = options.initialOutput ?? "";
     let finished = false;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
@@ -281,6 +288,7 @@ class BackgroundCommandMonitor {
       }
       cleanup();
 
+      if (options.shouldNotify?.() === false) return;
       this.invokeHandler({
         sessionId: options.sessionId,
         terminalId: options.terminalId,
@@ -294,6 +302,7 @@ class BackgroundCommandMonitor {
     const listener = (data: string) => {
       if (finished) return;
       raw += data;
+      options.onOutput?.(raw);
 
       // The sentinel echoes `$?` for the command itself, so it beats the OSC
       // marker whenever both are available.

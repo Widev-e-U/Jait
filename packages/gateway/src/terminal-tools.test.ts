@@ -584,15 +584,17 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).output).not.toContain("alice@dev-host");
   });
 
-  it("still times out when no OSC marker or shell prompt returns", async () => {
+  it("moves the wait to background when no completion marker returns", async () => {
     const { tool, writes } = makePromptFallbackTool(["running without prompt\r\n"]);
 
     const result = await tool.execute({ command: "long-running", terminalId: "term-existing", timeout: 20 }, makeContext());
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
-    expect(writes).toContain("\x03\r");
+    expect(writes).not.toContain("\x03\r");
+    expect(result.data).toMatchObject({ isBackground: true, watched: true });
+    backgroundCommandMonitor.clearForTests();
   });
 
   it("wraps single-line commands in bracketed paste for PSReadLine terminals", async () => {

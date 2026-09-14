@@ -450,13 +450,20 @@ export function clampTerminalRows(contentRows: number, minRows: number, maxRows:
 }
 
 interface TerminalViewProps {
-  terminalId: string
+  terminalId?: string | null
   className?: string
   token?: string | null
   projectRoot?: string | null
   readOnly?: boolean
   outputOffset?: number | null
   outputEndOffset?: number | null
+  /**
+   * Render a finished command's captured output through xterm instead of
+   * subscribing to a live terminal. ANSI is parsed, so a past (non-live) tool
+   * card looks exactly like the console did — colours included — with no
+   * socket, no scrolling stream and no input.
+   */
+  staticOutput?: string | null
   /**
    * Grow the terminal with its content between these row counts instead of
    * filling the container. Both must be set to take effect.
@@ -470,7 +477,7 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, minRows, maxRows, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId = null, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, staticOutput, minRows, maxRows, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -512,8 +519,14 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   useEffect(() => {
     if (!containerRef.current) return
 
+    // A static console replays captured output locally. It never opens a
+    // socket, so the same xterm path that renders a live terminal also renders
+    // a past one — with real ANSI colours instead of a plain grey <pre>.
+    const staticText = typeof staticOutput === 'string' && staticOutput.length > 0 ? staticOutput : null
+    const isStatic = staticText !== null
+
     const term = new Terminal({
-      cursorBlink: !readOnly,
+      cursorBlink: !readOnly && !isStatic,
       disableStdin: readOnly,
       fontSize: 13,
       fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace",
@@ -616,6 +629,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     })
 
     const emitSelectionReference = () => {
+      if (!terminalId) return
       const selection = term.getSelection().trim()
       if (!selection) {
         lastSelectionKeyRef.current = null
@@ -655,13 +669,16 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     // Initial fit + focus so the terminal can receive keyboard input
     requestAnimationFrame(() => {
       fitAddon.fit()
-      if (!readOnly) term.focus()
+      // Replay captured output after the first fit so it reflows to the final
+      // column count, then let `onWriteParsed` drive the auto-height measure.
+      if (staticText) term.write(staticText)
+      if (!readOnly && !isStatic) term.focus()
       scheduleContentMeasure()
     })
     // Retry focus after layout settles (some browsers need a longer delay)
     const focusRetryId = setTimeout(() => {
       fitAddon.fit()
-      if (!readOnly) term.focus()
+      if (!readOnly && !isStatic) term.focus()
       scheduleContentMeasure()
     }, 150)
 
@@ -695,6 +712,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     function connect() {
       if (disposed) return
       if (typeof document !== 'undefined' && document.hidden) return
+      // A console without an id has nothing to subscribe to; only the static
+      // replay path reaches this without one.
+      if (!terminalId) return
       const query = token ? `?token=${encodeURIComponent(token)}` : ''
       ws = new WebSocket(`${WS_URL}${query}`)
       wsRef.current = ws
@@ -740,8 +760,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       if (!ws) connect()
     }
 
-    connect()
-    if (typeof document !== 'undefined') {
+    if (!isStatic) connect()
+    if (!isStatic && typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange)
     }
 
@@ -753,7 +773,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
     // Forward resize events
     term.onResize(({ cols, rows }) => {
-      if (readOnly) return
+      // A static replay is a local recording: resizing it must not reach the
+      // gateway, and a console without an id has nothing to resize.
+      if (readOnly || isStatic || !terminalId) return
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.resize', terminalId, cols, rows }))
       }
@@ -843,7 +865,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, minRows, maxRows, onReferenceSelection])
+  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, staticOutput, minRows, maxRows, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current

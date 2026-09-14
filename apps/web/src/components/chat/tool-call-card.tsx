@@ -1890,11 +1890,15 @@ function isTerminalTool(tool: string): boolean {
     || displayTool.startsWith('ssh.') || displayTool === 'run.ssh' || displayTool === 'elevated.run'
 }
 
-function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
+export function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
   if (!isTerminalTool(call.tool)) return null
   if (call.status === 'running' || call.status === 'pending') return null
 
   const data = parseStructuredRecord(call.result?.data) ?? parseStructuredRecord(call.result?.message) ?? undefined
+
+  // A wait deadline can hand a live command to the background monitor.
+  // Its waiting badge describes that state; a red timeout would imply failure.
+  if (data?.isBackground === true && data?.watched === true) return null
 
   const timedOut = data?.timedOut === true || /timed out/i.test(call.result?.message ?? '')
   if (timedOut) {
@@ -2860,6 +2864,29 @@ export function stripTerminalOutputAnsiResidue(output: string): string {
     .replace(/\x07/g, '')
 }
 
+/**
+ * Picks the best captured copy of a command's output to replay through xterm.
+ *
+ * Several copies of the same PTY slice exist: the cleaned ones (`cleanChunk`
+ * strips every SGR sequence, leaving flat grey text) and the ANSI-preserving
+ * twin (`terminalOutputAnsi`). A *settled* card must replay the coloured bytes —
+ * otherwise an expanded, no-longer-live call looks nothing like the live view it
+ * replaced. So the first candidate that still carries escape sequences wins;
+ * empty strings are skipped (an ANSI twin that captured nothing must not shadow
+ * a usable plain copy) and the first non-empty string is the fallback.
+ */
+export function preferAnsiTerminalReplay(
+  ...candidates: Array<string | null | undefined>
+): string {
+  let firstNonEmpty = ''
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || candidate.length === 0) continue
+    if (candidate.includes('\x1b')) return candidate
+    if (!firstNonEmpty) firstNonEmpty = candidate
+  }
+  return firstNonEmpty
+}
+
 export function trimRepeatedTrailingTerminalPrompt(output: string, command: string): string {
   const trimmedOutput = output.trimEnd()
   const trimmedCommand = command.trim()
@@ -2889,6 +2916,14 @@ export function resolveToolTerminalOutputEndOffset(
     ?? null
 }
 
+// A terminal tool call renders through the xterm surface (real ANSI colours,
+// scrollback) whenever there is a live terminal to subscribe to. Completed
+// bounded commands keep that surface too: they pass `outputEndOffset`, so the
+// client replays the captured bytes and then stops accepting further output —
+// a frozen but fully coloured view of what actually ran.
+//
+// Only an unbounded, settled call (no known end offset, nothing active) falls
+// back to the static transcript replay.
 export function shouldShowToolTerminalSlice(options: {
   hasTerminal: boolean
   outputOffset: number | null
@@ -2897,8 +2932,7 @@ export function shouldShowToolTerminalSlice(options: {
 }): boolean {
   return options.hasTerminal
     && options.outputOffset !== null
-    && options.outputEndOffset === null
-    && options.activeOrWaiting
+    && (options.outputEndOffset !== null || options.activeOrWaiting)
 }
 
 export function isTerminalCreationCall(call: ToolCallInfo): boolean {
@@ -3856,7 +3890,9 @@ function ToolCallCardInner({
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const structuredTerminalResult = isPersistentTerminal ? getStructuredTerminalResult(call) : null
   const structuredTerminalId = isTerminalCreationCall(call) ? getStructuredTerminalId(call) : null
-  const isBackgroundCall = normalizedArgs.isBackground === true || structuredTerminalResult?.isBackground === true
+  const isBackgroundCall = typeof structuredTerminalResult?.isBackground === 'boolean'
+    ? structuredTerminalResult.isBackground
+    : normalizedArgs.isBackground === true
   const backgroundWatchedResult = structuredTerminalResult?.watched === true
   const runningHint = getRunningHint(displayTool, normalizedArgs)
   const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
@@ -3934,12 +3970,35 @@ function ToolCallCardInner({
   const persistedTerminalOutput = typeof structuredTerminalResult?.terminalOutput === 'string'
     ? structuredTerminalResult.terminalOutput
     : null
+  // Newer gateway builds also persist an ANSI-preserving twin of the output
+  // (`terminalOutputAnsi`). That is the one worth replaying: the cleaned
+  // `terminalOutput` has had every SGR sequence stripped, so a settled card
+  // rendered from it is a flat grey block instead of the coloured live view.
+  const persistedTerminalOutputAnsi = typeof structuredTerminalResult?.terminalOutputAnsi === 'string'
+    ? structuredTerminalResult.terminalOutputAnsi
+    : null
   const terminalDisplayOutput = trimRepeatedTrailingTerminalPrompt(
     stripTerminalOutputAnsiResidue(
       completedTerminalExecution?.output ?? persistedTerminalOutput ?? displayOutput,
     ),
     terminalCommand,
   )
+  // A settled call with no live surface still deserves more than a grey block,
+  // so we replay the captured bytes through xterm. Keep the raw ANSI here:
+  // stripping escapes is exactly what erases the colours. Only settled calls do
+  // this, so a streaming command never re-instantiates xterm on every chunk.
+  const terminalSettled = call.status !== 'running' && call.status !== 'pending'
+  const terminalStaticOutput = terminalSettled
+    ? trimRepeatedTrailingTerminalPrompt(
+        preferAnsiTerminalReplay(
+          persistedTerminalOutputAnsi,
+          completedTerminalExecution?.output,
+          persistedTerminalOutput,
+          displayOutput,
+        ),
+        terminalCommand,
+      )
+    : ''
   const backgroundWaiting = isTerminalBackgroundWaiting(toolTerminal)
     || (backgroundWatchedResult && !terminalSurfaceState.loaded)
   const showTerminalSlice = shouldShowToolTerminalSlice({
@@ -4189,6 +4248,19 @@ function ToolCallCardInner({
             readOnly
             outputOffset={terminalOutputOffset}
             outputEndOffset={terminalOutputEndOffset}
+            minRows={TOOL_TERMINAL_MIN_ROWS}
+            maxRows={TOOL_TERMINAL_MAX_ROWS}
+            className="bg-background"
+          />
+        </div>
+      </div>
+    ) : terminalStaticOutput ? (
+      <div className="overflow-hidden rounded-md bg-background">
+        <div className="px-3 py-2">
+          <TerminalView
+            staticOutput={terminalStaticOutput}
+            token={authToken}
+            readOnly
             minRows={TOOL_TERMINAL_MIN_ROWS}
             maxRows={TOOL_TERMINAL_MAX_ROWS}
             className="bg-background"

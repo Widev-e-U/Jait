@@ -5,6 +5,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+let getTerminalOutcomeBadge: typeof import('./tool-call-card')['getTerminalOutcomeBadge']
 let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredValue']
 let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['shouldInitiallyCollapseToolCallGroup']
 let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card')['shouldInitiallyCollapseAgentToolCallWrapper']
@@ -48,6 +49,7 @@ beforeAll(async () => {
     },
   }
   ;({
+    getTerminalOutcomeBadge,
     formatStructuredValue,
     shouldInitiallyCollapseToolCallGroup,
     shouldInitiallyCollapseAgentToolCallWrapper,
@@ -84,13 +86,13 @@ beforeAll(async () => {
 }, 30_000)
 
 describe('shouldShowToolTerminalSlice', () => {
-  it('uses the frozen transcript after a bounded command completes', () => {
+  it('keeps a bounded completed command in the coloured terminal renderer', () => {
     expect(shouldShowToolTerminalSlice({
       hasTerminal: true,
       outputOffset: 12,
       outputEndOffset: 18,
       activeOrWaiting: false,
-    })).toBe(false)
+    })).toBe(true)
   })
 
   it('keeps an active command in the live terminal renderer', () => {
@@ -102,9 +104,18 @@ describe('shouldShowToolTerminalSlice', () => {
     })).toBe(true)
   })
 
-  it('freezes immediately when terminal completion arrives before tool completion', () => {
+  it('falls back when a settled command has no bounded end offset', () => {
     expect(shouldShowToolTerminalSlice({
       hasTerminal: true,
+      outputOffset: 12,
+      outputEndOffset: null,
+      activeOrWaiting: false,
+    })).toBe(false)
+  })
+
+  it('has no slice without a resolved terminal surface', () => {
+    expect(shouldShowToolTerminalSlice({
+      hasTerminal: false,
       outputOffset: 12,
       outputEndOffset: 18,
       activeOrWaiting: true,
@@ -1331,5 +1342,20 @@ describe('tool-card auto-collapse scroll contract', () => {
     for (const line of anchorToggleCalls) {
       expect(line.trim()).toBe('anchorToggle()')
     }
+  })
+})
+
+
+describe('terminal wait outcome', () => {
+  it('does not show a failure badge when a wait moves to watched background', () => {
+    const call = {
+      callId: 'wait-timeout', tool: 'terminal.run', args: {}, status: 'success' as const,
+      result: { ok: true, message: 'Wait timed out; command still running',
+        data: { timedOut: true, isBackground: true, watched: true, exitCode: null } },
+    }
+    expect(getTerminalOutcomeBadge(call)).toBeNull()
+    expect(getTerminalOutcomeBadge({ ...call, result: {
+      ok: false, message: 'Command timed out', data: { timedOut: true },
+    } })?.label).toBe('timeout')
   })
 })

@@ -22,7 +22,7 @@ import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manag
 import type { WsControlPlane } from "../ws.js";
 import type { TerminalExecutionPayload } from "@jait/shared";
 import type { SecretInputService } from "../services/secret-input.js";
-import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
+import { backgroundCommandMonitor, extractCompletionOutput } from "../services/background-command-monitor.js";
 import { isShellPromptLine } from "./shell-prompt.js";
 import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
 import { writeFileSync, unlinkSync, mkdirSync, readdirSync, statSync } from "node:fs";
@@ -256,6 +256,24 @@ function cleanChunk(s: string): string {
   // Normalise carriage returns
   out = out.replace(/\r\n/g, "\n").replace(/\r/g, "");
   return out;
+}
+
+/**
+ * Sibling of {@link cleanChunk} for output that will be replayed through xterm
+ * in the chat card rather than shown as plain text.
+ *
+ * `cleanChunk` strips SGR sequences, which is exactly what erases the colours,
+ * bold and cursor addressing of a settled terminal card — leaving it a flat grey
+ * block instead of a faithful replay of what the user watched live. Only the
+ * sequences that MUST go are removed here: OSC 633 shell-integration markers
+ * (their payload leaks as visible junk) and stray BEL characters (they beep).
+ * Everything else — SGR colour, `\r` carriages used by progress bars, and even
+ * an OSC window-title — is preserved so xterm can render it verbatim.
+ */
+function cleanChunkPreservingSgr(s: string): string {
+  return s
+    .replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x07/g, "");
 }
 
 function hasShellPrompt(rawOutput: string, shell: string): boolean {
@@ -695,6 +713,7 @@ function executeInTerminal(
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
   requestInteractiveSecret?: (prompt: string) => Promise<string | null>,
+  onWaitTimeout?: (state: { raw: string; completionToken?: string; cleanup: () => void }) => boolean,
 ): Promise<{ output: string; exitCode: number | null; timedOut: boolean; interactionRequired?: boolean; pagerEscaped?: boolean }> {
   return new Promise((resolve) => {
     let raw = "";
@@ -761,22 +780,20 @@ function executeInTerminal(
       if (timeoutMs <= 0 || settled) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        // Rescue a wedged command. A strong pager prompt (less/man waiting)
-        // is best escaped with `q` — Ctrl+C is swallowed by the pager and
-        // leaves the PTY captured. The broader legacy pager check still gets
-        // `q`, and anything else gets Ctrl+C + Enter for a normal interrupt.
-        if (hasStrongPagerPrompt(raw)) {
-          pagerEscaped = true;
-          surface.write("q");
-          setTimeout(() => {
-            if (!settled) { try { surface.write("\r"); } catch { /* terminal gone */ } }
-          }, 120);
-        } else if (detectPagerPrompt(raw)) {
-          pagerEscaped = true;
-          surface.write("q");
-        } else {
-          surface.write("\x03\r");
+        // A wait deadline is not a process deadline: hand the live execution
+        // to the background monitor before releasing this listener.
+        const scriptToClean = tmpFile;
+        if (onWaitTimeout?.({
+          raw,
+          completionToken: remoteCompletionToken ?? undefined,
+          cleanup: () => { if (scriptToClean) { try { unlinkSync(scriptToClean); } catch { /* gone */ } } },
+        })) {
+          tmpFile = null; // the watcher now owns script cleanup
+          finish(true);
+          return;
         }
+        // If no watcher can own it, preserve the bounded execution fallback.
+        surface.write("\x03\r");
         setTimeout(() => finish(true), 500);
       }, timeoutMs);
     };
@@ -865,6 +882,7 @@ function executeInTerminal(
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      stopPagerWatchdog();
       if (settleTimer) clearTimeout(settleTimer);
       signal?.removeEventListener("abort", onAbort);
       surface.removeOutputListener(listener);
@@ -1000,7 +1018,7 @@ export function createTerminalRunTool(
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
       "The terminal stays alive between calls — like VS Code's integrated terminal. " +
       "Multi-line scripts, pipes, and complex syntax all work unchanged. " +
-      "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. " +
+      "Foreground calls wait for completion and return output inline. The wait budget defaults to 1 hour (up to 24 hours); on timeout a live terminal command continues in background with automatic completion notification. Sandbox execution retains a process timeout. " +
       "Agent commands are automatically prefixed with pager/editor-disabling variables (PAGER=cat, LESS=-FRX, GIT_EDITOR=true, GIT_MERGE_AUTOEDIT=no, …), so pagers and editors never capture the terminal; " +
       "if a pager still appears (e.g. `less -S` typed explicitly), it is detected and dismissed with `q` automatically without affecting the user's own keystrokes.",
     tier: "standard",
@@ -1011,15 +1029,15 @@ export function createTerminalRunTool(
       properties: {
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
-        timeout: { type: "number", description: "Execution timeout in ms. Always finite: default 3600000 (1 hour), hard cap 86400000 (24 hours). 0, negative, or huge values fall back to the default or clamp to the cap — there is no run-without-timeout mode. Raise it for legitimately long one-shot commands." },
-        isBackground: { type: "boolean", description: "If true, start the command and return immediately. Use only for indefinite processes such as servers, watchers, and daemons. For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — keep this false; the default 1-hour timeout already covers long-running builds, and `timeout` can be raised if needed." },
+        timeout: { type: "number", description: "Wait budget in ms: default 3600000, maximum 86400000. Omit for one-shot commands. On expiry, a live terminal command keeps running and is watched for completion; do not rerun it. For background startup, caps the initial output wait at 5000ms. Sandbox commands retain a process timeout. 0 or negative uses the default." },
+        isBackground: { type: "boolean", description: "If true, wait for startup output to settle (up to 5 seconds), then return an output snapshot while the command runs. Use for indefinite servers, watchers, and daemons. Keep false for finite builds, tests, installs, and scripts: completion output is returned inline. Background completion resumes the agent automatically; do not poll." },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
       required: ["command"],
     },
     async execute(input: TerminalRunInput, context: ToolContext): Promise<ToolResult> {
-      // Timeout invariant: every command is bounded by a finite timeout.
+      // Every tool wait has a finite budget; live PTY commands can outlive it.
       // Agents may lift the 1-hour default up to a 24-hour cap, but
       // timeout: 0 / negative / non-numeric never disable the guard.
       const { command, terminalId: preferredId, isBackground } = input;
@@ -1074,10 +1092,27 @@ export function createTerminalRunTool(
           await ensureSessionTerminal(registry, context, preferredId, ws, isBackground);
         const outputOffset = getTerminalOutputOffset(surface);
 
-        // 2. Background mode: start the command and return immediately. Watch
+        // 2. Background mode: collect startup output, then keep watching
         //    the terminal for completion (OSC 633) so the agent can be
         //    automatically re-triggered when the command finishes.
         if (isBackground) {
+          // Like Copilot async mode, keep the tool pending through startup.
+          // An idle snapshot releases the tool, but is never called "ready".
+          let startupPending = true;
+          let startupCancelled = false;
+          let scriptFile: string | null = null;
+          let startupOutput = "(no output)";
+          let startupCompletion: { exitCode: number | null; output: string } | undefined;
+          let idleTimer: ReturnType<typeof setTimeout> | undefined;
+          let releaseStartup!: () => void;
+          const startup = new Promise<void>((resolve) => { releaseStartup = resolve; });
+          const startupTimer = setTimeout(releaseStartup, Math.min(timeout, 5000));
+          const onStartupAbort = () => {
+            startupCancelled = true;
+            try { surface.write("\x03"); } catch { /* terminal already gone */ }
+            releaseStartup();
+          };
+          context.signal?.addEventListener("abort", onStartupAbort, { once: true });
           // Same rule as foreground execution: only inject the sentinel when
           // the shell has no OSC 633 integration (its B marker has never been
           // seen). With integration the monitor settles on 633;D directly —
@@ -1092,7 +1127,18 @@ export function createTerminalRunTool(
             surface,
             completionToken,
             shell: String(surface.snapshot().metadata?.shell ?? ""),
-            onComplete: ({ output }) => {
+            shouldNotify: () => !startupPending && !startupCancelled,
+            onOutput: (raw) => {
+              if (!startupPending) return;
+              startupOutput = extractCompletionOutput(raw, command, String(surface.snapshot().metadata?.shell ?? ""));
+              if (idleTimer) clearTimeout(idleTimer);
+              idleTimer = setTimeout(releaseStartup, 500);
+            },
+            onComplete: ({ exitCode, output }) => {
+              if (startupPending) {
+                startupCompletion = { exitCode, output };
+                releaseStartup();
+              }
               completeManagedTerminalExecution(
                 terminalId,
                 context.actionId,
@@ -1103,7 +1149,10 @@ export function createTerminalRunTool(
                 ws,
               );
             },
-            onStop: () => clearManagedTerminalExecution(terminalId, context.actionId, context, ws),
+            onStop: () => {
+              if (scriptFile) { try { unlinkSync(scriptFile); } catch { /* already gone */ } }
+              clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
+            },
           });
           setManagedTerminalExecution(terminalId, context, command, outputOffset, true, watched, ws);
           // Multi-line commands must reach the shell as a *single* command.
@@ -1117,7 +1166,7 @@ export function createTerminalRunTool(
           // Same pager/editor hardening as foreground commands — background
           // commands must also never sit in a pager waiting on the PTY.
           const agentCommand = buildAgentCommand(command, shell);
-          const scriptFile = command.includes("\n") && !(surface instanceof RemoteTerminalSurface)
+          scriptFile = command.includes("\n") && !(surface instanceof RemoteTerminalSurface)
             ? writeCommandScript(agentCommand)
             : null;
           const commandLine = scriptFile
@@ -1138,15 +1187,30 @@ export function createTerminalRunTool(
               buildSingleLineTerminalInput(surface.bracketedPasteEnabled, shell, terminalInput) + "\r",
             );
           }
+          try {
+            await startup;
+          } finally {
+            clearTimeout(startupTimer);
+            if (idleTimer) clearTimeout(idleTimer);
+            context.signal?.removeEventListener("abort", onStartupAbort);
+            startupPending = false;
+          }
+          if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+          if (startupCompletion) {
+            return {
+              ok: startupCompletion.exitCode === 0,
+              message: `Command completed (exit code ${startupCompletion.exitCode ?? "unavailable"})`,
+              data: { ...startupCompletion, terminalId, outputOffset,
+                outputEndOffset: getTerminalOutputOffset(surface), timedOut: false, isBackground: false, watched: false },
+            };
+          }
           return {
             ok: true,
             message: watched
-              ? `Background command started in terminal ${terminalId}. You'll be notified automatically when it finishes — end your turn and wait rather than polling.`
-              : `Background command started in terminal ${terminalId}, but it is NOT being watched (too many background commands are already running). You will NOT be notified when it finishes — check on it yourself with terminal.run.`,
+              ? `Command is running in terminal ${terminalId}. Output below is a startup snapshot, not completion. Continue independent work; if you need its result, end your turn and completion will resume you automatically. Do not poll or rerun the command.`
+              : `Command is running in terminal ${terminalId}, but could not be watched. No automatic completion notification will be sent.`,
             data: {
-              output: watched
-                ? "(background — running; you'll be notified on completion)"
-                : "(background — running; NOT watched, no completion notification will be sent)",
+              output: startupOutput,
               exitCode: null,
               timedOut: false,
               terminalId,
@@ -1161,6 +1225,8 @@ export function createTerminalRunTool(
         setManagedTerminalExecution(terminalId, context, command, outputOffset, false, null, ws);
         let result: Awaited<ReturnType<typeof executeInTerminal>>;
         let outputEndOffset: number | null = null;
+        let movedToBackground = false;
+        const startedAt = Date.now();
         try {
           // Pager/editor hardening: agent commands run in a real PTY, so
           // `git log`, `man …`, `git commit`, rebase, etc. would otherwise
@@ -1186,6 +1252,25 @@ export function createTerminalRunTool(
                   timeoutMs: 120_000,
                 })
               : undefined,
+            ({ raw, completionToken, cleanup }) => {
+              movedToBackground = backgroundCommandMonitor.track({
+                sessionId: context.sessionId, terminalId, command, surface,
+                initialOutput: raw, startedAt, completionToken, shell,
+                onComplete: ({ output }) => completeManagedTerminalExecution(
+                  terminalId, context.actionId,
+                  getTerminalCommandDoneEndOffset(surface, outputOffset) ?? getTerminalOutputOffset(surface),
+                  output, context, ws,
+                ),
+                onStop: () => {
+                  cleanup();
+                  clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
+                },
+              });
+              if (movedToBackground) {
+                setManagedTerminalExecution(terminalId, context, command, outputOffset, true, true, ws);
+              }
+              return movedToBackground;
+            },
           );
 
           result = context.signal
@@ -1193,7 +1278,7 @@ export function createTerminalRunTool(
             : await execPromise;
           outputEndOffset = getTerminalCommandDoneEndOffset(surface, outputOffset)
             ?? getTerminalOutputOffset(surface);
-          completeManagedTerminalExecution(
+          if (!movedToBackground) completeManagedTerminalExecution(
             terminalId,
             context.actionId,
             outputEndOffset,
@@ -1202,7 +1287,7 @@ export function createTerminalRunTool(
             ws,
           );
         } finally {
-          clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
+          if (!movedToBackground) clearManagedTerminalExecution(terminalId, context.actionId, context, ws);
         }
 
         const terminalOutput = "getRecentOutputSince" in surface
@@ -1211,6 +1296,27 @@ export function createTerminalRunTool(
               surface.getRecentOutputSince(outputOffset, outputEndOffset ?? undefined),
             ).trimEnd()
           : result.output;
+
+        // Raw-ish twin of `terminalOutput`, kept for the chat card only: the UI
+        // replays it through xterm so a settled card looks like the live view
+        // (colours, progress bars) instead of a grey block of stripped text.
+        // `terminalOutput` stays plain for the model; agent-loop.ts drops this
+        // key before the result enters the conversation history.
+        const terminalOutputAnsi = "getRecentOutputSince" in surface
+          && typeof surface.getRecentOutputSince === "function"
+          ? cleanChunkPreservingSgr(
+              surface.getRecentOutputSince(outputOffset, outputEndOffset ?? undefined),
+            ).trimEnd()
+          : result.output;
+
+        if (movedToBackground) {
+          return {
+            ok: true,
+            message: `Wait timed out after ${timeout}ms. The command is still running in terminal ${terminalId} and has not been interrupted. Continue independent work, or end your turn to await automatic completion. Do not poll or rerun the command.`,
+            data: { output: result.output, terminalOutput, terminalOutputAnsi, exitCode: null, timedOut: true,
+              terminalId, outputOffset, isBackground: true, watched: true, timeoutMs: timeout },
+          };
+        }
 
         // 3. Build response
         // Mark as failed if exit code != 0 or timed out.
@@ -1263,6 +1369,7 @@ export function createTerminalRunTool(
           data: {
             output: result.output,
             terminalOutput,
+            terminalOutputAnsi,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,
@@ -1300,9 +1407,9 @@ export function createJaitTerminalTool(
       "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal. " +
       "Every command runs as a live terminal inside the chat card, so do not create a separate terminal surface first. " +
       "For every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — wait for completion; " +
-      "the default 1-hour timeout already covers long-running builds, and `timeout` can be raised (up to 24 hours) when needed. " +
+      "the default wait is 1 hour and `timeout` can be raised up to 24 hours. If the wait expires, the command keeps running with a completion notification; do not rerun it. " +
       "Set isBackground: true only for indefinite processes such as servers, " +
-      "watchers, and daemons; Jait notifies you when they finish, so never poll or send another command to their terminal. " +
+      "watchers, and daemons. Background calls return a startup output snapshot after a brief idle wait; Jait notifies you when they finish. Continue independent work or end your turn to await completion; never poll or send another command to their terminal. " +
       "Agent commands are automatically hardened against pagers/editors (PAGER=cat, GIT_EDITOR=true, …), so `git log`, man pages, and commit/rebase editors can never wedge the call.",
   };
 }
