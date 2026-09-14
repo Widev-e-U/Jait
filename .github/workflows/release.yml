@@ -935,23 +935,37 @@ jobs:
         working-directory: packages/gateway
         run: |
           VERSION=$(jq -r '.version' package.json)
-          URL="https://registry.npmjs.org/@jait/gateway/$VERSION"
-          attempt=0
-          while [ "$(curl -s -o /dev/null -w '%{http_code}' "$URL")" != "200" ]; do
-            attempt=$((attempt + 1))
-            if [ "$attempt" -gt 30 ]; then
-              echo "❌ @jait/gateway@$VERSION is still absent after $((attempt * 10))s."
-              echo "   npm accepted the upload but never committed the version."
-              echo "   Not cutting a release for a version nobody can install."
-              exit 1
+          REGISTRY=$(npm config get registry)
+          echo "Verifying @jait/gateway@$VERSION via $REGISTRY"
+          # Ask npm itself first: it is the client that published, it honours the
+          # runner's configured registry/proxy, and it reads through the same
+          # path operators use. A bare curl to registry.npmjs.org is not a
+          # reliable witness — that made this step time out on an already
+          # published v0.1.850 and cost it its GitHub release.
+          is_live() {
+            if [ "$(npm view "@jait/gateway@$VERSION" version 2>/dev/null | tr -d '[:space:]')" = "$VERSION" ]; then
+              return 0
             fi
-            if [ "$attempt" -eq 6 ] || [ "$attempt" -eq 16 ]; then
-              echo "↻ @jait/gateway@$VERSION missing — retrying publish"
+            # Fallback in case the configured registry is a mirror that lags.
+            code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' \
+              "https://registry.npmjs.org/@jait/gateway/$VERSION" 2>/dev/null || true)
+            [ "$code" = "200" ]
+          }
+          for attempt in $(seq 1 24); do
+            if is_live; then
+              echo "✅ @jait/gateway@$VERSION is live on $REGISTRY"
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ] || [ "$attempt" -eq 10 ]; then
+              echo "↻ @jait/gateway@$VERSION not visible yet — retrying publish"
               npm publish --access public || true
             fi
             sleep 10
           done
-          echo "✅ @jait/gateway@$VERSION is live on registry.npmjs.org"
+          echo "❌ @jait/gateway@$VERSION is still absent after 240s."
+          echo "   npm accepted the upload but never committed the version."
+          echo "   Not cutting a release for a version nobody can install."
+          exit 1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
