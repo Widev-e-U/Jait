@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
 import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
 import {
@@ -42,6 +42,7 @@ import {
   getUserMessageEditComposerTransitionClassName,
 } from './message-edit-layout'
 import { getMobileMessageActionsPositionClassName } from './message-mobile-actions'
+import { shouldStartUserMessageEdit } from './message-bubble-click'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
@@ -487,10 +488,9 @@ function MessageInner({
     setEditing(false)
   }, [setEditing, userDisplaySegments, userDisplayText])
 
-  const handleUserBubbleClick = () => {
-    if (!canEdit || isEditing) return
-    const selection = typeof window !== 'undefined' ? window.getSelection()?.toString().trim() : ''
-    if (selection) return
+  const handleUserBubbleClick = (event: ReactMouseEvent<HTMLElement>) => {
+    const selection = typeof window !== 'undefined' ? window.getSelection()?.toString() : ''
+    if (!shouldStartUserMessageEdit(event, selection, { canEdit, isEditing })) return
     startEditing()
   }
 
@@ -1019,6 +1019,8 @@ function MessageInner({
                                   <DialogTrigger asChild>
                                     <button
                                       type="button"
+                                      data-no-message-edit
+                                      onClick={(event) => event.stopPropagation()}
                                       className="group block overflow-hidden rounded-lg border border-primary/10 bg-background/65 text-left transition-colors hover:border-primary/25 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                                       aria-label={`Expand image ${attachment.name}`}
                                     >
