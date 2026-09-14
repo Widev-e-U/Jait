@@ -30,7 +30,7 @@ interface ConversationProps {
     thinking?: unknown
     toolCalls?: unknown
     segments?: unknown
-    role?: 'user' | 'agent'
+    role?: 'user' | 'agent' | 'assistant'
     error?: unknown
   }>
   /** Whether there are older messages available to load. */

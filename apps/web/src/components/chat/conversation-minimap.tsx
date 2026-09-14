@@ -66,6 +66,8 @@ const MINIMAP_AGENT_MAX_WIDTH = 0.85
 const MINIMAP_MIN_LINE_RATIO = 0.12
 /** Ceiling on the line shape we keep per message, so one huge paste can't blow up memory. */
 const MINIMAP_MAX_LINES_PER_MESSAGE = 4000
+// Large pastes use a cheap approximation before allocating canvas/segment data.
+const MINIMAP_MAX_MEASURED_CHARACTERS = 16000
 /** Shape used for messages with no text of their own (tool-only turns, queue items). */
 const MINIMAP_EMPTY_SHAPE = [0.3]
 const MINIMAP_MESSAGE_MAX_WIDTH = 0.85
@@ -98,13 +100,18 @@ const MINIMAP_AVG_CHAR_WIDTH_PX = 9
 function minimapLineShapeFallback(text: string, wrapWidth: number): number[] {
   const charsPerLine = Math.max(Math.floor(wrapWidth / MINIMAP_AVG_CHAR_WIDTH_PX), 8)
   const widths: number[] = []
-  for (const paragraph of text.split('\n')) {
+  let start = 0
+  while (start <= text.length && widths.length < MINIMAP_MAX_LINES_PER_MESSAGE) {
+    const newline = text.indexOf('\n', start)
+    const end = newline < 0 ? text.length : newline
+    const paragraphLength = end - start
+    start = end + 1
     // A blank line stays blank — that gap is what keeps the preview readable.
-    if (paragraph.length === 0) {
+    if (paragraphLength === 0) {
       if (widths.length < MINIMAP_MAX_LINES_PER_MESSAGE) widths.push(0)
       continue
     }
-    let remaining = paragraph.length
+    let remaining = paragraphLength
     while (remaining > 0 && widths.length < MINIMAP_MAX_LINES_PER_MESSAGE) {
       if (remaining > charsPerLine) {
         widths.push(1)
@@ -122,7 +129,7 @@ interface MinimapMessageInput {
   thinking?: unknown
   toolCalls?: unknown
   segments?: unknown
-  role?: 'user' | 'agent'
+  role?: 'user' | 'agent' | 'assistant'
   error?: unknown
 }
 
@@ -144,6 +151,7 @@ export function computeMinimapMessageShape(
   const messageIsUser = message?.role === 'user'
   const push = (lineWidths: number[], options?: { error?: boolean; user?: boolean }) => {
     for (const width of lineWidths) {
+      if (widths.length >= MINIMAP_MAX_LINES_PER_MESSAGE) break
       widths.push(width)
       errorLines.push(options?.error === true)
       userLines.push(options?.user ?? messageIsUser)
@@ -159,7 +167,7 @@ export function computeMinimapMessageShape(
   let renderedStructuredRow = false
   let hasErrorSegment = false
 
-  for (let index = 0; index < segments.length; index++) {
+  for (let index = 0; index < segments.length && widths.length < MINIMAP_MAX_LINES_PER_MESSAGE; index++) {
     const segment = segments[index]
     if (!segment || typeof segment !== 'object' || !('type' in segment)) continue
     const type = segment.type
@@ -255,8 +263,9 @@ export function canReuseMinimapMessageShape(
  * deterministic char-count approximation above.
  */
 export function computeMinimapLineShape(text: string, wrapWidth = 512): number[] {
-  if (!text.trim()) return MINIMAP_EMPTY_SHAPE
   const width = Math.max(wrapWidth, 100)
+  if (text.length > MINIMAP_MAX_MEASURED_CHARACTERS) return minimapLineShapeFallback(text, width)
+  if (!text.trim()) return MINIMAP_EMPTY_SHAPE
   let prepared
   try {
     prepared = prepareWithSegments(text, MINIMAP_FONT, { whiteSpace: 'pre-wrap' })
