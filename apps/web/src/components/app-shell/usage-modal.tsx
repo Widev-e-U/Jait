@@ -36,6 +36,10 @@ interface UsageProfile {
   providerLabel: string
   profileLabel: string
   locationLabel: string
+  /** Signed-in account behind the profile (e.g. the Ollama Cloud email). */
+  accountLabel?: string | null
+  /** Subscription plan reported by the provider (e.g. Codex "plus"). */
+  planType?: string | null
   quotas: UsageQuotaSnapshot[]
   error: string | null
 }
@@ -127,7 +131,7 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
 }
 
 function ProfileUsage({ profile }: { profile: UsageProfile }) {
-  const plan = profile.quotas.find((quota) => quota.planType)?.planType
+  const plan = profile.planType ?? profile.quotas.find((quota) => quota.planType)?.planType
   const credits = profile.quotas.find((quota) => quota.credits)?.credits
 
   return (
@@ -138,6 +142,9 @@ function ProfileUsage({ profile }: { profile: UsageProfile }) {
           <p className="text-sm text-muted-foreground">
             {profile.providerLabel} · {profile.locationLabel}
           </p>
+          {profile.accountLabel && (
+            <p className="truncate text-xs text-muted-foreground">{profile.accountLabel}</p>
+          )}
         </div>
         {plan && (
           <span className="rounded-full bg-muted px-2.5 py-1 text-xs capitalize text-muted-foreground">

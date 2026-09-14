@@ -21,7 +21,14 @@ import { listJaitModels } from "../services/jait-models.js";
 import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { ProviderUsageService } from "../services/provider-usage.js";
-import { fetchOllamaUsage } from "../services/provider-quota-fetchers.js";
+import {
+  fetchOllamaUsage,
+  fetchOllamaUsageFrom,
+  probeOllamaAccount,
+  describeOllamaUsageGap,
+  OllamaUsageError,
+  type OllamaCloudAccount,
+} from "../services/provider-quota-fetchers.js";
 import { summarizeProviderUsage } from "../services/usage-summary.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { WsControlPlane } from "../ws.js";
@@ -140,27 +147,54 @@ export function registerProviderRoutes(
         : [];
     const explicitCloudApiKey = apiKeys["OLLAMA_API_KEY"]?.trim();
 
+    // Signed-in Ollama Cloud account per backend, used for the modal's account
+    // line and plan badge even when no quota buckets are available.
+    const ollamaAccounts = new Map<string, OllamaCloudAccount>();
+
     await Promise.all(ollamaBackends.map(async (backend) => {
       const quotaAccountId = `jait-backend:${backend.id}`;
-      const backendApiKey =
-        "apiKey" in backend && isOllamaCloudUrl(backend.baseUrl)
-          ? backend.apiKey?.trim()
-          : undefined;
-      const apiKey = explicitCloudApiKey || backendApiKey;
-      if (!apiKey || !deps.providerUsageService) {
-        quotaErrors[quotaAccountId] = isOllamaCloudUrl(backend.baseUrl)
-          ? "Add an Ollama Cloud API key to this Jait backend to load subscription usage."
-          : "Self-hosted Ollama has no provider subscription limit.";
+      const cloud = isOllamaCloudUrl(backend.baseUrl);
+      const backendApiKey = "apiKey" in backend ? backend.apiKey?.trim() : undefined;
+
+      // A Cloud backend can authenticate with its own key; a self-hosted daemon
+      // instead relies on the credentials it stored during `ollama signin`.
+      const usageApiKey = cloud ? explicitCloudApiKey || backendApiKey : explicitCloudApiKey;
+
+      const probe = await probeOllamaAccount({
+        baseUrl: backend.baseUrl,
+        apiKey: cloud ? backendApiKey : usageApiKey,
+      });
+      if (probe.account) ollamaAccounts.set(quotaAccountId, probe.account);
+
+      if (!deps.providerUsageService) return;
+
+      const failureHint = describeOllamaUsageGap({
+        baseUrl: backend.baseUrl,
+        cloud,
+        probe,
+      });
+
+      if (!usageApiKey && !probe.account) {
+        quotaErrors[quotaAccountId] = failureHint;
         return;
       }
+
       try {
-        deps.providerUsageService.recordOllamaUsage(
-          quotaAccountId,
-          await fetchOllamaUsage(apiKey),
-        );
+        // Cloud keys report quota from ollama.com; a signed-in self-hosted
+        // daemon reports it from its own `/api/usage`.
+        const usage = usageApiKey
+          ? await fetchOllamaUsage(usageApiKey)
+          : await fetchOllamaUsageFrom(backend.baseUrl);
+        deps.providerUsageService.recordOllamaUsage(quotaAccountId, usage, probe.account?.plan ?? null);
       } catch (error) {
         quotaErrors[quotaAccountId] =
-          error instanceof Error ? error.message : "Ollama usage refresh failed";
+          error instanceof OllamaUsageError && error.status === 401
+            ? "Ollama rejected this API key. Re-enter a valid Ollama Cloud key for this backend."
+            : error instanceof OllamaUsageError && error.status === 404
+              ? failureHint
+              : error instanceof Error
+                ? error.message
+                : "Ollama usage refresh failed";
       }
     }));
 
@@ -174,13 +208,19 @@ export function registerProviderRoutes(
     const quotas = deps.providerUsageService?.listForUser(quotaAccountIds) ?? [];
     return summarizeProviderUsage(accounts, quotas, {
       quotaErrors,
-      jaitBackendProfiles: ollamaBackends.map((backend) => ({
-        id: `jait-backend:${backend.id}`,
-        providerType: "ollama",
-        providerLabel: "Ollama",
-        profileLabel: backend.name,
-        quotaAccountId: `jait-backend:${backend.id}`,
-      })),
+      jaitBackendProfiles: ollamaBackends.map((backend) => {
+        const quotaAccountIdValue = `jait-backend:${backend.id}`;
+        const account = ollamaAccounts.get(quotaAccountIdValue);
+        return {
+          id: quotaAccountIdValue,
+          providerType: "ollama",
+          providerLabel: "Ollama",
+          profileLabel: backend.name,
+          quotaAccountId: quotaAccountIdValue,
+          accountLabel: account?.email ?? account?.name ?? null,
+          planType: account?.plan ?? null,
+        };
+      }),
     });
   });
 

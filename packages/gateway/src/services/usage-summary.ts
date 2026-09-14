@@ -8,6 +8,10 @@ export interface UsageProfile {
   providerLabel: string;
   profileLabel: string;
   locationLabel: string;
+  /** Signed-in account behind the profile (e.g. an Ollama Cloud email), when known. */
+  accountLabel?: string | null;
+  /** Subscription plan reported by the provider, when known. */
+  planType?: string | null;
   quotas: ProviderUsageSnapshot[];
   error: string | null;
 }
@@ -32,25 +36,33 @@ export function summarizeProviderUsage(
       providerLabel: string;
       profileLabel: string;
       quotaAccountId: string;
+      accountLabel?: string | null;
+      planType?: string | null;
     }>;
     quotaErrors?: Record<string, string>;
   } = {},
 ): UsageSummaryPayload {
   const quotaErrors = options.quotaErrors ?? {};
-  const profiles: UsageProfile[] = accounts.map((account) => ({
-    id: account.id,
-    providerType: account.providerType,
-    providerLabel:
-      account.providerType === "claude-code"
-        ? "Claude Code"
-        : account.providerType === "codex"
-          ? "Codex"
-          : account.providerType,
-    profileLabel: account.label,
-    locationLabel: account.nodeId === "gateway" ? "Gateway profile" : "Remote profile",
-    quotas: quotas.filter((quota) => quota.accountId === account.id),
-    error: quotaErrors[account.id] ?? null,
-  }));
+  const profiles: UsageProfile[] = accounts.map((account) => {
+    const accountQuotas = quotas.filter((quota) => quota.accountId === account.id);
+    return {
+      id: account.id,
+      providerType: account.providerType,
+      providerLabel:
+        account.providerType === "claude-code"
+          ? "Claude Code"
+          : account.providerType === "codex"
+            ? "Codex"
+            : account.providerType,
+      profileLabel: account.label,
+      locationLabel: account.nodeId === "gateway" ? "Gateway profile" : "Remote profile",
+      // The plan (e.g. Codex "plus") is only known from the rate-limit payload,
+      // so surface it on the profile for the modal's badge.
+      planType: accountQuotas.find((quota) => quota.planType)?.planType ?? null,
+      quotas: accountQuotas,
+      error: quotaErrors[account.id] ?? null,
+    };
+  });
 
   for (const backend of options.jaitBackendProfiles ?? []) {
     profiles.push({
@@ -59,6 +71,8 @@ export function summarizeProviderUsage(
       providerLabel: backend.providerLabel,
       profileLabel: backend.profileLabel,
       locationLabel: "Jait backend",
+      accountLabel: backend.accountLabel ?? null,
+      planType: backend.planType ?? null,
       quotas: quotas.filter((quota) => quota.accountId === backend.quotaAccountId),
       error: quotaErrors[backend.quotaAccountId] ?? null,
     });

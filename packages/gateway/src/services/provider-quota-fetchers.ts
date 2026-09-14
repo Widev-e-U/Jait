@@ -41,6 +41,31 @@ export interface OllamaUsageResponse {
   };
 }
 
+/** The signed-in Ollama Cloud account reported by a server's `/api/me`. */
+export interface OllamaCloudAccount {
+  email: string | null;
+  name: string | null;
+  plan: string | null;
+}
+
+export interface OllamaAccountProbe {
+  /** Whether the Ollama server answered the `/api/me` request at all (false = offline/timeout). */
+  reachable: boolean;
+  /** The signed-in Ollama Cloud account, or null when the server has no usable credentials. */
+  account: OllamaCloudAccount | null;
+}
+
+/** Usage fetch failure that keeps the HTTP status, so callers can explain the cause. */
+export class OllamaUsageError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null = null,
+  ) {
+    super(message);
+    this.name = "OllamaUsageError";
+  }
+}
+
 function isRateLimitWindow(value: unknown): value is CodexRateLimitWindow {
   if (!value || typeof value !== "object") return false;
   const window = value as Record<string, unknown>;
@@ -145,21 +170,106 @@ export function isOllamaUsageResponse(value: unknown): value is OllamaUsageRespo
   return buckets.some(isOllamaUsageLimit) && buckets.every((bucket) => bucket === undefined || isOllamaUsageLimit(bucket));
 }
 
-/** Read the Ollama Cloud quota. The endpoint currently requires an Ollama API key. */
-export async function fetchOllamaUsage(apiKey: string, timeoutMs = 10_000): Promise<OllamaUsageResponse> {
+/**
+ * Read the Ollama quota from any Ollama server's `/api/usage`.
+ *
+ * `apiKey` is optional because a self-hosted daemon that ran `ollama signin`
+ * authenticates the request with its own stored credentials.
+ */
+export async function fetchOllamaUsageFrom(
+  baseUrl: string,
+  apiKey?: string,
+  timeoutMs = 10_000,
+): Promise<OllamaUsageResponse> {
+  const base = (baseUrl.trim() || "https://ollama.com").replace(/\/+$/, "");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   timer.unref();
   try {
-    const response = await fetch("https://ollama.com/api/usage", {
-      headers: { Authorization: `Bearer ${apiKey}` },
+    const response = await fetch(`${base}/api/usage`, {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Ollama usage request failed (${response.status})`);
+    if (!response.ok) {
+      throw new OllamaUsageError(`Ollama usage request failed (${response.status})`, response.status);
+    }
     const body = (await response.json()) as unknown;
     if (!isOllamaUsageResponse(body)) throw new Error("Ollama returned an unexpected usage response");
     return body;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Read the Ollama Cloud quota. The endpoint requires an Ollama Cloud API key. */
+export async function fetchOllamaUsage(apiKey: string, timeoutMs = 10_000): Promise<OllamaUsageResponse> {
+  return fetchOllamaUsageFrom("https://ollama.com", apiKey, timeoutMs);
+}
+
+/**
+ * Ask an Ollama server who it is signed in as (`/api/me`).
+ *
+ * Used for diagnostics: a self-hosted daemon that ran `ollama signin` can report
+ * the Ollama Cloud account even though it cannot serve cloud quota buckets, and
+ * a valid Cloud API key confirms the account behind a quota request. The probe
+ * never throws — unreachable servers and rejected credentials are answers, not
+ * errors.
+ */
+export async function probeOllamaAccount(
+  options: { baseUrl?: string; apiKey?: string; timeoutMs?: number } = {},
+): Promise<OllamaAccountProbe> {
+  const baseUrl = (options.baseUrl?.trim() || "https://ollama.com").replace(/\/+$/, "");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 4_000);
+  timer.unref();
+  try {
+    const response = await fetch(`${baseUrl}/api/me`, {
+      method: "POST",
+      headers: options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : undefined,
+      signal: controller.signal,
+    });
+    if (!response.ok) return { reachable: true, account: null };
+    const body = (await response.json()) as unknown;
+    if (!body || typeof body !== "object") return { reachable: true, account: null };
+    const record = body as Record<string, unknown>;
+    return {
+      reachable: true,
+      account: {
+        email: typeof record.email === "string" ? record.email : null,
+        name: typeof record.name === "string" ? record.name : null,
+        plan: typeof record.plan === "string" ? record.plan : null,
+      },
+    };
+  } catch {
+    return { reachable: false, account: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Explain why an Ollama backend has no subscription-usage buckets.
+ *
+ * Kept separate from the route so each distinct cause — offline server, missing
+ * Cloud key, or a signed-in daemon that simply does not expose `/api/usage` —
+ * is unit-tested rather than inferred from a shared failure string.
+ */
+export function describeOllamaUsageGap(options: {
+  baseUrl: string;
+  cloud: boolean;
+  probe: OllamaAccountProbe;
+}): string {
+  const { baseUrl, cloud, probe } = options;
+  if (!probe.reachable) {
+    return `Ollama at ${baseUrl} did not respond. Subscription usage needs a running server.`;
+  }
+  if (cloud) {
+    return "Add an Ollama Cloud API key to this Jait backend to load subscription usage.";
+  }
+  const signedInAs = probe.account?.email ?? probe.account?.name ?? null;
+  if (signedInAs) {
+    const planSuffix = probe.account?.plan ? ` (${probe.account.plan})` : "";
+    return `Signed in to Ollama Cloud as ${signedInAs}${planSuffix}, but this Ollama server does not report subscription usage. Add an Ollama Cloud API key to see quota.`;
+  }
+  return "This Ollama instance is not signed in to Ollama Cloud, so there is no subscription usage to report.";
 }
