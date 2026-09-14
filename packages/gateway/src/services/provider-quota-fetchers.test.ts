@@ -54,6 +54,16 @@ describe("provider quota fetchers", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("normalizes capitalized Ollama account fields", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ Email: "me@example.com", Name: "Me", Plan: "pro" }),
+    )));
+    await expect(probeOllamaAccount({ baseUrl: "http://localhost:11434" })).resolves.toEqual({
+      reachable: true,
+      account: { email: "me@example.com", name: "Me", plan: "pro" },
+    });
+  });
+
   it("treats a rejected credential as reachable but unauthenticated", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 401 })));
 

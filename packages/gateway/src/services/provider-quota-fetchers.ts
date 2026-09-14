@@ -173,8 +173,8 @@ export function isOllamaUsageResponse(value: unknown): value is OllamaUsageRespo
 /**
  * Read the Ollama quota from any Ollama server's `/api/usage`.
  *
- * `apiKey` is optional because a self-hosted daemon that ran `ollama signin`
- * authenticates the request with its own stored credentials.
+ * Some proxies expose usage without an API key. Standard local Ollama daemons
+ * return 404; device authentication is handled by ollama-device-auth.ts.
  */
 export async function fetchOllamaUsageFrom(
   baseUrl: string,
@@ -235,9 +235,9 @@ export async function probeOllamaAccount(
     return {
       reachable: true,
       account: {
-        email: typeof record.email === "string" ? record.email : null,
-        name: typeof record.name === "string" ? record.name : null,
-        plan: typeof record.plan === "string" ? record.plan : null,
+        email: typeof (record.email ?? record.Email) === "string" ? (record.email ?? record.Email) as string : null,
+        name: typeof (record.name ?? record.Name) === "string" ? (record.name ?? record.Name) as string : null,
+        plan: typeof (record.plan ?? record.Plan) === "string" ? (record.plan ?? record.Plan) as string : null,
       },
     };
   } catch {

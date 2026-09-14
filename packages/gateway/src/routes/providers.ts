@@ -23,12 +23,12 @@ import type { ProviderAccountService } from "../services/provider-accounts.js";
 import type { ProviderUsageService } from "../services/provider-usage.js";
 import {
   fetchOllamaUsage,
-  fetchOllamaUsageFrom,
   probeOllamaAccount,
   describeOllamaUsageGap,
   OllamaUsageError,
   type OllamaCloudAccount,
 } from "../services/provider-quota-fetchers.js";
+import { fetchSignedInOllamaUsage } from "../services/ollama-device-auth.js";
 import { summarizeProviderUsage } from "../services/usage-summary.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { WsControlPlane } from "../ws.js";
@@ -180,15 +180,15 @@ export function registerProviderRoutes(
       }
 
       try {
-        // Cloud keys report quota from ollama.com; a signed-in self-hosted
-        // daemon reports it from its own `/api/usage`.
+        // Prefer a daemon usage endpoint; local daemons without one can use
+        // their device key to query Ollama Cloud directly.
         const usage = usageApiKey
           ? await fetchOllamaUsage(usageApiKey)
-          : await fetchOllamaUsageFrom(backend.baseUrl);
+          : await fetchSignedInOllamaUsage(backend.baseUrl, probe.account!);
         deps.providerUsageService.recordOllamaUsage(quotaAccountId, usage, probe.account?.plan ?? null);
       } catch (error) {
         quotaErrors[quotaAccountId] =
-          error instanceof OllamaUsageError && error.status === 401
+          usageApiKey && error instanceof OllamaUsageError && error.status === 401
             ? "Ollama rejected this API key. Re-enter a valid Ollama Cloud key for this backend."
             : error instanceof OllamaUsageError && error.status === 404
               ? failureHint
