@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.848](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.848) — 2026-09-14
+- fix(web): show shared composer controls in parallel chat panels — b1157e65
+
+## [v0.1.847](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.847) — 2026-09-14
+- feat(usage): show the signed-in Ollama account and report self-hosted quota — 9112c642
+- fix(chat): replay settled terminal output with its ANSI colours — f6a96e54
+
 ## [v0.1.846](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.846) — 2026-09-13
 - fix(web): keep chat read markers tied to the visible transcript — 4ba15d20
 - fix(gateway): acknowledge read state from the client's observed activity — 8bc59249
