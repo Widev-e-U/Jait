@@ -253,20 +253,15 @@ export function registerProjectRoutes(
     }
 
     const session = sessionService?.getById(sessionId);
-    let projectId = session?.projectId ?? null;
+    const projectId = session?.projectId ?? null;
     try {
-      if (!projectId && session?.userId && projectService) {
-        const project = projectService.getOrCreateForRoot({
-          userId: session.userId,
-          rootPath: projectPath,
-          nodeId,
-        });
-        projectId = project.id;
-        sessionService?.update(sessionId, { projectId, projectPath });
-      } else {
+      // Opening or restoring a filesystem surface is a UI operation. It must
+      // never classify a personal chat as a project chat; explicit project
+      // creation and chat-move actions own that transition.
+      if (projectId) {
         sessionService?.update(sessionId, { projectPath });
+        projectService?.touch(projectId);
       }
-      if (projectId) projectService?.touch(projectId);
     } catch { /* best effort */ }
 
     const panelState = { open: panelOpen, remotePath: projectPath, surfaceId, nodeId };

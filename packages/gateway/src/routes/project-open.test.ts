@@ -295,7 +295,7 @@ describe("POST /api/project/open", () => {
     await expect(readFile(writableTestFile, "utf-8")).resolves.toBe("after");
   });
 
-  it("should attach a project when opening a directory from a project-less session", async () => {
+  it("should keep a personal chat project-less when opening a filesystem surface", async () => {
     const user = users.createUser(`open-user-${Date.now()}`, "password123");
     const session = sessions.create({ userId: user.id, name: "No project yet" });
     expect(session.projectId).toBeNull();
@@ -308,13 +308,13 @@ describe("POST /api/project/open", () => {
 
     expect(openRes.ok).toBe(true);
     const data = (await openRes.json()) as { projectId: string | null; projectRoot: string };
-    expect(data.projectId).toBeTruthy();
+    expect(data.projectId).toBeNull();
     expect(data.projectRoot).toBe(writableTestRoot);
 
     const updatedSession = sessions.getById(session.id, user.id);
-    expect(updatedSession?.projectId).toBe(data.projectId);
-    expect(updatedSession?.projectPath).toBe(writableTestRoot);
-    expect(data.projectId ? projects.getById(data.projectId, user.id)?.rootPath : null).toBe(writableTestRoot);
+    expect(updatedSession?.projectId).toBeNull();
+    expect(updatedSession?.projectPath).toBeNull();
+    expect(projects.findByRoot(writableTestRoot, "gateway", user.id)).toBeUndefined();
   });
 
   it("should return filename and content search results via GET /api/project/search", async () => {

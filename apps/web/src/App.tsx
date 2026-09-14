@@ -3303,7 +3303,7 @@ function App() {
 
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
-    if (!activeProject?.projectRoot || !activeSessionId || activeProject.opening) return
+    if (!activeProjectId || !activeProject?.projectRoot || !activeSessionId || activeProject.opening) return
     let cancelled = false
     ;(async () => {
       try {
@@ -3331,7 +3331,7 @@ function App() {
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
     return () => { cancelled = true }
-  }, [activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProjectId, activeProject?.nodeId, activeProject?.surfaceId, activeProject?.projectRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Absolute paths of files the agent has modified (undecided only), used to refresh an already-open project editor
   const changedPaths = useMemo(
