@@ -1232,11 +1232,11 @@ describe('running terminal cards attach to the pushed binding', () => {
     startedAt: 1,
   }
 
-  function renderInSession(sessionId: string) {
+  function renderInSession(sessionId: string, tool = runningCall.tool) {
     return renderToStaticMarkup(createElement(
       SubAgentAuthProvider,
       { sessionId },
-      createElement(ToolCallCard, { call: runningCall }),
+      createElement(ToolCallCard, { call: { ...runningCall, tool } }),
     ))
   }
 
@@ -1245,7 +1245,7 @@ describe('running terminal cards attach to the pushed binding', () => {
     resetLiveToolTerminals()
   })
 
-  it('renders a real terminal as soon as the gateway announces the binding', async () => {
+  it.each(['jait.terminal', 'mcp__jait_core__jait_terminal', 'mcp__jait__terminal_run', 'functions.mcp__jait_core__jait_terminal'])('renders a live terminal for %s before its result arrives', async (tool) => {
     const { applyTerminalExecutionEvent } = await import('@/lib/tool-terminal-live')
     applyTerminalExecutionEvent('s-live', {
       terminalId: 'term-live',
@@ -1261,7 +1261,7 @@ describe('running terminal cards attach to the pushed binding', () => {
       },
     })
 
-    expect(renderInSession('s-live')).toContain('relative w-full overflow-hidden')
+    expect(renderInSession('s-live', tool)).toContain('relative w-full overflow-hidden')
   })
 
   it('falls back to streamed text when no binding has arrived', () => {

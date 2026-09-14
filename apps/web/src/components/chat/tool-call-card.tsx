@@ -443,8 +443,9 @@ export function getJaitMcpToolName(
     if (!candidate) continue
     const normalized = candidate
       .replace(/^functions[._]/, '')
-      .replace(/__/g, '.')
-      .replace(/\.{2,}/g, '.')
+      // normalizeToolName may already have changed the first underscore to
+      // a dot (mcp__jait -> mcp._jait). Collapse mixed separators too.
+      .replace(/[._]{2,}/g, '.')
     const match = normalized.match(/^mcp[._]jait(?:_core)?[._](.+)$/i)
     if (!match?.[1]) continue
     return match[1].replace(/_/g, '.')
