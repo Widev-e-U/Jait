@@ -5389,6 +5389,7 @@ function App() {
                             key={parallelChat.session.id}
                             session={parallelChat.session}
                             token={token}
+                            composerControlRow={developerComposerControlRow}
                             initialPrompt={parallelChat.initialPrompt}
                             provider={parallelChat.provider}
                             runtimeMode={parallelChat.runtimeMode}

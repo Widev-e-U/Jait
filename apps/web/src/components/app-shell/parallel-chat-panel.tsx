@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
 import { ChatComposerSurface, Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
@@ -38,6 +38,12 @@ interface ParallelChatPanelProps {
   onSearchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   showHideButton: boolean
   onClose: () => void
+  /**
+   * The shared composer control row (history + new chat + send-target switcher)
+   * rendered below the prompt input. Reusing the exact same element as the main
+   * developer chat keeps the panel footer identical instead of a bespoke copy.
+   */
+  composerControlRow?: ReactNode
 }
 
 export function ParallelChatPanel({
@@ -59,6 +65,7 @@ export function ParallelChatPanel({
   onSearchFiles,
   showHideButton,
   onClose,
+  composerControlRow,
 }: ParallelChatPanelProps) {
   const {
     messages,
@@ -251,7 +258,7 @@ export function ParallelChatPanel({
             {error}
           </div>
         )}
-        <div className="mx-auto w-full max-w-4xl">
+        <div className="mx-auto w-full max-w-4xl space-y-1.5">
         <ChatComposerSurface>
         <PromptInput
           value={draft}
@@ -285,6 +292,7 @@ export function ParallelChatPanel({
           chatId={session.id}
         />
         </ChatComposerSurface>
+        {composerControlRow}
         </div>
       </div>
     </section>
