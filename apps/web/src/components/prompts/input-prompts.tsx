@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { attentionKey } from '@jait/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -726,7 +728,15 @@ export function useUserQuestionPrompt({
   return { activeRequest, inlinePrompt }
 }
 
-function UserQuestionForm({
+function QuestionText({ children }: { children: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+    p: ({ children }) => <span className="block whitespace-pre-wrap">{children}</span>,
+    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer"
+      className="text-primary underline break-words" onClick={(event) => event.stopPropagation()}>{children}</a>,
+  }}>{children}</ReactMarkdown>
+}
+
+export function UserQuestionForm({
   request,
   answers,
   submitting,
@@ -758,8 +768,8 @@ function UserQuestionForm({
         return (
           <div key={question.id} className="space-y-2">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium leading-5 text-foreground">{question.header}</p>
-              <p className="text-xs leading-5 text-muted-foreground">{question.question}</p>
+              <p className="text-sm font-medium leading-5 text-foreground"><QuestionText>{question.header}</QuestionText></p>
+              <div className="text-xs leading-5 text-muted-foreground"><QuestionText>{question.question}</QuestionText></div>
             </div>
             {question.options?.length ? (
               <div className="space-y-1">
@@ -782,9 +792,9 @@ function UserQuestionForm({
                         }}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="font-medium text-foreground">{option.label}</span>
+                        <span className="font-medium text-foreground"><QuestionText>{option.label}</QuestionText></span>
                         {option.recommended && <span className="ml-1 text-primary">Recommended</span>}
-                        {option.description && <span className="block text-muted-foreground">{option.description}</span>}
+                        {option.description && <span className="block text-muted-foreground"><QuestionText>{option.description}</QuestionText></span>}
                       </span>
                     </label>
                   )

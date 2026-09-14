@@ -1,6 +1,7 @@
 package dev.jait.mobile;
 
 import android.content.Context;
+import dev.jait.mobile.common.QuestionLinks;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -158,6 +159,7 @@ public class AgentPromptView {
             Color.rgb(242, 244, 247),
             false
         );
+        QuestionLinks.apply(questionText);
         questionText.setLineSpacing(0, 1.15f);
         card.addView(questionText, layoutMatch(0, 4, 0, 10));
 
@@ -211,6 +213,7 @@ public class AgentPromptView {
             : label + recommended + "\n" + description;
         control.setText(visibleText);
         control.setTag(label);
+        QuestionLinks.apply(control);
         control.setTextColor(Color.rgb(228, 231, 235));
         control.setTextSize(14);
         control.setPadding(dp(8), dp(8), dp(8), dp(8));

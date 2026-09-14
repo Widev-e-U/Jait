@@ -362,10 +362,22 @@ public final class WearDashboardView {
     // ------------------------------------------------------------------ headers & nav
 
     /** Home header: brand-free, only the theme toggle pinned to the readable edge. */
+    private View themeToggle() {
+        android.widget.ImageButton button = new android.widget.ImageButton(context);
+        boolean dark = WearTheme.isDark(context);
+        button.setImageResource(dark ? R.drawable.ic_sun : R.drawable.ic_moon);
+        button.setImageTintList(android.content.res.ColorStateList.valueOf(WearTheme.foreground(context)));
+        button.setBackground(fill(999, WearTheme.card(context)));
+        button.setPadding(dp(7), dp(7), dp(7), dp(7));
+        button.setMinimumWidth(dp(32));
+        button.setMinimumHeight(dp(32));
+        button.setContentDescription(dark ? "Switch to light mode" : "Switch to dark mode");
+        return button;
+    }
+
     private View homeHeader(final Listener listener) {
         FrameLayout bar = new FrameLayout(context);
-        TextView themeToggle = iconPill(WearTheme.isDark(context) ? "☀" : "☾",
-            WearTheme.card(context), WearTheme.foreground(context));
+        View themeToggle = themeToggle();
         themeToggle.setOnClickListener(v -> listener.onToggleTheme());
         bar.addView(themeToggle, edgeParams(Gravity.END, 0, 0, 0, 0));
         return bar;
@@ -388,8 +400,7 @@ public final class WearDashboardView {
         backPill.setOnClickListener(back);
         bar.addView(backPill, edgeParams(Gravity.START, 0, 0, 0, 0));
 
-        TextView themeToggle = iconPill(WearTheme.isDark(context) ? "☀" : "☾",
-            WearTheme.card(context), WearTheme.foreground(context));
+        View themeToggle = themeToggle();
         themeToggle.setOnClickListener(v -> listener.onToggleTheme());
         bar.addView(themeToggle, edgeParams(Gravity.END, 0, 0, 0, 0));
         return bar;

@@ -41,6 +41,9 @@ public class WearQuestionActivity extends AppCompatActivity {
     }
 
     private String requestId = "";
+    private String pendingAttemptId = "";
+    private WearPromptView prompt;
+    private final android.os.Handler answerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private BroadcastReceiver companionReceiver;
     private Screen screen = Screen.HOME;
     private int page = 0;
@@ -157,7 +160,9 @@ public class WearQuestionActivity extends AppCompatActivity {
             page = 0;
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
                 .cancel(WearQuestionListenerService.notificationId(requestId));
-            setContentView(new WearPromptView(this, this::handleResult).build(request));
+            pendingAttemptId = "";
+            prompt = new WearPromptView(this, this::handleResult);
+            setContentView(prompt.build(request));
         } catch (JSONException error) {
             renderHome();
         }
@@ -217,15 +222,32 @@ public class WearQuestionActivity extends AppCompatActivity {
     private void handleResult(JSONObject result, boolean cancelled) {
         String completedRequestId = requestId;
         if (completedRequestId.isEmpty()) return;
-        WearRequestStore.markState(
-            this,
-            completedRequestId,
-            cancelled ? WearRequestStore.STATE_DISMISSED : WearRequestStore.STATE_ANSWERED
-        );
-        sendAnswer(completedRequestId, result, cancelled);
-        ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
-            .cancel(WearQuestionListenerService.notificationId(completedRequestId));
-        renderRequests(0);
+        if (!pendingAttemptId.isEmpty()) return;
+        String attemptId = java.util.UUID.randomUUID().toString();
+        pendingAttemptId = attemptId;
+        if (prompt != null) prompt.setSubmissionState(true, "Sending…");
+        sendAnswer(completedRequestId, attemptId, result, cancelled);
+        answerHandler.postDelayed(() -> answerFailed(attemptId,
+            "No confirmation from phone. Check connection and tap Send to retry."), 45000);
+    }
+
+    private void answerFailed(String attemptId, String message) {
+        if (!attemptId.equals(pendingAttemptId)) return;
+        pendingAttemptId = "";
+        if (prompt != null) prompt.setSubmissionState(false, message);
+    }
+
+    private void receiveAnswerResult(Intent intent) {
+        try {
+            JSONObject result = new JSONObject(intent.getStringExtra("result"));
+            if (!requestId.equals(result.optString("requestId", ""))) return;
+            if (result.optBoolean("accepted", false)) {
+                pendingAttemptId = "";
+                renderRequests(0);
+            } else {
+                answerFailed(result.optString("attemptId", ""), result.optString("error", "Could not send answer. Retry."));
+            }
+        } catch (JSONException ignored) { }
     }
 
     private void requestSnapshot() {
@@ -245,19 +267,27 @@ public class WearQuestionActivity extends AppCompatActivity {
         }, "jait-watch-snapshot-request").start();
     }
 
-    private void sendAnswer(String requestId, JSONObject result, boolean cancelled) {
+    private void sendAnswer(String requestId, String attemptId, JSONObject result, boolean cancelled) {
         new Thread(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("requestId", requestId);
+                payload.put("attemptId", attemptId);
                 payload.put("cancelled", cancelled);
                 if (!cancelled && result != null) payload.put("result", result);
                 byte[] data = payload.toString().getBytes(StandardCharsets.UTF_8);
                 MessageClient messageClient = Wearable.getMessageClient(this);
+                boolean delivered = false;
                 for (Node node : WearNodes.reachable(this)) {
-                    Tasks.await(messageClient.sendMessage(node.getId(), ANSWER_PATH, data), 5, TimeUnit.SECONDS);
+                    try {
+                        Tasks.await(messageClient.sendMessage(node.getId(), ANSWER_PATH, data), 5, TimeUnit.SECONDS);
+                        delivered = true;
+                        break;
+                    } catch (Exception ignored) { }
                 }
-            } catch (Exception ignored) {
+                if (!delivered) runOnUiThread(() -> answerFailed(attemptId, "Phone unavailable. Reconnect and tap Send to retry."));
+            } catch (Exception error) {
+                runOnUiThread(() -> answerFailed(attemptId, "Could not send answer. Tap Send to retry."));
             }
         }, "jait-wear-answer").start();
     }
@@ -266,6 +296,10 @@ public class WearQuestionActivity extends AppCompatActivity {
         companionReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
+                if (WearQuestionListenerService.ACTION_ANSWER_RESULT.equals(intent.getAction())) {
+                    receiveAnswerResult(intent);
+                    return;
+                }
                 if (WearQuestionListenerService.ACTION_SNAPSHOT_UPDATED.equals(intent.getAction())) {
                     refreshCurrentScreenAfterSnapshot();
                     return;
@@ -286,6 +320,7 @@ public class WearQuestionActivity extends AppCompatActivity {
         };
         IntentFilter filter = new IntentFilter(ACTION_DISMISS);
         filter.addAction(WearQuestionListenerService.ACTION_SNAPSHOT_UPDATED);
+        filter.addAction(WearQuestionListenerService.ACTION_ANSWER_RESULT);
         ContextCompat.registerReceiver(
             this,
             companionReceiver,
@@ -363,6 +398,7 @@ public class WearQuestionActivity extends AppCompatActivity {
             unregisterReceiver(companionReceiver);
             companionReceiver = null;
         }
+        answerHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 }

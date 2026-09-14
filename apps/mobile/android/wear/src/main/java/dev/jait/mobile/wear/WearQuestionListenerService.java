@@ -25,6 +25,7 @@ import org.json.JSONObject;
  */
 public class WearQuestionListenerService extends WearableListenerService {
     public static final String ACTION_SNAPSHOT_UPDATED = "dev.jait.mobile.wear.SNAPSHOT_UPDATED";
+    public static final String ACTION_ANSWER_RESULT = "dev.jait.mobile.wear.ANSWER_RESULT";
     private static final String CHANNEL_ID = "jait-wear-questions";
     private static final String QUESTION_PATH = "/jait/question";
     private static final String ATTENTION_PATH = "/jait/attention";
@@ -71,7 +72,20 @@ public class WearQuestionListenerService extends WearableListenerService {
     @Override
     public void onMessageReceived(MessageEvent event) {
         String payload = new String(event.getData(), StandardCharsets.UTF_8);
-        if (QUESTION_PATH.equals(event.getPath())) {
+        if ("/jait/answer/result".equals(event.getPath())) {
+            try {
+                JSONObject result = new JSONObject(payload);
+                String id = result.optString("requestId", "");
+                if (id.isEmpty()) return;
+                if (result.optBoolean("accepted", false)) {
+                    WearRequestStore.markState(this, id, result.optBoolean("cancelled", false)
+                        ? WearRequestStore.STATE_DISMISSED : WearRequestStore.STATE_ANSWERED);
+                }
+                Intent update = new Intent(ACTION_ANSWER_RESULT).setPackage(getPackageName());
+                update.putExtra("result", payload);
+                sendBroadcast(update);
+            } catch (JSONException ignored) { }
+        } else if (QUESTION_PATH.equals(event.getPath())) {
             showQuestion(payload);
         } else if (ATTENTION_PATH.equals(event.getPath())) {
             showAttention(payload);

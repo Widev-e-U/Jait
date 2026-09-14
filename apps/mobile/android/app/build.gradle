@@ -25,6 +25,8 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    testOptions.unitTests.includeAndroidResources = true
+    sourceSets.main.java.srcDir '../common/src/main/java'
     signingConfigs {
         release {
             def keystorePath = System.getenv('JAIT_ANDROID_KEYSTORE_PATH')
@@ -61,6 +63,7 @@ dependencies {
     implementation "com.google.android.gms:play-services-wearable:18.2.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:4.14.1"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

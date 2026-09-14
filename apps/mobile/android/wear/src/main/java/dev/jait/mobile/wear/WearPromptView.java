@@ -1,6 +1,7 @@
 package dev.jait.mobile.wear;
 
 import android.content.Context;
+import dev.jait.mobile.common.QuestionLinks;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -48,6 +49,10 @@ final class WearPromptView {
     private final Palette theme;
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
     private final Map<String, EditText> freeTextInputs = new LinkedHashMap<>();
+    private Button submitButton;
+    private Button cancelButton;
+    private TextView submissionStatus;
+    private boolean submitting;
     private final List<String> questionIds = new ArrayList<>();
 
     WearPromptView(Context context, Listener listener) {
@@ -268,15 +273,17 @@ final class WearPromptView {
             root.addView(buildQuestion(questions.getJSONObject(index)), layoutMatch(0, 0, 0, 8));
         }
 
+        submissionStatus = text("Select an answer, then tap Send", 11, theme.muted(), false);
+        root.addView(submissionStatus, layoutMatch(0, 4, 0, 0));
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(actions, layoutMatch(0, 6, 0, 8));
 
-        Button cancel = button("Cancel", theme.borderActive(), theme.primary());
+        Button cancel = cancelButton = button("Cancel", theme.borderActive(), theme.primary());
         cancel.setOnClickListener(view -> dispatch(true));
         actions.addView(cancel, weightedLayout(1f, 0, 0, 4, 0));
 
-        Button submit = button("Send", theme.blue(), theme.onPrimary());
+        Button submit = submitButton = button("Send", theme.blue(), theme.onPrimary());
         submit.setOnClickListener(view -> dispatch(false));
         actions.addView(submit, weightedLayout(1f, 4, 0, 0, 0));
 
@@ -311,6 +318,7 @@ final class WearPromptView {
         card.setBackground(rounded(theme.surface(), 10, Color.TRANSPARENT));
 
         TextView questionText = text(question.optString("question", ""), 12, theme.primary(), false);
+        QuestionLinks.apply(questionText, this::openLink);
         questionText.setLineSpacing(0, 1.1f);
         card.addView(questionText, layoutMatch(0, 0, 0, 6));
 
@@ -354,17 +362,45 @@ final class WearPromptView {
         return card;
     }
 
+    private void openLink(String url) {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse(url)).addCategory(android.content.Intent.CATEGORY_BROWSABLE);
+        androidx.wear.remote.interactions.RemoteActivityHelper helper =
+            new androidx.wear.remote.interactions.RemoteActivityHelper(context);
+        com.google.common.util.concurrent.ListenableFuture<Void> future = helper.startRemoteActivity(intent, null);
+        future.addListener(() -> {
+            String message = "Opened on phone";
+            try { future.get(); } catch (Exception error) { message = "Could not open link. Check your phone connection."; }
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show();
+        }, androidx.core.content.ContextCompat.getMainExecutor(context));
+    }
+
     private void configureOption(CompoundButton control, JSONObject option) {
         String label = option.optString("label", "");
-        control.setText(label);
+        String description = option.optString("description", "");
+        control.setText(description.isEmpty() ? label : label + "\n" + description);
         control.setTag(label);
+        QuestionLinks.apply(control, this::openLink);
         control.setTextColor(theme.primary());
         control.setTextSize(12);
         control.setPadding(dp(4), dp(4), dp(4), dp(4));
         control.setButtonTintList(ColorStateList.valueOf(theme.blue()));
     }
 
+    void setSubmissionState(boolean busy, String message) {
+        submitting = busy;
+        submitButton.setEnabled(!busy);
+        cancelButton.setEnabled(!busy);
+        submitButton.setText(busy ? "Sending…" : "Send");
+        submissionStatus.setText(message);
+        for (List<CompoundButton> controls : optionInputs.values()) {
+            for (CompoundButton control : controls) control.setEnabled(!busy);
+        }
+        for (EditText input : freeTextInputs.values()) input.setEnabled(!busy);
+    }
+
     private void dispatch(boolean cancelled) {
+        if (submitting) return;
         try {
             JSONObject result = new JSONObject();
             JSONObject answers = new JSONObject();
@@ -376,6 +412,10 @@ final class WearPromptView {
                 }
                 EditText freeTextInput = freeTextInputs.get(questionId);
                 String freeText = freeTextInput == null ? "" : freeTextInput.getText().toString().trim();
+                if (!cancelled && selected.length() == 0 && freeText.isEmpty()) {
+                    submissionStatus.setText("Please answer each question before sending");
+                    return;
+                }
                 answer.put("selected", selected);
                 answer.put("freeText", freeText.isEmpty() ? JSONObject.NULL : freeText);
                 answer.put("skipped", cancelled || (selected.length() == 0 && freeText.isEmpty()));

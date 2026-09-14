@@ -52,14 +52,27 @@ public class PhoneWearListenerService extends WearableListenerService {
             if (requestId.isEmpty()) return;
             boolean cancelled = payload.optBoolean("cancelled", false);
             JSONObject result = cancelled ? null : payload.optJSONObject("result");
-            AgentQuestionApi.submit(this, requestId, result, cancelled);
-
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
-                .cancel(AgentPromptActivity.notificationId(requestId));
-            Intent dismissIntent = new Intent(AgentPromptActivity.ACTION_DISMISS);
-            dismissIntent.setPackage(getPackageName());
-            dismissIntent.putExtra(AgentPromptActivity.EXTRA_REQUEST_ID, requestId);
-            sendBroadcast(dismissIntent);
+            String sourceNodeId = event.getSourceNodeId();
+            String attemptId = payload.optString("attemptId", "");
+            AgentQuestionApi.submit(this, requestId, result, cancelled, (accepted, error) -> {
+                try {
+                    JSONObject acknowledgement = new JSONObject();
+                    acknowledgement.put("requestId", requestId);
+                    acknowledgement.put("attemptId", attemptId);
+                    acknowledgement.put("accepted", accepted);
+                    acknowledgement.put("cancelled", cancelled);
+                    acknowledgement.put("error", error);
+                    com.google.android.gms.wearable.Wearable.getMessageClient(this).sendMessage(
+                        sourceNodeId, "/jait/answer/result", acknowledgement.toString().getBytes(StandardCharsets.UTF_8));
+                } catch (JSONException ignored) { }
+                if (!accepted) return;
+                ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
+                    .cancel(AgentPromptActivity.notificationId(requestId));
+                Intent dismissIntent = new Intent(AgentPromptActivity.ACTION_DISMISS);
+                dismissIntent.setPackage(getPackageName());
+                dismissIntent.putExtra(AgentPromptActivity.EXTRA_REQUEST_ID, requestId);
+                sendBroadcast(dismissIntent);
+            });
         } catch (JSONException ignored) {
         }
     }
