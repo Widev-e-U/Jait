@@ -926,45 +926,66 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # 5. Confirm the version is actually retrievable from the registry.
-      # npm can exit 0 ("Uploaded") and still never commit the version — a run
-      # once cut the v0.1.849 release while the npm version silently never
-      # landed. Poll the registry and re-publish once or twice; fail loudly so
-      # the release job (which needs this one) does not ship a phantom version.
+      # npm can exit 0 and still leave the upload *staged*: newer npm prints
+      # "Your package is being processed and may take a few minutes to become
+      # available", and the registry only commits the version minutes later
+      # (v0.1.850 needed ~6 min). Two failure modes are guarded here:
+      #   - a version that never lands at all (v0.1.849 shipped its GitHub
+      #     release while npm never got the version), and
+      #   - a fix that gives up too early and cost v0.1.850 its release.
+      # So: poll generously, re-publish periodically (a repeated publish is
+      # what nudges the registry to commit the staged version), and fail loudly
+      # only when the version really is not installable for operators.
       - name: Verify @jait/gateway on the registry
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         working-directory: packages/gateway
         run: |
+          # The verification is deliberately fail-loud; only the polling below
+          # should decide the step outcome, so no `-e` surprises from helpers.
+          set +e
           VERSION=$(jq -r '.version' package.json)
-          REGISTRY=$(npm config get registry)
+          REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
+          LOG="/tmp/npm-verify-${{ github.run_id }}.log"
           echo "Verifying @jait/gateway@$VERSION via $REGISTRY"
           # Ask npm itself first: it is the client that published, it honours the
           # runner's configured registry/proxy, and it reads through the same
           # path operators use. A bare curl to registry.npmjs.org is not a
-          # reliable witness — that made this step time out on an already
-          # published v0.1.850 and cost it its GitHub release.
+          # reliable witness on its own.
+          # NOTE: run npm from /tmp, not from this workspace member —
+          # `npm config`-style commands abort with ENOWORKSPACES ("This command
+          # does not support workspaces") inside a workspace, which killed this
+          # step instantly and left v0.1.851 unpublished.
           is_live() {
-            if [ "$(npm view "@jait/gateway@$VERSION" version 2>/dev/null | tr -d '[:space:]')" = "$VERSION" ]; then
+            if [ "$(cd /tmp && npm view "@jait/gateway@$VERSION" version 2>/dev/null | tr -d '[:space:]')" = "$VERSION" ]; then
               return 0
             fi
             # Fallback in case the configured registry is a mirror that lags.
+            local code
             code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' \
-              "https://registry.npmjs.org/@jait/gateway/$VERSION" 2>/dev/null || true)
+              "https://registry.npmjs.org/@jait/gateway/$VERSION" 2>/dev/null)
             [ "$code" = "200" ]
           }
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 60); do
             if is_live; then
-              echo "✅ @jait/gateway@$VERSION is live on $REGISTRY"
+              echo "✅ @jait/gateway@$VERSION is live on $REGISTRY (attempt $attempt)"
               exit 0
             fi
-            if [ "$attempt" -eq 4 ] || [ "$attempt" -eq 10 ]; then
+            # Re-publish every 2 minutes: a staged upload is committed once the
+            # registry finishes processing, and a repeat publish either succeeds
+            # or reports "cannot publish over ..." — both mean it is on its way.
+            if [ $((attempt % 8)) -eq 0 ]; then
               echo "↻ @jait/gateway@$VERSION not visible yet — retrying publish"
-              npm publish --access public || true
+              npm publish --access public 2>&1 | tee "$LOG" | tail -5
+              grep -qi 'EPUBLISHCONFLICT\|cannot publish over' "$LOG" \
+                && echo "   (registry reports it as already staged/published)"
             fi
-            sleep 10
+            sleep 15
           done
-          echo "❌ @jait/gateway@$VERSION is still absent after 240s."
+          echo "❌ @jait/gateway@$VERSION is still absent after 15 minutes."
           echo "   npm accepted the upload but never committed the version."
           echo "   Not cutting a release for a version nobody can install."
+          echo "--- last publish output ---"
+          tail -20 "$LOG" 2>/dev/null
           exit 1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
