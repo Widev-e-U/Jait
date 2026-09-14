@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.850](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.850) — 2026-09-14
+- ci(release): verify the gateway version on the registry — 97720c4c
+- test(web): cover the live terminal binding end to end — 9ed0f774
+- fix(web): recognise every Jait terminal tool alias — 82937b9e
+- fix(web): stop image expansion from opening the message editor — 681be5fc
+
 ## [v0.1.849](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.849) — 2026-09-14
 - feat(gateway): query Ollama Cloud quota with the signed-in device key — 94704e8d
 - perf(web): bound minimap work for large transcripts — 9288f5b1
